@@ -58,48 +58,5 @@ export class ColorPicker {
 
         return `rgb(${darkR}, ${darkG}, ${darkB})`;
     }
-
-    // Helper function to convert RGB to CIELAB
-    private rgbToLab(r: number, g: number, b: number): { L: number, a: number, b: number } {
-        const rgb = [r / 255, g / 255, b / 255];
-        const xyz = this.rgbToXyz(rgb);
-        return this.xyzToLab(xyz);
-    }
-
-    // Helper function to convert RGB to XYZ
-    private rgbToXyz(rgb: number[]): number[] {
-        const matrix = [
-            [0.4124564, 0.3575761, 0.1804375],
-            [0.2126729, 0.7151522, 0.0721750],
-            [0.0193339, 0.1191920, 0.9503041]
-        ];
-
-        const linearRgb = rgb.map(c => {
-            return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
-        });
-
-        const xyz: number[] = [0, 0, 0];
-        for (let i = 0; i < 3; i++) {
-            for (let j = 0; j < 3; j++) {
-                xyz[i] += matrix[i][j] * linearRgb[j];
-            }
-        }
-
-        return xyz;
-    }
-
-    // Helper function to convert XYZ to CIELAB
-    private xyzToLab(xyz: number[]): { L: number, a: number, b: number } {
-        const [x, y, z] = xyz.map(v => v / 100);
-        const fx = x > 0.008856 ? Math.cbrt(x) : (7.787 * x) + (16 / 116);
-        const fy = y > 0.008856 ? Math.cbrt(y) : (7.787 * y) + (16 / 116);
-        const fz = z > 0.008856 ? Math.cbrt(z) : (7.787 * z) + (16 / 116);
-
-        return {
-            L: (116 * fy) - 16,
-            a: 500 * (fx - fy),
-            b: 200 * (fy - fz)
-        };
-    }
 }
 

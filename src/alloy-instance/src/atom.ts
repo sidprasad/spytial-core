@@ -1,6 +1,5 @@
 import { AlloyInstance, getInstanceAtom, getInstanceType } from './instance';
 import { AlloyType, isBuiltin } from './type';
-import { JSDOM } from 'jsdom';
 
 export interface AlloyAtom {
   // identify as an atom
@@ -20,7 +19,7 @@ export interface AlloyAtom {
  * @param type The type of the atom.
  * @param element The element to create the atom from.
  */
-export function atomFromElement(type: string, element: Element): AlloyAtom {
+export function atomFromElement(type: string, element: globalThis.Element): AlloyAtom {
   const id = element.getAttribute('label');
   if (!id) throw new Error('No label attribute in atom element');
   return {
@@ -41,7 +40,7 @@ export function atomFromElement(type: string, element: Element): AlloyAtom {
  */
 export function atomsFromElements(
   type: string,
-  elements: NodeListOf<Element>
+  elements: globalThis.NodeListOf<globalThis.Element>
 ): AlloyAtom[] {
   return Array.from(elements).map((element) => atomFromElement(type, element));
 }

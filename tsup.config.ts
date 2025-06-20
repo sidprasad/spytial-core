@@ -12,12 +12,23 @@ export default defineConfig({
   format: ['cjs', 'esm'],
   dts: true,
   splitting: false,
-  sourcemap: true,
+  sourcemap: false,
   clean: true,
-  minify: true,
+  minify: false,
   target: 'es2020',
   outDir: 'dist',
   external: [],
   bundle: true,
   treeshake: true,
+  // Ensure all dependencies are bundled for client-side use
+  noExternal: [
+    'graphlib',
+    'cassowary', 
+    'chroma-js',
+    'ejs',
+    'js-yaml',
+    'uuid',
+    '@xmldom/xmldom',
+    'forge-expr-evaluator'
+  ],
 })

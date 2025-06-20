@@ -1,5 +1,4 @@
 import { SimplexSolver, Variable, Expression, Strength, Inequality, LEQ, GEQ, LE } from 'cassowary';
-import { intersection } from 'lodash';
 import { InstanceLayout, LayoutNode, LayoutEdge, LayoutGroup, LayoutConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, TopConstraint, LeftConstraint, AlignmentConstraint, ImplicitConstraint } from './interfaces';
 import { RelativeOrientationConstraint } from './layoutspec';
 import { v4 as uuidv4 } from 'uuid';
@@ -94,7 +93,7 @@ class ConstraintValidator {
     private variables: { [key: string]: { x: Variable, y: Variable } };
 
     private added_constraints: any[];
-    error: string;
+    error: string | null;
 
     layout: InstanceLayout;
     orientationConstraints: LayoutConstraint[];
@@ -118,12 +117,12 @@ class ConstraintValidator {
         this.error = null;
     }
 
-    public validateConstraints(): string {
+    public validateConstraints(): string | null {
         // I think this works, but I need to test it
         return this.validateGroupConstraints() || this.validatePositionalConstraints();
     }
 
-    public validatePositionalConstraints(): string {
+    public validatePositionalConstraints(): string | null {
 
         this.nodes.forEach(node => {
             let index = this.getNodeIndex(node.id);
@@ -154,7 +153,7 @@ class ConstraintValidator {
         return this.error;
     }
 
-    public validateGroupConstraints(): string {
+    public validateGroupConstraints(): string | null {
 
         // This identifies if there ARE any overlapping non-subgroups
         let overlappingNonSubgroups = false;
@@ -189,7 +188,7 @@ class ConstraintValidator {
         return this.nodes.findIndex(node => node.id === nodeId);
     }
 
-    private orientationConstraintToString(constraint) {
+    private orientationConstraintToString(constraint: LayoutConstraint) {
 
         if (isTopConstraint(constraint)) {
             let tc = constraint as TopConstraint;
@@ -358,7 +357,10 @@ class ConstraintValidator {
             // TODO: We want to invert this mapping so 
             // that we can map a source constraint to several layout constraints.
 
-            let sourceConstraintToLayoutConstraints = {};
+            let sourceConstraintToLayoutConstraints: Record<string, {
+                uid: string;
+                layoutConstraints: string[];
+            }> = {};
 
             minimal_conflicting_constraints.forEach((c) => {
 
@@ -406,7 +408,7 @@ class ConstraintValidator {
         this.horizontallyAligned = this.normalizeAlignment(this.horizontallyAligned);
         this.verticallyAligned = this.normalizeAlignment(this.verticallyAligned);
 
-        let implicitAlignmentConstraints = [];
+        let implicitAlignmentConstraints: LayoutConstraint[] = [];
 
 
         // Now we need to get the order of the nodes in each group
@@ -526,7 +528,7 @@ class ConstraintValidator {
         const g2Elements = group2.nodeIds;
 
         // Get elements that are in both groups
-        const commonElements = intersection(g1Elements, g2Elements);
+        const commonElements = g1Elements.filter(element => g2Elements.includes(element));
         return commonElements;
     }
 }

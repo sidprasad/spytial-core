@@ -1,13 +1,11 @@
-import { JSDOM , Element} from 'jsdom';
 import { AlloyDatum } from './datum';
 import { instanceFromElement } from './instance';
 
-
-
+// For client-side use, we expect DOMParser to be available
 export function parseAlloyXML(xml: string): AlloyDatum {
-  // Use JSDOM to parse the XML string
-  const dom = new JSDOM(xml, { contentType: "application/xml" });
-  const document = dom.window.document;
+  // Use DOMParser to parse the XML string
+  const parser = new globalThis.DOMParser();
+  const document = parser.parseFromString(xml, 'application/xml');
   const instances = Array.from(document.querySelectorAll('instance'));
   if (!instances.length) throw new Error(`No Alloy instance in XML: ${xml}`);
   
@@ -16,7 +14,7 @@ export function parseAlloyXML(xml: string): AlloyDatum {
                                undefined : 
                                parseStringAttribute(maybeVisualizer, 'script');
   return {
-    instances: instances.map(instanceFromElement),
+    instances: instances.map((element) => instanceFromElement(element as globalThis.Element)),
     bitwidth: parseNumericAttribute(instances[0], 'bitwidth'),
     command: parseStringAttribute(instances[0], 'command'),
     loopBack:
@@ -32,7 +30,7 @@ export function parseAlloyXML(xml: string): AlloyDatum {
 }
 
 function parseNumericAttribute(
-  element: Element,
+  element: globalThis.Element,
   attribute: string
 ): number | undefined {
   const value = element.getAttribute(attribute);
@@ -40,7 +38,7 @@ function parseNumericAttribute(
 }
 
 function parseStringAttribute(
-  element: Element,
+  element: globalThis.Element,
   attribute: string
 ): string | undefined {
   const value = element.getAttribute(attribute);
@@ -55,7 +53,7 @@ function deEscape(s: string | undefined): string | undefined {
            .replaceAll("&lt;", "<")
 }
 
-export function sigElementIsSet(sigElement: Element): boolean {
+export function sigElementIsSet(sigElement: globalThis.Element): boolean {
   return sigElement.querySelectorAll('type').length > 0;
 }
 
@@ -67,7 +65,7 @@ export function sigElementIsSet(sigElement: Element): boolean {
  */
 export function typeHierarchiesFromElement(
   typeNames: Record<string, string>,
-  element: Element
+  element: globalThis.Element
 ): Record<string, string[]> {
   const parents: Record<string, string> = {};
 
@@ -97,7 +95,7 @@ export function typeHierarchiesFromElement(
   return hierarchies;
 }
 
-export function typeNamesFromElement(element: Element): Record<string, string> {
+export function typeNamesFromElement(element: globalThis.Element): Record<string, string> {
   const names: Record<string, string> = {};
   const sigElements = element.querySelectorAll('sig');
   for (const sigElement of sigElements) {

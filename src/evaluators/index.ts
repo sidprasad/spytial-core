@@ -4,7 +4,6 @@
  */
 
 export * from './interfaces';
-export * from './base-evaluator';
 export * from './forge-evaluator';
 
 // Type export for convenience

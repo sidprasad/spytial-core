@@ -1,4 +1,3 @@
-import { isUndefined, uniq } from 'lodash';
 import { getAtomType } from './atom';
 import { AlloyInstance, getInstanceTypes } from './instance';
 import { AlloyRelation } from './relation';
@@ -31,9 +30,8 @@ export function applyProjections(
 }
 
 export function getProjectableTypes(instance: AlloyInstance): string[] {
-  return uniq(getInstanceTypes(instance).map(getTopLevelTypeId)).filter(
-    (type) => !isUndefined(type)
-  );
+  const uniqueTypes = [...new Set(getInstanceTypes(instance).map(getTopLevelTypeId))];
+  return uniqueTypes.filter((type) => type !== undefined);
 }
 
 function projectTypes(

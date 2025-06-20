@@ -113,7 +113,7 @@ function toParsedValue(ad: AlloyDatum): ParsedValue {
     // Convert the AlloyDatum to a ParsedValue object
     let parsedValue: ParsedValue = {
         instances: ad.instances.map((instance) => toInstanceData(instance)),
-        bitwidth: ad.bitwidth
+        bitwidth: ad.bitwidth || 0
         // Maybe more?
 
     };

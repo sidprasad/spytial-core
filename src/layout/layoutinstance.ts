@@ -185,7 +185,7 @@ export class LayoutInstance {
                     let groupName = `${gc.name}[${groupOn}]`;
 
                     // Check if the group already exists
-                    let existingGroup: LayoutGroup = groups.find((group) => group.name === groupName);
+                    let existingGroup: LayoutGroup | undefined = groups.find((group) => group.name === groupName);
 
                     if (existingGroup) {
                         existingGroup.nodeIds.push(addToGroup);
@@ -266,7 +266,7 @@ export class LayoutInstance {
                 return;
             }
 
-            let edgeLabel = this.getEdgeLabel(g, edge);
+            // let edgeLabel = this.getEdgeLabel(g, edge); // Unused for now
 
 
             relatedConstraints.forEach((c) => {
@@ -288,9 +288,8 @@ export class LayoutInstance {
                     }
                     // Now get the element of edge
 
-
-                    let sourceInGraph = thisTuple[0];
-                    let targetInGraph = thisTuple[arity - 1];
+                    // let sourceInGraph = thisTuple[0]; // Unused for now
+                    // let targetInGraph = thisTuple[arity - 1]; // Unused for now
 
                     let key = thisTuple[groupOn];
                     let toAdd = thisTuple[addToGroup];
@@ -306,7 +305,7 @@ export class LayoutInstance {
                     let groupName = `${relName}[${labelString}]`; // TODO: THis?
 
                     // Check if the group already exists
-                    let existingGroup: LayoutGroup = groups.find((group) => group.name === groupName);
+                    let existingGroup: LayoutGroup | undefined= groups.find((group) => group.name === groupName);
 
                     if (existingGroup) {
                         existingGroup.nodeIds.push(toAdd);
@@ -490,7 +489,7 @@ export class LayoutInstance {
         // finalProjectionChoices : { type : string, projectedAtom : string, atoms : string[]} 
         let finalProjectionChoices = Object.entries(projections)
 
-            .filter(([typeId, atomId]) => projectedSigs.includes(typeId)) // This is crucial for scenarios where the projection is changed.
+            .filter(([typeId]) => projectedSigs.includes(typeId)) // This is crucial for scenarios where the projection is changed.
 
             .map(([typeId, atomId]) => {
                 let atoms = atomsPerProjectedType[typeId];
@@ -577,9 +576,10 @@ export class LayoutInstance {
             let target = layoutNodes.find((node) => node.id === edge.w);
             let relName = this.getRelationName(g, edge);
 
-            let relTuples = this.getFieldTuplesForSourceAndTarget(a, relName, edge.v, edge.w);
-            // But what if there are multiple tuples?
-
+            // Skip edges with missing source or target nodes
+            if (!source || !target || !edgeId) {
+                return null;
+            }
 
             let e: LayoutEdge = {
                 source: source,
@@ -589,7 +589,7 @@ export class LayoutInstance {
                 id: edgeId
             };
             return e;
-        });
+        }).filter((edge): edge is LayoutEdge => edge !== null);
 
         //////////////////////// HACK /////////////
         /*
@@ -673,10 +673,12 @@ export class LayoutInstance {
 
 
         // First, for each, get the tuples / fragments.
-        let layoutNodePaths: LayoutNodePath[] = [];
-        let constraintFragments = [];
+        let constraintFragments: Array<{
+            source: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint,
+            fragmentList: string[]
+        }> = [];
 
-        for (const [index, c] of cyclicConstraints.entries()) {
+        for (const [, c] of cyclicConstraints.entries()) {
 
             let selectedTuples: string[][] = this.evaluator.evaluate(c.selector, { instanceIndex: this.instanceNum }).selectedTwoples();
             let nextNodeMap: Map<LayoutNode, LayoutNode[]> = new Map<LayoutNode, LayoutNode[]>();
@@ -688,8 +690,13 @@ export class LayoutInstance {
                 let srcN = layoutNodes.find((node) => node.id === sourceNodeId);
                 let tgtN = layoutNodes.find((node) => node.id === targetNodeId);
 
+                // Skip if either node is not found
+                if (!srcN || !tgtN) {
+                    return;
+                }
+
                 if (nextNodeMap.has(srcN)) {
-                    nextNodeMap.get(srcN).push(tgtN);
+                    nextNodeMap.get(srcN)!.push(tgtN);
                 }
                 else {
                     nextNodeMap.set(srcN, [tgtN]);
@@ -746,7 +753,7 @@ export class LayoutInstance {
                     groups: layoutWithoutCyclicConstraints.groups
                 };
                 let validator = new ConstraintValidator(instanceLayout);
-                currentLayoutError = validator.validateConstraints();
+                currentLayoutError = validator.validateConstraints() || "";
 
                 if (!currentLayoutError || currentLayoutError === "") {
                     // If we found a satisfying assignment, we can return the constraints.
@@ -794,10 +801,10 @@ export class LayoutInstance {
         }
 
         let fragmentConstraintsForCurrentOffset: LayoutConstraint[] = [];
-        for (var i = 0; i <fragment.length; i++) {
+        for (var k = 0; k < fragment.length; k++) {
             for (var j = 0; j < fragment.length; j++) {
-                if (i !== j) {
-                    let node1 = fragment[i];
+                if (k !== j) {
+                    let node1 = fragment[k];
                     let node2 = fragment[j];
                     let node1_pos = fragmentNodePositions[node1];
                     let node2_pos = fragmentNodePositions[node2];
@@ -845,13 +852,14 @@ export class LayoutInstance {
             path.push(currentNode);
 
             // If the current node has no outgoing edges, add the path to allPaths
-            if (!nextNodeMap.has(currentNode) || nextNodeMap.get(currentNode).length === 0) {
+            const neighbors = nextNodeMap.get(currentNode);
+            if (!nextNodeMap.has(currentNode) || !neighbors || neighbors.length === 0) {
 
                 let lnp = new LayoutNodePath(path, undefined);
                 allPaths.push(lnp);
             } else {
                 // Recursively visit all neighbors
-                for (const neighbor of nextNodeMap.get(currentNode)) {
+                for (const neighbor of neighbors) {
                     if (!path.includes(neighbor)) {
                         // Continue DFS if the neighbor is not already in the path
                         dfs(neighbor, [...path]); // Pass a copy of the path to avoid mutation
@@ -1131,7 +1139,7 @@ export class LayoutInstance {
 
 
     private getSigColors(ai: AlloyInstance): Record<string, string> {
-        let sigColors = {};
+        let sigColors: Record<string, string> = {};
 
         let types = getInstanceTypes(ai);
         let colorPicker = new ColorPicker(types.length);

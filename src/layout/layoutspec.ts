@@ -297,12 +297,12 @@ export function parseLayoutSpec(s: string): LayoutSpec {
 
 
     // First, parse the YAML
-    let parsed = yaml.load(s);
+    let parsed = yaml.load(s) as Record<string, unknown>;
 
 
     // Now extract the constraints and directives
-    let constraints = parsed.constraints;
-    let directives = parsed.directives;
+    let constraints = parsed?.constraints;
+    let directives = parsed?.directives;
 
 
 
@@ -311,31 +311,33 @@ export function parseLayoutSpec(s: string): LayoutSpec {
     // Now we go through the constraints and directives and extract them
 
 
-    if (constraints) {
+    if (constraints && Array.isArray(constraints)) {
         try {
           let constraintsParsed = parseConstraints(constraints);
           layoutSpec.constraints = constraintsParsed;
         }
         catch (e) {
+            const errorMessage = e instanceof Error ? e.message : String(e);
             throw new Error(`
 
                 <div class="container mt-4 mb-4">
-                    <p> ${e.message} </p
+                    <p> ${errorMessage} </p
                 </div>`);
         }
     }
 
-    if (directives) {
+    if (directives && Array.isArray(directives)) {
         try {
             let directivesParsed = parseDirectives(directives);
             layoutSpec.directives = directivesParsed;
         }
 
         catch (e) {
+            const errorMessage = e instanceof Error ? e.message : String(e);
             throw new Error(`                
                 <div class="container mt-4 mb-4">
                 <p>
-                    ${e.message}
+                    ${errorMessage}
                     </p>
                 </div>`);
         }
@@ -344,12 +346,13 @@ export function parseLayoutSpec(s: string): LayoutSpec {
 }
 
 
-function parseConstraints(constraints: any[]):   ConstraintsBlock
+function parseConstraints(constraints: unknown[]):   ConstraintsBlock
 {
-
+    // Type assertion since we expect specific structure from YAML
+    const typedConstraints = constraints as Record<string, any>[];
 
     // All cyclic orientation constraints should start with 'cyclic'
-    let cyclicConstraints: CyclicOrientationConstraint[] = constraints.filter(c => c.cyclic)
+    let cyclicConstraints: CyclicOrientationConstraint[] = typedConstraints.filter(c => c.cyclic)
         .map(c => {
             
             if(!c.cyclic.selector) {
@@ -379,7 +382,7 @@ function parseConstraints(constraints: any[]):   ConstraintsBlock
 
 
 
-    let relativeOrientationConstraints: RelativeOrientationConstraint[] = constraints.filter(c => c.orientation)
+    let relativeOrientationConstraints: RelativeOrientationConstraint[] = typedConstraints.filter(c => c.orientation)
         .map(c => {
 
             var isInternallyConsistent = true;
@@ -407,7 +410,7 @@ function parseConstraints(constraints: any[]):   ConstraintsBlock
         });
 
 
-    let byfield: GroupByField[] = constraints.filter(c => c.group)
+    let byfield: GroupByField[] = typedConstraints.filter(c => c.group)
         .filter(c => c.group.field)
         .map(c => {
 
@@ -438,7 +441,7 @@ function parseConstraints(constraints: any[]):   ConstraintsBlock
             // }
         });
 
-    let byselector: GroupBySelector[] = constraints.filter(c => c.group)
+    let byselector: GroupBySelector[] = typedConstraints.filter(c => c.group)
         .filter(c => c.group.selector)
         .map(c => {
             if(!c.group.selector) {
@@ -463,7 +466,7 @@ function parseConstraints(constraints: any[]):   ConstraintsBlock
 
 }
 
-function parseDirectives(directives: any[]): {
+function parseDirectives(directives: unknown[]): {
                             colors: AtomColorDirective[];
                             sizes: AtomSizeDirective[];
                             icons: AtomIconDirective[];
@@ -475,10 +478,12 @@ function parseDirectives(directives: any[]): {
                             hideDisconnectedBuiltIns : boolean;
                         } 
 {
+    // Type assertion since we expect specific structure from YAML
+    const typedDirectives = directives as Record<string, any>[];
 
     // CURRENTLY NO SUGAR HERE!
 
-    let icons : AtomIconDirective[] = directives.filter(d => d.icon)
+    let icons : AtomIconDirective[] = typedDirectives.filter(d => d.icon)
                 .map(d => {
 
                     return {
@@ -487,7 +492,7 @@ function parseDirectives(directives: any[]): {
                         showLabels: d.icon.showLabels || false 
                     }
                 });
-    let colors : AtomColorDirective[] = directives.filter(d => d.color)
+    let colors : AtomColorDirective[] = typedDirectives.filter(d => d.color)
                 .map(d => {
                     return {
                         color: d.color.value,
@@ -495,7 +500,7 @@ function parseDirectives(directives: any[]): {
                     }
                 });
 
-    let sizes : AtomSizeDirective[] = directives.filter(d => d.size)
+    let sizes : AtomSizeDirective[] = typedDirectives.filter(d => d.size)
                 .map(d => {
                     return {
                         height: d.size.height,
@@ -504,30 +509,30 @@ function parseDirectives(directives: any[]): {
                     }
                 });
 
-    let attributes : AttributeDirective[]  = directives.filter(d => d.attribute).map(d => {
+    let attributes : AttributeDirective[]  = typedDirectives.filter(d => d.attribute).map(d => {
         return {
             field: d.attribute.field
         }
     });
 
-    let hiddenFields : FieldHidingDirective[] = directives.filter(d => d.hideField).map(d => {
+    let hiddenFields : FieldHidingDirective[] = typedDirectives.filter(d => d.hideField).map(d => {
         return {
             field: d.hideField.field
         }
     });
 
-    let projections : ProjectionDirective[] = directives.filter(d => d.projection).map(d => {
+    let projections : ProjectionDirective[] = typedDirectives.filter(d => d.projection).map(d => {
             return {
                 sig: d.projection.sig
             }
         }
     );
 
-    let flags = directives.filter(d => d.flag).map(d => d.flag);
+    let flags = typedDirectives.filter(d => d.flag).map(d => d.flag);
     let hideDisconnected = flags.includes("hideDisconnected");
     let hideDisconnectedBuiltIns = flags.includes("hideDisconnectedBuiltIns");
 
-    let inferredEdges : InferredEdgeDirective[] = directives.filter(d => d.inferredEdge).map(d => {
+    let inferredEdges : InferredEdgeDirective[] = typedDirectives.filter(d => d.inferredEdge).map(d => {
         return {
             name: d.inferredEdge.name,
             selector: d.inferredEdge.selector

@@ -8,3 +8,28 @@ export * from './layoutspec';
 export * from './layoutinstance';
 export * from './colorpicker';
 export * from './constraint-validator';
+
+// Utility functions
+import { LayoutInstance } from './layoutinstance';
+import { LayoutSpec, parseLayoutSpec } from './layoutspec';
+import IEvaluator from '../evaluators/interfaces';
+import { AlloyInstance } from '../alloy-instance';
+
+/**
+ * Convenience function to set up and generate a layout
+ * @param spec The layout specification (YAML content or LayoutSpec object)
+ * @param instance The Alloy instance to layout
+ * @param evaluator The evaluator to use for constraint evaluation
+ * @param projections Optional projections to apply
+ * @returns The generated layout and projection data
+ */
+export function setupLayout(
+  spec: string | LayoutSpec,
+  instance: AlloyInstance,
+  evaluator: IEvaluator,
+  projections: Record<string, string> = {}
+) {
+  const layoutSpec = typeof spec === 'string' ? parseLayoutSpec(spec) : spec;
+  const layoutInstance = new LayoutInstance(layoutSpec, evaluator);
+  return layoutInstance.generateLayout(instance, projections);
+}

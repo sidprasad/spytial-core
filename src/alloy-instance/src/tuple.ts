@@ -1,4 +1,4 @@
-import { atomFromElement, atomsFromElements } from './atom';
+import { atomFromElement } from './atom';
 
 export interface AlloyTuple {
   // identify as a tuple
@@ -9,7 +9,7 @@ export interface AlloyTuple {
   types: string[];
 }
 
-export function tupleFromElement(types: string[], element: Element): AlloyTuple {
+export function tupleFromElement(types: string[], element: globalThis.Element): AlloyTuple {
   return {
     _: 'tuple',
     types,
@@ -19,7 +19,7 @@ export function tupleFromElement(types: string[], element: Element): AlloyTuple 
   }
 }
 
-export function tuplesFromElements(types: string[], elements: NodeListOf<Element>): AlloyTuple[] {
+export function tuplesFromElements(types: string[], elements: globalThis.NodeListOf<globalThis.Element>): AlloyTuple[] {
   return Array
     .from(elements)
     .map(element => tupleFromElement(types, element));

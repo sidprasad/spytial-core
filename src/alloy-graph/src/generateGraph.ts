@@ -9,9 +9,8 @@ import {
   getRelationTuples
 } from '../../alloy-instance';
 
-import { first, last } from 'lodash';
 import { generateEdgeId, generateNodeId } from './ids';
-import { Graph, Edge } from 'graphlib';
+import { Graph } from 'graphlib';
 
 
 
@@ -30,7 +29,7 @@ import { Graph, Edge } from 'graphlib';
 //   **/
 
 export function getRelationSTIndexes(
-  relation: string, 
+  _relation: string, 
   arity: number
 ): [number,number] {
   if(arity < 2) return [0, 0]
@@ -104,8 +103,8 @@ export function generateGraph(
         // that define a weighted directed graph on 3-ary edges: Node->Node->Int
         const [sourceIndex, targetIndex] = getRelationSTIndexes(relation.id, atoms.length)
 
-        const source = sourceIndex ? atoms[sourceIndex] : first(atoms);
-        const target = targetIndex ? atoms[targetIndex] : last(atoms);
+        const source = sourceIndex ? atoms[sourceIndex] : atoms[0];
+        const target = targetIndex ? atoms[targetIndex] : atoms[atoms.length - 1];
 
 
         // TODO: This is tricky, what should we do here?
@@ -207,7 +206,7 @@ function getVisibleGraphComponents(
 }
 
 function resolveSourceAndTarget(
-  relation: AlloyRelation, atoms: AlloyAtom[],
+  _relation: AlloyRelation, atoms: AlloyAtom[],
   //theme?: SterlingTheme //| WritableDraft<SterlingTheme>
 ): [AlloyAtom | undefined, AlloyAtom | undefined] {
   // if (theme) {
@@ -216,8 +215,8 @@ function resolveSourceAndTarget(
   //   const target = targetIndex ? atoms[targetIndex] : last(atoms);
   //   return [source, target]
   // } else {
-    const source = first(atoms);
-    const target = last(atoms);
+    const source = atoms[0];
+    const target = atoms[atoms.length - 1];
     return [source, target]
   //}
 }

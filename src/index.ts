@@ -8,6 +8,12 @@ export * as AlloyInstance from './alloy-instance';
 export * as Evaluators from './evaluators';
 export * as Layout from './layout';
 
+// Direct exports of key classes for convenience
+export { LayoutInstance } from './layout/layoutinstance';
+export { setupLayout } from './layout';
+export { type default as IEvaluator } from './evaluators/interfaces';
+export { WrappedForgeEvaluator } from './evaluators/forge-evaluator';
+
 export interface CoreConfig {
   debug?: boolean;
   version?: string;
@@ -47,9 +53,6 @@ export class CndCore {
     this.config = { ...this.config, ...newConfig };
   }
 }
-
-// Default export
-export default CndCore;
 
 // Utility functions
 export const createCndCore = (config?: CoreConfig): CndCore => {
