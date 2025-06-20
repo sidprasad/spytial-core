@@ -13,7 +13,7 @@ import {
 } from './interfaces';
 
 import {
-    LayoutSpec, parseLayoutSpec,
+    LayoutSpec,
     RelativeOrientationConstraint, CyclicOrientationConstraint,
     GroupByField, GroupBySelector
 } from './layoutspec';
@@ -86,7 +86,7 @@ export class LayoutInstance {
     static DISCONNECTED_PREFIX = "_d_"
 
 
-    readonly DEFAULT_NODE_ICON_PATH: string = null;
+    readonly DEFAULT_NODE_ICON_PATH: string = '';
     readonly DEFAULT_NODE_HEIGHT = 60;
     readonly DEFAULT_NODE_WIDTH = 100;
 
@@ -721,15 +721,7 @@ export class LayoutInstance {
             });
 
         }
-
-
-
-
-        const minRadius = 100; // Example fixed distance.
-
-        // Now this is where we **WOULD** typically do a variation.
-
-
+        
        const backtrackSolveFragments = (  layoutConstraints : LayoutConstraint[], fragmentIdx: number) : LayoutConstraint[] => {
 
             let currentLayoutError = "";
