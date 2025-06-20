@@ -1,0 +1,82 @@
+<alloy builddate="Wednesday, May 14th, 2025">
+<instance bitwidth="4" maxseq="-1" command="temporary-name_source_1" filename="/Users/siddharthaprasad/Desktop/copeanddrag/examples/paper-examples/bt/source.frg" version="4.1"  >
+
+<sig label="seq/Int" ID="0" parentID="1" builtin="yes">
+</sig>
+
+<sig label="Int" ID="1" parentID="2" builtin="yes">
+
+</sig>
+
+<sig label="univ" ID="2" builtin="yes">
+</sig>
+
+<field label="no-field-guard" ID="3" parentID="2">
+<types> <type ID="2"/><type ID="2"/> </types>
+</field>
+
+<sig label="Node" ID="4" parentID="2">
+<atom label="Node0"/><atom label="Node1"/><atom label="Node2"/><atom label="Node3"/><atom label="Node4"/>
+</sig>
+
+<field label="right" ID="5" parentID="4">
+<tuple><atom label="Node1"/><atom label="Node4"/></tuple>
+<tuple><atom label="Node3"/><atom label="Node0"/></tuple>
+<types><type ID="4"/><type ID="4"/></types>
+
+</field>
+
+<field label="key" ID="6" parentID="4">
+<tuple><atom label="Node0"/><atom label="7"/></tuple>
+<tuple><atom label="Node1"/><atom label="7"/></tuple>
+<tuple><atom label="Node2"/><atom label="6"/></tuple>
+<tuple><atom label="Node3"/><atom label="6"/></tuple>
+<tuple><atom label="Node4"/><atom label="5"/></tuple>
+<types><type ID="4"/><type ID="1"/></types>
+
+</field>
+
+<field label="left" ID="7" parentID="4">
+<tuple><atom label="Node3"/><atom label="Node1"/></tuple>
+<tuple><atom label="Node4"/><atom label="Node2"/></tuple>
+<types><type ID="4"/><type ID="4"/></types>
+
+</field>
+
+
+</instance>
+
+<source filename="/Users/siddharthaprasad/Desktop/copeanddrag/examples/paper-examples/bt/source.frg" content="#lang forge
+&#xA;option run_sterling &amp;quot;bst.js&amp;quot;
+&#xA;
+&#xA;/*
+&#xA;  Model of binary search trees
+&#xA;  Tim, 2024
+&#xA;*/
+&#xA;
+&#xA;sig Node {
+&#xA;  key: one Int,     -- every node has some key 
+&#xA;  left: lone Node,  -- every node has at most one left-child
+&#xA;  right: lone Node  -- every node has at most one right-child
+&#xA;}
+&#xA;fun descendantsOf[ancestor: Node]: set Node {
+&#xA;  ancestor.^(left + right) -- nodes reachable via transitive closure
+&#xA;}
+&#xA;pred binary_tree {
+&#xA;  -- no cycles (modified)
+&#xA;  all n: Node | 
+&#xA;    n not in descendantsOf[n] 
+&#xA;  -- connected via finite chain of left, right, and inverses
+&#xA;  all disj n1, n2: Node | n1 in n2.^(left + right + ~left + ~right)
+&#xA;  -- left+right differ (unless both are empty)
+&#xA;  all n: Node | some n.left =&amp;gt; n.left != n.right 
+&#xA;  -- nodes have a unique parent (if any)
+&#xA;  all n: Node | lone parent: Node | n in parent.(left+right)
+&#xA;}
+&#xA;--run {binary_tree} for 7 Node
+&#xA;
+&#xA;
+&#xA;
+&#xA;run {binary_tree and (some right) and (some left)} for exactly 5 Node
+&#xA;"></source>
+</alloy>

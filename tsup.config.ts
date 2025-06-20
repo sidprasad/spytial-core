@@ -25,9 +25,7 @@ export default defineConfig({
     'graphlib',
     'cassowary', 
     'chroma-js',
-    'ejs',
     'js-yaml',
-    'uuid',
     '@xmldom/xmldom',
     'forge-expr-evaluator'
   ],

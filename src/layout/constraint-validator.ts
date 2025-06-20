@@ -1,12 +1,51 @@
 import { SimplexSolver, Variable, Expression, Strength, Inequality, LEQ, GEQ, LE } from 'cassowary';
 import { InstanceLayout, LayoutNode, LayoutEdge, LayoutGroup, LayoutConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, TopConstraint, LeftConstraint, AlignmentConstraint, ImplicitConstraint } from './interfaces';
 import { RelativeOrientationConstraint } from './layoutspec';
-import { v4 as uuidv4 } from 'uuid';
 
+// Simple browser-compatible UUID generator
+function generateId(): string {
+    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+}
 
-import ejs from 'ejs';
-import fs from 'fs';
-import path from 'path';
+// Simple template renderer (replaces ejs for client-side compatibility)
+function renderTemplate(template: string, context: Record<string, any>): string {
+    let result = template;
+    
+    // Simple variable substitution
+    Object.entries(context).forEach(([key, value]) => {
+        const regex = new RegExp(`<%- ${key}%>`, 'g');
+        result = result.replace(regex, String(value));
+    });
+    
+    // Handle object iteration (simplified for this use case)
+    if (context.previousSourceConstraintToLayoutConstraints) {
+        const entries = Object.entries(context.previousSourceConstraintToLayoutConstraints);
+        let iterationHtml = '';
+        entries.forEach(([key, item]: [string, any]) => {
+            iterationHtml += `<code class="highlight ${item.uid}">${key}</code><br>`;
+        });
+        result = result.replace(
+            /<% Object\.entries\(previousSourceConstraintToLayoutConstraints\)\.forEach\(function\(\[key, item\]\) \{ %>[\s\S]*?<% \}\); %>/g,
+            iterationHtml
+        );
+        
+        // Handle the second iteration block
+        let iterationHtml2 = '';
+        entries.forEach(([sourceKey, value]: [string, any]) => {
+            if (value.constraints) {
+                value.constraints.forEach((constraint: any) => {
+                    iterationHtml2 += `<code class="highlight ${value.uid}">${constraint}</code><br>`;
+                });
+            }
+        });
+        result = result.replace(
+            /<% Object\.entries\(previousSourceConstraintToLayoutConstraints\)\.forEach\(function\(\[sourceKey, value\]\) \{ %>[\s\S]*?<% \}\); %>/g,
+            iterationHtml2
+        );
+    }
+    
+    return result;
+}
 
 // const templatePath = path.join(__dirname, 'constrainterr.ejs');
 // console.log("Using template at:", templatePath);
@@ -370,7 +409,7 @@ class ConstraintValidator {
                 // Use a unique identifier for the source constraint as the key
                 let sourceKey = c.sourceConstraint.toHTML(); // or another unique property
                 let layoutConstraintHTML = this.orientationConstraintToString(c);
-                let uid = uuidv4();
+                let uid = generateId();
 
                 
 
@@ -395,7 +434,7 @@ class ConstraintValidator {
 
             };
                
-            this.error = ejs.render(errorTemplate, context);
+            this.error = renderTemplate(errorTemplate, context);
             return;
         }
     }
