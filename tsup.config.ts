@@ -23,9 +23,10 @@ export default defineConfig({
   // Ensure all dependencies are bundled for client-side use
   noExternal: [
     'graphlib',
-    'cassowary', 
+    'kiwi.js', 
     'chroma-js',
     'js-yaml',
+    'lodash',
     '@xmldom/xmldom',
     'forge-expr-evaluator'
   ],

@@ -1,4 +1,4 @@
-import { SimplexSolver, Variable, Expression, Strength, Inequality, LEQ, GEQ, LE } from 'cassowary';
+import { Solver, Variable, Expression, Strength, Operator, Constraint } from 'kiwi.js';
 import { InstanceLayout, LayoutNode, LayoutEdge, LayoutGroup, LayoutConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, TopConstraint, LeftConstraint, AlignmentConstraint, ImplicitConstraint } from './interfaces';
 import { RelativeOrientationConstraint } from './layoutspec';
 
@@ -128,7 +128,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 class ConstraintValidator {
 
-    private solver: SimplexSolver;
+    private solver: Solver;
     private variables: { [key: string]: { x: Variable, y: Variable } };
 
     private added_constraints: any[];
@@ -146,7 +146,7 @@ class ConstraintValidator {
 
     constructor(layout: InstanceLayout) {
         this.layout = layout;
-        this.solver = new SimplexSolver();
+        this.solver = new Solver();
         this.nodes = layout.nodes;
         this.edges = layout.edges;
         this.orientationConstraints = layout.constraints;
@@ -179,7 +179,7 @@ class ConstraintValidator {
             }
         }
 
-        this.solver.solve();
+        this.solver.updateVariables();
 
         //// TODO: Does adding these play badly when we have circular layouts?
 
@@ -269,7 +269,7 @@ class ConstraintValidator {
             changed = false;
             for (let i = 0; i < core.length - 1; i++) { // -1 to always keep conflictingConstraint
                 let testSet = core.slice(0, i).concat(core.slice(i + 1));
-                let solver = new SimplexSolver();
+                let solver = new Solver();
                 try {
                     for (const c of testSet) {
 
@@ -283,7 +283,7 @@ class ConstraintValidator {
                             solver.addConstraint(cassowaryConstraint);
                         });
                     }
-                    solver.solve();
+                    solver.updateVariables();
                     // If no error, this subset is satisfiable, so keep the constraint in the core
                 } catch {
                     // Still unsat, so we can remove this constraint from the core
@@ -312,11 +312,10 @@ class ConstraintValidator {
                 let topVar = this.variables[topId].y;
                 let bottomVar = this.variables[bottomId].y;
 
-                let lhs = new Expression(topVar)
-                    .plus(new Expression(minDistance));
-                let rhs = new Expression(bottomVar);
+                // Create constraint: topVar + minDistance <= bottomVar
+                let kiwiConstraint = new Constraint(topVar.plus(minDistance), Operator.Le, bottomVar, Strength.required);
 
-                return [new Inequality(lhs, LEQ, rhs, Strength.required)];
+                return [kiwiConstraint];
             }
             else if (isLeftConstraint(constraint)) {
                 let lc = constraint as LeftConstraint;
@@ -331,11 +330,10 @@ class ConstraintValidator {
                 let leftVar = this.variables[leftId].x;
                 let rightVar = this.variables[rightId].x;
 
-                let lhs = new Expression(leftVar)
-                    .plus(new Expression(minDistance));
-                let rhs = new Expression(rightVar);
+                // Create constraint: leftVar + minDistance <= rightVar
+                let kiwiConstraint = new Constraint(leftVar.plus(minDistance), Operator.Le, rightVar, Strength.required);
 
-                return [new Inequality(lhs, LEQ, rhs, Strength.required)];
+                return [kiwiConstraint];
             }
             else if (isAlignmentConstraint(constraint)) {
 
@@ -353,11 +351,6 @@ class ConstraintValidator {
                 let node1Var = this.variables[node1Id][axis];
                 let node2Var = this.variables[node2Id][axis];
 
-                let lhs = new Expression(node1Var);
-                let rhs = new Expression(node2Var);
-
-             
-
                 // And register the alignment
                 if (axis === 'x') {
                     this.verticallyAligned.push([node1, node2]);
@@ -366,8 +359,8 @@ class ConstraintValidator {
                     this.horizontallyAligned.push([node1, node2]);
                 }
 
-                return [new Inequality(lhs, LEQ, rhs, Strength.required),
-                        new Inequality(lhs, GEQ, rhs, Strength.required)];
+                // Create equality constraint: node1Var == node2Var
+                return [new Constraint(node1Var, Operator.Eq, node2Var, Strength.required)];
             }
             else {
                 console.log(constraint, "Unknown constraint type");
@@ -441,7 +434,7 @@ class ConstraintValidator {
 
     private getAlignmentOrders(): LayoutConstraint[] {
         // Make sure the solver has solved
-        this.solver.solve();
+        this.solver.updateVariables();
 
         // Now first, create the normalized groups.
         this.horizontallyAligned = this.normalizeAlignment(this.horizontallyAligned);
@@ -452,7 +445,11 @@ class ConstraintValidator {
 
         // Now we need to get the order of the nodes in each group
         for (let i = 0; i < this.horizontallyAligned.length; i++) {
-            this.horizontallyAligned[i].sort((a, b) => this.variables[this.getNodeIndex(a.id)].x.value - this.variables[this.getNodeIndex(b.id)].x.value);   
+            this.horizontallyAligned[i].sort((a, b) => {
+                const aValue = this.variables[this.getNodeIndex(a.id)].x.value();
+                const bValue = this.variables[this.getNodeIndex(b.id)].x.value();
+                return (aValue as number) - (bValue as number);
+            });   
         }
 
         this.horizontallyAligned.forEach((alignedLeftToRight) => {
@@ -480,7 +477,11 @@ class ConstraintValidator {
 
 
         for (let i = 0; i < this.verticallyAligned.length; i++) {
-            this.verticallyAligned[i].sort((a, b) => this.variables[this.getNodeIndex(a.id)].y.value - this.variables[this.getNodeIndex(b.id)].y.value);
+            this.verticallyAligned[i].sort((a, b) => {
+                const aValue = this.variables[this.getNodeIndex(a.id)].y.value();
+                const bValue = this.variables[this.getNodeIndex(b.id)].y.value();
+                return (aValue as number) - (bValue as number);
+            });
         }
 
 

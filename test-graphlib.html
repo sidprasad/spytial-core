@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Graphlib Test</title>
+</head>
+<body>
+    <h1>Testing Graphlib Integration</h1>
+    <div id="output"></div>
+
+    <script type="module">
+        const output = document.getElementById('output');
+        
+        function log(message) {
+            output.innerHTML += `<p>${message}</p>`;
+            console.log(message);
+        }
+
+        try {
+            log('Testing layout module import...');
+            const layoutModule = await import('./dist/layout.mjs');
+            log('✅ Layout module imported successfully');
+            
+            log('Testing layout spec parsing...');
+            const testSpec = `
+directives:
+  - flag: hideDisconnected
+constraints:
+  - orientation:
+      selector: "*"
+      directions: [right, below]
+`;
+            
+            const layoutSpec = layoutModule.parseLayoutSpec(testSpec);
+            log('✅ Layout spec parsed successfully');
+            log(`Hide disconnected: ${layoutSpec.directives.hideDisconnected}`);
+            
+            log('Testing alloy graph module...');
+            const alloyGraphModule = await import('./dist/alloy-graph.mjs');
+            log('✅ Alloy graph module imported successfully');
+            
+            log('Testing alloy instance module...');
+            const alloyInstanceModule = await import('./dist/alloy-instance.mjs');
+            log('✅ Alloy instance module imported successfully');
+            
+            log('Testing simple XML parsing...');
+            const testXML = `<alloy>
+  <instance>
+    <sig label="Node" ID="0">
+      <atom label="Node$0"/>
+      <atom label="Node$1"/>
+    </sig>
+  </instance>
+</alloy>`;
+            
+            const parsedData = alloyInstanceModule.parseAlloyXML(testXML);
+            log('✅ XML parsing successful');
+            log(`Found ${parsedData.instances.length} instances`);
+            
+            if (parsedData.instances.length > 0) {
+                const instance = parsedData.instances[0];
+                log(`Instance has ${Object.keys(instance.types).length} types`);
+                
+                log('Testing graph generation...');
+                const graph = alloyGraphModule.generateGraph(instance, false, false);
+                log('✅ Graph generation successful');
+                log(`Graph has ${graph.nodes().length} nodes and ${graph.edges().length} edges`);
+            }
+            
+            log('🎉 All tests passed! Graphlib integration is working.');
+            
+        } catch (error) {
+            log(`❌ Error: ${error.message}`);
+            log(`Stack: ${error.stack}`);
+        }
+    </script>
+</body>
+</html>

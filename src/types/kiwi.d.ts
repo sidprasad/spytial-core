@@ -4,10 +4,16 @@ declare module 'kiwi.js' {
     constructor(name?: string);
     name(): string;
     value(): number;
+    
+    // Arithmetic operations
+    plus(value: number): Expression;
+    minus(value: number): Expression;
+    multiply(value: number): Expression;
+    divide(value: number): Expression;
   }
 
   export class Expression {
-    constructor(constant?: number);
+    constructor(variable?: Variable, coefficient?: number, constant?: number);
     constant(): number;
     terms(): { variable: Variable; coefficient: number }[];
     value(): number;
