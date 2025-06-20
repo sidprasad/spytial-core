@@ -23,7 +23,7 @@ import {
 
 
 import { generateGraph } from '../alloy-graph';
-import { WrappedForgeEvaluator } from '../forge-util/evaluatorUtil';
+import IEvaluator from '../evaluators/interfaces';
 import { ColorPicker } from './colorpicker';
 import { ConstraintValidator } from './constraint-validator';
 const UNIVERSAL_TYPE = "univ";
@@ -95,13 +95,13 @@ export class LayoutInstance {
     public readonly minSepHeight = 15;
     public readonly minSepWidth = 15;
 
-    private evaluator: WrappedForgeEvaluator;
+    private evaluator: IEvaluator;
     private instanceNum: number;
 
     private readonly addAlignmentEdges: boolean;
 
 
-    constructor(layoutSpec: LayoutSpec, evaluator: WrappedForgeEvaluator, instNum: number = 0, addAlignmentEdges: boolean = true) {
+    constructor(layoutSpec: LayoutSpec, evaluator: IEvaluator, instNum: number = 0, addAlignmentEdges: boolean = true) {
         this.instanceNum = instNum;
         this.evaluator = evaluator;
         this._layoutSpec = layoutSpec;
@@ -163,7 +163,7 @@ export class LayoutInstance {
         for (var gc of groupBySelectorConstraints) {
 
             let selector = gc.selector;
-            let selectorRes = this.evaluator.evaluate(selector, this.instanceNum);
+            let selectorRes = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
 
 
             // Now, we should support both unary and binary selectors.
@@ -678,7 +678,7 @@ export class LayoutInstance {
 
         for (const [index, c] of cyclicConstraints.entries()) {
 
-            let selectedTuples: string[][] = this.evaluator.evaluate(c.selector, this.instanceNum).selectedTwoples();
+            let selectedTuples: string[][] = this.evaluator.evaluate(c.selector, { instanceIndex: this.instanceNum }).selectedTwoples();
             let nextNodeMap: Map<LayoutNode, LayoutNode[]> = new Map<LayoutNode, LayoutNode[]>();
             // For each tuple, add to the nextNodeMap
             selectedTuples.forEach((tuple) => {
@@ -917,7 +917,7 @@ export class LayoutInstance {
             let directions = c.directions;
             let selector = c.selector;
 
-            let selectorRes = this.evaluator.evaluate(selector, this.instanceNum);
+            let selectorRes = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
             let selectedTuples: string[][] = selectorRes.selectedTwoples();
 
             // For each tuple, we need to apply the constraints
@@ -1045,7 +1045,7 @@ export class LayoutInstance {
         // Apply size directives first
         let sizeDirectives = this._layoutSpec.directives.sizes;
         sizeDirectives.forEach((sizeDirective) => {
-            let selectedNodes = this.evaluator.evaluate(sizeDirective.selector, this.instanceNum).selectedAtoms();
+            let selectedNodes = this.evaluator.evaluate(sizeDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
             let width = sizeDirective.width;
             let height = sizeDirective.height;
 
@@ -1085,7 +1085,7 @@ export class LayoutInstance {
         // Apply color directives first
         let colorDirectives = this._layoutSpec.directives.colors;
         colorDirectives.forEach((colorDirective) => {
-            let selected = this.evaluator.evaluate(colorDirective.selector, this.instanceNum).selectedAtoms();
+            let selected = this.evaluator.evaluate(colorDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
             let color = colorDirective.color;
 
             selected.forEach((nodeId) => {
@@ -1115,7 +1115,7 @@ export class LayoutInstance {
         // Apply icon directives first
         let iconDirectives = this._layoutSpec.directives.icons;
         iconDirectives.forEach((iconDirective) => {
-            let selected = this.evaluator.evaluate(iconDirective.selector, this.instanceNum).selectedAtoms();
+            let selected = this.evaluator.evaluate(iconDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
             let iconPath = iconDirective.path;
 
             selected.forEach((nodeId) => {
@@ -1189,7 +1189,7 @@ export class LayoutInstance {
 
 
 
-            let res = this.evaluator.evaluate(he.selector, this.instanceNum);
+            let res = this.evaluator.evaluate(he.selector, { instanceIndex: this.instanceNum });
 
             let selectedTuples: string[][] = res.selectedTuplesAll();
             let edgeIdPrefix = `${inferredEdgePrefix}<:${he.name}`;
