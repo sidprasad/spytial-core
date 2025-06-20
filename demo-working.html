@@ -426,22 +426,11 @@ ${Object.entries(datum.instances[0]?.relations || {}).map(([relName, rel]) =>
                 
                 const result = `✅ Layout Spec Parsing Test Successful!
 
-Parsed Layout Specification:
-- Hide Disconnected: ${layoutSpec.directives.hideDisconnected}
-- Hide Disconnected Built-ins: ${layoutSpec.directives.hideDisconnectedBuiltIns}
-- Attributes: ${layoutSpec.directives.attributes.length}
-- Hidden Fields: ${layoutSpec.directives.hiddenFields.length}
-- Projections: ${layoutSpec.directives.projections.length}
+=== COMPLETE LAYOUT SPECIFICATION OBJECT ===
+${JSON.stringify(layoutSpec, null, 2)}
 
-Node Constraints:
-${Object.keys(layoutSpec.constraints.node || {}).map(key => 
-  `- ${key}: ${JSON.stringify(layoutSpec.constraints.node[key])}`
-).join('\n') || '  (none)'}
-
-Edge Constraints:
-${Object.keys(layoutSpec.constraints.edge || {}).map(key => 
-  `- ${key}: ${JSON.stringify(layoutSpec.constraints.edge[key])}`
-).join('\n') || '  (none)'}`;
+=== ALL LAYOUT CONSTRAINTS (RAW) ===
+${JSON.stringify(layoutSpec.constraints, null, 2)}`;
                 
                 showOutput(result);
             } catch (error) {
@@ -529,27 +518,18 @@ Evaluator created successfully and implements IEvaluator interface!`;
                 
                 const result = `✅ Layout Generation Test Completed!
 
-Components Created Successfully:
-- Alloy Instance: ✓ (${Object.keys(instance.types).length} types, ${Object.keys(instance.relations).length} relations)
-- Layout Specification: ✓ (parsed from YAML)
-- Evaluator: ✓ (WrappedForgeEvaluator instance)
-- Layout Instance: ✓ (ready for layout generation)
+=== ALLOY INSTANCE (COMPLETE) ===
+${JSON.stringify(instance, null, 2)}
 
-API Methods Available:
-- setupLayout(): ${typeof cndCore.setupLayout}
-- LayoutInstance.generateLayout(): ${typeof layoutInstance.generateLayout}
+=== LAYOUT SPECIFICATION (COMPLETE) ===
+${JSON.stringify(layoutSpec, null, 2)}
 
-Note: Full layout generation requires proper evaluator initialization with Forge dependencies.
-All core APIs are working and ready for use in a proper environment!
+=== ALL LAYOUT CONSTRAINTS (RAW) ===
+${JSON.stringify(layoutSpec.constraints, null, 2)}
 
-Instance Details:
-- Types: ${Object.keys(instance.types).join(', ')}
-- Relations: ${Object.keys(instance.relations).join(', ')}
-- Atoms: ${Object.values(instance.types).map(t => t.atoms.length).reduce((a, b) => a + b, 0)} total
-
-Layout Specification:
-- Node constraints for: ${Object.keys(layoutSpec.constraints.node || {}).join(', ') || 'none'}
-- Edge constraints for: ${Object.keys(layoutSpec.constraints.edge || {}).join(', ') || 'none'}`;
+=== LAYOUT INSTANCE OBJECT ===
+Layout Instance Created: ${layoutInstance ? 'Yes' : 'No'}
+Available Methods: ${Object.getOwnPropertyNames(Object.getPrototypeOf(layoutInstance)).filter(name => name !== 'constructor').join(', ')}`;
                 
                 showOutput(result);
             } catch (error) {
