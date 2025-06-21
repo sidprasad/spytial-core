@@ -412,33 +412,49 @@ ${Object.entries(datum.instances[0]?.relations || {}).map(([relName, rel]) =>
 
         window.testLayoutSpec = async function() {
             try {
-                if (!cndCore) {
-                    await window.testModuleImports();
-                }
+                const cndYaml = document.getElementById('cnd-input').value || sampleCnd;
+                const layoutSpec = parseLayoutSpec(cndYaml);
                 
-                showOutput('Testing layout specification parsing...');
-                
-                // Import layout module specifically
-                const layout = await import('./dist/layout.mjs');
-                
-                const cndSpec = getCurrentCNDSpec();
-                const layoutSpec = layout.parseLayoutSpec(cndSpec);
-                
-                const result = `✅ Layout Spec Parsing Test Successful!
-
-=== COMPLETE LAYOUT SPECIFICATION OBJECT ===
-${JSON.stringify(layoutSpec, null, 2)}
-
-=== ALL LAYOUT CONSTRAINTS (RAW) ===
-${JSON.stringify(layoutSpec.constraints, null, 2)}`;
-                
-                showOutput(result);
+                document.getElementById('layout-spec-output').innerHTML = `
+                    <h4>✅ Layout Spec Parsing Successful</h4>
+                    <h5>Complete CND Layout Specification:</h5>
+                    <pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto; white-space: pre-wrap; max-height: 600px;">${JSON.stringify(layoutSpec, null, 2)}</pre>
+                `;
             } catch (error) {
-                showOutput(`❌ Layout Spec Parsing Failed:\n${error.message}\n\nStack:\n${error.stack}`, true);
+                document.getElementById('layout-spec-output').innerHTML = `
+                    <h4>❌ Layout Spec Parsing Failed:</h4>
+                    <p style="color: red;">${error.message}</p>
+                    <h5>Stack:</h5>
+                    <pre style="color: red; font-size: 12px;">${error.stack}</pre>
+                `;
             }
-        };
+        }
 
-        window.testEvaluator = async function() {
+        window.testLayoutGeneration = async function() {
+            try {
+                const xmlData = document.getElementById('alloy-input').value || sampleAlloyXml;
+                const cndYaml = document.getElementById('cnd-input').value || sampleCnd;
+                
+                const alloyInstance = parseAlloyXML(xmlData);
+                const layoutSpec = parseLayoutSpec(cndYaml);
+                const result = setupLayout(layoutSpec, alloyInstance);
+                
+                document.getElementById('layout-generation-output').innerHTML = `
+                    <h4>✅ Layout Generation Successful</h4>
+                    <h5>Complete Generated Layout:</h5>
+                    <pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto; white-space: pre-wrap; max-height: 600px;">${JSON.stringify(result, null, 2)}</pre>
+                `;
+            } catch (error) {
+                document.getElementById('layout-generation-output').innerHTML = `
+                    <h4>❌ Layout Generation Failed:</h4>
+                    <p style="color: red;">${error.message}</p>
+                    <h5>Stack:</h5>
+                    <pre style="color: red; font-size: 12px;">${error.stack}</pre>
+                `;
+            }
+        }
+
+        function testEvaluator() {
             try {
                 if (!cndCore) {
                     await window.testModuleImports();
