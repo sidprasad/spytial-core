@@ -7,12 +7,14 @@ export * as AlloyGraph from './alloy-graph';
 export * as AlloyInstance from './alloy-instance';
 export * as Evaluators from './evaluators';
 export * as Layout from './layout';
+export * as Translators from './translators';
 
 // Direct exports of key classes for convenience
 export { LayoutInstance } from './layout/layoutinstance';
 export { setupLayout } from './layout';
 export { type default as IEvaluator } from './evaluators/interfaces';
 export { ForgeEvaluator, WrappedForgeEvaluator } from './evaluators/forge-evaluator';
+export { WebColaTranslator, DagreTranslator } from './translators';
 
 export interface CoreConfig {
   debug?: boolean;

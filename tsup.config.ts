@@ -8,6 +8,7 @@ export default defineConfig({
     'alloy-graph': 'src/alloy-graph/index.ts',
     'alloy-instance': 'src/alloy-instance/index.ts',
     'layout': 'src/layout/index.ts',
+    'translators': 'src/translators/index.ts',
   },
   format: ['cjs', 'esm'],
   dts: true,
