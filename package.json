@@ -83,7 +83,9 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
+    "@types/d3": "^7.4.3",
     "chroma-js": "^3.1.2",
+    "d3": "^7.9.0",
     "forge-expr-evaluator": "^1.1.0",
     "graphlib": "^2.1.8",
     "js-yaml": "^4.1.0",

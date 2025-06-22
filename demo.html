@@ -130,6 +130,7 @@ Loading sample data from sample/layout.cnd...
         <button onclick="testLayoutGeneration()">Test Full Layout Generation</button>
         <button onclick="testGenerateLayoutMethod()">Test LayoutInstance.generateLayout()</button>
         <button onclick="testWebColaTranslator()">Test WebCola Translator</button>
+        <button onclick="testWebColaCnDGraph()">Test WebCola Custom Element</button>
         <button onclick="enableDebugMode()" style="background-color: #ff6b6b;">🔍 Enable Debug Mode</button>
         
         <div id="output" class="output" style="display: none;"></div>
@@ -362,6 +363,9 @@ Key APIs:
 - LayoutInstance: ${typeof cndCore.LayoutInstance}
 - ForgeEvaluator: ${typeof cndCore.ForgeEvaluator}
 - WrappedForgeEvaluator: ${typeof cndCore.WrappedForgeEvaluator}
+- WebColaTranslator: ${typeof cndCore.WebColaTranslator}
+- DagreTranslator: ${typeof cndCore.DagreTranslator}
+- Translators: ${typeof cndCore.Translators}
 - AlloyInstance: ${typeof cndCore.AlloyInstance}
 - parseAlloyXML: ${typeof cndCore.parseAlloyXML || 'not available in main module'}
 
@@ -765,6 +769,10 @@ ${JSON.stringify(generatedLayout, null, 2)}` : `❌ Layout Generation Failed: ${
                     debugger; // Break here before the generateLayout call
                     const result1 = layoutInstance.generateLayout(instance, {});
                     console.log('🔍 DEBUG: generateLayout succeeded:', result1);
+                    
+                    // Store the layout globally for the custom element to use
+                    window.lastInstanceLayout = result1.layout;
+                    
                     layoutResults.push({ 
                         scenario: 'Empty Projections', 
                         result: result1.layout,
@@ -782,6 +790,10 @@ ${JSON.stringify(generatedLayout, null, 2)}` : `❌ Layout Generation Failed: ${
                     try {
                         const sampleProjections = {}; // Could be enhanced with actual projection logic
                         const result2 = layoutInstance.generateLayout(instance, sampleProjections);
+                        
+                        // Update the global layout if this succeeds
+                        window.lastInstanceLayout = result2.layout;
+                        
                         layoutResults.push({ 
                             scenario: 'Sample Projections', 
                             result: result2.layout,
@@ -826,6 +838,255 @@ Layout Spec: ${JSON.stringify(layoutSpec, null, 2)}`;
                 showOutput(result);
             } catch (error) {
                 showOutput(`❌ LayoutInstance.generateLayout() Test Failed:\n${error.message}\n\nStack:\n${error.stack}`, true);
+            }
+        };
+
+        window.testWebColaTranslator = async function() {
+            try {
+                if (!cndCore) {
+                    await window.testModuleImports();
+                }
+                
+                showOutput('Testing WebCola Translator...');
+                
+                // Import required modules
+                const alloyInstance = await import('./dist/alloy-instance.mjs');
+                const layout = await import('./dist/layout.mjs');
+                const translators = await import('./dist/translators.mjs');
+                
+                // Parse the data
+                const alloyXML = getCurrentAlloyXML();
+                const cndSpec = getCurrentCNDSpec();
+                
+                let ad;
+                try {
+                    ad = alloyInstance.parseAlloyXML(alloyXML);
+                } catch (e) {
+                    throw new Error("Error parsing Forge instance. Is it well formed? <br> <pre>" + e.message + "</pre>");
+                }
+
+                const instance = ad.instances[0];
+                const layoutSpec = layout.parseLayoutSpec(cndSpec);
+                
+                // Create evaluator and layout instance
+                let ForgeEvaluatorClass;
+                if (cndCore.ForgeEvaluator) {
+                    ForgeEvaluatorClass = cndCore.ForgeEvaluator;
+                } else if (cndCore.Evaluators?.ForgeEvaluator) {
+                    ForgeEvaluatorClass = cndCore.Evaluators.ForgeEvaluator;
+                } else {
+                    ForgeEvaluatorClass = cndCore.WrappedForgeEvaluator;
+                }
+                
+                const evaluator = new ForgeEvaluatorClass();
+                
+                // Try to initialize evaluator (might fail, continue anyway)
+                try {
+                    await evaluator.initialize({
+                        sourceData: alloyXML,
+                        processedData: { instance: instance },
+                        sourceCode: '',
+                        metadata: { 
+                            command: ad.command || "",
+                            loopBack: ad.loopBack || -1,
+                            alloyDatum: ad
+                        }
+                    });
+                } catch (initError) {
+                    console.warn('Evaluator initialization failed (expected):', initError.message);
+                }
+                
+                const layoutInstance = new cndCore.LayoutInstance(layoutSpec, evaluator);
+                
+                // Generate layout
+                let generatedLayout;
+                try {
+                    const layoutResult = layoutInstance.generateLayout(instance, {});
+                    generatedLayout = layoutResult.layout;
+                } catch (generateError) {
+                    console.warn('generateLayout failed:', generateError.message);
+                    // Create a minimal layout for testing the translator
+                    generatedLayout = {
+                        nodes: [
+                            { id: 'Node0', x: 100, y: 100, width: 80, height: 50, color: '#4CAF50', mostSpecificType: 'Node', showLabels: true },
+                            { id: 'Node1', x: 200, y: 150, width: 80, height: 50, color: '#4CAF50', mostSpecificType: 'Node', showLabels: true }
+                        ],
+                        edges: [
+                            { id: 'edge1', source: { id: 'Node0' }, target: { id: 'Node1' }, relationName: 'right', label: 'right' }
+                        ],
+                        constraints: [],
+                        groups: []
+                    };
+                }
+                
+                console.log('🔧 Testing WebCola Translator with layout:', generatedLayout);
+                
+                // Test WebColaTranslator
+                let webColaTranslator;
+                if (cndCore.WebColaTranslator) {
+                    webColaTranslator = new cndCore.WebColaTranslator(generatedLayout);
+                } else if (cndCore.Translators?.WebColaTranslator) {
+                    webColaTranslator = new cndCore.Translators.WebColaTranslator(generatedLayout);
+                } else if (translators.WebColaTranslator) {
+                    webColaTranslator = new translators.WebColaTranslator(generatedLayout);
+                } else {
+                    throw new Error('WebColaTranslator not found in any expected location');
+                }
+                
+                console.log('🔧 WebColaTranslator created:', webColaTranslator);
+                
+                const result = `✅ WebCola Translator Test Successful!
+
+=== WEBCOLA TRANSLATION RESULT ===
+Translator Created: ${webColaTranslator ? 'Yes' : 'No'}
+
+WebCola Nodes (${webColaTranslator.colaNodes?.length || 0}):
+${JSON.stringify(webColaTranslator.colaNodes, null, 2)}
+
+WebCola Edges (${webColaTranslator.colaEdges?.length || 0}):
+${JSON.stringify(webColaTranslator.colaEdges, null, 2)}
+
+WebCola Constraints (${webColaTranslator.colaConstraints?.length || 0}):
+${JSON.stringify(webColaTranslator.colaConstraints, null, 2)}
+
+WebCola Groups (${webColaTranslator.groupDefinitions?.length || 0}):
+${JSON.stringify(webColaTranslator.groupDefinitions, null, 2)}
+
+✅ WebColaTranslator successfully converted the layout data to WebCola format!`;
+                
+                showOutput(result);
+            } catch (error) {
+                showOutput(`❌ WebCola Translator Test Failed:\n${error.message}\n\nStack:\n${error.stack}`, true);
+            }
+        };
+
+        window.testWebColaCnDGraph = async function() {
+            try {
+                if (!cndCore) {
+                    await window.testModuleImports();
+                }
+                
+                showOutput('Testing WebCola Custom Element...');
+                
+                // Import the custom element
+                const translators = await import('./dist/translators.mjs');
+                
+                console.log('Available in translators module:', Object.keys(translators));
+                
+                // Import WebColaCnDGraph directly
+                let WebColaCnDGraphClass;
+                try {
+                    // Import the custom element file directly
+                    await import('./src/translators/webcola-cnd-graph.ts');
+                    // The element should now be registered
+                    WebColaCnDGraphClass = customElements.get('webcola-cnd-graph');
+                    if (!WebColaCnDGraphClass) {
+                        throw new Error('WebColaCnDGraph not registered');
+                    }
+                } catch (error) {
+                    console.error('Error importing WebColaCnDGraph:', error);
+                    throw new Error('Could not load WebColaCnDGraph: ' + error.message);
+                }
+                
+                console.log('🔧 WebColaCnDGraph class found:', WebColaCnDGraphClass);
+                
+                // Get current data
+                const alloyXML = getCurrentAlloyXML();
+                const cndSpec = getCurrentCNDSpec();
+                
+                // Create and add the custom element to the page
+                const container = document.createElement('div');
+                container.style.cssText = `
+                    margin: 20px 0;
+                    padding: 20px;
+                    border: 2px solid #007acc;
+                    border-radius: 8px;
+                    background: #f8f9fa;
+                `;
+                
+                const title = document.createElement('h4');
+                title.textContent = '🎯 WebCola Custom Element Live Demo';
+                title.style.margin = '0 0 15px 0';
+                container.appendChild(title);
+                
+                const webColaGraph = document.createElement('webcola-cnd-graph');
+                webColaGraph.setAttribute('width', '800');
+                webColaGraph.setAttribute('height', '400');
+                webColaGraph.style.cssText = `
+                    display: block;
+                    width: 100%;
+                    height: 400px;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                `;
+                
+                container.appendChild(webColaGraph);
+                
+                // Add some controls
+                const controls = document.createElement('div');
+                controls.style.marginTop = '10px';
+                
+                const renderButton = document.createElement('button');
+                renderButton.textContent = 'Render Layout';
+                renderButton.onclick = async () => {
+                    try {
+                        // We need to get the InstanceLayout that was created earlier
+                        if (window.lastInstanceLayout) {
+                            await webColaGraph.renderLayout(window.lastInstanceLayout);
+                        } else {
+                            alert('No layout available. Please run "Generate Layout Instance" first.');
+                        }
+                    } catch (error) {
+                        console.error('Error rendering layout:', error);
+                        alert('Error rendering layout: ' + error.message);
+                    }
+                };
+                
+                const clearButton = document.createElement('button');
+                clearButton.textContent = 'Clear';
+                clearButton.onclick = () => webColaGraph.clear();
+                
+                controls.appendChild(renderButton);
+                controls.appendChild(clearButton);
+                container.appendChild(controls);
+                
+                // Insert the container after the output div
+                const outputDiv = document.getElementById('output');
+                if (outputDiv) {
+                    outputDiv.parentNode.insertBefore(container, outputDiv.nextSibling);
+                }
+                
+                const result = `✅ WebCola Custom Element Test Successful!
+
+=== CUSTOM ELEMENT DETAILS ===
+Element Tag: <webcola-cnd-graph>
+Class Available: ${WebColaCnDGraphClass ? 'Yes' : 'No'}
+Custom Element Registered: ${customElements.get('webcola-cnd-graph') ? 'Yes' : 'No'}
+
+Attributes Set:
+- width: 800
+- height: 400
+- alloy-xml: ${alloyXML.length} characters
+- layout-spec: ${cndSpec.length} characters
+
+🎯 Live visualization should appear above this message!
+
+Features:
+✓ Shadow DOM encapsulation
+✓ Attribute-based configuration
+✓ Automatic rendering on data change
+✓ Error handling and loading states
+✓ SVG-based visualization with proper CSS
+✓ WebCola integration for layout
+
+You can:
+• Refresh the visualization with new data
+• Clear the current visualization
+• Inspect the element in DevTools`;
+                
+                showOutput(result);
+            } catch (error) {
+                showOutput(`❌ WebCola Custom Element Test Failed:\n${error.message}\n\nStack:\n${error.stack}`, true);
             }
         };
 

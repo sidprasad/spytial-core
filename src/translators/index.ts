@@ -5,6 +5,10 @@
 export { WebColaLayout as WebColaTranslator } from './webcolatranslator';
 export { DagreTranslator } from './dagretranslator';
 
+// WebColaCnDGraph is exported directly from its file for browser usage
+// Import and re-export if needed:
+// export { WebColaCnDGraph } from './webcola-cnd-graph';
+
 // Re-export types for convenience
 export type { 
   InstanceLayout, 
@@ -13,3 +17,5 @@ export type {
   LayoutConstraint, 
   LayoutGroup 
 } from '../layout/interfaces';
+
+export type { NodeWithMetadata, EdgeWithMetadata } from './webcolatranslator';

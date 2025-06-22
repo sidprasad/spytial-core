@@ -36,6 +36,9 @@ type EdgeWithMetadata = {
   label: string // This is what is displayed on the edge
 };
 
+// Export the types for use in other modules
+export type { NodeWithMetadata, EdgeWithMetadata };
+
 // WebCola constraint types
 interface ColaConstraint {
   type: string;
