@@ -1,332 +1,379 @@
+import { WebColaTranslator } from './webcolatranslator';
+import { InstanceLayout } from '../../layout/interfaces';
+import * as cola from 'webcola';
+import * as d3 from 'd3';
+
 /**
- * WebColaCnDGraph - Custom HTML Element for rendering CND layouts with WebCola
- * 
- * This element takes an InstanceLayout as input, translates it to WebCola format,
- * and renders an interactive SVG visualization.
- * 
- * Usage:
- * <webcola-cnd-graph width="800" height="600"></webcola-cnd-graph>
- * 
- * Then call: element.renderLayout(instanceLayout)
+ * WebCola CnD Graph Custom Element
+ * Full implementation using WebCola constraint-based layout with D3 integration
  */
-
 export class WebColaCnDGraph extends HTMLElement {
-  private _width: number = 800;
-  private _height: number = 600;
-  private svg: any = null;
-  private mainGroup: any = null;
+  private svg!: any;
+  private container!: any;
   private currentLayout: any = null;
-
-  static get observedAttributes(): string[] {
-    return ['width', 'height'];
-  }
 
   constructor() {
     super();
-    
-    // Create shadow DOM
-    const shadow = this.attachShadow({ mode: 'open' });
-    
-    // Add styles
-    const style = document.createElement('style');
-    style.textContent = this.getStyles();
-    shadow.appendChild(style);
-    
-    // Create the SVG container
-    this.createSVGStructure(shadow);
-  }
-
-  private createSVGStructure(container: ShadowRoot): void {
-    // Create the main container
-    const svgContainer = document.createElement('div');
-    svgContainer.className = 'webcola-container';
-    svgContainer.style.width = '100%';
-    svgContainer.style.height = '100%';
-    svgContainer.style.border = '1px solid #ccc';
-    svgContainer.style.background = 'white';
-    
-    // Create SVG element
-    const svgElement = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svgElement.id = 'svg';
-    svgElement.style.width = '100%';
-    svgElement.style.height = '100%';
-    svgElement.setAttribute('width', this._width.toString());
-    svgElement.setAttribute('height', this._height.toString());
-    
-    // Create defs for markers
-    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-    
-    // End arrow marker
-    const endArrow = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
-    endArrow.id = 'end-arrow';
-    endArrow.setAttribute('markerWidth', '10');
-    endArrow.setAttribute('markerHeight', '10');
-    endArrow.setAttribute('refX', '9');
-    endArrow.setAttribute('refY', '3');
-    endArrow.setAttribute('orient', 'auto');
-    
-    const endArrowPolygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-    endArrowPolygon.setAttribute('points', '0,0 0,6 9,3');
-    endArrowPolygon.setAttribute('fill', 'black');
-    endArrow.appendChild(endArrowPolygon);
-    defs.appendChild(endArrow);
-    
-    svgElement.appendChild(defs);
-    
-    // Create main group
-    const mainGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    mainGroup.id = 'main-group';
-    svgElement.appendChild(mainGroup);
-    
-    svgContainer.appendChild(svgElement);
-    container.appendChild(svgContainer);
-    
-    // Store references
-    this.svg = svgElement;
-    this.mainGroup = mainGroup;
-  }
-
-  get width(): number { return this._width; }
-  set width(value: number) { 
-    this._width = value; 
-    this.setAttribute('width', value.toString());
-  }
-
-  get height(): number { return this._height; }
-  set height(value: number) { 
-    this._height = value; 
-    this.setAttribute('height', value.toString());
-  }
-
-  attributeChangedCallback(name: string, oldValue: string, newValue: string): void {
-    if (oldValue === newValue) return;
-
-    switch (name) {
-      case 'width':
-        this._width = parseInt(newValue) || 800;
-        if (this.svg) {
-          this.svg.setAttribute('width', this._width.toString());
-        }
-        break;
-      case 'height':
-        this._height = parseInt(newValue) || 600;
-        if (this.svg) {
-          this.svg.setAttribute('height', this._height.toString());
-        }
-        break;
-    }
+    this.attachShadow({ mode: 'open' });
+    this.initializeDOM();
+    this.initializeD3();
   }
 
   /**
-   * Main method to render a layout from InstanceLayout
+   * Initialize the Shadow DOM structure
    */
-  async renderLayout(instanceLayout: any): Promise<void> {
+  private initializeDOM(): void {
+    this.shadowRoot!.innerHTML = `
+      <style>
+        ${this.getCSS()}
+      </style>
+      <div id="svg-container">
+        <svg id="svg" width="800" height="600">
+          <defs>
+            <marker id="end-arrow" markerWidth="15" markerHeight="10" refX="12" refY="5" orient="auto">
+              <polygon points="0 0, 15 5, 0 10" />
+            </marker>
+            <marker id="hand-drawn-arrow" markerWidth="15" markerHeight="10" refX="12" refY="5" orient="auto">
+              <polygon points="0 0, 15 5, 0 10" fill="#666666" />
+            </marker>
+          </defs>
+          <g class="zoomable"></g>
+        </svg>
+      </div>
+      <div id="loading" style="display: none;">Loading...</div>
+      <div id="error" style="display: none; color: red;"></div>
+    `;
+  }
+
+  /**
+   * Initialize D3 selections and zoom behavior
+   */
+  private initializeD3(): void {
+    this.svg = d3.select(this.shadowRoot!.querySelector('#svg'));
+    this.container = this.svg.select('.zoomable');
+    
+    // Set up zoom behavior
+    const zoom = d3.zoom()
+      .scaleExtent([0.1, 4])
+      .on('zoom', (event: any) => {
+        this.container.attr('transform', event.transform);
+      });
+    
+    this.svg.call(zoom);
+  }
+
+  /**
+   * Render layout using WebCola constraint solver
+   * @param instanceLayout - The layout instance to render
+   */
+  public async renderLayout(instanceLayout: InstanceLayout): Promise<void> {
     try {
       this.showLoading();
-
-      // Import WebColaTranslator from the built module
-      const { WebColaTranslator } = await import('./webcolatranslator');
       
-      // Create translator and convert layout
+      // Translate to WebCola format
       const translator = new WebColaTranslator();
-      const webColaLayout = await translator.translate(instanceLayout);
+      const webcolaLayout = await translator.translate(instanceLayout);
       
-      // Store current layout
-      this.currentLayout = webColaLayout;
-      
-      // Render simple SVG
-      this.renderSimpleSVG(webColaLayout);
-      
-    } catch (error: any) {
-      console.error('Error rendering layout:', error);
-      this.showError(`Failed to render layout: ${error.message}`);
-    }
-  }
+      console.log('🔄 Starting WebCola layout with cola.d3adaptor');
+      console.log('Layout data:', webcolaLayout);
 
-  private showLoading(): void {
-    if (!this.mainGroup) return;
-    
-    this.mainGroup.innerHTML = '';
-    
-    const loadingText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    loadingText.setAttribute('x', (this._width / 2).toString());
-    loadingText.setAttribute('y', (this._height / 2).toString());
-    loadingText.setAttribute('text-anchor', 'middle');
-    loadingText.setAttribute('fill', '#1976d2');
-    loadingText.textContent = 'Loading layout...';
-    
-    this.mainGroup.appendChild(loadingText);
-  }
+      // Create WebCola layout using d3adaptor
+      const layout = cola.d3adaptor()
+        .linkDistance(100)
+        .avoidOverlaps(true)
+        .handleDisconnected(true)
+        .size([800, 600])
+        .nodes(webcolaLayout.nodes)
+        .links(webcolaLayout.links);
 
-  private showError(message: string): void {
-    if (!this.mainGroup) return;
-    
-    this.mainGroup.innerHTML = '';
-    
-    const errorText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    errorText.setAttribute('x', (this._width / 2).toString());
-    errorText.setAttribute('y', (this._height / 2).toString());
-    errorText.setAttribute('text-anchor', 'middle');
-    errorText.setAttribute('fill', '#d32f2f');
-    errorText.textContent = message;
-    
-    this.mainGroup.appendChild(errorText);
-  }
-
-  private renderSimpleSVG(webColaLayout: any): void {
-    if (!this.mainGroup || !webColaLayout) return;
-
-    // Clear previous content
-    this.mainGroup.innerHTML = '';
-
-    const nodes = webColaLayout.nodes || [];
-    const links = webColaLayout.links || [];
-    const groups = webColaLayout.groups || [];
-
-    // Simple layout algorithm - arrange nodes in a grid
-    const nodePositions = this.calculateSimpleLayout(nodes);
-
-    // Draw groups first (as backgrounds)
-    groups.forEach((group: any, index: number) => {
-      const groupRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      groupRect.setAttribute('x', (50 + (index * 200)).toString());
-      groupRect.setAttribute('y', '50');
-      groupRect.setAttribute('width', '180');
-      groupRect.setAttribute('height', '120');
-      groupRect.setAttribute('fill', 'rgba(173, 216, 230, 0.3)');
-      groupRect.setAttribute('stroke', 'rgba(100, 149, 237, 0.8)');
-      groupRect.setAttribute('stroke-width', '2');
-      groupRect.setAttribute('stroke-dasharray', '5,5');
-      groupRect.setAttribute('rx', '5');
-      this.mainGroup.appendChild(groupRect);
-
-      // Group label
-      const groupLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      groupLabel.setAttribute('x', (50 + (index * 200) + 90).toString());
-      groupLabel.setAttribute('y', '45');
-      groupLabel.setAttribute('text-anchor', 'middle');
-      groupLabel.setAttribute('fill', 'black');
-      groupLabel.setAttribute('font-family', 'Verdana');
-      groupLabel.setAttribute('font-size', '12');
-      groupLabel.textContent = group.name || group.id || `Group ${index + 1}`;
-      this.mainGroup.appendChild(groupLabel);
-    });
-
-    // Draw links
-    links.forEach((link: any) => {
-      const sourcePos = nodePositions[link.source] || { x: 100, y: 100 };
-      const targetPos = nodePositions[link.target] || { x: 200, y: 200 };
-
-      const linkLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      linkLine.setAttribute('x1', sourcePos.x.toString());
-      linkLine.setAttribute('y1', sourcePos.y.toString());
-      linkLine.setAttribute('x2', targetPos.x.toString());
-      linkLine.setAttribute('y2', targetPos.y.toString());
-      linkLine.setAttribute('stroke', 'black');
-      linkLine.setAttribute('stroke-width', '2');
-      linkLine.setAttribute('marker-end', 'url(#end-arrow)');
-      
-      // Add class based on edge type
-      if (link.id && link.id.includes('_inferred_')) {
-        linkLine.setAttribute('stroke', '#666666');
-        linkLine.setAttribute('stroke-dasharray', '5,5');
+      // Add constraints if available
+      if (webcolaLayout.constraints && webcolaLayout.constraints.length > 0) {
+        layout.constraints(webcolaLayout.constraints);
       }
-      
-      this.mainGroup.appendChild(linkLine);
-    });
 
-    // Draw nodes
-    nodes.forEach((node: any, index: number) => {
-      const pos = nodePositions[index] || { x: 100 + (index * 100), y: 200 };
-
-      // Node circle
-      const nodeCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      nodeCircle.setAttribute('cx', pos.x.toString());
-      nodeCircle.setAttribute('cy', pos.y.toString());
-      nodeCircle.setAttribute('r', (node.radius || 20).toString());
-      nodeCircle.setAttribute('fill', node.color || '#b7e4c7');
-      nodeCircle.setAttribute('stroke', '#40916c');
-      nodeCircle.setAttribute('stroke-width', '2');
-      this.mainGroup.appendChild(nodeCircle);
-
-      // Node label
-      const nodeLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      nodeLabel.setAttribute('x', pos.x.toString());
-      nodeLabel.setAttribute('y', (pos.y + 4).toString());
-      nodeLabel.setAttribute('text-anchor', 'middle');
-      nodeLabel.setAttribute('fill', 'black');
-      nodeLabel.setAttribute('font-family', 'Verdana');
-      nodeLabel.setAttribute('font-size', '10');
-      nodeLabel.setAttribute('pointer-events', 'none');
-      nodeLabel.textContent = node.label || node.id || `Node ${index + 1}`;
-      this.mainGroup.appendChild(nodeLabel);
-    });
-
-    // Add a success message
-    const successText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    successText.setAttribute('x', (this._width - 10).toString());
-    successText.setAttribute('y', '20');
-    successText.setAttribute('text-anchor', 'end');
-    successText.setAttribute('fill', '#00b894');
-    successText.setAttribute('font-size', '12');
-    successText.textContent = `Rendered ${nodes.length} nodes, ${links.length} edges`;
-    this.mainGroup.appendChild(successText);
-  }
-
-  private calculateSimpleLayout(nodes: any[]): Record<number, {x: number, y: number}> {
-    const positions: Record<number, {x: number, y: number}> = {};
-    const margin = 100;
-    const spacing = 120;
-    
-    // Arrange nodes in a grid
-    const cols = Math.ceil(Math.sqrt(nodes.length));
-    
-    nodes.forEach((node: any, index: number) => {
-      const row = Math.floor(index / cols);
-      const col = index % cols;
-      
-      positions[index] = {
-        x: margin + (col * spacing),
-        y: margin + (row * spacing)
+      // Store current layout for updates
+      this.currentLayout = {
+        nodes: webcolaLayout.nodes,
+        links: webcolaLayout.links,
+        groups: webcolaLayout.groups || [],
+        constraints: webcolaLayout.constraints || []
       };
-    });
-    
-    return positions;
-  }
 
-  /**
-   * Clear the visualization
-   */
-  clear(): void {
-    if (this.mainGroup) {
-      this.mainGroup.innerHTML = '';
+      // Clear existing visualization
+      this.container.selectAll('*').remove();
+
+      // Create D3 selections for data binding
+      this.renderGroups(this.currentLayout.groups);
+      this.renderLinks(this.currentLayout.links, layout);
+      this.renderNodes(this.currentLayout.nodes, layout);
+
+      // Start the layout with proper event handling
+      layout
+        .on('tick', () => {
+          this.updatePositions();
+        })
+        .on('end', () => {
+          console.log('✅ WebCola layout converged');
+          this.hideLoading();
+        })
+        .start(10, 15, 20);
+
+    } catch (error) {
+      console.error('Error rendering layout:', error);
+      this.showError(`Layout rendering failed: ${(error as Error).message}`);
     }
-    this.currentLayout = null;
   }
 
   /**
-   * Get the current layout data
+   * Render groups using D3 data binding
    */
-  getCurrentLayout(): any {
-    return this.currentLayout;
+  private renderGroups(groups: any[]): void {
+    this.container
+      .selectAll('.group')
+      .data(groups)
+      .enter()
+      .append('rect')
+      .attr('class', 'group')
+      .attr('fill', 'rgba(200, 200, 200, 0.3)')
+      .attr('stroke', 'black')
+      .attr('stroke-width', 1);
   }
 
-  private getStyles(): string {
+  /**
+   * Render links using D3 data binding
+   */
+  private renderLinks(links: any[], layout: any): void {
+    this.container
+      .selectAll('.link')
+      .data(links)
+      .enter()
+      .append('path')
+      .attr('class', (d: any) => d.isInferred ? 'inferredLink' : 'link')
+      .attr('stroke', (d: any) => d.isInferred ? '#666666' : '#333330')
+      .attr('stroke-width', 1)
+      .attr('fill', 'none')
+      .attr('marker-end', (d: any) => 
+        d.isInferred ? 'url(#hand-drawn-arrow)' : 'url(#end-arrow)'
+      );
+  }
+
+  /**
+   * Render nodes using D3 data binding with drag behavior
+   */
+  private renderNodes(nodes: any[], layout: any): void {
+    const nodeSelection = this.container
+      .selectAll('.node')
+      .data(nodes)
+      .enter()
+      .append('g')
+      .attr('class', 'node')
+      .call(this.createDragBehavior(layout));
+
+    // Add node rectangles
+    nodeSelection
+      .append('rect')
+      .attr('width', (d: any) => d.width || 60)
+      .attr('height', (d: any) => d.height || 30)
+      .attr('x', (d: any) => -(d.width || 60) / 2)
+      .attr('y', (d: any) => -(d.height || 30) / 2)
+      .attr('fill', (d: any) => d.color || 'white')
+      .attr('stroke', 'black')
+      .attr('stroke-width', 1.5);
+
+    // Add node labels
+    nodeSelection
+      .append('text')
+      .attr('text-anchor', 'middle')
+      .attr('dominant-baseline', 'middle')
+      .attr('font-family', 'system-ui')
+      .attr('font-size', '10px')
+      .attr('fill', 'black')
+      .text((d: any) => d.name || d.id || 'Node');
+  }
+
+  /**
+   * Create drag behavior that integrates with WebCola layout
+   */
+  private createDragBehavior(layout: any): any {
+    return d3.drag()
+      .on('start', (event: any, d: any) => {
+        if (!event.active) layout.alphaTarget(0.3).restart();
+        d.fx = d.x;
+        d.fy = d.y;
+      })
+      .on('drag', (event: any, d: any) => {
+        d.fx = event.x;
+        d.fy = event.y;
+      })
+      .on('end', (event: any, d: any) => {
+        if (!event.active) layout.alphaTarget(0);
+        d.fx = null;
+        d.fy = null;
+      });
+  }
+
+  /**
+   * Update positions during WebCola layout iterations
+   */
+  private updatePositions(): void {
+    if (!this.currentLayout || !this.container) return;
+
+    // Update node positions
+    this.container.selectAll('.node')
+      .attr('transform', (d: any) => `translate(${d.x}, ${d.y})`);
+
+    // Update link paths
+    this.container.selectAll('.link, .inferredLink')
+      .attr('d', (d: any) => this.createEdgePath(d));
+
+    // Update group boundaries if WebCola provides them
+    this.container.selectAll('.group')
+      .attr('x', (d: any) => d.bounds ? d.bounds.x : 0)
+      .attr('y', (d: any) => d.bounds ? d.bounds.y : 0)
+      .attr('width', (d: any) => d.bounds ? d.bounds.width() : 0)
+      .attr('height', (d: any) => d.bounds ? d.bounds.height() : 0);
+  }
+
+  /**
+   * Create SVG path for edges
+   */
+  private createEdgePath(edge: any): string {
+    const source = edge.source;
+    const target = edge.target;
+    
+    // Use WebCola's routing if available
+    if (edge.route && edge.route.length > 0) {
+      let path = `M ${edge.route[0].x} ${edge.route[0].y}`;
+      for (let i = 1; i < edge.route.length; i++) {
+        path += ` L ${edge.route[i].x} ${edge.route[i].y}`;
+      }
+      return path;
+    }
+
+    // Fallback to simple line
+    return `M ${source.x} ${source.y} L ${target.x} ${target.y}`;
+  }
+
+  /**
+   * Show loading indicator
+   */
+  private showLoading(): void {
+    const loading = this.shadowRoot!.querySelector('#loading') as HTMLElement;
+    if (loading) loading.style.display = 'block';
+  }
+
+  /**
+   * Hide loading indicator
+   */
+  private hideLoading(): void {
+    const loading = this.shadowRoot!.querySelector('#loading') as HTMLElement;
+    if (loading) loading.style.display = 'none';
+  }
+
+  /**
+   * Show error message
+   */
+  private showError(message: string): void {
+    const errorDiv = this.shadowRoot!.querySelector('#error') as HTMLElement;
+    if (errorDiv) {
+      errorDiv.textContent = message;
+      errorDiv.style.display = 'block';
+    }
+    this.hideLoading();
+  }
+
+  /**
+   * Get CSS styles for the component
+   */
+  private getCSS(): string {
     return `
-      .webcola-container {
+      #svg-container {
         width: 100%;
         height: 100%;
-        border: 1px solid #ccc;
-        background: white;
         position: relative;
+      }
+
+      #svg {
+        width: 100%;
+        height: 100%;
+        border: 1px solid #ddd;
+      }
+
+      .zoomable {
+        transform-origin: 0 0;
+      }
+
+      .node {
+        cursor: pointer;
+      }
+
+      .node:hover rect {
+        stroke-width: 2px;
+        stroke: #1976d2;
+      }
+
+      .link {
+        fill: none;
+        stroke: #333;
+        stroke-width: 1.5px;
+        stroke-opacity: 1;
+        marker-end: url(#end-arrow);
+      }
+
+      .inferredLink {
+        stroke: #666666;
+        fill: none;
+        stroke-width: 1px;
+        stroke-opacity: 0.8;
+        stroke-dasharray: 4, 2;
+        marker-end: url(#hand-drawn-arrow);
+      }
+
+      .group {
+        fill: rgba(200, 200, 200, 0.3);
+        stroke: black;
+        stroke-width: 1px;
+      }
+
+      .label {
+        fill: black;
+        font-family: system-ui;
+        font-size: 10px;
+        text-anchor: middle;
+        cursor: move;
+      }
+
+      #loading {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 16px;
+        color: #1976d2;
+        background: white;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+      }
+
+      #error {
+        position: absolute;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 14px;
+        color: red;
+        background: white;
+        padding: 10px;
+        border: 1px solid red;
+        border-radius: 4px;
+        max-width: 80%;
       }
     `;
   }
 }
 
-// Register the custom element (only if in browser environment)
-if (typeof globalThis !== 'undefined' && 
-    typeof globalThis.customElements !== 'undefined' && 
-    !globalThis.customElements.get('webcola-cnd-graph')) {
-  globalThis.customElements.define('webcola-cnd-graph', WebColaCnDGraph);
+// Register the custom element
+if (typeof customElements !== 'undefined') {
+  customElements.define('webcola-cnd-graph', WebColaCnDGraph);
 }

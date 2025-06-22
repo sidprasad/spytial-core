@@ -86,8 +86,8 @@ export class WebColaLayout {
 
   private dagre_graph: Record<string, unknown> | null = null;
 
-  readonly FIG_WIDTH: number;
-  readonly FIG_HEIGHT: number;
+  public FIG_WIDTH: number;
+  public FIG_HEIGHT: number;
 
   constructor(instanceLayout: InstanceLayout, fig_height: number = 800, fig_width: number = 800) {
 

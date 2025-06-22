@@ -25,6 +25,16 @@
       "types": "./dist/layout.d.ts",
       "import": "./dist/layout.mjs",
       "require": "./dist/layout.js"
+    },
+    "./translators": {
+      "types": "./dist/translators.d.ts",
+      "import": "./dist/translators.mjs",
+      "require": "./dist/translators.js"
+    },
+    "./webcola-cnd-graph": {
+      "types": "./dist/webcola-cnd-graph.d.ts",
+      "import": "./dist/webcola-cnd-graph.mjs",
+      "require": "./dist/webcola-cnd-graph.js"
     }
   },
   "files": [
