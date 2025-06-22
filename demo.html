@@ -128,6 +128,8 @@ Loading sample data from sample/layout.cnd...
         <button onclick="testLayoutSpec()">Test Layout Spec Parsing</button>
         <button onclick="testEvaluator()">Test Evaluator</button>
         <button onclick="testLayoutGeneration()">Test Full Layout Generation</button>
+        <button onclick="testGenerateLayoutMethod()">Test LayoutInstance.generateLayout()</button>
+        <button onclick="enableDebugMode()" style="background-color: #ff6b6b;">🔍 Enable Debug Mode</button>
         
         <div id="output" class="output" style="display: none;"></div>
     </div>
@@ -357,9 +359,13 @@ ${exports.map(exp => `- ${exp}`).join('\n')}
 Key APIs:
 - setupLayout: ${typeof cndCore.setupLayout}
 - LayoutInstance: ${typeof cndCore.LayoutInstance}
+- ForgeEvaluator: ${typeof cndCore.ForgeEvaluator}
 - WrappedForgeEvaluator: ${typeof cndCore.WrappedForgeEvaluator}
 - AlloyInstance: ${typeof cndCore.AlloyInstance}
 - parseAlloyXML: ${typeof cndCore.parseAlloyXML || 'not available in main module'}
+
+🔍 DEBUG: Full cndCore object:
+${JSON.stringify(Object.getOwnPropertyNames(cndCore), null, 2)}
 
 Module loaded successfully!`;
                 
@@ -412,49 +418,79 @@ ${Object.entries(datum.instances[0]?.relations || {}).map(([relName, rel]) =>
 
         window.testLayoutSpec = async function() {
             try {
-                const cndYaml = document.getElementById('cnd-input').value || sampleCnd;
-                const layoutSpec = parseLayoutSpec(cndYaml);
+                if (!cndCore) {
+                    await window.testModuleImports();
+                }
                 
-                document.getElementById('layout-spec-output').innerHTML = `
-                    <h4>✅ Layout Spec Parsing Successful</h4>
-                    <h5>Complete CND Layout Specification:</h5>
-                    <pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto; white-space: pre-wrap; max-height: 600px;">${JSON.stringify(layoutSpec, null, 2)}</pre>
-                `;
+                showOutput('Testing layout specification parsing...');
+                
+                // Import layout module specifically
+                const layout = await import('./dist/layout.mjs');
+                
+                const cndYaml = getCurrentCNDSpec();
+                const layoutSpec = layout.parseLayoutSpec(cndYaml);
+                
+                const result = `✅ Layout Spec Parsing Successful!
+
+=== COMPLETE CND LAYOUT SPECIFICATION ===
+${JSON.stringify(layoutSpec, null, 2)}
+
+=== ALL LAYOUT CONSTRAINTS (RAW) ===
+${JSON.stringify(layoutSpec.constraints, null, 2)}`;
+                
+                showOutput(result);
             } catch (error) {
-                document.getElementById('layout-spec-output').innerHTML = `
-                    <h4>❌ Layout Spec Parsing Failed:</h4>
-                    <p style="color: red;">${error.message}</p>
-                    <h5>Stack:</h5>
-                    <pre style="color: red; font-size: 12px;">${error.stack}</pre>
-                `;
+                showOutput(`❌ Layout Spec Parsing Failed:\n${error.message}\n\nStack:\n${error.stack}`, true);
             }
         }
 
         window.testLayoutGeneration = async function() {
             try {
-                const xmlData = document.getElementById('alloy-input').value || sampleAlloyXml;
-                const cndYaml = document.getElementById('cnd-input').value || sampleCnd;
+                if (!cndCore) {
+                    await window.testModuleImports();
+                }
                 
-                const alloyInstance = parseAlloyXML(xmlData);
-                const layoutSpec = parseLayoutSpec(cndYaml);
-                const result = setupLayout(layoutSpec, alloyInstance);
+                showOutput('Testing full layout generation...');
                 
-                document.getElementById('layout-generation-output').innerHTML = `
-                    <h4>✅ Layout Generation Successful</h4>
-                    <h5>Complete Generated Layout:</h5>
-                    <pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto; white-space: pre-wrap; max-height: 600px;">${JSON.stringify(result, null, 2)}</pre>
-                `;
+                // Import required modules
+                const alloyInstance = await import('./dist/alloy-instance.mjs');
+                const layout = await import('./dist/layout.mjs');
+                
+                const xmlData = getCurrentAlloyXML();
+                const cndYaml = getCurrentCNDSpec();
+                
+                const datum = alloyInstance.parseAlloyXML(xmlData);
+                const instance = datum.instances[0];
+                const layoutSpec = layout.parseLayoutSpec(cndYaml);
+                
+                // Create evaluator
+                const evaluator = new cndCore.WrappedForgeEvaluator();
+                
+                // Create layout instance
+                const layoutInstance = new cndCore.LayoutInstance(layoutSpec, evaluator);
+                
+                const result = `✅ Layout Generation Test Completed!
+
+=== ALLOY INSTANCE (COMPLETE) ===
+${JSON.stringify(instance, null, 2)}
+
+=== LAYOUT SPECIFICATION (COMPLETE) ===
+${JSON.stringify(layoutSpec, null, 2)}
+
+=== ALL LAYOUT CONSTRAINTS (RAW) ===
+${JSON.stringify(layoutSpec.constraints, null, 2)}
+
+=== LAYOUT INSTANCE OBJECT ===
+Layout Instance Created: ${layoutInstance ? 'Yes' : 'No'}
+Available Methods: ${Object.getOwnPropertyNames(Object.getPrototypeOf(layoutInstance)).filter(name => name !== 'constructor').join(', ')}`;
+                
+                showOutput(result);
             } catch (error) {
-                document.getElementById('layout-generation-output').innerHTML = `
-                    <h4>❌ Layout Generation Failed:</h4>
-                    <p style="color: red;">${error.message}</p>
-                    <h5>Stack:</h5>
-                    <pre style="color: red; font-size: 12px;">${error.stack}</pre>
-                `;
+                showOutput(`❌ Layout Generation Test Failed:\n${error.message}\n\nStack:\n${error.stack}`, true);
             }
         }
 
-        function testEvaluator() {
+        window.testEvaluator = async function() {
             try {
                 if (!cndCore) {
                     await window.testModuleImports();
@@ -462,7 +498,17 @@ ${Object.entries(datum.instances[0]?.relations || {}).map(([relName, rel]) =>
                 
                 showOutput('Testing evaluator creation...');
                 
-                const evaluator = new cndCore.WrappedForgeEvaluator();
+                // Try different ways to access ForgeEvaluator
+                let ForgeEvaluatorClass;
+                if (cndCore.ForgeEvaluator) {
+                    ForgeEvaluatorClass = cndCore.ForgeEvaluator;
+                } else if (cndCore.Evaluators?.ForgeEvaluator) {
+                    ForgeEvaluatorClass = cndCore.Evaluators.ForgeEvaluator;
+                } else {
+                    ForgeEvaluatorClass = cndCore.WrappedForgeEvaluator;
+                }
+                
+                const evaluator = new ForgeEvaluatorClass();
                 
                 // Test basic evaluator interface
                 const hasInitialize = typeof evaluator.initialize === 'function';
@@ -500,21 +546,45 @@ Evaluator created successfully and implements IEvaluator interface!`;
                 const alloyXML = getCurrentAlloyXML();
                 const cndSpec = getCurrentCNDSpec();
                 
-                // Parse the data
-                const datum = alloyInstance.parseAlloyXML(alloyXML);
-                const instance = datum.instances[0];
+                // Parse the Alloy XML using the correct pattern
+                let ad;
+                try {
+                    ad = alloyInstance.parseAlloyXML(alloyXML);
+                } catch (e) {
+                    throw new Error("Error parsing Forge instance. Is it well formed? <br> <pre>" + e.message + "</pre>");
+                }
+
+                let command = ad.command || "";
+                let instances = ad.instances;
+                let loopBack = ad.loopBack || -1;
+                
+                // Get the first instance
+                const instance = instances[0];
                 const layoutSpec = layout.parseLayoutSpec(cndSpec);
                 
-                // Create evaluator
-                const evaluator = new cndCore.WrappedForgeEvaluator();
+                // Create ForgeEvaluator (not WrappedForgeEvaluator)
+                let ForgeEvaluatorClass;
+                if (cndCore.ForgeEvaluator) {
+                    ForgeEvaluatorClass = cndCore.ForgeEvaluator;
+                } else if (cndCore.Evaluators?.ForgeEvaluator) {
+                    ForgeEvaluatorClass = cndCore.Evaluators.ForgeEvaluator;
+                } else {
+                    ForgeEvaluatorClass = cndCore.WrappedForgeEvaluator;
+                }
+                
+                const evaluator = new ForgeEvaluatorClass();
                 
                 // Try to initialize evaluator (this might fail due to missing dependencies)
                 try {
                     await evaluator.initialize({
                         sourceData: alloyXML,
-                        processedData: { instance },
+                        processedData: { instance: instance },
                         sourceCode: '',
-                        metadata: {}
+                        metadata: { 
+                            command: command,
+                            loopBack: loopBack,
+                            alloyDatum: ad
+                        }
                     });
                 } catch (initError) {
                     // Expected to fail due to forge dependencies, continue anyway
@@ -532,6 +602,18 @@ Evaluator created successfully and implements IEvaluator interface!`;
                     console.warn('setupLayout failed (expected due to evaluator):', setupError.message);
                 }
                 
+                // Test LayoutInstance.generateLayout() method
+                let generatedLayout;
+                let layoutError = null;
+                try {
+                    // Call generateLayout with the instance and empty projections
+                    const layoutResult = layoutInstance.generateLayout(instance, {});
+                    generatedLayout = layoutResult.layout;
+                } catch (generateError) {
+                    layoutError = generateError;
+                    console.warn('generateLayout failed:', generateError.message);
+                }
+                
                 const result = `✅ Layout Generation Test Completed!
 
 === ALLOY INSTANCE (COMPLETE) ===
@@ -545,12 +627,241 @@ ${JSON.stringify(layoutSpec.constraints, null, 2)}
 
 === LAYOUT INSTANCE OBJECT ===
 Layout Instance Created: ${layoutInstance ? 'Yes' : 'No'}
-Available Methods: ${Object.getOwnPropertyNames(Object.getPrototypeOf(layoutInstance)).filter(name => name !== 'constructor').join(', ')}`;
+Available Methods: ${Object.getOwnPropertyNames(Object.getPrototypeOf(layoutInstance)).filter(name => name !== 'constructor').join(', ')}
+
+=== GENERATED LAYOUT RESULT ===
+${generatedLayout ? `Layout Generated Successfully!
+
+Layout Nodes (${generatedLayout.nodes?.length || 0}):
+${JSON.stringify(generatedLayout.nodes, null, 2)}
+
+Layout Edges (${generatedLayout.edges?.length || 0}):
+${JSON.stringify(generatedLayout.edges, null, 2)}
+
+Layout Constraints (${generatedLayout.constraints?.length || 0}):
+${JSON.stringify(generatedLayout.constraints, null, 2)}
+
+Layout Groups (${generatedLayout.groups?.length || 0}):
+${JSON.stringify(generatedLayout.groups, null, 2)}
+
+Complete Generated Layout Object:
+${JSON.stringify(generatedLayout, null, 2)}` : `❌ Layout Generation Failed: ${layoutError?.message || 'Unknown error'}`}`;
                 
                 showOutput(result);
             } catch (error) {
                 showOutput(`❌ Layout Generation Test Failed:\n${error.message}\n\nStack:\n${error.stack}`, true);
             }
+        };
+
+        window.testGenerateLayoutMethod = async function() {
+            try {
+                if (!cndCore) {
+                    await window.testModuleImports();
+                }
+                
+                showOutput('Testing LayoutInstance.generateLayout() method specifically...');
+                
+                // 🔍 DEBUG: Add breakpoint here - open DevTools and set breakpoint on next line
+                console.log('🔍 DEBUG: Starting generateLayout test');
+                debugger; // This will break into the debugger when DevTools are open
+                
+                // Import required modules
+                const alloyInstance = await import('./dist/alloy-instance.mjs');
+                const layout = await import('./dist/layout.mjs');
+                
+                // Use current input data
+                const alloyXML = getCurrentAlloyXML();
+                const cndSpec = getCurrentCNDSpec();
+                
+                // Parse the Alloy XML using the correct pattern
+                let ad;
+                try {
+                    ad = alloyInstance.parseAlloyXML(alloyXML);
+                } catch (e) {
+                    throw new Error("Error parsing Forge instance. Is it well formed? <br> <pre>" + e.message + "</pre>");
+                }
+
+                let command = ad.command || "";
+                let instances = ad.instances;
+                let loopBack = ad.loopBack || -1;
+                
+                // Get the first instance
+                const instance = instances[0];
+                const layoutSpec = layout.parseLayoutSpec(cndSpec);
+                
+                // 🔍 DEBUG: Log parsed data
+                console.log('🔍 DEBUG: Parsed AlloyDatum:', ad);
+                console.log('🔍 DEBUG: Command:', command);
+                console.log('🔍 DEBUG: Instances:', instances);
+                console.log('🔍 DEBUG: LoopBack:', loopBack);
+                console.log('🔍 DEBUG: First instance:', instance);
+                console.log('🔍 DEBUG: Parsed layout spec:', layoutSpec);
+                
+                // Create ForgeEvaluator (not WrappedForgeEvaluator) and pass in the parsed AlloyDatum
+                console.log('🔍 DEBUG: Available in cndCore:', Object.keys(cndCore));
+                console.log('🔍 DEBUG: cndCore.ForgeEvaluator:', cndCore.ForgeEvaluator);
+                console.log('🔍 DEBUG: cndCore.Evaluators:', cndCore.Evaluators);
+                console.log('🔍 DEBUG: cndCore.Evaluators.ForgeEvaluator:', cndCore.Evaluators?.ForgeEvaluator);
+                
+                // Try different ways to access ForgeEvaluator
+                let ForgeEvaluatorClass;
+                if (cndCore.ForgeEvaluator) {
+                    ForgeEvaluatorClass = cndCore.ForgeEvaluator;
+                    console.log('🔍 DEBUG: Using cndCore.ForgeEvaluator');
+                } else if (cndCore.Evaluators?.ForgeEvaluator) {
+                    ForgeEvaluatorClass = cndCore.Evaluators.ForgeEvaluator;
+                    console.log('🔍 DEBUG: Using cndCore.Evaluators.ForgeEvaluator');
+                } else {
+                    // Fallback to WrappedForgeEvaluator
+                    ForgeEvaluatorClass = cndCore.WrappedForgeEvaluator;
+                    console.log('🔍 DEBUG: Falling back to cndCore.WrappedForgeEvaluator');
+                }
+                
+                const evaluator = new ForgeEvaluatorClass();
+                
+                // 🔍 DEBUG: Check evaluator state
+                console.log('🔍 DEBUG: Evaluator created:', evaluator);
+                console.log('🔍 DEBUG: Evaluator methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(evaluator)));
+                
+                // Try to initialize the evaluator properly
+                try {
+                    console.log('🔍 DEBUG: Attempting evaluator initialization...');
+                    await evaluator.initialize({
+                        sourceData: alloyXML,
+                        processedData: { instance: instance },
+                        sourceCode: '',
+                        metadata: { 
+                            command: command,
+                            loopBack: loopBack,
+                            alloyDatum: ad
+                        }
+                    });
+                    console.log('🔍 DEBUG: Evaluator initialized successfully');
+                } catch (initError) {
+                    console.error('🔍 DEBUG: Evaluator initialization failed:', initError);
+                    console.error('🔍 DEBUG: Error details:', {
+                        message: initError.message,
+                        stack: initError.stack,
+                        evaluatorReady: evaluator.isReady()
+                    });
+                    // Don't throw here, continue to see what happens
+                }
+                
+                // Create layout instance
+                const layoutInstance = new cndCore.LayoutInstance(layoutSpec, evaluator);
+                
+                // 🔍 DEBUG: Check layout instance
+                console.log('🔍 DEBUG: LayoutInstance created:', layoutInstance);
+                console.log('🔍 DEBUG: LayoutInstance methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(layoutInstance)));
+                
+                // Call generateLayout method with different projection scenarios
+                let layoutResults = [];
+                let errors = [];
+                
+                // Test 1: Empty projections
+                try {
+                    console.log('🔍 DEBUG: Calling generateLayout with empty projections...');
+                    debugger; // Break here before the generateLayout call
+                    const result1 = layoutInstance.generateLayout(instance, {});
+                    console.log('🔍 DEBUG: generateLayout succeeded:', result1);
+                    layoutResults.push({ 
+                        scenario: 'Empty Projections', 
+                        result: result1.layout,
+                        projectionData: result1.projectionData 
+                    });
+                } catch (error) {
+                    console.error('🔍 DEBUG: generateLayout failed:', error);
+                    console.error('🔍 DEBUG: Error stack:', error.stack);
+                    errors.push({ scenario: 'Empty Projections', error: error.message, fullError: error });
+                }
+                
+                // Test 2: With sample projections (if any projection fields exist)
+                const instanceTypes = Object.keys(instance.types || {});
+                if (instanceTypes.length > 0) {
+                    try {
+                        const sampleProjections = {}; // Could be enhanced with actual projection logic
+                        const result2 = layoutInstance.generateLayout(instance, sampleProjections);
+                        layoutResults.push({ 
+                            scenario: 'Sample Projections', 
+                            result: result2.layout,
+                            projectionData: result2.projectionData 
+                        });
+                    } catch (error) {
+                        errors.push({ scenario: 'Sample Projections', error: error.message });
+                    }
+                }
+                
+                const result = `✅ LayoutInstance.generateLayout() Test Results!
+
+=== METHOD CALL RESULTS ===
+${layoutResults.length > 0 ? layoutResults.map((lr, i) => `
+--- Scenario ${i + 1}: ${lr.scenario} ---
+Generated Layout Nodes (${lr.result.nodes?.length || 0}):
+${JSON.stringify(lr.result.nodes, null, 2)}
+
+Generated Layout Edges (${lr.result.edges?.length || 0}):
+${JSON.stringify(lr.result.edges, null, 2)}
+
+Generated Layout Constraints (${lr.result.constraints?.length || 0}):
+${JSON.stringify(lr.result.constraints, null, 2)}
+
+Generated Layout Groups (${lr.result.groups?.length || 0}):
+${JSON.stringify(lr.result.groups, null, 2)}
+
+Projection Data:
+${JSON.stringify(lr.projectionData, null, 2)}
+
+Complete Generated Layout:
+${JSON.stringify(lr.result, null, 2)}
+`).join('\n') : 'No successful layout generation'}
+
+=== ERRORS ENCOUNTERED ===
+${errors.length > 0 ? errors.map(e => `- ${e.scenario}: ${e.error}`).join('\n') : 'No errors'}
+
+=== LAYOUT INSTANCE DETAILS ===
+Instance Created: ${layoutInstance ? 'Yes' : 'No'}
+Layout Spec: ${JSON.stringify(layoutSpec, null, 2)}`;
+                
+                showOutput(result);
+            } catch (error) {
+                showOutput(`❌ LayoutInstance.generateLayout() Test Failed:\n${error.message}\n\nStack:\n${error.stack}`, true);
+            }
+        };
+
+        window.enableDebugMode = function() {
+            showOutput(`🔍 DEBUG MODE ENABLED
+
+To debug the generateLayout method:
+
+1. Open Browser Developer Tools (F12 or Ctrl+Shift+I / Cmd+Option+I)
+2. Go to the 'Sources' or 'Debugger' tab
+3. Click 'Test LayoutInstance.generateLayout()' button
+4. The debugger will automatically break at key points
+
+DEBUG BREAKPOINTS ADDED:
+✓ Before generateLayout test starts
+✓ Before generateLayout() method call
+✓ Enhanced console logging for all steps
+✓ Full error stack traces
+
+CONSOLE LOGS TO WATCH:
+🔍 DEBUG: Starting generateLayout test
+🔍 DEBUG: Parsed Alloy instance
+🔍 DEBUG: Parsed layout spec  
+🔍 DEBUG: Evaluator created
+🔍 DEBUG: Evaluator initialization
+🔍 DEBUG: LayoutInstance created
+🔍 DEBUG: Calling generateLayout
+🔍 DEBUG: generateLayout result/error
+
+TIP: In the Console tab, you can inspect variables:
+- instance (the parsed Alloy data)
+- layoutSpec (the parsed CND spec)
+- evaluator (the evaluator object)
+- layoutInstance (the layout instance)
+- result1 (the generateLayout result)
+
+Press F10 to step over, F11 to step into, F8 to continue.`);
         };
 
         // Auto-run module import test on load and load sample files

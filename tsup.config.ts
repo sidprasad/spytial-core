@@ -12,7 +12,7 @@ export default defineConfig({
   format: ['cjs', 'esm'],
   dts: true,
   splitting: false,
-  sourcemap: false,
+  sourcemap: true,  // Enable sourcemaps for debugging
   clean: true,
   minify: false,
   target: 'es2020',

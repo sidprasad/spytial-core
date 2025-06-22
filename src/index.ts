@@ -12,7 +12,7 @@ export * as Layout from './layout';
 export { LayoutInstance } from './layout/layoutinstance';
 export { setupLayout } from './layout';
 export { type default as IEvaluator } from './evaluators/interfaces';
-export { WrappedForgeEvaluator } from './evaluators/forge-evaluator';
+export { ForgeEvaluator, WrappedForgeEvaluator } from './evaluators/forge-evaluator';
 
 export interface CoreConfig {
   debug?: boolean;
