@@ -1,6 +1,6 @@
 import { Node } from 'webcola';
-import { InstanceLayout, LayoutNode, LayoutEdge, LayoutConstraint, LayoutGroup, LeftConstraint, TopConstraint, AlignmentConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint } from '../layout/interfaces';
-import { LayoutInstance } from '../layout/layoutinstance';
+import { InstanceLayout, LayoutNode, LayoutEdge, LayoutConstraint, LayoutGroup, LeftConstraint, TopConstraint, AlignmentConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint } from '../../layout/interfaces';
+import { LayoutInstance } from '../../layout/layoutinstance';
 
 /**
  * WebColaTranslator - Translates InstanceLayout to WebCola format
@@ -389,5 +389,39 @@ export class WebColaLayout {
     });
 
     return colaGroups;
+  }
+
+  // Public getters for accessing layout data
+  get nodes(): NodeWithMetadata[] {
+    return this.colaNodes;
+  }
+
+  get links(): EdgeWithMetadata[] {
+    return this.colaEdges;
+  }
+
+  get constraints(): ColaConstraint[] {
+    return this.colaConstraints;
+  }
+
+  get groups(): ColaGroupDefinition[] {
+    return this.groupDefinitions;
+  }
+}
+
+/**
+ * WebColaTranslator - Main translator class for converting InstanceLayout to WebCola format
+ */
+export class WebColaTranslator {
+  
+  /**
+   * Translate an InstanceLayout to WebColaLayout
+   * @param instanceLayout The layout to translate
+   * @param figWidth Optional figure width (default: 800)
+   * @param figHeight Optional figure height (default: 800)
+   * @returns Promise<WebColaLayout> The translated layout
+   */
+  async translate(instanceLayout: InstanceLayout, figWidth: number = 800, figHeight: number = 800): Promise<WebColaLayout> {
+    return new WebColaLayout(instanceLayout, figHeight, figWidth);
   }
 }

@@ -2,12 +2,8 @@
  * Translators module - converts layout data to different visualization libraries
  */
 
-export { WebColaLayout as WebColaTranslator } from './webcolatranslator';
+export { WebColaTranslator, WebColaLayout } from './webcola/webcolatranslator';
 export { DagreTranslator } from './dagretranslator';
-
-// WebColaCnDGraph is exported directly from its file for browser usage
-// Import and re-export if needed:
-// export { WebColaCnDGraph } from './webcola-cnd-graph';
 
 // Re-export types for convenience
 export type { 
@@ -18,4 +14,7 @@ export type {
   LayoutGroup 
 } from '../layout/interfaces';
 
-export type { NodeWithMetadata, EdgeWithMetadata } from './webcolatranslator';
+export type {
+  NodeWithMetadata,
+  EdgeWithMetadata
+} from './webcola/webcolatranslator';
