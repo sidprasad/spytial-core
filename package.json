@@ -68,6 +68,7 @@
   "devDependencies": {
     "@types/chroma-js": "^3.1.1",
     "@types/ejs": "^3.1.5",
+    "@types/graphlib": "^2.1.12",
     "@types/js-yaml": "^4.0.9",
     "@types/lodash": "^4.17.18",
     "@types/node": "^24.0.3",
@@ -86,6 +87,7 @@
   },
   "dependencies": {
     "@types/d3": "^4.13.12",
+    "@xmldom/xmldom": "^0.9.8",
     "chroma-js": "^3.1.2",
     "d3": "^4.13.0",
     "forge-expr-evaluator": "^1.1.0",

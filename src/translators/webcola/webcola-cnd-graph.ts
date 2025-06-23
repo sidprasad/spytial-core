@@ -1,5 +1,6 @@
-import { WebColaTranslator } from './webcolatranslator';
+import { WebColaLayout, WebColaTranslator } from './webcolatranslator';
 import { InstanceLayout } from '../../layout/interfaces';
+import { Layout } from 'webcola';
 
 // Use global D3 v4 and WebCola from external scripts (CDN + vendor)
 declare global {
@@ -22,7 +23,8 @@ const DEFAULT_SCALE_FACTOR = 5;
 export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLElement : (class {} as any)) {
   private svg!: any;
   private container!: any;
-  private currentLayout: any = null;
+  private currentLayout: WebColaLayout | null = null;
+  private colaLayout: Layout | null = null;
   private readonly lineFunction: d3.Line<{ x: number; y: number }>;
 
   /**
@@ -265,14 +267,15 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
 
       // Store current layout
       this.currentLayout = webcolaLayout;
+      this.colaLayout = layout;
 
       // Clear existing visualization
       this.container.selectAll('*').remove();
 
       // Create D3 selections for data binding
-      this.renderGroups(this.currentLayout.groups, layout);
-      this.renderLinks(this.currentLayout.links, layout);
-      this.renderNodes(this.currentLayout.nodes, layout);
+      this.renderGroups(webcolaLayout.groups, layout);
+      this.renderLinks(webcolaLayout.links, layout);
+      this.renderNodes(webcolaLayout.nodes, layout);
 
       // Start the layout with specific iteration counts and proper event handling
       layout
@@ -865,6 +868,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         if (typeof (cola as any).makeEdgeBetween === 'function' && 
             source.innerBounds && target.innerBounds) {
           const route = (cola as any).makeEdgeBetween(source.innerBounds, target.innerBounds, 5);
+          console.log('Routing edge with WebCola:', route, 'source:', source, 'target:', target);
           return this.lineFunction([route.sourceIntersection, route.arrowStart]);
         }
 
@@ -919,8 +923,8 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
   private routeEdges(): void {
     try {
       // Prepare edge routing with margin
-      if (typeof (this.currentLayout as any)?.prepareEdgeRouting === 'function') {
-        (this.currentLayout as any).prepareEdgeRouting(
+      if (typeof (this.colaLayout as any)?.prepareEdgeRouting === 'function') {
+        (this.colaLayout as any).prepareEdgeRouting(
           WebColaCnDGraph.VIEWBOX_PADDING / WebColaCnDGraph.EDGE_ROUTE_MARGIN_DIVISOR
         );
       }
@@ -952,6 +956,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
     this.container.selectAll('.link-group path')
       .attr('d', (d: any) => {
         try {
+          console.log("d", d);
           return this.routeSingleEdge(d);
         } catch (error) {
           console.error(`Error routing edge ${d.id} from ${d.source.id} to ${d.target.id}:`, error);
@@ -973,12 +978,14 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    * @returns SVG path string for the edge
    */
   private routeSingleEdge(edgeData: any): string | null {
+    console.log("edgeData", edgeData);
     let route: Array<{ x: number; y: number }>;
 
     // Get initial route from WebCola
-    if (typeof (this.currentLayout as any)?.routeEdge === 'function') {
-      route = (this.currentLayout as any).routeEdge(edgeData);
+    if (typeof (this.colaLayout as any)?.routeEdge === 'function') {
+      route = (this.colaLayout as any).routeEdge(edgeData);
     } else {
+      console.warn('WebCola routeEdge function not available, using fallback routing');
       // Fallback route
       route = [
         { x: edgeData.source.x || 0, y: edgeData.source.y || 0 },
