@@ -733,12 +733,6 @@ export class LayoutInstance {
                     groups: layoutWithoutCyclicConstraints.groups
                 };
 
-                /*
-
-                    TODO: This is also super broken.
-
-                */
-
                 let validator = new ConstraintValidator(instanceLayout);
                 currentLayoutError = validator.validateConstraints() || null;
 
