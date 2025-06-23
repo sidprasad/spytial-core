@@ -5,9 +5,8 @@
 export { WebColaTranslator } from './webcola/webcolatranslator';
 export { DagreTranslator } from './dagretranslator';
 
-// WebCola visualization factory function - simpler than custom elements
-export { createWebColaCnDGraph } from './webcola/webcola-factory';
-export type { WebColaCnDGraphAPI } from './webcola/webcola-factory';
+// WebColaCnDGraph web component for browser usage
+export { WebColaCnDGraph } from './webcola/webcola-cnd-graph';
 
 // Re-export types for convenience
 export type { 

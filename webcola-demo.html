@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebCola CnD Graph Demo</title>
+    <title>WebCola CnD Graph Demo - Real Pipeline</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -47,7 +47,9 @@
         <p>This demonstrates how to use the WebColaCnDGraph custom element.</p>
         
         <div>
-            <button onclick="loadGraph()">Load Sample Graph</button>
+            <button onclick="loadGraph()">Load & Render Graph</button>
+            <button onclick="loadRealData()">Load Data Only</button>
+            <button onclick="renderGraph()">Render Graph</button>
             <button onclick="clearGraph()">Clear Graph</button>
         </div>
         
@@ -61,82 +63,184 @@
         <div id="status">Ready to load graph...</div>
     </div>
 
-    <!-- Import the web component -->
-    <script type="module">
-        try {
-            // Import the translators module first to see what's available
-            const translators = await import('./dist/translators.mjs');
-            console.log('✅ Translators module imported successfully');
-            console.log('📦 Available exports:', Object.keys(translators));
-            console.log('🔍 WebColaCnDGraph:', translators.WebColaCnDGraph);
-            
-            // Check if WebColaCnDGraph is available
-            if (translators.WebColaCnDGraph) {
-                console.log('✅ WebColaCnDGraph is available:', translators.WebColaCnDGraph);
-                const WebColaCnDGraph = translators.WebColaCnDGraph;
+    <!-- D3 v4 and WebCola - the working combination you confirmed -->
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="./vendor/cola.js"></script>
+    
+    <!-- Complete CND-Core browser bundle -->
+    <script src="./dist/browser/cnd-core-complete.global.js"></script>
+    <script>
+        // Variables to store data
+        let currentInstanceLayout = null;
+
+        async function initializePipeline() {
+            try {
+                console.log('Complete CND-Core browser bundle loaded successfully');
+                console.log('Available on global CndCore:', Object.keys(CndCore));
                 
-                // The web component should now be registered automatically
-                console.log('🎯 Custom element registered:', customElements.get('webcola-cnd-graph'));
+                // Deep inspection of the structure
+                console.log('AlloyInstance structure:', CndCore.AlloyInstance);
+                console.log('AlloyInstance keys:', CndCore.AlloyInstance ? Object.keys(CndCore.AlloyInstance) : 'undefined');
+                console.log('ForgeEvaluator available:', !!CndCore.ForgeEvaluator);
+                console.log('AlloyGraph available:', !!CndCore.AlloyGraph);
+                console.log('Layout available:', !!CndCore.Layout);
                 
-                document.getElementById('status').textContent = '✅ WebColaCnDGraph imported successfully! Ready to load graph.';
-            } else {
-                console.error('❌ WebColaCnDGraph not found in translators module');
-                document.getElementById('status').textContent = '❌ WebColaCnDGraph not available';
+                document.getElementById('status').textContent = 'Complete CND-Core pipeline ready! Everything bundled.';
+                
+                return true;
+            } catch (error) {
+                console.error('Failed to initialize pipeline:', error);
+                document.getElementById('status').textContent = `Pipeline init failed: ${error.message}`;
+                return false;
             }
-        } catch (error) {
-            console.error('❌ Failed to import translators module:', error);
-            document.getElementById('status').textContent = `❌ Import failed: ${error.message}`;
         }
-        
-        // The web component should now be available as <webcola-cnd-graph>
-        
-        window.loadGraph = async function() {
+
+        async function loadRealData() {
+            try {
+                document.getElementById('status').textContent = 'Loading real sample data...';
+
+                // Load the sample XML and CND files
+                const [alloyResponse, cndResponse] = await Promise.all([
+                    fetch('./sample/datum.xml'),
+                    fetch('./sample/layout.cnd')
+                ]);
+                
+                if (!alloyResponse.ok || !cndResponse.ok) {
+                    throw new Error('Could not load sample files');
+                }
+
+                const alloyXML = await alloyResponse.text();
+                const cndSpec = await cndResponse.text();
+
+                console.log('Loaded Alloy XML:', alloyXML.substring(0, 200) + '...');
+                console.log('Loaded CND Spec:', cndSpec.substring(0, 200) + '...');
+
+                // Step 1: Parse Alloy XML into AlloyDatum (following the correct pattern)
+                document.getElementById('status').textContent = 'Parsing Alloy datum...';
+                let alloyDatum;
+                try {
+                    alloyDatum = CndCore.AlloyInstance.parseAlloyXML(alloyXML);
+                } catch (e) {
+                    throw new Error("Error parsing Forge instance. Is it well formed? " + e.message);
+                }
+                console.log('Parsed Alloy Datum:', alloyDatum);
+
+                let command = alloyDatum.command || "";
+                let instances = alloyDatum.instances;
+                let loopBack = alloyDatum.loopBack || -1;
+                
+                // Use the first instance (instanceNumber = 0)
+                const instanceNumber = 0;
+                if (!instances || instances.length === 0) {
+                    throw new Error('No instances found in Alloy datum');
+                }
+
+                // Step 2: Create evaluator with the raw XML
+                document.getElementById('status').textContent = 'Creating evaluator...';
+                const evaluator = new CndCore.ForgeEvaluator();
+                
+                // Initialize the evaluator with the XML data
+                evaluator.initialize({
+                    sourceData: alloyXML,
+                    sourceCode: '', // Will be extracted from XML
+                    processedData: alloyDatum
+                });
+                console.log('Created and initialized Evaluator:', evaluator);
+
+                // Step 3: Parse layout specification
+                document.getElementById('status').textContent = 'Parsing layout specification...';
+                const layoutSpec = CndCore.parseLayoutSpec(cndSpec);
+                console.log('Parsed Layout Spec:', layoutSpec);
+
+                // Step 4: Create LayoutInstance (following the correct pattern)
+                document.getElementById('status').textContent = 'Creating layout instance...';
+                const ENABLE_ALIGNMENT_EDGES = true;
+                const layoutInstance = new CndCore.LayoutInstance(layoutSpec, evaluator, instanceNumber, ENABLE_ALIGNMENT_EDGES);
+                console.log('Created Layout Instance:', layoutInstance);
+
+                // Step 5: Generate the actual layout
+                document.getElementById('status').textContent = 'Generating layout...';
+                const instance = instances[instanceNumber]; // Get the specific instance
+                const projections = {}; // Empty projections object for now
+                const layoutResult = layoutInstance.generateLayout(instance, projections);
+                const instanceLayout = layoutResult.layout;
+                console.log('Generated Instance Layout:', instanceLayout);
+
+                // Store for rendering
+                currentInstanceLayout = instanceLayout;
+                
+                document.getElementById('status').textContent = 'Real data pipeline complete! Ready to render.';
+                
+            } catch (error) {
+                console.error('Failed to load real data:', error);
+                document.getElementById('status').textContent = `Data loading failed: ${error.message}`;
+            }
+        }
+
+        async function renderGraph() {
             const graphElement = document.getElementById('graph-container');
             const statusElement = document.getElementById('status');
             
             try {
-                statusElement.textContent = 'Loading graph...';
+                if (!currentInstanceLayout) {
+                    statusElement.textContent = 'No layout data available. Loading real data first...';
+                    await loadRealData();
+                    if (!currentInstanceLayout) {
+                        throw new Error('Failed to generate layout data');
+                    }
+                }
+
+                statusElement.textContent = 'Rendering graph with WebCola...';
                 
-                // Create a sample layout
-                const sampleLayout = {
-                    nodes: [
-                        { id: 'A', name: 'Node A', x: 100, y: 100, color: '#ff6b6b', showLabels: true, attributes: { type: 'Person' } },
-                        { id: 'B', name: 'Node B', x: 200, y: 200, color: '#4ecdc4', showLabels: true, attributes: { type: 'Company' } },
-                        { id: 'C', name: 'Node C', x: 300, y: 150, color: '#45b7d1', showLabels: true, attributes: { type: 'Product' } }
-                    ],
-                    edges: [
-                        { id: 'e1', source: 'A', target: 'B', label: 'works at', relName: 'employment' },
-                        { id: 'e2', source: 'B', target: 'C', label: 'produces', relName: 'production' }
-                    ],
-                    constraints: [],
-                    groups: []
-                };
+                // Use the real InstanceLayout data with WebCola custom element
+                await graphElement.renderLayout(currentInstanceLayout);
                 
-                // Call the renderLayout method on the web component
-                await graphElement.renderLayout(sampleLayout);
-                
-                statusElement.textContent = '✅ Graph loaded successfully!';
+                statusElement.textContent = 'Real graph rendered successfully!';
             } catch (error) {
-                console.error('Error loading graph:', error);
-                statusElement.textContent = `❌ Error: ${error.message}`;
+                console.error('Error rendering graph:', error);
+                statusElement.textContent = `Render error: ${error.message}`;
             }
-        };
-        
-        window.clearGraph = function() {
+        }
+
+        function clearGraph() {
             const graphElement = document.getElementById('graph-container');
             const statusElement = document.getElementById('status');
             
-            // Clear the graph by removing all children in the SVG
-            const svg = graphElement.shadowRoot?.querySelector('svg');
-            if (svg) {
-                const container = svg.querySelector('.zoomable');
-                if (container) {
-                    container.innerHTML = '';
+            // Clear the graph
+            if (graphElement.clear) {
+                graphElement.clear();
+            } else {
+                // Fallback: remove all SVG content
+                const svg = graphElement.shadowRoot?.querySelector('svg');
+                if (svg) {
+                    const container = svg.querySelector('.zoomable');
+                    if (container) {
+                        container.innerHTML = '';
+                    }
                 }
             }
             
             statusElement.textContent = 'Graph cleared.';
-        };
+        }
+
+        async function loadGraph() {
+            try {
+                await loadRealData();
+                await renderGraph();
+            } catch (error) {
+                console.error('Failed to load and render graph:', error);
+                document.getElementById('status').textContent = `Failed to load graph: ${error.message}`;
+            }
+        }
+
+        // Auto-initialize when page loads
+        window.addEventListener('load', initializePipeline);
+
+        // Expose functions globally for buttons
+        window.loadGraph = loadGraph;
+        window.loadRealData = loadRealData;
+        window.renderGraph = renderGraph;
+        window.clearGraph = clearGraph;
     </script>
 </body>
 </html>

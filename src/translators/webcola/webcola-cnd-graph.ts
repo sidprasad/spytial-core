@@ -1,7 +1,17 @@
 import { WebColaTranslator } from './webcolatranslator';
 import { InstanceLayout } from '../../layout/interfaces';
-import * as cola from 'webcola';
-import * as d3 from 'd3';
+
+// Use global D3 v4 and WebCola from external scripts (CDN + vendor)
+declare global {
+  interface Window {
+    cola: any;
+    d3: any;
+  }
+}
+
+// Access global versions loaded by external scripts
+const cola = (typeof window !== 'undefined') ? (window as any).cola : null;
+const d3 = (typeof window !== 'undefined') ? (window as any).d3 : null;
 
 const DEFAULT_SCALE_FACTOR = 5;
 
@@ -59,9 +69,9 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
     this.initializeD3();
 
     // TODO: I'd like to make this better.
-    this.lineFunction = d3.line<{ x: number; y: number }>()
-      .x((d) => d.x)
-      .y((d) => d.y)
+    this.lineFunction = d3.line()
+      .x((d: any) => d.x)
+      .y((d: any) => d.y)
       .curve(d3.curveBasis);
   }
 
@@ -89,8 +99,10 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    * @param node - Node object to check
    * @returns True if the node should be hidden from display
    */
-  private isHiddenNode(node: { name: string }): boolean {
-    return node.name.startsWith("_");
+  private isHiddenNode(node: { name?: string; id?: string }): boolean {
+    // Check name first, fall back to id if name is not available
+    const identifier = node.name || node.id;
+    return identifier ? identifier.startsWith("_") : false;
   }
 
   /**
@@ -192,11 +204,11 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
     this.svg = d3.select(this.shadowRoot!.querySelector('#svg'));
     this.container = this.svg.select('.zoomable');
 
-    // Set up zoom behavior
+    // Set up zoom behavior (D3 v4 API - matches your working pattern)
     const zoom = d3.zoom()
       .scaleExtent([0.1, 4])
-      .on('zoom', (event: any) => {
-        this.container.attr('transform', event.transform);
+      .on('zoom', () => {
+        this.container.attr('transform', d3.event.transform);
       });
 
     this.svg.call(zoom);
@@ -208,6 +220,25 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    */
   public async renderLayout(instanceLayout: InstanceLayout): Promise<void> {
     try {
+      // Check if D3 and WebCola are available
+      if (!d3) {
+        throw new Error('D3 library not available. Please ensure D3 v3 is loaded from CDN.');
+      }
+      if (!cola) {
+        throw new Error('WebCola library not available. Please ensure vendor/cola.js is loaded.');
+      }
+
+      // Ensure D3 and container are properly initialized
+      if (!this.container || !this.svg) {
+        console.log('Re-initializing D3 selections...');
+        this.initializeD3();
+      }
+      
+      // Double-check that container is now available
+      if (!this.container) {
+        throw new Error('Failed to initialize D3 container. SVG elements may not be available.');
+      }
+
       this.showLoading();
 
       // Translate to WebCola format
@@ -239,7 +270,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       this.container.selectAll('*').remove();
 
       // Create D3 selections for data binding
-      this.renderGroups(this.currentLayout.groups);
+      this.renderGroups(this.currentLayout.groups, layout);
       this.renderLinks(this.currentLayout.links, layout);
       this.renderNodes(this.currentLayout.nodes, layout);
 
@@ -253,13 +284,26 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
           // Call advanced edge routing after layout converges
           this.routeEdges();
           this.hideLoading();
-        })
-        .start(
+        });
+
+      // Start the layout with error handling for D3/WebCola compatibility issues
+      try {
+        layout.start(
           WebColaCnDGraph.INITIAL_UNCONSTRAINED_ITERATIONS,
           WebColaCnDGraph.INITIAL_USER_CONSTRAINT_ITERATIONS,
           WebColaCnDGraph.INITIAL_ALL_CONSTRAINTS_ITERATIONS,
           WebColaCnDGraph.GRID_SNAP_ITERATIONS
         );
+      } catch (layoutError) {
+        console.warn('WebCola layout start encountered an error, trying alternative approach:', layoutError);
+        // Try starting with default parameters as fallback
+        try {
+          layout.start();
+        } catch (fallbackError) {
+          console.error('Both WebCola start methods failed:', fallbackError);
+          throw new Error(`WebCola layout failed to start: ${(fallbackError as Error).message}`);
+        }
+      }
 
     } catch (error) {
       console.error('Error rendering layout:', error);
@@ -270,13 +314,13 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
   /**
    * Render groups using D3 data binding
    */
-  private renderGroups(groups: any[]): void {
+  private renderGroups(groups: any[], layout: any): void {
     if (!this.currentLayout?.nodes) {
       console.warn("Cannot render groups: nodes not available");
       return;
     }
     
-    this.setupGroups(groups, this.currentLayout.nodes, null);
+    this.setupGroups(groups, this.currentLayout.nodes, layout);
   }
 
   /**
@@ -433,7 +477,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         return targetNode?.color || "#999999";
       })
       .attr("stroke-width", 1)
-      .call(this.createDragBehavior(layout));
+      .call(layout.drag);
   }
 
   /**
@@ -474,7 +518,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         
         return "";
       })
-      .call(this.createDragBehavior(layout));
+      .call(layout.drag);
   }
 
   /**
@@ -500,7 +544,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       .enter()
       .append("g")
       .attr("class", "node")
-      .call(this.createDragBehavior(layout));
+      .call(layout.drag);
 
     // Add rectangle backgrounds for nodes
     this.setupNodeRectangles(nodeSelection);
@@ -719,8 +763,8 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       .attr('x', (d: any) => d.bounds?.x || 0)
       .attr('y', (d: any) => d.bounds?.y || 0)
       .attr('width', (d: any) => d.bounds?.width() || 0)
-      .attr('height', (d: any) => d.bounds?.height() || 0)
-      .lower();
+      .attr('height', (d: any) => d.bounds?.height() || 0);
+      // Note: .lower() not available in D3 v3
 
     // Update node rectangles using bounds
     this.container.selectAll('.node rect')
@@ -758,8 +802,8 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
     // Update most specific type labels
     this.container.selectAll('.mostSpecificTypeLabel')
       .attr('x', (d: any) => d.x - (d.width || 60) / 2 + 5)
-      .attr('y', (d: any) => d.y - (d.height || 30) / 2 + 10)
-      .raise();
+      .attr('y', (d: any) => d.y - (d.height || 30) / 2 + 10);
+      // Note: .raise() not available in D3 v3
 
     // Update main node labels with tspan positioning
     this.container.selectAll('.node .label')
@@ -774,8 +818,8 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
             lineOffset += 1;
             return lineOffset === 1 ? '0em' : '1em';
           });
-      })
-      .raise();
+      });
+      // Note: .raise() not available in D3 v3
 
     // Update link paths with advanced routing for group edges
     this.container.selectAll('.link-group path')
@@ -830,8 +874,8 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       .attr('marker-end', (d: any) => {
         if (this.isAlignmentEdge(d)) return 'none';
         return this.isInferredEdge(d) ? 'url(#hand-drawn-arrow)' : 'url(#end-arrow)';
-      })
-      .raise();
+      });
+      // Note: Removed .raise() for D3 compatibility
 
     // Update link labels using path midpoint calculation
     this.container.selectAll('.link-group .linklabel')
@@ -842,8 +886,8 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       .attr('y', (d: any) => {
         const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${d.id}"]`) as SVGPathElement;
         return pathElement ? this.calculateNewPosition(d.y, pathElement, 'y') : (d.source.y + d.target.y) / 2;
-      })
-      .raise();
+      });
+      // Note: Removed .raise() for D3 compatibility
 
     // Update group labels (center top of each group)
     this.container.selectAll('.groupLabel')
@@ -855,12 +899,13 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         if (!d.bounds) return 0;
         return d.bounds.y + 12;
       })
-      .attr('text-anchor', 'middle')
-      .lower();
+      .attr('text-anchor', 'middle');
+      // Note: .lower() not available in D3 v3
 
     // Ensure proper layering - raise important elements
-    this.container.selectAll('marker').raise();
-    this.container.selectAll('.link-group .linklabel').raise();
+    // Note: .raise() not available in D3 v3, removing for now
+    // this.container.selectAll('marker').raise();
+    // this.container.selectAll('.link-group .linklabel').raise();
   }
 
   /**
@@ -1269,8 +1314,8 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       .attr('text-anchor', 'middle')
       .each((d: any, i: number, nodes: any[]) => {
         this.handleLabelOverlap(nodes[i] as SVGTextElement);
-      })
-      .raise();
+      });
+      // Note: Removed .raise() for D3 compatibility
   }
 
   /**
@@ -1490,26 +1535,13 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    * 
    * @example
    * ```typescript
-   * const dragBehavior = this.createDragBehavior(layout);
+   * const dragBehavior = layout.drag;
    * nodeSelection.call(dragBehavior);
    * ```
    */
   private createDragBehavior(layout: any): any {
-    return d3.drag()
-      .on('start', (event: any, d: any) => {
-        if (!event.active && layout) layout.alpha(0.3).restart();
-        d.fx = d.x;
-        d.fy = d.y;
-      })
-      .on('drag', (event: any, d: any) => {
-        d.fx = event.x;
-        d.fy = event.y;
-      })
-      .on('end', (event: any, d: any) => {
-        if (!event.active && layout) layout.alphaTarget(0);
-        d.fx = null;
-        d.fy = null;
-      });
+    // Use WebCola's own drag behavior instead of D3's - this handles D3 version compatibility
+    return layout.drag;
   }
 
   /**

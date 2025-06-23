@@ -32,6 +32,8 @@
   ],
   "scripts": {
     "build": "tsup",
+    "build:browser": "tsup --config tsup.browser.config.ts",
+    "build:all": "npm run build && npm run build:browser",
     "dev": "tsup --watch",
     "test": "vitest",
     "test:ui": "vitest --ui",
@@ -41,7 +43,7 @@
     "format": "prettier --write src/**/*.{ts,tsx,json,md}",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
-    "prepublishOnly": "npm run clean && npm run build",
+    "prepublishOnly": "npm run clean && npm run build:all",
     "serve": "python3 -m http.server 8080"
   },
   "keywords": [
@@ -83,9 +85,9 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
-    "@types/d3": "^7.4.3",
+    "@types/d3": "^4.13.12",
     "chroma-js": "^3.1.2",
-    "d3": "^7.9.0",
+    "d3": "^4.13.0",
     "forge-expr-evaluator": "^1.1.0",
     "graphlib": "^2.1.8",
     "js-yaml": "^4.1.0",
