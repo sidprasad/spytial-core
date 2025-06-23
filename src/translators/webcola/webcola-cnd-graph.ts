@@ -1,6 +1,6 @@
-import { WebColaLayout, WebColaTranslator } from './webcolatranslator';
+import { NodeWithMetadata, WebColaLayout, WebColaTranslator } from './webcolatranslator';
 import { InstanceLayout } from '../../layout/interfaces';
-import { Layout } from 'webcola';
+import { GridRouter, Layout } from 'webcola';
 
 // Use global D3 v4 and WebCola from external scripts (CDN + vendor)
 declare global {
@@ -19,6 +19,8 @@ const DEFAULT_SCALE_FACTOR = 5;
 /**
  * WebCola CnD Graph Custom Element
  * Full implementation using WebCola constraint-based layout with D3 integration
+ * @field currentLayout - Holds the current custom WebColaLayout instance
+ * @field colaLayout - Holds the current layout instance used by WebCola
  */
 export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLElement : (class {} as any)) {
   private svg!: any;
@@ -77,6 +79,11 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       .curve(d3.curveBasis);
   }
 
+  // Access the layoutFormat attribute
+  private get layoutFormat(): string | null {
+    return this.getAttribute('layoutFormat');
+  }
+
   /**
    * Determines if an edge is used for alignment purposes.
    * Alignment edges are identified by IDs starting with "_alignment_".
@@ -120,8 +127,11 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    * const isInferred = this.isInferredEdge(inferredEdge); // returns true
    * ```
    */
-  private isInferredEdge(edge: { isInferred?: boolean }): boolean {
-    return Boolean(edge.isInferred);
+  private isInferredEdge(edge: { id?: string }): boolean {
+    const helperPrefix = "_inferred_";
+
+    // Check if the edge contains the helper prefix
+    return edge.id ? edge.id.includes(helperPrefix) : false;
   }
 
   /**
@@ -280,12 +290,24 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       // Start the layout with specific iteration counts and proper event handling
       layout
         .on('tick', () => {
-          this.updatePositions();
+          if (this.layoutFormat === 'default') {
+            this.updatePositions();
+          } else if (this.layoutFormat === 'grid') {
+            this.gridUpdatePositions();
+          } else {
+            console.warn(`Unknown layout format: ${this.layoutFormat}. Skipping position updates.`);
+          }
         })
         .on('end', () => {
           console.log('✅ WebCola layout converged');
           // Call advanced edge routing after layout converges
-          this.routeEdges();
+          if (this.layoutFormat === 'default') {
+            this.routeEdges();
+          } else if (this.layoutFormat === 'grid') {
+            this.gridify(10, 25, 10);
+          } else {
+            console.warn(`Unknown layout format: ${this.layoutFormat}. Skipping edge routing.`);
+          }
           this.hideLoading();
         });
 
@@ -840,7 +862,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
           const addTargetToGroup = groupOnIndex < addToGroupIndex;
 
           if (addTargetToGroup) {
-            const potentialGroups = this.getContainingGroups(this.currentLayout.groups || [], target);
+            const potentialGroups = this.getContainingGroups(this.currentLayout?.groups || [], target);
             const targetGroup = potentialGroups.find(group => group.keyNode === this.getNodeIndex(source));
             
             if (targetGroup) {
@@ -850,7 +872,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
               console.log('Target group not found', potentialGroups, this.getNodeIndex(target));
             }
           } else if (addSourceToGroup) {
-            const potentialGroups = this.getContainingGroups(this.currentLayout.groups || [], source);
+            const potentialGroups = this.getContainingGroups(this.currentLayout?.groups || [], source);
             const sourceGroup = potentialGroups.find(group => group.keyNode === this.getNodeIndex(target));
             
             if (sourceGroup) {
@@ -868,7 +890,6 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         if (typeof (cola as any).makeEdgeBetween === 'function' && 
             source.innerBounds && target.innerBounds) {
           const route = (cola as any).makeEdgeBetween(source.innerBounds, target.innerBounds, 5);
-          console.log('Routing edge with WebCola:', route, 'source:', source, 'target:', target);
           return this.lineFunction([route.sourceIntersection, route.arrowStart]);
         }
 
@@ -915,6 +936,78 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
     // this.container.selectAll('.link-group .linklabel').raise();
   }
 
+  private gridUpdatePositions() {
+    const node = this.container.selectAll(".node");
+    const mostSpecificTypeLabel = this.container.selectAll(".mostSpecificTypeLabel");
+    const label = this.container.selectAll(".label");
+    const group = this.container.selectAll(".group");
+    const groupLabel = this.container.selectAll(".groupLabel");
+
+    // UPDATE NODES AND NODE LABELS
+    node.select("rect")
+        .each(function (d: any) { d.innerBounds = d.bounds.inflate(-1); })
+        .attr("x", function (d: any) { return d.bounds.x; })
+        .attr("y", function (d: any) { return d.bounds.y; })
+        .attr("width", function (d: any) { return d.bounds.width(); })
+        .attr("height", function (d: any) { return d.bounds.height(); });
+    
+
+    node.select("image")
+        .attr("x", function (d: any) {
+            if (d.showLabels) {
+                // Move to the top-right corner
+                return d.x + (d.width / 2) - (d.width * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR);
+            } else {
+                // Align with d.bounds.x
+                return d.bounds.x;
+            }
+        })
+        .attr("y", function (d: any) {
+            if (d.showLabels) {
+                // Align with the top edge
+                return d.y - d.height / 2;
+            } else {
+                // Align with d.bounds.y
+                return d.bounds.y;
+            }
+        })
+
+    mostSpecificTypeLabel
+        .attr("x", function (d: any) { return d.bounds.x + 5; })
+        .attr("y", function (d: any) { return d.bounds.y + 10; })
+        .raise();
+
+    label
+        .attr("x", (d: any) => d.x)
+        .attr("y", (d: any) => d.y)
+        .each(function (d: any) {
+            var y = 0; // Initialize y offset for tspans
+            d3.select(this).selectAll("tspan")
+                .attr("x", d.x) // Align tspans with the node's x position
+                .attr("dy", function () {
+                    y += 1; // Increment y for each tspan to create line spacing
+                    return y === 1 ? "0em" : "1em"; // Keep the first tspan in place, move others down
+                });
+        })
+        .raise();
+
+    // UPDATE GROUPS AND GROUP LABELS
+    group.attr("x", function (d: any) { return d.bounds.x; })
+        .attr("y", function (d: any) { return d.bounds.y; })
+        .attr("width", function (d: any) { return d.bounds.width(); })
+        .attr("height", function (d: any) { return d.bounds.height(); })
+        .lower();
+
+    // Render group labels
+    groupLabel.attr("x", function (d: any) { return d.bounds.x + d.bounds.width() / 2; }) // Center horizontally
+        .attr("y", function (d: any) { return d.bounds.y + 12; })
+        .attr("text-anchor", "middle") // Center the text on its position
+        .raise();
+
+    const linkGroups = this.container.selectAll(".linkGroup");
+    linkGroups.select("text.linklabel").raise(); // Ensure link labels are raised
+  }
+
   /**
    * Advanced edge routing with curvature calculation and overlap handling.
    * Implements sophisticated routing for multiple edges between nodes, self-loops,
@@ -932,7 +1025,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       console.log('Routing edges for the nth time', ++this.edgeRouteIdx);
 
       // Route all link paths with advanced logic
-      this.routeLinkPaths();
+      this.routeLinkPaths(); 
 
       // Update link labels with proper positioning
       this.updateLinkLabelsAfterRouting();
@@ -949,6 +1042,181 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
     }
   }
 
+  private route(nodes: any, groups: any, margin: number, groupMargin: number): GridRouter<any> {
+    nodes.forEach((d: any) => {
+        d.routerNode = {
+            name: d.name,
+            bounds: d.bounds || d.innerBounds
+        };
+    });
+    groups.forEach((d: any) => {
+        d.routerNode = {
+            bounds: d.bounds.inflate(-groupMargin),
+            children: (typeof d.groups !== 'undefined' ? d.groups.map((c: any) => nodes.length + c.id) : [])
+            .concat(typeof d.leaves !== 'undefined' ? d.leaves.map((c: any) => c.index) : [])
+        };
+    });
+    let gridRouterNodes = nodes.concat(groups).map((d: any, i: number) => {
+        d.routerNode.id = i;
+        return d.routerNode;
+    });
+    // NOTE: Router nodes are nodes needed for grid routing, which include both nodes and groups
+    return new cola.GridRouter(gridRouterNodes, {
+        getChildren: (v: any) => v.children,
+        getBounds: (v: any) => v.bounds
+    }, margin - groupMargin);
+  }
+
+  private gridify(nudgeGap: number, margin: number, groupMargin: number): void {
+    try {
+      console.log("Gridify");
+      // Create the grid router
+      const gridrouter = this.route(this.currentLayout?.nodes, this.currentLayout?.groups, margin, groupMargin);
+
+      // Route all edges using the GridRouter
+      let routes: any[] = [];
+      const edges = this.currentLayout?.links || [];
+
+      if (!edges || edges.length === 0) {
+          console.warn("No edges to route in GridRouter");
+          return;
+      }
+      
+      // Route edges using the GridRouter
+      routes = gridrouter.routeEdges(edges, nudgeGap, function (e: any) { return e.source.routerNode.id; }, function (e: any) { return e.target.routerNode.id; });
+
+      console.log("GridRouter routes: ", routes);
+
+      // Clear existing paths; 
+      // NOTE: This is crucial to avoid node explosion when re-routing
+      this.container.selectAll('.link-group').remove();
+
+      // Create paths from GridRouter routes
+      routes.forEach((route, index) => {
+          const cornerradius = 5;
+          const arrowwidth = 3; // Abitrary value (see note below)
+          const arrowheight = 7; // Abitrary value (see note below)
+
+          // Get the corresponding edge data
+          // Assumption: edges are in the same order as routes
+          const edgeData = edges[index];
+
+          // Calculate the route path using the GridRouter
+          // NOTE: Arrow width/height not used in our implementation
+          const p = cola.GridRouter.getRoutePath(route, cornerradius, arrowwidth, arrowheight);
+
+          // Create the link groups
+          const linkGroup = this.container.append('g')
+              .attr("class", "link-group")
+              .datum(edgeData);
+
+          // Create the link
+          linkGroup.append('path')
+              .attr("class", () => {
+                  if (this.isAlignmentEdge(edgeData)) return "alignmentLink";
+                  if (this.isInferredEdge(edgeData)) return "inferredLink";
+                  return "link";
+              })
+              .attr('data-link-id', edgeData.id)
+              .attr('stroke', (d: any) => d.color)
+              .attr('d', p.routepath)
+              .lower();
+          
+          // Create the link labels
+          linkGroup
+              .filter((d: any) => !this.isAlignmentEdge(d))
+              .append("text")
+              .attr("class", "linklabel")
+              .text((d: any) => d.label);
+      });
+
+      // Update node positions
+      // NOTE: `transition()` gives the snap-to-grid effect
+      // NOTE: Uses absolute positioning to be compatible with pre-existing code (also easier to reason)
+      // NOTE: Use `d.bounds` to get the bounds of the node, `d.bounds.cx()` and `d.bounds.cy()` for center coordinates
+      this.container.selectAll(".node").transition()
+          .attr("x", function (d: any) { return d.bounds.x; })
+          .attr("y", function (d: any) { return d.bounds.y; })
+          .attr("width", function (d: any) { return d.bounds.width(); })
+          .attr("height", function (d: any) { return d.bounds.height(); });
+      
+      // Update group positions
+      // var groupPadding = margin - groupMargin;
+      // console.log("Group padding", groupPadding);
+      this.container.selectAll(".group").transition()
+          .attr("x", function (d: any) { return d.bounds.x; })
+          .attr('y', function (d: any) { return d.bounds.y; })
+          .attr('width', function (d: any) { return d.bounds.width(); })
+          .attr('height', function (d: any) { return d.bounds.height(); });
+      
+      // Update label positions
+      this.container.selectAll(".label").transition()
+          .attr("x", function (d: any) { return d.bounds.cx(); })
+          .attr("y", function (d: any) { return d.bounds.cy(); });
+      
+      // Position link labels at route midpoints
+      this.gridUpdateLinkLabels(routes, edges);
+
+      this.fitViewportToContent();
+      this.setupRelationHighlighting();
+    } catch (e) {
+      console.log("Error routing edges in GridRouter");
+      console.error(e);
+
+
+      let runtimeMessages = document.getElementById("runtime_messages") as HTMLElement;
+      let dismissableAlert = document.createElement("div");
+      dismissableAlert.className = "alert alert-danger alert-dismissible fade show";
+      dismissableAlert.setAttribute("role", "alert");
+      dismissableAlert.innerHTML = `Runtime (WebCola) error when gridifying edges. You may have to click and drag these nodes slightly to un-stick layout.`;
+
+      // Make sure we don't have duplicate alerts
+      let existingAlerts = runtimeMessages.querySelectorAll(".alert");
+      existingAlerts.forEach(alert => {
+          if (alert.innerHTML === dismissableAlert.innerHTML) {
+              alert.remove();
+          }
+      });
+
+      runtimeMessages.appendChild(dismissableAlert);
+      return;
+    }
+  }
+
+  private gridUpdateLinkLabels(routes: any[], edges: any[]) {
+    console.log("Updating link labels");
+    routes.forEach((route: any, index: number) => {
+        var edgeData = edges[index];
+        
+        // Calculate midpoint of the route
+        let combinedSegment: any[] = [];
+        let direction = []; // 'L' for left, 'R' for right, 'U' for up, 'D' for down
+        route.forEach((segment: any) => {
+            combinedSegment = combinedSegment.concat(segment);
+        });
+        // console.log("Combined segment", combinedSegment);
+        const midpointIndex = Math.floor(combinedSegment.length / 2); // NOTE: Length should be even
+        const midpoint = {
+            x: (combinedSegment[midpointIndex - 1].x + combinedSegment[midpointIndex].x) / 2,
+            y: (combinedSegment[midpointIndex - 1].y + combinedSegment[midpointIndex].y) / 2
+        };
+
+        // TODO: Compute the direction of the angle
+        // This is useful for determining where to place padding around the label
+        // Currently, the label is directly on the line, which can be hard to read
+
+        // console.log(`Midpoint for edge ${edgeData.id}:`, midpoint);
+        
+        // Update corresponding label
+        const linkGroups = this.container.selectAll(".link-group");
+        linkGroups.filter(function(d: any) { return d.id === edgeData.id; })
+            .select("text.linklabel")
+            .attr("x", midpoint.x)
+            .attr("y", midpoint.y)
+            .attr("text-anchor", "middle");
+    });
+  }
+
   /**
    * Routes all link paths with advanced curvature and collision handling.
    */
@@ -956,7 +1224,6 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
     this.container.selectAll('.link-group path')
       .attr('d', (d: any) => {
         try {
-          console.log("d", d);
           return this.routeSingleEdge(d);
         } catch (error) {
           console.error(`Error routing edge ${d.id} from ${d.source.id} to ${d.target.id}:`, error);
@@ -978,14 +1245,12 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    * @returns SVG path string for the edge
    */
   private routeSingleEdge(edgeData: any): string | null {
-    console.log("edgeData", edgeData);
     let route: Array<{ x: number; y: number }>;
 
     // Get initial route from WebCola
     if (typeof (this.colaLayout as any)?.routeEdge === 'function') {
       route = (this.colaLayout as any).routeEdge(edgeData);
     } else {
-      console.warn('WebCola routeEdge function not available, using fallback routing');
       // Fallback route
       route = [
         { x: edgeData.source.x || 0, y: edgeData.source.y || 0 },
@@ -1069,7 +1334,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
 
     if (addTargetToGroup) {
       const sourceIndex = this.getNodeIndex(edgeData.source);
-      const potentialGroups = this.getContainingGroups(this.currentLayout.groups || [], edgeData.target);
+      const potentialGroups = this.getContainingGroups(this.currentLayout?.groups || [], edgeData.target);
       const targetGroup = potentialGroups.find(group => group.keyNode === sourceIndex);
       
       if (targetGroup) {
@@ -1079,8 +1344,9 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         console.log('Target group not found', potentialGroups, this.getNodeIndex(edgeData.target), edgeData.id);
       }
     } else if (addSourceToGroup) {
+      const sourceIndex = this.getNodeIndex(edgeData.source);
       const targetIndex = this.getNodeIndex(edgeData.target);
-      const potentialGroups = this.getContainingGroups(this.currentLayout.groups || [], edgeData.source);
+      const potentialGroups = this.getContainingGroups(this.currentLayout?.groups || [], edgeData.source);
       const sourceGroup = potentialGroups.find(group => group.keyNode === targetIndex);
       
       if (sourceGroup) {
