@@ -252,7 +252,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       const { scaledConstraints, linkLength } = this.getScaledDetails(webcolaLayout.constraints, DEFAULT_SCALE_FACTOR);
 
       // Create WebCola layout using d3adaptor
-      const layout = cola.d3adaptor()
+      const layout = cola.d3adaptor(d3)
         .linkDistance(linkLength)
         .convergenceThreshold(1e-3)
         .avoidOverlaps(true)
@@ -448,7 +448,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
     nodes: any[], 
     layout: any
   ): d3.Selection<SVGRectElement, any, any, unknown> {
-    return this.container
+    const groupRects = this.container
       .selectAll<SVGRectElement, any>(".group")
       .data(groups)
       .enter()
@@ -478,6 +478,9 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       })
       .attr("stroke-width", 1)
       .call(layout.drag);
+
+
+    return groupRects;
   }
 
   /**
@@ -517,8 +520,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         }
         
         return "";
-      })
-      .call(layout.drag);
+      }).call(layout.drag);
   }
 
   /**
