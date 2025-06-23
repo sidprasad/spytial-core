@@ -765,7 +765,8 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       .attr('x', (d: any) => d.bounds?.x || 0)
       .attr('y', (d: any) => d.bounds?.y || 0)
       .attr('width', (d: any) => d.bounds?.width() || 0)
-      .attr('height', (d: any) => d.bounds?.height() || 0);
+      .attr('height', (d: any) => d.bounds?.height() || 0)
+      .lower();
       // Note: .lower() not available in D3 v3
 
     // Update node rectangles using bounds
