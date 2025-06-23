@@ -10,7 +10,7 @@ type SourceConstraint = RelativeOrientationConstraint | CyclicOrientationConstra
  * Represents a constraint validation error with structured data
  * Provides detailed information about constraint conflicts for programmatic handling
  */
-export interface ConstraintError {
+export interface ConstraintError  extends Error {
     /** Type of constraint error */
     readonly type: 'group-overlap' | 'positional-conflict' | 'unknown-constraint';
 
@@ -129,6 +129,7 @@ class ConstraintValidator {
                             .filter((node): node is LayoutNode => node !== undefined);
 
                         const gOverlap: GroupOverlapError = {
+                            name: 'GroupOverlapError',
                             type: 'group-overlap',
                             message: `Groups "${group.name}" and "${otherGroup.name}" overlap with nodes: ${intersection.join(', ')}`,
                             group1: group,
@@ -316,6 +317,8 @@ class ConstraintValidator {
 
 
             const constraintError : PositionalConstraintError = {
+                  name: "PositionalConstraintError", // Add this required property
+
                 type: 'positional-conflict',
                 message: `Constraint "${this.orientationConstraintToString(constraint)}" conflicts with existing constraints`,
                 conflictingConstraint: constraint,

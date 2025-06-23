@@ -15,10 +15,6 @@ import {
 } from './layoutspec';
 
 
-
-
-
-import { generateGraph } from '../data-instance/alloy/alloy-graph';
 import IEvaluator from '../evaluators/interfaces';
 import { ColorPicker } from './colorpicker';
 import { ConstraintValidator } from './constraint-validator';
@@ -635,7 +631,7 @@ export class LayoutInstance {
         let finalConstraintValidator = new ConstraintValidator(layout);
         let finalLayoutError = finalConstraintValidator.validateConstraints();
         if (finalLayoutError) {
-            throw new Error(finalLayoutError.message || finalLayoutError.toString());
+            throw finalLayoutError;
         }
 
         return { layout, projectionData };
