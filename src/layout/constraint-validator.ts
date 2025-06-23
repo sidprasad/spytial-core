@@ -1,129 +1,39 @@
 import { Solver, Variable, Expression, Strength, Operator, Constraint } from 'kiwi.js';
 import { InstanceLayout, LayoutNode, LayoutEdge, LayoutGroup, LayoutConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, TopConstraint, LeftConstraint, AlignmentConstraint, ImplicitConstraint } from './interfaces';
-import { RelativeOrientationConstraint } from './layoutspec';
+import { RelativeOrientationConstraint, CyclicOrientationConstraint } from './layoutspec';
 
-// Simple browser-compatible UUID generator
-function generateId(): string {
-    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+
+
+type SourceConstraint = RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint;
+
+/**
+ * Represents a constraint validation error with structured data
+ * Provides detailed information about constraint conflicts for programmatic handling
+ */
+export interface ConstraintError {
+    /** Type of constraint error */
+    readonly type: 'group-overlap' | 'positional-conflict' | 'unknown-constraint';
+
+    /** Human-readable error message */
+    readonly message: string;
+
 }
 
-// Simple template renderer (replaces ejs for client-side compatibility)
-function renderTemplate(template: string, context: Record<string, any>): string {
-    let result = template;
-    
-    // Simple variable substitution
-    Object.entries(context).forEach(([key, value]) => {
-        const regex = new RegExp(`<%- ${key}%>`, 'g');
-        result = result.replace(regex, String(value));
-    });
-    
-    // Handle object iteration (simplified for this use case)
-    if (context.previousSourceConstraintToLayoutConstraints) {
-        const entries = Object.entries(context.previousSourceConstraintToLayoutConstraints);
-        let iterationHtml = '';
-        entries.forEach(([key, item]: [string, any]) => {
-            iterationHtml += `<code class="highlight ${item.uid}">${key}</code><br>`;
-        });
-        result = result.replace(
-            /<% Object\.entries\(previousSourceConstraintToLayoutConstraints\)\.forEach\(function\(\[key, item\]\) \{ %>[\s\S]*?<% \}\); %>/g,
-            iterationHtml
-        );
-        
-        // Handle the second iteration block
-        let iterationHtml2 = '';
-        entries.forEach(([sourceKey, value]: [string, any]) => {
-            if (value.constraints) {
-                value.constraints.forEach((constraint: any) => {
-                    iterationHtml2 += `<code class="highlight ${value.uid}">${constraint}</code><br>`;
-                });
-            }
-        });
-        result = result.replace(
-            /<% Object\.entries\(previousSourceConstraintToLayoutConstraints\)\.forEach\(function\(\[sourceKey, value\]\) \{ %>[\s\S]*?<% \}\); %>/g,
-            iterationHtml2
-        );
-    }
-    
-    return result;
+interface PositionalConstraintError extends ConstraintError {
+    type: 'positional-conflict';
+    conflictingConstraint: LayoutConstraint;
+    conflictingSourceConstraint: SourceConstraint;
+    minimalConflictingSet: Map<SourceConstraint, LayoutConstraint[]>;
 }
 
-// const templatePath = path.join(__dirname, 'constrainterr.ejs');
-// console.log("Using template at:", templatePath);
-const errorTemplate = `  
-  <div class="mb-3">
-    <div style="display: flex; gap: 1rem; overflow-x: auto;">
-      <div class="card flex-shrink-0" style="min-width: 320px; max-width: 100%;">
-        <div class="card-header bg-light">
-          <strong>In terms of CnD</strong>
-        </div>
-        <div class="card-body">
-
-            Constraint: <br> <code> <%- conflictingSourceConstraint%> </code><br> conflicts with one (or some) the 
-            following source constraints: <br>
-
-
-            <% Object.entries(previousSourceConstraintToLayoutConstraints).forEach(function([key, item]) { %>
-                <code class="highlight <%= item.uid %>"><%- key %></code>
-                <br>
-            <% }); %>
-
-
-
-
-        </div>
-      </div>
-      <div class="card flex-shrink-0" style="min-width: 320px; max-width: 100%;">
-        <div class="card-header bg-light">
-          <strong>In terms of diagram elements</strong>
-        </div>
-        <div class="card-body">
-          
-
-            Constraint: <br> <code> <%- conflictingConstraint%> </code><br> conflicts with the 
-            following constraints: <br>
-
-
-            <% Object.entries(previousSourceConstraintToLayoutConstraints).forEach(function([sourceKey, value]) { %>
-                <% value.layoutConstraints.forEach(function(layoutConstraint) { %>
-                    <div class="highlight <%= value.uid %>">
-                    <code><%- layoutConstraint %></code>
-                    </div>
-                <% }); %>
-            <% }); %>
-
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <script>
-document.addEventListener('DOMContentLoaded', function() {
-  document.querySelectorAll('.highlight').forEach(function(el) {
-    el.addEventListener('mouseenter', function() {
-      // Get all classes except 'highlight'
-      const requiredClasses = Array.from(el.classList).filter(c => c !== 'highlight');
-      if (requiredClasses.length === 0) return;
-      // Highlight any element that has all requiredClasses (regardless of extras)
-      document.querySelectorAll('*').forEach(function(otherEl) {
-        if (requiredClasses.every(cls => otherEl.classList.contains(cls))) {
-          otherEl.classList.add('highlighted');
-        }
-      });
-    });
-    el.addEventListener('mouseleave', function() {
-      document.querySelectorAll('.highlighted').forEach(function(sharedEl) {
-        sharedEl.classList.remove('highlighted');
-      });
-    });
-  });
-});
-</script>
-
-<style>
-.highlighted {
-  background-color: yellow; /* or your highlight style */
+interface GroupOverlapError extends ConstraintError {
+    type: 'group-overlap';
+    group1: LayoutGroup;
+    group2: LayoutGroup;
+    overlappingNodes: LayoutNode[];
 }
-</style>`;
+
+
 
 
 class ConstraintValidator {
@@ -132,7 +42,6 @@ class ConstraintValidator {
     private variables: { [key: string]: { x: Variable, y: Variable } };
 
     private added_constraints: any[];
-    error: string | null;
 
     layout: InstanceLayout;
     orientationConstraints: LayoutConstraint[];
@@ -153,15 +62,13 @@ class ConstraintValidator {
         this.variables = {};
         this.groups = layout.groups;
         this.added_constraints = [];
-        this.error = null;
     }
 
-    public validateConstraints(): string | null {
-        // I think this works, but I need to test it
+    public validateConstraints(): ConstraintError | null {
         return this.validateGroupConstraints() || this.validatePositionalConstraints();
     }
 
-    public validatePositionalConstraints(): string | null {
+    public validatePositionalConstraints(): PositionalConstraintError | null {
 
         this.nodes.forEach(node => {
             let index = this.getNodeIndex(node.id);
@@ -173,9 +80,9 @@ class ConstraintValidator {
 
         for (let i = 0; i < this.orientationConstraints.length; i++) {
             let constraint = this.orientationConstraints[i]; // TODO: This changes?
-            this.addConstraintToSolver(constraint);
-            if (this.error) {
-                return this.error;
+            let error = this.addConstraintToSolver(constraint);
+            if (error) {
+                return error;
             }
         }
 
@@ -185,18 +92,18 @@ class ConstraintValidator {
 
         // Now that the solver has solved, we can get an ALIGNMENT ORDER for the nodes.
         let and_more_constraints = this.getAlignmentOrders();
-        
+
         // Now add THESE constraints to the layout constraints
         this.layout.constraints = this.layout.constraints.concat(and_more_constraints);
 
-        return this.error;
+        return null;
     }
 
-    public validateGroupConstraints(): string | null {
+    public validateGroupConstraints(): GroupOverlapError | null {
 
         // This identifies if there ARE any overlapping non-subgroups
         let overlappingNonSubgroups = false;
-        
+
         this.groups.forEach(group => {
             this.groups.forEach(otherGroup => {
 
@@ -214,13 +121,26 @@ class ConstraintValidator {
                     overlappingNonSubgroups = intersection.length > 0;
 
                     if (overlappingNonSubgroups) {
-                        let intersectingGroupNames = intersection.join(', ');
-                        this.error = `Layout not satisfiable! [ ${intersectingGroupNames} ] are in groups ${group.name} and ${otherGroup.name}, but neither group is contained in the other. Groups must be either nested or disjoint.`;
+
+
+                        // Fix the overlapping nodes mapping with proper type handling
+                        const overlappingNodes: LayoutNode[] = intersection
+                            .map(nid => this.nodes.find(n => n.id === nid))
+                            .filter((node): node is LayoutNode => node !== undefined);
+
+                        const gOverlap: GroupOverlapError = {
+                            type: 'group-overlap',
+                            message: `Groups "${group.name}" and "${otherGroup.name}" overlap with nodes: ${intersection.join(', ')}`,
+                            group1: group,
+                            group2: otherGroup,
+                            overlappingNodes: overlappingNodes
+                        };
+                        return gOverlap;
                     }
                 }
             })
         });
-        return this.error;
+        return null;
     }
 
     private getNodeIndex(nodeId: string) {
@@ -274,7 +194,7 @@ class ConstraintValidator {
                     for (const c of testSet) {
 
 
-                        let cassowaryConstraints = this.constraintToCassowary(c);
+                        let cassowaryConstraints = this.constraintToKiwi(c);
                         // Add the Cassowary constraints to the solver
                         cassowaryConstraints.forEach((cassowaryConstraint) => {
                             // console.log("Adding constraint to solver:", cassowaryConstraint);
@@ -297,82 +217,82 @@ class ConstraintValidator {
         return core.filter(c => c !== conflictingConstraint);
     }
 
-    private constraintToCassowary(constraint: LayoutConstraint) : any[] {
+    private constraintToKiwi(constraint: LayoutConstraint): any[] {
         // This is the main method that converts a LayoutConstraint to a Cassowary constraint.
         if (isTopConstraint(constraint)) {
-                let tc = constraint as TopConstraint;
+            let tc = constraint as TopConstraint;
 
-                let top = tc.top;
-                let bottom = tc.bottom;
-                let minDistance = tc.minDistance;
+            let top = tc.top;
+            let bottom = tc.bottom;
+            let minDistance = tc.minDistance;
 
-                const topId = this.getNodeIndex(top.id);
-                const bottomId = this.getNodeIndex(bottom.id);
+            const topId = this.getNodeIndex(top.id);
+            const bottomId = this.getNodeIndex(bottom.id);
 
-                let topVar = this.variables[topId].y;
-                let bottomVar = this.variables[bottomId].y;
+            let topVar = this.variables[topId].y;
+            let bottomVar = this.variables[bottomId].y;
 
-                // Create constraint: topVar + minDistance <= bottomVar
-                let kiwiConstraint = new Constraint(topVar.plus(minDistance), Operator.Le, bottomVar, Strength.required);
+            // Create constraint: topVar + minDistance <= bottomVar
+            let kiwiConstraint = new Constraint(topVar.plus(minDistance), Operator.Le, bottomVar, Strength.required);
 
-                return [kiwiConstraint];
+            return [kiwiConstraint];
+        }
+        else if (isLeftConstraint(constraint)) {
+            let lc = constraint as LeftConstraint;
+
+            let left = lc.left;
+            let right = lc.right;
+            let minDistance = lc.minDistance;
+
+            const leftId = this.getNodeIndex(left.id);
+            const rightId = this.getNodeIndex(right.id);
+
+            let leftVar = this.variables[leftId].x;
+            let rightVar = this.variables[rightId].x;
+
+            // Create constraint: leftVar + minDistance <= rightVar
+            let kiwiConstraint = new Constraint(leftVar.plus(minDistance), Operator.Le, rightVar, Strength.required);
+
+            return [kiwiConstraint];
+        }
+        else if (isAlignmentConstraint(constraint)) {
+
+
+            // This is trickier. We want to REGISTER alignment AS WELL.
+
+            let ac = constraint as AlignmentConstraint;
+            let axis = ac.axis;
+            let node1 = ac.node1;
+            let node2 = ac.node2;
+
+            const node1Id = this.getNodeIndex(node1.id);
+            const node2Id = this.getNodeIndex(node2.id);
+
+            let node1Var = this.variables[node1Id][axis];
+            let node2Var = this.variables[node2Id][axis];
+
+            // And register the alignment
+            if (axis === 'x') {
+                this.verticallyAligned.push([node1, node2]);
             }
-            else if (isLeftConstraint(constraint)) {
-                let lc = constraint as LeftConstraint;
-
-                let left = lc.left;
-                let right = lc.right;
-                let minDistance = lc.minDistance;
-
-                const leftId = this.getNodeIndex(left.id);
-                const rightId = this.getNodeIndex(right.id);
-
-                let leftVar = this.variables[leftId].x;
-                let rightVar = this.variables[rightId].x;
-
-                // Create constraint: leftVar + minDistance <= rightVar
-                let kiwiConstraint = new Constraint(leftVar.plus(minDistance), Operator.Le, rightVar, Strength.required);
-
-                return [kiwiConstraint];
+            else if (axis === 'y') {
+                this.horizontallyAligned.push([node1, node2]);
             }
-            else if (isAlignmentConstraint(constraint)) {
 
-
-                // This is trickier. We want to REGISTER alignment AS WELL.
-
-                let ac = constraint as AlignmentConstraint;
-                let axis = ac.axis;
-                let node1 = ac.node1;
-                let node2 = ac.node2;
-
-                const node1Id = this.getNodeIndex(node1.id);
-                const node2Id = this.getNodeIndex(node2.id);
-
-                let node1Var = this.variables[node1Id][axis];
-                let node2Var = this.variables[node2Id][axis];
-
-                // And register the alignment
-                if (axis === 'x') {
-                    this.verticallyAligned.push([node1, node2]);
-                }
-                else if (axis === 'y') {
-                    this.horizontallyAligned.push([node1, node2]);
-                }
-
-                // Create equality constraint: node1Var == node2Var
-                return [new Constraint(node1Var, Operator.Eq, node2Var, Strength.required)];
-            }
-            else {
-                console.log(constraint, "Unknown constraint type");
-                this.error = "Unknown constraint type";
-                return [];
-            }
+            // Create equality constraint: node1Var == node2Var
+            return [new Constraint(node1Var, Operator.Eq, node2Var, Strength.required)];
+        }
+        else {
+            console.log(constraint, "Unknown constraint type");
+            this.error = "Unknown constraint type";
+            return [];
+        }
     }
 
     // TODO: Factor out the constraintToCassowary bit. from the ADD to solver.
     private addConstraintToSolver(constraint: LayoutConstraint) {
         try {
-            let cassowaryConstraints = this.constraintToCassowary(constraint);
+            let cassowaryConstraints = this.constraintToKiwi(constraint);
             cassowaryConstraints.forEach((cassowaryConstraint) => {
                 this.solver.addConstraint(cassowaryConstraint);
             });
@@ -382,54 +302,30 @@ class ConstraintValidator {
 
             const minimal_conflicting_constraints = this.getMinimalConflictingConstraints(this.added_constraints, constraint);
 
-            // let previousSourceConstraintSet = new Set(minimal_conflicting_constraints.map((c) => c.sourceConstraint).map((c) => c.toHTML()));
-            // let previousSourceConstraints = [...previousSourceConstraintSet];
 
-
-            // TODO: We want to invert this mapping so 
-            // that we can map a source constraint to several layout constraints.
-
-            let sourceConstraintToLayoutConstraints: Record<string, {
-                uid: string;
-                layoutConstraints: string[];
-            }> = {};
+            let sourceConstraintToLayoutConstraints: Map<SourceConstraint, LayoutConstraint[]> = new Map();
 
             minimal_conflicting_constraints.forEach((c) => {
-
-
-                //// TODO: THIS IS WRONG!!
-
-                // Use a unique identifier for the source constraint as the key
-                let sourceKey = c.sourceConstraint.toHTML(); // or another unique property
-                let layoutConstraintHTML = this.orientationConstraintToString(c);
-                let uid = generateId();
-
+                const sourceConstraint = c.sourceConstraint;
                 
-
-                if (!sourceConstraintToLayoutConstraints[sourceKey]) {
-                    sourceConstraintToLayoutConstraints[sourceKey] = {
-                        uid : uid,
-                        layoutConstraints: []
-                    };
+                if (!sourceConstraintToLayoutConstraints.has(sourceConstraint)) {
+                    sourceConstraintToLayoutConstraints.set(sourceConstraint, []);
                 }
-                sourceConstraintToLayoutConstraints[sourceKey].layoutConstraints.push(layoutConstraintHTML);
+                
+                sourceConstraintToLayoutConstraints.get(sourceConstraint)!.push(c);
             });
 
 
-
-            let conflictingConstraint = this.orientationConstraintToString(constraint);
-            let conflictingSourceConstraint = constraint.sourceConstraint.toHTML();
-            
-            const context = {
-                conflictingConstraint: conflictingConstraint,
-                conflictingSourceConstraint: conflictingSourceConstraint,
-                previousSourceConstraintToLayoutConstraints: sourceConstraintToLayoutConstraints,
-
+            const constraintError : PositionalConstraintError = {
+                type: 'positional-conflict',
+                message: `Constraint "${this.orientationConstraintToString(constraint)}" conflicts with existing constraints`,
+                conflictingConstraint: constraint,
+                conflictingSourceConstraint: constraint.sourceConstraint,
+                minimalConflictingSet: sourceConstraintToLayoutConstraints,
             };
-               
-            this.error = renderTemplate(errorTemplate, context);
-            return;
+            return constraintError;
         }
+        return null;
     }
 
     private getAlignmentOrders(): LayoutConstraint[] {
@@ -449,7 +345,7 @@ class ConstraintValidator {
                 const aValue = this.variables[this.getNodeIndex(a.id)].x.value();
                 const bValue = this.variables[this.getNodeIndex(b.id)].x.value();
                 return (aValue as number) - (bValue as number);
-            });   
+            });
         }
 
         this.horizontallyAligned.forEach((alignedLeftToRight) => {
@@ -459,11 +355,11 @@ class ConstraintValidator {
                 let node2 = alignedLeftToRight[i + 1];
 
 
-                let roc : RelativeOrientationConstraint = new RelativeOrientationConstraint(['directlyLeft'], `${node1.id}->${node2.id}`);
+                let roc: RelativeOrientationConstraint = new RelativeOrientationConstraint(['directlyLeft'], `${node1.id}->${node2.id}`);
                 let sourceConstraint = new ImplicitConstraint(roc, "Preventing Overlap");
 
-                let lc : LeftConstraint =  { 
-                    left: node1, 
+                let lc: LeftConstraint = {
+                    left: node1,
                     right: node2,
                     minDistance: this.minPadding,
                     // sourceConstraint is ``implied'' or ``implicit'' here, since it is derived from the alignment order. That's tricky.
@@ -491,11 +387,11 @@ class ConstraintValidator {
                 let node1 = alignedTopToBottom[i];
                 let node2 = alignedTopToBottom[i + 1];
 
-                let roc : RelativeOrientationConstraint = new RelativeOrientationConstraint(['directlyAbove'], `${node1.id}->${node2.id}`);
+                let roc: RelativeOrientationConstraint = new RelativeOrientationConstraint(['directlyAbove'], `${node1.id}->${node2.id}`);
                 let sourceConstraint = new ImplicitConstraint(roc, "Preventing Overlap");
 
-                let tc : TopConstraint =  { 
-                    top: node1, 
+                let tc: TopConstraint = {
+                    top: node1,
                     bottom: node2,
                     minDistance: this.minPadding,
                     sourceConstraint: sourceConstraint
@@ -555,7 +451,7 @@ class ConstraintValidator {
 
 
 
-    private isSubGroup(subgroup : LayoutGroup, group : LayoutGroup): boolean {
+    private isSubGroup(subgroup: LayoutGroup, group: LayoutGroup): boolean {
         const sgElements = subgroup.nodeIds;
         const gElements = group.nodeIds;
         return sgElements.every((element) => gElements.includes(element));
@@ -563,7 +459,7 @@ class ConstraintValidator {
 
 
 
-    private groupIntersection(group1 : LayoutGroup, group2 : LayoutGroup): string[] {
+    private groupIntersection(group1: LayoutGroup, group2: LayoutGroup): string[] {
         const g1Elements = group1.nodeIds;
         const g2Elements = group2.nodeIds;
 
