@@ -40,6 +40,14 @@ export class WebColaCnDGraph extends HTMLElement {
   private static readonly VIEWBOX_PADDING = 10;
 
   /**
+   * Configuration constants for WebCola layout iterations
+   */
+  private static readonly INITIAL_UNCONSTRAINED_ITERATIONS = 10;
+  private static readonly INITIAL_USER_CONSTRAINT_ITERATIONS = 100;
+  private static readonly INITIAL_ALL_CONSTRAINTS_ITERATIONS = 1000;
+  private static readonly GRID_SNAP_ITERATIONS = 5; // Set to 0 to disable grid snapping
+
+  /**
    * Counter for edge routing iterations (for performance tracking)
    */
   private edgeRouteIdx = 0;
@@ -222,7 +230,7 @@ export class WebColaCnDGraph extends HTMLElement {
         .links(webcolaLayout.links)
         .constraints(scaledConstraints)
         .groups(webcolaLayout.groups || [])
-        .size([webcolaLayout.FIG_WIDTH, webcolaLayout.FIG_HEIGHT]) // Set the size of the layout area
+        .size([webcolaLayout.FIG_WIDTH, webcolaLayout.FIG_HEIGHT]);
 
       // Store current layout
       this.currentLayout = webcolaLayout;
@@ -235,7 +243,7 @@ export class WebColaCnDGraph extends HTMLElement {
       this.renderLinks(this.currentLayout.links, layout);
       this.renderNodes(this.currentLayout.nodes, layout);
 
-      // Start the layout with proper event handling
+      // Start the layout with specific iteration counts and proper event handling
       layout
         .on('tick', () => {
           this.updatePositions();
@@ -246,7 +254,12 @@ export class WebColaCnDGraph extends HTMLElement {
           this.routeEdges();
           this.hideLoading();
         })
-        .start(10, 15, 20);
+        .start(
+          WebColaCnDGraph.INITIAL_UNCONSTRAINED_ITERATIONS,
+          WebColaCnDGraph.INITIAL_USER_CONSTRAINT_ITERATIONS,
+          WebColaCnDGraph.INITIAL_ALL_CONSTRAINTS_ITERATIONS,
+          WebColaCnDGraph.GRID_SNAP_ITERATIONS
+        );
 
     } catch (error) {
       console.error('Error rendering layout:', error);
