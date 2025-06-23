@@ -6,8 +6,7 @@
 
 import type { IDataInstance, IAtom, IType, IRelation, ITuple } from '../interfaces';
 import { Graph } from 'graphlib';
-// Note: You'll need to install graphlib-dot
-// npm install graphlib-dot @types/graphlib-dot
+import { read } from 'graphlib-dot';
 
 /**
  * Configuration for DOT graph processing
@@ -72,10 +71,18 @@ export class DotDataInstance implements IDataInstance {
   /**
    * Get type information for a specific atom
    */
-  public getAtomType(atomId: string): IType | undefined {
+  public getAtomType(atomId: string): IType {
     const atom = this.atomCache.get(atomId);
-    if (!atom) return undefined;
-    return this.typeCache.get(atom.type);
+    if (!atom) {
+      throw new Error(`Atom not found: ${atomId}`);
+    }
+    
+    const type = this.typeCache.get(atom.type);
+    if (!type) {
+      throw new Error(`Type not found for atom ${atomId}: ${atom.type}`);
+    }
+    
+    return type;
   }
 
   /**
@@ -188,7 +195,9 @@ export class DotDataInstance implements IDataInstance {
   private addDefaultTypes(): void {
     // Add default node type
     this.typeCache.set(this.config.defaultNodeType, {
-      name: this.config.defaultNodeType,
+      id: this.config.defaultNodeType,
+      types: [this.config.defaultNodeType],
+      atoms: [],
       isBuiltin: false
     });
     
@@ -203,9 +212,10 @@ export class DotDataInstance implements IDataInstance {
         if (shape && !shapes.has(shape)) {
           shapes.add(shape);
           this.typeCache.set(shape, {
-            name: shape,
-            isBuiltin: false,
-            parentType: this.config.defaultNodeType
+            id: shape,
+            types: [this.config.defaultNodeType, shape],
+            atoms: [],
+            isBuiltin: false
           });
         }
       }
@@ -235,10 +245,18 @@ export class DotDataInstance implements IDataInstance {
         }
       }
       
-      this.atomCache.set(nodeId, {
+      const atom: IAtom = {
         id: nodeId,
         type: nodeType
-      });
+      };
+      
+      this.atomCache.set(nodeId, atom);
+      
+      // Add atom to its type
+      const type = this.typeCache.get(nodeType);
+      if (type) {
+        type.atoms.push(atom);
+      }
     }
   }
 
@@ -251,9 +269,10 @@ export class DotDataInstance implements IDataInstance {
     
     if (!this.relationCache.has(edgeRelationName)) {
       this.relationCache.set(edgeRelationName, {
+        id: edgeRelationName,
         name: edgeRelationName,
-        arity: 2,
-        types: [this.config.defaultNodeType, this.config.defaultNodeType]
+        types: [this.config.defaultNodeType, this.config.defaultNodeType],
+        tuples: []
       });
     }
     
@@ -271,17 +290,26 @@ export class DotDataInstance implements IDataInstance {
         // Create relation if it doesn't exist
         if (!this.relationCache.has(relationName)) {
           this.relationCache.set(relationName, {
+            id: relationName,
             name: relationName,
-            arity: 2,
-            types: [this.config.defaultNodeType, this.config.defaultNodeType]
+            types: [this.config.defaultNodeType, this.config.defaultNodeType],
+            tuples: []
           });
         }
       }
       
-      this.tupleCache.push({
-        relation: relationName,
-        atoms: [edge.v, edge.w]
-      });
+      const tuple: ITuple = {
+        atoms: [edge.v, edge.w],
+        types: [this.config.defaultNodeType, this.config.defaultNodeType]
+      };
+      
+      this.tupleCache.push(tuple);
+      
+      // Add tuple to relation
+      const relation = this.relationCache.get(relationName);
+      if (relation) {
+        relation.tuples.push(tuple);
+      }
     }
   }
 
@@ -304,9 +332,10 @@ export class DotDataInstance implements IDataInstance {
         const relationName = `node_${attr}`;
         
         this.relationCache.set(relationName, {
+          id: relationName,
           name: relationName,
-          arity: 2,
-          types: [this.config.defaultNodeType, 'String']
+          types: [this.config.defaultNodeType, 'String'],
+          tuples: []
         });
         
         for (const nodeId of this.graph.nodes()) {
@@ -314,10 +343,18 @@ export class DotDataInstance implements IDataInstance {
           const value = nodeData[attr];
           
           if (value !== undefined) {
-            this.tupleCache.push({
-              relation: relationName,
-              atoms: [nodeId, String(value)]
-            });
+            const tuple: ITuple = {
+              atoms: [nodeId, String(value)],
+              types: [this.config.defaultNodeType, 'String']
+            };
+            
+            this.tupleCache.push(tuple);
+            
+            // Add tuple to relation
+            const relation = this.relationCache.get(relationName);
+            if (relation) {
+              relation.tuples.push(tuple);
+            }
           }
         }
       }
@@ -338,9 +375,10 @@ export class DotDataInstance implements IDataInstance {
         const relationName = `edge_${attr}`;
         
         this.relationCache.set(relationName, {
+          id: relationName,
           name: relationName,
-          arity: 3,
-          types: [this.config.defaultNodeType, this.config.defaultNodeType, 'String']
+          types: [this.config.defaultNodeType, this.config.defaultNodeType, 'String'],
+          tuples: []
         });
         
         for (const edge of this.graph.edges()) {
@@ -348,10 +386,18 @@ export class DotDataInstance implements IDataInstance {
           const value = edgeData[attr];
           
           if (value !== undefined) {
-            this.tupleCache.push({
-              relation: relationName,
-              atoms: [edge.v, edge.w, String(value)]
-            });
+            const tuple: ITuple = {
+              atoms: [edge.v, edge.w, String(value)],
+              types: [this.config.defaultNodeType, this.config.defaultNodeType, 'String']
+            };
+            
+            this.tupleCache.push(tuple);
+            
+            // Add tuple to relation
+            const relation = this.relationCache.get(relationName);
+            if (relation) {
+              relation.tuples.push(tuple);
+            }
           }
         }
       }
@@ -392,9 +438,9 @@ export class DotDataInstance implements IDataInstance {
   /**
    * Check if node is built-in
    */
-  private isBuiltinNode(nodeData: any): boolean {
+  private isBuiltinNode(nodeData: Record<string, unknown>): boolean {
     const builtinShapes = new Set(['record', 'plaintext', 'none']);
-    return builtinShapes.has(nodeData.shape);
+    return builtinShapes.has(nodeData.shape as string);
   }
 }
 
@@ -407,8 +453,6 @@ export class DotDataInstance implements IDataInstance {
  * 
  * @example
  * ```typescript
- * import { read } from 'graphlib-dot';
- * 
  * const dotText = `digraph { A -> B; }`;
  * const dataInstance = createDotDataInstance(dotText);
  * ```
@@ -417,17 +461,9 @@ export function createDotDataInstance(
   dotText: string, 
   config?: Partial<DotConfig>
 ): IDataInstance {
-  // This requires graphlib-dot to be installed
-  // For now, we'll provide a placeholder that shows the intended usage
-  
   try {
-    // This would be the actual implementation with graphlib-dot:
-    // const graph = read(dotText);
-    // return new DotDataInstance(graph, config);
-    
-    throw new Error(
-      'graphlib-dot is required. Install with: npm install graphlib-dot @types/graphlib-dot'
-    );
+    const graph = read(dotText);
+    return new DotDataInstance(graph, config);
   } catch (error) {
     throw new Error(`Failed to parse DOT graph: ${(error as Error).message}`);
   }

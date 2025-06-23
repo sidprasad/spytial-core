@@ -12,6 +12,7 @@ export * as Translators from './translators';
 // Export new data instance abstraction
 export * from './data-instance/interfaces';
 export { AlloyDataInstance } from './data-instance/alloy-data-instance';
+export { DotDataInstance, createDotDataInstance, createDotDataInstanceFromGraph, createExampleDotGraph, isDotDataInstance } from './data-instance/dot/dot-data-instance';
 
 // Direct exports of key classes for convenience
 export { LayoutInstance } from './layout/layoutinstance';
