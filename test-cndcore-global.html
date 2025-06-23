@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test CndCore Global</title>
+</head>
+<body>
+  <h1>Testing CndCore Global Access</h1>
+  <div id="output"></div>
+  
+  <script src="dist/browser/cnd-core-complete.global.js"></script>
+  <script>
+    const output = document.getElementById('output');
+    
+    try {
+      console.log('window.CndCore:', window.CndCore);
+      output.innerHTML += '<p>CndCore loaded: ' + (typeof window.CndCore) + '</p>';
+      
+      if (window.CndCore) {
+        output.innerHTML += '<p>CndCore keys: ' + Object.keys(window.CndCore).join(', ') + '</p>';
+        
+        if (window.CndCore.DotEvaluator) {
+          output.innerHTML += '<p>✅ DotEvaluator is available!</p>';
+          
+          // Test basic instantiation
+          const evaluator = new window.CndCore.DotEvaluator();
+          output.innerHTML += '<p>✅ DotEvaluator instantiated successfully!</p>';
+        } else {
+          output.innerHTML += '<p>❌ DotEvaluator not found in CndCore</p>';
+        }
+      }
+    } catch (err) {
+      output.innerHTML += '<p>❌ Error: ' + err.message + '</p>';
+      console.error(err);
+    }
+  </script>
+</body>
+</html>

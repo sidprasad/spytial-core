@@ -16,7 +16,7 @@ import IEvaluator, {
 function toForgeType(type: AlloyType): Sig | BuiltinType {
 
 
-    let meta = type.meta && type.meta.builtin ? {
+    let meta = type.meta && type.meta?.builtin ? {
         builtin: type.meta.builtin
     } : undefined
 
