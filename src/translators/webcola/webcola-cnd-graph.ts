@@ -3,6 +3,10 @@ import { InstanceLayout } from '../../layout/interfaces';
 import * as cola from 'webcola';
 import * as d3 from 'd3';
 
+
+
+const DEFAULT_SCALE_FACTOR = 5;
+
 /**
  * WebCola CnD Graph Custom Element
  * Full implementation using WebCola constraint-based layout with D3 integration
@@ -12,12 +16,53 @@ export class WebColaCnDGraph extends HTMLElement {
   private container!: any;
   private currentLayout: any = null;
 
+
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
     this.initializeDOM();
     this.initializeD3();
   }
+
+
+
+  
+private getScaledDetails(constraints : any[], scaleFactor : number = DEFAULT_SCALE_FACTOR) {
+
+    const adjustedScaleFactor = scaleFactor / 5;
+    const min_sep = 150;
+    const default_node_width = 100;
+
+    let linkLength = (min_sep + default_node_width) / adjustedScaleFactor;
+
+
+
+    /*
+    For each constraint, if it is a separation constraint, adjust the distance by the scale factor.
+    */
+    function getScaledConstraints(constraints : any[]) : any[] {
+        return constraints.map(constraint => {
+            if (constraint.type === "separation" && typeof constraint.gap === "number") {
+
+                const oldgap = constraint.gap;
+                const newgap = oldgap / adjustedScaleFactor; // or * scaleFactor, depending on your UI logic
+                //console.log(`Scaling constraint gap from ${oldgap} to ${newgap} with scale factor ${adjustedScaleFactor}`);
+
+                return {
+                    ...constraint,
+                    gap: newgap 
+                };
+            }
+            return constraint;
+        });
+    }
+
+    return {
+        scaledConstraints: getScaledConstraints(constraints),
+        linkLength: linkLength
+    }
+}
+
 
   /**
    * Initialize the Shadow DOM structure
@@ -77,28 +122,21 @@ export class WebColaCnDGraph extends HTMLElement {
       console.log('🔄 Starting WebCola layout with cola.d3adaptor');
       console.log('Layout data:', webcolaLayout);
 
+      // Get scaled constraints and link length
+      const { scaledConstraints, linkLength } = this.getScaledDetails(webcolaLayout.constraints, DEFAULT_SCALE_FACTOR);
+
       // Create WebCola layout using d3adaptor
       const layout = cola.d3adaptor()
-        .linkDistance(100)
+        .linkDistance(linkLength) // this has to become something else.
         .avoidOverlaps(true)
         .handleDisconnected(true)
-        .size([800, 600])
         .nodes(webcolaLayout.nodes)
-        .links(webcolaLayout.links);
+        .links(webcolaLayout.links)
+        .constraints(scaledConstraints)
+        .groups(webcolaLayout.groups || [])
+        .size([webcolaLayout.FIG_WIDTH, webcolaLayout.FIG_HEIGHT]) // Set the size of the layout area
 
-      // Add constraints if available
-      if (webcolaLayout.constraints && webcolaLayout.constraints.length > 0) {
-        layout.constraints(webcolaLayout.constraints);
-      }
-
-      // Store current layout for updates
-      this.currentLayout = {
-        nodes: webcolaLayout.nodes,
-        links: webcolaLayout.links,
-        groups: webcolaLayout.groups || [],
-        constraints: webcolaLayout.constraints || []
-      };
-
+      
       // Clear existing visualization
       this.container.selectAll('*').remove();
 

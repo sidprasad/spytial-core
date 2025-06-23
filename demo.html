@@ -976,8 +976,8 @@ ${JSON.stringify(webColaTranslator.groupDefinitions, null, 2)}
                 // Import WebColaCnDGraph directly
                 let WebColaCnDGraphClass;
                 try {
-                    // Import the custom element from the built module
-                    const webcolaModule = await import('./dist/webcola-cnd-graph.mjs');
+                    // Import the custom element file directly
+                    await import('./webcola-cnd-graph.js');
                     // The element should now be registered
                     WebColaCnDGraphClass = customElements.get('webcola-cnd-graph');
                     if (!WebColaCnDGraphClass) {
