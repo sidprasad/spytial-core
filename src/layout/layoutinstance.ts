@@ -588,11 +588,7 @@ export class LayoutInstance {
         const nonCyclicConstraintError = validatorWithoutCyclic.validateConstraints();
 
         if (nonCyclicConstraintError) {
-
-
-            // TODO: This needs to be fixed for errors.
-
-            throw new Error(nonCyclicConstraintError.message);
+            throw nonCyclicConstraintError;
         }
         // And updating constraints, since the validator may add constraints.
         // (IN particular these would be non-overlap constraints for spacing in groups.)
@@ -715,7 +711,7 @@ export class LayoutInstance {
         
        const backtrackSolveFragments = (  layoutConstraints : LayoutConstraint[], fragmentIdx: number) : LayoutConstraint[] => {
 
-            let currentLayoutError = "";
+            let currentLayoutError = null;
             if (fragmentIdx >= constraintFragments.length) {
                 // Base case: All fragments have been processed
                 return layoutConstraints;
@@ -744,9 +740,9 @@ export class LayoutInstance {
                 */
 
                 let validator = new ConstraintValidator(instanceLayout);
-                currentLayoutError = validator.validateConstraints()?.message || "";
+                currentLayoutError = validator.validateConstraints() || null;
 
-                if (!currentLayoutError || currentLayoutError === "") {
+                if (!currentLayoutError ) {
                     // If we found a satisfying assignment, we can return the constraints.
                     return backtrackSolveFragments(
                         allConstraintsForFragment, 
@@ -756,15 +752,12 @@ export class LayoutInstance {
             }
 
             if(currentLayoutError) {
-                throw new Error(`${currentLayoutError}`);
+                throw currentLayoutError;
             }
             throw new Error(`Failed to find a satisfying layout for cyclic constraints.`);
-           
         }
 
-
         const finalConstraints: LayoutConstraint[] = backtrackSolveFragments(layoutWithoutCyclicConstraints.constraints, 0);
-
         return finalConstraints;
     }
 
