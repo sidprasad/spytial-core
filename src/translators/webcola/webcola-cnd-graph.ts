@@ -9,7 +9,7 @@ const DEFAULT_SCALE_FACTOR = 5;
  * WebCola CnD Graph Custom Element
  * Full implementation using WebCola constraint-based layout with D3 integration
  */
-export class WebColaCnDGraph extends HTMLElement {
+export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLElement : (class {} as any)) {
   private svg!: any;
   private container!: any;
   private currentLayout: any = null;
@@ -1542,5 +1542,7 @@ export class WebColaCnDGraph extends HTMLElement {
   }
 }
 
-// Register the custom element
-customElements.define('webcola-cnd-graph', WebColaCnDGraph);
+// Register the custom element only in browser environments
+if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined') {
+  customElements.define('webcola-cnd-graph', WebColaCnDGraph);
+}

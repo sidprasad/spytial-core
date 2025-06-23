@@ -5,9 +5,9 @@
 export { WebColaTranslator } from './webcola/webcolatranslator';
 export { DagreTranslator } from './dagretranslator';
 
-// WebColaCnDGraph is exported directly from its file for browser usage
-// Import and re-export if needed:
-// export { WebColaCnDGraph } from './webcola-cnd-graph';
+// WebCola visualization factory function - simpler than custom elements
+export { createWebColaCnDGraph } from './webcola/webcola-factory';
+export type { WebColaCnDGraphAPI } from './webcola/webcola-factory';
 
 // Re-export types for convenience
 export type { 

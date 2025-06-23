@@ -921,36 +921,45 @@ Layout Spec: ${JSON.stringify(layoutSpec, null, 2)}`;
                 
                 console.log('🔧 Testing WebCola Translator with layout:', generatedLayout);
                 
-                // Test WebColaTranslator
+                // Test WebColaTranslator - use the correct API
                 let webColaTranslator;
+                let webColaLayout;
+                
                 if (cndCore.WebColaTranslator) {
-                    webColaTranslator = new cndCore.WebColaTranslator(generatedLayout);
+                    webColaTranslator = new cndCore.WebColaTranslator();
+                    webColaLayout = await webColaTranslator.translate(generatedLayout);
                 } else if (cndCore.Translators?.WebColaTranslator) {
-                    webColaTranslator = new cndCore.Translators.WebColaTranslator(generatedLayout);
+                    webColaTranslator = new cndCore.Translators.WebColaTranslator();
+                    webColaLayout = await webColaTranslator.translate(generatedLayout);
                 } else if (translators.WebColaTranslator) {
-                    webColaTranslator = new translators.WebColaTranslator(generatedLayout);
+                    webColaTranslator = new translators.WebColaTranslator();
+                    webColaLayout = await webColaTranslator.translate(generatedLayout);
                 } else {
                     throw new Error('WebColaTranslator not found in any expected location');
                 }
                 
                 console.log('🔧 WebColaTranslator created:', webColaTranslator);
+                console.log('🔧 WebColaLayout result:', webColaLayout);
                 
                 const result = `✅ WebCola Translator Test Successful!
 
 === WEBCOLA TRANSLATION RESULT ===
 Translator Created: ${webColaTranslator ? 'Yes' : 'No'}
+Layout Translated: ${webColaLayout ? 'Yes' : 'No'}
 
-WebCola Nodes (${webColaTranslator.colaNodes?.length || 0}):
-${JSON.stringify(webColaTranslator.colaNodes, null, 2)}
+WebCola Nodes (${webColaLayout?.nodes?.length || 0}):
+${JSON.stringify(webColaLayout?.nodes, null, 2)}
 
-WebCola Edges (${webColaTranslator.colaEdges?.length || 0}):
-${JSON.stringify(webColaTranslator.colaEdges, null, 2)}
+WebCola Links (${webColaLayout?.links?.length || 0}):
+${JSON.stringify(webColaLayout?.links, null, 2)}
 
-WebCola Constraints (${webColaTranslator.colaConstraints?.length || 0}):
-${JSON.stringify(webColaTranslator.colaConstraints, null, 2)}
+WebCola Constraints (${webColaLayout?.constraints?.length || 0}):
+${JSON.stringify(webColaLayout?.constraints, null, 2)}
 
-WebCola Groups (${webColaTranslator.groupDefinitions?.length || 0}):
-${JSON.stringify(webColaTranslator.groupDefinitions, null, 2)}
+WebCola Groups (${webColaLayout?.groups?.length || 0}):
+${JSON.stringify(webColaLayout?.groups, null, 2)}
+
+Layout Dimensions: ${webColaLayout?.FIG_WIDTH || 0} x ${webColaLayout?.FIG_HEIGHT || 0}
 
 ✅ WebColaTranslator successfully converted the layout data to WebCola format!`;
                 
@@ -976,12 +985,17 @@ ${JSON.stringify(webColaTranslator.groupDefinitions, null, 2)}
                 // Import WebColaCnDGraph directly
                 let WebColaCnDGraphClass;
                 try {
-                    // Import the custom element file directly
-                    await import('./webcola-cnd-graph.js');
-                    // The element should now be registered
-                    WebColaCnDGraphClass = customElements.get('webcola-cnd-graph');
-                    if (!WebColaCnDGraphClass) {
-                        throw new Error('WebColaCnDGraph not registered');
+                    console.log('🔍 Available in translators module:', Object.keys(translators));
+                    console.log('🔍 WebColaCnDGraph type:', typeof translators.WebColaCnDGraph);
+                    console.log('🔍 WebColaCnDGraph value:', translators.WebColaCnDGraph);
+                    
+                    // The WebColaCnDGraph should be available in the translators module
+                    if (translators.WebColaCnDGraph) {
+                        WebColaCnDGraphClass = translators.WebColaCnDGraph;
+                        console.log('✅ WebColaCnDGraph imported from translators module');
+                    } else {
+                        console.error('❌ WebColaCnDGraph not found. Available exports:', Object.keys(translators));
+                        throw new Error('WebColaCnDGraph not found in translators module');
                     }
                 } catch (error) {
                     console.error('Error importing WebColaCnDGraph:', error);
