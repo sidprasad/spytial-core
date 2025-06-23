@@ -278,7 +278,7 @@ constraints:
                     throw new Error('Please provide both Alloy XML and CND specification');
                 }
                 
-                showOutput('🔄 Testing with your custom data...');
+                showOutput('🔄 Testing with your custom data using new IDataInstance abstraction...');
                 
                 if (!cndCore) {
                     await window.testModuleImports();
@@ -288,10 +288,13 @@ constraints:
                 const alloyInstance = await import('./dist/alloy-instance.mjs');
                 const layout = await import('./dist/layout.mjs');
                 
-                // Parse the custom data
+                // Parse the custom data using the original AlloyInstance
                 const datum = alloyInstance.parseAlloyXML(alloyXML);
                 const instance = datum.instances[0];
                 const layoutSpec = layout.parseLayoutSpec(cndSpec);
+                
+                // Create the new AlloyDataInstance wrapper around the AlloyInstance
+                const alloyDataInstance = new cndCore.AlloyDataInstance(instance);
                 
                 // Create evaluator
                 const evaluator = new cndCore.WrappedForgeEvaluator();
@@ -308,16 +311,26 @@ constraints:
                     console.warn('Evaluator initialization failed (expected):', initError.message);
                 }
                 
+                // Test the IDataInstance interface methods
+                const types = alloyDataInstance.getTypes();
+                const allAtoms = alloyDataInstance.getAtoms();
+                const relations = alloyDataInstance.getRelations();
+                
                 // Test parsing results
-                const result = `✅ Successfully processed your custom data!
+                const result = `✅ Successfully processed your custom data using new IDataInstance abstraction!
 
-📊 Parsed Alloy Instance:
+📊 Original Alloy Instance:
 - Total instances: ${datum.instances.length}
 - Types found: ${Object.keys(instance.types).join(', ')}
 - Relations found: ${Object.keys(instance.relations).join(', ')}
 - Total atoms: ${Object.values(instance.types).map(t => t.atoms.length).reduce((a, b) => a + b, 0)}
 
-🎨 Parsed CND Specification:
+� New IDataInstance Interface Results:
+- Types via getTypes(): ${Object.keys(types).join(', ')}
+- Total atoms via getAtoms(): ${allAtoms.length}
+- Relations via getRelations(): ${Object.keys(relations).join(', ')}
+
+�🎨 Parsed CND Specification:
 - Hide disconnected: ${layoutSpec.directives.hideDisconnected}
 - Hide disconnected built-ins: ${layoutSpec.directives.hideDisconnectedBuiltIns}
 - Attributes: ${layoutSpec.directives.attributes.length}
@@ -325,17 +338,18 @@ constraints:
 - Node constraints: ${Object.keys(layoutSpec.constraints.node || {}).length}
 - Edge constraints: ${Object.keys(layoutSpec.constraints.edge || {}).length}
 
-🚀 Ready for Layout Generation:
-All components created successfully and ready to generate layouts!
+🚀 Ready for Layout Generation with IDataInstance:
+All components created successfully and ready to generate layouts using the generic interface!
 
-Atom Details:
-${Object.entries(instance.types).map(([typeName, type]) => 
-  `- ${typeName}: ${type.atoms.map(a => a.id).join(', ')}`
+IDataInstance Interface Methods:
+${allAtoms.slice(0, 5).map(atom => 
+  `- Atom ${atom.getId()}: type ${alloyDataInstance.getAtomType(atom.getId())}`
 ).join('\n')}
+${allAtoms.length > 5 ? `... and ${allAtoms.length - 5} more atoms` : ''}
 
-Relation Details:
-${Object.entries(instance.relations).map(([relName, rel]) => 
-  `- ${relName}: ${rel.tuples.length} tuples`
+Relations via IDataInstance:
+${Object.entries(relations).map(([relName, rel]) => 
+  `- ${relName}: ${rel.getTuples().length} tuples`
 ).join('\n')}`;
                 
                 showOutput(result);
@@ -599,20 +613,23 @@ Evaluator created successfully and implements IEvaluator interface!`;
                 // Create layout instance
                 const layoutInstance = new cndCore.LayoutInstance(layoutSpec, evaluator);
                 
-                // Test the setupLayout convenience function
+                // Create the new AlloyDataInstance wrapper around the AlloyInstance
+                const alloyDataInstance = new cndCore.AlloyDataInstance(instance);
+                
+                // Test the setupLayout convenience function with new IDataInstance
                 let setupResult;
                 try {
-                    setupResult = cndCore.setupLayout(cndSpec, instance, evaluator);
+                    setupResult = cndCore.setupLayout(cndSpec, alloyDataInstance, evaluator);
                 } catch (setupError) {
                     console.warn('setupLayout failed (expected due to evaluator):', setupError.message);
                 }
                 
-                // Test LayoutInstance.generateLayout() method
+                // Test LayoutInstance.generateLayout() method with IDataInstance
                 let generatedLayout;
                 let layoutError = null;
                 try {
-                    // Call generateLayout with the instance and empty projections
-                    const layoutResult = layoutInstance.generateLayout(instance, {});
+                    // Call generateLayout with the AlloyDataInstance and empty projections
+                    const layoutResult = layoutInstance.generateLayout(alloyDataInstance, {});
                     generatedLayout = layoutResult.layout;
                 } catch (generateError) {
                     layoutError = generateError;
@@ -664,11 +681,7 @@ ${JSON.stringify(generatedLayout, null, 2)}` : `❌ Layout Generation Failed: ${
                     await window.testModuleImports();
                 }
                 
-                showOutput('Testing LayoutInstance.generateLayout() method specifically...');
-                
-                // 🔍 DEBUG: Add breakpoint here - open DevTools and set breakpoint on next line
-                console.log('🔍 DEBUG: Starting generateLayout test');
-                debugger; // This will break into the debugger when DevTools are open
+                showOutput('Testing LayoutInstance.generateLayout() method with new IDataInstance abstraction...');
                 
                 // Import required modules
                 const alloyInstance = await import('./dist/alloy-instance.mjs');
@@ -690,47 +703,31 @@ ${JSON.stringify(generatedLayout, null, 2)}` : `❌ Layout Generation Failed: ${
                 let instances = ad.instances;
                 let loopBack = ad.loopBack || -1;
                 
-                // Get the first instance
+                // Get the first instance and wrap it with AlloyDataInstance
                 const instance = instances[0];
+                const alloyDataInstance = new cndCore.AlloyDataInstance(instance);
                 const layoutSpec = layout.parseLayoutSpec(cndSpec);
                 
-                // 🔍 DEBUG: Log parsed data
-                console.log('🔍 DEBUG: Parsed AlloyDatum:', ad);
-                console.log('🔍 DEBUG: Command:', command);
-                console.log('🔍 DEBUG: Instances:', instances);
-                console.log('🔍 DEBUG: LoopBack:', loopBack);
-                console.log('🔍 DEBUG: First instance:', instance);
-                console.log('🔍 DEBUG: Parsed layout spec:', layoutSpec);
+                console.log('🔍 DEBUG: Using new AlloyDataInstance abstraction');
+                console.log('🔍 DEBUG: AlloyDataInstance methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(alloyDataInstance)));
+                console.log('🔍 DEBUG: Types via getTypes():', Object.keys(alloyDataInstance.getTypes()));
+                console.log('🔍 DEBUG: Atoms via getAtoms():', alloyDataInstance.getAtoms().length);
+                console.log('🔍 DEBUG: Relations via getRelations():', Object.keys(alloyDataInstance.getRelations()));
                 
-                // Create ForgeEvaluator (not WrappedForgeEvaluator) and pass in the parsed AlloyDatum
-                console.log('🔍 DEBUG: Available in cndCore:', Object.keys(cndCore));
-                console.log('🔍 DEBUG: cndCore.ForgeEvaluator:', cndCore.ForgeEvaluator);
-                console.log('🔍 DEBUG: cndCore.Evaluators:', cndCore.Evaluators);
-                console.log('🔍 DEBUG: cndCore.Evaluators.ForgeEvaluator:', cndCore.Evaluators?.ForgeEvaluator);
-                
-                // Try different ways to access ForgeEvaluator
+                // Create ForgeEvaluator
                 let ForgeEvaluatorClass;
                 if (cndCore.ForgeEvaluator) {
                     ForgeEvaluatorClass = cndCore.ForgeEvaluator;
-                    console.log('🔍 DEBUG: Using cndCore.ForgeEvaluator');
                 } else if (cndCore.Evaluators?.ForgeEvaluator) {
                     ForgeEvaluatorClass = cndCore.Evaluators.ForgeEvaluator;
-                    console.log('🔍 DEBUG: Using cndCore.Evaluators.ForgeEvaluator');
                 } else {
-                    // Fallback to WrappedForgeEvaluator
                     ForgeEvaluatorClass = cndCore.WrappedForgeEvaluator;
-                    console.log('🔍 DEBUG: Falling back to cndCore.WrappedForgeEvaluator');
                 }
                 
                 const evaluator = new ForgeEvaluatorClass();
                 
-                // 🔍 DEBUG: Check evaluator state
-                console.log('🔍 DEBUG: Evaluator created:', evaluator);
-                console.log('🔍 DEBUG: Evaluator methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(evaluator)));
-                
-                // Try to initialize the evaluator properly
+                // Try to initialize the evaluator
                 try {
-                    console.log('🔍 DEBUG: Attempting evaluator initialization...');
                     await evaluator.initialize({
                         sourceData: alloyXML,
                         processedData: { instance: instance },
@@ -741,70 +738,63 @@ ${JSON.stringify(generatedLayout, null, 2)}` : `❌ Layout Generation Failed: ${
                             alloyDatum: ad
                         }
                     });
-                    console.log('🔍 DEBUG: Evaluator initialized successfully');
                 } catch (initError) {
-                    console.error('🔍 DEBUG: Evaluator initialization failed:', initError);
-                    console.error('🔍 DEBUG: Error details:', {
-                        message: initError.message,
-                        stack: initError.stack,
-                        evaluatorReady: evaluator.isReady()
-                    });
-                    // Don't throw here, continue to see what happens
+                    console.warn('Evaluator initialization failed (expected):', initError.message);
                 }
                 
                 // Create layout instance
                 const layoutInstance = new cndCore.LayoutInstance(layoutSpec, evaluator);
                 
-                // 🔍 DEBUG: Check layout instance
-                console.log('🔍 DEBUG: LayoutInstance created:', layoutInstance);
-                console.log('🔍 DEBUG: LayoutInstance methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(layoutInstance)));
-                
-                // Call generateLayout method with different projection scenarios
+                // Call generateLayout method with the new IDataInstance interface
                 let layoutResults = [];
                 let errors = [];
                 
-                // Test 1: Empty projections
+                // Test 1: Empty projections using IDataInstance
                 try {
-                    console.log('🔍 DEBUG: Calling generateLayout with empty projections...');
-                    debugger; // Break here before the generateLayout call
-                    const result1 = layoutInstance.generateLayout(instance, {});
-                    console.log('🔍 DEBUG: generateLayout succeeded:', result1);
+                    console.log('🔍 DEBUG: Calling generateLayout with AlloyDataInstance and empty projections...');
+                    const result1 = layoutInstance.generateLayout(alloyDataInstance, {});
+                    console.log('🔍 DEBUG: generateLayout succeeded with IDataInstance:', result1);
                     
                     // Store the layout globally for the custom element to use
                     window.lastInstanceLayout = result1.layout;
                     
                     layoutResults.push({ 
-                        scenario: 'Empty Projections', 
+                        scenario: 'Empty Projections (IDataInstance)', 
                         result: result1.layout,
                         projectionData: result1.projectionData 
                     });
                 } catch (error) {
-                    console.error('🔍 DEBUG: generateLayout failed:', error);
-                    console.error('🔍 DEBUG: Error stack:', error.stack);
-                    errors.push({ scenario: 'Empty Projections', error: error.message, fullError: error });
+                    console.error('🔍 DEBUG: generateLayout failed with IDataInstance:', error);
+                    errors.push({ scenario: 'Empty Projections (IDataInstance)', error: error.message, fullError: error });
                 }
                 
-                // Test 2: With sample projections (if any projection fields exist)
-                const instanceTypes = Object.keys(instance.types || {});
+                // Test 2: With sample projections using IDataInstance
+                const instanceTypes = Object.keys(alloyDataInstance.getTypes());
                 if (instanceTypes.length > 0) {
                     try {
                         const sampleProjections = {}; // Could be enhanced with actual projection logic
-                        const result2 = layoutInstance.generateLayout(instance, sampleProjections);
+                        const result2 = layoutInstance.generateLayout(alloyDataInstance, sampleProjections);
                         
                         // Update the global layout if this succeeds
                         window.lastInstanceLayout = result2.layout;
                         
                         layoutResults.push({ 
-                            scenario: 'Sample Projections', 
+                            scenario: 'Sample Projections (IDataInstance)', 
                             result: result2.layout,
                             projectionData: result2.projectionData 
                         });
                     } catch (error) {
-                        errors.push({ scenario: 'Sample Projections', error: error.message });
+                        errors.push({ scenario: 'Sample Projections (IDataInstance)', error: error.message });
                     }
                 }
                 
-                const result = `✅ LayoutInstance.generateLayout() Test Results!
+                const result = `✅ LayoutInstance.generateLayout() Test Results with IDataInstance!
+
+=== NEW ABSTRACTION INTERFACE ===
+Using AlloyDataInstance wrapper implementing IDataInstance
+- getTypes(): ${instanceTypes.join(', ')}
+- getAtoms(): ${alloyDataInstance.getAtoms().length} atoms
+- getRelations(): ${Object.keys(alloyDataInstance.getRelations()).join(', ')}
 
 === METHOD CALL RESULTS ===
 ${layoutResults.length > 0 ? layoutResults.map((lr, i) => `
@@ -818,22 +808,17 @@ ${JSON.stringify(lr.result.edges, null, 2)}
 Generated Layout Constraints (${lr.result.constraints?.length || 0}):
 ${JSON.stringify(lr.result.constraints, null, 2)}
 
-Generated Layout Groups (${lr.result.groups?.length || 0}):
-${JSON.stringify(lr.result.groups, null, 2)}
-
 Projection Data:
 ${JSON.stringify(lr.projectionData, null, 2)}
-
-Complete Generated Layout:
-${JSON.stringify(lr.result, null, 2)}
 `).join('\n') : 'No successful layout generation'}
 
 === ERRORS ENCOUNTERED ===
 ${errors.length > 0 ? errors.map(e => `- ${e.scenario}: ${e.error}`).join('\n') : 'No errors'}
 
-=== LAYOUT INSTANCE DETAILS ===
-Instance Created: ${layoutInstance ? 'Yes' : 'No'}
-Layout Spec: ${JSON.stringify(layoutSpec, null, 2)}`;
+=== COMPARISON: Old vs New ===
+Original AlloyInstance: ${Object.keys(instance.types).join(', ')} types
+IDataInstance Interface: ${instanceTypes.join(', ')} types
+✅ Successfully migrated to generic IDataInstance abstraction!`;
                 
                 showOutput(result);
             } catch (error) {

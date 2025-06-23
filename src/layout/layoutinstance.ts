@@ -1,9 +1,5 @@
 import { Graph, Edge } from 'graphlib';
-import { AlloyInstance, getAtomType, getInstanceTypes } from '../alloy-instance';
-import { isBuiltin, AlloyType } from '../alloy-instance/src/type';
-import { applyProjections } from '../alloy-instance/src/projection';
-
-
+import {IAtom, IDataInstance, IType} from '../data-instance/interfaces';
 
 
 import {
@@ -22,7 +18,7 @@ import {
 
 
 
-import { generateGraph } from '../alloy-graph';
+import { generateGraph } from '../data-instance/alloy/alloy-graph';
 import IEvaluator from '../evaluators/interfaces';
 import { ColorPicker } from './colorpicker';
 import { ConstraintValidator } from './constraint-validator';
@@ -141,10 +137,10 @@ export class LayoutInstance {
     /**
      * Generates groups based on the specified graph.
      * @param g - The graph, which will be modified to remove the edges that are used to generate groups.
-     * @param a - The ORIGINAL (pre-projection) Alloy instance.
+     * @param a - The ORIGINAL (pre-projection) Data Instance.
      * @returns A record of groups.
      */
-    private generateGroups(g: Graph, a: AlloyInstance): LayoutGroup[] {
+    private generateGroups(g: Graph, a: IDataInstance): LayoutGroup[] {
 
         //let groupingConstraints : GroupingConstraint[] = this._layoutSpec.constraints.grouping;
 
@@ -199,19 +195,6 @@ export class LayoutInstance {
                             showLabel: true
                         };
                         groups.push(newGroup);
-
-
-                        // TODO: DO WE WANT THIS? ... perhaps not?
-                        // Should we add a *inferred edge* to the group here? Perhaps - it sort of makes sense.
-                        // if so, we need something more sophisticated than prefixing the edge name.
-                        // Like _g_ and _helper_ can't clash.
-
-                        // Need to add a helper + group edge to the graph.
-                        // const edgePrefix = "_g_0_1__helper_"; // Group, group on 0, addToGroup 1, AND make it a inferred edge. Crucially the inferred edge comes first.
-                        // const newId = edgePrefix + gc.name;
-                        // g.setEdge(groupOn, addToGroup, groupName, newId);
-
-
                     }
                 }
 
@@ -391,7 +374,7 @@ export class LayoutInstance {
     * Modifies the graph to remove extraneous nodes (ex. those to be hidden)
     * @param g - The graph, which will be modified to remove extraneous nodes.
     */
-    private ensureNoExtraNodes(g: Graph, a: AlloyInstance) {
+    private ensureNoExtraNodes(g: Graph, a: IDataInstance) {
 
         let nodes = [...g.nodes()];
 
@@ -401,8 +384,8 @@ export class LayoutInstance {
 
             // Check if builtin
             try {
-                const type = getAtomType(a, node);
-                const isAtomBuiltin = isBuiltin(type);
+                const type = a.getAtomType(node);
+                const isAtomBuiltin = type?.isBuiltin || false;
 
                 let inEdges = g.inEdges(node) || [];
                 let outEdges = g.outEdges(node) || [];
@@ -422,16 +405,16 @@ export class LayoutInstance {
     }
 
 
-    private getMostSpecificType(node: string, a: AlloyInstance): string {
-        let type = getAtomType(a, node);
-        let allTypes = type.types;
+    private getMostSpecificType(node: string, a: IDataInstance): string {
+        let allTypes = this.getNodeTypes(node, a);
         let mostSpecificType = allTypes[0];
         return mostSpecificType;
     }
 
-    private getNodeTypes(node: string, a: AlloyInstance): string[] {
-        let type = getAtomType(a, node);
-        let allTypes = type.types.concat(UNIVERSAL_TYPE);
+    private getNodeTypes(node: string, a: IDataInstance): string[] {
+        let type = a.getAtomType(node);
+        let allTypes = type?.types || [];
+        allTypes = allTypes.concat(UNIVERSAL_TYPE);
         return allTypes;
     }
 
@@ -449,10 +432,11 @@ export class LayoutInstance {
     }
 
 
-    private applyLayoutProjections(ai: AlloyInstance, projections: Record<string, string>): { projectedInstance: AlloyInstance, finalProjectionChoices: { type: string, projectedAtom: string, atoms: string[] }[] } {
+    private applyLayoutProjections(ai: IDataInstance, projections: Record<string, string>): { projectedInstance: IDataInstance, finalProjectionChoices: { type: string, projectedAtom: string, atoms: string[] }[] } {
 
         let projectedSigs: string[] = this.projectedSigs;
-        let projectedTypes: AlloyType[] = projectedSigs.map((sig) => ai.types[sig]);
+
+        let projectedTypes: IType[] = projectedSigs.map((sig) => ai.getAtomType(sig));
 
 
         // Now we should have a map from each type to its atoms
@@ -496,7 +480,7 @@ export class LayoutInstance {
                 return { type: typeId, projectedAtom: atomId, atoms: atoms };
             });
 
-        let projectedInstance = applyProjections(ai, projectedAtomIds);
+        let projectedInstance = ai.applyProjections( projectedAtomIds);
         return { projectedInstance, finalProjectionChoices };
     }
 
@@ -505,13 +489,13 @@ export class LayoutInstance {
 
 
 
-    public generateLayout(a: AlloyInstance, projections: Record<string, string>): { layout: InstanceLayout, projectionData: { type: string, projectedAtom: string, atoms: string[] }[] } {
+    public generateLayout(a: IDataInstance, projections: Record<string, string>): { layout: InstanceLayout, projectionData: { type: string, projectedAtom: string, atoms: string[] }[] } {
 
         let projectionResult = this.applyLayoutProjections(a, projections);
         let ai = projectionResult.projectedInstance;
         let projectionData = projectionResult.finalProjectionChoices;
 
-        let g: Graph = generateGraph(ai, this.hideDisconnected, this.hideDisconnectedBuiltIns);
+        let g: Graph = ai.generateGraph( this.hideDisconnected, this.hideDisconnectedBuiltIns);
 
         const attributes = this.generateAttributesAndRemoveEdges(g);
 
@@ -608,7 +592,11 @@ export class LayoutInstance {
         const nonCyclicConstraintError = validatorWithoutCyclic.validateConstraints();
 
         if (nonCyclicConstraintError) {
-            throw new Error(nonCyclicConstraintError);
+
+
+            // TODO: This needs to be fixed for errors.
+
+            throw new Error(nonCyclicConstraintError.message);
         }
         // And updating constraints, since the validator may add constraints.
         // (IN particular these would be non-overlap constraints for spacing in groups.)
@@ -647,7 +635,7 @@ export class LayoutInstance {
         let finalConstraintValidator = new ConstraintValidator(layout);
         let finalLayoutError = finalConstraintValidator.validateConstraints();
         if (finalLayoutError) {
-            throw new Error(finalLayoutError);
+            throw new Error(finalLayoutError.message || finalLayoutError.toString());
         }
 
         return { layout, projectionData };
@@ -752,8 +740,15 @@ export class LayoutInstance {
                     edges: layoutWithoutCyclicConstraints.edges,
                     groups: layoutWithoutCyclicConstraints.groups
                 };
+
+                /*
+
+                    TODO: This is also super broken.
+
+                */
+
                 let validator = new ConstraintValidator(instanceLayout);
-                currentLayoutError = validator.validateConstraints() || "";
+                currentLayoutError = validator.validateConstraints()?.message || "";
 
                 if (!currentLayoutError || currentLayoutError === "") {
                     // If we found a satisfying assignment, we can return the constraints.
@@ -1076,7 +1071,7 @@ export class LayoutInstance {
     }
 
 
-    private getNodeColorMap(g: Graph, a: AlloyInstance): Record<string, string> {
+    private getNodeColorMap(g: Graph, a: IDataInstance): Record<string, string> {
         let nodeColorMap: Record<string, string> = {};
 
         // Start by getting the default signature colors
@@ -1138,10 +1133,10 @@ export class LayoutInstance {
     }
 
 
-    private getSigColors(ai: AlloyInstance): Record<string, string> {
+    private getSigColors(ai: IDataInstance): Record<string, string> {
         let sigColors: Record<string, string> = {};
 
-        let types = getInstanceTypes(ai);
+        let types = ai.getTypes();
         let colorPicker = new ColorPicker(types.length);
         types.forEach((type) => {
             sigColors[type.id] = colorPicker.getNextColor();
@@ -1149,10 +1144,10 @@ export class LayoutInstance {
         return sigColors;
     }
 
-    private getFieldTuples(a: AlloyInstance, fieldName: string): string[][] {
+    private getFieldTuples(a: IDataInstance, fieldName: string): string[][] {
 
 
-        let field = Object.values(a.relations).find((rel) => rel.name === fieldName);
+        let field = Object.values(a.getRelations()).find((rel) => rel.name === fieldName);
 
 
         if (!field) {
@@ -1165,7 +1160,7 @@ export class LayoutInstance {
         return fieldTuples;
     }
 
-    private getFieldTuplesForSourceAndTarget(a: AlloyInstance, fieldName: string, src: string, tgt: string): string[][] {
+    private getFieldTuplesForSourceAndTarget(a: IDataInstance, fieldName: string, src: string, tgt: string): string[][] {
 
         let fieldTuples = this.getFieldTuples(a, fieldName);
         let filteredTuples = fieldTuples.filter((tuple) => {

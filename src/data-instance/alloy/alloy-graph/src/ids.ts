@@ -1,4 +1,4 @@
-import { AlloyAtom, AlloyRelation, AlloyTuple } from '../../alloy-instance';
+import { AlloyAtom, AlloyRelation, AlloyTuple } from '../../data-instance/alloy-instance';
 
 export function generateNodeId(atom: AlloyAtom): string {
   return atom.id;

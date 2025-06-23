@@ -284,7 +284,6 @@ class ConstraintValidator {
         }
         else {
             console.log(constraint, "Unknown constraint type");
-            this.error = "Unknown constraint type";
             return [];
         }
     }
