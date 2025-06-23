@@ -43,7 +43,7 @@ export interface IDataInstance {
 
     // To graph data
 
-    getAtomType(id: string): IType;
+    getAtomType(id: string): IType | undefined;
     getTypes(): readonly IType[];
     getAtoms(): readonly IAtom[];
     getRelations(): readonly IRelation[]; // Assuming relations are just strings for simplicity

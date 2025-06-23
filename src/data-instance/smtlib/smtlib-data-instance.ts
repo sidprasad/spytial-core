@@ -222,11 +222,11 @@ export class SmtLibDataInstance implements IDataInstance {
    * @param hideDisconnectedBuiltIns - Whether to hide disconnected built-ins
    * @returns Graph representation suitable for layout processing
    */
-  public generateGraph(
-    hideDisconnected: boolean = false, 
+  public  generateGraph(
+    hideDisconnected: boolean = false,
     hideDisconnectedBuiltIns: boolean = false
-  ): Graph<any, any> {
-    const graph = new Graph<any, any>({ directed: true });
+  ): Graph {
+    const graph = new Graph({ directed: true });
     
     // Add nodes for all atoms
     for (const atom of this.getAtoms()) {
@@ -246,7 +246,6 @@ export class SmtLibDataInstance implements IDataInstance {
         const [source, target] = tuple.atoms;
         
         const edgeData = {
-          relation: tuple.relation,
           type: 'dependency'
         };
         
@@ -274,9 +273,10 @@ export class SmtLibDataInstance implements IDataInstance {
     for (const sort of this.model.sorts) {
       if (!this.typeCache.has(sort.name)) {
         this.typeCache.set(sort.name, {
-          name: sort.name,
-          isBuiltin: sort.isBuiltin,
-          parentType: sort.parentSort
+          id: sort.name,
+          types: sort.parentSort ? [sort.parentSort, sort.name] : [sort.name],
+          atoms: [], // Will be populated later
+          isBuiltin: sort.isBuiltin
         });
       }
     }
@@ -308,9 +308,10 @@ export class SmtLibDataInstance implements IDataInstance {
     
     for (const type of builtinTypes) {
       this.typeCache.set(type.name, {
-        name: type.name,
-        isBuiltin: type.isBuiltin,
-        parentType: type.parentSort
+        id: type.name,
+        types: [type.name],
+        atoms: [], // Will be populated later
+        isBuiltin: type.isBuiltin
       });
     }
   }
@@ -333,9 +334,10 @@ export class SmtLibDataInstance implements IDataInstance {
       const relationName = this.config.relationPrefix + definition.name;
       
       this.relationCache.set(relationName, {
+        id: relationName,
         name: relationName,
-        arity: definition.parameters.length + 1, // parameters + return value
-        types: [...parameterTypes, definition.sort]
+        types: [...parameterTypes, definition.sort],
+        tuples: [] // Will be populated later if needed
       });
       
       // Function name also becomes an atom if configured
@@ -358,9 +360,10 @@ export class SmtLibDataInstance implements IDataInstance {
     // Create dependency relation if it doesn't exist
     if (!this.relationCache.has(dependencyRelationName)) {
       this.relationCache.set(dependencyRelationName, {
+        id: dependencyRelationName,
         name: dependencyRelationName,
-        arity: 2,
-        types: ['String', 'String'] // source and target names
+        types: ['String', 'String'], // source and target names
+        tuples: [] // Will be populated below
       });
     }
     
@@ -368,8 +371,8 @@ export class SmtLibDataInstance implements IDataInstance {
     for (const definition of this.model.definitions) {
       for (const dependency of definition.dependencies) {
         this.tupleCache.push({
-          relation: dependencyRelationName,
-          atoms: [dependency, definition.name]
+          atoms: [dependency, definition.name],
+          types: ['String', 'String']
         });
       }
     }
@@ -394,7 +397,7 @@ export class SmtLibDataInstance implements IDataInstance {
    * @param hideDisconnectedBuiltIns - Whether to hide disconnected built-ins
    */
   private filterDisconnectedNodes(
-    graph: Graph<any, any>, 
+    graph: Graph, 
     hideDisconnected: boolean, 
     hideDisconnectedBuiltIns: boolean
   ): void {

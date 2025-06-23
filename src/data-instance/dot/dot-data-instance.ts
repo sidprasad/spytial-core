@@ -1,7 +1,18 @@
 /**
  * @fileoverview
- * DOT data instance implementation using graphlib-dot parser.
- * Implements IDataInstance interface for DOT graphs with minimal custom parsing.
+ * DOT data instance implementation using graphlib-d  public getAtomType(atomId: string): IType | undefined {
+    const atom = this.atomCache.get(atomId);
+    if (!atom) {
+      return undefined;
+    }
+    
+    const type = this.typeCache.get(atom.type);
+    if (!type) {
+      return undefined;
+    }
+    
+    return type;
+  } Implements IDataInstance interface for DOT graphs with minimal custom parsing.
  */
 
 import type { IDataInstance, IAtom, IType, IRelation, ITuple } from '../interfaces';
