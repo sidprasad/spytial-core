@@ -290,7 +290,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       // Start the layout with specific iteration counts and proper event handling
       layout
         .on('tick', () => {
-          if (this.layoutFormat === 'default' || !this.layoutFormat) {
+          if (this.layoutFormat === 'default' || !this.layoutFormat || this.layoutFormat === null) {
             this.updatePositions();
           } else if (this.layoutFormat === 'grid') {
             this.gridUpdatePositions();
@@ -301,7 +301,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         .on('end', () => {
           console.log('✅ WebCola layout converged');
           // Call advanced edge routing after layout converges
-          if (this.layoutFormat === 'default') {
+          if (this.layoutFormat === 'default' || !this.layoutFormat ) {
             this.routeEdges();
           } else if (this.layoutFormat === 'grid') {
             this.gridify(10, 25, 10);

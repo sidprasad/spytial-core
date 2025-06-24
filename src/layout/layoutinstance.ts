@@ -491,6 +491,8 @@ export class LayoutInstance {
         let ai = projectionResult.projectedInstance;
         let projectionData = projectionResult.finalProjectionChoices;
 
+
+        
         let g: Graph = ai.generateGraph( this.hideDisconnected, this.hideDisconnectedBuiltIns);
 
         const attributes = this.generateAttributesAndRemoveEdges(g);
