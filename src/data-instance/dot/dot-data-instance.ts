@@ -1,520 +1,310 @@
-/**
- * @fileoverview
- * DOT data instance implementation using graphlib-d  public getAtomType(atomId: string): IType | undefined {
-    const atom = this.atomCache.get(atomId);
-    if (!atom) {
-      return undefined;
-    }
-    
-    const type = this.typeCache.get(atom.type);
-    if (!type) {
-      return undefined;
-    }
-    
-    return type;
-  } Implements IDataInstance interface for DOT graphs with minimal custom parsing.
- */
-
-import type { IDataInstance, IAtom, IType, IRelation, ITuple } from '../interfaces';
-import { Graph } from 'graphlib';
-import { read } from 'graphlib-dot';
+import type { Graph } from 'graphlib';
+import parse from 'graphlib-dot';
+import type { IDataInstance, IAtom, IType, IRelation } from '../interfaces';
 
 /**
- * Configuration for DOT graph processing
- */
-export interface DotConfig {
-  /** Default type name for nodes */
-  readonly defaultNodeType: string;
-  
-  /** Default relation name for edges */
-  readonly defaultEdgeRelation: string;
-  
-  /** Whether to create types from node shapes */
-  readonly createTypesFromShapes: boolean;
-  
-  /** Attribute that defines node type */
-  readonly nodeTypeAttribute: string;
-  
-  /** Whether to include node attributes as relations */
-  readonly includeNodeAttributes: boolean;
-  
-  /** Whether to include edge attributes as relations */
-  readonly includeEdgeAttributes: boolean;
-}
-
-/**
- * Default configuration
- */
-export const DEFAULT_DOT_CONFIG: DotConfig = {
-  defaultNodeType: 'Node',
-  defaultEdgeRelation: 'edge',
-  createTypesFromShapes: true,
-  nodeTypeAttribute: 'type',
-  includeNodeAttributes: false,
-  includeEdgeAttributes: false
-} as const;
-
-/**
- * DOT data instance implementation using graphlib-dot
+ * Simple DOT data instance implementation
+ * Converts DOT graphs to the IDataInstance interface with proper type handling
+ * Leverages type information from DOT annotations and builtin type detection
  */
 export class DotDataInstance implements IDataInstance {
   private readonly graph: Graph;
-  private readonly config: DotConfig;
-  
-  // Caches
-  private readonly typeCache = new Map<string, IType>();
-  private readonly atomCache = new Map<string, IAtom>();
-  private readonly relationCache = new Map<string, IRelation>();
-  private readonly tupleCache: ITuple[] = [];
+  private readonly atoms: IAtom[] = [];
+  private readonly types: IType[] = [];
+  private readonly relations: IRelation[] = [];
+  private readonly typeMap = new Map<string, IType>();
 
-  /**
-   * Create DOT data instance from graphlib Graph
-   * 
-   * @param graph - Parsed graphlib Graph (from graphlib-dot)
-   * @param config - Optional configuration
-   */
-  constructor(graph: Graph, config: Partial<DotConfig> = {}) {
-    this.graph = graph;
-    this.config = { ...DEFAULT_DOT_CONFIG, ...config };
-    this.initializeCaches();
+  constructor(dotSpec: string) {
+    this.graph = parse.read(dotSpec) as Graph;
+    this.buildDataStructures();
   }
 
   /**
-   * Get type information for a specific atom
+   * Build atoms, types, and relations from the DOT graph
+   * Uses type information from DOT annotations and proper builtin detection
    */
-  public getAtomType(atomId: string): IType {
-    const atom = this.atomCache.get(atomId);
-    if (!atom) {
-      throw new Error(`Atom not found: ${atomId}`);
-    }
+  private buildDataStructures(): void {
+    // Always create builtin types first (matching dot-to-alloy-xml structure)
+    this.createBuiltinTypes();
     
-    const type = this.typeCache.get(atom.type);
-    if (!type) {
-      throw new Error(`Type not found for atom ${atomId}: ${atom.type}`);
-    }
+    // Collect unique user-defined types from DOT nodes
+    const userTypeNames = new Set<string>();
     
-    return type;
-  }
-
-  /**
-   * Get all types defined in this instance
-   */
-  public getTypes(): readonly IType[] {
-    return Array.from(this.typeCache.values());
-  }
-
-  /**
-   * Get all atoms in this instance
-   */
-  public getAtoms(): readonly IAtom[] {
-    return Array.from(this.atomCache.values());
-  }
-
-  /**
-   * Get all relations in this instance
-   */
-  public getRelations(): readonly IRelation[] {
-    return Array.from(this.relationCache.values());
-  }
-
-  /**
-   * Get all tuples in this instance
-   */
-  public getTuples(): readonly ITuple[] {
-    return [...this.tupleCache];
-  }
-
-  /**
-   * Apply projections to filter the instance
-   */
-  public applyProjections(atomIds: string[]): IDataInstance {
-    const atomIdSet = new Set(atomIds);
-    
-    // Create filtered graph
-    const filteredGraph = new Graph({ 
-      directed: this.graph.isDirected(),
-      multigraph: this.graph.isMultigraph()
-    });
-    
-    // Copy nodes that are in projection
-    for (const nodeId of this.graph.nodes()) {
-      if (atomIdSet.has(nodeId)) {
-        filteredGraph.setNode(nodeId, this.graph.node(nodeId));
-      }
-    }
-    
-    // Copy edges between projected nodes
-    for (const edge of this.graph.edges()) {
-      if (atomIdSet.has(edge.v) && atomIdSet.has(edge.w)) {
-        filteredGraph.setEdge(edge.v, edge.w, this.graph.edge(edge));
-      }
-    }
-    
-    return new DotDataInstance(filteredGraph, this.config);
-  }
-
-  /**
-   * Generate graph representation (returns the internal graph)
-   */
-  public generateGraph(
-    hideDisconnected: boolean = false, 
-    hideDisconnectedBuiltIns: boolean = false
-  ): Graph {
-    if (!hideDisconnected && !hideDisconnectedBuiltIns) {
-      return this.graph;
-    }
-    
-    // Create copy and filter if needed
-    const filteredGraph = new Graph({
-      directed: this.graph.isDirected(),
-      multigraph: this.graph.isMultigraph()
-    });
-    
-    // Copy all nodes and edges first
-    for (const nodeId of this.graph.nodes()) {
-      filteredGraph.setNode(nodeId, this.graph.node(nodeId));
-    }
-    
-    for (const edge of this.graph.edges()) {
-      filteredGraph.setEdge(edge.v, edge.w, this.graph.edge(edge));
-    }
-    
-    // Filter disconnected nodes if requested
-    if (hideDisconnected || hideDisconnectedBuiltIns) {
-      this.filterDisconnectedNodes(filteredGraph, hideDisconnected, hideDisconnectedBuiltIns);
-    }
-    
-    return filteredGraph;
-  }
-
-  /**
-   * Initialize caches from the graphlib Graph
-   */
-  private initializeCaches(): void {
-    this.addDefaultTypes();
-    this.processNodes();
-    this.processEdges();
-    
-    if (this.config.includeNodeAttributes || this.config.includeEdgeAttributes) {
-      this.createAttributeRelations();
-    }
-  }
-
-  /**
-   * Add default and shape-based types
-   */
-  private addDefaultTypes(): void {
-    // Add default node type
-    this.typeCache.set(this.config.defaultNodeType, {
-      id: this.config.defaultNodeType,
-      types: [this.config.defaultNodeType],
-      atoms: [],
-      isBuiltin: false
-    });
-    
-    // Add types from node shapes if configured
-    if (this.config.createTypesFromShapes) {
-      const shapes = new Set<string>();
-      
-      for (const nodeId of this.graph.nodes()) {
-        const nodeData = this.graph.node(nodeId);
-        const shape = nodeData?.shape;
-        
-        if (shape && !shapes.has(shape)) {
-          shapes.add(shape);
-          this.typeCache.set(shape, {
-            id: shape,
-            types: [this.config.defaultNodeType, shape],
-            atoms: [],
-            isBuiltin: false
-          });
-        }
-      }
-    }
-  }
-
-  /**
-   * Process all nodes to create atoms
-   */
-  private processNodes(): void {
     for (const nodeId of this.graph.nodes()) {
       const nodeData = this.graph.node(nodeId) || {};
+      const typeName = nodeData.type ? String(nodeData.type) : 'univ';
       
-      // Determine node type
-      let nodeType = this.config.defaultNodeType;
-      
-      // Check for explicit type
-      const explicitType = nodeData[this.config.nodeTypeAttribute];
-      if (explicitType && this.typeCache.has(explicitType)) {
-        nodeType = explicitType;
+      // Only collect non-builtin types
+      if (!this.isBuiltinType(typeName)) {
+        userTypeNames.add(typeName);
       }
-      // Check for shape-based type
-      else if (this.config.createTypesFromShapes && nodeData.shape) {
-        const shape = nodeData.shape;
-        if (this.typeCache.has(shape)) {
-          nodeType = shape;
-        }
-      }
+    }
+
+    // Create user-defined types
+    for (const typeName of userTypeNames) {
+      const type: IType = {
+        id: typeName,
+        types: new Set(),
+        atoms: new Set(),
+        isBuiltin: false
+      };
+      this.types.push(type);
+      this.typeMap.set(typeName, type);
+    }
+
+    // Create atoms with proper type assignment
+    for (const nodeId of this.graph.nodes()) {
+      const nodeData = this.graph.node(nodeId) || {};
+      const typeName = nodeData.type ? String(nodeData.type) : 'univ';
+      const nodeType = this.typeMap.get(typeName)!;
       
-      const atom: IAtom = {
-        id: nodeId,
-        type: nodeType
+      const atom: IAtom = { 
+        id: nodeId, 
+        type: nodeType 
       };
       
-      this.atomCache.set(nodeId, atom);
-      
-      // Add atom to its type
-      const type = this.typeCache.get(nodeType);
-      if (type) {
-        type.atoms.push(atom);
-      }
+      this.atoms.push(atom);
+      nodeType.atoms.add(atom);
+    }
+
+    // Create edge relations (grouped by label, defaulting to 'edges')
+    this.createEdgeRelations();
+  }
+
+  /**
+   * Create builtin types following the same structure as dot-to-alloy-xml
+   * Ensures compatibility with Alloy infrastructure
+   */
+  private createBuiltinTypes(): void {
+    const builtinTypes = [
+      { id: 'seq/Int', isBuiltin: true },
+      { id: 'Int', isBuiltin: true },
+      { id: 'univ', isBuiltin: true }
+    ];
+
+    for (const { id, isBuiltin } of builtinTypes) {
+      const type: IType = {
+        id,
+        types: new Set(),
+        atoms: new Set(),
+        isBuiltin
+      };
+      this.types.push(type);
+      this.typeMap.set(id, type);
     }
   }
 
   /**
-   * Process all edges to create relations and tuples
+   * Check if a type name is a builtin type
+   * Matches the builtin detection logic from dot-to-alloy-xml
+   * 
+   * @param typeName - Type name to check
+   * @returns True if the type is builtin
    */
-  private processEdges(): void {
-    // Create default edge relation
-    const edgeRelationName = this.config.defaultEdgeRelation;
-    
-    if (!this.relationCache.has(edgeRelationName)) {
-      this.relationCache.set(edgeRelationName, {
-        id: edgeRelationName,
-        name: edgeRelationName,
-        types: [this.config.defaultNodeType, this.config.defaultNodeType],
-        tuples: []
-      });
-    }
-    
-    // Create tuples for each edge
+  private isBuiltinType(typeName: string): boolean {
+    return typeName === 'seq/Int' || typeName === 'Int' || typeName === 'univ';
+  }
+
+  /**
+   * Create edge relations grouped by label
+   * Follows the same edge grouping logic as dot-to-alloy-xml
+   */
+  private createEdgeRelations(): void {
+    const univType = this.typeMap.get('univ')!;
+    const edgeGroups = new Map<string, Array<{ source: string; target: string }>>();
+
+    // Group edges by label (same logic as dot-to-alloy-xml)
     for (const edge of this.graph.edges()) {
       const edgeData = this.graph.edge(edge) || {};
+      const label = (edgeData.label && String(edgeData.label).trim()) || 'edges';
       
-      // Determine relation name
-      let relationName = edgeRelationName;
-      const edgeType = edgeData.type || edgeData.label;
+      if (!edgeGroups.has(label)) {
+        edgeGroups.set(label, []);
+      }
       
-      if (edgeType) {
-        relationName = edgeType;
+      edgeGroups.get(label)!.push({
+        source: edge.v,
+        target: edge.w
+      });
+    }
+
+    // Create relation for each edge group
+    for (const [fieldName, edgeList] of edgeGroups) {
+      const relation: IRelation = {
+        id: fieldName,
+        name: fieldName,
+        types: [univType, univType], // Binary relation univ -> univ
+        tuples: new Set()
+      };
+
+      // Add tuples for each edge in this group
+      for (const edge of edgeList) {
+        const sourceAtom = this.atoms.find(a => a.id === edge.source);
+        const targetAtom = this.atoms.find(a => a.id === edge.target);
         
-        // Create relation if it doesn't exist
-        if (!this.relationCache.has(relationName)) {
-          this.relationCache.set(relationName, {
-            id: relationName,
-            name: relationName,
-            types: [this.config.defaultNodeType, this.config.defaultNodeType],
-            tuples: []
+        if (sourceAtom && targetAtom) {
+          relation.tuples.add({
+            relation,
+            atoms: [sourceAtom, targetAtom]
           });
         }
       }
-      
-      const tuple: ITuple = {
-        atoms: [edge.v, edge.w],
-        types: [this.config.defaultNodeType, this.config.defaultNodeType]
-      };
-      
-      this.tupleCache.push(tuple);
-      
-      // Add tuple to relation
-      const relation = this.relationCache.get(relationName);
-      if (relation) {
-        relation.tuples.push(tuple);
-      }
+
+      this.relations.push(relation);
     }
   }
 
-  /**
-   * Create attribute relations if configured
-   */
-  private createAttributeRelations(): void {
-    // Node attributes
-    if (this.config.includeNodeAttributes) {
-      const nodeAttributes = new Set<string>();
-      
-      for (const nodeId of this.graph.nodes()) {
+  getAtomType(atomId: string): IType | undefined {
+    return this.atoms.find(a => a.id === atomId)?.type;
+  }
+
+  getTypes(): readonly IType[] {
+    return this.types;
+  }
+
+  getAtoms(): readonly IAtom[] {
+    return this.atoms;
+  }
+
+  getRelations(): readonly IRelation[] {
+    return this.relations;
+  }
+
+  applyProjections(atomIds: string[]): IDataInstance {
+    const atomSet = new Set(atomIds);
+    
+    // Create filtered DOT string preserving type annotations
+    let filteredDot = this.graph.isDirected() ? 'digraph {\n' : 'graph {\n';
+    
+    // Add nodes with their type attributes preserved
+    for (const nodeId of this.graph.nodes()) {
+      if (atomSet.has(nodeId)) {
         const nodeData = this.graph.node(nodeId) || {};
-        Object.keys(nodeData).forEach(attr => nodeAttributes.add(attr));
-      }
-      
-      for (const attr of nodeAttributes) {
-        if (attr === this.config.nodeTypeAttribute) continue; // Skip type attribute
+        let nodeDecl = `  "${nodeId}"`;
         
-        const relationName = `node_${attr}`;
+        // Preserve type and label attributes
+        const attrs: string[] = [];
+        if (nodeData.type) attrs.push(`type="${nodeData.type}"`);
+        if (nodeData.label) attrs.push(`label="${nodeData.label}"`);
         
-        this.relationCache.set(relationName, {
-          id: relationName,
-          name: relationName,
-          types: [this.config.defaultNodeType, 'String'],
-          tuples: []
-        });
-        
-        for (const nodeId of this.graph.nodes()) {
-          const nodeData = this.graph.node(nodeId) || {};
-          const value = nodeData[attr];
-          
-          if (value !== undefined) {
-            const tuple: ITuple = {
-              atoms: [nodeId, String(value)],
-              types: [this.config.defaultNodeType, 'String']
-            };
-            
-            this.tupleCache.push(tuple);
-            
-            // Add tuple to relation
-            const relation = this.relationCache.get(relationName);
-            if (relation) {
-              relation.tuples.push(tuple);
-            }
-          }
+        if (attrs.length > 0) {
+          nodeDecl += ` [${attrs.join(', ')}]`;
         }
+        
+        filteredDot += nodeDecl + ';\n';
       }
     }
     
-    // Edge attributes
-    if (this.config.includeEdgeAttributes) {
-      const edgeAttributes = new Set<string>();
-      
-      for (const edge of this.graph.edges()) {
+    // Add edges with their label attributes preserved
+    const connector = this.graph.isDirected() ? '->' : '--';
+    for (const edge of this.graph.edges()) {
+      if (atomSet.has(edge.v) && atomSet.has(edge.w)) {
         const edgeData = this.graph.edge(edge) || {};
-        Object.keys(edgeData).forEach(attr => edgeAttributes.add(attr));
-      }
-      
-      for (const attr of edgeAttributes) {
-        if (attr === 'type' || attr === 'label') continue; // Skip relation-defining attributes
+        let edgeDecl = `  "${edge.v}" ${connector} "${edge.w}"`;
         
-        const relationName = `edge_${attr}`;
-        
-        this.relationCache.set(relationName, {
-          id: relationName,
-          name: relationName,
-          types: [this.config.defaultNodeType, this.config.defaultNodeType, 'String'],
-          tuples: []
-        });
-        
-        for (const edge of this.graph.edges()) {
-          const edgeData = this.graph.edge(edge) || {};
-          const value = edgeData[attr];
-          
-          if (value !== undefined) {
-            const tuple: ITuple = {
-              atoms: [edge.v, edge.w, String(value)],
-              types: [this.config.defaultNodeType, this.config.defaultNodeType, 'String']
-            };
-            
-            this.tupleCache.push(tuple);
-            
-            // Add tuple to relation
-            const relation = this.relationCache.get(relationName);
-            if (relation) {
-              relation.tuples.push(tuple);
-            }
-          }
+        // Preserve edge label if present
+        if (edgeData.label) {
+          edgeDecl += ` [label="${edgeData.label}"]`;
         }
-      }
-    }
-  }
-
-  /**
-   * Filter disconnected nodes from graph
-   */
-  private filterDisconnectedNodes(
-    graph: Graph, 
-    hideDisconnected: boolean, 
-    hideDisconnectedBuiltIns: boolean
-  ): void {
-    const nodesToRemove: string[] = [];
-    
-    for (const nodeId of graph.nodes()) {
-      const nodeData = graph.node(nodeId) || {};
-      const inEdges = graph.inEdges(nodeId);
-      const outEdges = graph.outEdges(nodeId);
-      const isDisconnected = (!inEdges || inEdges.length === 0) && 
-                            (!outEdges || outEdges.length === 0);
-      
-      if (isDisconnected) {
-        const isBuiltin = this.isBuiltinNode(nodeData);
         
-        if (hideDisconnected || (hideDisconnectedBuiltIns && isBuiltin)) {
-          nodesToRemove.push(nodeId);
-        }
+        filteredDot += edgeDecl + ';\n';
       }
     }
     
-    for (const nodeId of nodesToRemove) {
-      graph.removeNode(nodeId);
-    }
+    filteredDot += '}\n';
+    
+    return new DotDataInstance(filteredDot);
+  }
+
+  generateGraph(): Graph {
+    return this.graph;
   }
 
   /**
-   * Check if node is built-in
+   * Get the display label for a node
+   * Uses label attribute if available, otherwise falls back to node ID
+   * 
+   * @param nodeId - Node identifier
+   * @returns Display label for the node
    */
-  private isBuiltinNode(nodeData: Record<string, unknown>): boolean {
-    const builtinShapes = new Set(['record', 'plaintext', 'none']);
-    return builtinShapes.has(nodeData.shape as string);
+  getNodeLabel(nodeId: string): string {
+    const nodeData = this.graph.node(nodeId) || {};
+    return nodeData.label ? String(nodeData.label) : nodeId;
+  }
+
+  /**
+   * Get all user-defined (non-builtin) type names
+   * Excludes builtin types like univ, Int, seq/Int
+   * 
+   * @returns Array of user-defined type names
+   */
+  getUserTypeNames(): readonly string[] {
+    return this.types
+      .filter(type => !type.isBuiltin)
+      .map(type => type.id);
+  }
+
+  /**
+   * Get all builtin type names
+   * 
+   * @returns Array of builtin type names
+   */
+  getBuiltinTypeNames(): readonly string[] {
+    return this.types
+      .filter(type => type.isBuiltin)
+      .map(type => type.id);
   }
 }
 
 /**
- * Create DOT data instance from DOT text using graphlib-dot
+ * Create DOT data instance from DOT specification
+ * Properly handles type annotations and builtin type detection
+ * Compatible with dot-to-alloy-xml type structure
  * 
- * @param dotText - DOT graph as string
- * @param config - Optional configuration
- * @returns DOT data instance implementing IDataInstance
+ * @param dotSpec - DOT graph specification as string
+ * @returns IDataInstance implementation for DOT graphs
  * 
  * @example
  * ```typescript
- * const dotText = `digraph { A -> B; }`;
- * const dataInstance = createDotDataInstance(dotText);
+ * const dotGraph = `digraph {
+ *   A [type="Entity", label="Node A"];
+ *   B [type="Process"];
+ *   C; // defaults to type="univ"
+ *   A -> B [label="processes"];
+ * }`;
+ * const instance = createDotDataInstance(dotGraph);
+ * console.log(instance.getBuiltinTypeNames()); // ['seq/Int', 'Int', 'univ']
+ * console.log(instance.getUserTypeNames()); // ['Entity', 'Process']
  * ```
  */
-export function createDotDataInstance(
-  dotText: string, 
-  config?: Partial<DotConfig>
-): IDataInstance {
-  try {
-    const graph = read(dotText);
-    return new DotDataInstance(graph, config);
-  } catch (error) {
-    throw new Error(`Failed to parse DOT graph: ${(error as Error).message}`);
-  }
+export function createDotDataInstance(dotSpec: string): IDataInstance {
+  return new DotDataInstance(dotSpec);
 }
 
 /**
- * Create DOT data instance from pre-parsed graphlib Graph
+ * Configuration options for DOT data instance creation
+ */
+export interface DotConfig {
+  /** Default type for nodes without explicit type annotation */
+  readonly defaultType?: string;
+  /** Whether to preserve node labels in projections */
+  readonly preserveLabels?: boolean;
+  /** Whether to include builtin types in output */
+  readonly includeBuiltins?: boolean;
+}
+
+/**
+ * Create DOT data instance with configuration options
  * 
- * @param graph - Graphlib Graph (from graphlib-dot or manual creation)
- * @param config - Optional configuration
- * @returns DOT data instance implementing IDataInstance
+ * @param dotSpec - DOT graph specification as string  
+ * @param config - Configuration options
+ * @returns IDataInstance implementation for DOT graphs
  */
-export function createDotDataInstanceFromGraph(
-  graph: Graph,
-  config?: Partial<DotConfig>
+export function createDotDataInstanceWithConfig(
+  dotSpec: string,
+  config: DotConfig = {}
 ): IDataInstance {
-  return new DotDataInstance(graph, config);
-}
-
-/**
- * Create example DOT graph for testing
- */
-export function createExampleDotGraph(): Graph {
-  const graph = new Graph({ directed: true });
-  
-  // Add nodes with attributes
-  graph.setNode('A', { label: 'Node A', shape: 'box', type: 'Entity' });
-  graph.setNode('B', { label: 'Node B', shape: 'ellipse', type: 'Entity' });
-  graph.setNode('C', { label: 'Node C', shape: 'diamond', type: 'Relation' });
-  
-  // Add edges with attributes
-  graph.setEdge('A', 'B', { label: 'connects', weight: 1.0 });
-  graph.setEdge('B', 'C', { label: 'belongs_to', weight: 2.0 });
-  
-  return graph;
-}
-
-/**
- * Type guard to check if instance is DOT data instance
- */
-export function isDotDataInstance(instance: IDataInstance): instance is DotDataInstance {
-  return instance instanceof DotDataInstance;
+  // Future enhancement: could modify behavior based on config
+  // For now, use standard implementation
+  return new DotDataInstance(dotSpec);
 }
