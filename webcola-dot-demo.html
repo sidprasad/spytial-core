@@ -1,127 +1,371 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>DOT → Alloy → WebCola Demo</title>
-  <style>
-    body { font-family: sans-serif; margin: 2em; }
-    #graph { border: 1px solid #ccc; width: 800px; height: 500px; }
-    textarea { width: 800px; height: 120px; }
-    button { margin: 1em 0; }
-    svg { width: 100%; height: 100%; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebCola DOT Demo - Real Pipeline</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        #graph-container {
+            width: 100%;
+            height: 600px;
+            border: 2px solid #007acc;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        button {
+            background-color: #007acc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #005a9e;
+        }
+        textarea {
+            width: 100%;
+            height: 200px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+        label {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 5px;
+        }
+    </style>
 </head>
 <body>
-  <h2>DOT → Alloy → WebCola Demo</h2>
-  <textarea id="dotInput">// Enter DOT here
-digraph {
-  A [type=Entity];
-  B [type=Entity];
-  C [type=Relation];
+    <div class="container">
+        <h1>🎯 WebCola DOT Graph Demo with DotDataInstance</h1>
+        <p>This demonstrates how to use the WebColaCnDGraph custom element with the new DOT data instance abstraction.</p>
+        
+        <!-- Editable Input Fields -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+            <div>
+                <label for="webcola-dot">DOT Graph Specification:</label>
+                <textarea id="webcola-dot" placeholder="Enter your DOT graph specification here...">digraph example {
+  // Node definitions with types
+  A [label="Entity A", type="Entity"];
+  B [label="Entity B", type="Entity"];
+  C [label="Process C", type="Process"];
+  D [label="Data D", type="Data"];
+  
+  // Edge definitions with labels
   A -> B [label="connects"];
-  B -> C [label="belongs_to"];
-}
-</textarea>
-  <br>
-  <button id="runBtn">Run DOT Evaluator & Layout</button>
-  <div id="graph"></div>
-  <pre id="output"></pre>
+  B -> C [label="processes"];
+  C -> D [label="produces"];
+  D -> A [label="feeds_back"];
+}</textarea>
+            </div>
+            <div>
+                <label for="webcola-cnd">CND Layout Specification (YAML):</label>
+                <textarea id="webcola-cnd" placeholder="Loading sample CND layout...">
+Loading sample data from sample/layout.cnd...
+                </textarea>
+            </div>
+        </div>
+        
+        <div>
+            <button onclick="loadGraph()">🚀 Load & Render DOT Graph</button>
+            <button onclick="loadDotData()">📋 Process DOT Data Only</button>
+            <button onclick="renderGraph()">🎨 Render Graph</button>
+            <button onclick="clearGraph()">🗑️ Clear Graph</button>
+            <button onclick="loadSampleDataIntoFields()">📋 Load Sample CND Layout</button>
+            <button onclick="loadExampleDot()">📋 Load Example DOT</button>
+        </div>
+        
+        <!-- Use the webcola-cnd-graph custom element -->
+        <webcola-cnd-graph 
+            id="graph-container"
+            width="800" 
+            height="600">
+        </webcola-cnd-graph>
+        
+        <div id="status">Ready to load DOT graph...</div>
+    </div>
 
-  <!-- Load webcola and your bundle (adjust paths as needed) -->
-  <script src="vendor/cola.js"></script>
-  <script src="dist/browser/cnd-core-complete.global.js"></script>
-  <script>
-    // DotEvaluator is now available via the global CndCore object
-    const { DotEvaluator } = window.CndCore;
+    <!-- D3 v4 and WebCola - the working combination -->
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="./vendor/cola.js"></script>
+    
+    <!-- Complete CND-Core browser bundle -->
+    <script src="./dist/browser/cnd-core-complete.global.js"></script>
+    <script>
+        // Variables to store data
+        let currentInstanceLayout = null;
+        let sampleCNDSpec = '';
 
-    // Minimal SVG rendering for demo
-    function renderGraph(nodes, links) {
-      const svgNS = "http://www.w3.org/2000/svg";
-      const width = 800, height = 500;
-      const svg = document.createElementNS(svgNS, "svg");
-      svg.setAttribute("width", width);
-      svg.setAttribute("height", height);
-
-      // Draw links
-      for (const l of links) {
-        const line = document.createElementNS(svgNS, "line");
-        line.setAttribute("x1", l.source.x);
-        line.setAttribute("y1", l.source.y);
-        line.setAttribute("x2", l.target.x);
-        line.setAttribute("y2", l.target.y);
-        line.setAttribute("stroke", "#888");
-        line.setAttribute("stroke-width", "2");
-        svg.appendChild(line);
-      }
-      // Draw nodes
-      for (const n of nodes) {
-        const circle = document.createElementNS(svgNS, "circle");
-        circle.setAttribute("cx", n.x);
-        circle.setAttribute("cy", n.y);
-        circle.setAttribute("r", 20);
-        circle.setAttribute("fill", "#4a90e2");
-        svg.appendChild(circle);
-
-        const text = document.createElementNS(svgNS, "text");
-        text.setAttribute("x", n.x);
-        text.setAttribute("y", n.y + 5);
-        text.setAttribute("text-anchor", "middle");
-        text.setAttribute("fill", "#fff");
-        text.setAttribute("font-size", "16");
-        text.textContent = n.id;
-        svg.appendChild(text);
-      }
-      return svg;
-    }
-
-    document.getElementById('runBtn').onclick = async () => {
-      const dot = document.getElementById('dotInput').value;
-      const output = document.getElementById('output');
-      const graphDiv = document.getElementById('graph');
-      output.textContent = '';
-
-      try {
-        // 1. Evaluate DOT using DotEvaluator
-        const evaluator = new DotEvaluator();
-        evaluator.initialize({ sourceData: dot });
-        // For demo, just get all atoms and relations
-        const atoms = evaluator.forgeEvaluator['instance']?.getAtoms?.() || [];
-        const relations = evaluator.forgeEvaluator['instance']?.getRelations?.() || [];
-
-        // 2. Build nodes/links for webcola
-        const nodes = atoms.map(a => ({ id: a.id }));
-        const links = [];
-        for (const rel of relations) {
-          if (rel.tuples) {
-            for (const t of rel.tuples) {
-              if (t.atoms.length === 2) {
-                links.push({ source: t.atoms[0], target: t.atoms[1] });
-              }
-            }
-          }
+        /**
+         * Get current DOT specification from input field
+         * @returns {string} DOT graph specification
+         */
+        function getCurrentDotSpec() {
+            return document.getElementById('webcola-dot').value.trim();
         }
 
-        // 3. Layout with webcola
-        const cola = window.cola.d3adaptor()
-          .size([800, 500])
-          .nodes(nodes)
-          .links(links)
-          .jaccardLinkLengths(120)
-          .avoidOverlaps(true)
-          .start(30, 0, 20);
+        /**
+         * Get current CND specification from input field
+         * @returns {string} CND layout specification
+         */
+        function getCurrentCNDSpec() {
+            return document.getElementById('webcola-cnd').value.trim() || sampleCNDSpec;
+        }
 
-        cola.on('end', () => {
-          graphDiv.innerHTML = '';
-          graphDiv.appendChild(renderGraph(nodes, links));
-        });
+        /**
+         * Load sample CND layout specification into input field
+         */
+        async function loadSampleDataIntoFields() {
+            try {
+                const cndResponse = await fetch('./sample/layout.cnd');
+                
+                if (cndResponse.ok) {
+                    sampleCNDSpec = await cndResponse.text();
+                    document.getElementById('webcola-cnd').value = sampleCNDSpec;
+                    document.getElementById('status').textContent = '✅ Sample CND layout loaded into input field!';
+                } else {
+                    document.getElementById('status').textContent = '❌ Could not load sample CND layout file';
+                }
+            } catch (error) {
+                console.error('Error loading sample CND file:', error);
+                document.getElementById('status').textContent = `❌ Error loading sample data: ${error.message}`;
+            }
+        }
 
-        output.textContent = 'Nodes: ' + JSON.stringify(nodes, null, 2) +
-          '\nLinks: ' + JSON.stringify(links, null, 2);
+        /**
+         * Load example DOT graph into input field
+         */
+        function loadExampleDot() {
+            const exampleDot = `digraph workflow {
+  // Workflow nodes with proper typing
+  Start [label="Start Process", type="Control"];
+  Input [label="Data Input", type="Data"];
+  Process1 [label="Validation", type="Process"];
+  Process2 [label="Transformation", type="Process"];
+  Decision [label="Quality Check", type="Decision"];
+  Output [label="Final Output", type="Data"];
+  Error [label="Error Handler", type="Control"];
+  End [label="End Process", type="Control"];
+  
+  // Workflow edges with descriptive labels
+  Start -> Input [label="initiates"];
+  Input -> Process1 [label="feeds"];
+  Process1 -> Process2 [label="validates"];
+  Process2 -> Decision [label="transforms"];
+  Decision -> Output [label="passes"];
+  Decision -> Error [label="fails"];
+  Error -> Process1 [label="retries"];
+  Output -> End [label="completes"];
+}`;
+            
+            document.getElementById('webcola-dot').value = exampleDot;
+            document.getElementById('status').textContent = '✅ Example DOT graph loaded!';
+        }
 
-      } catch (err) {
-        output.textContent = 'Error: ' + (err && err.message ? err.message : err);
-      }
-    };
-  </script>
+        /**
+         * Initialize the DOT pipeline components
+         * @returns {boolean} Success status
+         */
+        async function initializePipeline() {
+            try {
+                console.log('Complete CND-Core browser bundle loaded successfully');
+                console.log('Available on global CndCore:', Object.keys(CndCore));
+                
+                // Check for DOT-specific components
+                console.log('createDotDataInstance available:', !!CndCore.createDotDataInstance);
+                console.log('DotDataInstance available:', !!CndCore.DotDataInstance);
+                console.log('ForgeEvaluator available:', !!CndCore.ForgeEvaluator);
+                console.log('Layout available:', !!CndCore.Layout);
+                
+                document.getElementById('status').textContent = 'DOT pipeline ready! All components loaded.';
+                
+                return true;
+            } catch (error) {
+                console.error('Failed to initialize DOT pipeline:', error);
+                document.getElementById('status').textContent = `Pipeline init failed: ${error.message}`;
+                return false;
+            }
+        }
+
+        /**
+         * Process DOT data using the DOT data instance pipeline
+         */
+        async function loadDotData() {
+            try {
+                document.getElementById('status').textContent = 'Processing DOT data with DotDataInstance...';
+
+                // Get DOT specification from input field
+                const dotSpec = getCurrentDotSpec();
+                if (!dotSpec) {
+                    throw new Error('Please enter a DOT graph specification');
+                }
+
+                // Get CND specification - load sample if needed
+                let cndSpec = getCurrentCNDSpec();
+                if (!cndSpec || cndSpec.includes('Loading sample data')) {
+                    const cndResponse = await fetch('./sample/layout.cnd');
+                    if (!cndResponse.ok) {
+                        throw new Error('Could not load sample CND layout file');
+                    }
+                    cndSpec = await cndResponse.text();
+                    sampleCNDSpec = cndSpec;
+                    document.getElementById('webcola-cnd').value = cndSpec;
+                }
+
+                console.log('Using DOT Spec:', dotSpec.substring(0, 200) + '...');
+                console.log('Using CND Spec:', cndSpec.substring(0, 200) + '...');
+
+                // Step 1: Create DOT data instance using the DOT pipeline
+                document.getElementById('status').textContent = 'Creating DOT data instance...';
+                const dotDataInstance = CndCore.createDotDataInstance(dotSpec);
+                console.log('Created DOT Data Instance:', dotDataInstance);
+                console.log('Types via DOT IDataInstance:', dotDataInstance.getTypes().length);
+                console.log('Atoms via DOT IDataInstance:', dotDataInstance.getAtoms().length);
+                console.log('Relations via DOT IDataInstance:', dotDataInstance.getRelations().length);
+
+                // Step 2: Create evaluator - we can use a simple mock evaluator for DOT
+                document.getElementById('status').textContent = 'Creating evaluator for DOT data...';
+                // For DOT, we don't need the full ForgeEvaluator since we have the data instance directly
+                // We can create a simple mock evaluator or use the DOT data instance directly
+                const mockEvaluator = {
+                    evaluate: () => ({ result: true, type: 'boolean' }),
+                    validateExpression: () => true,
+                    getContextInfo: () => ({ dataType: 'dot' })
+                };
+                console.log('Created Mock Evaluator for DOT:', mockEvaluator);
+
+                // Step 3: Parse layout specification
+                document.getElementById('status').textContent = 'Parsing layout specification...';
+                const layoutSpec = CndCore.parseLayoutSpec(cndSpec);
+                console.log('Parsed Layout Spec:', layoutSpec);
+
+                // Step 4: Create LayoutInstance using DOT data
+                document.getElementById('status').textContent = 'Creating layout instance with DOT data...';
+                const ENABLE_ALIGNMENT_EDGES = true;
+                const instanceNumber = 0; // DOT doesn't have multiple instances like Alloy
+                
+                // Create layout instance - it should work with any IDataInstance
+                const layoutInstance = new CndCore.LayoutInstance(layoutSpec, mockEvaluator, instanceNumber, ENABLE_ALIGNMENT_EDGES);
+                console.log('Created Layout Instance:', layoutInstance);
+
+                // Step 5: Generate the actual layout using the DOT IDataInstance interface
+                document.getElementById('status').textContent = 'Generating layout with DOT IDataInstance...';
+                const projections = {}; // Empty projections object for now
+                const layoutResult = layoutInstance.generateLayout(dotDataInstance, projections);
+                const instanceLayout = layoutResult.layout;
+                console.log('Generated Instance Layout using DOT IDataInstance:', instanceLayout);
+
+                // Store for rendering
+                currentInstanceLayout = instanceLayout;
+                
+                document.getElementById('status').textContent = 'DOT data pipeline complete with DotDataInstance! Ready to render.';
+                
+            } catch (error) {
+                console.error('Failed to load DOT data:', error);
+                document.getElementById('status').textContent = `DOT data loading failed: ${error.message}`;
+            }
+        }
+
+        /**
+         * Render the graph using the webcola-cnd-graph custom element
+         */
+        async function renderGraph() {
+            const graphElement = document.getElementById('graph-container');
+            const statusElement = document.getElementById('status');
+            
+            try {
+                if (!currentInstanceLayout) {
+                    statusElement.textContent = 'No layout data available. Processing DOT data first...';
+                    await loadDotData();
+                    if (!currentInstanceLayout) {
+                        throw new Error('Failed to generate layout data from DOT');
+                    }
+                }
+
+                statusElement.textContent = 'Rendering DOT graph with WebCola...';
+                
+                // Use the real InstanceLayout data with WebCola custom element
+                await graphElement.renderLayout(currentInstanceLayout);
+                
+                statusElement.textContent = 'DOT graph rendered successfully!';
+            } catch (error) {
+                console.error('Error rendering DOT graph:', error);
+                statusElement.textContent = `DOT render error: ${error.message}`;
+            }
+        }
+
+        /**
+         * Clear the graph and reset state
+         */
+        function clearGraph() {
+            const graphElement = document.getElementById('graph-container');
+            const statusElement = document.getElementById('status');
+            
+            // Clear the graph
+            if (graphElement.clear) {
+                graphElement.clear();
+            } else {
+                // Fallback: remove all SVG content
+                const svg = graphElement.shadowRoot?.querySelector('svg');
+                if (svg) {
+                    const container = svg.querySelector('.zoomable');
+                    if (container) {
+                        container.innerHTML = '';
+                    }
+                }
+            }
+            
+            // Clear stored layout
+            currentInstanceLayout = null;
+            
+            statusElement.textContent = 'Graph cleared.';
+        }
+
+        /**
+         * Load and render DOT graph in one step
+         */
+        async function loadGraph() {
+            try {
+                await loadDotData();
+                await renderGraph();
+            } catch (error) {
+                console.error('Failed to load and render DOT graph:', error);
+                document.getElementById('status').textContent = `Failed to load DOT graph: ${error.message}`;
+            }
+        }
+
+        // Auto-initialize when page loads
+        window.addEventListener('load', initializePipeline);
+
+        // Expose functions globally for buttons
+        window.loadGraph = loadGraph;
+        window.loadDotData = loadDotData;
+        window.renderGraph = renderGraph;
+        window.clearGraph = clearGraph;
+        window.loadSampleDataIntoFields = loadSampleDataIntoFields;
+        window.loadExampleDot = loadExampleDot;
+    </script>
 </body>
 </html>
