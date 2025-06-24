@@ -1129,8 +1129,9 @@ export class LayoutInstance {
 
     private getFieldTuples(a: IDataInstance, fieldName: string): string[][] {
 
-
-        let field = Object.values(a.getRelations()).find((rel) => rel.name === fieldName);
+        let relations = a.getRelations();
+        let vals = Object.values(relations);
+        let field = Object.values(relations).find((rel) => rel.name === fieldName);
 
 
         if (!field) {

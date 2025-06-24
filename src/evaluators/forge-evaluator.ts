@@ -357,6 +357,9 @@ export class ForgeEvaluator implements IEvaluator {
 
         try {
             const instanceIndex = config?.instanceIndex ?? 0;
+
+            console.log("Evaluator", this.evaluator);
+
             const result: EvaluationResult = this.evaluator!.evaluateExpression(expression, instanceIndex);
 
             if (isErrorResult(result)) {
