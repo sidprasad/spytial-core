@@ -137,9 +137,6 @@ function isErrorResult(result: EvaluationResult): result is ErrorResult {
     return (result as ErrorResult).error !== undefined;
 }
 
-// export type SingleValue = string | number | boolean;
-// export type Tuple = SingleValue[];
-// export type EvalResult = SingleValue | Tuple[];
 function isSingleValue(value: unknown): value is SingleValue {
     return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
 }
@@ -179,6 +176,10 @@ export class ForgeEvaluatorResult implements IEvaluatorResult {
 
     getExpression(): string {
         return this.expr;
+    }
+
+    noResult(): boolean {
+        return !this.isErrorResult && (Array.isArray(this.result) && this.result.length === 0);
     }
 
     getRawResult(): IEvaluatorResultType {

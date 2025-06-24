@@ -50,6 +50,9 @@ export interface IEvaluatorResult {
   /** Get a pretty-printed string representation */
   prettyPrint(): string;
   
+
+  noResult(): boolean;
+
   /** Get result as a single value (throws if not singleton) */
   singleResult(): SingleValue;
   
@@ -73,6 +76,8 @@ export interface IEvaluatorResult {
   
   /** Get the raw result data */
   getRawResult(): EvaluatorResult;
+
+  
 }
 
 /**
