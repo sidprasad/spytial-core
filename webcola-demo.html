@@ -83,17 +83,22 @@
         </div>
         
         <div>
-            <button onclick="loadGraph()">🚀 Load & Render Alloy Graph</button>
-            <button onclick="loadAlloyData()">📋 Process Alloy Data Only</button>
-            <button onclick="renderGraph()">🎨 Render Graph</button>
-            <button onclick="clearGraph()">🗑️ Clear Graph</button>
+            <button onclick="loadGraph()">Load & Render Graph</button>
+            <button onclick="loadRealData()">Load Data Only</button>
+            <button onclick="renderGraph()">Render Graph</button>
+            <button onclick="clearGraph()">Clear Graph</button>
+            <select title="Choose the Layout Format" class="form-control" id="layoutFormat" name="layoutFormat" onchange="changeLayoutFormat()">
+                <option value="default" selected>Standard</option>
+                <option value="grid">Grid (Beta)</option>
+            </select>
         </div>
         
         <!-- Use the webcola-cnd-graph custom element -->
         <webcola-cnd-graph 
             id="graph-container"
             width="800" 
-            height="600">
+            height="600"
+            layoutFormat="default">
         </webcola-cnd-graph>
         
         <div id="status" class="status info">Ready to load Alloy graph...</div>
@@ -309,6 +314,22 @@
             } catch (error) {
                 console.error('Failed to load and render Alloy graph:', error);
                 updateStatus(`Failed to load Alloy graph: ${error.message}`, 'error');
+            }
+        }
+
+        async function changeLayoutFormat() {
+            const graphElement = document.getElementById('graph-container');
+            const layoutFormat = document.getElementById('layoutFormat').value;
+            graphElement.setAttribute('layoutFormat', layoutFormat);
+            console.log(`Layout format changed to: ${layoutFormat}`);
+
+            // Re-render the graph with the new layout format
+            try {
+                await graphElement.renderLayout(currentInstanceLayout);
+                statusElement.textContent = 'Real graph rendered successfully!';
+            } catch (error) {
+                console.error('Error rendering graph:', error);
+                statusElement.textContent = `Render error: ${error.message}`;
             }
         }
 
