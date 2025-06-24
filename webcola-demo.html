@@ -43,8 +43,24 @@
 </head>
 <body>
     <div class="container">
-        <h1>🎯 WebCola CnD Graph Demo</h1>
-        <p>This demonstrates how to use the WebColaCnDGraph custom element.</p>
+        <h1>🎯 WebCola CnD Graph Demo with IDataInstance</h1>
+        <p>This demonstrates how to use the WebColaCnDGraph custom element with the new generic IDataInstance abstraction.</p>
+        
+        <!-- Editable Input Fields -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+            <div>
+                <label for="webcola-alloy" style="font-weight: bold; display: block; margin-bottom: 5px;">Alloy Instance (XML):</label>
+                <textarea id="webcola-alloy" style="width: 100%; height: 200px; font-family: 'Courier New', monospace; font-size: 12px; padding: 10px; border: 1px solid #ddd; border-radius: 4px; resize: vertical;" placeholder="Loading sample Alloy XML...">
+Loading sample data from sample/datum.xml...
+                </textarea>
+            </div>
+            <div>
+                <label for="webcola-cnd" style="font-weight: bold; display: block; margin-bottom: 5px;">CND Layout Specification (YAML):</label>
+                <textarea id="webcola-cnd" style="width: 100%; height: 200px; font-family: 'Courier New', monospace; font-size: 12px; padding: 10px; border: 1px solid #ddd; border-radius: 4px; resize: vertical;" placeholder="Loading sample CND layout...">
+Loading sample data from sample/layout.cnd...
+                </textarea>
+            </div>
+        </div>
         
         <div>
             <button onclick="loadGraph()">Load & Render Graph</button>
@@ -77,6 +93,41 @@
     <script>
         // Variables to store data
         let currentInstanceLayout = null;
+        let sampleAlloyXML = '';
+        let sampleCNDSpec = '';
+
+        // Utility functions for input fields
+        function getCurrentAlloyXML() {
+            return document.getElementById('webcola-alloy').value.trim() || sampleAlloyXML;
+        }
+
+        function getCurrentCNDSpec() {
+            return document.getElementById('webcola-cnd').value.trim() || sampleCNDSpec;
+        }
+
+        async function loadSampleDataIntoFields() {
+            try {
+                const [alloyResponse, cndResponse] = await Promise.all([
+                    fetch('./sample/datum.xml'),
+                    fetch('./sample/layout.cnd')
+                ]);
+                
+                if (alloyResponse.ok && cndResponse.ok) {
+                    sampleAlloyXML = await alloyResponse.text();
+                    sampleCNDSpec = await cndResponse.text();
+                    
+                    document.getElementById('webcola-alloy').value = sampleAlloyXML;
+                    document.getElementById('webcola-cnd').value = sampleCNDSpec;
+                    
+                    document.getElementById('status').textContent = '✅ Sample data loaded into input fields!';
+                } else {
+                    document.getElementById('status').textContent = '❌ Could not load sample files';
+                }
+            } catch (error) {
+                console.error('Error loading sample files:', error);
+                document.getElementById('status').textContent = `❌ Error loading sample data: ${error.message}`;
+            }
+        }
 
         async function initializePipeline() {
             try {
@@ -102,23 +153,37 @@
 
         async function loadRealData() {
             try {
-                document.getElementById('status').textContent = 'Loading real sample data...';
+                document.getElementById('status').textContent = 'Loading data with new IDataInstance abstraction...';
 
-                // Load the sample XML and CND files
-                const [alloyResponse, cndResponse] = await Promise.all([
-                    fetch('./sample/datum.xml'),
-                    fetch('./sample/layout.cnd')
-                ]);
+                // Get data from input fields or load sample data
+                let alloyXML = getCurrentAlloyXML();
+                let cndSpec = getCurrentCNDSpec();
                 
-                if (!alloyResponse.ok || !cndResponse.ok) {
-                    throw new Error('Could not load sample files');
+                // If fields are empty, load sample data
+                if (!alloyXML || !cndSpec || alloyXML.includes('Loading sample data') || cndSpec.includes('Loading sample data')) {
+                    const [alloyResponse, cndResponse] = await Promise.all([
+                        fetch('./sample/datum.xml'),
+                        fetch('./sample/layout.cnd')
+                    ]);
+                    
+                    if (!alloyResponse.ok || !cndResponse.ok) {
+                        throw new Error('Could not load sample files');
+                    }
+
+                    alloyXML = await alloyResponse.text();
+                    cndSpec = await cndResponse.text();
+                    
+                    // Store for future use
+                    sampleAlloyXML = alloyXML;
+                    sampleCNDSpec = cndSpec;
+                    
+                    // Update the input fields
+                    document.getElementById('webcola-alloy').value = alloyXML;
+                    document.getElementById('webcola-cnd').value = cndSpec;
                 }
 
-                const alloyXML = await alloyResponse.text();
-                const cndSpec = await cndResponse.text();
-
-                console.log('Loaded Alloy XML:', alloyXML.substring(0, 200) + '...');
-                console.log('Loaded CND Spec:', cndSpec.substring(0, 200) + '...');
+                console.log('Using Alloy XML:', alloyXML.substring(0, 200) + '...');
+                console.log('Using CND Spec:', cndSpec.substring(0, 200) + '...');
 
                 // Step 1: Parse Alloy XML into AlloyDatum (following the correct pattern)
                 document.getElementById('status').textContent = 'Parsing Alloy datum...';
@@ -139,6 +204,15 @@
                 if (!instances || instances.length === 0) {
                     throw new Error('No instances found in Alloy datum');
                 }
+                
+                // Step 1.5: Wrap the AlloyInstance with the new AlloyDataInstance abstraction
+                document.getElementById('status').textContent = 'Creating IDataInstance wrapper...';
+                const instance = instances[instanceNumber];
+                const alloyDataInstance = new CndCore.AlloyDataInstance(instance);
+                console.log('Created AlloyDataInstance:', alloyDataInstance);
+                console.log('Types via IDataInstance:', Object.keys(alloyDataInstance.getTypes()));
+                console.log('Atoms via IDataInstance:', alloyDataInstance.getAtoms().length);
+                console.log('Relations via IDataInstance:', Object.keys(alloyDataInstance.getRelations()));
 
                 // Step 2: Create evaluator with the raw XML
                 document.getElementById('status').textContent = 'Creating evaluator...';
@@ -163,18 +237,17 @@
                 const layoutInstance = new CndCore.LayoutInstance(layoutSpec, evaluator, instanceNumber, ENABLE_ALIGNMENT_EDGES);
                 console.log('Created Layout Instance:', layoutInstance);
 
-                // Step 5: Generate the actual layout
-                document.getElementById('status').textContent = 'Generating layout...';
-                const instance = instances[instanceNumber]; // Get the specific instance
+                // Step 5: Generate the actual layout using the new IDataInstance interface
+                document.getElementById('status').textContent = 'Generating layout with IDataInstance...';
                 const projections = {}; // Empty projections object for now
-                const layoutResult = layoutInstance.generateLayout(instance, projections);
+                const layoutResult = layoutInstance.generateLayout(alloyDataInstance, projections);
                 const instanceLayout = layoutResult.layout;
-                console.log('Generated Instance Layout:', instanceLayout);
+                console.log('Generated Instance Layout using IDataInstance:', instanceLayout);
 
                 // Store for rendering
                 currentInstanceLayout = instanceLayout;
                 
-                document.getElementById('status').textContent = 'Real data pipeline complete! Ready to render.';
+                document.getElementById('status').textContent = 'Real data pipeline complete with IDataInstance abstraction! Ready to render.';
                 
             } catch (error) {
                 console.error('Failed to load real data:', error);
@@ -225,7 +298,14 @@
                 }
             }
             
-            statusElement.textContent = 'Graph cleared.';
+            // Also clear input fields
+            document.getElementById('webcola-alloy').value = '';
+            document.getElementById('webcola-cnd').value = '';
+            
+            // Clear stored layout
+            currentInstanceLayout = null;
+            
+            statusElement.textContent = 'Graph and input fields cleared.';
         }
 
         async function loadGraph() {
@@ -262,6 +342,7 @@
         window.loadRealData = loadRealData;
         window.renderGraph = renderGraph;
         window.clearGraph = clearGraph;
+        window.loadSampleDataIntoFields = loadSampleDataIntoFields;
     </script>
 </body>
 </html>

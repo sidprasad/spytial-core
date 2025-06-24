@@ -1,7 +1,7 @@
 import { DOMParser } from '@xmldom/xmldom';
 
 import { ForgeExprEvaluatorUtil, EvaluationResult, ErrorResult } from 'forge-expr-evaluator';
-import { AlloyDatum, AlloyRelation, parseAlloyXML, AlloyTuple, AlloyInstance, AlloyType } from '../alloy-instance';
+import { AlloyDatum, AlloyRelation, parseAlloyXML, AlloyTuple, AlloyInstance, AlloyType } from '../data-instance/alloy/alloy-instance';
 import { DatumParsed, ParsedValue, Relation, Sig, InstanceData, ForgeTuple, BuiltinType } from 'forge-expr-evaluator/dist/types';
 import { SingleValue, Tuple } from 'forge-expr-evaluator/dist/ForgeExprEvaluator';
 import IEvaluator, { 

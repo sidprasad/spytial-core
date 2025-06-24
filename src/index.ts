@@ -3,11 +3,15 @@
  */
 
 // Export sub-modules
-export * as AlloyGraph from './alloy-graph';
-export * as AlloyInstance from './alloy-instance';
+export * as AlloyGraph from './data-instance/alloy/alloy-graph';
+export * as AlloyInstance from './data-instance/alloy/alloy-instance';
 export * as Evaluators from './evaluators';
 export * as Layout from './layout';
 export * as Translators from './translators';
+
+// Export new data instance abstraction
+export * from './data-instance/interfaces';
+export { AlloyDataInstance } from './data-instance/alloy-data-instance';
 
 // Direct exports of key classes for convenience
 export { LayoutInstance } from './layout/layoutinstance';
