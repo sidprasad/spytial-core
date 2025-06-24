@@ -347,7 +347,9 @@ export class ForgeEvaluator implements IEvaluator {
         }
 
         if (!this.sourceCode) {
-            throw new Error('No source code available for evaluation');
+           // throw new Error('No source code available for evaluation');
+           console.log('No source code available for evaluation, proceeding without it');
+           this.sourceCode = ''; // Ensure sourceCode is defined
         }
 
         try {

@@ -55,12 +55,20 @@
             display: block;
             margin-bottom: 5px;
         }
+        .status {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .status.info { background: #e3f2fd; color: #1976d2; }
+        .status.success { background: #e8f5e8; color: #2e7d32; }
+        .status.error { background: #ffebee; color: #c62828; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🎯 WebCola DOT Graph Demo with DotDataInstance</h1>
-        <p>This demonstrates how to use the WebColaCnDGraph custom element with the new DOT data instance abstraction.</p>
+        <h1>🎯 WebCola DOT Graph Demo with DotEvaluator</h1>
+        <p>This demonstrates the complete DOT → DotDataInstance → DotEvaluator → Layout → WebCola pipeline.</p>
         
         <!-- Editable Input Fields -->
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
@@ -82,9 +90,7 @@
             </div>
             <div>
                 <label for="webcola-cnd">CND Layout Specification (YAML):</label>
-                <textarea id="webcola-cnd" placeholder="Loading sample CND layout...">
-Loading sample data from sample/layout.cnd...
-                </textarea>
+                <textarea id="webcola-cnd" placeholder="Paste your CND layout specification here..."></textarea>
             </div>
         </div>
         
@@ -93,7 +99,6 @@ Loading sample data from sample/layout.cnd...
             <button onclick="loadDotData()">📋 Process DOT Data Only</button>
             <button onclick="renderGraph()">🎨 Render Graph</button>
             <button onclick="clearGraph()">🗑️ Clear Graph</button>
-            <button onclick="loadSampleDataIntoFields()">📋 Load Sample CND Layout</button>
             <button onclick="loadExampleDot()">📋 Load Example DOT</button>
         </div>
         
@@ -104,7 +109,7 @@ Loading sample data from sample/layout.cnd...
             height="600">
         </webcola-cnd-graph>
         
-        <div id="status">Ready to load DOT graph...</div>
+        <div id="status" class="status info">Ready to load DOT graph...</div>
     </div>
 
     <!-- D3 v4 and WebCola - the working combination -->
@@ -116,7 +121,6 @@ Loading sample data from sample/layout.cnd...
     <script>
         // Variables to store data
         let currentInstanceLayout = null;
-        let sampleCNDSpec = '';
 
         /**
          * Get current DOT specification from input field
@@ -127,31 +131,22 @@ Loading sample data from sample/layout.cnd...
         }
 
         /**
-         * Get current CND specification from input field
+         * Get current CND specification from input field  
          * @returns {string} CND layout specification
          */
         function getCurrentCNDSpec() {
-            return document.getElementById('webcola-cnd').value.trim() || sampleCNDSpec;
+            return document.getElementById('webcola-cnd').value.trim();
         }
 
         /**
-         * Load sample CND layout specification into input field
+         * Update status display with proper styling
+         * @param {string} message - Status message to display
+         * @param {string} type - Status type: 'info', 'success', 'error'
          */
-        async function loadSampleDataIntoFields() {
-            try {
-                const cndResponse = await fetch('./sample/layout.cnd');
-                
-                if (cndResponse.ok) {
-                    sampleCNDSpec = await cndResponse.text();
-                    document.getElementById('webcola-cnd').value = sampleCNDSpec;
-                    document.getElementById('status').textContent = '✅ Sample CND layout loaded into input field!';
-                } else {
-                    document.getElementById('status').textContent = '❌ Could not load sample CND layout file';
-                }
-            } catch (error) {
-                console.error('Error loading sample CND file:', error);
-                document.getElementById('status').textContent = `❌ Error loading sample data: ${error.message}`;
-            }
+        function updateStatus(message, type = 'info') {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = message;
+            statusElement.className = `status ${type}`;
         }
 
         /**
@@ -181,7 +176,7 @@ Loading sample data from sample/layout.cnd...
 }`;
             
             document.getElementById('webcola-dot').value = exampleDot;
-            document.getElementById('status').textContent = '✅ Example DOT graph loaded!';
+            updateStatus('✅ Example DOT graph loaded!', 'success');
         }
 
         /**
@@ -196,25 +191,26 @@ Loading sample data from sample/layout.cnd...
                 // Check for DOT-specific components
                 console.log('createDotDataInstance available:', !!CndCore.createDotDataInstance);
                 console.log('DotDataInstance available:', !!CndCore.DotDataInstance);
-                console.log('ForgeEvaluator available:', !!CndCore.ForgeEvaluator);
-                console.log('Layout available:', !!CndCore.Layout);
+                console.log('DotEvaluator available:', !!CndCore.DotEvaluator);
+                console.log('LayoutInstance available:', !!CndCore.LayoutInstance);
+                console.log('parseLayoutSpec available:', !!CndCore.parseLayoutSpec);
                 
-                document.getElementById('status').textContent = 'DOT pipeline ready! All components loaded.';
+                updateStatus('DOT pipeline ready! Enter DOT and CND specifications above.', 'success');
                 
                 return true;
             } catch (error) {
                 console.error('Failed to initialize DOT pipeline:', error);
-                document.getElementById('status').textContent = `Pipeline init failed: ${error.message}`;
+                updateStatus(`Pipeline init failed: ${error.message}`, 'error');
                 return false;
             }
         }
 
         /**
-         * Process DOT data using the DOT data instance pipeline
+         * Process DOT data using the complete DOT → DotEvaluator → Layout pipeline
          */
         async function loadDotData() {
             try {
-                document.getElementById('status').textContent = 'Processing DOT data with DotDataInstance...';
+                updateStatus('Processing DOT data with DotEvaluator...', 'info');
 
                 // Get DOT specification from input field
                 const dotSpec = getCurrentDotSpec();
@@ -222,69 +218,74 @@ Loading sample data from sample/layout.cnd...
                     throw new Error('Please enter a DOT graph specification');
                 }
 
-                // Get CND specification - load sample if needed
-                let cndSpec = getCurrentCNDSpec();
-                if (!cndSpec || cndSpec.includes('Loading sample data')) {
-                    const cndResponse = await fetch('./sample/layout.cnd');
-                    if (!cndResponse.ok) {
-                        throw new Error('Could not load sample CND layout file');
-                    }
-                    cndSpec = await cndResponse.text();
-                    sampleCNDSpec = cndSpec;
-                    document.getElementById('webcola-cnd').value = cndSpec;
+                // Get CND specification from input field
+                const cndSpec = getCurrentCNDSpec();
+                if (!cndSpec) {
+                    throw new Error('Please enter a CND layout specification');
                 }
 
                 console.log('Using DOT Spec:', dotSpec.substring(0, 200) + '...');
                 console.log('Using CND Spec:', cndSpec.substring(0, 200) + '...');
 
-                // Step 1: Create DOT data instance using the DOT pipeline
-                document.getElementById('status').textContent = 'Creating DOT data instance...';
+                // Step 1: Create DOT data instance
+                updateStatus('Creating DOT data instance...', 'info');
                 const dotDataInstance = CndCore.createDotDataInstance(dotSpec);
                 console.log('Created DOT Data Instance:', dotDataInstance);
                 console.log('Types via DOT IDataInstance:', dotDataInstance.getTypes().length);
                 console.log('Atoms via DOT IDataInstance:', dotDataInstance.getAtoms().length);
                 console.log('Relations via DOT IDataInstance:', dotDataInstance.getRelations().length);
 
-                // Step 2: Create evaluator - we can use a simple mock evaluator for DOT
-                document.getElementById('status').textContent = 'Creating evaluator for DOT data...';
-                // For DOT, we don't need the full ForgeEvaluator since we have the data instance directly
-                // We can create a simple mock evaluator or use the DOT data instance directly
-                const mockEvaluator = {
-                    evaluate: () => ({ result: true, type: 'boolean' }),
-                    validateExpression: () => true,
-                    getContextInfo: () => ({ dataType: 'dot' })
+                // Step 2: Create evaluation context with DOT data instance
+                updateStatus('Creating evaluation context...', 'info');
+                const evaluationContext = {
+                    dataInstance: dotDataInstance,
+                    sourceData: dotSpec,
+                    processedData: dotDataInstance
                 };
-                console.log('Created Mock Evaluator for DOT:', mockEvaluator);
 
-                // Step 3: Parse layout specification
-                document.getElementById('status').textContent = 'Parsing layout specification...';
+                // Step 3: Create DotEvaluator with context
+                updateStatus('Creating DotEvaluator with context...', 'info');
+                const dotEvaluator = new CndCore.DotEvaluator();
+                
+                // Initialize with proper context
+                dotEvaluator.initialize(evaluationContext);
+                
+                if (!dotEvaluator.isReady()) {
+                    throw new Error('DotEvaluator failed to initialize with context');
+                }
+
+                console.log('DotEvaluator initialized with context');
+
+                // Step 4: Parse layout specification
+                updateStatus('Parsing layout specification...', 'info');
                 const layoutSpec = CndCore.parseLayoutSpec(cndSpec);
                 console.log('Parsed Layout Spec:', layoutSpec);
 
-                // Step 4: Create LayoutInstance using DOT data
-                document.getElementById('status').textContent = 'Creating layout instance with DOT data...';
+                // Step 5: Create LayoutInstance with DotEvaluator
+                updateStatus('Creating layout instance with DotEvaluator...', 'info');
                 const ENABLE_ALIGNMENT_EDGES = true;
-                const instanceNumber = 0; // DOT doesn't have multiple instances like Alloy
+                const instanceNumber = 0;
                 
-                // Create layout instance - it should work with any IDataInstance
-                const layoutInstance = new CndCore.LayoutInstance(layoutSpec, mockEvaluator, instanceNumber, ENABLE_ALIGNMENT_EDGES);
-                console.log('Created Layout Instance:', layoutInstance);
+                const layoutInstance = new CndCore.LayoutInstance(
+                    layoutSpec, 
+                    dotEvaluator, 
+                    instanceNumber, 
+                    ENABLE_ALIGNMENT_EDGES
+                );
+                console.log('Created Layout Instance with DotEvaluator:', layoutInstance);
 
-                // Step 5: Generate the actual layout using the DOT IDataInstance interface
-                document.getElementById('status').textContent = 'Generating layout with DOT IDataInstance...';
-                const projections = {}; // Empty projections object for now
+                // Step 6: Generate layout using DOT data instance
+                updateStatus('Generating layout with DOT data...', 'info');
+                const projections = {};
                 const layoutResult = layoutInstance.generateLayout(dotDataInstance, projections);
-                const instanceLayout = layoutResult.layout;
-                console.log('Generated Instance Layout using DOT IDataInstance:', instanceLayout);
+                currentInstanceLayout = layoutResult.layout;
+                console.log('Generated Instance Layout using DOT pipeline:', currentInstanceLayout);
 
-                // Store for rendering
-                currentInstanceLayout = instanceLayout;
-                
-                document.getElementById('status').textContent = 'DOT data pipeline complete with DotDataInstance! Ready to render.';
+                updateStatus('DOT pipeline complete with DotEvaluator! Ready to render.', 'success');
                 
             } catch (error) {
                 console.error('Failed to load DOT data:', error);
-                document.getElementById('status').textContent = `DOT data loading failed: ${error.message}`;
+                updateStatus(`DOT data loading failed: ${error.message}`, 'error');
             }
         }
 
@@ -293,26 +294,25 @@ Loading sample data from sample/layout.cnd...
          */
         async function renderGraph() {
             const graphElement = document.getElementById('graph-container');
-            const statusElement = document.getElementById('status');
             
             try {
                 if (!currentInstanceLayout) {
-                    statusElement.textContent = 'No layout data available. Processing DOT data first...';
+                    updateStatus('No layout data available. Processing DOT data first...', 'info');
                     await loadDotData();
                     if (!currentInstanceLayout) {
                         throw new Error('Failed to generate layout data from DOT');
                     }
                 }
 
-                statusElement.textContent = 'Rendering DOT graph with WebCola...';
+                updateStatus('Rendering DOT graph with WebCola...', 'info');
                 
                 // Use the real InstanceLayout data with WebCola custom element
                 await graphElement.renderLayout(currentInstanceLayout);
                 
-                statusElement.textContent = 'DOT graph rendered successfully!';
+                updateStatus('DOT graph rendered successfully!', 'success');
             } catch (error) {
                 console.error('Error rendering DOT graph:', error);
-                statusElement.textContent = `DOT render error: ${error.message}`;
+                updateStatus(`DOT render error: ${error.message}`, 'error');
             }
         }
 
@@ -321,7 +321,6 @@ Loading sample data from sample/layout.cnd...
          */
         function clearGraph() {
             const graphElement = document.getElementById('graph-container');
-            const statusElement = document.getElementById('status');
             
             // Clear the graph
             if (graphElement.clear) {
@@ -340,7 +339,7 @@ Loading sample data from sample/layout.cnd...
             // Clear stored layout
             currentInstanceLayout = null;
             
-            statusElement.textContent = 'Graph cleared.';
+            updateStatus('Graph cleared.', 'info');
         }
 
         /**
@@ -352,7 +351,7 @@ Loading sample data from sample/layout.cnd...
                 await renderGraph();
             } catch (error) {
                 console.error('Failed to load and render DOT graph:', error);
-                document.getElementById('status').textContent = `Failed to load DOT graph: ${error.message}`;
+                updateStatus(`Failed to load DOT graph: ${error.message}`, 'error');
             }
         }
 
@@ -364,7 +363,6 @@ Loading sample data from sample/layout.cnd...
         window.loadDotData = loadDotData;
         window.renderGraph = renderGraph;
         window.clearGraph = clearGraph;
-        window.loadSampleDataIntoFields = loadSampleDataIntoFields;
         window.loadExampleDot = loadExampleDot;
     </script>
 </body>
