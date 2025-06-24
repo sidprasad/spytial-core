@@ -346,6 +346,9 @@ export class ForgeEvaluator implements IEvaluator {
             throw new Error('ForgeEvaluator is not properly initialized');
         }
 
+
+
+        
         if (!this.sourceCode) {
            // throw new Error('No source code available for evaluation');
            console.log('No source code available for evaluation, proceeding without it');
@@ -359,7 +362,7 @@ export class ForgeEvaluator implements IEvaluator {
             if (isErrorResult(result)) {
                 throw new Error(result.error.message);
             }
-
+            console.log(`Evaluated expression: ${expression} at ${config} with result:`, result);
             return new ForgeEvaluatorResult(result, expression);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
