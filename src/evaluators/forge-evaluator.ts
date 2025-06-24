@@ -391,49 +391,8 @@ export class ForgeEvaluator implements IEvaluator {
         }
     }
 
-    getContextInfo() {
-        if (!this.context) {
-            return {
-                hasSourceCode: false,
-                instanceCount: 0,
-                dataType: 'none'
-            };
-        }
 
-        const instanceCount = this.getInstanceCount();
-        
-        return {
-            hasSourceCode: !!this.sourceCode,
-            instanceCount,
-            dataType: 'alloy-xml',
-            hasEvaluator: !!this.evaluator,
-            sourceCodeLength: this.sourceCode.length
-        };
-    }
 
-    getCapabilities() {
-        return {
-            language: 'Forge/Alloy',
-            version: '1.0.0',
-            supportedOperators: [
-                '+', '-', '&', '|', '!', '=', '!=', '<', '>', '<=', '>=',
-                '.', '->', 'in', 'not in', 'some', 'all', 'no', 'lone', 'one',
-                'iff', 'implies', 'else', 'let', 'sum', 'Int', 'String'
-            ],
-            supportedTypes: [
-                'Int', 'String', 'univ', 'none', 'seq/Int', 'Time', 'Relation'
-            ],
-            features: [
-                'relational-logic',
-                'quantifiers', 
-                'temporal-operators',
-                'arithmetic',
-                'set-operations',
-                'sequence-operations',
-                'transitive-closure'
-            ]
-        };
-    }
 
     dispose(): void {
         this.context = undefined;
@@ -442,24 +401,6 @@ export class ForgeEvaluator implements IEvaluator {
         this.initialized = false;
     }
 
-    // Public method to get the underlying evaluator (for backward compatibility)
-    getEvaluator(): ForgeExprEvaluatorUtil | undefined {
-        return this.evaluator;
-    }
-
-    private getInstanceCount(): number {
-        if (!this.context?.processedData) {
-            return 0;
-        }
-        
-        try {
-            // Extract instance count from processed data
-            const processedData = this.context.processedData as { instances?: unknown[] };
-            return processedData.instances?.length ?? 0;
-        } catch {
-            return 0;
-        }
-    }
 
     static getSourceCodeFromDatum(datum: string): string {
         try {
