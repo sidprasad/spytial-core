@@ -171,7 +171,7 @@
                 // Get Alloy XML from input field
                 const alloyXml = getCurrentAlloyXml();
                 if (!alloyXml) {
-                    throw new Error('Please enter an Alloy XML instance');
+                    throw new Error('Please enter an Alloy XML instance')   ;
                 }
 
                 // Get CND specification from input field
@@ -185,14 +185,16 @@
 
                 // Step 1: Parse Alloy XML
                 updateStatus('Parsing Alloy XML...', 'info');
-                const alloyDatum = CndCore.parseAlloyXML(alloyXml);
+                const alloyDatum = CndCore.AlloyInstace.parseAlloyXML(alloyXml);
                 console.log('Parsed Alloy Datum:', alloyDatum);
                 
                 if (!alloyDatum.instances || alloyDatum.instances.length === 0) {
                     throw new Error('No instances found in Alloy XML');
                 }
 
-                const alloyDataInstance = alloyDatum.instances[0];
+                const alloyDataInstance = new AlloyDataInstance(allowDatum.instances[0]);
+                // Now we need to convert thi
+
                 console.log('Using Alloy Data Instance:', alloyDataInstance);
                 console.log('Types via Alloy IDataInstance:', alloyDataInstance.getTypes().length);
                 console.log('Atoms via Alloy IDataInstance:', alloyDataInstance.getAtoms().length);

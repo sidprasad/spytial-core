@@ -50,5 +50,4 @@ export interface IDataInstance {
     generateGraph(hideDisconnected : boolean, hideDisconnectedBuiltIns : boolean) : Graph;
 
 
-    parse(data: string): IDataInstance; // Parse data from a string format
 }
