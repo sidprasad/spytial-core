@@ -50,6 +50,9 @@ export interface IEvaluatorResult {
   /** Get a pretty-printed string representation */
   prettyPrint(): string;
   
+
+  noResult(): boolean;
+
   /** Get result as a single value (throws if not singleton) */
   singleResult(): SingleValue;
   
@@ -73,6 +76,8 @@ export interface IEvaluatorResult {
   
   /** Get the raw result data */
   getRawResult(): EvaluatorResult;
+
+  
 }
 
 /**
@@ -99,40 +104,7 @@ interface IEvaluator {
    */
   evaluate(_expression: string, _config?: EvaluatorConfig): IEvaluatorResult;
   
-  /**
-   * Validate an expression without evaluating it
-   * @param _expression The expression to validate
-   * @returns True if expression is valid, false otherwise
-   */
-  validateExpression(_expression: string): boolean;
-  
-  /**
-   * Get information about the evaluation context
-   * @returns Context metadata and statistics
-   */
-  getContextInfo(): {
-    hasSourceCode: boolean;
-    instanceCount: number;
-    dataType: string;
-    [key: string]: unknown;
-  };
-  
-  /**
-   * Get supported expression syntax/capabilities
-   * @returns Description of what this evaluator can handle
-   */
-  getCapabilities(): {
-    language: string;
-    version?: string;
-    supportedOperators: string[];
-    supportedTypes: string[];
-    features: string[];
-  };
-  
-  /**
-   * Clean up resources and reset the evaluator
-   */
-  dispose(): void;
+
 }
 
 export default IEvaluator;

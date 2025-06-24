@@ -1,9 +1,6 @@
 
-// import { applyProjections } from '../data-instance/alloy-instance/src/projection';
 
 import { Graph } from "graphlib";
-
-
 
 export interface IAtom  {
   id: string;
@@ -50,6 +47,7 @@ export interface IDataInstance {
 
     applyProjections(atomIds: string[]) : IDataInstance;
 
-    // TODO: Do we really need these options here?
     generateGraph(hideDisconnected : boolean, hideDisconnectedBuiltIns : boolean) : Graph;
+
+
 }

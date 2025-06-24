@@ -12,6 +12,7 @@ export * as Translators from './translators';
 // Export new data instance abstraction
 export * from './data-instance/interfaces';
 export { AlloyDataInstance } from './data-instance/alloy-data-instance';
+export { DotDataInstance, createDotDataInstance } from './data-instance/dot/dot-data-instance';
 
 // Direct exports of key classes for convenience
 export { LayoutInstance } from './layout/layoutinstance';
@@ -20,6 +21,7 @@ export { setupLayout } from './layout';
 export { type default as IEvaluator } from './evaluators/interfaces';
 export { ForgeEvaluator, WrappedForgeEvaluator } from './evaluators/forge-evaluator';
 export { WebColaTranslator, DagreTranslator } from './translators';
+export { DotEvaluator } from './evaluators/dot-evalutator';
 
 // Browser-specific exports and initialization
 if (typeof window !== 'undefined') {

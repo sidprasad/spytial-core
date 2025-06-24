@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebCola CND Demo</title>
+    <title>WebCola DOT Demo - Real Pipeline</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -67,14 +67,26 @@
 </head>
 <body>
     <div class="container">
-        <h1>🎯 WebCola Alloy Visualization Demo</h1>
-        <p>This demonstrates the complete Alloy XML → AlloyDataInstance → ForgeEvaluator → Layout → WebCola pipeline.</p>
+        <h1>🎯 WebCola DOT Graph Demo with DotEvaluator</h1>
+        <p>This demonstrates the complete DOT → DotDataInstance → DotEvaluator → Layout → WebCola pipeline.</p>
         
         <!-- Editable Input Fields -->
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
             <div>
-                <label for="webcola-alloy">Alloy XML Instance:</label>
-                <textarea id="webcola-alloy" placeholder="Paste your Alloy XML instance here..."></textarea>
+                <label for="webcola-dot">DOT Graph Specification:</label>
+                <textarea id="webcola-dot" placeholder="Enter your DOT graph specification here...">digraph example {
+  // Node definitions with types
+  A [label="Entity A", type="Entity"];
+  B [label="Entity B", type="Entity"];
+  C [label="Process C", type="Process"];
+  D [label="Data D", type="Data"];
+  
+  // Edge definitions with labels
+  A -> B [label="connects"];
+  B -> C [label="processes"];
+  C -> D [label="produces"];
+  D -> A [label="feeds_back"];
+}</textarea>
             </div>
             <div>
                 <label for="webcola-cnd">CND Layout Specification (YAML):</label>
@@ -83,25 +95,21 @@
         </div>
         
         <div>
-            <button onclick="loadGraph()">Load & Render Graph</button>
-            <button onclick="loadRealData()">Load Data Only</button>
-            <button onclick="renderGraph()">Render Graph</button>
-            <button onclick="clearGraph()">Clear Graph</button>
-            <select title="Choose the Layout Format" class="form-control" id="layoutFormat" name="layoutFormat" onchange="changeLayoutFormat()">
-                <option value="default" selected>Standard</option>
-                <option value="grid">Grid (Beta)</option>
-            </select>
+            <button onclick="loadGraph()">🚀 Load & Render DOT Graph</button>
+            <button onclick="loadDotData()">📋 Process DOT Data Only</button>
+            <button onclick="renderGraph()">🎨 Render Graph</button>
+            <button onclick="clearGraph()">🗑️ Clear Graph</button>
+            <button onclick="loadExampleDot()">📋 Load Example DOT</button>
         </div>
         
         <!-- Use the webcola-cnd-graph custom element -->
         <webcola-cnd-graph 
             id="graph-container"
             width="800" 
-            height="600"
-            layoutFormat="default">
+            height="600">
         </webcola-cnd-graph>
         
-        <div id="status" class="status info">Ready to load Alloy graph...</div>
+        <div id="status" class="status info">Ready to load DOT graph...</div>
     </div>
 
     <!-- D3 v4 and WebCola - the working combination -->
@@ -115,11 +123,11 @@
         let currentInstanceLayout = null;
 
         /**
-         * Get current Alloy XML from input field
-         * @returns {string} Alloy XML specification
+         * Get current DOT specification from input field
+         * @returns {string} DOT graph specification
          */
-        function getCurrentAlloyXml() {
-            return document.getElementById('webcola-alloy').value.trim();
+        function getCurrentDotSpec() {
+            return document.getElementById('webcola-dot').value.trim();
         }
 
         /**
@@ -142,7 +150,37 @@
         }
 
         /**
-         * Initialize the Alloy pipeline components
+         * Load example DOT graph into input field
+         */
+        function loadExampleDot() {
+            const exampleDot = `digraph workflow {
+  // Workflow nodes with proper typing
+  Start [label="Start Process", type="Control"];
+  Input [label="Data Input", type="Data"];
+  Process1 [label="Validation", type="Process"];
+  Process2 [label="Transformation", type="Process"];
+  Decision [label="Quality Check", type="Decision"];
+  Output [label="Final Output", type="Data"];
+  Error [label="Error Handler", type="Control"];
+  End [label="End Process", type="Control"];
+  
+  // Workflow edges with descriptive labels
+  Start -> Input [label="initiates"];
+  Input -> Process1 [label="feeds"];
+  Process1 -> Process2 [label="validates"];
+  Process2 -> Decision [label="transforms"];
+  Decision -> Output [label="passes"];
+  Decision -> Error [label="fails"];
+  Error -> Process1 [label="retries"];
+  Output -> End [label="completes"];
+}`;
+            
+            document.getElementById('webcola-dot').value = exampleDot;
+            updateStatus('✅ Example DOT graph loaded!', 'success');
+        }
+
+        /**
+         * Initialize the DOT pipeline components
          * @returns {boolean} Success status
          */
         async function initializePipeline() {
@@ -150,104 +188,104 @@
                 console.log('Complete CND-Core browser bundle loaded successfully');
                 console.log('Available on global CndCore:', Object.keys(CndCore));
                 
-                // Check for Alloy-specific components
-                console.log('parseAlloyXML available:', !!CndCore.AlloyInstance.parseAlloyXML);
-                console.log('ForgeEvaluator available:', !!CndCore.ForgeEvaluator);
+                // Check for DOT-specific components
+                console.log('createDotDataInstance available:', !!CndCore.createDotDataInstance);
+                console.log('DotDataInstance available:', !!CndCore.DotDataInstance);
+                console.log('DotEvaluator available:', !!CndCore.DotEvaluator);
                 console.log('LayoutInstance available:', !!CndCore.LayoutInstance);
                 console.log('parseLayoutSpec available:', !!CndCore.parseLayoutSpec);
                 
-                updateStatus('Alloy pipeline ready! Enter Alloy XML and CND specifications above.', 'success');
+                updateStatus('DOT pipeline ready! Enter DOT and CND specifications above.', 'success');
                 
                 return true;
             } catch (error) {
-                console.error('Failed to initialize Alloy pipeline:', error);
+                console.error('Failed to initialize DOT pipeline:', error);
                 updateStatus(`Pipeline init failed: ${error.message}`, 'error');
                 return false;
             }
         }
 
         /**
-         * Process Alloy data using the complete Alloy → ForgeEvaluator → Layout pipeline
+         * Process DOT data using the complete DOT → DotEvaluator → Layout pipeline
          */
-        async function loadAlloyData() {
+        async function loadDotData() {
             try {
-                updateStatus('Processing Alloy data with ForgeEvaluator...', 'info');
+                updateStatus('Processing DOT data with DotEvaluator...', 'info');
 
-                // Get Alloy XML from input field
-                const alloyXml = getCurrentAlloyXml();
-                if (!alloyXml) {
-                    throw new Error('Please enter an Alloy XML instance')   ;
+                // Get DOT specification from input field
+                const dotSpec = getCurrentDotSpec();
+                if (!dotSpec) {
+                    throw new Error('Please enter a DOT graph specification');
                 }
 
                 // Get CND specification from input field
-                const cndSpec = getCurrentCNDSpec() || "";
-                // if (!cndSpec) {
-                //     throw new Error('Please enter a CND layout specification');
-                // }
-
-                console.log('Using Alloy XML:', alloyXml.substring(0, 200) + '...');
-                console.log('Using CND Spec:', cndSpec.substring(0, 200) + '...');
-
-                // Step 1: Parse Alloy XML
-                updateStatus('Parsing Alloy XML...', 'info');
-                const alloyDatum = CndCore.AlloyInstance.parseAlloyXML(alloyXml);
-                console.log('Parsed Alloy Datum:', alloyDatum);
-                
-                if (!alloyDatum.instances || alloyDatum.instances.length === 0) {
-                    throw new Error('No instances found in Alloy XML');
+                const cndSpec = getCurrentCNDSpec();
+                if (!cndSpec) {
+                    throw new Error('Please enter a CND layout specification');
                 }
 
-                const alloyDataInstance = new CndCore.AlloyDataInstance(alloyDatum.instances[0]);
-                // Now we need to convert thi
+                console.log('Using DOT Spec:', dotSpec.substring(0, 200) + '...');
+                console.log('Using CND Spec:', cndSpec.substring(0, 200) + '...');
 
-                console.log('Using Alloy Data Instance:', alloyDataInstance);
-                console.log('Types via Alloy IDataInstance:', alloyDataInstance.getTypes().length);
-                console.log('Atoms via Alloy IDataInstance:', alloyDataInstance.getAtoms().length);
-                console.log('Relations via Alloy IDataInstance:', alloyDataInstance.getRelations().length);
+                // Step 1: Create DOT data instance
+                updateStatus('Creating DOT data instance...', 'info');
+                const dotDataInstance = CndCore.createDotDataInstance(dotSpec);
+                console.log('Created DOT Data Instance:', dotDataInstance);
+                console.log('Types via DOT IDataInstance:', dotDataInstance.getTypes().length);
+                console.log('Atoms via DOT IDataInstance:', dotDataInstance.getAtoms().length);
+                console.log('Relations via DOT IDataInstance:', dotDataInstance.getRelations().length);
 
-                // Step 2: Create ForgeEvaluator with Alloy data
-                updateStatus('Creating ForgeEvaluator...', 'info');
+                // Step 2: Create evaluation context with DOT data instance
+                updateStatus('Creating evaluation context...', 'info');
+                const evaluationContext = {
+                    dataInstance: dotDataInstance,
+                    sourceData: dotSpec,
+                    processedData: dotDataInstance
+                };
 
+                // Step 3: Create DotEvaluator with context
+                updateStatus('Creating DotEvaluator with context...', 'info');
+                const dotEvaluator = new CndCore.DotEvaluator();
+                
+                // Initialize with proper context
+                dotEvaluator.initialize(evaluationContext);
+                
+                if (!dotEvaluator.isReady()) {
+                    throw new Error('DotEvaluator failed to initialize with context');
+                }
 
-                let evaluationContext = {
-                    sourceData: alloyXml,
-                }; //alloyDatum
-                const forgeEvaluator = new CndCore.ForgeEvaluator();
-                forgeEvaluator.initialize(evaluationContext);
+                console.log('DotEvaluator initialized with context');
 
-                console.log('Created ForgeEvaluator:', forgeEvaluator);
-
-                // Step 3: Parse layout specification
+                // Step 4: Parse layout specification
                 updateStatus('Parsing layout specification...', 'info');
                 const layoutSpec = CndCore.parseLayoutSpec(cndSpec);
                 console.log('Parsed Layout Spec:', layoutSpec);
 
-                // Step 4: Create LayoutInstance with ForgeEvaluator
-                updateStatus('Creating layout instance with ForgeEvaluator...', 'info');
+                // Step 5: Create LayoutInstance with DotEvaluator
+                updateStatus('Creating layout instance with DotEvaluator...', 'info');
                 const ENABLE_ALIGNMENT_EDGES = true;
                 const instanceNumber = 0;
                 
-                
                 const layoutInstance = new CndCore.LayoutInstance(
                     layoutSpec, 
-                    forgeEvaluator, 
+                    dotEvaluator, 
                     instanceNumber, 
                     ENABLE_ALIGNMENT_EDGES
                 );
-                console.log('Created Layout Instance with ForgeEvaluator:', layoutInstance);
+                console.log('Created Layout Instance with DotEvaluator:', layoutInstance);
 
-                // Step 5: Generate layout using Alloy data instance
-                updateStatus('Generating layout with Alloy data...', 'info');
+                // Step 6: Generate layout using DOT data instance
+                updateStatus('Generating layout with DOT data...', 'info');
                 const projections = {};
-                const layoutResult = layoutInstance.generateLayout(alloyDataInstance, projections);
+                const layoutResult = layoutInstance.generateLayout(dotDataInstance, projections);
                 currentInstanceLayout = layoutResult.layout;
-                console.log('Generated Instance Layout using Alloy pipeline:', currentInstanceLayout);
+                console.log('Generated Instance Layout using DOT pipeline:', currentInstanceLayout);
 
-                updateStatus('Alloy pipeline complete with ForgeEvaluator! Ready to render.', 'success');
+                updateStatus('DOT pipeline complete with DotEvaluator! Ready to render.', 'success');
                 
             } catch (error) {
-                console.error('Failed to load Alloy data:', error);
-                updateStatus(`Alloy data loading failed: ${error.message}`, 'error');
+                console.error('Failed to load DOT data:', error);
+                updateStatus(`DOT data loading failed: ${error.message}`, 'error');
             }
         }
 
@@ -259,22 +297,22 @@
             
             try {
                 if (!currentInstanceLayout) {
-                    updateStatus('No layout data available. Processing Alloy data first...', 'info');
-                    await loadAlloyData();
+                    updateStatus('No layout data available. Processing DOT data first...', 'info');
+                    await loadDotData();
                     if (!currentInstanceLayout) {
-                        throw new Error('Failed to generate layout data from Alloy');
+                        throw new Error('Failed to generate layout data from DOT');
                     }
                 }
 
-                updateStatus('Rendering Alloy graph with WebCola...', 'info');
+                updateStatus('Rendering DOT graph with WebCola...', 'info');
                 
                 // Use the real InstanceLayout data with WebCola custom element
                 await graphElement.renderLayout(currentInstanceLayout);
                 
-                updateStatus('Alloy graph rendered successfully!', 'success');
+                updateStatus('DOT graph rendered successfully!', 'success');
             } catch (error) {
-                console.error('Error rendering Alloy graph:', error);
-                updateStatus(`Alloy render error: ${error.message}`, 'error');
+                console.error('Error rendering DOT graph:', error);
+                updateStatus(`DOT render error: ${error.message}`, 'error');
             }
         }
 
@@ -305,31 +343,15 @@
         }
 
         /**
-         * Load and render Alloy graph in one step
+         * Load and render DOT graph in one step
          */
         async function loadGraph() {
             try {
-                await loadAlloyData();
+                await loadDotData();
                 await renderGraph();
             } catch (error) {
-                console.error('Failed to load and render Alloy graph:', error);
-                updateStatus(`Failed to load Alloy graph: ${error.message}`, 'error');
-            }
-        }
-
-        async function changeLayoutFormat() {
-            const graphElement = document.getElementById('graph-container');
-            const layoutFormat = document.getElementById('layoutFormat').value;
-            graphElement.setAttribute('layoutFormat', layoutFormat);
-            console.log(`Layout format changed to: ${layoutFormat}`);
-
-            // Re-render the graph with the new layout format
-            try {
-                await graphElement.renderLayout(currentInstanceLayout);
-                statusElement.textContent = 'Real graph rendered successfully!';
-            } catch (error) {
-                console.error('Error rendering graph:', error);
-                statusElement.textContent = `Render error: ${error.message}`;
+                console.error('Failed to load and render DOT graph:', error);
+                updateStatus(`Failed to load DOT graph: ${error.message}`, 'error');
             }
         }
 
@@ -338,9 +360,10 @@
 
         // Expose functions globally for buttons
         window.loadGraph = loadGraph;
-        window.loadAlloyData = loadAlloyData;
+        window.loadDotData = loadDotData;
         window.renderGraph = renderGraph;
         window.clearGraph = clearGraph;
+        window.loadExampleDot = loadExampleDot;
     </script>
 </body>
 </html>

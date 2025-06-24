@@ -83,7 +83,7 @@ export class AlloyDataInstance implements IDataInstance {
     
     return alloyRelations.map((alloyRelation: AlloyRelation) => ({
       id: alloyRelation.id,
-      name: alloyRelation.id, // Use id as name for now
+      name: alloyRelation.name, 
       types: alloyRelation.types,
       tuples: alloyRelation.tuples.map((tuple: AlloyTuple) => ({
         atoms: tuple.atoms,
