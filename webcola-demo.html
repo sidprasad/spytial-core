@@ -146,7 +146,7 @@
                 console.log('Available on global CndCore:', Object.keys(CndCore));
                 
                 // Check for Alloy-specific components
-                console.log('parseAlloyXML available:', !!CndCore.parseAlloyXML);
+                console.log('parseAlloyXML available:', !!CndCore.AlloyInstace.parseAlloyXML);
                 console.log('ForgeEvaluator available:', !!CndCore.ForgeEvaluator);
                 console.log('LayoutInstance available:', !!CndCore.LayoutInstance);
                 console.log('parseLayoutSpec available:', !!CndCore.parseLayoutSpec);
@@ -175,10 +175,10 @@
                 }
 
                 // Get CND specification from input field
-                const cndSpec = getCurrentCNDSpec();
-                if (!cndSpec) {
-                    throw new Error('Please enter a CND layout specification');
-                }
+                const cndSpec = getCurrentCNDSpec() || "";
+                // if (!cndSpec) {
+                //     throw new Error('Please enter a CND layout specification');
+                // }
 
                 console.log('Using Alloy XML:', alloyXml.substring(0, 200) + '...');
                 console.log('Using CND Spec:', cndSpec.substring(0, 200) + '...');

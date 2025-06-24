@@ -13,12 +13,13 @@ export * from './constraint-validator';
 import { LayoutInstance } from './layoutinstance';
 import { LayoutSpec, parseLayoutSpec } from './layoutspec';
 import IEvaluator from '../evaluators/interfaces';
+import { AlloyInstance } from '../data-instance/alloy/alloy-instance';
 import { IDataInstance } from '../data-instance/interfaces';
 
 /**
  * Convenience function to set up and generate a layout
  * @param spec The layout specification (YAML content or LayoutSpec object)
- * @param instance The data instance to layout (can be AlloyInstance via AlloyDataInstance)
+ * @param instance The Alloy instance to layout
  * @param evaluator The evaluator to use for constraint evaluation
  * @param projections Optional projections to apply
  * @returns The generated layout and projection data

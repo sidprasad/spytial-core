@@ -7,7 +7,7 @@ import {
   getInstanceAtoms,
   getInstanceRelations,
   getRelationTuples
-} from '../../alloy-instance';
+} from '../../data-instance/alloy-instance';
 
 import { generateEdgeId, generateNodeId } from './ids';
 import { Graph } from 'graphlib';

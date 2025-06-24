@@ -1,9 +1,6 @@
 
-// import { applyProjections } from '../data-instance/alloy-instance/src/projection';
 
 import { Graph } from "graphlib";
-
-
 
 export interface IAtom  {
   id: string;
@@ -43,13 +40,15 @@ export interface IDataInstance {
 
     // To graph data
 
-    getAtomType(id: string): IType | undefined;
+    getAtomType(id: string): IType;
     getTypes(): readonly IType[];
     getAtoms(): readonly IAtom[];
     getRelations(): readonly IRelation[]; // Assuming relations are just strings for simplicity
 
     applyProjections(atomIds: string[]) : IDataInstance;
 
-    // TODO: Do we really need these options here?
     generateGraph(hideDisconnected : boolean, hideDisconnectedBuiltIns : boolean) : Graph;
+
+
+    parse(data: string): IDataInstance; // Parse data from a string format
 }

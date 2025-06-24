@@ -195,3 +195,6 @@ MIT
 - ERROR handling
 - Other backends (SMTLIB, DOT, PYRET, ...)
 - What about other ...
+
+
+** I think the IDataInstance bit is over engineered. Need to take a step back and think about it**.
