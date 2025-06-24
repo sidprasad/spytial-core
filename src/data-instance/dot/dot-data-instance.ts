@@ -48,6 +48,7 @@ export class DotDataInstance implements IDataInstance {
   }
 
   public generateGraph(hideDisconnected: boolean, hideDisconnectedBuiltIns: boolean): Graph {
+    console.log('Generating graph from DOT data instance with hideDisconnected:', hideDisconnected, 'hideDisconnectedBuiltIns:', hideDisconnectedBuiltIns);
     return this.alloyDataInstance.generateGraph(hideDisconnected, hideDisconnectedBuiltIns);
   }
 

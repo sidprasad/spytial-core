@@ -290,7 +290,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       // Start the layout with specific iteration counts and proper event handling
       layout
         .on('tick', () => {
-          if (this.layoutFormat === 'default') {
+          if (this.layoutFormat === 'default' || !this.layoutFormat) {
             this.updatePositions();
           } else if (this.layoutFormat === 'grid') {
             this.gridUpdatePositions();

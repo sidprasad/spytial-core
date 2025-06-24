@@ -219,17 +219,17 @@
                 }
 
                 // Get CND specification from input field
-                const cndSpec = getCurrentCNDSpec();
-                if (!cndSpec) {
-                    throw new Error('Please enter a CND layout specification');
-                }
+                const cndSpec = getCurrentCNDSpec() || "";
+                // if (!cndSpec) {
+                //     throw new Error('Please enter a CND layout specification');
+                // }
 
                 console.log('Using DOT Spec:', dotSpec.substring(0, 200) + '...');
                 console.log('Using CND Spec:', cndSpec.substring(0, 200) + '...');
 
                 // Step 1: Create DOT data instance
                 updateStatus('Creating DOT data instance...', 'info');
-                const dotDataInstance = CndCore.createDotDataInstance(dotSpec);
+                const dotDataInstance = new CndCore.DotDataInstance(dotSpec);
                 console.log('Created DOT Data Instance:', dotDataInstance);
                 console.log('Types via DOT IDataInstance:', dotDataInstance.getTypes().length);
                 console.log('Atoms via DOT IDataInstance:', dotDataInstance.getAtoms().length);
