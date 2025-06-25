@@ -99,7 +99,7 @@ export class AlloyDataInstance implements IDataInstance {
    * @param atomIds - Array of atom IDs to project onto
    * @returns New filtered AlloyDataInstance
    */
-  public applyProjections(atomIds: string[]): IDataInstance {
+  public applyProjections(atomIds: string[]): AlloyDataInstance {
     const projectedAlloyInstance = applyProjections(this.alloyInstance, atomIds);
     return new AlloyDataInstance(projectedAlloyInstance);
   }

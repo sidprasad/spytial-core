@@ -141,11 +141,18 @@ export class SmtLibDataInstance implements IDataInstance {
    * @param atomId - Atom identifier
    * @returns Type information or undefined if atom not found
    */
-  public getAtomType(atomId: string): IType | undefined {
+  public getAtomType(atomId: string): IType  {
     const atom = this.atomCache.get(atomId);
-    if (!atom) return undefined;
     
-    return this.typeCache.get(atom.type);
+    if (!atom) {
+      throw new Error(`Atom with ID '${atomId}' not found in SMT-LIB model.`);
+    }
+
+    const type = this.typeCache.get(atom.type);
+    if (!type) {
+      throw new Error(`Type '${atom.type}' not found for atom '${atomId}'.`);
+    }
+    return type;
   }
 
   /**
