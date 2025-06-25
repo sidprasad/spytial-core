@@ -90,7 +90,7 @@
     "@types/graphlib-dot": "^0.6.4",
     "@xmldom/xmldom": "^0.9.8",
     "chroma-js": "^3.1.2",
-    "d3": "^4.13.0",
+    "d3": "^7.9.0",
     "forge-expr-evaluator": "^1.1.0",
     "graphlib": "^2.1.8",
     "graphlib-dot": "^0.6.4",

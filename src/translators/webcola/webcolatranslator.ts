@@ -1,4 +1,4 @@
-import { Node, Group } from 'webcola';
+import { Node, Group, Link } from 'webcola';
 import { InstanceLayout, LayoutNode, LayoutEdge, LayoutConstraint, LayoutGroup, LeftConstraint, TopConstraint, AlignmentConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint } from '../../layout/interfaces';
 import { LayoutInstance } from '../../layout/layoutinstance';
 
@@ -28,7 +28,7 @@ type NodeWithMetadata = Node &
     showLabels: boolean,
   };
 
-type EdgeWithMetadata = {
+type EdgeWithMetadata = Link<NodeWithMetadata> & {
   source: number,
   target: number,
   relName: string, // This is the name of the relation for the edge
@@ -71,6 +71,9 @@ interface ColaGroupDefinition extends Group {
   id?: string;
   showLabel?: boolean;
 }
+
+// Export group definition type
+export type { ColaGroupDefinition };
 
 
 export class WebColaLayout {

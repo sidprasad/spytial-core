@@ -1,6 +1,6 @@
-import { NodeWithMetadata, WebColaLayout, WebColaTranslator } from './webcolatranslator';
+import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator, ColaGroupDefinition } from './webcolatranslator';
 import { InstanceLayout } from '../../layout/interfaces';
-import { GridRouter, Layout } from 'webcola';
+import { GridRouter, Group, Layout, Node, Link } from 'webcola';
 
 // Use global D3 v4 and WebCola from external scripts (CDN + vendor)
 declare global {
@@ -25,9 +25,16 @@ const DEFAULT_SCALE_FACTOR = 5;
 export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLElement : (class {} as any)) {
   private svg!: any;
   private container!: any;
-  private currentLayout: WebColaLayout | null = null;
-  private colaLayout: Layout | null = null;
+  private currentLayout!: WebColaLayout;
+  private colaLayout!: Layout;
   private readonly lineFunction: d3.Line<{ x: number; y: number }>;
+
+  /**
+   * Configuration constants for SVG
+   */
+
+  private static readonly DEFAULT_SVG_WIDTH = 800;
+  private static readonly DEFAULT_SVG_HEIGHT = 600;
 
   /**
    * Configuration constants for node visualization
@@ -39,10 +46,11 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
   /**
    * Configuration constants for group visualization
    */
-  private static readonly DISCONNECTED_NODE_GROUP = "_d_";
+  private static readonly DISCONNECTED_NODE_PREFIX = "_d_";
   private static readonly GROUP_BORDER_RADIUS = 8;
   private static readonly GROUP_FILL_OPACITY = 0.25;
   private static readonly GROUP_LABEL_PADDING = 20;
+  private static readonly DEFAULT_GROUP_COMPACTNESS = 1e-5;
 
   /**
    * Configuration constants for edge routing
@@ -79,7 +87,9 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       .curve(d3.curveBasis);
   }
 
-  // Access the layoutFormat attribute
+  /**
+   * Access the layoutFormat attribute
+   */
   private get layoutFormat(): string | null {
     return this.getAttribute('layoutFormat');
   }
@@ -148,13 +158,15 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    * ```
    */
   private isDisconnectedGroup(group: { name: string }): boolean {
-    return group.name.startsWith(WebColaCnDGraph.DISCONNECTED_NODE_GROUP);
+    return group.name.startsWith(WebColaCnDGraph.DISCONNECTED_NODE_PREFIX);
   }
 
   private getScaledDetails(constraints: any[], scaleFactor: number = DEFAULT_SCALE_FACTOR) {
     const adjustedScaleFactor = scaleFactor / 5;
     const min_sep = 150;
     const default_node_width = 100;
+
+    let groupCompactness = WebColaCnDGraph.DEFAULT_GROUP_COMPACTNESS * adjustedScaleFactor;
 
     let linkLength = (min_sep + default_node_width) / adjustedScaleFactor;
 
@@ -179,7 +191,8 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
 
     return {
       scaledConstraints: getScaledConstraints(constraints),
-      linkLength: linkLength
+      linkLength: linkLength,
+      groupCompactness: groupCompactness
     }
   }
 
@@ -187,22 +200,25 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    * Initialize the Shadow DOM structure
    */
   private initializeDOM(): void {
+    const width = this.getAttribute('width') || WebColaCnDGraph.DEFAULT_SVG_WIDTH.toString();
+    const height = this.getAttribute('height') || WebColaCnDGraph.DEFAULT_SVG_HEIGHT.toString();
+
     this.shadowRoot!.innerHTML = `
       <style>
-        ${this.getCSS()}
+      ${this.getCSS()}
       </style>
       <div id="svg-container">
-        <svg id="svg" width="800" height="600">
-          <defs>
-            <marker id="end-arrow" markerWidth="15" markerHeight="10" refX="12" refY="5" orient="auto">
-              <polygon points="0 0, 15 5, 0 10" />
-            </marker>
-            <marker id="hand-drawn-arrow" markerWidth="15" markerHeight="10" refX="12" refY="5" orient="auto">
-              <polygon points="0 0, 15 5, 0 10" fill="#666666" />
-            </marker>
-          </defs>
-          <g class="zoomable"></g>
-        </svg>
+      <svg id="svg" width="${width}" height="${height}">
+        <defs>
+        <marker id="end-arrow" markerWidth="15" markerHeight="10" refX="12" refY="5" orient="auto">
+          <polygon points="0 0, 15 5, 0 10" />
+        </marker>
+        <marker id="hand-drawn-arrow" markerWidth="15" markerHeight="10" refX="12" refY="5" orient="auto">
+          <polygon points="0 0, 15 5, 0 10" fill="#666666" />
+        </marker>
+        </defs>
+        <g class="zoomable"></g>
+      </svg>
       </div>
       <div id="loading" style="display: none;">Loading...</div>
       <div id="error" style="display: none; color: red;"></div>
@@ -218,7 +234,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
 
     // Set up zoom behavior (D3 v4 API - matches your working pattern)
     const zoom = d3.zoom()
-      .scaleExtent([0.1, 4])
+      .scaleExtent([0.5, 5])
       .on('zoom', () => {
         this.container.attr('transform', d3.event.transform);
       });
@@ -261,10 +277,10 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       console.log('Layout data:', webcolaLayout);
 
       // Get scaled constraints and link length
-      const { scaledConstraints, linkLength } = this.getScaledDetails(webcolaLayout.constraints, DEFAULT_SCALE_FACTOR);
+      const { scaledConstraints, linkLength, groupCompactness } = this.getScaledDetails(webcolaLayout.constraints, DEFAULT_SCALE_FACTOR);
 
       // Create WebCola layout using d3adaptor
-      const layout = cola.d3adaptor(d3)
+      const layout: Layout = cola.d3adaptor(d3)
         .linkDistance(linkLength)
         .convergenceThreshold(1e-3)
         .avoidOverlaps(true)
@@ -272,7 +288,8 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         .nodes(webcolaLayout.nodes)
         .links(webcolaLayout.links)
         .constraints(scaledConstraints)
-        .groups(webcolaLayout.groups || [])
+        .groups(webcolaLayout.groups)
+        .groupCompactness(groupCompactness)
         .size([webcolaLayout.FIG_WIDTH, webcolaLayout.FIG_HEIGHT]);
 
       // Store current layout
@@ -283,12 +300,12 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       this.container.selectAll('*').remove();
 
       // Create D3 selections for data binding
-      this.renderGroups(webcolaLayout.groups, layout);
-      this.renderLinks(webcolaLayout.links, layout);
-      this.renderNodes(webcolaLayout.nodes, layout);
+      this.renderGroups(webcolaLayout.groups, this.colaLayout);
+      this.renderLinks(webcolaLayout.links, this.colaLayout);
+      this.renderNodes(webcolaLayout.nodes, this.colaLayout);
 
       // Start the layout with specific iteration counts and proper event handling
-      layout
+      this.colaLayout
         .on('tick', () => {
           if (this.layoutFormat === 'default' || !this.layoutFormat || this.layoutFormat === null) {
             this.updatePositions();
@@ -313,7 +330,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
 
       // Start the layout with error handling for D3/WebCola compatibility issues
       try {
-        layout.start(
+        this.colaLayout.start(
           WebColaCnDGraph.INITIAL_UNCONSTRAINED_ITERATIONS,
           WebColaCnDGraph.INITIAL_USER_CONSTRAINT_ITERATIONS,
           WebColaCnDGraph.INITIAL_ALL_CONSTRAINTS_ITERATIONS,
@@ -339,8 +356,8 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
   /**
    * Render groups using D3 data binding
    */
-  private renderGroups(groups: any[], layout: any): void {
-    if (!this.currentLayout?.nodes) {
+  private renderGroups(groups: Array<ColaGroupDefinition>, layout: Layout): void {
+    if (!this.currentLayout.nodes || this.currentLayout.nodes.length === 0) {
       console.warn("Cannot render groups: nodes not available");
       return;
     }
@@ -363,12 +380,12 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    * ```
    */
   private setupLinks(
-    links: any[], 
-    layout: any
+    links: Array<EdgeWithMetadata>, 
+    layout: Layout
   ): d3.Selection<SVGGElement, any, any, unknown> {
     // Create link groups for each edge
     const linkGroups = this.container
-      .selectAll<SVGGElement, any>(".link-group")
+      .selectAll(".link-group")
       .data(links)
       .enter()
       .append("g")
@@ -446,9 +463,9 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    * ```
    */
   private setupGroups(
-    groups: any[], 
-    nodes: any[], 
-    layout: any
+    groups: Array<ColaGroupDefinition>, 
+    nodes: Array<NodeWithMetadata>, 
+    layout: Layout
   ): d3.Selection<SVGRectElement, any, any, unknown> {
     // Create group rectangles with dynamic styling
     const groupRects = this.setupGroupRectangles(groups, nodes, layout);
@@ -469,12 +486,12 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    * @returns D3 selection of created group rectangles
    */
   private setupGroupRectangles(
-    groups: any[], 
-    nodes: any[], 
-    layout: any
+    groups: Array<ColaGroupDefinition>, 
+    nodes: Array<NodeWithMetadata>, 
+    layout: Layout
   ): d3.Selection<SVGRectElement, any, any, unknown> {
     const groupRects = this.container
-      .selectAll<SVGRectElement, any>(".group")
+      .selectAll(".group")
       .data(groups)
       .enter()
       .append("rect")
@@ -485,9 +502,9 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       .attr("ry", WebColaCnDGraph.GROUP_BORDER_RADIUS)
       .style("fill", (d: any) => {
         // Disconnected groups are transparent
-        if (this.isDisconnectedGroup(d)) {
-          return "transparent";
-        }
+        // if (this.isDisconnectedGroup(d)) {
+        //   return "transparent";
+        // }
 
         // Use key node color for regular groups
         const targetNode = nodes[d.keyNode];
@@ -495,9 +512,9 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       })
       .attr("fill-opacity", WebColaCnDGraph.GROUP_FILL_OPACITY)
       .attr("stroke", (d: any) => {
-        if (this.isDisconnectedGroup(d)) {
-          return "none";
-        }
+        // if (this.isDisconnectedGroup(d)) {
+        //   return "none";
+        // }
         const targetNode = nodes[d.keyNode];
         return targetNode?.color || "#999999";
       })
@@ -517,11 +534,11 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    * @returns D3 selection of created group labels
    */
   private setupGroupLabels(
-    groups: any[], 
-    layout: any
+    groups: Array<ColaGroupDefinition>, 
+    layout: Layout
   ): d3.Selection<SVGTextElement, any, any, unknown> {
     return this.container
-      .selectAll<SVGTextElement, any>(".groupLabel")
+      .selectAll(".groupLabel")
       .data(groups)
       .enter()
       .append("text")
@@ -551,7 +568,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
   /**
    * Render links using D3 data binding with enhanced grouping and labeling
    */
-  private renderLinks(links: any[], layout: any): void {
+  private renderLinks(links: Array<EdgeWithMetadata>, layout: Layout): void {
     this.setupLinks(links, layout);
   }
 
@@ -563,10 +580,10 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    * @param layout - WebCola layout instance for drag behavior
    * @returns D3 selection of created node groups
    */
-  private setupNodes(nodes: any[], layout: any): d3.Selection<SVGGElement, any, any, unknown> {
+  private setupNodes(nodes: Array<NodeWithMetadata>, layout: Layout): d3.Selection<SVGGElement, any, any, unknown> {
     // Create node groups with drag behavior
     const nodeSelection = this.container
-      .selectAll<SVGGElement, any>(".node")
+      .selectAll(".node")
       .data(nodes)
       .enter()
       .append("g")
@@ -720,7 +737,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
   /**
    * Render nodes using D3 data binding with drag behavior
    */
-  private renderNodes(nodes: any[], layout: any): void {
+  private renderNodes(nodes: Array<NodeWithMetadata>, layout: Layout): void {
     this.setupNodes(nodes, layout);
   }
 
@@ -785,6 +802,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    * group edge routing, and element layering.
    */
   private updatePositions(): void {
+    console.log('tick - updating positions');
     // Update group positions and sizes first (lower layer)
     this.container.selectAll('.group, .disconnectedNode')
       .attr('x', (d: any) => d.bounds?.x || 0)
@@ -792,7 +810,6 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       .attr('width', (d: any) => d.bounds?.width() || 0)
       .attr('height', (d: any) => d.bounds?.height() || 0)
       .lower();
-      // Note: .lower() not available in D3 v3
 
     // Update node rectangles using bounds
     this.container.selectAll('.node rect')
@@ -830,8 +847,8 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
     // Update most specific type labels
     this.container.selectAll('.mostSpecificTypeLabel')
       .attr('x', (d: any) => d.x - (d.width || 60) / 2 + 5)
-      .attr('y', (d: any) => d.y - (d.height || 30) / 2 + 10);
-      // Note: .raise() not available in D3 v3
+      .attr('y', (d: any) => d.y - (d.height || 30) / 2 + 10)
+      .raise();
 
     // Update main node labels with tspan positioning
     this.container.selectAll('.node .label')
@@ -846,8 +863,8 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
             lineOffset += 1;
             return lineOffset === 1 ? '0em' : '1em';
           });
-      });
-      // Note: .raise() not available in D3 v3
+      })
+      .raise();
 
     // Update link paths with advanced routing for group edges
     this.container.selectAll('.link-group path')
@@ -902,8 +919,8 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       .attr('marker-end', (d: any) => {
         if (this.isAlignmentEdge(d)) return 'none';
         return this.isInferredEdge(d) ? 'url(#hand-drawn-arrow)' : 'url(#end-arrow)';
-      });
-      // Note: Removed .raise() for D3 compatibility
+      })
+      .raise();
 
     // Update link labels using path midpoint calculation
     this.container.selectAll('.link-group .linklabel')
@@ -914,8 +931,8 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       .attr('y', (d: any) => {
         const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${d.id}"]`) as SVGPathElement;
         return pathElement ? this.calculateNewPosition(d.y, pathElement, 'y') : (d.source.y + d.target.y) / 2;
-      });
-      // Note: Removed .raise() for D3 compatibility
+      })
+      .raise();
 
     // Update group labels (center top of each group)
     this.container.selectAll('.groupLabel')
@@ -927,16 +944,16 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         if (!d.bounds) return 0;
         return d.bounds.y + 12;
       })
-      .attr('text-anchor', 'middle');
-      // Note: .lower() not available in D3 v3
+      .attr('text-anchor', 'middle')
+      .lower();
 
     // Ensure proper layering - raise important elements
-    // Note: .raise() not available in D3 v3, removing for now
-    // this.container.selectAll('marker').raise();
-    // this.container.selectAll('.link-group .linklabel').raise();
+    this.container.selectAll('marker').raise();
+    this.container.selectAll('.link-group .linklabel').raise();
   }
 
   private gridUpdatePositions() {
+    console.log('grid tick - updating positions');
     const node = this.container.selectAll(".node");
     const mostSpecificTypeLabel = this.container.selectAll(".mostSpecificTypeLabel");
     const label = this.container.selectAll(".label");
@@ -1245,17 +1262,32 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    * @returns SVG path string for the edge
    */
   private routeSingleEdge(edgeData: any): string | null {
+    const defaultRoute = [
+      { x: edgeData.source.x || 0, y: edgeData.source.y || 0 },
+      { x: edgeData.target.x || 0, y: edgeData.target.y || 0 }
+    ];
     let route: Array<{ x: number; y: number }>;
 
     // Get initial route from WebCola
     if (typeof (this.colaLayout as any)?.routeEdge === 'function') {
-      route = (this.colaLayout as any).routeEdge(edgeData);
+      try {
+        route = (this.colaLayout as any).routeEdge(edgeData);
+
+        // Error check the route
+        // NOTE: Conditional written by Copilot, may not cover all cases
+        if (!route || !Array.isArray(route) || route.length < 2 || 
+            !route[0] || !route[1] || route[0].x === undefined || route[0].y === undefined) {
+                throw new Error(`WebCola failed to route edge ${edgeData.id} from ${edgeData.source.id} to ${edgeData.target.id}`);
+        }
+      } catch (e) {
+        // TODO: Display error on frontend WebCola routing failure
+        console.log("Error routing edge", edgeData.id, `from ${edgeData.source.id} to ${edgeData.target.id}`);
+        console.error(e);
+        return this.lineFunction(defaultRoute);
+      }
     } else {
       // Fallback route
-      route = [
-        { x: edgeData.source.x || 0, y: edgeData.source.y || 0 },
-        { x: edgeData.target.x || 0, y: edgeData.target.y || 0 }
-      ];
+      route = defaultRoute;
     }
 
     // Handle self-loops
@@ -1356,6 +1388,9 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       } else {
         console.log('Source group not found', potentialGroups, sourceIndex, targetIndex, edgeData.id);
       }
+    } else {
+      // If neither source nor target is a group, log the edge data
+      console.log("This is a group edge, but neither source nor target is a group.", edgeData);
     }
 
     // Simplify route for group edges (remove intermediate points)
@@ -1375,7 +1410,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    * @returns Modified route points with curvature and offset
    */
   private handleMultipleEdgeRouting(edgeData: any, route: Array<{ x: number; y: number }>): Array<{ x: number; y: number }> {
-    const allEdgesBetweenNodes = this.getAllEdgesBetweenNodes(edgeData.source.id, edgeData.target.id);
+    const allEdgesBetweenNodes = this.getAllEdgesBetweenNodes(edgeData.source, edgeData.target);
     
     // Add midpoint if route only has start and end
     if (route.length === 2) {
@@ -1411,10 +1446,10 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    * @param targetId - Target node ID
    * @returns Array of edges between the nodes
    */
-  private getAllEdgesBetweenNodes(sourceId: string, targetId: string): any[] {
+  private getAllEdgesBetweenNodes(sourceId: string, targetId: string): EdgeWithMetadata[] {
     if (!this.currentLayout?.links) return [];
     
-    return this.currentLayout.links.filter((edge: any) => {
+    return this.currentLayout.links.filter((edge: EdgeWithMetadata) => {
       return !this.isAlignmentEdge(edge) && (
         (edge.source.id === sourceId && edge.target.id === targetId) ||
         (edge.source.id === targetId && edge.target.id === sourceId)
@@ -1444,9 +1479,9 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
     }
 
     return (edgeIndex % 2 === 0 ? 1 : -1) * 
-           (Math.floor(edgeIndex / 2) + 1) * 
-           WebColaCnDGraph.CURVATURE_BASE_MULTIPLIER * 
-           edgeCount;
+            (Math.floor(edgeIndex / 2) + 1) * 
+            WebColaCnDGraph.CURVATURE_BASE_MULTIPLIER * 
+            edgeCount;
   }
 
   /**
@@ -1461,8 +1496,8 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
   private applyEdgeOffset(edgeData: any, route: Array<{ x: number; y: number }>, allEdges: any[], angle: number): Array<{ x: number; y: number }> {
     const edgeIndex = allEdges.findIndex(edge => edge.id === edgeData.id);
     const offset = (edgeIndex % 2 === 0 ? 1 : -1) * 
-                   (Math.floor(edgeIndex / 2) + 1) * 
-                   WebColaCnDGraph.MIN_EDGE_DISTANCE;
+                    (Math.floor(edgeIndex / 2) + 1) * 
+                    WebColaCnDGraph.MIN_EDGE_DISTANCE;
 
     const direction = this.getDominantDirection(angle);
     
@@ -1852,5 +1887,6 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
 
 // Register the custom element only in browser environments
 if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined') {
+  // eslint-disable-next-line no-undef
   customElements.define('webcola-cnd-graph', WebColaCnDGraph);
 }
