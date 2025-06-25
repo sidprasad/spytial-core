@@ -805,27 +805,27 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
     console.log('tick - updating positions');
     // Update group positions and sizes first (lower layer)
     this.container.selectAll('.group, .disconnectedNode')
-      .attr('x', (d: any) => d.bounds?.x || 0)
-      .attr('y', (d: any) => d.bounds?.y || 0)
-      .attr('width', (d: any) => d.bounds?.width() || 0)
-      .attr('height', (d: any) => d.bounds?.height() || 0)
+      .attr('x', (d: ColaGroupDefinition) => d.bounds?.x || 0)
+      .attr('y', (d: ColaGroupDefinition) => d.bounds?.y || 0)
+      .attr('width', (d: ColaGroupDefinition) => d.bounds?.width() || 0)
+      .attr('height', (d: ColaGroupDefinition) => d.bounds?.height() || 0)
       .lower();
 
     // Update node rectangles using bounds
     this.container.selectAll('.node rect')
-      .each((d: any) => {
+      .each((d: NodeWithMetadata) => {
         if (d.bounds) {
           d.innerBounds = d.bounds.inflate(-1);
         }
       })
-      .attr('x', (d: any) => d.bounds?.x || d.x - (d.width || 60) / 2)
-      .attr('y', (d: any) => d.bounds?.y || d.y - (d.height || 30) / 2)
-      .attr('width', (d: any) => d.bounds?.width() || d.width || 60)
-      .attr('height', (d: any) => d.bounds?.height() || d.height || 30);
+      .attr('x', (d: NodeWithMetadata) => d.bounds?.x || d.x - (d.width || 60) / 2)
+      .attr('y', (d: NodeWithMetadata) => d.bounds?.y || d.y - (d.height || 30) / 2)
+      .attr('width', (d: NodeWithMetadata) => d.bounds?.width() || d.width || 60)
+      .attr('height', (d: NodeWithMetadata) => d.bounds?.height() || d.height || 30);
 
     // Update node icons with proper positioning
     this.container.selectAll('.node image')
-      .attr('x', (d: any) => {
+      .attr('x', (d: NodeWithMetadata) => {
         if (d.showLabels) {
           // Move to the top-right corner
           return d.x + (d.width || 60) / 2 - ((d.width || 60) * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR);
@@ -834,7 +834,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
           return d.bounds?.x || (d.x - (d.width || 60) / 2);
         }
       })
-      .attr('y', (d: any) => {
+      .attr('y', (d: NodeWithMetadata) => {
         if (d.showLabels) {
           // Align with the top edge
           return d.y - (d.height || 30) / 2;
@@ -846,15 +846,15 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
 
     // Update most specific type labels
     this.container.selectAll('.mostSpecificTypeLabel')
-      .attr('x', (d: any) => d.x - (d.width || 60) / 2 + 5)
-      .attr('y', (d: any) => d.y - (d.height || 30) / 2 + 10)
+      .attr('x', (d: NodeWithMetadata) => d.x - (d.width || 60) / 2 + 5)
+      .attr('y', (d: NodeWithMetadata) => d.y - (d.height || 30) / 2 + 10)
       .raise();
 
     // Update main node labels with tspan positioning
     this.container.selectAll('.node .label')
-      .attr('x', (d: any) => d.x)
-      .attr('y', (d: any) => d.y)
-      .each((d: any, i: number, nodes: any[]) => {
+      .attr('x', (d: NodeWithMetadata) => d.x)
+      .attr('y', (d: NodeWithMetadata) => d.y)
+      .each((d: NodeWithMetadata, i: number, nodes: Array<NodeWithMetadata>) => {
         let lineOffset = 0;
         d3.select(nodes[i])
           .selectAll('tspan')
@@ -868,7 +868,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
 
     // Update link paths with advanced routing for group edges
     this.container.selectAll('.link-group path')
-      .attr('d', (d: any) => {
+      .attr('d', (d: EdgeWithMetadata) => {
         let source = d.source;
         let target = d.target;
 
@@ -884,6 +884,8 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
             
             if (targetGroup) {
               target = targetGroup;
+              // NOTE: I think this is a rectangle...
+              // Just added this to the NodeWithMetadata interface
               target.innerBounds = targetGroup.bounds?.inflate(-1 * (targetGroup.padding || 10));
             } else {
               console.log('Target group not found', potentialGroups, this.getNodeIndex(target));
@@ -916,7 +918,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
           { x: target.x || 0, y: target.y || 0 }
         ]);
       })
-      .attr('marker-end', (d: any) => {
+      .attr('marker-end', (d: EdgeWithMetadata) => {
         if (this.isAlignmentEdge(d)) return 'none';
         return this.isInferredEdge(d) ? 'url(#hand-drawn-arrow)' : 'url(#end-arrow)';
       })
@@ -924,23 +926,23 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
 
     // Update link labels using path midpoint calculation
     this.container.selectAll('.link-group .linklabel')
-      .attr('x', (d: any) => {
+      .attr('x', (d: EdgeWithMetadata) => {
         const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${d.id}"]`) as SVGPathElement;
-        return pathElement ? this.calculateNewPosition(d.x, pathElement, 'x') : (d.source.x + d.target.x) / 2;
+        return pathElement ? this.calculateNewPosition(pathElement, 'x') : (d.source.x + d.target.x) / 2;
       })
-      .attr('y', (d: any) => {
+      .attr('y', (d: EdgeWithMetadata) => {
         const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${d.id}"]`) as SVGPathElement;
-        return pathElement ? this.calculateNewPosition(d.y, pathElement, 'y') : (d.source.y + d.target.y) / 2;
+        return pathElement ? this.calculateNewPosition(pathElement, 'y') : (d.source.y + d.target.y) / 2;
       })
       .raise();
 
     // Update group labels (center top of each group)
     this.container.selectAll('.groupLabel')
-      .attr('x', (d: any) => {
+      .attr('x', (d: ColaGroupDefinition) => {
         if (!d.bounds) return 0;
         return d.bounds.x + (d.bounds.width() / 2);
       })
-      .attr('y', (d: any) => {
+      .attr('y', (d: ColaGroupDefinition) => {
         if (!d.bounds) return 0;
         return d.bounds.y + 12;
       })
@@ -1823,7 +1825,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
   }
 
 
-  private calculateNewPosition(previousPosition : any, pathElement : any, axis : 'x' | 'y'): number {
+  private calculateNewPosition(pathElement : any, axis : 'x' | 'y'): number {
         const pathLength = pathElement.getTotalLength();
         const midpointLength = pathLength / 2;
         const offset = 0; //getRandomOffsetAlongPath(); // commenting out to remove jitter

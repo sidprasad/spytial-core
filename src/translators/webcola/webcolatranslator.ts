@@ -1,4 +1,4 @@
-import { Node, Group, Link } from 'webcola';
+import { Node, Group, Link, Rectangle } from 'webcola';
 import { InstanceLayout, LayoutNode, LayoutEdge, LayoutConstraint, LayoutGroup, LeftConstraint, TopConstraint, AlignmentConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint } from '../../layout/interfaces';
 import { LayoutInstance } from '../../layout/layoutinstance';
 
@@ -26,6 +26,7 @@ type NodeWithMetadata = Node &
     icon: string,
     mostSpecificType: string,
     showLabels: boolean,
+    innerBounds: Rectangle,
   };
 
 type EdgeWithMetadata = Link<NodeWithMetadata> & {
