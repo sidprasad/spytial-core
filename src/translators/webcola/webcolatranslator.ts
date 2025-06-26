@@ -1,4 +1,4 @@
-import { Node, Group } from 'webcola';
+import { Node, Group, Link, Rectangle } from 'webcola';
 import { InstanceLayout, LayoutNode, LayoutEdge, LayoutConstraint, LayoutGroup, LeftConstraint, TopConstraint, AlignmentConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint } from '../../layout/interfaces';
 import { LayoutInstance } from '../../layout/layoutinstance';
 import * as dagre from 'dagre';
@@ -20,8 +20,7 @@ import * as dagre from 'dagre';
  * positioning of nodes using separation and alignment constraints.
  */
 
-type NodeWithMetadata = Node &
-{
+type NodeWithMetadata = Node & {
   id: string,
   attributes: Record<string, string[]>,
   color: string
@@ -30,7 +29,7 @@ type NodeWithMetadata = Node &
   showLabels: boolean,
 };
 
-type EdgeWithMetadata = {
+type EdgeWithMetadata = Link<NodeWithMetadata> & {
   source: number,
   target: number,
   relName: string, // This is the name of the relation for the edge
@@ -334,8 +333,8 @@ export class WebColaLayout {
     }
 
 
-    // Returns true if group1 is a subgroup of group2
-    private isSubGroup(group1: string[], group2: string[]) {
+  // Returns true if group1 is a subgroup of group2
+  private isSubGroup(group1: string[], group2: string[]) {
     return group1.every((node) => group2.includes(node));
   }
 
