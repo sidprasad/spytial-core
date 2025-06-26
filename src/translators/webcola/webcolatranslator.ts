@@ -1,6 +1,7 @@
 import { Node, Group } from 'webcola';
 import { InstanceLayout, LayoutNode, LayoutEdge, LayoutConstraint, LayoutGroup, LeftConstraint, TopConstraint, AlignmentConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint } from '../../layout/interfaces';
 import { LayoutInstance } from '../../layout/layoutinstance';
+import * as dagre from 'dagre';
 
 /**
  * WebColaTranslator - Translates InstanceLayout to WebCola format
@@ -19,14 +20,15 @@ import { LayoutInstance } from '../../layout/layoutinstance';
  * positioning of nodes using separation and alignment constraints.
  */
 
-type NodeWithMetadata = Node & 
-  { id: string, 
-    attributes: Record<string, string[]>, 
-    color: string 
-    icon: string,
-    mostSpecificType: string,
-    showLabels: boolean,
-  };
+type NodeWithMetadata = Node &
+{
+  id: string,
+  attributes: Record<string, string[]>,
+  color: string
+  icon: string,
+  mostSpecificType: string,
+  showLabels: boolean,
+};
 
 type EdgeWithMetadata = {
   source: number,
@@ -61,16 +63,16 @@ interface ColaHierarchyConstraint extends ColaConstraint {
   gap: number;
 }
 
-// WebCola group definition
-interface ColaGroupDefinition extends Group {
-  leaves?: NodeWithMetadata[];
-  groups?: ColaGroupDefinition[];
-  padding: number;
-  name: string;
-  keyNode?: number;
-  id?: string;
-  showLabel?: boolean;
-}
+// // WebCola group definition
+// interface ColaGroupDefinition extends Group {
+//   leaves?: NodeWithMetadata[];
+//   groups?: ColaGroupDefinition[];
+//   padding: number;
+//   name: string;
+//   keyNode?: number;
+//   id?: string;
+//   showLabel?: boolean;
+// }
 
 
 export class WebColaLayout {
@@ -79,12 +81,12 @@ export class WebColaLayout {
   readonly colaConstraints: ColaConstraint[];
   readonly colaNodes: NodeWithMetadata[];
   readonly colaEdges: EdgeWithMetadata[];
-  readonly groupDefinitions: ColaGroupDefinition[];
+  readonly groupDefinitions: any;
 
   private readonly DEFAULT_X: number;
   private readonly DEFAULT_Y: number;
 
-  private dagre_graph: Record<string, unknown> | null = null;
+  private dagre_graph: any;
 
   public FIG_WIDTH: number;
   public FIG_HEIGHT: number;
@@ -93,11 +95,34 @@ export class WebColaLayout {
 
     this.FIG_HEIGHT = fig_height;
     this.FIG_WIDTH = fig_width;
-    
+
     this.DEFAULT_X = fig_width / 2;
     this.DEFAULT_Y = fig_height / 2;
 
     this.instanceLayout = instanceLayout;
+
+    // Can I create a DAGRE graph here.
+    try {
+      const g = new dagre.graphlib.Graph({ multigraph: true });
+      g.setGraph({ nodesep: 50, ranksep: 100, rankdir: 'TB' });
+      g.setDefaultEdgeLabel(() => ({}));
+
+      instanceLayout.nodes.forEach(node => {
+        g.setNode(node.id, { width: node.width, height: node.height });
+      });
+
+      instanceLayout.edges.forEach(edge => {
+        g.setEdge(edge.source.id, edge.target.id);
+      });
+      dagre.layout(g);
+
+      this.dagre_graph = g;
+    }
+    catch (e) {
+      console.log(e);
+      this.dagre_graph = null;
+    }
+
 
 
     this.colaNodes = instanceLayout.nodes.map(node => this.toColaNode(node));
@@ -108,6 +133,10 @@ export class WebColaLayout {
 
 
     this.colaConstraints = instanceLayout.constraints.map(constraint => this.toColaConstraint(constraint));
+
+    if (this.colaConstraints.length === 0 && this.dagre_graph) {
+      this.colaNodes.forEach(node => node.fixed = 1);
+    }
 
 
   }
@@ -171,8 +200,7 @@ export class WebColaLayout {
 
     if (this.dagre_graph) {
       // Get the corresponding node in the DAGRE graph
-      const dagreGraph = this.dagre_graph as { node: (id: string) => { x: number; y: number } };
-      let dagre_node = dagreGraph.node(node.id);
+      let dagre_node = this.dagre_graph.node(node.id);
       x = dagre_node.x;
       y = dagre_node.y;
       //fixed = 1; // THIS REALLY IS NOT GOOD!
@@ -215,16 +243,16 @@ export class WebColaLayout {
 
     // Switch on the type of constraint
     if (isLeftConstraint(constraint)) {
-      
+
       // Get the two nodes that are being constrained
       let node1 = this.colaNodes[this.getNodeIndex(constraint.left.id)];
       let node2 = this.colaNodes[this.getNodeIndex(constraint.right.id)];
       //      // Set fixed to 0 here.
       node1.fixed = 0;
-      node2.fixed = 0;  
+      node2.fixed = 0;
 
       let distance = constraint.minDistance + ((node1.width || 100) / 2) + ((node2.width || 100) / 2);
-      
+
       return this.leftConstraint(this.getNodeIndex(constraint.left.id), this.getNodeIndex(constraint.right.id), distance);
     }
 
@@ -256,17 +284,17 @@ export class WebColaLayout {
         axis: constraint.axis,
         left: this.getNodeIndex(constraint.node1.id),
         right: this.getNodeIndex(constraint.node2.id),
-        gap: 0, 
+        gap: 0,
         'equality': true
       }
-      
+
       // FInd the two cola nodes that are being aligned
       let node1 = this.colaNodes[this.getNodeIndex(constraint.node1.id)];
       let node2 = this.colaNodes[this.getNodeIndex(constraint.node2.id)];
       //      // Set fixed to 0 here.
       node1.fixed = 0;
       node2.fixed = 0;
-      
+
       return alignmentConstraint;
 
     }
@@ -274,36 +302,36 @@ export class WebColaLayout {
   }
 
 
-  private determineGroups(groups: LayoutGroup[]): ColaGroupDefinition[] {
-  // Convert groups to the format expected by determineGroupsAndSubgroups
-  const groupsAsRecord: Record<string, string[]> = {};
-  groups.forEach(group => {
-    groupsAsRecord[group.name] = group.nodeIds;
-  });
 
-  const groupsAndSubgroups = this.determineGroupsAndSubgroups(groupsAsRecord);
+  private determineGroups(groups: LayoutGroup[]): { leaves: number[], padding: number, name: string, groups: number[] }[] {
 
-  // Now we need to add metadata from the original LayoutGroup objects
-  const enrichedGroups = groupsAndSubgroups.map(colaGroup => {
-    const originalGroup = groups.find(g => g.name === colaGroup.name);
-    
-    if (originalGroup?.keyNodeId) {
-      const keyIndex = this.getNodeIndex(originalGroup.keyNodeId);
-      if (keyIndex !== -1) {
-        colaGroup.keyNode = keyIndex;
-      }
+
+      // Do we actually have to do this? Can we just use the groups as they are?
+
+      // No we actually have to break this down into subgroups
+
+
+      let groupsAsRecord: Record<string, string[]> = {};
+      groups.forEach(group => {
+        groupsAsRecord[group.name] = group.nodeIds;
+      });
+
+      let groupsAndSubgroups = this.determineGroupsAndSubgroups(groupsAsRecord);
+
+      groupsAndSubgroups.forEach((group) => {
+
+
+        let grp: LayoutGroup = groups.find(g => g.name === group.name);
+        let keyNode = grp.keyNodeId;
+        let keyIndex = this.getNodeIndex(keyNode);
+        group['keyNode'] = keyIndex;
+        group['id'] = grp.name;
+        group['showLabel'] = grp.showLabel;
+      });
+
+      return groupsAndSubgroups;
+
     }
-    
-    if (originalGroup) {
-      colaGroup.id = originalGroup.name;
-      colaGroup.showLabel = originalGroup.showLabel;
-    }
-    
-    return colaGroup;
-  });
-
-  return enrichedGroups;
-}
 
 
     // Returns true if group1 is a subgroup of group2
@@ -313,93 +341,84 @@ export class WebColaLayout {
 
 
 
-  /**
-   * Determines groups and their subgroup relationships for WebCola layout.
-   * 
-   * This method processes group definitions to create a hierarchical structure
-   * where subgroups are properly nested within their parent groups, and ensures
-   * no node appears in both a parent group's leaves and its subgroups.
-   * 
-   * @param groupDefinitions - Record mapping group names to arrays of node IDs
-   * @returns Array of ColaGroupDefinition objects with proper hierarchy
-   */
-  private determineGroupsAndSubgroups(groupDefinitions: Record<string, string[]>): ColaGroupDefinition[] {
-    const subgroups: Record<string, string[]> = {};
+  private determineGroupsAndSubgroups(groupDefinitions: Record<string, string[]>) {
+    let subgroups: Record<string, string[]> = {};
 
-    // Identify subgroup relationships by checking containment
-    Object.entries(groupDefinitions).forEach(([parentKey, parentNodes]) => {
-      Object.entries(groupDefinitions).forEach(([childKey, childNodes]) => {
-        if (parentKey !== childKey && this.isSubGroup(childNodes, parentNodes)) {
-          if (!subgroups[parentKey]) {
-            subgroups[parentKey] = [];
+
+    Object.entries(groupDefinitions).forEach(([key1, value1]) => {
+      Object.entries(groupDefinitions).forEach(([key2, value2]) => {
+
+        const avoidContainmentCycle =
+          key1 !== key2 // Group is not a subgroup of itself
+          && (!subgroups[key2] || !subgroups[key2].includes(key1)) // Group is not a subgroup of a subgroup of itself
+        const shouldAddSubgroup = avoidContainmentCycle && this.isSubGroup(value2, value1);
+
+
+        if (shouldAddSubgroup) {
+
+          if (subgroups[key1]) {
+            subgroups[key1].push(key2);
+          } else {
+            subgroups[key1] = [key2];
           }
-          subgroups[parentKey].push(childKey);
         }
-      });
+      })
     });
 
-    // Create initial group definitions with all leaves as Node objects
-    const colaGroupsBeforeSubgrouping = Object.entries(groupDefinitions).map(([key, nodeIds]) => {
+
+
+    // TODO: But there may be groups that intersect with each other, but are not subgroups of each other.
+    // WebCola struggles with this, so need to find a way to handle this.
+    // Similarly, two webcola groups cannot share a subgroup.
+
+    //Now modify groupDefinitions to be in the format that WebCola expects (ie indexed by node)
+
+    const colaGroupsBeforeSubgrouping = Object.entries(groupDefinitions).map(([key, value]) => {
+
+
       const defaultPadding = 10;
       const disconnectedNodePadding = 30;
       const disconnectedNodeMarker = LayoutInstance.DISCONNECTED_PREFIX;
 
-      // Convert node IDs to actual Node objects from colaNodes
-      const leaves = nodeIds
-        .map((nodeId) => {
-          const index = this.getNodeIndex(nodeId);
-          return index !== -1 ? this.colaNodes[index] : null;
-        })
-        .filter((node): node is NodeWithMetadata => node !== null);
-    
-      const name = key;
-      const padding = name.startsWith(disconnectedNodeMarker) 
-        ? disconnectedNodePadding 
-        : defaultPadding;
+      let leaves = value.map((nodeId) => this.getNodeIndex(nodeId));  
+      let name = key;
+
+      let padding = name.startsWith(disconnectedNodeMarker) ? disconnectedNodePadding : defaultPadding;
 
       return { leaves, padding, name };
     });
 
-    // Create a map for efficient group lookup
-    const groupMap = new Map<string, ColaGroupDefinition>();
+    const colaGroups = Object.entries(colaGroupsBeforeSubgrouping).map(([key, value]) => {
 
-    // First pass: create all groups without subgroup relationships
-    colaGroupsBeforeSubgrouping.forEach(group => {
-      const colaGroup: ColaGroupDefinition = {
-        leaves: group.leaves,
-        groups: [],
-        padding: group.padding,
-        name: group.name
-      };
-      groupMap.set(group.name, colaGroup);
+      let leaves = value.leaves;
+      let padding = value.padding;
+      let name = value.name;
+
+
+      // if the group has no subgroups, return it as is
+      if (!subgroups[name]) {
+        return { leaves, padding, name, groups: [] };
+      }
+
+      let groups = subgroups[name].map((subgroupName) => {
+        // Get the index of the subgroup
+        let subgroupIndex = colaGroupsBeforeSubgrouping.findIndex((group) => group.name === subgroupName);
+        return subgroupIndex;
+      });
+
+
+      // Remove leaves in the subgroups from the leaves in the group
+      groups.forEach((groupIndex) => {
+        let group = colaGroupsBeforeSubgrouping[groupIndex];
+        leaves = leaves.filter((leaf) => !group.leaves.includes(leaf));
+      });
+
+      return { leaves, padding, name, groups };
     });
 
-    // Second pass: establish subgroup relationships and adjust leaves
-    Object.entries(subgroups).forEach(([parentName, subgroupNames]) => {
-      const parentGroup = groupMap.get(parentName);
-      if (!parentGroup) return;
-
-      // Get subgroup objects
-      const subgroupObjects = subgroupNames
-        .map(name => groupMap.get(name))
-        .filter((group): group is ColaGroupDefinition => group !== undefined);
-
-      parentGroup.groups = subgroupObjects;
-
-      // Remove leaves that are contained in subgroups from parent's direct leaves
-      const subgroupLeafIds = new Set(
-        subgroupObjects.flatMap(subgroup => 
-          subgroup.leaves?.map(leaf => leaf.id) || []
-        )
-      );
-    
-      parentGroup.leaves = parentGroup.leaves?.filter(
-        leaf => !subgroupLeafIds.has(leaf.id)
-      ) || [];
-    });
-
-    return Array.from(groupMap.values());
+    return colaGroups;
   }
+
 
   // Public getters for accessing layout data
   get nodes(): NodeWithMetadata[] {
@@ -414,7 +433,7 @@ export class WebColaLayout {
     return this.colaConstraints;
   }
 
-  get groups(): ColaGroupDefinition[] {
+  get groups(): any {
     // TODO: Make sure the leaves and 
     // groups are well defined here (i.e. not defined by index by object?)
 
@@ -426,7 +445,7 @@ export class WebColaLayout {
  * WebColaTranslator - Main translator class for converting InstanceLayout to WebCola format
  */
 export class WebColaTranslator {
-  
+
   /**
    * Translate an InstanceLayout to WebColaLayout
    * @param instanceLayout The layout to translate
