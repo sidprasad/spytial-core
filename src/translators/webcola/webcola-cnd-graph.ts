@@ -68,10 +68,11 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
   private edgeRouteIdx = 0;
 
 
-
+  // We use these to store state and references.
   private svgNodes : any;
-  private svgGroups : any[];
-  private svgEdges : any[];
+  private svgLinkGroups : any;
+  private svgGroups : any;
+  private svgEdges : any;
 
   constructor() {
     super();
@@ -351,10 +352,8 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       console.warn("Cannot render groups: nodes not available");
       return;
     }
-    
-    console.log("Groups:", groups);
-
-    this.setupGroups(groups, this.currentLayout.nodes, layout);
+  
+    this.svgGroups = this.setupGroups(groups, this.currentLayout.nodes, layout);
   }
 
   /**
@@ -374,10 +373,10 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
   private setupLinks(
     links: any[], 
     layout: any
-  ): d3.Selection<SVGGElement, any, any, unknown> {
+  ) {
     // Create link groups for each edge
     const linkGroups = this.container
-      .selectAll<SVGGElement, any>(".link-group")
+      .selectAll(".link-group")
       .data(links)
       .enter()
       .append("g")
@@ -464,7 +463,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
     groups: any[], 
     nodes: any[], 
     layout: any
-  ): d3.Selection<SVGRectElement, any, any, unknown> {
+  ) {
     // Create group rectangles with dynamic styling
     const groupRects = this.setupGroupRectangles(groups, nodes, layout);
 
@@ -567,7 +566,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    * Render links using D3 data binding with enhanced grouping and labeling
    */
   private renderLinks(links: any[], layout: any): void {
-    this.setupLinks(links, layout);
+    this.svgLinkGroups = this.setupLinks(links, layout);
   }
 
   /**
@@ -801,7 +800,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    */
   private updatePositions(): void {
     // Update group positions and sizes first (lower layer)
-    this.container.selectAll('.group')
+    this.svgGroups
       .attr('x', (d: any) => d.bounds.x)
       .attr('y', (d: any) => d.bounds.y )
       .attr('width', (d: any) => d.bounds.width() )
@@ -843,13 +842,13 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       });
 
     // Update most specific type labels
-    this.container.selectAll('.mostSpecificTypeLabel')
+    this.svgNodes.select('mostSpecificTypeLabel')
       .attr('x', (d: any) => d.x - (d.width ) / 2 + 5)
       .attr('y', (d: any) => d.y - (d.height ) / 2 + 10)
       .raise();
 
     // Update main node labels with tspan positioning
-    this.container.selectAll('.node .label')
+    this.svgNodes.select('text.label')
       .attr('x', (d: any) => d.x)
       .attr('y', (d: any) => d.y)
       .each((d: any, i: number, nodes: any[]) => {
@@ -864,8 +863,9 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       }).raise();// not available in D3 v3
 
     // Update link paths with advanced routing for group edges
-    this.container.selectAll('.link-group path')
+    this.svgLinkGroups.select('path')
       .attr('d', (d: any) => {
+        console.log('Routing link:', d.id, 'Source:', d.source, 'Target:', d.target);
         let source = d.source;
         let target = d.target;
 
@@ -916,11 +916,12 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       .attr('marker-end', (d: any) => {
         if (this.isAlignmentEdge(d)) return 'none';
         return this.isInferredEdge(d) ? 'url(#hand-drawn-arrow)' : 'url(#end-arrow)';
-      });
-      // Note: Removed .raise() for D3 compatibility
+      })
+      .raise();
+
 
     // Update link labels using path midpoint calculation
-    this.container.selectAll('.link-group .linklabel')
+    this.svgLinkGroups.select('linklabel')
       .attr('x', (d: any) => {
         const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${d.id}"]`) as SVGPathElement;
         return pathElement ? this.calculateNewPosition(d.x, pathElement, 'x') : (d.source.x + d.target.x) / 2;
@@ -1235,6 +1236,10 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    * Routes all link paths with advanced curvature and collision handling.
    */
   private routeLinkPaths(): void {
+
+    // TODO: Should this use linkGroups?
+
+
     this.container.selectAll('.link-group path')
       .attr('d', (d: any) => {
         try {
