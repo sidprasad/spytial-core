@@ -74,6 +74,13 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    */
   private edgeRouteIdx = 0;
 
+
+  // We use these to store state and references.
+  private svgNodes : any;
+  private svgLinkGroups : any;
+  private svgGroups : any;
+  private svgEdges : any;
+
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
@@ -361,8 +368,8 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       console.warn("Cannot render groups: nodes not available");
       return;
     }
-    
-    this.setupGroups(groups, this.currentLayout.nodes, layout);
+  
+    this.svgGroups = this.setupGroups(groups, this.currentLayout.nodes, layout);
   }
 
   /**
@@ -382,7 +389,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
   private setupLinks(
     links: Array<EdgeWithMetadata>, 
     layout: Layout
-  ): d3.Selection<SVGGElement, any, any, unknown> {
+  ) {
     // Create link groups for each edge
     const linkGroups = this.container
       .selectAll(".link-group")
@@ -460,13 +467,19 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    * @example
    * ```typescript
    * const groupSelection = this.setupGroups(this.currentLayout.groups, this.currentLayout.nodes, layout);
+   * 
+   * 
+   * 
+   * TODO: Could the issue be that groups are NODES and not indices?
+   * 
+   * Why are we returning anything here?
    * ```
    */
   private setupGroups(
     groups: Array<ColaGroupDefinition>, 
     nodes: Array<NodeWithMetadata>, 
     layout: Layout
-  ): d3.Selection<SVGRectElement, any, any, unknown> {
+  ) {
     // Create group rectangles with dynamic styling
     const groupRects = this.setupGroupRectangles(groups, nodes, layout);
 
@@ -614,10 +627,10 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
   private setupNodeRectangles(nodeSelection: d3.Selection<SVGGElement, any, any, unknown>): void {
     nodeSelection
       .append("rect")
-      .attr("width", (d: any) => d.width || 60)
-      .attr("height", (d: any) => d.height || 30)
-      .attr("x", (d: any) => -(d.width || 60) / 2) // Center on node's x position
-      .attr("y", (d: any) => -(d.height || 30) / 2) // Center on node's y position
+      .attr("width", (d: any) => d.width )
+      .attr("height", (d: any) => d.height )
+      .attr("x", (d: any) => -(d.width ) / 2) // Center on node's x position
+      .attr("y", (d: any) => -(d.height ) / 2) // Center on node's y position
       .attr("stroke", (d: any) => d.color || "black")
       .attr("rx", WebColaCnDGraph.NODE_BORDER_RADIUS)
       .attr("ry", WebColaCnDGraph.NODE_BORDER_RADIUS)
@@ -643,16 +656,16 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       .attr("xlink:href", (d: any) => d.icon)
       .attr("width", (d: any) => {
         return d.showLabels
-          ? (d.width || 60) * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR
-          : (d.width || 60);
+          ? (d.width ) * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR
+          : (d.width );
       })
       .attr("height", (d: any) => {
         return d.showLabels
-          ? (d.height || 30) * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR
-          : (d.height || 30);
+          ? (d.height ) * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR
+          : (d.height );
       })
       .attr("x", (d: any) => {
-        const width = d.width || 60;
+        const width = d.width ;
         if (d.showLabels) {
           // Position in top-right corner when labels are shown
           return d.x + width - (width * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR);
@@ -661,7 +674,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         return d.x - width / 2;
       })
       .attr("y", (d: any) => {
-        const height = d.height || 30;
+        const height = d.height ;
         // Always align with top edge
         return d.y - height / 2;
       })
@@ -738,7 +751,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    * Render nodes using D3 data binding with drag behavior
    */
   private renderNodes(nodes: Array<NodeWithMetadata>, layout: Layout): void {
-    this.setupNodes(nodes, layout);
+    this.svgNodes = this.setupNodes(nodes, layout);
   }
 
   /**
@@ -804,54 +817,54 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
   private updatePositions(): void {
     console.log('tick - updating positions');
     // Update group positions and sizes first (lower layer)
-    this.container.selectAll('.group, .disconnectedNode')
-      .attr('x', (d: ColaGroupDefinition) => d.bounds?.x || 0)
-      .attr('y', (d: ColaGroupDefinition) => d.bounds?.y || 0)
-      .attr('width', (d: ColaGroupDefinition) => d.bounds?.width() || 0)
-      .attr('height', (d: ColaGroupDefinition) => d.bounds?.height() || 0)
+    this.svgGroups
+      .attr('x', (d: ColaGroupDefinition) => d.bounds.x)
+      .attr('y', (d: ColaGroupDefinition) => d.bounds.y )
+      .attr('width', (d: ColaGroupDefinition) => d.bounds.width() )
+      .attr('height', (d: ColaGroupDefinition) => d.bounds.height() )
       .lower();
 
     // Update node rectangles using bounds
-    this.container.selectAll('.node rect')
+    this.svgNodes.select('rect')
       .each((d: NodeWithMetadata) => {
         if (d.bounds) {
           d.innerBounds = d.bounds.inflate(-1);
         }
       })
-      .attr('x', (d: NodeWithMetadata) => d.bounds?.x || d.x - (d.width || 60) / 2)
-      .attr('y', (d: NodeWithMetadata) => d.bounds?.y || d.y - (d.height || 30) / 2)
-      .attr('width', (d: NodeWithMetadata) => d.bounds?.width() || d.width || 60)
-      .attr('height', (d: NodeWithMetadata) => d.bounds?.height() || d.height || 30);
+      .attr('x', (d: NodeWithMetadata) => d.bounds.x )
+      .attr('y', (d: NodeWithMetadata) => d.bounds.y )
+      .attr('width', (d: NodeWithMetadata) => d.bounds.width() )
+      .attr('height', (d: NodeWithMetadata) => d.bounds.height());
 
     // Update node icons with proper positioning
-    this.container.selectAll('.node image')
+    this.svgNodes.select('image')
       .attr('x', (d: NodeWithMetadata) => {
         if (d.showLabels) {
           // Move to the top-right corner
-          return d.x + (d.width || 60) / 2 - ((d.width || 60) * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR);
+          return d.x + (d.width) / 2 - ((d.width) * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR);
         } else {
           // Align with bounds if available, otherwise center
-          return d.bounds?.x || (d.x - (d.width || 60) / 2);
+          return d.bounds.x;
         }
       })
       .attr('y', (d: NodeWithMetadata) => {
         if (d.showLabels) {
           // Align with the top edge
-          return d.y - (d.height || 30) / 2;
+          return d.y - (d.height) / 2;
         } else {
           // Align with bounds if available, otherwise center
-          return d.bounds?.y || (d.y - (d.height || 30) / 2);
+          return d.bounds.y;
         }
       });
 
     // Update most specific type labels
-    this.container.selectAll('.mostSpecificTypeLabel')
-      .attr('x', (d: NodeWithMetadata) => d.x - (d.width || 60) / 2 + 5)
-      .attr('y', (d: NodeWithMetadata) => d.y - (d.height || 30) / 2 + 10)
+    this.svgNodes.select('mostSpecificTypeLabel')
+      .attr('x', (d: NodeWithMetadata) => d.x - (d.width) / 2 + 5)
+      .attr('y', (d: NodeWithMetadata) => d.y - (d.height) / 2 + 10)
       .raise();
 
     // Update main node labels with tspan positioning
-    this.container.selectAll('.node .label')
+    this.svgNodes.select('.label') // NOTE: Does this need `text.label`?
       .attr('x', (d: NodeWithMetadata) => d.x)
       .attr('y', (d: NodeWithMetadata) => d.y)
       .each((d: NodeWithMetadata, i: number, nodes: Array<NodeWithMetadata>) => {
@@ -867,8 +880,9 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       .raise();
 
     // Update link paths with advanced routing for group edges
-    this.container.selectAll('.link-group path')
+    this.svgLinkGroups.select('path')
       .attr('d', (d: EdgeWithMetadata) => {
+        // console.log('Routing link:', d.id, 'Source:', d.source, 'Target:', d.target);
         let source = d.source;
         let target = d.target;
 
@@ -925,7 +939,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       .raise();
 
     // Update link labels using path midpoint calculation
-    this.container.selectAll('.link-group .linklabel')
+    this.svgLinkGroups.select('linklabel')
       .attr('x', (d: EdgeWithMetadata) => {
         const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${d.id}"]`) as SVGPathElement;
         return pathElement ? this.calculateNewPosition(pathElement, 'x') : (d.source.x + d.target.x) / 2;
@@ -1240,6 +1254,10 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    * Routes all link paths with advanced curvature and collision handling.
    */
   private routeLinkPaths(): void {
+
+    // TODO: Should this use linkGroups?
+
+
     this.container.selectAll('.link-group path')
       .attr('d', (d: any) => {
         try {
@@ -1627,7 +1645,8 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       .attr('text-anchor', 'middle')
       .each((d: any, i: number, nodes: any[]) => {
         this.handleLabelOverlap(nodes[i] as SVGTextElement);
-      });
+      })
+      .raise();
       // Note: Removed .raise() for D3 compatibility
   }
 

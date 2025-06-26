@@ -1,6 +1,7 @@
 import { Node, Group, Link, Rectangle } from 'webcola';
 import { InstanceLayout, LayoutNode, LayoutEdge, LayoutConstraint, LayoutGroup, LeftConstraint, TopConstraint, AlignmentConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint } from '../../layout/interfaces';
 import { LayoutInstance } from '../../layout/layoutinstance';
+import * as dagre from 'dagre';
 
 /**
  * WebColaTranslator - Translates InstanceLayout to WebCola format
@@ -19,15 +20,16 @@ import { LayoutInstance } from '../../layout/layoutinstance';
  * positioning of nodes using separation and alignment constraints.
  */
 
-type NodeWithMetadata = Node & 
-  { id: string, 
-    attributes: Record<string, string[]>, 
-    color: string 
-    icon: string,
-    mostSpecificType: string,
-    showLabels: boolean,
-    innerBounds: Rectangle,
-  };
+type NodeWithMetadata = Node &
+{
+  id: string,
+  attributes: Record<string, string[]>,
+  color: string
+  icon: string,
+  mostSpecificType: string,
+  showLabels: boolean,
+  innerBounds: Rectangle,
+};
 
 type EdgeWithMetadata = Link<NodeWithMetadata> & {
   source: number,
@@ -88,7 +90,7 @@ export class WebColaLayout {
   private readonly DEFAULT_X: number;
   private readonly DEFAULT_Y: number;
 
-  private dagre_graph: Record<string, unknown> | null = null;
+  private dagre_graph: any;
 
   public FIG_WIDTH: number;
   public FIG_HEIGHT: number;
@@ -97,11 +99,34 @@ export class WebColaLayout {
 
     this.FIG_HEIGHT = fig_height;
     this.FIG_WIDTH = fig_width;
-    
+
     this.DEFAULT_X = fig_width / 2;
     this.DEFAULT_Y = fig_height / 2;
 
     this.instanceLayout = instanceLayout;
+
+    // Can I create a DAGRE graph here.
+    try {
+      const g = new dagre.graphlib.Graph({ multigraph: true });
+      g.setGraph({ nodesep: 50, ranksep: 100, rankdir: 'TB' });
+      g.setDefaultEdgeLabel(() => ({}));
+
+      instanceLayout.nodes.forEach(node => {
+        g.setNode(node.id, { width: node.width, height: node.height });
+      });
+
+      instanceLayout.edges.forEach(edge => {
+        g.setEdge(edge.source.id, edge.target.id);
+      });
+      dagre.layout(g);
+
+      this.dagre_graph = g;
+    }
+    catch (e) {
+      console.log(e);
+      this.dagre_graph = null;
+    }
+
 
 
     this.colaNodes = instanceLayout.nodes.map(node => this.toColaNode(node));
@@ -112,6 +137,10 @@ export class WebColaLayout {
 
 
     this.colaConstraints = instanceLayout.constraints.map(constraint => this.toColaConstraint(constraint));
+
+    if (this.colaConstraints.length === 0 && this.dagre_graph) {
+      this.colaNodes.forEach(node => node.fixed = 1);
+    }
 
 
   }
@@ -175,8 +204,7 @@ export class WebColaLayout {
 
     if (this.dagre_graph) {
       // Get the corresponding node in the DAGRE graph
-      const dagreGraph = this.dagre_graph as { node: (id: string) => { x: number; y: number } };
-      let dagre_node = dagreGraph.node(node.id);
+      let dagre_node = this.dagre_graph.node(node.id);
       x = dagre_node.x;
       y = dagre_node.y;
       //fixed = 1; // THIS REALLY IS NOT GOOD!
@@ -219,16 +247,16 @@ export class WebColaLayout {
 
     // Switch on the type of constraint
     if (isLeftConstraint(constraint)) {
-      
+
       // Get the two nodes that are being constrained
       let node1 = this.colaNodes[this.getNodeIndex(constraint.left.id)];
       let node2 = this.colaNodes[this.getNodeIndex(constraint.right.id)];
       //      // Set fixed to 0 here.
       node1.fixed = 0;
-      node2.fixed = 0;  
+      node2.fixed = 0;
 
       let distance = constraint.minDistance + ((node1.width || 100) / 2) + ((node2.width || 100) / 2);
-      
+
       return this.leftConstraint(this.getNodeIndex(constraint.left.id), this.getNodeIndex(constraint.right.id), distance);
     }
 
@@ -260,17 +288,17 @@ export class WebColaLayout {
         axis: constraint.axis,
         left: this.getNodeIndex(constraint.node1.id),
         right: this.getNodeIndex(constraint.node2.id),
-        gap: 0, 
+        gap: 0,
         'equality': true
       }
-      
+
       // FInd the two cola nodes that are being aligned
       let node1 = this.colaNodes[this.getNodeIndex(constraint.node1.id)];
       let node2 = this.colaNodes[this.getNodeIndex(constraint.node2.id)];
       //      // Set fixed to 0 here.
       node1.fixed = 0;
       node2.fixed = 0;
-      
+
       return alignmentConstraint;
 
     }
@@ -279,39 +307,39 @@ export class WebColaLayout {
 
 
   private determineGroups(groups: LayoutGroup[]): ColaGroupDefinition[] {
-  // Convert groups to the format expected by determineGroupsAndSubgroups
-  const groupsAsRecord: Record<string, string[]> = {};
-  groups.forEach(group => {
-    groupsAsRecord[group.name] = group.nodeIds;
-  });
+    // Convert groups to the format expected by determineGroupsAndSubgroups
+    const groupsAsRecord: Record<string, string[]> = {};
+    groups.forEach(group => {
+      groupsAsRecord[group.name] = group.nodeIds;
+    });
 
-  const groupsAndSubgroups = this.determineGroupsAndSubgroups(groupsAsRecord);
+    const groupsAndSubgroups = this.determineGroupsAndSubgroups(groupsAsRecord);
 
-  // Now we need to add metadata from the original LayoutGroup objects
-  const enrichedGroups = groupsAndSubgroups.map(colaGroup => {
-    const originalGroup = groups.find(g => g.name === colaGroup.name);
-    
-    if (originalGroup?.keyNodeId) {
-      const keyIndex = this.getNodeIndex(originalGroup.keyNodeId);
-      if (keyIndex !== -1) {
-        colaGroup.keyNode = keyIndex;
+    // Now we need to add metadata from the original LayoutGroup objects
+    const enrichedGroups = groupsAndSubgroups.map(colaGroup => {
+      const originalGroup = groups.find(g => g.name === colaGroup.name);
+
+      if (originalGroup?.keyNodeId) {
+        const keyIndex = this.getNodeIndex(originalGroup.keyNodeId);
+        if (keyIndex !== -1) {
+          colaGroup.keyNode = keyIndex;
+        }
       }
-    }
-    
-    if (originalGroup) {
-      colaGroup.id = originalGroup.name;
-      colaGroup.showLabel = originalGroup.showLabel;
-    }
-    
-    return colaGroup;
-  });
 
-  return enrichedGroups;
-}
+      if (originalGroup) {
+        colaGroup.id = originalGroup.name;
+        colaGroup.showLabel = originalGroup.showLabel;
+      }
+
+      return colaGroup;
+    });
+
+    return enrichedGroups;
+  }
 
 
-    // Returns true if group1 is a subgroup of group2
-    private isSubGroup(group1: string[], group2: string[]) {
+  // Returns true if group1 is a subgroup of group2
+  private isSubGroup(group1: string[], group2: string[]) {
     return group1.every((node) => group2.includes(node));
   }
 
@@ -355,10 +383,10 @@ export class WebColaLayout {
           return index !== -1 ? this.colaNodes[index] : null;
         })
         .filter((node): node is NodeWithMetadata => node !== null);
-    
+
       const name = key;
-      const padding = name.startsWith(disconnectedNodeMarker) 
-        ? disconnectedNodePadding 
+      const padding = name.startsWith(disconnectedNodeMarker)
+        ? disconnectedNodePadding
         : defaultPadding;
 
       return { leaves, padding, name };
@@ -392,11 +420,11 @@ export class WebColaLayout {
 
       // Remove leaves that are contained in subgroups from parent's direct leaves
       const subgroupLeafIds = new Set(
-        subgroupObjects.flatMap(subgroup => 
+        subgroupObjects.flatMap(subgroup =>
           subgroup.leaves?.map(leaf => leaf.id) || []
         )
       );
-    
+
       parentGroup.leaves = parentGroup.leaves?.filter(
         leaf => !subgroupLeafIds.has(leaf.id)
       ) || [];
@@ -430,7 +458,7 @@ export class WebColaLayout {
  * WebColaTranslator - Main translator class for converting InstanceLayout to WebCola format
  */
 export class WebColaTranslator {
-  
+
   /**
    * Translate an InstanceLayout to WebColaLayout
    * @param instanceLayout The layout to translate
