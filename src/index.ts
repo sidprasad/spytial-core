@@ -20,7 +20,7 @@ export { parseLayoutSpec } from './layout/layoutspec';
 export { setupLayout } from './layout';
 export { type default as IEvaluator } from './evaluators/interfaces';
 export { ForgeEvaluator, WrappedForgeEvaluator } from './evaluators/forge-evaluator';
-export { WebColaTranslator, DagreTranslator } from './translators';
+export { WebColaTranslator } from './translators';
 export { DotEvaluator } from './evaluators/dot-evalutator';
 
 // Browser-specific exports and initialization

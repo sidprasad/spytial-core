@@ -3,7 +3,7 @@
  */
 
 export { WebColaTranslator } from './webcola/webcolatranslator';
-export { DagreTranslator } from './dagretranslator';
+
 
 // WebColaCnDGraph web component for browser usage
 export { WebColaCnDGraph } from './webcola/webcola-cnd-graph';
