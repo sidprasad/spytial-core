@@ -35,7 +35,7 @@ export function generateEdgeId(
 function atomListToTuple(atoms: IAtom[]): ITuple {
 
     return {
-        atoms: atoms.map(a => a.id),
+        atoms: atoms.map(a => a.id), // name or ID?
         types: atoms.map(a => a.type)
     };
 }
@@ -57,11 +57,15 @@ export class RacketGDataInstance implements IDataInstance {
 
 
         // Atoms
-        this.atoms = datum.atoms.map(atom => ({
-            id: atom.id,
-            //label: atom.label,
-            type: atom.type
-        }));
+        this.atoms = datum.atoms.map(atom => 
+            {
+                return {
+                    id: atom.id, // Using label as ID. We could change this later.
+                    //name: atom.label,
+                    type: atom.type
+                };
+            });
+        
 
 
 
@@ -87,6 +91,7 @@ export class RacketGDataInstance implements IDataInstance {
         const relationMap = new Map<string, { label: string; tuples: ITuple[]; types: string[] }>();
 
         datum.relations.forEach(rel => {
+
             const srcAtom = this.atoms.find(atom => atom.id === rel.src);
             const dstAtom = this.atoms.find(atom => atom.id === rel.dst);
             if (!srcAtom || !dstAtom) {

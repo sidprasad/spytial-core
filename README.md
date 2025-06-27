@@ -198,3 +198,8 @@ MIT
 
 
 ** I think the IDataInstance bit is over engineered. Need to take a step back and think about it**.
+
+### TODO
+
+- Each IAtom, LAYOUTNODE needs a different ID and Name. 
+- The ID must be unique, the name need not.
