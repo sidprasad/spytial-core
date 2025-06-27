@@ -34,7 +34,8 @@ export class AlloyDataInstance implements IDataInstance {
       types: alloyType.types,
       atoms: alloyType.atoms.map((atom: AlloyAtom) => ({
         id: atom.id,
-        type: atom.type
+        type: atom.type,
+        name: atom.id // In Alloy, atoms are identified by their ID.
       })),
       isBuiltin: isBuiltin(alloyType)
     };
@@ -53,7 +54,8 @@ export class AlloyDataInstance implements IDataInstance {
       types: alloyType.types,
       atoms: alloyType.atoms.map((atom: AlloyAtom) => ({
         id: atom.id,
-        type: atom.type
+        type: atom.type,
+        name: atom.id // In Alloy, atoms are identified by their ID.
       })),
       isBuiltin: isBuiltin(alloyType)
     }));
@@ -69,7 +71,8 @@ export class AlloyDataInstance implements IDataInstance {
     
     return alloyAtoms.map((alloyAtom: AlloyAtom) => ({
       id: alloyAtom.id,
-      type: alloyAtom.type
+      type: alloyAtom.type,
+      name: alloyAtom.id // In Alloy, atoms are identified by their ID.
     }));
   }
 

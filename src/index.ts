@@ -13,6 +13,7 @@ export * as Translators from './translators';
 export * from './data-instance/interfaces';
 export { AlloyDataInstance } from './data-instance/alloy-data-instance';
 export { DotDataInstance } from './data-instance/dot/dot-data-instance';
+export { RacketGDataInstance } from './data-instance/racket/racket-g-data-instance';
 
 // Direct exports of key classes for convenience
 export { LayoutInstance } from './layout/layoutinstance';
@@ -22,6 +23,7 @@ export { type default as IEvaluator } from './evaluators/interfaces';
 export { ForgeEvaluator, WrappedForgeEvaluator } from './evaluators/forge-evaluator';
 export { WebColaTranslator } from './translators';
 export { DotEvaluator } from './evaluators/dot-evalutator';
+export { SimpleGraphQueryEvaluator } from "./evaluators/sgq-evaluator";
 
 // Browser-specific exports and initialization
 if (typeof window !== 'undefined') {

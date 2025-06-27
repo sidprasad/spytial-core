@@ -516,7 +516,7 @@ export class LayoutInstance {
         let layoutNodes: LayoutNode[] = g.nodes().map((nodeId) => {
 
             let color = nodeColorMap[nodeId] || "black";
-
+            
 
             let iconDetails = nodeIconMap[nodeId];
             let iconPath = iconDetails.path;
@@ -535,6 +535,7 @@ export class LayoutInstance {
 
             return {
                 id: nodeId,
+                name: nodeId, // TODO: Use atom name if available
                 color: color,
                 groups: nodeGroups,
                 attributes: nodeAttributes,

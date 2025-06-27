@@ -3,7 +3,9 @@
 import { Graph } from "graphlib";
 
 export interface IAtom  {
-  id: string;
+  
+  
+  id: string; // ID might have to be DIFFERENT FROM the NAME (these are the same in Alloy, but different elsewhere.)
   type: string;
 }
 

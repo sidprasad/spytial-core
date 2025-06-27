@@ -42,4 +42,4 @@ export class SimpleGraphQueryEvaluator implements IEvaluator {
 }
 
 
-export default SimpleGraphQueryEvaluator;
+//export default SimpleGraphQueryEvaluator;
