@@ -1,7 +1,7 @@
 import IEvaluator from "./interfaces";
-import { SimpleGraphQuery} from "simple-graph-query";
+import Evaluator from "simple-graph-query";
 
-import {EvaluationContext, IEvaluatorResult } from "./interfaces";
+import {EvaluationContext, EvaluatorConfig, IEvaluatorResult } from "./interfaces";
 /**
  * Evaluator is available as SimpleGraphQuery.default
  * 
@@ -12,16 +12,17 @@ import {EvaluationContext, IEvaluatorResult } from "./interfaces";
  * ```
  */
 export class SimpleGraphQueryEvaluator implements IEvaluator {
-  private context: EvaluationContext;
-  private impl: SimpleGraphQueryEvaluator;
+  private context: EvaluationContext | undefined;
+  private eval: Evaluator;
 
+  constructor() {
+    this.eval = new Evaluator();
+
+  }
 
   private ready: boolean = false;
 
   initialize(context: EvaluationContext): void {
-
-    this.impl = new SimpleGraphQueryEvaluatorImpl();
-
     this.context = context;
     this.ready = true;
   }
@@ -34,11 +35,11 @@ export class SimpleGraphQueryEvaluator implements IEvaluator {
     if (!this.isReady()) {
       throw new Error("Evaluator not initialized");
     }
-    // Placeholder for actual evaluation logic
-    const result: EvaluatorResult = {};
-    return new EvaluatorResultWrapper(result, expression);
+
+    const result : IEvaluatorResult= this.eval.evaluate(expression, config);
+    return result;
   }
 }
 
 
-export default SimpleGraphQuery;
+export default SimpleGraphQueryEvaluator;
