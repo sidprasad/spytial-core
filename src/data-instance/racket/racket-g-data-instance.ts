@@ -1,6 +1,12 @@
 import { Graph } from "graphlib";
 import { IAtom, IDataInstance, IRelation, ITuple, IType } from "../interfaces";
 
+/////// TODO: THis is still a work in progress.
+/// FOr example, lists are still being collapsed in places (id vs name/label, etc).
+
+
+
+
 /**
  * Atom structure as found in exampledatum.json
  */
