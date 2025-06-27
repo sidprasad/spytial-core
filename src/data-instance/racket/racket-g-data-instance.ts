@@ -163,6 +163,9 @@ export class RacketGDataInstance implements IDataInstance {
     /**
      * Apply projections to the data instance, returning a new instance with only the
      * atoms and relations that are in the given atomIds.
+     * 
+     * SidP: TODO: I'm not sure if this is the right interpretation of projections.
+     * I don't think its the same as Alloy projections.
      */
     applyProjections(atomIds: string[]): IDataInstance {
         // Create a Set for fast lookup
