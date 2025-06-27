@@ -16,6 +16,8 @@ export default [
         console: 'readonly',
         window: 'readonly',
         document: 'readonly',
+        d3: 'readonly',
+        cola: 'readonly',
       },
     },
     plugins: {
