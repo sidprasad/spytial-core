@@ -1,0 +1,291 @@
+{
+    "atoms": [
+        {
+            "id": "n0",
+            "label": "redblack",
+            "type": "redblack"
+        },
+        {
+            "id": "n1",
+            "label": "black",
+            "type": "symbol"
+        },
+        {
+            "id": "n2",
+            "label": "10",
+            "type": "number"
+        },
+        {
+            "id": "n3",
+            "label": "redblack",
+            "type": "redblack"
+        },
+        {
+            "id": "n4",
+            "label": "red",
+            "type": "symbol"
+        },
+        {
+            "id": "n5",
+            "label": "5",
+            "type": "number"
+        },
+        {
+            "id": "n6",
+            "label": "redblack",
+            "type": "redblack"
+        },
+        {
+            "id": "n7",
+            "label": "black",
+            "type": "symbol"
+        },
+        {
+            "id": "n8",
+            "label": "2",
+            "type": "number"
+        },
+        {
+            "id": "n9",
+            "label": "list",
+            "type": "list"
+        },
+        {
+            "id": "n10",
+            "label": "list",
+            "type": "list"
+        },
+        {
+            "id": "n11",
+            "label": "redblack",
+            "type": "redblack"
+        },
+        {
+            "id": "n12",
+            "label": "black",
+            "type": "symbol"
+        },
+        {
+            "id": "n13",
+            "label": "7",
+            "type": "number"
+        },
+        {
+            "id": "n14",
+            "label": "list",
+            "type": "list"
+        },
+        {
+            "id": "n15",
+            "label": "list",
+            "type": "list"
+        },
+        {
+            "id": "n16",
+            "label": "redblack",
+            "type": "redblack"
+        },
+        {
+            "id": "n17",
+            "label": "red",
+            "type": "symbol"
+        },
+        {
+            "id": "n18",
+            "label": "15",
+            "type": "number"
+        },
+        {
+            "id": "n19",
+            "label": "redblack",
+            "type": "redblack"
+        },
+        {
+            "id": "n20",
+            "label": "black",
+            "type": "symbol"
+        },
+        {
+            "id": "n21",
+            "label": "12",
+            "type": "number"
+        },
+        {
+            "id": "n22",
+            "label": "list",
+            "type": "list"
+        },
+        {
+            "id": "n23",
+            "label": "list",
+            "type": "list"
+        },
+        {
+            "id": "n24",
+            "label": "redblack",
+            "type": "redblack"
+        },
+        {
+            "id": "n25",
+            "label": "black",
+            "type": "symbol"
+        },
+        {
+            "id": "n26",
+            "label": "20",
+            "type": "number"
+        },
+        {
+            "id": "n27",
+            "label": "list",
+            "type": "list"
+        },
+        {
+            "id": "n28",
+            "label": "list",
+            "type": "list"
+        }
+    ],
+    "relations": [
+        {
+            "dst": "n1",
+            "label": "color",
+            "src": "n0"
+        },
+        {
+            "dst": "n2",
+            "label": "value",
+            "src": "n0"
+        },
+        {
+            "dst": "n4",
+            "label": "color",
+            "src": "n3"
+        },
+        {
+            "dst": "n5",
+            "label": "value",
+            "src": "n3"
+        },
+        {
+            "dst": "n7",
+            "label": "color",
+            "src": "n6"
+        },
+        {
+            "dst": "n8",
+            "label": "value",
+            "src": "n6"
+        },
+        {
+            "dst": "n9",
+            "label": "left",
+            "src": "n6"
+        },
+        {
+            "dst": "n10",
+            "label": "right",
+            "src": "n6"
+        },
+        {
+            "dst": "n6",
+            "label": "left",
+            "src": "n3"
+        },
+        {
+            "dst": "n12",
+            "label": "color",
+            "src": "n11"
+        },
+        {
+            "dst": "n13",
+            "label": "value",
+            "src": "n11"
+        },
+        {
+            "dst": "n14",
+            "label": "left",
+            "src": "n11"
+        },
+        {
+            "dst": "n15",
+            "label": "right",
+            "src": "n11"
+        },
+        {
+            "dst": "n11",
+            "label": "right",
+            "src": "n3"
+        },
+        {
+            "dst": "n3",
+            "label": "left",
+            "src": "n0"
+        },
+        {
+            "dst": "n17",
+            "label": "color",
+            "src": "n16"
+        },
+        {
+            "dst": "n18",
+            "label": "value",
+            "src": "n16"
+        },
+        {
+            "dst": "n20",
+            "label": "color",
+            "src": "n19"
+        },
+        {
+            "dst": "n21",
+            "label": "value",
+            "src": "n19"
+        },
+        {
+            "dst": "n22",
+            "label": "left",
+            "src": "n19"
+        },
+        {
+            "dst": "n23",
+            "label": "right",
+            "src": "n19"
+        },
+        {
+            "dst": "n19",
+            "label": "left",
+            "src": "n16"
+        },
+        {
+            "dst": "n25",
+            "label": "color",
+            "src": "n24"
+        },
+        {
+            "dst": "n26",
+            "label": "value",
+            "src": "n24"
+        },
+        {
+            "dst": "n27",
+            "label": "left",
+            "src": "n24"
+        },
+        {
+            "dst": "n28",
+            "label": "right",
+            "src": "n24"
+        },
+        {
+            "dst": "n24",
+            "label": "right",
+            "src": "n16"
+        },
+        {
+            "dst": "n16",
+            "label": "right",
+            "src": "n0"
+        }
+    ]
+}
