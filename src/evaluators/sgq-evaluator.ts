@@ -13,7 +13,7 @@ import {EvaluationContext, IEvaluatorResult } from "./interfaces";
  */
 export class SimpleGraphQueryEvaluator implements IEvaluator {
   private context: EvaluationContext;
-  private impl: SimpleGraphQueryEvaluatorImpl;
+  private impl: SimpleGraphQueryEvaluator;
 
 
   private ready: boolean = false;
