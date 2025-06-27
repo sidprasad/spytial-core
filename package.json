@@ -2,34 +2,17 @@
   "name": "cnd-core",
   "version": "1.0.0",
   "description": "A fully client-side application for CnD.",
-  "main": "./dist/index.js",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/browser/cnd-core-complete.global.js",
+  "types": "./dist/browser/cnd-core-complete.global.d.ts",
+  "files": [
+    "dist/browser"
+  ],
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
-    },
-    "./alloy-graph": {
-      "types": "./dist/alloy-graph.d.ts",
-      "import": "./dist/alloy-graph.mjs",
-      "require": "./dist/alloy-graph.js"
-    },
-    "./alloy-instance": {
-      "types": "./dist/alloy-instance.d.ts",
-      "import": "./dist/alloy-instance.mjs",
-      "require": "./dist/alloy-instance.js"
-    },
-    "./layout": {
-      "types": "./dist/layout.d.ts",
-      "import": "./dist/layout.mjs",
-      "require": "./dist/layout.js"
+      "import": "./dist/browser/cnd-core-complete.global.js",
+      "require": "./dist/browser/cnd-core-complete.global.js"
     }
   },
-  "files": [
-    "dist"
-  ],
   "scripts": {
     "build": "tsup",
     "build:browser": "tsup --config tsup.browser.config.ts",
@@ -52,7 +35,7 @@
     "client-side",
     "npm"
   ],
-  "author": "",
+  "author": "Siddhartha Prasad",
   "license": "MIT",
   "engines": {
     "node": ">=16"
