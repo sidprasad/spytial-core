@@ -21,6 +21,16 @@ interface RacketGRelation {
 
 
 
+export function generateEdgeId(
+    relation: IRelation,
+    tuple: ITuple
+): string {
+
+    const relationId = relation.id;
+    const atoms = tuple.atoms;
+    return `${relationId}:${atoms.join('->')}`;
+}
+
 
 function atomListToTuple(atoms: IAtom[]): ITuple {
 
@@ -37,7 +47,6 @@ export class RacketGDataInstance implements IDataInstance {
     private readonly atoms: IAtom[];
     private readonly types: IType[];
     private readonly relations: IRelation[];
-    private readonly graph: Graph;
 
     /**
      * Construct from a datum in the exampledatum.json format.
@@ -110,14 +119,6 @@ export class RacketGDataInstance implements IDataInstance {
 
 
 
-
-
-        // Optionally, build a graphlib Graph for generateGraph
-        this.graph = new Graph();
-        this.atoms.forEach(atom => this.graph.setNode(atom.id, atom));
-        datum.relations.forEach(rel => {
-            this.graph.setEdge(rel.src, rel.dst, rel.label);
-        });
     }
 
     /**
@@ -168,90 +169,12 @@ export class RacketGDataInstance implements IDataInstance {
      * I don't think its the same as Alloy projections.
      */
     applyProjections(atomIds: string[]): IDataInstance {
-        // Create a Set for fast lookup
-        const atomIdSet = new Set(atomIds);
 
-        // Filter atoms
-        const projectedAtoms = this.atoms.filter(atom => atomIdSet.has(atom.id));
+        // TODO: NO PROJECTION FOR NOW.
 
-        // Filter relations: only keep tuples where all atoms are in the projected set
-        const projectedRelations = this.relations
-            .map(rel => {
-                const filteredTuples = rel.tuples.filter(tuple =>
-                    tuple.atoms.every(atomId => atomIdSet.has(atomId))
-                );
-                return { ...rel, tuples: filteredTuples };
-            })
-            .filter(rel => rel.tuples.length > 0);
+        return this; // No projection applied, return the original instance
 
-        // Filter types: only include types with at least one atom in the projection
-        const projectedTypes = this.types
-            .map(type => {
-                const filteredAtoms = type.atoms.filter(atom => atomIdSet.has(atom.id));
-                return { ...type, atoms: filteredAtoms };
-            })
-            .filter(type => type.atoms.length > 0);
 
-        // Build a new graph with only projected atoms and edges between them
-        const projectedGraph = new Graph();
-        projectedAtoms.forEach(atom => projectedGraph.setNode(atom.id, atom));
-        projectedRelations.forEach(rel => {
-            rel.tuples.forEach(tuple => {
-                if (tuple.atoms.length === 2) {
-                    projectedGraph.setEdge(tuple.atoms[0], tuple.atoms[1], rel.name);
-                }
-            });
-        });
-
-        // Return a new instance
-        const projectedDatum = {
-            atoms: projectedAtoms,
-            relations: []
-        };
-        // Reconstruct relations in the original input format for the constructor
-        projectedRelations.forEach(rel => {
-            rel.tuples.forEach(tuple => {
-                if (tuple.atoms.length === 2) {
-                    projectedDatum.relations.push({
-                        src: tuple.atoms[0],
-                        dst: tuple.atoms[1],
-                        label: rel.name
-                    });
-                }
-            });
-        });
-
-        return new RacketGDataInstance(projectedDatum);
-    }
-
-    /**
-     * Utility to deep copy a graphlib Graph.
-     * @param source - The source Graph to copy
-     * @returns A new deep-copied Graph
-     */
-    private deepCopyGraph(source: Graph): Graph {
-        const copy = new Graph({ directed: source.isDirected(), multigraph: source.isMultigraph(), compound: source.isCompound() });
-        source.nodes().forEach(node => {
-            copy.setNode(node, JSON.parse(JSON.stringify(source.node(node))));
-        });
-        source.edges().forEach(edge => {
-            copy.setEdge(
-                edge.v,
-                edge.w,
-                JSON.parse(JSON.stringify(source.edge(edge))),
-                edge.name
-            );
-        });
-        // Copy parent relationships if compound
-        if (source.isCompound()) {
-            source.nodes().forEach(node => {
-                const parent = source.parent(node);
-                if (parent !== undefined) {
-                    copy.setParent(node, parent);
-                }
-            });
-        }
-        return copy;
     }
 
     /**
@@ -259,20 +182,63 @@ export class RacketGDataInstance implements IDataInstance {
      */
     generateGraph(hideDisconnected: boolean, hideDisconnectedBuiltIns: boolean): Graph {
 
-        // Deep copy the underlying graph
-        let g = this.deepCopyGraph(this.graph);
+        const graph = new Graph({ directed: true, multigraph: true, compound: true });
+
+        this.atoms.forEach(atom => {
+            const nodeId = atom.id;
+            // I *think* we want to have the same values
+            // to be the same node. We can decide later if
+            // this is indeed what we want or we want 
+            // ..replication...
+            graph.setNode(nodeId, atom.id);
+
+        });
 
 
-        g.nodes().forEach(node => {
-            let outEdges = g.outEdges(node) || [];
-            let inEdges = g.inEdges(node) || [];
+
+        this.relations.forEach(relation => {
+            // You can add custom logic for attributes, arity, etc.
+            const isAttribute = false; // Implement your own attribute detection if needed
+
+            if (!isAttribute) {
+                relation.tuples.forEach(tuple => {
+                    const edgeId = generateEdgeId(relation, tuple);
+                    const atoms = tuple.atoms;
+
+
+                    const sourceIndex = 0;
+                    const targetIndex = atoms.length - 1;
+
+                    const source = atoms[sourceIndex];
+                    const target = atoms[targetIndex];
+
+                    if (source && target) {
+                        const betweenTuples = atoms.slice(1, -1).join(',');
+                        const tupleSuffix = betweenTuples.length > 0 ? `[${betweenTuples}]` : '';
+                        const label = relation.name + tupleSuffix;
+
+                        const source_node_id = source;
+                        const target_node_id = target;
+
+                        graph.setEdge(source_node_id, target_node_id, label, edgeId);
+                    }
+                });
+            }
+        });
+
+
+
+
+        graph.nodes().forEach(node => {
+            let outEdges = graph.outEdges(node) || [];
+            let inEdges = graph.inEdges(node) || [];
             if (outEdges.length === 0 && inEdges.length === 0) {
                 const isBuiltin = this.getAtomType(node).isBuiltin;
                 if (hideDisconnected || (isBuiltin && hideDisconnectedBuiltIns)) {
-                    g.removeNode(node);
+                    graph.removeNode(node);
                 }
             }
         });
-        return g;
+        return graph; // Return the graph as is for now, no filtering applied
     }
 }

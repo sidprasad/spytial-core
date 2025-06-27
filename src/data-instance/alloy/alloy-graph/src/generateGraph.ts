@@ -82,7 +82,7 @@ export function generateGraph(
 
 
   getInstanceAtoms(instance).forEach((atom) => {
-    const nodeId = generateNodeId(atom);
+    const nodeId = (atom);
 
     if (nodeIds.has(nodeId))
       // Add node to graph
