@@ -1,0 +1,9 @@
+constraints:
+  - orientation:
+      selector: cond
+      directions:
+        - directlyAbove
+directives:
+  - attribute:
+      field: key
+  - flag: hideDisconnectedBuiltIns
