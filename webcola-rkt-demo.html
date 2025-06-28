@@ -208,7 +208,7 @@
 
                 // Step 3: Create and initialize SimpleGraphQueryEvaluator
                 updateStatus('Creating SimpleGraphQueryEvaluator...', 'info');
-                const evaluator = new CndCore.SimpleGraphQueryEvaluator();
+                const evaluator = new CndCore.Evaluators.SGraphQueryEvaluator();
                 evaluator.initialize(evaluationContext);
 
                 // Step 4: Parse layout specification

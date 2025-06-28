@@ -195,7 +195,7 @@ export class SGQEvaluatorResult implements IEvaluatorResult {
  */
 export class SGraphQueryEvaluator implements IEvaluator {
   private context: EvaluationContext | undefined;
-  private eval: SimpleGraphQueryEvaluator;
+  private eval!: SimpleGraphQueryEvaluator;
 
   constructor() {
    
