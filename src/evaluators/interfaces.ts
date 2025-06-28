@@ -1,3 +1,4 @@
+import { IDataInstance } from "../data-instance/interfaces";
 
 /**
  * Result types for evaluator operations
@@ -34,7 +35,7 @@ export interface EvaluatorConfig {
  */
 export interface EvaluationContext {
   /** Raw data source (XML, JSON, etc.) */
-  sourceData: string | Record<string, unknown>;
+  sourceData: string | Record<string, unknown> | IDataInstance;
   /** Parsed/processed data structure */
   processedData?: Record<string, unknown>;
   /** Source code associated with the data (if applicable) */

@@ -171,17 +171,44 @@
                 const dataInstance = new CndCore.RacketGDataInstance(datum);
                 console.log('Created RacketGDataInstance:', dataInstance);
 
+
+                // Processed data needs to look like:
+
+    //   const graph = {
+    //     nodes: [
+    //       { id: 'a', type: 'Person' },
+    //       { id: 'b', type: 'Person' },
+    //       { id: 'c', type: 'Person' }
+    //     ],
+    //     edges: [
+    //       { from: 'a', to: 'b', label: 'knows' },
+    //       { from: 'b', to: 'c', label: 'knows' }
+    //     ]
+    //   };
+                let processedData = {
+                    nodes: datum.atoms.map(atom => ({
+                        id: atom.id,
+                        type: atom.type,
+                        
+                    })),
+                    edges: datum.relations.map(relation => ({
+                        from: relation.src,
+                        to: relation.dst,
+                        label: relation.label || '?' // Default label if none provided
+                    }))
+                };
+
                 // Step 2: Create evaluation context
                 updateStatus('Creating evaluation context...', 'info');
                 const evaluationContext = {
-                    dataInstance,
-                    sourceData: rktJson,
-                    processedData: dataInstance
+                    
+                    sourceData: dataInstance,
+                    processedData: processedData
                 };
 
                 // Step 3: Create and initialize SimpleGraphQueryEvaluator
                 updateStatus('Creating SimpleGraphQueryEvaluator...', 'info');
-                const evaluator = new CndCore.SimpleGraphQueryEvaluator();
+                const evaluator = new CndCore.Evaluators.SGraphQueryEvaluator();
                 evaluator.initialize(evaluationContext);
 
                 // Step 4: Parse layout specification

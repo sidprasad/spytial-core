@@ -1,0 +1,111 @@
+{
+    "atoms": [
+        {
+            "id": "e-if$0",
+            "label": "e-if$0",
+            "type": "e-if"
+        },
+        {
+            "id": "e-bool$1",
+            "label": "e-bool$1",
+            "type": "e-bool"
+        },
+        {
+            "id": "unknown$2",
+            "label": "#t",
+            "type": "boolean"
+        },
+        {
+            "id": "e-num$3",
+            "label": "e-num$3",
+            "type": "e-num"
+        },
+        {
+            "id": 42,
+            "label": 42,
+            "type": "number"
+        },
+        {
+            "id": "e-op$5",
+            "label": "e-op$5",
+            "type": "e-op"
+        },
+        {
+            "id": "+",
+            "label": "+",
+            "type": "symbol"
+        },
+        {
+            "id": "e-num$7",
+            "label": "e-num$7",
+            "type": "e-num"
+        },
+        {
+            "id": 1,
+            "label": 1,
+            "type": "number"
+        },
+        {
+            "id": "e-num$9",
+            "label": "e-num$9",
+            "type": "e-num"
+        },
+        {
+            "id": 2,
+            "label": 2,
+            "type": "number"
+        }
+    ],
+    "relations": [
+        {
+            "dst": "unknown$2",
+            "label": "value",
+            "src": "e-bool$1"
+        },
+        {
+            "dst": "e-bool$1",
+            "label": "cond",
+            "src": "e-if$0"
+        },
+        {
+            "dst": 42,
+            "label": "value",
+            "src": "e-num$3"
+        },
+        {
+            "dst": "e-num$3",
+            "label": "consq",
+            "src": "e-if$0"
+        },
+        {
+            "dst": "+",
+            "label": "op",
+            "src": "e-op$5"
+        },
+        {
+            "dst": 1,
+            "label": "value",
+            "src": "e-num$7"
+        },
+        {
+            "dst": "e-num$7",
+            "label": "left",
+            "src": "e-op$5"
+        },
+        {
+            "dst": 2,
+            "label": "value",
+            "src": "e-num$9"
+        },
+        {
+            "dst": "e-num$9",
+            "label": "right",
+            "src": "e-op$5"
+        },
+        {
+            "dst": "e-op$5",
+            "label": "altern",
+            "src": "e-if$0"
+        }
+    ]
+}

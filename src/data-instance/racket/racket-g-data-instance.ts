@@ -66,7 +66,7 @@ export class RacketGDataInstance implements IDataInstance {
         this.atoms = datum.atoms.map(atom => 
             {
                 return {
-                    id: atom.id, // Using label as ID. We could change this later.
+                    id: String(atom.id), // Using label as ID. We could change this later.
                     //name: atom.label,
                     type: atom.type
                 };
@@ -98,8 +98,12 @@ export class RacketGDataInstance implements IDataInstance {
 
         datum.relations.forEach(rel => {
 
-            const srcAtom = this.atoms.find(atom => atom.id === rel.src);
-            const dstAtom = this.atoms.find(atom => atom.id === rel.dst);
+            const src = String(rel.src);
+            const dst = String(rel.dst);
+
+
+            const srcAtom = this.atoms.find(atom => atom.id === src);
+            const dstAtom = this.atoms.find(atom => atom.id === dst);
             if (!srcAtom || !dstAtom) {
                 throw new Error(`Relation references non-existent atoms: ${rel.src} or ${rel.dst}`);
             }
@@ -252,4 +256,6 @@ export class RacketGDataInstance implements IDataInstance {
         });
         return graph; // Return the graph as is for now, no filtering applied
     }
+
+
 }
