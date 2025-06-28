@@ -5,5 +5,5 @@ constraints:
         - directlyAbove
 directives:
   - attribute:
-      field: key
+      field: value
   - flag: hideDisconnectedBuiltIns
