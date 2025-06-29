@@ -27,7 +27,9 @@ export default defineConfig({
     '@xmldom/xmldom',
     'forge-expr-evaluator',
     'd3',
-    'webcola'
+    'webcola',
+    'dagre',
+    'simple-graph-query'
   ],
   // Define global variables for browser environment
   define: {
