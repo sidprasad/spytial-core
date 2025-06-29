@@ -1,6 +1,15 @@
 # cnd-core
 
-A TypeScript library for client-side applications.
+A fully-typed, tree-shakable TypeScript imp-lementation of `Cope and Drag`.
+Supportsmultiple languages (e.g. Alloy, Forge, DOT, Racket), 
+with pluggable evaluators and layouts for extensibility.
+
+---
+
+## Features
+- **Client-side only**: No Node.js dependencies and tree-shakable.
+- **Custom Elements** for easy embedding in web apps
+---
 
 ## Installation
 
@@ -8,178 +17,89 @@ A TypeScript library for client-side applications.
 npm install cnd-core
 ```
 
+---
+
 ## Usage
 
-### Basic Usage
+### Importing
 
 ```typescript
-import { CndCore, createCndCore } from 'cnd-core';
+// Import the main API and types
+import { AlloyDataInstance, ForgeEvaluator, LayoutInstance, parseAlloyXML, parseLayoutSpec } from 'cnd-core';
 
-// Create an instance
-const core = new CndCore({
-  debug: true,
-  version: '1.0.0'
-});
-
-// Initialize
-core.init();
-
-// Or use the factory function
-const core2 = createCndCore({ debug: false });
+// Or import only what you need for tree-shaking
+import { RacketGDataInstance } from 'cnd-core/racket';
+import { SimpleGraphQueryEvaluator } from 'cnd-core/evaluators';
 ```
 
-### Sub-module Usage
+---
 
-The library provides specialized sub-modules that can be imported individually for better tree-shaking:
-
-#### Alloy Graph Module
+### Example: Forge/Alloy XML → Layout → Render
 
 ```typescript
-// Import the entire sub-module
-import * as AlloyGraph from 'cnd-core/alloy-graph';
+import { AlloyDataInstance, ForgeEvaluator, LayoutInstance, parseAlloyXML, parseLayoutSpec } from 'cnd-core';
 
-// Or import specific functionality
-import { AlloyGraph, createAlloyGraph } from 'cnd-core/alloy-graph';
+// Parse Alloy XML
+const alloyDatum = parseAlloyXML(alloyXmlString);
+const dataInstance = new AlloyDataInstance(alloyDatum.instances[0]);
 
-const graph = createAlloyGraph({ directed: true });
-graph.addNode({ id: 'node1', label: 'First Node' });
-graph.addNode({ id: 'node2', label: 'Second Node' });
-graph.addEdge({ id: 'edge1', source: 'node1', target: 'node2' });
+// Create evaluator
+const evaluator = new ForgeEvaluator();
+evaluator.initialize({ sourceData: alloyXmlString });
+
+// Parse CnD Layout Spec
+const layoutSpec = parseLayoutSpec(layoutSpecString);
+
+// Create layout instance and generate layout
+const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
+const { layout } = layoutInstance.generateLayout(dataInstance, {});
+
+// Use layout with your renderer or <webcola-cnd-graph> custom element
 ```
 
-#### Alloy Instance Module
+---
+
+### Example: Racket JSON → Layout
 
 ```typescript
-// Import the entire sub-module
-import * as AlloyInstance from 'cnd-core/alloy-instance';
+import { RacketGDataInstance, SimpleGraphQueryEvaluator, LayoutInstance, parseLayoutSpec } from 'cnd-core';
 
-// Or import specific functionality
-import { CndAlloyInstance, createCndAlloyInstance } from 'cnd-core/alloy-instance';
+// Parse Racket JSON
+const datum = JSON.parse(racketJsonString);
+const dataInstance = new RacketGDataInstance(datum);
 
-const instance = createCndAlloyInstance({ validateTuples: true });
-instance.addSignature({
-  name: 'Person',
-  atoms: [{ id: 'Person1', signature: 'Person' }]
-});
+// Create evaluator
+const evaluator = new SimpleGraphQueryEvaluator();
+evaluator.initialize({ dataInstance });
+
+// Parse layout spec
+const layoutSpec = parseLayoutSpec(layoutSpecString);
+
+// Create layout instance and generate layout
+const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
+const { layout } = layoutInstance.generateLayout(dataInstance, {});
 ```
 
-### Tree-shaking Benefits
+---
 
-When you import only what you need, bundlers can eliminate unused code:
+### Web Component Usage
 
-```typescript
-// Only imports graph functionality
-import { createAlloyGraph } from 'cnd-core/alloy-graph';
-
-// Only imports instance functionality  
-import { createCndAlloyInstance } from 'cnd-core/alloy-instance';
+```html
+<webcola-cnd-graph id="graph" width="800" height="600"></webcola-cnd-graph>
+<script>
+  // Assuming CndCore is loaded globally
+  const graphElement = document.getElementById('graph');
+  graphElement.renderLayout(layout); // layout from the pipeline above
+</script>
 ```
 
-### Configuration
-
-```typescript
-import { CndCore, CoreConfig } from 'cnd-core';
-
-const config: CoreConfig = {
-  debug: true,
-  version: '1.0.0'
-};
-
-const core = new CndCore(config);
-
-// Update configuration
-core.updateConfig({ debug: false });
-
-// Get current configuration
-const currentConfig = core.getConfig();
-```
-
-## API Reference
-
-### `CndCore`
-
-The main class for the library.
-
-#### Constructor
-
-```typescript
-new CndCore(config?: CoreConfig)
-```
-
-#### Methods
-
-- `init(): void` - Initialize the core library
-- `getConfig(): CoreConfig` - Get the current configuration
-- `updateConfig(newConfig: Partial<CoreConfig>): void` - Update the configuration
-
-### `createCndCore`
-
-Factory function to create a CndCore instance.
-
-```typescript
-createCndCore(config?: CoreConfig): CndCore
-```
-
-### `CoreConfig`
-
-Configuration interface for the library.
-
-```typescript
-interface CoreConfig {
-  debug?: boolean;
-  version?: string;
-}
-```
-
-## Development
-
-### Prerequisites
-
-- Node.js >= 16
-- npm or yarn
-
-### Setup
-
-```bash
-# Install dependencies
-npm install
-
-# Build the library
-npm run build
-
-# Run tests
-npm test
-
-# Run tests with UI
-npm run test:ui
-
-# Development mode (watch)
-npm run dev
-```
-
-### Scripts
-
-- `npm run build` - Build the library for production
-- `npm run dev` - Build in watch mode for development
-- `npm test` - Run tests
-- `npm run test:ui` - Run tests with Vitest UI
-- `npm run test:run` - Run tests once
-- `npm run lint` - Lint the code
-- `npm run lint:fix` - Fix linting issues
-- `npm run format` - Format code with Prettier
-- `npm run typecheck` - Type check without emitting
-- `npm run clean` - Clean build directory
-
-## Publishing
-
-```bash
-npm run prepublishOnly
-npm publish
-```
+---
 
 ## License
 
 MIT
+
+---
 
 ## Contributing
 
@@ -189,17 +109,4 @@ MIT
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-
-### TODO:
-
-- ERROR handling
-- Other backends (SMTLIB, DOT, PYRET, ...)
-- What about other ...
-
-
-** I think the IDataInstance bit is over engineered. Need to take a step back and think about it**.
-
-### TODO
-
-- Each IAtom, LAYOUTNODE needs a different ID and Name. 
-- The ID must be unique, the name need not.
+---

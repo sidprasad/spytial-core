@@ -1,6 +1,6 @@
 {
   "name": "cnd-core",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A fully client-side application for CnD.",
   "main": "./dist/browser/cnd-core-complete.global.js",
   "types": "./dist/browser/cnd-core-complete.global.d.ts",
@@ -16,7 +16,7 @@
   "scripts": {
     "build": "tsup",
     "build:browser": "tsup --config tsup.browser.config.ts",
-    "build:all": "npm run build && npm run build:browser",
+    "build:all": "npm run build:browser",
     "dev": "tsup --watch",
     "test": "vitest",
     "test:ui": "vitest --ui",
@@ -26,7 +26,7 @@
     "format": "prettier --write src/**/*.{ts,tsx,json,md}",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
-    "prepublishOnly": "npm run clean && npm run build:all",
+    "prepublishOnly": "npm run clean && npm run build:browser",
     "serve": "python3 -m http.server 8080"
   },
   "keywords": [
@@ -42,12 +42,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yourusername/cnd-core.git"
+    "url": "git+https://github.com/sidprasad/cnd-core.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/cnd-core/issues"
+    "url": "https://github.com/sidprasad/cnd-core/issues"
   },
-  "homepage": "https://github.com/yourusername/cnd-core#readme",
+  "homepage": "https://github.com/sidprasad/cnd-core#readme",
   "devDependencies": {
     "@types/chroma-js": "^3.1.1",
     "@types/dagre": "^0.7.52",
