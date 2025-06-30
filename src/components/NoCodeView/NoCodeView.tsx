@@ -6,6 +6,24 @@ import jsyaml from "js-yaml";
 
 import "./NoCodeView.css";
 
+// Utility function to generate unique IDs for constraints
+export function generateId(): string {
+    // Check if Web Crypto API is available (modern browsers)
+    if (typeof window !== 'undefined' && window.crypto && window.crypto.randomUUID) {
+        // Use native crypto.randomUUID() for maximum uniqueness
+        return window.crypto.randomUUID();
+    }
+
+    console.error("Web Crypto API not available, falling back to Math.random for ID generation");
+    
+    // Final fallback for older environments
+    const timestamp = Date.now().toString(36);
+    const randomPart = Math.random().toString(36).substring(2, 15);
+    const extraRandom = Math.random().toString(36).substring(2, 15);
+
+    return `${timestamp}-${randomPart}-${extraRandom}`;
+};
+
 // TODO: Add unit tests for this function
 // Specifically for the Flag Selector
 
@@ -86,6 +104,7 @@ export function parseLayoutSpecToData(yamlString: string): {
 
             // Return structured constraint data
             return {
+                id: generateId(),
                 type,
                 params
             } as ConstraintData;
@@ -109,6 +128,7 @@ export function parseLayoutSpecToData(yamlString: string): {
 
             // Return structured directive data
             return {
+                id: generateId(),
                 type,
                 params
             } as DirectiveData;
@@ -141,11 +161,6 @@ const NoCodeView = ({
     directives,
     setDirectives,
 }: NoCodeViewProps) => {
-
-    // Utility function to generate simple unique IDs for constraints
-    const generateId = () => {
-        return Date.now().toString();
-    }
 
     const addConstraint = () => {
         const newConstraint: ConstraintData = {
