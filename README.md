@@ -1,7 +1,7 @@
 # cnd-core
 
-A fully-typed, tree-shakable TypeScript imp-lementation of `Cope and Drag`.
-Supportsmultiple languages (e.g. Alloy, Forge, DOT, Racket), 
+A fully-typed, tree-shakable TypeScript implementation of `Cope and Drag`.
+Supports multiple languages (e.g. Alloy, Forge, DOT, Racket), 
 with pluggable evaluators and layouts for extensibility.
 
 ---
@@ -9,12 +9,35 @@ with pluggable evaluators and layouts for extensibility.
 ## Features
 - **Client-side only**: No Node.js dependencies and tree-shakable.
 - **Custom Elements** for easy embedding in web apps
+
 ---
 
 ## Installation
 
 ```bash
 npm install cnd-core
+```
+
+- [View on npm](https://www.npmjs.com/package/cnd-core)
+
+---
+
+## CDN
+
+You can use the browser bundle directly from a CDN:
+
+- **jsDelivr:**  
+  [`https://cdn.jsdelivr.net/npm/cnd-core/dist/browser/cnd-core-complete.global.js`](https://cdn.jsdelivr.net/npm/cnd-core/dist/browser/cnd-core-complete.global.js)
+- **unpkg:**  
+  [`https://unpkg.com/cnd-core/dist/browser/cnd-core-complete.global.js`](https://unpkg.com/cnd-core/dist/browser/cnd-core-complete.global.js)
+
+**Example usage:**
+```html
+<script src="https://cdn.jsdelivr.net/npm/cnd-core/dist/browser/cnd-core-complete.global.js"></script>
+<script>
+  // CndCore is now available as a global variable
+  // Example: const evaluator = new CndCore.SimpleGraphQueryEvaluator();
+</script>
 ```
 
 ---
