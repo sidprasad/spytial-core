@@ -191,8 +191,8 @@ export function parseLayoutSpecToData(yamlString: string): {
     }
 
     return {
-        constraints: yamlConstraints,
-        directives: yamlDirectives
+        constraints,
+        directives
     };
 }
 
