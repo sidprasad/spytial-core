@@ -1,0 +1,278 @@
+/* CND Layout Interface Component Styles */
+
+/* Main Container */
+.container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 200px;
+}
+
+.container.disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Header Section */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.mainLabel {
+  font-weight: bold;
+  margin-bottom: 0;
+  color: #333;
+  font-size: 14px;
+}
+
+/* Toggle Switch Container */
+.toggleContainer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  user-select: none;
+}
+
+.toggleLabel {
+  font-size: 12px;
+  color: #666;
+  font-weight: 500;
+  transition: color 0.2s ease;
+  white-space: nowrap;
+}
+
+.toggleLabel.active {
+  color: #007acc;
+  font-weight: 600;
+}
+
+/* iOS-style Toggle Switch */
+.toggle {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 24px;
+  cursor: pointer;
+}
+
+.toggleInput {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.toggleSlider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  border-radius: 24px;
+  transition: all 0.3s ease;
+  border: 1px solid #bbb;
+}
+
+.toggleSlider::before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.toggleInput:checked + .toggleSlider {
+  background-color: #007acc;
+  border-color: #007acc;
+}
+
+.toggleInput:checked + .toggleSlider::before {
+  transform: translateX(26px);
+}
+
+.toggleInput:focus + .toggleSlider {
+  box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.3);
+  outline: none;
+}
+
+.toggleInput:disabled + .toggleSlider {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Content Area */
+.content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 200px;
+}
+
+/* Code View Styles */
+.codeView {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.textarea {
+  width: 100%;
+  min-height: 200px;
+  font-family: 'Courier New', Monaco, 'Lucida Console', monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  resize: vertical;
+  box-sizing: border-box;
+  background-color: #fafafa;
+  color: #333;
+  flex: 1;
+}
+
+.textarea:focus {
+  outline: none;
+  border-color: #007acc;
+  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+  background-color: #fff;
+}
+
+.textarea:disabled {
+  background-color: #f5f5f5;
+  color: #999;
+  cursor: not-allowed;
+}
+
+.helpText {
+  font-size: 11px;
+  color: #666;
+  margin-top: 6px;
+  font-style: italic;
+}
+
+/* No Code View Styles */
+.noCodeView {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed #ddd;
+  border-radius: 8px;
+  background-color: #fafafa;
+  min-height: 300px;
+  padding: 20px;
+}
+
+/* Placeholder Styles */
+.placeholder {
+  text-align: center;
+  max-width: 400px;
+  color: #666;
+}
+
+.placeholderIcon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.7;
+}
+
+.placeholderTitle {
+  font-size: 20px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 12px;
+  margin-top: 0;
+}
+
+.placeholderText {
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 20px;
+  color: #666;
+}
+
+.placeholderFeatures {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+.feature {
+  font-size: 12px;
+  padding: 6px 12px;
+  background-color: #e8f4fd;
+  color: #007acc;
+  border-radius: 16px;
+  font-weight: 500;
+  border: 1px solid #cce7f7;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .toggleContainer {
+    align-self: flex-end;
+  }
+  
+  .placeholderFeatures {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .toggleContainer {
+    gap: 8px;
+  }
+  
+  .toggleLabel {
+    font-size: 11px;
+  }
+  
+  .toggle {
+    width: 40px;
+    height: 20px;
+  }
+  
+  .toggleSlider::before {
+    height: 14px;
+    width: 14px;
+    left: 2px;
+    bottom: 2px;
+  }
+  
+  .toggleInput:checked + .toggleSlider::before {
+    transform: translateX(20px);
+  }
+  
+  .textarea {
+    font-size: 11px;
+  }
+  
+  .placeholderIcon {
+    font-size: 36px;
+  }
+  
+  .placeholderTitle {
+    font-size: 18px;
+  }
+}
