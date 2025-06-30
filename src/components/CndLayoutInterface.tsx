@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
-import styles from './CndLayoutInterface.module.css';
+import './CndLayoutInterface.css';
+import { NoCodeView } from './NoCodeView/NoCodeView';
 
 /**
  * Configuration options for the CND Layout Interface component
@@ -40,7 +41,7 @@ export interface CndLayoutInterfaceProps {
  * />
  * ```
  */
-export const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
+const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
   value,
   onChange,
   isNoCodeView,
@@ -59,7 +60,9 @@ export const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
   }, [disabled, onViewChange]);
 
   /**
-   * Handle textarea value change
+   * Handle textarea value change with proper event handling
+   * Optimized for performance with useCallback memoization
+   * 
    * @param event - The change event from the textarea
    */
   const handleTextareaChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -67,84 +70,87 @@ export const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
     onChange(event.target.value);
   }, [disabled, onChange]);
 
-  // Combine CSS classes
+  // Build CSS classes combining Bootstrap and custom styles for optimal tree-shaking
   const containerClasses = [
-    styles.container,
+    'cnd-layout-interface',
+    'container-fluid', // Bootstrap fluid container
+    disabled && 'cnd-layout-interface--disabled',
     className,
-    disabled ? styles.disabled : '',
+  ].filter(Boolean).join(' ');
+
+  const toggleLabelCodeClasses = [
+    'cnd-layout-interface__toggle-label',
+    'small', // Bootstrap small text
+    !isNoCodeView && 'text-primary fw-semibold', // Bootstrap active styling
+  ].filter(Boolean).join(' ');
+
+  const toggleLabelNoCodeClasses = [
+    'cnd-layout-interface__toggle-label',
+    'small', // Bootstrap small text
+    isNoCodeView && 'text-primary fw-semibold', // Bootstrap active styling
   ].filter(Boolean).join(' ');
 
   return (
     <div className={containerClasses} aria-label={ariaLabel}>
-      {/* Header with label and toggle switch */}
-      <div className={styles.header}>
-        <label htmlFor="cnd-layout-toggle" className={styles.mainLabel}>
+      {/* Header with Bootstrap flex utilities */}
+      <div className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+        <label htmlFor="cnd-layout-toggle" className="h6 mb-0 text-dark">
           CND Layout Specification ({isNoCodeView ? 'No Code' : 'Code'} View):
         </label>
         
-        <div className={styles.toggleContainer}>
-          <span className={`${styles.toggleLabel} ${!isNoCodeView ? styles.active : ''}`}>
+        {/* Toggle container with Bootstrap spacing */}
+        <div className="d-flex align-items-center gap-3">
+          <span className={toggleLabelCodeClasses}>
             Code View
           </span>
           
-          <label className={styles.toggle} htmlFor="cnd-layout-toggle">
+          <label className="cnd-layout-interface__toggle" htmlFor="cnd-layout-toggle">
             <input
               id="cnd-layout-toggle"
               type="checkbox"
               checked={isNoCodeView}
               onChange={handleToggleChange}
               disabled={disabled}
-              className={styles.toggleInput}
-              aria-describedby="toggle-description"
+              className="cnd-layout-interface__toggle-input"
+              aria-describedby="cnd-layout-toggle-description"
             />
-            <span className={styles.toggleSlider}></span>
+            <span className="cnd-layout-interface__toggle-slider"></span>
           </label>
           
-          <span className={`${styles.toggleLabel} ${isNoCodeView ? styles.active : ''}`}>
+          <span className={toggleLabelNoCodeClasses}>
             No Code View
           </span>
         </div>
       </div>
 
-      {/* Hidden description for screen readers */}
-      <div id="toggle-description" className="sr-only">
+      {/* Hidden description for screen readers - Bootstrap sr-only utility */}
+      <div id="cnd-layout-toggle-description" className="visually-hidden">
         Toggle between Code View (text editor) and No Code View (visual editor) for CND layout specification
       </div>
 
-      {/* Content area */}
-      <div className={styles.content}>
+      {/* Content area with Bootstrap styling */}
+      <div className="cnd-layout-interface__content">
         {isNoCodeView ? (
-          // No Code View - Visual interface placeholder
-          <div className={styles.noCodeView} role="region" aria-label="Visual CND Layout Editor">
-            <div className={styles.placeholder}>
-              <div className={styles.placeholderIcon}>🎨</div>
-              <h3 className={styles.placeholderTitle}>Visual Layout Editor</h3>
-              <p className={styles.placeholderText}>
-                This visual interface for creating CND layout specifications will be integrated here.
-                Switch to Code View to edit YAML directly.
-              </p>
-              <div className={styles.placeholderFeatures}>
-                <div className={styles.feature}>📐 Constraint Editor</div>
-                <div className={styles.feature}>🎯 Directive Builder</div>
-                <div className={styles.feature}>🔧 Layout Tools</div>
-              </div>
-            </div>
-          </div>
+          // No Code View - Bootstrap card layout
+          <NoCodeView />
         ) : (
-          // Code View - Text area for YAML editing
-          <div className={styles.codeView} role="region" aria-label="YAML Code Editor">
-            <textarea
-              id="webcola-cnd"
-              className={`form-control ${styles.textarea}`}
-              value={value}
-              onChange={handleTextareaChange}
-              disabled={disabled}
-              rows={12}
-              spellCheck={false}
-              aria-label="CND Layout Specification YAML"
-              aria-describedby="yaml-help"
-            />
-            <div id="yaml-help" className={styles.helpText}>
+          // Code View - Bootstrap form styling
+          <div className="cnd-layout-interface__code-view" role="region" aria-label="YAML Code Editor">
+            <div className="mb-2">
+              <textarea
+                id="webcola-cnd"
+                className="form-control cnd-layout-interface__textarea"
+                value={value}
+                onChange={handleTextareaChange}
+                disabled={disabled}
+                rows={12}
+                spellCheck={false}
+                aria-label="CND Layout Specification YAML"
+                aria-describedby="cnd-layout-yaml-help"
+                style={{ minHeight: '400px', resize: 'vertical' }}
+              />
+            </div>
+            <div id="cnd-layout-yaml-help" className="form-text text-muted fst-italic">
               Enter your CND layout specification in YAML format. 
               Use the toggle above to switch to the visual editor.
             </div>
@@ -155,4 +161,8 @@ export const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
   );
 };
 
-export default CndLayoutInterface;
+/**
+ * Named export for better tree-shaking support following cnd-core guidelines
+ * Avoids default exports to improve bundler optimization
+ */
+export { CndLayoutInterface };

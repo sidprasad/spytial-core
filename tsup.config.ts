@@ -18,7 +18,7 @@ export default defineConfig({
   minify: false,
   target: 'es2020',
   outDir: 'dist',
-  external: [],
+  external: ['react', 'react-dom'],
   bundle: true,
   treeshake: true,
   // Ensure all dependencies are bundled for client-side use
