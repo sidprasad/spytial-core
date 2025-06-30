@@ -6,6 +6,9 @@ import jsyaml from "js-yaml";
 
 import "./NoCodeView.css";
 
+// TODO: Add unit tests for this function
+// Specifically for the Flag Selector
+
 /**
  * Converts YAML string to structured constraint and directive data objects
  * 
@@ -97,7 +100,12 @@ export function parseLayoutSpecToData(yamlString: string): {
 
         directives = yamlDirectives.map(directive => {
             const type = Object.keys(directive)[0]; // Get the directive type
-            const params = directive[type]; // Get the parameters for the directive
+            let params = directive[type]; // Get the parameters for the directive
+
+            // HACK: This means that it's flag selector
+            if (typeof params === "string") {
+                params = { [type]: params};
+            }
 
             // Return structured directive data
             return {
