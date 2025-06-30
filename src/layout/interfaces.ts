@@ -16,6 +16,7 @@ export interface LayoutGroup {
 
 export interface LayoutNode {
     id: string;
+    label: string;
     color : string;
     groups?: string[];
     attributes?: Record<string, string[]>;

@@ -133,3 +133,10 @@ MIT
 5. Open a Pull Request
 
 ---
+
+
+
+## TODO
+
+- Node IDs and labels are currently the same for some readers / parsers. This seems wrong.
+  Part of this is because of how layoutinstance requires the **graph**. It shouldnt have to.

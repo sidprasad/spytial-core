@@ -513,7 +513,18 @@ export class LayoutInstance {
 
         let dcN = this.getDisconnectedNodes(g);
 
+
+        /// NOW, we should get the nodes back with their IDs.
+
+
+
         let layoutNodes: LayoutNode[] = g.nodes().map((nodeId) => {
+
+            let nodeMetadata = g.node(nodeId);
+            // If the node has a label, we can use it.
+            // Otherwise, we can use the nodeId as the label.
+            let label = nodeMetadata?.label || nodeId; // TODO: Use atom name
+
 
             let color = nodeColorMap[nodeId] || "black";
             
@@ -535,7 +546,7 @@ export class LayoutInstance {
 
             return {
                 id: nodeId,
-                name: nodeId, // TODO: Use atom name if available
+                name: label, 
                 color: color,
                 groups: nodeGroups,
                 attributes: nodeAttributes,

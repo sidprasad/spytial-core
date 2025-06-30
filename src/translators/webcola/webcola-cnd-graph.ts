@@ -679,7 +679,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         return d.y - height / 2;
       })
       .append("title")
-      .text((d: any) => d.name || d.id || "Node")
+      .text((d: any) => d.label || d.name || d.id || "Node")
       .on("error", function(this: SVGImageElement, event: any, d: any) {
         d3.select(this).attr("xlink:href", "img/default.png");
         console.error(`Failed to load icon for node ${d.id}: ${d.icon}`);
