@@ -1,27 +1,19 @@
 import React from 'react';
 import { UNARY_SELECTOR_TEXT } from './constants';
+import { DirectiveData } from './interfaces';
 
 interface ColorAtomSelectorProps {
-  /** Selector expression */
-  selector?: string;
-  /** Color value */
-  value?: string;
-  /** Callback when selector changes */
-  onSelectorChange?: (value: string) => void;
-  /** Callback when color value changes */
-  onValueChange?: (value: string) => void;
+  /** Directive data object containing type and parameters */
+  directiveData: DirectiveData;
+  /** Callback when directive data is updated */
+  onUpdate: (updates: Partial<Omit<DirectiveData, 'id'>>) => void;
 }
 
 /**
  * Minimal React component for atom color directive.
  * Includes selector input and color picker.
  */
-export const ColorAtomSelector: React.FC<ColorAtomSelectorProps> = ({
-  selector = '',
-  value = '#000000',
-  onSelectorChange,
-  onValueChange
-}) => {
+export const ColorAtomSelector: React.FC<ColorAtomSelectorProps> = (props: ColorAtomSelectorProps) => {
   return (
     <>
       <div className="input-group">
@@ -34,8 +26,15 @@ export const ColorAtomSelector: React.FC<ColorAtomSelectorProps> = ({
           type="text"
           name="selector"
           className="form-control"
-          value={selector}
-          onChange={(e) => onSelectorChange?.(e.target.value)}
+          onChange={(event) => {
+            const { name, value } = event.target;
+            props.onUpdate({
+              params: {
+                ...props.directiveData.params,
+                [name]: value
+              }
+            });
+          }}
           required
         />
       </div>
@@ -47,8 +46,15 @@ export const ColorAtomSelector: React.FC<ColorAtomSelectorProps> = ({
           type="color"
           name="value"
           className="form-control"
-          value={value}
-          onChange={(e) => onValueChange?.(e.target.value)}
+          onChange={(event) => {
+            const { name, value } = event.target;
+            props.onUpdate({
+              params: {
+                ...props.directiveData.params,
+                [name]: value
+              }
+            });
+          }}
           required
         />
       </div>

@@ -18,7 +18,7 @@ export default defineConfig(({ mode }) => ({
     outDir: 'dist/components',
     emptyOutDir: true,
     sourcemap: true,
-    minify: mode === 'production', // Set to true for production
+    minify: false, // Set to true for production
     rollupOptions: {
       // Don't externalize React - bundle it
       external: [],

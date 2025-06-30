@@ -1,19 +1,12 @@
 import React from 'react';
 import { UNARY_SELECTOR_TEXT } from './constants';
+import { DirectiveData } from './interfaces';
 
 interface IconSelectorProps {
-  /** Selector expression */
-  selector?: string;
-  /** Icon path */
-  path?: string;
-  /** Show labels flag */
-  showLabels?: boolean;
-  /** Callback when selector changes */
-  onSelectorChange?: (value: string) => void;
-  /** Callback when path changes */
-  onPathChange?: (value: string) => void;
-  /** Callback when showLabels changes */
-  onShowLabelsChange?: (value: boolean) => void;
+  /** Directive data object containing type and parameters */
+  directiveData: DirectiveData;
+  /** Callback when directive data is updated */
+  onUpdate: (updates: Partial<Omit<DirectiveData, 'id'>>) => void;
 }
 
 /**
@@ -21,13 +14,12 @@ interface IconSelectorProps {
  * Includes selector, path input, and show labels checkbox.
  */
 export const IconSelector: React.FC<IconSelectorProps> = ({
-  selector = '',
-  path = '',
-  showLabels = false,
-  onSelectorChange,
-  onPathChange,
-  onShowLabelsChange
+  directiveData,
+  onUpdate
 }) => {
+  const selector = (directiveData.params.selector as string) || '';
+  const path = (directiveData.params.path as string) || '';
+  const showLabels = (directiveData.params.showLabels as boolean) || false;
   return (
     <>
       <div className="input-group">
@@ -41,7 +33,7 @@ export const IconSelector: React.FC<IconSelectorProps> = ({
           name="selector"
           className="form-control"
           value={selector}
-          onChange={(e) => onSelectorChange?.(e.target.value)}
+          onChange={(e) => onUpdate({ params: { ...directiveData.params, selector: e.target.value } })}
           required
         />
       </div>
@@ -54,7 +46,7 @@ export const IconSelector: React.FC<IconSelectorProps> = ({
           name="path"
           className="form-control"
           value={path}
-          onChange={(e) => onPathChange?.(e.target.value)}
+          onChange={(e) => onUpdate({ params: { ...directiveData.params, path: e.target.value } })}
           placeholder="/path/to/icon.png"
           required
         />
@@ -69,7 +61,7 @@ export const IconSelector: React.FC<IconSelectorProps> = ({
             type="checkbox"
             name="showLabels"
             checked={showLabels}
-            onChange={(e) => onShowLabelsChange?.(e.target.checked)}
+            onChange={(e) => onUpdate({ params: { ...directiveData.params, showLabels: e.target.checked } })}
           />
         </div>
       </div>

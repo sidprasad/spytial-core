@@ -1,20 +1,18 @@
 import React from 'react';
+import { DirectiveData } from './interfaces';
 
 interface ProjectionSelectorProps {
-  /** Signature name */
-  sig?: string;
-  /** Callback when sig changes */
-  onSigChange?: (value: string) => void;
+  /** Directive data object containing type and parameters */
+  directiveData: DirectiveData;
+  /** Callback when directive data is updated */
+  onUpdate: (updates: Partial<Omit<DirectiveData, 'id'>>) => void;
 }
 
 /**
  * Minimal React component for projection directive.
  * Specifies a signature to project.
  */
-export const ProjectionSelector: React.FC<ProjectionSelectorProps> = ({
-  sig = '',
-  onSigChange
-}) => {
+export const ProjectionSelector: React.FC<ProjectionSelectorProps> = (props: ProjectionSelectorProps) => {
   return (
     <div className="input-group">
       <div className="input-group-prepend">
@@ -24,8 +22,15 @@ export const ProjectionSelector: React.FC<ProjectionSelectorProps> = ({
         type="text"
         className="form-control"
         name="sig"
-        value={sig}
-        onChange={(e) => onSigChange?.(e.target.value)}
+        onChange={(event) => {
+          const { name, value } = event.target;
+          props.onUpdate({
+            params: {
+              ...props.directiveData.params,
+              [name]: value
+            }
+          });
+        }}
         required
       />
     </div>

@@ -5,14 +5,9 @@ import { CyclicSelector,
     GroupByFieldSelector, 
     GroupBySelectorSelector, 
 } from './index';
-
-/**
- * Constraint types supported by the CND layout system
- * Following cnd-core TypeScript strict typing guidelines
- * 
- * @public
- */
-type ConstraintType = 'orientation' | 'cyclic' | 'groupfield' | 'groupselector';
+import { useHighlight } from './hooks';
+import { ConstraintType } from './types';
+import { ConstraintData } from './interfaces';
 
 /**
  * Configuration options for constraint card component
@@ -22,10 +17,10 @@ type ConstraintType = 'orientation' | 'cyclic' | 'groupfield' | 'groupselector';
  * @interface ConstraintCardProps
  */
 interface ConstraintCardProps {
-  /** Current constraint type selection */
-  constraintType?: ConstraintType;
-  /** Callback when constraint type changes */
-  onConstraintChange?: (constraintType: ConstraintType) => void;
+  /** Constraint data object containing type and parameters */
+  constraintData: ConstraintData;
+ /** Callback when constraint data is updated */
+  onUpdate: (updates: Partial<Omit<ConstraintData, 'id'>>) => void;
   /** Callback when constraint is removed */
   onRemove: () => void;
   /** Additional CSS class name for styling */
@@ -33,12 +28,9 @@ interface ConstraintCardProps {
 }
 
 const ConstraintCard = (props: ConstraintCardProps) => {
-
-    const [cardHTML, setCardHTML] = useState<React.JSX.Element>(<OrientationSelector />); // FIXME: Better way to set default?
-
-    const removeConstraint = useCallback((event: any) => {
-        props.onRemove();
-    }, [props.onRemove]);
+    const [cardHTML, setCardHTML] = useState<React.JSX.Element>(<OrientationSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>); // FIXME: Better way to set default?
+    
+    const { isHighlighted } = useHighlight(1000); // Highlight for 1 second
 
     /**
      * Handle constraint type change with proper event typing
@@ -54,23 +46,28 @@ const ConstraintCard = (props: ConstraintCardProps) => {
         console.log('Select element value', selectedValue);
 
         // Constraint Fields
+        // TODO: Use a mapping object to avoid multiple if-else statements
         if (selectedValue === "cyclic") {
-            setCardHTML(<CyclicSelector />);
+            setCardHTML(<CyclicSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>);
         } else if (selectedValue === "orientation") {
-            setCardHTML(<OrientationSelector />);
+            setCardHTML(<OrientationSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>);
         } else if (selectedValue === "groupfield") {
-            setCardHTML(<GroupByFieldSelector />);
+            setCardHTML(<GroupByFieldSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>);
         } else if (selectedValue === "groupselector") {
-            setCardHTML(<GroupBySelectorSelector />);
+            setCardHTML(<GroupBySelectorSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>);
         }
-        
-        // Call the parent callback with the new constraint type
-        props.onConstraintChange?.(selectedValue);
-    }, [props.onConstraintChange]);
+
+        // Update the constraint type
+        props.onUpdate({ type: selectedValue, params: {} });
+    }, [props.onUpdate, props.constraintData]);
+
+    // const classes = [
+    //     isHighlighted && 'highlight',
+    // ].filter(Boolean).join(' ');
 
     return (
-        <>
-            <button className="close" title="Remove constraint" type="button" onClick= { () => removeConstraint(this) }>
+        <div className={ isHighlighted ? 'highlight' : '' }>
+            <button className="close" title="Remove constraint" type="button" onClick= { props.onRemove }>
                 <span aria-hidden="true">&times;</span>
             </button>
             <div className="input-group"> 
@@ -87,7 +84,7 @@ const ConstraintCard = (props: ConstraintCardProps) => {
             <div className="params">
                 { cardHTML }
             </div>
-        </>
+        </div>
     )
 }
 

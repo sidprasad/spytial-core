@@ -1,32 +1,18 @@
 import React from 'react';
+import { ConstraintData } from './interfaces';
 
 interface GroupByFieldSelectorProps {
-  /** Field name */
-  field?: string;
-  /** Group on index */
-  groupOn?: number;
-  /** Add to group index */
-  addToGroup?: number;
-  /** Callback when field changes */
-  onFieldChange?: (value: string) => void;
-  /** Callback when groupOn changes */
-  onGroupOnChange?: (value: number) => void;
-  /** Callback when addToGroup changes */
-  onAddToGroupChange?: (value: number) => void;
+  /** Constraint data object containing type and parameters */
+  constraintData: ConstraintData;
+  /** Callback when constraint data is updated */
+  onUpdate: (updates: Partial<Omit<ConstraintData, 'id'>>) => void;
 }
 
 /**
  * Minimal React component for group-by-field constraint configuration.
  * Groups elements based on a field with configurable indices.
  */
-export const GroupByFieldSelector: React.FC<GroupByFieldSelectorProps> = ({
-  field = '',
-  groupOn = 0,
-  addToGroup = 0,
-  onFieldChange,
-  onGroupOnChange,
-  onAddToGroupChange
-}) => {
+export const GroupByFieldSelector: React.FC<GroupByFieldSelectorProps> = (props: GroupByFieldSelectorProps) => {
   return (
     <>
       <div className="input-group">
@@ -37,8 +23,15 @@ export const GroupByFieldSelector: React.FC<GroupByFieldSelectorProps> = ({
           type="text"
           name="field"
           className="form-control"
-          value={field}
-          onChange={(e) => onFieldChange?.(e.target.value)}
+          onChange={(event) => {
+            const { name, value } = event.target;
+            props.onUpdate({
+              params: {
+                ...props.constraintData.params,
+                [name]: value
+              }
+            });
+          }}
           required
         />
       </div>
@@ -52,8 +45,15 @@ export const GroupByFieldSelector: React.FC<GroupByFieldSelectorProps> = ({
           type="number"
           name="groupOn"
           className="form-control"
-          value={groupOn}
-          onChange={(e) => onGroupOnChange?.(Number(e.target.value))}
+          onChange={(event) => {
+            const { name, value } = event.target;
+            props.onUpdate({
+              params: {
+                ...props.constraintData.params,
+                [name]: Number(value)
+              }
+            });
+          }}
           required
         />
       </div>
@@ -67,8 +67,15 @@ export const GroupByFieldSelector: React.FC<GroupByFieldSelectorProps> = ({
           type="number"
           name="addToGroup"
           className="form-control"
-          value={addToGroup}
-          onChange={(e) => onAddToGroupChange?.(Number(e.target.value))}
+          onChange={(event) => {
+            const { name, value } = event.target;
+            props.onUpdate({
+              params: {
+                ...props.constraintData.params,
+                [name]: Number(value)
+              }
+            });
+          }}
           required
         />
       </div>

@@ -81,7 +81,7 @@
                 <textarea id="webcola-alloy" placeholder="Paste your Alloy XML instance here..."></textarea>
             </div>
             <div id="webcola-cnd-container">
-                <!-- TODO: Attach React element here -->
+                <!-- React element attached here -->
             </div>
         </div>
         
@@ -115,7 +115,8 @@
     <script src="./dist/browser/cnd-core-complete.global.js"></script>
     
     <!-- Your React component bundle (includes React runtime) -->
-    <script src="./dist/components/demo-integration.iife.js"></script>
+    <script src="./dist/components/demo-integration.global.js"></script>
+    <link rel="stylesheet" href="./dist/components/demo-integration.css">
     <script>
         // Variables to store data
         let currentInstanceLayout = null;

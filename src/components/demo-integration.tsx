@@ -39,7 +39,7 @@ function CndLayoutInterfaceWrapper() {
 
   return (
     <CndLayoutInterface
-      value={yamlValue}
+      yamlValue={yamlValue}
       onChange={handleYamlChange}
       isNoCodeView={isNoCodeView}
       onViewChange={handleViewChange}

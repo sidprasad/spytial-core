@@ -1,10 +1,11 @@
 import React from 'react';
+import { DirectiveData } from './interfaces';
 
 interface FlagSelectorProps {
-  /** Flag value */
-  flag?: string;
-  /** Callback when flag changes */
-  onFlagChange?: (value: string) => void;
+  /** Directive data object containing type and parameters */
+  directiveData: DirectiveData;
+  /** Callback when directive data is updated */
+  onUpdate: (updates: Partial<Omit<DirectiveData, 'id'>>) => void;
 }
 
 /**
@@ -12,16 +13,18 @@ interface FlagSelectorProps {
  * Dropdown for predefined visibility flag options.
  */
 export const FlagSelector: React.FC<FlagSelectorProps> = ({
-  flag = '',
-  onFlagChange
+  directiveData,
+  onUpdate
 }) => {
+  const flag = (directiveData.params.flag as string) || '';
+
   return (
     <div className="input-group">
       <select
         name="flag"
         className="form-control"
         value={flag}
-        onChange={(e) => onFlagChange?.(e.target.value)}
+        onChange={(e) => onUpdate({ params: { ...directiveData.params, flag: e.target.value } })}
       >
         <option value="">Select flag...</option>
         <option value="hideDisconnectedBuiltIns">Hide disconnected built ins.</option>

@@ -1,19 +1,12 @@
 import React from 'react';
 import { UNARY_SELECTOR_TEXT } from './constants';
+import { DirectiveData } from './interfaces';
 
 interface SizeSelectorProps {
-  /** Selector expression */
-  selector?: string;
-  /** Width value */
-  width?: number;
-  /** Height value */
-  height?: number;
-  /** Callback when selector changes */
-  onSelectorChange?: (value: string) => void;
-  /** Callback when width changes */
-  onWidthChange?: (value: number) => void;
-  /** Callback when height changes */
-  onHeightChange?: (value: number) => void;
+  /** Directive data object containing type and parameters */
+  directiveData: DirectiveData;
+  /** Callback when directive data is updated */
+  onUpdate: (updates: Partial<Omit<DirectiveData, 'id'>>) => void;
 }
 
 /**
@@ -21,13 +14,13 @@ interface SizeSelectorProps {
  * Includes selector input and width/height number inputs.
  */
 export const SizeSelector: React.FC<SizeSelectorProps> = ({
-  selector = '',
-  width = 10,
-  height = 10,
-  onSelectorChange,
-  onWidthChange,
-  onHeightChange
+  directiveData,
+  onUpdate
 }) => {
+  const selector = (directiveData.params.selector as string) || '';
+  const width = (directiveData.params.width as number) || 10;
+  const height = (directiveData.params.height as number) || 10;
+
   return (
     <>
       <div className="input-group">
@@ -41,7 +34,7 @@ export const SizeSelector: React.FC<SizeSelectorProps> = ({
           name="selector"
           className="form-control"
           value={selector}
-          onChange={(e) => onSelectorChange?.(e.target.value)}
+          onChange={(e) => onUpdate({ params: { ...directiveData.params, selector: e.target.value } })}
           required
         />
       </div>
@@ -54,7 +47,7 @@ export const SizeSelector: React.FC<SizeSelectorProps> = ({
           name="width"
           className="form-control"
           value={width}
-          onChange={(e) => onWidthChange?.(Number(e.target.value))}
+          onChange={(e) => onUpdate({ params: { ...directiveData.params, width: Number(e.target.value) } })}
           required
         />
         <label>
@@ -65,7 +58,7 @@ export const SizeSelector: React.FC<SizeSelectorProps> = ({
           name="height"
           className="form-control"
           value={height}
-          onChange={(e) => onHeightChange?.(Number(e.target.value))}
+          onChange={(e) => onUpdate({ params: { ...directiveData.params, height: Number(e.target.value) } })}
           required
         />
       </div>

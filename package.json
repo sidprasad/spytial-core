@@ -16,7 +16,7 @@
   "scripts": {
     "build": "tsup",
     "build:browser": "tsup --config tsup.browser.config.ts",
-    "build:components": "vite build --mode production",
+    "build:components": "tsup --config tsup.components.config.ts",
     "build:all": "npm run build:browser && npm run build:components",
     "dev": "tsup --watch",
     "test": "vitest",

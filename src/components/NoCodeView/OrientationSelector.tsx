@@ -1,27 +1,19 @@
 import React from 'react';
 import { TUPLE_SELECTOR_TEXT } from './constants';
+import { ConstraintData } from './interfaces';
 
 interface OrientationSelectorProps {
-  /** Selector value */
-  selector?: string;
-  /** Selected directions */
-  directions?: string[];
-  /** Callback when selector changes */
-  onSelectorChange?: (value: string) => void;
-  /** Callback when directions change */
-  onDirectionsChange?: (values: string[]) => void;
+  /** Constraint data object containing type and parameters */
+  constraintData: ConstraintData;
+  /** Callback when constraint data is updated */
+  onUpdate: (updates: Partial<Omit<ConstraintData, 'id'>>) => void;
 }
 
 /**
  * Minimal React component for orientation/direction constraint configuration.
  * Includes selector input and multi-select direction dropdown.
  */
-export const OrientationSelector: React.FC<OrientationSelectorProps> = ({
-  selector = '',
-  directions = [],
-  onSelectorChange,
-  onDirectionsChange
-}) => {
+export const OrientationSelector: React.FC<OrientationSelectorProps> = (props: OrientationSelectorProps) => {
   return (
     <>
       <div className="input-group">
@@ -34,8 +26,15 @@ export const OrientationSelector: React.FC<OrientationSelectorProps> = ({
           type="text"
           name="selector"
           className="form-control"
-          value={selector}
-          onChange={(e) => onSelectorChange?.(e.target.value)}
+          onChange={(event) => {
+            const { name, value } = event.target;
+            props.onUpdate({
+              params: {
+                ...props.constraintData.params,
+                [name]: value
+              }
+            });
+          }}
           required
         />
       </div>
@@ -47,10 +46,15 @@ export const OrientationSelector: React.FC<OrientationSelectorProps> = ({
           name="directions"
           className="form-control"
           multiple
-          value={directions}
-          onChange={(e) => {
-            const selectedValues = Array.from(e.target.selectedOptions, option => option.value);
-            onDirectionsChange?.(selectedValues);
+          onChange={(event) => {
+            const { name } = event.target;
+            const selectedValues = Array.from(event.target.selectedOptions, (option) => option.value);
+            props.onUpdate({
+              params: {
+                ...props.constraintData.params,
+                [name]: selectedValues
+              }
+            });
           }}
         >
           <option value="left">Left</option>

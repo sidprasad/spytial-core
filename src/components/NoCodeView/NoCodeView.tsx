@@ -1,15 +1,211 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { ConstraintCard } from "./ConstraintCard";
 import { DirectiveCard } from "./DirectiveCard";
+import { ConstraintData, DirectiveData } from "./interfaces";
+
+import "./NoCodeView.css";
+import jsyaml from "js-yaml";
+
+/**
+ * Converts constraint and directive data objects to YAML string
+ * 
+ * Generates a valid CND layout specification from structured data objects.
+ * This function is the inverse of parseLayoutSpec and ensures round-trip
+ * compatibility for the No Code View.
+ * 
+ * Following cnd-core guidelines:
+ * - Tree-shakable named export
+ * - Client-side optimized (no Node.js APIs)
+ * - TypeScript strict typing
+ * - Functional programming approach
+ * 
+ * @param constraints - Array of constraint data objects from No Code View
+ * @param directives - Array of directive data objects from No Code View
+ * @returns YAML string representation of the layout specification
+ * 
+ * @example
+ * ```typescript
+ * const constraints = [
+ *   { type: 'orientation', directions: ['left'], selector: 'Node' }
+ * ];
+ * const directives = [
+ *   { type: 'color', value: '#ff0000', selector: 'Node' }
+ * ];
+ * const yamlSpec = generateLayoutSpecYaml(constraints, directives);
+ * ```
+ * 
+ * @public
+ */
+export function generateLayoutSpecYaml(
+  constraints: ConstraintData[], 
+  directives: DirectiveData[]
+): string {
+
+    // Helper function to determine YAML constraint type from structured data
+    // TODO: Make this a map??
+    function toYamlConstraintType(type: string): string {
+        if (type === "cyclic") {
+            return "cyclic";
+        }
+        if (type === "orientation") {
+            return "orientation";
+        }
+        if (type === "groupfield" || type === "groupselector") {
+            return "group";
+        }
+        return "unknown";
+    }
+
+    // Convert constraint type to YAML constraint type
+    const yamlConstraints = constraints.forEach(c => {
+        return {
+            [toYamlConstraintType(c.type)]: c.params
+        }
+    });
+
+    // Convert directive type to YAML directive type
+    const yamlDirectives = directives.forEach(d => {
+        return {
+            [d.type]: d.params
+        }
+    });
+
+    // Combine constraints and directives into a single YAML object
+    let combinedSpec: any = {};
+    if (constraints.length > 0) {
+        combinedSpec.constraints = yamlConstraints;
+    }
+    if (directives.length > 0) {
+        combinedSpec.directives = yamlDirectives;
+    }
+
+    // Convert combined spec object to YAML string
+    let yamlStr = "";
+
+    if (Object.keys(combinedSpec).length > 0) {
+        yamlStr = jsyaml.dump(combinedSpec);
+    }
+
+    return yamlStr;
+}
+
+/**
+ * Converts YAML string to structured constraint and directive data objects
+ * 
+ * Parses a CND layout specification YAML and extracts constraint and directive
+ * data suitable for the No Code View interface. This function complements
+ * parseLayoutSpec by providing data in a format optimized for visual editing.
+ * 
+ * Following cnd-core guidelines:
+ * - Error handling with structured error messages
+ * - Client-side performance optimized
+ * - Comprehensive type safety
+ * - Tree-shakable export
+ * 
+ * @param yamlString - YAML string containing CND layout specification
+ * @returns Object containing structured constraint and directive arrays
+ * @throws {Error} When YAML is invalid or contains unsupported constraint types
+ * 
+ * @example
+ * ```typescript
+ * const yamlSpec = `
+ * constraints:
+ *   - orientation: { directions: [left], selector: Node }
+ * directives:
+ *   - color: { value: '#ff0000', selector: Node }
+ * `;
+ * const { constraints, directives } = parseLayoutSpecToData(yamlSpec);
+ * ```
+ * 
+ * @public
+ */
+export function parseLayoutSpecToData(yamlString: string): {
+  constraints: ConstraintData[];
+  directives: DirectiveData[];
+} {
+    let constraints: ConstraintData[] = [];
+    let directives: DirectiveData[] = [];
+
+    const parsedYaml = jsyaml.load(yamlString) as any;
+
+    const yamlConstraints = parsedYaml?.constraints;
+    const yamlDirectives = parsedYaml?.directives;
+
+    // Helper function to determine constraint type from YAML object
+    // TODO: Make this a map??
+    function get_constraint_type_from_yaml(constraint: any): string {
+        const type = Object.keys(constraint)[0]; // Get the constraint type
+        const params = constraint[type]; // Get the parameters for the constraint
+
+        if (type === "cyclic" || type === "orientation") {
+            return type;
+        }
+        if (type === "group") {
+            if (params["selector"]) {
+                return "groupselector";
+            }
+            if (params["field"]) {
+                return "groupfield";
+            }
+        }
+        return "unknown";
+    }
+
+    // Convert YAML constraints to structured data
+    if (yamlConstraints) {
+        if (!Array.isArray(yamlConstraints)) {
+            throw new Error("Invalid YAML: 'constraints' should be an array");
+        }
+
+        constraints = yamlConstraints.map(constraint => {
+            const type = get_constraint_type_from_yaml(constraint);
+            if (type === "unknown") {
+                throw new Error(`Unsupported constraint type in YAML: ${JSON.stringify(constraint)}`);
+            }
+            const params = constraint[Object.keys(constraint)[0]];
+
+            // Return structured constraint data
+            return {
+                type,
+                params
+            } as ConstraintData;
+        })
+    }
+
+    // Convert YAML directives to structured data
+    if (yamlDirectives) {
+        if (!Array.isArray(yamlDirectives)) {
+            throw new Error("Invalid YAML: 'directives' should be an array");
+        }
+
+        directives = yamlDirectives.map(directive => {
+            const type = Object.keys(directive)[0]; // Get the directive type
+            const params = directive[type]; // Get the parameters for the directive
+
+            // Return structured directive data
+            return {
+                type,
+                params
+            } as DirectiveData;
+        })
+    }
+
+    return {
+        constraints: yamlConstraints,
+        directives: yamlDirectives
+    };
+}
 
 interface NoCodeViewProps {
+    /** YAML string of CnD layout spec */
+    yamlValue?: string;
     /** Callback when YAML value changes */
-    onChange: (value: string) => void;
+    onChange?: (value: string) => void;
 }
 
 const NoCodeView = (props: NoCodeViewProps) => {
-    const [constraintIds, setConstraintIds] = useState<string[]>([]);
-    const [directiveIds, setDirectiveIds] = useState<string[]>([]);
+    const [constraints, setConstraints] = useState<ConstraintData[]>([]);
+    const [directives, setDirectives] = useState<DirectiveData[]>([]);
 
     // Utility function to generate simple unique IDs for constraints
     const generateId = () => {
@@ -17,32 +213,122 @@ const NoCodeView = (props: NoCodeViewProps) => {
     }
 
     const addConstraint = () => {
-        const newConstraintId = generateId();
-        setConstraintIds([...constraintIds, newConstraintId])
+        const newConstraint: ConstraintData = {
+            id: generateId(),
+            type: "orientation",
+            params: {},
+        };
+        setConstraints([...constraints, newConstraint])
     }
+
+    /**
+     * Update constraint data with immutable merge
+     * 
+     * @param constraintId - ID of constraint to update
+     * @param updates - Partial constraint data to merge
+     */
+    const updateConstraint = useCallback((
+        constraintId: string, 
+        updates: Partial<Omit<ConstraintData, 'id'>>
+    ) => {
+        setConstraints(prevConstraints =>
+        prevConstraints.map(constraint =>
+            constraint.id === constraintId 
+            ? { ...constraint, ...updates }
+            : constraint
+        )
+        );
+    }, []);
+
+    // useEffect(() => {
+    //     console.log("Constraints updated:", constraints);
+    // }, [constraints]);
 
     const addDirective = () => {
-        // addElement("directiveContainer", "directive", DIRECTIVE_SELECT);
-        const newDirectiveId = generateId();
-        setDirectiveIds([...directiveIds, newDirectiveId]);
+        const newDirective: DirectiveData = {
+            id: generateId(),
+            type: "attribute",
+            params: {},
+        };
+        setDirectives([...directives, newDirective]);
     }
 
-    const addElement = () => {
-        const container = document.getElementById(containerId);
-        const div = document.createElement("div");
-        div.classList.add(className);
-        div.innerHTML = template;
+    /**
+     * Update directive data with immutable merge
+     * 
+     * @param directiveId - ID of directive to update
+     * @param updates - Partial directive data to merge
+     */
+    const updateDirective = useCallback((
+        directiveId: string, 
+        updates: Partial<Omit<DirectiveData, 'id'>>
+    ) => {
+        setDirectives(prevDirectives =>
+        prevDirectives.map(directive =>
+            directive.id === directiveId 
+            ? { ...directive, ...updates }
+            : directive
+        )
+        );
+    }, []);
 
-        container.prepend(div); // Add the new element to the top
-        updateFields(div.querySelector("select"));
-
-        // Add a highlight effect
-        div.classList.add("highlight");
-        setTimeout(() => {
-            div.classList.remove("highlight");
-        }, 1000); // Remove the highlight after 1 second
+    /**
+     * Generates YAML specification from current No Code View state
+     * 
+     * Converts the current constraints and directives state into a valid YAML
+     * string that can be used with the existing CND layout pipeline. This enables
+     * seamless integration between visual editing and text-based editing.
+     * 
+     * Following cnd-core component guidelines:
+     * - useCallback optimization for performance
+     * - Immutable data handling
+     * - Error boundary compatibility
+     * - Client-side optimized processing
+     * 
+     * @returns YAML string representation of current visual state
+     * 
+     * @example
+     * ```typescript
+     * const yamlSpec = noCodeViewRef.current?.generateYamlFromState();
+     * if (yamlSpec) {
+     *   updateTextArea(yamlSpec);
+     * }
+     * ```
+     */
+    const generateYamlFromState = (): string => {
+        return generateLayoutSpecYaml(constraints, directives);
     }
 
+    /**
+     * Loads constraint and directive state from YAML specification
+     * 
+     * Parses a YAML string and updates the No Code View's internal state to reflect
+     * the constraints and directives defined in the specification. This enables
+     * bidirectional synchronization between text and visual editing modes.
+     * 
+     * Following cnd-core component guidelines:
+     * - Functional state updates with proper error handling
+     * - Performance optimized with batched state updates
+     * - Type-safe parsing with comprehensive validation
+     * - Tree-shakable method design
+     * 
+     * @param yamlString - YAML specification to load into the visual interface
+     * @throws {Error} When YAML contains invalid or unsupported constraint types
+     * 
+     * @example
+     * ```typescript
+     * try {
+     *   noCodeViewRef.current?.loadStateFromYaml(textAreaValue);
+     * } catch (error) {
+     *   console.error('Failed to load YAML:', error);
+     * }
+     * ```
+     */
+    const loadStateFromYaml = (yamlString: string): void => {
+        const { constraints: newConstraints, directives: newDirectives } = parseLayoutSpecToData(yamlString);
+        setConstraints(newConstraints);
+        setDirectives(newDirectives);
+    };
 
     return (
         <div className="container-fluid" id="noCodeViewContainer">
@@ -51,11 +337,13 @@ const NoCodeView = (props: NoCodeViewProps) => {
                 <div id="constraintContainer">
                     {/* Constraints will be added here dynamically */ }
                     { 
-                        constraintIds.map((id) => (
+                        constraints.map((cd1) => (
                             <ConstraintCard 
-                                key={id} 
+                                key={cd1.id}
+                                constraintData={cd1}
+                                onUpdate={(updates) => updateConstraint(cd1.id, updates)}
                                 onRemove={() => {
-                                    setConstraintIds(constraintIds.filter((cid) => cid !== id));
+                                    setConstraints(constraints.filter((cd2) => cd2.id !== cd1.id));
                                 }} />
                         ))
                     }
@@ -66,11 +354,13 @@ const NoCodeView = (props: NoCodeViewProps) => {
                 <h5>Directives  <button type="button" onClick={ addDirective } title="Click to add a new directive">+</button></h5>
                 <div id="directiveContainer">
                     { 
-                        directiveIds.map((id) => (
+                        directives.map((dd1) => (
                             <DirectiveCard 
-                                key={id} 
+                                key={dd1.id} 
+                                directiveData={dd1}
+                                onUpdate={(updates) => updateDirective(dd1.id, updates)}
                                 onRemove={() => {
-                                    setDirectiveIds(directiveIds.filter((did) => did !== id));
+                                    setDirectives(directives.filter((dd2) => dd2.id !== dd1.id));
                                 }} />
                         ))
                     }

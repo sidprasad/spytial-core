@@ -1,20 +1,18 @@
 import React from 'react';
+import { DirectiveData } from './interfaces';
 
 interface AttributeSelectorProps {
-  /** Field name */
-  field?: string;
-  /** Callback when field changes */
-  onFieldChange?: (value: string) => void;
+  /** Directive data object containing type and parameters */
+  directiveData: DirectiveData;
+  /** Callback when directive data is updated */
+  onUpdate: (updates: Partial<Omit<DirectiveData, 'id'>>) => void;
 }
 
 /**
  * Minimal React component for attribute field selection.
  * Simple field input for attribute directives.
  */
-export const AttributeSelector: React.FC<AttributeSelectorProps> = ({
-  field = '',
-  onFieldChange
-}) => {
+export const AttributeSelector: React.FC<AttributeSelectorProps> = (props: AttributeSelectorProps) => {
   return (
     <div className="input-group">
       <div className="input-group-prepend">
@@ -24,8 +22,15 @@ export const AttributeSelector: React.FC<AttributeSelectorProps> = ({
         type="text"
         name="field"
         className="form-control"
-        value={field}
-        onChange={(e) => onFieldChange?.(e.target.value)}
+        onChange={(event) => {
+          const { name, value } = event.target;
+          props.onUpdate({
+            params: {
+              ...props.directiveData.params,
+              [name]: value
+            }
+          });
+        }}
         required
       />
     </div>

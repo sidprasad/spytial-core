@@ -1,14 +1,11 @@
 import React from 'react';
+import { DirectiveData } from './interfaces';
 
 interface ColorEdgeSelectorProps {
-  /** Field name */
-  field?: string;
-  /** Color value */
-  value?: string;
-  /** Callback when field changes */
-  onFieldChange?: (value: string) => void;
-  /** Callback when color value changes */
-  onValueChange?: (value: string) => void;
+  /** Directive data object containing type and parameters */
+  directiveData: DirectiveData;
+  /** Callback when directive data is updated */
+  onUpdate: (updates: Partial<Omit<DirectiveData, 'id'>>) => void;
 }
 
 /**
@@ -16,11 +13,12 @@ interface ColorEdgeSelectorProps {
  * Includes field input and color picker.
  */
 export const ColorEdgeSelector: React.FC<ColorEdgeSelectorProps> = ({
-  field = '',
-  value = '#000000',
-  onFieldChange,
-  onValueChange
+  directiveData,
+  onUpdate
 }) => {
+  const field = (directiveData.params.field as string) || '';
+  const value = (directiveData.params.value as string) || '#000000';
+
   return (
     <>
       <div className="input-group">
@@ -32,7 +30,7 @@ export const ColorEdgeSelector: React.FC<ColorEdgeSelectorProps> = ({
           name="field"
           className="form-control"
           value={field}
-          onChange={(e) => onFieldChange?.(e.target.value)}
+          onChange={(e) => onUpdate({ params: { ...directiveData.params, field: e.target.value } })}
           required
         />
       </div>
@@ -45,7 +43,7 @@ export const ColorEdgeSelector: React.FC<ColorEdgeSelectorProps> = ({
           name="value"
           className="form-control"
           value={value}
-          onChange={(e) => onValueChange?.(e.target.value)}
+          onChange={(e) => onUpdate({ params: { ...directiveData.params, value: e.target.value } })}
           required
         />
       </div>

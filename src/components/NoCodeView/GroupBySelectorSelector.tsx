@@ -1,27 +1,19 @@
 import React from 'react';
 import { UNARY_SELECTOR_TEXT, TUPLE_SELECTOR_TEXT } from './constants';
+import { ConstraintData } from './interfaces';
 
 interface GroupBySelectorSelectorProps {
-  /** Selector expression */
-  selector?: string;
-  /** Group name */
-  name?: string;
-  /** Callback when selector changes */
-  onSelectorChange?: (value: string) => void;
-  /** Callback when name changes */
-  onNameChange?: (value: string) => void;
+  /** Constraint data object containing type and parameters */
+  constraintData: ConstraintData;
+  /** Callback when constraint data is updated */
+  onUpdate: (updates: Partial<Omit<ConstraintData, 'id'>>) => void;
 }
 
 /**
  * Minimal React component for group-by-selector constraint configuration.
  * Groups elements based on a Forge selector expression.
  */
-export const GroupBySelectorSelector: React.FC<GroupBySelectorSelectorProps> = ({
-  selector = '',
-  name = '',
-  onSelectorChange,
-  onNameChange
-}) => {
+export const GroupBySelectorSelector: React.FC<GroupBySelectorSelectorProps> = (props: GroupBySelectorSelectorProps) => {
   return (
     <>
       <div className="input-group">
@@ -34,8 +26,15 @@ export const GroupBySelectorSelector: React.FC<GroupBySelectorSelectorProps> = (
           type="text"
           name="selector"
           className="form-control"
-          value={selector}
-          onChange={(e) => onSelectorChange?.(e.target.value)}
+          onChange={(event) => {
+            const { name, value } = event.target;
+            props.onUpdate({
+              params: {
+                ...props.constraintData.params,
+                [name]: value
+              }
+            });
+          }}
           required
         />
       </div>
@@ -47,8 +46,15 @@ export const GroupBySelectorSelector: React.FC<GroupBySelectorSelectorProps> = (
           type="text"
           name="name"
           className="form-control"
-          value={name}
-          onChange={(e) => onNameChange?.(e.target.value)}
+          onChange={(event) => {
+            const { name, value } = event.target;
+            props.onUpdate({
+              params: {
+                ...props.constraintData.params,
+                [name]: value
+              }
+            });
+          }}
           required
         />
       </div>

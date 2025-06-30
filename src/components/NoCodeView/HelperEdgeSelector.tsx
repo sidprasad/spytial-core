@@ -1,15 +1,12 @@
 import React from 'react';
 import { TUPLE_SELECTOR_TEXT } from './constants';
+import { DirectiveData } from './interfaces';
 
 interface HelperEdgeSelectorProps {
-  /** Selector expression */
-  selector?: string;
-  /** Edge name */
-  name?: string;
-  /** Callback when selector changes */
-  onSelectorChange?: (value: string) => void;
-  /** Callback when name changes */
-  onNameChange?: (value: string) => void;
+  /** Directive data object containing type and parameters */
+  directiveData: DirectiveData;
+  /** Callback when directive data is updated */
+  onUpdate: (updates: Partial<Omit<DirectiveData, 'id'>>) => void;
 }
 
 /**
@@ -17,11 +14,12 @@ interface HelperEdgeSelectorProps {
  * Includes selector input and edge name field.
  */
 export const HelperEdgeSelector: React.FC<HelperEdgeSelectorProps> = ({
-  selector = '',
-  name = '',
-  onSelectorChange,
-  onNameChange
+  directiveData,
+  onUpdate
 }) => {
+  const selector = (directiveData.params.selector as string) || '';
+  const name = (directiveData.params.name as string) || '';
+
   return (
     <>
       <div className="input-group">
@@ -35,7 +33,7 @@ export const HelperEdgeSelector: React.FC<HelperEdgeSelectorProps> = ({
           name="selector"
           className="form-control"
           value={selector}
-          onChange={(e) => onSelectorChange?.(e.target.value)}
+          onChange={(e) => onUpdate({ params: { ...directiveData.params, selector: e.target.value } })}
           required
         />
       </div>
@@ -48,7 +46,7 @@ export const HelperEdgeSelector: React.FC<HelperEdgeSelectorProps> = ({
           name="name"
           className="form-control"
           value={name}
-          onChange={(e) => onNameChange?.(e.target.value)}
+          onChange={(e) => onUpdate({ params: { ...directiveData.params, name: e.target.value } })}
           required
         />
       </div>

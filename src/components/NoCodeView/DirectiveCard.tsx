@@ -10,14 +10,8 @@ import {
     HelperEdgeSelector, 
     ProjectionSelector 
 } from './index';
-
-/**
- * Directive types supported by the CND layout system
- * Following cnd-core TypeScript strict typing guidelines
- * 
- * @public
- */
-type DirectiveType = 'attribute' | 'hideField' | 'icon' | 'atomColor' | 'edgeColor' | 'size' | 'projection' | 'flag' | 'inferredEdge';
+import { useHighlight } from './hooks';
+import { DirectiveData } from './interfaces';
 
 /**
  * Configuration options for constraint card component
@@ -27,10 +21,10 @@ type DirectiveType = 'attribute' | 'hideField' | 'icon' | 'atomColor' | 'edgeCol
  * @interface DirectiveCardProps
  */
 interface DirectiveCardProps {
-  /** Current Directive type selection */
-  directiveType?: DirectiveType;
-  /** Callback when Directive type changes */
-  onDirectiveChange?: (directiveType: DirectiveType) => void;
+  /** Directive data object containing type and parameters */
+  directiveData: DirectiveData;
+  /** Callback when directive data is updated */
+  onUpdate: (updates: Partial<Omit<DirectiveData, 'id'>>) => void;
   /** Callback when Directive is removed */
   onRemove: () => void;
   /** Additional CSS class name for styling */
@@ -38,11 +32,9 @@ interface DirectiveCardProps {
 }
 
 const DirectiveCard: React.FC<DirectiveCardProps> = (props: DirectiveCardProps) => {
-    const [cardHTML, setCardHTML] = useState<React.JSX.Element>(<FlagSelector />); // FIXME: Better way to set default?
+    const [cardHTML, setCardHTML] = useState<React.JSX.Element>(<FlagSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>);
 
-    const removeDirective = () => {
-
-    };
+    const { isHighlighted } = useHighlight(1000); // Highlight for 1 second
 
     /**
      * Handle directive type change with proper event typing
@@ -61,32 +53,36 @@ const DirectiveCard: React.FC<DirectiveCardProps> = (props: DirectiveCardProps) 
         // TODO: Refactor to use a mapping object instead of if-else chain
         // This way, the initial type can also use this mapping
         if (selectedValue === "attribute") {
-            setCardHTML(<AttributeSelector />);
+            setCardHTML(<AttributeSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>);
         } else if (selectedValue === "hideField") {
-            setCardHTML(<HideFieldSelector />);
+            setCardHTML(<HideFieldSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>);
         } else if (selectedValue === "icon") {
-            setCardHTML(<IconSelector />);
+            setCardHTML(<IconSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>);
         } else if (selectedValue === "atomColor") {
-            setCardHTML(<ColorAtomSelector />);
+            setCardHTML(<ColorAtomSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>);
         } else if (selectedValue === "edgeColor") {
-            setCardHTML(<ColorEdgeSelector />);
+            setCardHTML(<ColorEdgeSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>);
         } else if (selectedValue === "size") { 
-            setCardHTML(<SizeSelector />);
+            setCardHTML(<SizeSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>);
         } else if (selectedValue === "projection") {
-            setCardHTML(<ProjectionSelector />);
+            setCardHTML(<ProjectionSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>);
         } else if (selectedValue === "flag") {
-            setCardHTML(<FlagSelector />);
+            setCardHTML(<FlagSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>);
         } else if (selectedValue === "inferredEdge") {
-            setCardHTML(<HelperEdgeSelector />);
+            setCardHTML(<HelperEdgeSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>);
         }
         
         // Call the parent callback with the new directive type
-        props.onDirectiveChange?.(selectedValue);
-    }, [props.onDirectiveChange]);
+        props.onUpdate({ type: selectedValue, params: {} })
+    }, [props.onUpdate, props.directiveData]);
+
+    const classes = [
+        isHighlighted && 'highlight',
+    ].filter(Boolean).join(' ');
 
   return (
-    <>
-        <button className="close" title="Remove directive" type="button" onClick= { removeDirective }>
+    <div className={classes}>
+        <button className="close" title="Remove directive" type="button" onClick= { props.onRemove }>
             <span aria-hidden="true">&times;</span>
         </button>
         <div className="input-group">
@@ -108,7 +104,7 @@ const DirectiveCard: React.FC<DirectiveCardProps> = (props: DirectiveCardProps) 
         <div className="params">
             { cardHTML }
         </div>
-    </>
+    </div>
   )
 }
 

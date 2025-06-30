@@ -7,13 +7,13 @@ import { NoCodeView } from './NoCodeView/NoCodeView';
  */
 export interface CndLayoutInterfaceProps {
   /** Current YAML value */
-  value: string;
+  yamlValue?: string;
   /** Callback when YAML value changes */
-  onChange: (value: string) => void;
+  onChange?: (value: string) => void;
   /** Whether to show No Code View */
   isNoCodeView: boolean;
   /** Callback when view mode changes */
-  onViewChange: (isNoCodeView: boolean) => void;
+  onViewChange?: (isNoCodeView: boolean) => void;
   /** Additional CSS class name */
   className?: string;
   /** Whether the component is disabled */
@@ -42,7 +42,7 @@ export interface CndLayoutInterfaceProps {
  * ```
  */
 const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
-  value,
+  yamlValue,
   onChange,
   isNoCodeView,
   onViewChange,
@@ -56,7 +56,7 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
    */
   const handleToggleChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     if (disabled) return;
-    onViewChange(event.target.checked);
+    onViewChange?.(event.target.checked);
   }, [disabled, onViewChange]);
 
   /**
@@ -67,7 +67,7 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
    */
   const handleTextareaChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
     if (disabled) return;
-    onChange(event.target.value);
+    onChange?.(event.target.value);
   }, [disabled, onChange]);
 
   // Build CSS classes combining Bootstrap and custom styles for optimal tree-shaking
@@ -132,7 +132,7 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
       <div className="cnd-layout-interface__content">
         {isNoCodeView ? (
           // No Code View - Bootstrap card layout
-          <NoCodeView />
+          <NoCodeView yamlValue={yamlValue}/>
         ) : (
           // Code View - Bootstrap form styling
           <div className="cnd-layout-interface__code-view" role="region" aria-label="YAML Code Editor">
@@ -140,7 +140,7 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
               <textarea
                 id="webcola-cnd"
                 className="form-control cnd-layout-interface__textarea"
-                value={value}
+                value={yamlValue}
                 onChange={handleTextareaChange}
                 disabled={disabled}
                 rows={12}
