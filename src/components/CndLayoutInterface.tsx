@@ -1,19 +1,31 @@
 import React, { useCallback } from 'react';
 import './CndLayoutInterface.css';
 import { NoCodeView } from './NoCodeView/NoCodeView';
+import { ConstraintData, DirectiveData } from './NoCodeView/interfaces';
+
+import jsyaml from 'js-yaml';
+import { CodeView } from './NoCodeView/CodeView';
 
 /**
  * Configuration options for the CND Layout Interface component
  */
 export interface CndLayoutInterfaceProps {
   /** Current YAML value */
-  yamlValue?: string;
+  yamlValue: string;
   /** Callback when YAML value changes */
-  onChange?: (value: string) => void;
+  onChange: (value: string) => void;
   /** Whether to show No Code View */
   isNoCodeView: boolean;
   /** Callback when view mode changes */
-  onViewChange?: (isNoCodeView: boolean) => void;
+  onViewChange: (isNoCodeView: boolean) => void;
+  /** Constraints */
+  constraints: ConstraintData[];
+  /** Callback to update constraints */
+  setConstraints: (constraints: ConstraintData[]) => void;
+  /** Directives */
+  directives: DirectiveData[];
+  /** Callback to update directives */
+  setDirectives: (directives: DirectiveData[]) => void;
   /** Additional CSS class name */
   className?: string;
   /** Whether the component is disabled */
@@ -46,6 +58,10 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
   onChange,
   isNoCodeView,
   onViewChange,
+  constraints,
+  setConstraints,
+  directives,
+  setDirectives,
   className = '',
   disabled = false,
   'aria-label': ariaLabel = 'CND Layout Specification Interface',
@@ -67,7 +83,7 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
    */
   const handleTextareaChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
     if (disabled) return;
-    onChange?.(event.target.value);
+    onChange(event.target.value);
   }, [disabled, onChange]);
 
   // Build CSS classes combining Bootstrap and custom styles for optimal tree-shaking
@@ -132,29 +148,10 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
       <div className="cnd-layout-interface__content">
         {isNoCodeView ? (
           // No Code View - Bootstrap card layout
-          <NoCodeView yamlValue={yamlValue}/>
+          <NoCodeView yamlValue={yamlValue} constraints={constraints} setConstraints={setConstraints} directives={directives} setDirectives={setDirectives}/>
         ) : (
           // Code View - Bootstrap form styling
-          <div className="cnd-layout-interface__code-view" role="region" aria-label="YAML Code Editor">
-            <div className="mb-2">
-              <textarea
-                id="webcola-cnd"
-                className="form-control cnd-layout-interface__textarea"
-                value={yamlValue}
-                onChange={handleTextareaChange}
-                disabled={disabled}
-                rows={12}
-                spellCheck={false}
-                aria-label="CND Layout Specification YAML"
-                aria-describedby="cnd-layout-yaml-help"
-                style={{ minHeight: '400px', resize: 'vertical' }}
-              />
-            </div>
-            <div id="cnd-layout-yaml-help" className="form-text text-muted fst-italic">
-              Enter your CND layout specification in YAML format. 
-              Use the toggle above to switch to the visual editor.
-            </div>
-          </div>
+          <CodeView constraints={constraints} directives={directives} yamlValue={yamlValue} handleTextareaChange={handleTextareaChange}/>
         )}
       </div>
     </div>

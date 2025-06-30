@@ -26,6 +26,7 @@ export const OrientationSelector: React.FC<OrientationSelectorProps> = (props: O
           type="text"
           name="selector"
           className="form-control"
+          value={props.constraintData.params.selector as string || ''}
           onChange={(event) => {
             const { name, value } = event.target;
             props.onUpdate({
@@ -46,6 +47,7 @@ export const OrientationSelector: React.FC<OrientationSelectorProps> = (props: O
           name="directions"
           className="form-control"
           multiple
+          value={(props.constraintData.params.directions as string[]) || []}
           onChange={(event) => {
             const { name } = event.target;
             const selectedValues = Array.from(event.target.selectedOptions, (option) => option.value);

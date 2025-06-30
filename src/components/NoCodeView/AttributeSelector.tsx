@@ -22,6 +22,7 @@ export const AttributeSelector: React.FC<AttributeSelectorProps> = (props: Attri
         type="text"
         name="field"
         className="form-control"
+        value={props.directiveData.params.field as string || ''}
         onChange={(event) => {
           const { name, value } = event.target;
           props.onUpdate({

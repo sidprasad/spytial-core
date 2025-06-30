@@ -8,6 +8,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { CndLayoutInterface } from './CndLayoutInterface';
+import { ConstraintData, DirectiveData } from './NoCodeView/interfaces';
 
 /**
  * Integration wrapper component that connects the React component
@@ -16,6 +17,8 @@ import { CndLayoutInterface } from './CndLayoutInterface';
 function CndLayoutInterfaceWrapper() {
   const [yamlValue, setYamlValue] = React.useState<string>('');
   const [isNoCodeView, setIsNoCodeView] = React.useState<boolean>(false);
+  const [constraints, setConstraints] = React.useState<ConstraintData[]>([]);
+  const [directives, setDirectives] = React.useState<DirectiveData[]>([]);
 
   /**
    * Handle YAML value changes and update the global state
@@ -43,6 +46,10 @@ function CndLayoutInterfaceWrapper() {
       onChange={handleYamlChange}
       isNoCodeView={isNoCodeView}
       onViewChange={handleViewChange}
+      constraints={constraints}
+      setConstraints={setConstraints}
+      directives={directives}
+      setDirectives={setDirectives}
       aria-label="CND Layout Specification Editor"
     />
   );

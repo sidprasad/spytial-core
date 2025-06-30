@@ -26,6 +26,7 @@ export const GroupBySelectorSelector: React.FC<GroupBySelectorSelectorProps> = (
           type="text"
           name="selector"
           className="form-control"
+          value={props.constraintData.params.selector as string || ''}
           onChange={(event) => {
             const { name, value } = event.target;
             props.onUpdate({
@@ -46,6 +47,7 @@ export const GroupBySelectorSelector: React.FC<GroupBySelectorSelectorProps> = (
           type="text"
           name="name"
           className="form-control"
+          value={props.constraintData.params.name as string || ''}
           onChange={(event) => {
             const { name, value } = event.target;
             props.onUpdate({

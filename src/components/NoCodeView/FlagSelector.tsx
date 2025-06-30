@@ -16,7 +16,9 @@ export const FlagSelector: React.FC<FlagSelectorProps> = ({
   directiveData,
   onUpdate
 }) => {
-  const flag = (directiveData.params.flag as string) || '';
+  // FIXME: for some reason the select doesn't show the current value without this console.log
+  const flag = directiveData.params.flag as string || '';
+  console.log('FlagSelector render, flag:', flag)
 
   return (
     <div className="input-group">

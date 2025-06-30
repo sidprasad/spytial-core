@@ -28,7 +28,14 @@ interface ConstraintCardProps {
 }
 
 const ConstraintCard = (props: ConstraintCardProps) => {
-    const [cardHTML, setCardHTML] = useState<React.JSX.Element>(<OrientationSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>); // FIXME: Better way to set default?
+    const constraintsToSelectorComponentMap: Record<ConstraintType, React.JSX.Element> = {
+        cyclic: <CyclicSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>,
+        orientation: <OrientationSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>,
+        groupfield: <GroupByFieldSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>,
+        groupselector: <GroupBySelectorSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>,  
+    }
+
+    const [cardHTML, setCardHTML] = useState<React.JSX.Element>(constraintsToSelectorComponentMap[props.constraintData.type]);
     
     const { isHighlighted } = useHighlight(1000); // Highlight for 1 second
 
@@ -46,16 +53,7 @@ const ConstraintCard = (props: ConstraintCardProps) => {
         console.log('Select element value', selectedValue);
 
         // Constraint Fields
-        // TODO: Use a mapping object to avoid multiple if-else statements
-        if (selectedValue === "cyclic") {
-            setCardHTML(<CyclicSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>);
-        } else if (selectedValue === "orientation") {
-            setCardHTML(<OrientationSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>);
-        } else if (selectedValue === "groupfield") {
-            setCardHTML(<GroupByFieldSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>);
-        } else if (selectedValue === "groupselector") {
-            setCardHTML(<GroupBySelectorSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>);
-        }
+        setCardHTML(constraintsToSelectorComponentMap[selectedValue]);
 
         // Update the constraint type
         props.onUpdate({ type: selectedValue, params: {} });
@@ -74,7 +72,7 @@ const ConstraintCard = (props: ConstraintCardProps) => {
                 <div className="input-group-prepend">
                     <span className="input-group-text" title="Choose constraint type">Constraint</span>
                 </div>
-                <select onChange={ updateFields } >
+                <select onChange={ updateFields } value={ props.constraintData.type }>
                     <option value="orientation" title={ORIENTATION_DESCRIPTION}>Orientation</option>
                     <option value="cyclic" title={CYCLIC_DESCRIPTION}>Cyclic</option>
                     <option value="groupfield" title={GROUPING_FIELD_DESCRIPTION}>Group by field</option>

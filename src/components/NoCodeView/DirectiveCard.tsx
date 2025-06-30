@@ -12,6 +12,7 @@ import {
 } from './index';
 import { useHighlight } from './hooks';
 import { DirectiveData } from './interfaces';
+import { DirectiveType } from './types';
 
 /**
  * Configuration options for constraint card component
@@ -32,7 +33,19 @@ interface DirectiveCardProps {
 }
 
 const DirectiveCard: React.FC<DirectiveCardProps> = (props: DirectiveCardProps) => {
-    const [cardHTML, setCardHTML] = useState<React.JSX.Element>(<FlagSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>);
+    const directiveToSelectorComponentMap: Record<DirectiveData['type'], React.JSX.Element> = {
+        "attribute": <AttributeSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>,
+        "hideField": <HideFieldSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>,
+        "icon": <IconSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>,
+        "atomColor": <ColorAtomSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>,
+        "edgeColor": <ColorEdgeSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>,
+        "size": <SizeSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>,
+        "projection": <ProjectionSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>,
+        "flag": <FlagSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>,
+        "inferredEdge": <HelperEdgeSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>,
+    }
+
+    const [cardHTML, setCardHTML] = useState<React.JSX.Element>(directiveToSelectorComponentMap[props.directiveData.type]);
 
     const { isHighlighted } = useHighlight(1000); // Highlight for 1 second
 
@@ -52,25 +65,7 @@ const DirectiveCard: React.FC<DirectiveCardProps> = (props: DirectiveCardProps) 
         // Directive Fields
         // TODO: Refactor to use a mapping object instead of if-else chain
         // This way, the initial type can also use this mapping
-        if (selectedValue === "attribute") {
-            setCardHTML(<AttributeSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>);
-        } else if (selectedValue === "hideField") {
-            setCardHTML(<HideFieldSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>);
-        } else if (selectedValue === "icon") {
-            setCardHTML(<IconSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>);
-        } else if (selectedValue === "atomColor") {
-            setCardHTML(<ColorAtomSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>);
-        } else if (selectedValue === "edgeColor") {
-            setCardHTML(<ColorEdgeSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>);
-        } else if (selectedValue === "size") { 
-            setCardHTML(<SizeSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>);
-        } else if (selectedValue === "projection") {
-            setCardHTML(<ProjectionSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>);
-        } else if (selectedValue === "flag") {
-            setCardHTML(<FlagSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>);
-        } else if (selectedValue === "inferredEdge") {
-            setCardHTML(<HelperEdgeSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>);
-        }
+        setCardHTML(directiveToSelectorComponentMap[selectedValue]);
         
         // Call the parent callback with the new directive type
         props.onUpdate({ type: selectedValue, params: {} })
@@ -89,7 +84,7 @@ const DirectiveCard: React.FC<DirectiveCardProps> = (props: DirectiveCardProps) 
             <div className="input-group-prepend">
                 <span className="input-group-text">Directive</span>
             </div>
-            <select onChange={ updateFields }>
+            <select onChange={ updateFields } value={ props.directiveData.type }>
                 <option value="flag">Visibility Flag</option>
                 <option value="attribute">Attribute</option>
                 <option value="hideField">Hide Field</option>

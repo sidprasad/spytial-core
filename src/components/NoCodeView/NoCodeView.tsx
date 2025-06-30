@@ -2,92 +2,9 @@ import React, { useCallback, useEffect, useState } from "react";
 import { ConstraintCard } from "./ConstraintCard";
 import { DirectiveCard } from "./DirectiveCard";
 import { ConstraintData, DirectiveData } from "./interfaces";
-
-import "./NoCodeView.css";
 import jsyaml from "js-yaml";
 
-/**
- * Converts constraint and directive data objects to YAML string
- * 
- * Generates a valid CND layout specification from structured data objects.
- * This function is the inverse of parseLayoutSpec and ensures round-trip
- * compatibility for the No Code View.
- * 
- * Following cnd-core guidelines:
- * - Tree-shakable named export
- * - Client-side optimized (no Node.js APIs)
- * - TypeScript strict typing
- * - Functional programming approach
- * 
- * @param constraints - Array of constraint data objects from No Code View
- * @param directives - Array of directive data objects from No Code View
- * @returns YAML string representation of the layout specification
- * 
- * @example
- * ```typescript
- * const constraints = [
- *   { type: 'orientation', directions: ['left'], selector: 'Node' }
- * ];
- * const directives = [
- *   { type: 'color', value: '#ff0000', selector: 'Node' }
- * ];
- * const yamlSpec = generateLayoutSpecYaml(constraints, directives);
- * ```
- * 
- * @public
- */
-export function generateLayoutSpecYaml(
-  constraints: ConstraintData[], 
-  directives: DirectiveData[]
-): string {
-
-    // Helper function to determine YAML constraint type from structured data
-    // TODO: Make this a map??
-    function toYamlConstraintType(type: string): string {
-        if (type === "cyclic") {
-            return "cyclic";
-        }
-        if (type === "orientation") {
-            return "orientation";
-        }
-        if (type === "groupfield" || type === "groupselector") {
-            return "group";
-        }
-        return "unknown";
-    }
-
-    // Convert constraint type to YAML constraint type
-    const yamlConstraints = constraints.forEach(c => {
-        return {
-            [toYamlConstraintType(c.type)]: c.params
-        }
-    });
-
-    // Convert directive type to YAML directive type
-    const yamlDirectives = directives.forEach(d => {
-        return {
-            [d.type]: d.params
-        }
-    });
-
-    // Combine constraints and directives into a single YAML object
-    let combinedSpec: any = {};
-    if (constraints.length > 0) {
-        combinedSpec.constraints = yamlConstraints;
-    }
-    if (directives.length > 0) {
-        combinedSpec.directives = yamlDirectives;
-    }
-
-    // Convert combined spec object to YAML string
-    let yamlStr = "";
-
-    if (Object.keys(combinedSpec).length > 0) {
-        yamlStr = jsyaml.dump(combinedSpec);
-    }
-
-    return yamlStr;
-}
+import "./NoCodeView.css";
 
 /**
  * Converts YAML string to structured constraint and directive data objects
@@ -199,13 +116,23 @@ export function parseLayoutSpecToData(yamlString: string): {
 interface NoCodeViewProps {
     /** YAML string of CnD layout spec */
     yamlValue?: string;
-    /** Callback when YAML value changes */
-    onChange?: (value: string) => void;
+    /** Constraints */
+    constraints: ConstraintData[];
+    /** Callback to set constraints */
+    setConstraints: (constraints: ConstraintData[]) => void;
+    /** Directives */
+    directives: DirectiveData[];
+    /** Callback to set directives */
+    setDirectives: (directives: DirectiveData[]) => void;
 }
 
-const NoCodeView = (props: NoCodeViewProps) => {
-    const [constraints, setConstraints] = useState<ConstraintData[]>([]);
-    const [directives, setDirectives] = useState<DirectiveData[]>([]);
+const NoCodeView = ({
+    yamlValue,
+    constraints,
+    setConstraints,
+    directives,
+    setDirectives,
+}: NoCodeViewProps) => {
 
     // Utility function to generate simple unique IDs for constraints
     const generateId = () => {
@@ -231,8 +158,7 @@ const NoCodeView = (props: NoCodeViewProps) => {
         constraintId: string, 
         updates: Partial<Omit<ConstraintData, 'id'>>
     ) => {
-        setConstraints(prevConstraints =>
-        prevConstraints.map(constraint =>
+        setConstraints(constraints.map(constraint => 
             constraint.id === constraintId 
             ? { ...constraint, ...updates }
             : constraint
@@ -263,41 +189,12 @@ const NoCodeView = (props: NoCodeViewProps) => {
         directiveId: string, 
         updates: Partial<Omit<DirectiveData, 'id'>>
     ) => {
-        setDirectives(prevDirectives =>
-        prevDirectives.map(directive =>
+        setDirectives(directives.map(directive =>
             directive.id === directiveId 
             ? { ...directive, ...updates }
-            : directive
-        )
+            : directive)
         );
     }, []);
-
-    /**
-     * Generates YAML specification from current No Code View state
-     * 
-     * Converts the current constraints and directives state into a valid YAML
-     * string that can be used with the existing CND layout pipeline. This enables
-     * seamless integration between visual editing and text-based editing.
-     * 
-     * Following cnd-core component guidelines:
-     * - useCallback optimization for performance
-     * - Immutable data handling
-     * - Error boundary compatibility
-     * - Client-side optimized processing
-     * 
-     * @returns YAML string representation of current visual state
-     * 
-     * @example
-     * ```typescript
-     * const yamlSpec = noCodeViewRef.current?.generateYamlFromState();
-     * if (yamlSpec) {
-     *   updateTextArea(yamlSpec);
-     * }
-     * ```
-     */
-    const generateYamlFromState = (): string => {
-        return generateLayoutSpecYaml(constraints, directives);
-    }
 
     /**
      * Loads constraint and directive state from YAML specification
@@ -329,6 +226,19 @@ const NoCodeView = (props: NoCodeViewProps) => {
         setConstraints(newConstraints);
         setDirectives(newDirectives);
     };
+
+    // Load initial state from YAML when component mounts
+    useEffect(() => {
+        // If switching to No Code View and have YAML, load it
+        if (yamlValue) {
+            try {
+                console.log("Loading YAML into No Code View state")
+                loadStateFromYaml(yamlValue);
+            } catch (error) {
+                console.error("Failed to load YAML into No Code View:", error);
+            }
+        }
+    }, [])
 
     return (
         <div className="container-fluid" id="noCodeViewContainer">
