@@ -93,6 +93,7 @@
                     </select>
                 </div>
             </div>
+            <div id="status" class="status info">Ready to load Alloy graph...</div>
             <div id="graph-container-wrapper">
                 <!-- Use the webcola-cnd-graph custom element -->
                 <webcola-cnd-graph 
@@ -103,7 +104,6 @@
                 </webcola-cnd-graph>
             </div>
         </div>
-        <div id="status" class="status info">Ready to load Alloy graph...</div>
     </div>
     <div id="cnd-panel" class="container col-md-4 border p-3">
         <div id="webcola-cnd-container">
@@ -170,7 +170,7 @@
                 console.log('LayoutInstance available:', !!CndCore.LayoutInstance);
                 console.log('parseLayoutSpec available:', !!CndCore.parseLayoutSpec);
                 
-                updateStatus('Alloy pipeline ready! Enter Alloy XML and CND specifications above.', 'success');
+                updateStatus('Alloy pipeline ready! Enter Alloy XML and CND specifications now.', 'success');
                 
                 return true;
             } catch (error) {
