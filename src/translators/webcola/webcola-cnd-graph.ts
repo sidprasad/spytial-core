@@ -679,7 +679,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         return d.y - height / 2;
       })
       .append("title")
-      .text((d: any) => d.name || d.id || "Node")
+      .text((d: any) => d.label || d.name || d.id || "Node")
       .on("error", function(this: SVGImageElement, event: any, d: any) {
         d3.select(this).attr("xlink:href", "img/default.png");
         console.error(`Failed to load icon for node ${d.id}: ${d.icon}`);
@@ -720,7 +720,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         }
 
         const shouldShowLabels = d.showLabels;
-        const displayLabel = shouldShowLabels ? (d.name || d.id || "Node") : "";
+        const displayLabel = shouldShowLabels ? (d.label || d.name || d.id || "Node") : "";
         const textElement = d3.select(nodes[i]);
 
         // Add main name label

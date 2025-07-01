@@ -21,6 +21,8 @@ import * as dagre from 'dagre';
  */
 
 type NodeWithMetadata = Node & {
+
+  label: string, // This is the label that will be displayed on the node
   id: string,
   attributes: Record<string, string[]>,
   color: string
@@ -218,6 +220,7 @@ export class WebColaLayout {
       fixed: fixed,
       mostSpecificType: node.mostSpecificType,
       showLabels: node.showLabels,
+      label : node.label
     }
   }
 
