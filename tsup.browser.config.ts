@@ -14,7 +14,7 @@ export default defineConfig({
   minify: false, // Keep readable for debugging
   target: 'es2020',
   outDir: 'dist/browser',
-  external: [], // Bundle everything
+  external: ['react', 'react-dom'], // Bundle everything, except React
   bundle: true,
   treeshake: true,
   // Bundle ALL dependencies for browser use

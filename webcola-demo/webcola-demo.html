@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WebCola CND Demo</title>
+    
+    <!-- Bootstrap CSS for component styling -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -76,9 +80,8 @@
                 <label for="webcola-alloy">Alloy XML Instance:</label>
                 <textarea id="webcola-alloy" placeholder="Paste your Alloy XML instance here..."></textarea>
             </div>
-            <div>
-                <label for="webcola-cnd">CND Layout Specification (YAML):</label>
-                <textarea id="webcola-cnd" placeholder="Paste your CND layout specification here..."></textarea>
+            <div id="webcola-cnd-container">
+                <!-- React element attached here -->
             </div>
         </div>
         
@@ -106,10 +109,14 @@
 
     <!-- D3 v4 and WebCola - the working combination -->
     <script src="https://d3js.org/d3.v4.min.js"></script>
-    <script src="./vendor/cola.js"></script>
+    <script src="../vendor/cola.js"></script>
     
     <!-- Complete CND-Core browser bundle -->
-    <script src="./dist/browser/cnd-core-complete.global.js"></script>
+    <script src="../dist/browser/cnd-core-complete.global.js"></script>
+    
+    <!-- Your React component bundle (includes React runtime) -->
+    <script src="../dist/components/demo-integration.global.js"></script>
+    <link rel="stylesheet" href="../dist/components/demo-integration.css">
     <script>
         // Variables to store data
         let currentInstanceLayout = null;
@@ -127,7 +134,10 @@
          * @returns {string} CND layout specification
          */
         function getCurrentCNDSpec() {
-            return document.getElementById('webcola-cnd').value.trim();
+            // Try to get value from React component first
+            return window.getCurrentCNDSpecFromReact ? 
+                window.getCurrentCNDSpecFromReact() : 
+                document.getElementById('webcola-cnd')?.value?.trim();
         }
 
         /**
@@ -335,7 +345,13 @@
         }
 
         // Auto-initialize when page loads
-        window.addEventListener('load', initializePipeline);
+        window.addEventListener('load', () => {
+            initializePipeline();
+            // Mount React component if available
+            if (window.mountCndLayoutInterface) {
+                window.mountCndLayoutInterface();
+            }
+        });
 
         // Expose functions globally for buttons
         window.loadGraph = loadGraph;
