@@ -59,7 +59,9 @@ export interface IInputDataInstance  extends IDataInstance {
   // Add atoms, relations, and types
   addAtom(atom: IAtom): void;
   addRelation(relation: IRelation): void;
-  addType(type: IType): void;
+
+  removeAtom(id: string): void;
+  removeRelation(id: string): void;
 
   // And a method to re-ify the data instance
   // to something in the source language / format.

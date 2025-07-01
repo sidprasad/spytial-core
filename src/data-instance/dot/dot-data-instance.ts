@@ -1,9 +1,7 @@
-import type { Graph } from 'graphlib';
+import { Graph } from 'graphlib';
 import parse from 'graphlib-dot';
-import type { IDataInstance, IAtom, IType, IRelation, IInputDataInstance } from '../interfaces';
+import type { IAtom, IType, IRelation, IInputDataInstance, ITuple } from '../interfaces';
 
-import { AlloyDatum, parseAlloyXML } from '../alloy/alloy-instance';
-import { AlloyDataInstance } from '../alloy-data-instance';
 
 /**
  * Simple DOT data instance implementation
@@ -13,20 +11,23 @@ import { AlloyDataInstance } from '../alloy-data-instance';
 export class DotDataInstance implements IInputDataInstance {
 
 
-  private graph : Graph;
+  private graph: Graph;
   constructor(dotSpec: string) {
-  
+
+    // This graph is the source of truth for the data instance.
+    // Each node has its type and label as properties.
     this.graph = parse.read(dotSpec);
 
   }
 
 
-  reify() : string {
-      // Convert the graph back to DOT format
-      return parse.write(this.graph);
-    }
 
-  
+  reify(): string {
+    // Convert the graph back to DOT format
+    return parse.write(this.graph);
+  }
+
+
   getAtoms(): readonly IAtom[] {
     const atoms: IAtom[] = [];
     this.graph.nodes().forEach((nodeId) => {
@@ -42,7 +43,180 @@ export class DotDataInstance implements IInputDataInstance {
     return atoms;
   }
 
+  getAtomType(id: string): IType {
+    const node = this.graph.node(id);
+    if (!node) {
+      throw new Error(`Atom with id ${id} not found`);
+    }
 
+    const t = node.type || 'unknown';
+
+    return {
+      id: t,
+      types: [t],
+      atoms: this.getAtoms().filter(atom => atom.type === t),
+      isBuiltin: false // Assuming no built-in types in DOT
+    };
+  }
+
+  getTypes(): readonly IType[] {
+
+    // First get Atom types, then dedup.
+    const atoms = this.getAtoms();
+    const typeMap: Record<string, IType> = {};
+    atoms.forEach(atom => {
+      const typeId = atom.type || 'unknown';
+      if (!typeMap[typeId]) {
+        typeMap[typeId] = {
+          id: typeId,
+          types: [typeId],
+          atoms: [],
+          isBuiltin: false // Assuming no built-in types in DOT
+        };
+      }
+      typeMap[typeId].atoms.push(atom);
+    }
+    );
+    return Object.values(typeMap);
+  }
+
+  // TODO: Fix.
+  applyProjections(atomIds: string[]): DotDataInstance {
+    const newGraph = new Graph();
+
+    atomIds.forEach(id => {
+      const node = this.graph.node(id);
+      if (node) {
+        newGraph.setNode(id, { ...node });
+      }
+    });
+
+    // Copy edges
+    this.graph.edges().forEach(edge => {
+      if (newGraph.hasNode(edge.v) && newGraph.hasNode(edge.w)) {
+        newGraph.setEdge(edge.v, edge.w, this.graph.edge(edge));
+      }
+    });
+
+    return new DotDataInstance(parse.write(newGraph));
+  }
+
+
+
+
+  generateGraph(hideDisconnected: boolean, hideDisconnectedBuiltIns: boolean): Graph {
+
+    const graph = new Graph({ directed: true, multigraph: true, compound: true });
+
+    // Copy over this.graph nodes and edges
+    this.graph.nodes().forEach(nodeId => {
+      const node = this.graph.node(nodeId);
+      if (node) {
+        graph.setNode(nodeId, { label: node.label, type: node.type });
+      }
+    });
+    this.graph.edges().forEach(edge => {
+      graph.setEdge(edge.v, edge.w, this.graph.edge(edge));
+    });
+
+
+
+
+    graph.nodes().forEach(node => {
+      let outEdges = graph.outEdges(node) || [];
+      let inEdges = graph.inEdges(node) || [];
+      if (outEdges.length === 0 && inEdges.length === 0) {
+        const isBuiltin = this.getAtomType(node).isBuiltin;
+        if (hideDisconnected || (isBuiltin && hideDisconnectedBuiltIns)) {
+          graph.removeNode(node);
+        }
+      }
+    });
+    return graph; // Return the graph as is for now, no filtering applied
+  }
+
+
+
+  getRelations(): readonly IRelation[] {
+    
+    // First, each relation comes from an edge in the graph.
+    const relationMap = new Map<string, { label: string; tuples: ITuple[]; types: string[] }>();
+    
+
+    // Now for each edge, we create a relation in the relationMap.
+    this.graph.edges().forEach(edge => {
+      const source = edge.v;
+      const target = edge.w;
+      const label = this.graph.edge(edge).label || '';
+      
+      // Create a tuple from the edge
+      const tuple: ITuple = {
+        atoms: [source, target],
+        types: [this.getAtomType(source).id, this.getAtomType(target).id]
+      };
+
+      if (!relationMap.has(label)) {
+        relationMap.set(label, { label, tuples: [], types: tuple.types });
+      }
+      relationMap.get(label)!.tuples.push(tuple);
+    });
+
+    // Convert the relationMap to an array of IRelation
+    const relations: IRelation[] = [];
+    relationMap.forEach((value, key) => {
+      relations.push({
+        id: key,
+        name: key,
+        types: value.types,
+        tuples: value.tuples
+      });
+    }
+    );
+    return relations;
+  }
+
+
+
+  addAtom(atom: IAtom): void {
+    if (this.graph.hasNode(atom.id)) {
+      throw new Error(`Atom with id ${atom.id} already exists`);
+    }
+    this.graph.setNode(atom.id, { type: atom.type, label: atom.label });
+  }
+
+  addRelation(relation: IRelation): void {
+    relation.tuples.forEach(tuple => {
+      if (tuple.atoms.length < 2) {
+        throw new Error(`Tuple must have at least two atoms, found ${tuple.atoms.length}`);
+      }
+      const source = tuple.atoms[0];
+      const target = tuple.atoms[tuple.atoms.length - 1];
+      this.graph.setEdge(source, target, { label: relation.name });
+    });
+  }
+
+  removeRelation(id: string): void {
+    if (!this.graph.hasNode(id)) {
+      throw new Error(`Relation with id ${id} does not exist`);
+    }
+    
+    // Remove all edges associated with this relation
+    const edgesToRemove = this.graph.edges().filter(edge => this.graph.edge(edge).label === id);
+    edgesToRemove.forEach(edge => this.graph.removeEdge(edge));
+    
+    // Finally, remove the node itself
+    this.graph.removeNode(id);
+  }
+
+  removeAtom(id: string): void {
+    if (!this.graph.hasNode(id)) {
+      throw new Error(`Atom with id ${id} does not exist`);
+    }
+    
+    // Remove by its ID (I believe graphlib does the rest.)
+    this.graph.removeNode(id);
+  }
+
+
+}
   
-
- }
