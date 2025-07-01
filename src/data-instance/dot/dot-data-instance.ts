@@ -207,16 +207,29 @@ export class DotDataInstance implements IInputDataInstance {
   }
 
   addRelationTuple(relationId : string, t : ITuple): void {
-    // TODO: Add this.
+    
+    // Add the edge in the graph that corresponds to this tuple
+    const source = t.atoms[0];
+    const target = t.atoms[t.atoms.length - 1];
+    const edgeName = `${relationId}:${t.atoms.join('-')}`;
+    if (this.graph.hasEdge(source, target, edgeName)) {
+      throw new Error(`Relation tuple ${relationId} with atoms ${t.atoms.join(', ')} already exists`);
+    }
+    this.addEdge(source, target, relationId);
 
-    // Ensure each ...
   }
 
   removeRelationTuple(relationId: string, t : ITuple): void {
    
-
-    // TODO: Implement
-
+    // Remove the edge in the graph that corresponds to this tuple
+    const source = t.atoms[0];
+    const target = t.atoms[t.atoms.length - 1];
+    const edgeName = `${relationId}:${t.atoms.join('-')}`;
+    if (this.graph.hasEdge(source, target, edgeName)) {
+      this.graph.removeEdge(source, target, edgeName);
+    } else {
+      throw new Error(`Relation tuple ${relationId} with atoms ${t.atoms.join(', ')} does not exist`);
+    }
   }
 
   removeAtom(id: string): void {
