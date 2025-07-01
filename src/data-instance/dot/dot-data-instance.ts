@@ -1,6 +1,7 @@
 import { Graph } from 'graphlib';
 import parse from 'graphlib-dot';
 import type { IAtom, IType, IRelation, IInputDataInstance, ITuple } from '../interfaces';
+import { Tuple } from '../../evaluators';
 
 
 /**
@@ -205,28 +206,17 @@ export class DotDataInstance implements IInputDataInstance {
     this.graph.setNode(atom.id, { type: atom.type, label: atom.label });
   }
 
-  addRelation(relation: IRelation): void {
-    relation.tuples.forEach(tuple => {
-      if (tuple.atoms.length < 2) {
-        throw new Error(`Tuple must have at least two atoms, found ${tuple.atoms.length}`);
-      }
-      const source = tuple.atoms[0];
-      const target = tuple.atoms[tuple.atoms.length - 1];
-      this.addEdge(source, target, relation.name);
-    });
+  addRelationTuple(relationId : string, t : ITuple): void {
+    // TODO: Add this.
+
+    // Ensure each ...
   }
 
-  removeRelation(id: string): void {
-    if (!this.graph.hasNode(id)) {
-      throw new Error(`Relation with id ${id} does not exist`);
-    }
-    
-    // Remove all edges associated with this relation
-    const edgesToRemove = this.graph.edges().filter(edge => this.graph.edge(edge).label === id);
-    edgesToRemove.forEach(edge => this.graph.removeEdge(edge));
-    
-    // Finally, remove the node itself
-    this.graph.removeNode(id);
+  removeRelationTuple(relationId: string, t : ITuple): void {
+   
+
+    // TODO: Implement
+
   }
 
   removeAtom(id: string): void {
