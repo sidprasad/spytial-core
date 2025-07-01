@@ -2,8 +2,6 @@ import React, { useCallback } from 'react';
 import './CndLayoutInterface.css';
 import { NoCodeView } from './NoCodeView/NoCodeView';
 import { ConstraintData, DirectiveData } from './NoCodeView/interfaces';
-
-import jsyaml from 'js-yaml';
 import { CodeView } from './NoCodeView/CodeView';
 
 /**
@@ -21,11 +19,11 @@ export interface CndLayoutInterfaceProps {
   /** Constraints */
   constraints: ConstraintData[];
   /** Callback to update constraints */
-  setConstraints: (constraints: ConstraintData[]) => void;
+  setConstraints: (updater: (prev: ConstraintData[]) => ConstraintData[]) => void;
   /** Directives */
   directives: DirectiveData[];
   /** Callback to update directives */
-  setDirectives: (directives: DirectiveData[]) => void;
+  setDirectives: (updater: (prev: DirectiveData[]) => DirectiveData[]) => void;
   /** Additional CSS class name */
   className?: string;
   /** Whether the component is disabled */

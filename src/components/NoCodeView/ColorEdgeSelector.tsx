@@ -29,7 +29,7 @@ export const ColorEdgeSelector: React.FC<ColorEdgeSelectorProps> = ({
           type="text"
           name="field"
           className="form-control"
-          value={field}
+          defaultValue={field}
           onChange={(e) => onUpdate({ params: { ...directiveData.params, field: e.target.value } })}
           required
         />
@@ -42,7 +42,7 @@ export const ColorEdgeSelector: React.FC<ColorEdgeSelectorProps> = ({
           type="color"
           name="value"
           className="form-control"
-          value={value}
+          defaultValue={value}
           onChange={(e) => onUpdate({ params: { ...directiveData.params, value: e.target.value } })}
           required
         />

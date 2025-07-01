@@ -9,6 +9,79 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { CndLayoutInterface } from './CndLayoutInterface';
 import { ConstraintData, DirectiveData } from './NoCodeView/interfaces';
+import { generateLayoutSpecYaml } from './NoCodeView/CodeView';
+
+class CndLayoutStateManager {
+  private static instance: CndLayoutStateManager;
+  private constraints: ConstraintData[] = [];
+  private directives: DirectiveData[] = [];
+  private yamlValue: string = '';
+
+  public constructor() {}
+
+  /**
+   * Get singleton instance of state manager
+   * @returns The global state manager instance
+   */
+  public static getInstance(): CndLayoutStateManager {
+    if (!CndLayoutStateManager.instance) {
+      CndLayoutStateManager.instance = new CndLayoutStateManager();
+    }
+    return CndLayoutStateManager.instance;
+  }
+
+  /**
+   * Update constraints array
+   * @param constraints - New constraints array
+   */
+  public setConstraints(constraints: ConstraintData[]): void {
+    this.constraints = constraints;
+  }
+
+  /**
+   * Update directives array
+   * @param directives - New directives array
+   */
+  public setDirectives(directives: DirectiveData[]): void {
+    this.directives = directives;
+  }
+
+  /**
+   * Update YAML value
+   * @param yamlValue - New YAML string
+   */
+  public setYamlValue(yamlValue: string): void {
+    this.yamlValue = yamlValue;
+  }
+
+  /**
+   * Generate YAML spec from current constraints and directives
+   * @returns Generated YAML specification string
+   */
+  public generateCurrentYamlSpec(): string {
+    try {
+      return generateLayoutSpecYaml(this.constraints, this.directives);
+    } catch (error) {
+      console.error('Failed to generate YAML spec from state:', error);
+      return '';
+    }
+  }
+
+  /**
+   * Get the most current CND specification
+   * Prioritizes manual YAML input over generated spec
+   * @returns Current CND specification string
+   */
+  public getCurrentCndSpec(): string {
+    // If user has manually entered YAML, use that
+    if (this.yamlValue.trim()) {
+      return this.yamlValue;
+    }
+    
+    // Otherwise generate from constraints/directives
+    return this.generateCurrentYamlSpec();
+  }
+}
 
 /**
  * Integration wrapper component that connects the React component
@@ -19,6 +92,22 @@ function CndLayoutInterfaceWrapper() {
   const [isNoCodeView, setIsNoCodeView] = React.useState<boolean>(false);
   const [constraints, setConstraints] = React.useState<ConstraintData[]>([]);
   const [directives, setDirectives] = React.useState<DirectiveData[]>([]);
+
+  /** Get state manager instance */
+  const stateManager = React.useMemo(() => CndLayoutStateManager.getInstance(), []);
+
+  /** Sync with class state variables */
+  React.useEffect(() => {
+    stateManager.setConstraints(constraints);
+  }, [constraints]);
+
+  React.useEffect(() => {
+    stateManager.setDirectives(directives);
+  }, [directives]);
+
+  React.useEffect(() => {
+    stateManager.setYamlValue(yamlValue);
+  }, [yamlValue]);
 
   /**
    * Handle YAML value changes and update the global state
@@ -40,6 +129,20 @@ function CndLayoutInterfaceWrapper() {
     console.log(`Switched to ${newIsNoCodeView ? 'No Code' : 'Code'} View`);
   }, []);
 
+  /**
+   * Handle constraints updates with functional setState
+   */
+  const handleSetConstraints = React.useCallback((updater: (prev: ConstraintData[]) => ConstraintData[]) => {
+    setConstraints(updater);
+  }, []);
+
+  /**
+   * Handle directives updates with functional setState
+   */
+  const handleSetDirectives = React.useCallback((updater: (prev: DirectiveData[]) => DirectiveData[]) => {
+    setDirectives(updater);
+  }, []);
+
   return (
     <CndLayoutInterface
       yamlValue={yamlValue}
@@ -47,9 +150,9 @@ function CndLayoutInterfaceWrapper() {
       isNoCodeView={isNoCodeView}
       onViewChange={handleViewChange}
       constraints={constraints}
-      setConstraints={setConstraints}
+      setConstraints={handleSetConstraints}
       directives={directives}
-      setDirectives={setDirectives}
+      setDirectives={handleSetDirectives}
       aria-label="CND Layout Specification Editor"
     />
   );
@@ -77,18 +180,40 @@ export function mountCndLayoutInterface(): void {
 }
 
 /**
- * Update the existing getCurrentCNDSpec function to work with React component
- * This maintains compatibility with the existing demo JavaScript
+ * Get current CND specification from React component state
+ * This function provides access to the most current specification
+ * 
+ * @returns Current CND specification string or undefined if not available
+ * 
+ * @example
+ * ```javascript
+ * // In your demo page JavaScript:
+ * const cndSpec = getCurrentCNDSpecFromReact();
+ * if (cndSpec) {
+ *   console.log('Current spec:', cndSpec);
+ * }
+ * ```
  */
 export function getCurrentCNDSpecFromReact(): string | undefined {
-  // Try to get value from React component's textarea first
-  const reactTextarea = document.querySelector('#webcola-cnd-container textarea');
-  if (reactTextarea && reactTextarea instanceof HTMLTextAreaElement) {
-    return reactTextarea.value.trim();
-  }
+  try {
+    const stateManager = CndLayoutStateManager.getInstance();
+    const currentSpec = stateManager.generateCurrentYamlSpec();
 
-  // Error handling if React component is not found
-  console.error('CndLayoutInterface textarea not found');
+    if (currentSpec.trim()) {
+      return currentSpec;
+    }
+  
+    // Fallback: Try to get value from the DOM
+    const reactTextarea = document.querySelector('#webcola-cnd-container textarea');
+    if (reactTextarea && reactTextarea instanceof HTMLTextAreaElement) {
+      return reactTextarea.value.trim();
+    }
+  
+    // Error handling if React component is not found
+    console.warn('CndLayoutInterface textarea not found');
+  } catch (error) {
+    console.error('Error accessing CndLayoutInterface instance:', error);
+  }
 }
 
 /**

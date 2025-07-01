@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { TUPLE_SELECTOR_TEXT } from './constants';
 import { ConstraintData } from './interfaces';
 
@@ -14,6 +14,27 @@ interface OrientationSelectorProps {
  * Includes selector input and multi-select direction dropdown.
  */
 export const OrientationSelector: React.FC<OrientationSelectorProps> = (props: OrientationSelectorProps) => {
+  const handleInputChange = useCallback((event) => {
+    const { name, value } = event.target;
+    props.onUpdate({
+      params: {
+        ...props.constraintData.params,
+        [name]: value
+      }
+    });
+  }, [props.onUpdate]);
+
+  const handleSelectChange = useCallback((event) => {
+    const { name } = event.target;
+    const selectedValues = Array.from(event.target.selectedOptions, (option) => option.value);
+    props.onUpdate({
+      params: {
+        ...props.constraintData.params,
+        [name]: selectedValues
+      }
+    });
+  }, [props.onUpdate, props.constraintData.params]);
+
   return (
     <>
       <div className="input-group">
@@ -26,16 +47,8 @@ export const OrientationSelector: React.FC<OrientationSelectorProps> = (props: O
           type="text"
           name="selector"
           className="form-control"
-          value={props.constraintData.params.selector as string || ''}
-          onChange={(event) => {
-            const { name, value } = event.target;
-            props.onUpdate({
-              params: {
-                ...props.constraintData.params,
-                [name]: value
-              }
-            });
-          }}
+          defaultValue={props.constraintData.params.selector as string || ''}
+          onChange={handleInputChange}
           required
         />
       </div>
@@ -47,17 +60,8 @@ export const OrientationSelector: React.FC<OrientationSelectorProps> = (props: O
           name="directions"
           className="form-control"
           multiple
-          value={(props.constraintData.params.directions as string[]) || []}
-          onChange={(event) => {
-            const { name } = event.target;
-            const selectedValues = Array.from(event.target.selectedOptions, (option) => option.value);
-            props.onUpdate({
-              params: {
-                ...props.constraintData.params,
-                [name]: selectedValues
-              }
-            });
-          }}
+          defaultValue={(props.constraintData.params.directions as string[]) || []}
+          onChange={handleSelectChange}
         >
           <option value="left">Left</option>
           <option value="right">Right</option>

@@ -59,8 +59,6 @@ const DirectiveCard: React.FC<DirectiveCardProps> = (props: DirectiveCardProps) 
         // Access the HTMLSelectElement through event.target
         const selectElement = event.target;
         const selectedValue = selectElement.value as DirectiveType;
-        
-        console.log('Select element value', selectedValue);
 
         // Directive Fields
         // TODO: Refactor to use a mapping object instead of if-else chain

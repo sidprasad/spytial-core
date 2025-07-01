@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect } from "react";
 import { ConstraintCard } from "./ConstraintCard";
 import { DirectiveCard } from "./DirectiveCard";
 import { ConstraintData, DirectiveData } from "./interfaces";
@@ -147,11 +147,11 @@ interface NoCodeViewProps {
     /** Constraints */
     constraints: ConstraintData[];
     /** Callback to set constraints */
-    setConstraints: (constraints: ConstraintData[]) => void;
+    setConstraints: (updater: (prev: ConstraintData[]) => ConstraintData[]) => void;
     /** Directives */
     directives: DirectiveData[];
     /** Callback to set directives */
-    setDirectives: (directives: DirectiveData[]) => void;
+    setDirectives: (updater: (prev: DirectiveData[]) => DirectiveData[]) => void;
 }
 
 const NoCodeView = ({
@@ -168,7 +168,7 @@ const NoCodeView = ({
             type: "orientation",
             params: {},
         };
-        setConstraints([...constraints, newConstraint])
+        setConstraints((prev) => [...prev, newConstraint]);
     }
 
     /**
@@ -181,17 +181,20 @@ const NoCodeView = ({
         constraintId: string, 
         updates: Partial<Omit<ConstraintData, 'id'>>
     ) => {
-        setConstraints(constraints.map(constraint => 
-            constraint.id === constraintId 
-            ? { ...constraint, ...updates }
-            : constraint
-        )
-        );
-    }, []);
-
-    // useEffect(() => {
-    //     console.log("Constraints updated:", constraints);
-    // }, [constraints]);
+        setConstraints((prevConstraints: ConstraintData[]) => prevConstraints.map((constraint: ConstraintData) => {
+            if (constraint.id === constraintId) {
+                return {
+                    ...constraint,
+                    ...updates,
+                    params: {
+                        ...constraint.params,
+                        ...updates.params
+                    }
+                };
+            }
+            return constraint;
+        }));
+    }, [setConstraints]);
 
     const addDirective = () => {
         const newDirective: DirectiveData = {
@@ -199,7 +202,7 @@ const NoCodeView = ({
             type: "attribute",
             params: {},
         };
-        setDirectives([...directives, newDirective]);
+        setDirectives((prev) => [...prev, newDirective]);
     }
 
     /**
@@ -212,12 +215,19 @@ const NoCodeView = ({
         directiveId: string, 
         updates: Partial<Omit<DirectiveData, 'id'>>
     ) => {
-        setDirectives(directives.map(directive =>
+        setDirectives((prevDirectives: DirectiveData[]) => prevDirectives.map((directive: DirectiveData) =>
             directive.id === directiveId 
-            ? { ...directive, ...updates }
-            : directive)
-        );
-    }, []);
+            ? {
+                ...directive,
+                ...updates,
+                params: {
+                    ...directive.params,
+                    ...updates.params
+                }
+            }
+            : directive
+        ));
+    }, [setDirectives]);
 
     /**
      * Loads constraint and directive state from YAML specification
@@ -246,8 +256,8 @@ const NoCodeView = ({
      */
     const loadStateFromYaml = (yamlString: string): void => {
         const { constraints: newConstraints, directives: newDirectives } = parseLayoutSpecToData(yamlString);
-        setConstraints(newConstraints);
-        setDirectives(newDirectives);
+        setConstraints((prev) => newConstraints);
+        setDirectives((prev) => newDirectives);
     };
 
     // Load initial state from YAML when component mounts
@@ -255,7 +265,6 @@ const NoCodeView = ({
         // If switching to No Code View and have YAML, load it
         if (yamlValue) {
             try {
-                console.log("Loading YAML into No Code View state")
                 loadStateFromYaml(yamlValue);
             } catch (error) {
                 console.error("Failed to load YAML into No Code View:", error);
@@ -276,7 +285,7 @@ const NoCodeView = ({
                                 constraintData={cd1}
                                 onUpdate={(updates) => updateConstraint(cd1.id, updates)}
                                 onRemove={() => {
-                                    setConstraints(constraints.filter((cd2) => cd2.id !== cd1.id));
+                                    setConstraints((prev) => prev.filter((cd2) => cd2.id !== cd1.id));
                                 }} />
                         ))
                     }
@@ -293,7 +302,7 @@ const NoCodeView = ({
                                 directiveData={dd1}
                                 onUpdate={(updates) => updateDirective(dd1.id, updates)}
                                 onRemove={() => {
-                                    setDirectives(directives.filter((dd2) => dd2.id !== dd1.id));
+                                    setDirectives((prev) => prev.filter((dd2) => dd2.id !== dd1.id));
                                 }} />
                         ))
                     }

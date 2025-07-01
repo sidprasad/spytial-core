@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { UNARY_SELECTOR_TEXT, TUPLE_SELECTOR_TEXT } from './constants';
 import { ConstraintData } from './interfaces';
 
@@ -14,6 +14,16 @@ interface GroupBySelectorSelectorProps {
  * Groups elements based on a Forge selector expression.
  */
 export const GroupBySelectorSelector: React.FC<GroupBySelectorSelectorProps> = (props: GroupBySelectorSelectorProps) => {
+  const handleInputChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = event.target;
+    props.onUpdate({
+      params: {
+        ...props.constraintData.params,
+        [name]: value,
+      },
+    });
+  }, [props.onUpdate, props.constraintData]);
+
   return (
     <>
       <div className="input-group">
@@ -26,16 +36,8 @@ export const GroupBySelectorSelector: React.FC<GroupBySelectorSelectorProps> = (
           type="text"
           name="selector"
           className="form-control"
-          value={props.constraintData.params.selector as string || ''}
-          onChange={(event) => {
-            const { name, value } = event.target;
-            props.onUpdate({
-              params: {
-                ...props.constraintData.params,
-                [name]: value
-              }
-            });
-          }}
+          defaultValue={props.constraintData.params.selector as string || ''}
+          onChange={handleInputChange}
           required
         />
       </div>
@@ -47,16 +49,8 @@ export const GroupBySelectorSelector: React.FC<GroupBySelectorSelectorProps> = (
           type="text"
           name="name"
           className="form-control"
-          value={props.constraintData.params.name as string || ''}
-          onChange={(event) => {
-            const { name, value } = event.target;
-            props.onUpdate({
-              params: {
-                ...props.constraintData.params,
-                [name]: value
-              }
-            });
-          }}
+          defaultValue={props.constraintData.params.name as string || ''}
+          onChange={handleInputChange}
           required
         />
       </div>

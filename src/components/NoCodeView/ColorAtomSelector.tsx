@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { UNARY_SELECTOR_TEXT } from './constants';
 import { DirectiveData } from './interfaces';
 
@@ -14,6 +14,16 @@ interface ColorAtomSelectorProps {
  * Includes selector input and color picker.
  */
 export const ColorAtomSelector: React.FC<ColorAtomSelectorProps> = (props: ColorAtomSelectorProps) => {
+  const handleInputChange = useCallback((event) => {
+    const { name, value } = event.target;
+    props.onUpdate({
+      params: {
+        ...props.directiveData.params,
+        [name]: value
+      }
+    });
+  }, [props.onUpdate, props.directiveData.params]);
+
   return (
     <>
       <div className="input-group">
@@ -26,15 +36,7 @@ export const ColorAtomSelector: React.FC<ColorAtomSelectorProps> = (props: Color
           type="text"
           name="selector"
           className="form-control"
-          onChange={(event) => {
-            const { name, value } = event.target;
-            props.onUpdate({
-              params: {
-                ...props.directiveData.params,
-                [name]: value
-              }
-            });
-          }}
+          onChange={handleInputChange}
           required
         />
       </div>
@@ -46,15 +48,7 @@ export const ColorAtomSelector: React.FC<ColorAtomSelectorProps> = (props: Color
           type="color"
           name="value"
           className="form-control"
-          onChange={(event) => {
-            const { name, value } = event.target;
-            props.onUpdate({
-              params: {
-                ...props.directiveData.params,
-                [name]: value
-              }
-            });
-          }}
+          onChange={handleInputChange}
           required
         />
       </div>

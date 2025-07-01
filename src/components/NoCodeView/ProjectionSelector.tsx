@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { DirectiveData } from './interfaces';
 
 interface ProjectionSelectorProps {
@@ -13,6 +13,16 @@ interface ProjectionSelectorProps {
  * Specifies a signature to project.
  */
 export const ProjectionSelector: React.FC<ProjectionSelectorProps> = (props: ProjectionSelectorProps) => {
+  const handleInputChange = useCallback((event) => {
+    const { name, value } = event.target;
+    props.onUpdate({
+      params: {
+        ...props.directiveData.params,
+        [name]: value
+      }
+    });
+  }, [props.onUpdate, props.directiveData.params]);
+
   return (
     <div className="input-group">
       <div className="input-group-prepend">
@@ -22,15 +32,7 @@ export const ProjectionSelector: React.FC<ProjectionSelectorProps> = (props: Pro
         type="text"
         className="form-control"
         name="sig"
-        onChange={(event) => {
-          const { name, value } = event.target;
-          props.onUpdate({
-            params: {
-              ...props.directiveData.params,
-              [name]: value
-            }
-          });
-        }}
+        onChange={handleInputChange}
         required
       />
     </div>

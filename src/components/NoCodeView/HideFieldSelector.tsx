@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { DirectiveData } from './interfaces';
 
 interface HideFieldSelectorProps {
@@ -13,6 +13,16 @@ interface HideFieldSelectorProps {
  * Simple field input to specify which field to hide.
  */
 export const HideFieldSelector: React.FC<HideFieldSelectorProps> = (props: HideFieldSelectorProps) => {
+  const handleInputChange = useCallback((event) => {
+    const { name, value } = event.target;
+    props.onUpdate({
+      params: {
+        ...props.directiveData.params,
+        [name]: value
+      }
+    });
+  }, [props.onUpdate, props.directiveData.params]);
+
   return (
     <div className="input-group">
       <div className="input-group-prepend">
@@ -22,15 +32,7 @@ export const HideFieldSelector: React.FC<HideFieldSelectorProps> = (props: HideF
         type="text"
         name="field"
         className="form-control"
-        onChange={(event) => {
-          const { name, value } = event.target;
-          props.onUpdate({
-            params: {
-              ...props.directiveData.params,
-              [name]: value
-            }
-          });
-        }}
+        onChange={handleInputChange}
         required
       />
     </div>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { ConstraintData } from './interfaces';
 
 interface GroupByFieldSelectorProps {
@@ -13,6 +13,16 @@ interface GroupByFieldSelectorProps {
  * Groups elements based on a field with configurable indices.
  */
 export const GroupByFieldSelector: React.FC<GroupByFieldSelectorProps> = (props: GroupByFieldSelectorProps) => {
+  const handleInputChange = useCallback((event) => {
+    const { name, value } = event.target;
+    props.onUpdate({
+      params: {
+        ...props.constraintData.params,
+        [name]: event.target.type === 'number' ? Number(value) : value
+      }
+    });
+  }, [props.onUpdate, props.constraintData.params]);
+
   return (
     <>
       <div className="input-group">
@@ -23,15 +33,7 @@ export const GroupByFieldSelector: React.FC<GroupByFieldSelectorProps> = (props:
           type="text"
           name="field"
           className="form-control"
-          onChange={(event) => {
-            const { name, value } = event.target;
-            props.onUpdate({
-              params: {
-                ...props.constraintData.params,
-                [name]: value
-              }
-            });
-          }}
+          onChange={handleInputChange}
           required
         />
       </div>
@@ -45,15 +47,7 @@ export const GroupByFieldSelector: React.FC<GroupByFieldSelectorProps> = (props:
           type="number"
           name="groupOn"
           className="form-control"
-          onChange={(event) => {
-            const { name, value } = event.target;
-            props.onUpdate({
-              params: {
-                ...props.constraintData.params,
-                [name]: Number(value)
-              }
-            });
-          }}
+          onChange={handleInputChange}
           required
         />
       </div>
@@ -67,15 +61,7 @@ export const GroupByFieldSelector: React.FC<GroupByFieldSelectorProps> = (props:
           type="number"
           name="addToGroup"
           className="form-control"
-          onChange={(event) => {
-            const { name, value } = event.target;
-            props.onUpdate({
-              params: {
-                ...props.constraintData.params,
-                [name]: Number(value)
-              }
-            });
-          }}
+          onChange={handleInputChange}
           required
         />
       </div>

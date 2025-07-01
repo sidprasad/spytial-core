@@ -32,7 +32,7 @@ export const HelperEdgeSelector: React.FC<HelperEdgeSelectorProps> = ({
           type="text"
           name="selector"
           className="form-control"
-          value={selector}
+          defaultValue={selector}
           onChange={(e) => onUpdate({ params: { ...directiveData.params, selector: e.target.value } })}
           required
         />
@@ -45,7 +45,7 @@ export const HelperEdgeSelector: React.FC<HelperEdgeSelectorProps> = ({
           type="text"
           name="name"
           className="form-control"
-          value={name}
+          defaultValue={name}
           onChange={(e) => onUpdate({ params: { ...directiveData.params, name: e.target.value } })}
           required
         />

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { DirectiveData } from './interfaces';
 
 interface AttributeSelectorProps {
@@ -13,6 +13,16 @@ interface AttributeSelectorProps {
  * Simple field input for attribute directives.
  */
 export const AttributeSelector: React.FC<AttributeSelectorProps> = (props: AttributeSelectorProps) => {
+  const handleInputChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = event.target;
+    props.onUpdate({
+      params: {
+        ...props.directiveData.params,
+        [name]: value
+      }
+    });
+  }, [props.onUpdate, props.directiveData.params]);
+
   return (
     <div className="input-group">
       <div className="input-group-prepend">
@@ -22,16 +32,8 @@ export const AttributeSelector: React.FC<AttributeSelectorProps> = (props: Attri
         type="text"
         name="field"
         className="form-control"
-        value={props.directiveData.params.field as string || ''}
-        onChange={(event) => {
-          const { name, value } = event.target;
-          props.onUpdate({
-            params: {
-              ...props.directiveData.params,
-              [name]: value
-            }
-          });
-        }}
+        defaultValue={props.directiveData.params.field as string || ''}
+        onChange={handleInputChange}
         required
       />
     </div>

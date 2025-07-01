@@ -49,8 +49,6 @@ const ConstraintCard = (props: ConstraintCardProps) => {
         // Access the HTMLSelectElement through event.target
         const selectElement = event.target;
         const selectedValue = selectElement.value as ConstraintType;
-        
-        console.log('Select element value', selectedValue);
 
         // Constraint Fields
         setCardHTML(constraintsToSelectorComponentMap[selectedValue]);
@@ -58,10 +56,6 @@ const ConstraintCard = (props: ConstraintCardProps) => {
         // Update the constraint type
         props.onUpdate({ type: selectedValue, params: {} });
     }, [props.onUpdate, props.constraintData]);
-
-    // const classes = [
-    //     isHighlighted && 'highlight',
-    // ].filter(Boolean).join(' ');
 
     return (
         <div className={ isHighlighted ? 'highlight' : '' }>

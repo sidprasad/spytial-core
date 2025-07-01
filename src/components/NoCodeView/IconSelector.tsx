@@ -32,7 +32,7 @@ export const IconSelector: React.FC<IconSelectorProps> = ({
           type="text"
           name="selector"
           className="form-control"
-          value={selector}
+          defaultValue={selector}
           onChange={(e) => onUpdate({ params: { ...directiveData.params, selector: e.target.value } })}
           required
         />
@@ -45,7 +45,7 @@ export const IconSelector: React.FC<IconSelectorProps> = ({
           type="text"
           name="path"
           className="form-control"
-          value={path}
+          defaultValue={path}
           onChange={(e) => onUpdate({ params: { ...directiveData.params, path: e.target.value } })}
           placeholder="/path/to/icon.png"
           required
@@ -60,7 +60,7 @@ export const IconSelector: React.FC<IconSelectorProps> = ({
             className="form-check-input"
             type="checkbox"
             name="showLabels"
-            checked={showLabels}
+            defaultChecked={showLabels}
             onChange={(e) => onUpdate({ params: { ...directiveData.params, showLabels: e.target.checked } })}
           />
         </div>

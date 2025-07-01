@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react'
 import { ConstraintData, DirectiveData } from './interfaces';
 import jsyaml from 'js-yaml';
+import { generateXGroupConstraints } from 'webcola';
 
 // TODO: Add unit tests for this function
 
@@ -55,14 +56,20 @@ export function generateLayoutSpecYaml(
     }
 
     // Convert constraint type to YAML constraint type
-    const yamlConstraints = constraints.forEach(c => {
+    const yamlConstraints = constraints.map(c => {
         return {
             [toYamlConstraintType(c.type)]: c.params
         }
     });
 
     // Convert directive type to YAML directive type
-    const yamlDirectives = directives.forEach(d => {
+    const yamlDirectives = directives.map(d => {
+        // HACK: Special case for flag directives
+        if (d.type === "flag") {
+            return {
+                [d.type]: d.params.flag as string
+            }
+        }
         return {
             [d.type]: d.params
         }
@@ -97,16 +104,16 @@ interface CodeViewProps {
 
 const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
     // Populate the textarea on initial render if constraints/directives exist
-    // useEffect(() => {
-    //     if (props.constraints.length > 0 || props.directives.length > 0) {
-    //         const generatedYaml = generateLayoutSpecYaml(props.constraints, props.directives);
-    //         if (generatedYaml !== props.yamlValue) {
-    //             props.handleTextareaChange({
-    //                 target: { value: generatedYaml }
-    //             } as React.ChangeEvent<HTMLTextAreaElement>);
-    //         }
-    //     }
-    // }, []);
+    useEffect(() => {
+        if (props.constraints.length > 0 || props.directives.length > 0) {
+            const generatedYaml = generateLayoutSpecYaml(props.constraints, props.directives);
+            if (generatedYaml !== props.yamlValue) {
+                props.handleTextareaChange({
+                    target: { value: generatedYaml }
+                } as React.ChangeEvent<HTMLTextAreaElement>);
+            }
+        }
+    }, []);
 
   return (
     <div className="cnd-layout-interface__code-view" role="region" aria-label="YAML Code Editor">

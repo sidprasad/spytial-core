@@ -29,7 +29,6 @@ export const useHighlight = (duration: number = 1000) => {
     // Automatically clear highlight after specified duration
     const timer = setTimeout(() => {
       setIsHighlighted(false);
-      console.log('Highlight removed after', duration, 'ms');
     }, duration);
 
     // Cleanup timer on unmount (client-side optimization)

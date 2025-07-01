@@ -33,7 +33,7 @@ export const SizeSelector: React.FC<SizeSelectorProps> = ({
           type="text"
           name="selector"
           className="form-control"
-          value={selector}
+          defaultValue={selector}
           onChange={(e) => onUpdate({ params: { ...directiveData.params, selector: e.target.value } })}
           required
         />
@@ -46,7 +46,7 @@ export const SizeSelector: React.FC<SizeSelectorProps> = ({
           type="number"
           name="width"
           className="form-control"
-          value={width}
+          defaultValue={width}
           onChange={(e) => onUpdate({ params: { ...directiveData.params, width: Number(e.target.value) } })}
           required
         />
@@ -57,7 +57,7 @@ export const SizeSelector: React.FC<SizeSelectorProps> = ({
           type="number"
           name="height"
           className="form-control"
-          value={height}
+          defaultValue={height}
           onChange={(e) => onUpdate({ params: { ...directiveData.params, height: Number(e.target.value) } })}
           required
         />
