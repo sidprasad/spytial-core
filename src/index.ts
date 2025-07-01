@@ -22,8 +22,7 @@ export { setupLayout } from './layout';
 export { type default as IEvaluator } from './evaluators/interfaces';
 export { ForgeEvaluator, WrappedForgeEvaluator } from './evaluators/forge-evaluator';
 export { WebColaTranslator } from './translators';
-export { DotEvaluator } from './evaluators/dot-evalutator';
-export { SimpleGraphQueryEvaluator } from "./evaluators/sgq-evaluator";
+export { SGraphQueryEvaluator } from "./evaluators/sgq-evaluator";
 
 // Browser-specific exports and initialization
 if (typeof window !== 'undefined') {

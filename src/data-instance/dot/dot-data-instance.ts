@@ -18,8 +18,24 @@ export class DotDataInstance implements IInputDataInstance {
     // Each node has its type and label as properties.
     this.graph = parse.read(dotSpec);
 
+    // For each edge, remove it and then re-add it with label and name.
+    this.graph.edges().forEach(edge => {
+      const edgeData = this.graph.edge(edge);
+      if (edgeData && edgeData.label) {
+        // Remove the edge first
+        this.graph.removeEdge(edge);
+        // Re-add it with label and name
+        this.addEdge(edge.v, edge.w, edgeData.label);
+      }
+    });
   }
 
+
+  private addEdge(v: string, w: string, label: string): void {
+    const name = `${v}-${w}-${label}`;
+    // Add an edge with a label and an optional name
+    this.graph.setEdge(v, w, label, name);
+  }
 
 
   reify(): string {
@@ -82,23 +98,26 @@ export class DotDataInstance implements IInputDataInstance {
 
   // TODO: Fix.
   applyProjections(atomIds: string[]): DotDataInstance {
-    const newGraph = new Graph();
+    // const newGraph = new Graph();
 
-    atomIds.forEach(id => {
-      const node = this.graph.node(id);
-      if (node) {
-        newGraph.setNode(id, { ...node });
-      }
-    });
+    // atomIds.forEach(id => {
+    //   const node = this.graph.node(id);
+    //   if (node) {
+    //     newGraph.setNode(id, { ...node });
+    //   }
+    // });
 
-    // Copy edges
-    this.graph.edges().forEach(edge => {
-      if (newGraph.hasNode(edge.v) && newGraph.hasNode(edge.w)) {
-        newGraph.setEdge(edge.v, edge.w, this.graph.edge(edge));
-      }
-    });
+    // // Copy edges
+    // this.graph.edges().forEach(edge => {
+    //   if (newGraph.hasNode(edge.v) && newGraph.hasNode(edge.w)) {
+    //     newGraph.setEdge(edge.v, edge.w, this.graph.edge(edge));
+    //   }
+    // });
 
-    return new DotDataInstance(parse.write(newGraph));
+    // return new DotDataInstance(parse.write(newGraph));
+
+    console.log('applyProjections is not implemented for DotDataInstance');
+    return this;
   }
 
 
@@ -106,33 +125,35 @@ export class DotDataInstance implements IInputDataInstance {
 
   generateGraph(hideDisconnected: boolean, hideDisconnectedBuiltIns: boolean): Graph {
 
-    const graph = new Graph({ directed: true, multigraph: true, compound: true });
+    // TODO: This modifies the GRAPH IN PLACE, which is not ideal right?
 
-    // Copy over this.graph nodes and edges
-    this.graph.nodes().forEach(nodeId => {
-      const node = this.graph.node(nodeId);
-      if (node) {
-        graph.setNode(nodeId, { label: node.label, type: node.type });
-      }
-    });
-    this.graph.edges().forEach(edge => {
-      graph.setEdge(edge.v, edge.w, this.graph.edge(edge));
-    });
+    // const graph = new Graph({ directed: true, multigraph: true, compound: true });
+
+    // // Copy over this.graph nodes and edges
+    // this.graph.nodes().forEach(nodeId => {
+    //   const node = this.graph.node(nodeId);
+    //   if (node) {
+    //     graph.setNode(nodeId, { label: node.label, type: node.type });
+    //   }
+    // });
+    // this.graph.edges().forEach(edge => {
+    //   graph.setEdge(edge.v, edge.w, this.graph.edge(edge));
+    // });
 
 
 
 
-    graph.nodes().forEach(node => {
-      let outEdges = graph.outEdges(node) || [];
-      let inEdges = graph.inEdges(node) || [];
+    this.graph.nodes().forEach(node => {
+      let outEdges = this.graph.outEdges(node) || [];
+      let inEdges = this.graph.inEdges(node) || [];
       if (outEdges.length === 0 && inEdges.length === 0) {
         const isBuiltin = this.getAtomType(node).isBuiltin;
         if (hideDisconnected || (isBuiltin && hideDisconnectedBuiltIns)) {
-          graph.removeNode(node);
+          this.graph.removeNode(node);
         }
       }
     });
-    return graph; // Return the graph as is for now, no filtering applied
+    return this.graph; // Return the graph as is for now, no filtering applied
   }
 
 
@@ -191,7 +212,7 @@ export class DotDataInstance implements IInputDataInstance {
       }
       const source = tuple.atoms[0];
       const target = tuple.atoms[tuple.atoms.length - 1];
-      this.graph.setEdge(source, target, { label: relation.name });
+      this.addEdge(source, target, relation.name);
     });
   }
 

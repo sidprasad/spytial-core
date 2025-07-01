@@ -419,8 +419,16 @@ export class LayoutInstance {
 
     public getRelationName(g: Graph, edge: Edge): string {
         let relNameRaw = this.getEdgeLabel(g, edge);
+
+        try {
+
         let relName = relNameRaw.split("[")[0];
         return relName;
+        }
+        catch{
+            console.warn(`Failed to parse relation name from edge label: ${relNameRaw}. Defaulting to empty string.`);
+            return relNameRaw;
+        }
     }
 
     private getEdgeLabel(g: Graph, edge: Edge): string {

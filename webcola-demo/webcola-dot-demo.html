@@ -67,8 +67,8 @@
 </head>
 <body>
     <div class="container">
-        <h1>🎯 WebCola DOT Graph Demo with DotEvaluator</h1>
-        <p>This demonstrates the complete DOT → DotDataInstance → DotEvaluator → Layout → WebCola pipeline.</p>
+        <h1>🎯 WebCola DOT Graph Demo with SimpleGraphQueryEvaluator</h1>
+        <p>This demonstrates the complete DOT → DotDataInstance → SimpleGraphQueryEvaluator → Layout → WebCola pipeline.</p>
         
         <!-- Editable Input Fields -->
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
@@ -114,10 +114,10 @@
 
     <!-- D3 v4 and WebCola - the working combination -->
     <script src="https://d3js.org/d3.v4.min.js"></script>
-    <script src="./vendor/cola.js"></script>
+    <script src="../vendor/cola.js"></script>
     
     <!-- Complete CND-Core browser bundle -->
-    <script src="./dist/browser/cnd-core-complete.global.js"></script>
+    <script src="../dist/browser/cnd-core-complete.global.js"></script>
     <script>
         // Variables to store data
         let currentInstanceLayout = null;
@@ -206,11 +206,11 @@
         }
 
         /**
-         * Process DOT data using the complete DOT → DotEvaluator → Layout pipeline
+         * Process DOT data using the complete DOT → SimpleGraphQueryEvaluator → Layout pipeline
          */
         async function loadDotData() {
             try {
-                updateStatus('Processing DOT data with DotEvaluator...', 'info');
+                updateStatus('Processing DOT data with SimpleGraphQueryEvaluator...', 'info');
 
                 // Get DOT specification from input field
                 const dotSpec = getCurrentDotSpec();
@@ -220,9 +220,6 @@
 
                 // Get CND specification from input field
                 const cndSpec = getCurrentCNDSpec() || "";
-                // if (!cndSpec) {
-                //     throw new Error('Please enter a CND layout specification');
-                // }
 
                 console.log('Using DOT Spec:', dotSpec.substring(0, 200) + '...');
                 console.log('Using CND Spec:', cndSpec.substring(0, 200) + '...');
@@ -243,36 +240,27 @@
                     processedData: dotDataInstance
                 };
 
-                // Step 3: Create DotEvaluator with context
-                updateStatus('Creating DotEvaluator with context...', 'info');
-                const dotEvaluator = new CndCore.DotEvaluator();
-                
-                // Initialize with proper context
-                dotEvaluator.initialize(evaluationContext);
-                
-                if (!dotEvaluator.isReady()) {
-                    throw new Error('DotEvaluator failed to initialize with context');
-                }
-
-                console.log('DotEvaluator initialized with context');
+                // Step 3: Create and initialize SGraphQueryEvaluator
+                updateStatus('Creating SGraphQueryEvaluator...', 'info');
+                const evaluator = new CndCore.SGraphQueryEvaluator();
+                evaluator.initialize(evaluationContext);
 
                 // Step 4: Parse layout specification
                 updateStatus('Parsing layout specification...', 'info');
                 const layoutSpec = CndCore.parseLayoutSpec(cndSpec);
                 console.log('Parsed Layout Spec:', layoutSpec);
 
-                // Step 5: Create LayoutInstance with DotEvaluator
-                updateStatus('Creating layout instance with DotEvaluator...', 'info');
+                // Step 5: Create LayoutInstance with SimpleGraphQueryEvaluator
+                updateStatus('Creating layout instance with SimpleGraphQueryEvaluator...', 'info');
                 const ENABLE_ALIGNMENT_EDGES = true;
                 const instanceNumber = 0;
-                
                 const layoutInstance = new CndCore.LayoutInstance(
                     layoutSpec, 
-                    dotEvaluator, 
+                    evaluator, 
                     instanceNumber, 
                     ENABLE_ALIGNMENT_EDGES
                 );
-                console.log('Created Layout Instance with DotEvaluator:', layoutInstance);
+                console.log('Created Layout Instance with SimpleGraphQueryEvaluator:', layoutInstance);
 
                 // Step 6: Generate layout using DOT data instance
                 updateStatus('Generating layout with DOT data...', 'info');
@@ -281,8 +269,19 @@
                 currentInstanceLayout = layoutResult.layout;
                 console.log('Generated Instance Layout using DOT pipeline:', currentInstanceLayout);
 
-                updateStatus('DOT pipeline complete with DotEvaluator! Ready to render.', 'success');
-                
+                // Step 7: Use CndLayoutStateManager to store state
+                if (CndCore.CndLayoutStateManager) {
+                    if (!window.cndLayoutStateManager) {
+                        window.cndLayoutStateManager = new CndCore.CndLayoutStateManager();
+                    }
+                    window.cndLayoutStateManager.setState({
+                        dotSpec,
+                        cndSpec,
+                        layout: currentInstanceLayout
+                    });
+                }
+
+                updateStatus('DOT pipeline complete! Ready to render.', 'success');
             } catch (error) {
                 console.error('Failed to load DOT data:', error);
                 updateStatus(`DOT data loading failed: ${error.message}`, 'error');
