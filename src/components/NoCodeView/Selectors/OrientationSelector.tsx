@@ -54,7 +54,7 @@ export const OrientationSelector: React.FC<OrientationSelectorProps> = (props: O
       </div>
       <div className="input-group">
         <div className="input-group-prepend">
-          <span className="input-group-text">Directions</span>
+          <span className="input-group-text stretch-height">Directions</span>
         </div>
         <select
           name="directions"

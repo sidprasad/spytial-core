@@ -71,11 +71,12 @@ const DirectiveCard: React.FC<DirectiveCardProps> = (props: DirectiveCardProps) 
 
     const classes = [
         isHighlighted && 'highlight',
+        'noCodeCard',
     ].filter(Boolean).join(' ');
 
   return (
     <div className={classes}>
-        <button className="close" title="Remove directive" type="button" onClick= { props.onRemove }>
+        <button className="closeButton" title="Remove directive" type="button" onClick= { props.onRemove }>
             <span aria-hidden="true">&times;</span>
         </button>
         <div className="input-group">

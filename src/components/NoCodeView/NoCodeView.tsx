@@ -199,7 +199,7 @@ const NoCodeView = ({
     const addDirective = () => {
         const newDirective: DirectiveData = {
             id: generateId(),
-            type: "attribute",
+            type: "flag",
             params: {},
         };
         setDirectives((prev) => [...prev, newDirective]);
@@ -273,10 +273,10 @@ const NoCodeView = ({
     }, [])
 
     return (
-        <div className="container-fluid" id="noCodeViewContainer">
-            <div className="container-fluid">
+        <div id="noCodeViewContainer">
+            <div>
                 <h5>Constraints  <button type="button" onClick={ addConstraint } title="Click to add a new constraint">+</button></h5>
-                <div id="constraintContainer">
+                <div className='cardContainer' id="constraintContainer">
                     {/* Constraints will be added here dynamically */ }
                     { 
                         constraints.map((cd1) => (
@@ -292,9 +292,9 @@ const NoCodeView = ({
                 </div>
             </div>
             <hr />
-            <div className="container-fluid">
+            <div>
                 <h5>Directives  <button type="button" onClick={ addDirective } title="Click to add a new directive">+</button></h5>
-                <div id="directiveContainer">
+                <div className='cardContainer' id="directiveContainer">
                     { 
                         directives.map((dd1) => (
                             <DirectiveCard 
