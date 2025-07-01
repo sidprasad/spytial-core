@@ -1,7 +1,7 @@
 import type { Graph } from 'graphlib';
 import parse from 'graphlib-dot';
-import type { IDataInstance, IAtom, IType, IRelation } from '../interfaces';
-import {dotToAlloyXMLString} from './dot-to-alloy-xml';
+import type { IDataInstance, IAtom, IType, IRelation, IInputDataInstance } from '../interfaces';
+
 import { AlloyDatum, parseAlloyXML } from '../alloy/alloy-instance';
 import { AlloyDataInstance } from '../alloy-data-instance';
 
@@ -10,46 +10,39 @@ import { AlloyDataInstance } from '../alloy-data-instance';
  * Converts DOT graphs to the IDataInstance interface with proper type handling
  * Leverages type information from DOT annotations and builtin type detection
  */
-export class DotDataInstance implements IDataInstance {
-  private readonly alloyDatum : AlloyDatum;
-  private readonly alloyDataInstance: AlloyDataInstance; 
+export class DotDataInstance implements IInputDataInstance {
 
 
+  private graph : Graph;
   constructor(dotSpec: string) {
-    const alloyXMLString = dotToAlloyXMLString(dotSpec);
-    this.alloyDatum = parseAlloyXML(alloyXMLString);
-
-    // Assumption
-    const ai = this.alloyDatum.instances[0];
-    this.alloyDataInstance = new AlloyDataInstance(ai);
+  
+    this.graph = parse.read(dotSpec);
 
   }
 
-  public getAtomType(id: string): IType {
-    return this.alloyDataInstance.getAtomType(id);
+
+  reify() : string {
+      // Convert the graph back to DOT format
+      return parse.write(this.graph);
+    }
+
+  
+  getAtoms(): readonly IAtom[] {
+    const atoms: IAtom[] = [];
+    this.graph.nodes().forEach((nodeId) => {
+      const node = this.graph.node(nodeId);
+      if (node && node.label) {
+        atoms.push({
+          id: nodeId,
+          type: node.type || 'unknown',
+          label: node.label
+        });
+      }
+    });
+    return atoms;
   }
 
-  public getTypes(): readonly IType[] {
-    return this.alloyDataInstance.getTypes();
-  }
 
-  public getAtoms(): readonly IAtom[] {
-    return this.alloyDataInstance.getAtoms();
-  }
+  
 
-  public getRelations(): readonly IRelation[] {
-    return this.alloyDataInstance.getRelations();
-  }
-
-  public applyProjections(atomIds: string[]): IDataInstance {
-    const projectedInstance : AlloyDataInstance = this.alloyDataInstance.applyProjections(atomIds);
-    
-    return  projectedInstance;
-  }
-
-  public generateGraph(hideDisconnected: boolean, hideDisconnectedBuiltIns: boolean): Graph {
-    console.log('Generating graph from DOT data instance with hideDisconnected:', hideDisconnected, 'hideDisconnectedBuiltIns:', hideDisconnectedBuiltIns);
-    return this.alloyDataInstance.generateGraph(hideDisconnected, hideDisconnectedBuiltIns);
-  }
-
-}
+ }

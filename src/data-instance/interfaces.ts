@@ -7,6 +7,7 @@ export interface IAtom  {
   
   id: string; // ID might have to be DIFFERENT FROM the NAME (these are the same in Alloy, but different elsewhere.)
   type: string;
+  label: string; // Label for the atom, used for display purposes
 }
 
 
@@ -51,5 +52,17 @@ export interface IDataInstance {
 
     generateGraph(hideDisconnected : boolean, hideDisconnectedBuiltIns : boolean) : Graph;
 
+}
 
+
+export interface IInputDataInstance  extends IDataInstance {
+  // Add atoms, relations, and types
+  addAtom(atom: IAtom): void;
+  addRelation(relation: IRelation): void;
+  addType(type: IType): void;
+
+  // And a method to re-ify the data instance
+  // to something in the source language / format.
+  // E.g. in Forge this would return a Forge instance.
+  reify(): any;
 }

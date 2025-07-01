@@ -72,7 +72,7 @@ export class AlloyDataInstance implements IDataInstance {
     return alloyAtoms.map((alloyAtom: AlloyAtom) => ({
       id: alloyAtom.id,
       type: alloyAtom.type,
-      name: alloyAtom.id // In Alloy, atoms are identified by their ID.
+      label: alloyAtom.id 
     }));
   }
 
