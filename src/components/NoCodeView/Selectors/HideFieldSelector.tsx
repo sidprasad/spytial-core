@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
-import { DirectiveData } from './interfaces';
+import { DirectiveData } from '../interfaces';
 
-interface ProjectionSelectorProps {
+interface HideFieldSelectorProps {
   /** Directive data object containing type and parameters */
   directiveData: DirectiveData;
   /** Callback when directive data is updated */
@@ -9,10 +9,10 @@ interface ProjectionSelectorProps {
 }
 
 /**
- * Minimal React component for projection directive.
- * Specifies a signature to project.
+ * Minimal React component for hide field directive.
+ * Simple field input to specify which field to hide.
  */
-export const ProjectionSelector: React.FC<ProjectionSelectorProps> = (props: ProjectionSelectorProps) => {
+export const HideFieldSelector: React.FC<HideFieldSelectorProps> = (props: HideFieldSelectorProps) => {
   const handleInputChange = useCallback((event) => {
     const { name, value } = event.target;
     props.onUpdate({
@@ -26,12 +26,12 @@ export const ProjectionSelector: React.FC<ProjectionSelectorProps> = (props: Pro
   return (
     <div className="input-group">
       <div className="input-group-prepend">
-        <span className="input-group-text">Sig</span>
+        <span className="input-group-text">Field</span>
       </div>
       <input
         type="text"
+        name="field"
         className="form-control"
-        name="sig"
         onChange={handleInputChange}
         required
       />

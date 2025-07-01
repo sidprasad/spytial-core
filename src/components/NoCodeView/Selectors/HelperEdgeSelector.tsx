@@ -1,6 +1,6 @@
 import React from 'react';
-import { TUPLE_SELECTOR_TEXT } from './constants';
-import { DirectiveData } from './interfaces';
+import { TUPLE_SELECTOR_TEXT } from '../constants';
+import { DirectiveData } from '../interfaces';
 
 interface HelperEdgeSelectorProps {
   /** Directive data object containing type and parameters */

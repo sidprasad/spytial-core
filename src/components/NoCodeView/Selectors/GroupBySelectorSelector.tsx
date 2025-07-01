@@ -1,6 +1,6 @@
 import React, { useCallback } from 'react';
-import { UNARY_SELECTOR_TEXT, TUPLE_SELECTOR_TEXT } from './constants';
-import { ConstraintData } from './interfaces';
+import { UNARY_SELECTOR_TEXT, TUPLE_SELECTOR_TEXT } from '../constants';
+import { ConstraintData } from '../interfaces';
 
 interface GroupBySelectorSelectorProps {
   /** Constraint data object containing type and parameters */

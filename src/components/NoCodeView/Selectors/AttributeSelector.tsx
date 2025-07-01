@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
-import { DirectiveData } from './interfaces';
+import { DirectiveData } from '../interfaces';
 
-interface HideFieldSelectorProps {
+interface AttributeSelectorProps {
   /** Directive data object containing type and parameters */
   directiveData: DirectiveData;
   /** Callback when directive data is updated */
@@ -9,11 +9,11 @@ interface HideFieldSelectorProps {
 }
 
 /**
- * Minimal React component for hide field directive.
- * Simple field input to specify which field to hide.
+ * Minimal React component for attribute field selection.
+ * Simple field input for attribute directives.
  */
-export const HideFieldSelector: React.FC<HideFieldSelectorProps> = (props: HideFieldSelectorProps) => {
-  const handleInputChange = useCallback((event) => {
+export const AttributeSelector: React.FC<AttributeSelectorProps> = (props: AttributeSelectorProps) => {
+  const handleInputChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
     props.onUpdate({
       params: {
@@ -32,6 +32,7 @@ export const HideFieldSelector: React.FC<HideFieldSelectorProps> = (props: HideF
         type="text"
         name="field"
         className="form-control"
+        defaultValue={props.directiveData.params.field as string || ''}
         onChange={handleInputChange}
         required
       />

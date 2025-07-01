@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
-import { DirectiveData } from './interfaces';
+import { DirectiveData } from '../interfaces';
 
-interface AttributeSelectorProps {
+interface ProjectionSelectorProps {
   /** Directive data object containing type and parameters */
   directiveData: DirectiveData;
   /** Callback when directive data is updated */
@@ -9,11 +9,11 @@ interface AttributeSelectorProps {
 }
 
 /**
- * Minimal React component for attribute field selection.
- * Simple field input for attribute directives.
+ * Minimal React component for projection directive.
+ * Specifies a signature to project.
  */
-export const AttributeSelector: React.FC<AttributeSelectorProps> = (props: AttributeSelectorProps) => {
-  const handleInputChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+export const ProjectionSelector: React.FC<ProjectionSelectorProps> = (props: ProjectionSelectorProps) => {
+  const handleInputChange = useCallback((event) => {
     const { name, value } = event.target;
     props.onUpdate({
       params: {
@@ -26,13 +26,12 @@ export const AttributeSelector: React.FC<AttributeSelectorProps> = (props: Attri
   return (
     <div className="input-group">
       <div className="input-group-prepend">
-        <span className="input-group-text">Field</span>
+        <span className="input-group-text">Sig</span>
       </div>
       <input
         type="text"
-        name="field"
         className="form-control"
-        defaultValue={props.directiveData.params.field as string || ''}
+        name="sig"
         onChange={handleInputChange}
         required
       />

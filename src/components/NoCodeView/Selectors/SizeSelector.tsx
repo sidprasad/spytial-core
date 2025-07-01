@@ -1,6 +1,6 @@
 import React from 'react';
-import { UNARY_SELECTOR_TEXT } from './constants';
-import { DirectiveData } from './interfaces';
+import { UNARY_SELECTOR_TEXT } from '../constants';
+import { DirectiveData } from '../interfaces';
 
 interface SizeSelectorProps {
   /** Directive data object containing type and parameters */

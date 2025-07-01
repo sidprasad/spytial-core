@@ -1,5 +1,5 @@
 import React from 'react';
-import { DirectiveData } from './interfaces';
+import { DirectiveData } from '../interfaces';
 
 interface FlagSelectorProps {
   /** Directive data object containing type and parameters */

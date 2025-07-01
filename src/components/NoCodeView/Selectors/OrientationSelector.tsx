@@ -1,6 +1,6 @@
 import React, { useCallback } from 'react';
-import { TUPLE_SELECTOR_TEXT } from './constants';
-import { ConstraintData } from './interfaces';
+import { TUPLE_SELECTOR_TEXT } from '../constants';
+import { ConstraintData } from '../interfaces';
 
 interface OrientationSelectorProps {
   /** Constraint data object containing type and parameters */

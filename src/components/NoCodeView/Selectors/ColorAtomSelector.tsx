@@ -1,6 +1,6 @@
 import React, { useCallback } from 'react';
-import { UNARY_SELECTOR_TEXT } from './constants';
-import { DirectiveData } from './interfaces';
+import { UNARY_SELECTOR_TEXT } from '../constants';
+import { DirectiveData } from '../interfaces';
 
 interface ColorAtomSelectorProps {
   /** Directive data object containing type and parameters */

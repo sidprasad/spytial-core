@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { ConstraintData } from './interfaces';
+import { ConstraintData } from '../interfaces';
 
 interface GroupByFieldSelectorProps {
   /** Constraint data object containing type and parameters */
