@@ -720,7 +720,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         }
 
         const shouldShowLabels = d.showLabels;
-        const displayLabel = shouldShowLabels ? (d.name || d.id || "Node") : "";
+        const displayLabel = shouldShowLabels ? (d.label || d.name || d.id || "Node") : "";
         const textElement = d3.select(nodes[i]);
 
         // Add main name label

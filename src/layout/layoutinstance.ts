@@ -546,6 +546,7 @@ export class LayoutInstance {
 
             return {
                 id: nodeId,
+                label: label,
                 name: label, 
                 color: color,
                 groups: nodeGroups,
