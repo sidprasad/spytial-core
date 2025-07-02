@@ -149,15 +149,23 @@ export function addInstanceRelationTuple(
   instance: AlloyInstance,
   relationId: string,
   tuple: AlloyTuple): AlloyInstance {
-  const relation = getInstanceRelation(instance, relationId);
+  let relation = instance.relations[relationId];
   const newRelations = { ...instance.relations };
   const newSkolems = { ...instance.skolems };
-  // Add the tuple to the relation
-  relation.tuples.push(tuple);
-  // If the relation is not already in the instance, add it
-  if (!newRelations[relation.id]) {
-    newRelations[relation.id] = relation;
+
+  if (!relation) {
+    // Create a new relation if it doesn't exist
+    relation = {
+      id: relationId,
+      name: relationId,
+      tuples: [tuple],
+      types: tuple.types,
+      _: 'relation',
+    };
+    newRelations[relationId] = relation;
   } else {
+    // Add the tuple to the relation
+    relation.tuples.push(tuple);
     newRelations[relation.id] = relation;
   }
   // [SP TODO]: Don't worry about skolems for now
