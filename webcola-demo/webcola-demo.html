@@ -45,6 +45,13 @@
         button:hover {
             background-color: #005a9e;
         }
+        #applyLayoutButton {
+            font-size: 16px;
+        }
+        #applyLayoutButton:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
         textarea {
             width: 100%;
             height: 200px;
@@ -83,9 +90,6 @@
             </div>
             <div id="left-panel">
                 <div id="control-panel" class="d-flex align-items-center gap-2">
-                    <button onclick="loadGraph()">Load & Render Graph</button>
-                    <button onclick="loadRealData()">Load Data Only</button>
-                    <button onclick="renderGraph()">Render Graph</button>
                     <button onclick="clearGraph()">Clear Graph</button>
                     <select title="Choose the Layout Format" class="form-control-sm" id="layoutFormat" name="layoutFormat" onchange="changeLayoutFormat()">
                         <option value="default" selected>Standard</option>
@@ -105,7 +109,9 @@
             </div>
         </div>
     </div>
-    <div id="cnd-panel" class="container col-md-4 border p-3">
+    <div id="cnd-panel" class="container d-flex flex-column col-md-4 border p-3">
+        <h5 class="h5 mb-2 text-dark">CND Layout Specification:</h5>
+        <button id="applyLayoutButton" class="mb-3" onclick="loadGraph()">Apply Layout</button>
         <div id="webcola-cnd-container">
             <!-- React element attached here -->
         </div>
