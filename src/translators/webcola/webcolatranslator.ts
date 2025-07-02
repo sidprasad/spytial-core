@@ -21,6 +21,8 @@ import * as dagre from 'dagre';
  */
 
 type NodeWithMetadata = Node & {
+
+  label: string, // This is the label that will be displayed on the node
   id: string,
   attributes: Record<string, string[]>,
   color: string
@@ -34,7 +36,8 @@ type EdgeWithMetadata = Link<NodeWithMetadata> & {
   target: number,
   relName: string, // This is the name of the relation for the edge
   id: string, // Unique identifier for the edge
-  label: string // This is what is displayed on the edge
+  label: string, // This is what is displayed on the edge
+  color: string
 };
 
 // Export the types for use in other modules
@@ -218,6 +221,7 @@ export class WebColaLayout {
       fixed: fixed,
       mostSpecificType: node.mostSpecificType,
       showLabels: node.showLabels,
+      label : node.label
     }
   }
 
@@ -233,7 +237,8 @@ export class WebColaLayout {
       target: targetIndex,
       relName: edge.relationName,
       id: edge.id,
-      label: edge.label
+      label: edge.label,
+      color: edge.color,
     }
   }
 

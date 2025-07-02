@@ -16,6 +16,7 @@ export interface LayoutGroup {
 
 export interface LayoutNode {
     id: string;
+    label: string;
     color : string;
     groups?: string[];
     attributes?: Record<string, string[]>;
@@ -34,6 +35,7 @@ export interface LayoutEdge {
     label: string;
     relationName : string;
     id : string;
+    color: string;
 }
 
 export class ImplicitConstraint {

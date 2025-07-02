@@ -7,9 +7,9 @@
 
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { CndLayoutInterface } from './CndLayoutInterface';
-import { ConstraintData, DirectiveData } from './NoCodeView/interfaces';
-import { generateLayoutSpecYaml } from './NoCodeView/CodeView';
+import { CndLayoutInterface } from '../src/components/CndLayoutInterface';
+import { ConstraintData, DirectiveData } from '../src/components/NoCodeView/interfaces';
+import { generateLayoutSpecYaml } from '../src/components/NoCodeView/CodeView';
 
 class CndLayoutStateManager {
   private static instance: CndLayoutStateManager;

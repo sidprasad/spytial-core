@@ -25,6 +25,9 @@ interface RacketGRelation {
     label: string;
 }
 
+interface IAtomWithLabel extends IAtom {
+    label: string; // Adding label to the IAtom interface for consistency
+}
 
 
 export function generateEdgeId(
@@ -50,7 +53,7 @@ function atomListToTuple(atoms: IAtom[]): ITuple {
  * Adapts a RacketG-style datum to the IDataInstance interface.
  */
 export class RacketGDataInstance implements IDataInstance {
-    private readonly atoms: IAtom[];
+    private readonly atoms: IAtomWithLabel[];
     private readonly types: IType[];
     private readonly relations: IRelation[];
 
@@ -67,7 +70,7 @@ export class RacketGDataInstance implements IDataInstance {
             {
                 return {
                     id: String(atom.id), // Using label as ID. We could change this later.
-                    //name: atom.label,
+                    label : atom.label,
                     type: atom.type
                 };
             });
@@ -201,14 +204,9 @@ export class RacketGDataInstance implements IDataInstance {
 
         this.atoms.forEach(atom => {
             const nodeId = atom.id;
-            // I *think* we want to have the same values
-            // to be the same node. We can decide later if
-            // this is indeed what we want or we want 
-            // ..replication...
-            graph.setNode(nodeId, atom.id);
-
+            // Set node with label object
+            graph.setNode(nodeId, { label: atom.label });
         });
-
 
 
         this.relations.forEach(relation => {
