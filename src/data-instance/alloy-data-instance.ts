@@ -1,5 +1,6 @@
-import type { IDataInstance, IAtom, IType, IRelation, ITuple } from './interfaces';
-import type { AlloyInstance, AlloyType, AlloyAtom, AlloyRelation, AlloyTuple } from './alloy/alloy-instance';
+import type { IDataInstance, IAtom, IType, IRelation, ITuple, IInputDataInstance } from './interfaces';
+import type { AlloyType, AlloyAtom, AlloyRelation, AlloyTuple } from './alloy/alloy-instance';
+import { addInstanceAtom, addInstanceRelationTuple, removeInstanceRelationTuple, AlloyInstance, removeInstanceAtom } from './alloy/alloy-instance';
 import { 
   getInstanceAtoms,
   getInstanceTypes,
@@ -16,8 +17,8 @@ import { Graph } from 'graphlib';
  * Implementation of IDataInstance for Alloy instances
  * Wraps the existing AlloyInstance to provide the IDataInstance interface
  */
-export class AlloyDataInstance implements IDataInstance {
-  constructor(private readonly alloyInstance: AlloyInstance) {}
+export class AlloyDataInstance implements IInputDataInstance {
+  constructor(private alloyInstance: AlloyInstance) {}
 
   /**
    * Get type information for a specific atom
@@ -130,6 +131,65 @@ export class AlloyDataInstance implements IDataInstance {
   public getAlloyInstance(): AlloyInstance {
     return this.alloyInstance;
   }
+
+
+  /**
+   * Reify the instance to a DOT string representation
+   * 
+   * @returns An inst string representation of the AlloyInstance
+   */
+  public reify(): string {
+    return ""; // Placeholder for actual reification logic
+  }
+
+
+
+  /**
+   * Remove an atom by ID
+   * 
+   * @param id - ID of the atom to remove
+   */
+  public removeAtom(id: string): void {
+    
+    // We actually have to 
+    this.alloyInstance = removeInstanceAtom(this.alloyInstance, id);
+  }
+
+  public addAtom(atom: IAtom): void {
+    // Convert IAtom to AlloyAtom
+    const alloyAtom: AlloyAtom = {
+      _: 'atom',
+      id: atom.id,
+      type: atom.type,
+      
+    };
+    this.alloyInstance = addInstanceAtom(this.alloyInstance, alloyAtom);
+  }
+
+  public addRelationTuple(relationId: string, tuple: ITuple): void {
+    // Convert ITuple to AlloyTuple
+    const alloyTuple: AlloyTuple = {
+      _: 'tuple',
+      atoms: tuple.atoms,
+      types: tuple.types
+    };
+    this.alloyInstance = addInstanceRelationTuple(this.alloyInstance, relationId, alloyTuple);
+  }
+
+  public removeRelationTuple(relationId: string, t: ITuple): void {
+    
+    // Convert ITuple to AlloyTuple
+    const alloyTuple: AlloyTuple = {
+      _: 'tuple',
+      atoms: t.atoms,
+      types: t.types
+    };
+
+
+    this.alloyInstance = removeInstanceRelationTuple(this.alloyInstance, relationId, alloyTuple);
+  }
+
+
 }
 
 /**
