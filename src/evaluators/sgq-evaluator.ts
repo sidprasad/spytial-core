@@ -6,7 +6,13 @@ import { IDataInstance } from "../data-instance/interfaces";
 import {SingleValue, Tuple} from "./interfaces";
 
 
-
+function isDataInstance(value: unknown): value is IDataInstance {
+    return (value as IDataInstance).getAtoms !== undefined &&
+           (value as IDataInstance).getRelations !== undefined &&
+           (value as IDataInstance).getTypes !== undefined &&
+           (value as IDataInstance).applyProjections !== undefined &&
+           (value as IDataInstance).generateGraph !== undefined;
+}
 
 function isErrorResult(result: EvaluationResult): result is ErrorResult {
     return (result as ErrorResult).error !== undefined;
@@ -206,6 +212,18 @@ export class SGraphQueryEvaluator implements IEvaluator {
 
   initialize(context: EvaluationContext): void {
     this.context = context;
+
+
+    console.log("Initializing SimpleGraphQueryEvaluator with context.sourceData:", context.sourceData);
+
+    
+
+    if (!context.sourceData || !isDataInstance(context.sourceData)) {
+        console.log("Invalid context.sourceData:", context.sourceData);
+      throw new Error("Invalid context.sourceData: Expected an instance of IDataInstance");
+    }
+
+
     const id : IDataInstance = context.sourceData as IDataInstance;
     this.eval = new SimpleGraphQueryEvaluator(id);
     console.log("SimpleGraphQueryEvaluator initialized with context:", context);
