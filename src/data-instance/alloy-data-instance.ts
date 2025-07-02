@@ -34,6 +34,7 @@ export class AlloyDataInstance implements IDataInstance {
       types: alloyType.types,
       atoms: alloyType.atoms.map((atom: AlloyAtom) => ({
         id: atom.id,
+        label: atom.id, // Label is the same as ID in Alloy
         type: atom.type,
         name: atom.id // In Alloy, atoms are identified by their ID.
       })),
@@ -55,7 +56,9 @@ export class AlloyDataInstance implements IDataInstance {
       atoms: alloyType.atoms.map((atom: AlloyAtom) => ({
         id: atom.id,
         type: atom.type,
+        label: atom.id, // Label is the same as ID in Alloy
         name: atom.id // In Alloy, atoms are identified by their ID.
+
       })),
       isBuiltin: isBuiltin(alloyType)
     }));
