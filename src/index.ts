@@ -11,7 +11,7 @@ export * as Translators from './translators';
 
 // Export new data instance abstraction
 export * from './data-instance/interfaces';
-export { AlloyDataInstance } from './data-instance/alloy-data-instance';
+export { AlloyDataInstance, createEmptyAlloyDataInstance } from './data-instance/alloy-data-instance';
 export { DotDataInstance } from './data-instance/dot/dot-data-instance';
 export { RacketGDataInstance } from './data-instance/racket/racket-g-data-instance';
 

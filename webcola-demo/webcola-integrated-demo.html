@@ -2,13 +2,16 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-sca        
-        <div class="main-layout">
-    <title>WebCola Integrated Demo - InstanceBuilder + Layout</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebCola CND Integrated Demo - Visual Instance Builder</title>
+    
+    <!-- Bootstrap CSS for component styling -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 1400px;
+            max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
             background-color: #f5f5f5;
@@ -20,38 +23,20 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             margin-bottom: 20px;
         }
-        .main-layout {
-            display: grid;
-            grid-template-columns: 1fr 2fr;
-            gap: 20px;
-            height: calc(100vh - 200px);
-        }
-        .left-column {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
-        .cnd-section {
-            flex: 0 0 auto;
-        }
-        .builder-section {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-        }
         #graph-container {
             width: 100%;
-            height: 100%;
+            height: 600px;
             border: 2px solid #007acc;
             border-radius: 8px;
+            margin: 20px 0;
         }
         .instance-builder-container {
             border: 1px solid #ddd;
             border-radius: 8px;
             padding: 0;
             background: #fafafa;
-            flex: 1;
-            min-height: 400px;
+            height: 200px;
+            overflow-y: auto;
         }
         button {
             background-color: #007acc;
@@ -66,15 +51,9 @@
         button:hover {
             background-color: #005a9e;
         }
-        button.secondary {
-            background-color: #6c757d;
-        }
-        button.secondary:hover {
-            background-color: #545b62;
-        }
         textarea {
             width: 100%;
-            height: 150px;
+            height: 200px;
             font-family: 'Courier New', monospace;
             font-size: 12px;
             padding: 10px;
@@ -96,83 +75,46 @@
         .status.info { background: #e3f2fd; color: #1976d2; }
         .status.success { background: #e8f5e8; color: #2e7d32; }
         .status.error { background: #ffebee; color: #c62828; }
-        .instance-summary {
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
-            padding: 15px;
-            margin: 10px 0;
-        }
-        .instance-summary h4 {
-            margin-top: 0;
-            color: #495057;
-        }
-        .dot-output {
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
-            padding: 10px;
-            white-space: pre-wrap;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-        .workflow-step {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 15px;
-            margin: 15px 0;
-            border-radius: 8px;
-            text-align: center;
-            font-weight: bold;
-        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🚀 CND Visual Builder</h1>
-        <p>Construct data instances visually while configuring layout specifications in real-time.</p>
+        <h1>🎯 WebCola CND Visual Builder</h1>
+        <p>Build data instances visually and see them rendered with CND layout specifications automatically.</p>
         
-        <div class="workflow-step">
-            Build Instance + Configure Layout → Live Visualization
-        </div>
-
-        <!-- Main Builder Interface -->
-        <div class="grid-layout">
-            <!-- Left Column: CND Spec + Instance Builder -->
-            <div class="left-column">
-                <!-- CND Specification Section -->
-                <div class="cnd-section">
-                    <h3>🎨 CND Layout Specification</h3>
-                    <textarea id="webcola-cnd" placeholder="Enter CND layout specification...">directives:
-  - attribute:
-      field: label</textarea>
-                </div>
-                
-                <!-- Instance Builder Section -->
-                <div class="builder-section">
-                    <h3>🏗️ Instance Builder</h3>
-                    <div id="instance-builder-container" class="instance-builder-container">
-                        <div style="padding: 20px; text-align: center; color: #666;">
-                            <p>Loading InstanceBuilder...</p>
-                        </div>
+        <!-- Editable Input Fields -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+            <div>
+                <label for="instance-builder-container">Visual Instance Builder:</label>
+                <div id="instance-builder-container" class="instance-builder-container">
+                    <div style="padding: 20px; text-align: center; color: #666;">
+                        <p>Loading InstanceBuilder...</p>
+                        <p><em>Build atoms and relations visually here</em></p>
                     </div>
                 </div>
             </div>
-            
-            <!-- Right Column: Visualization -->
-            <div>
-                <h3>🎨 Live Visualization</h3>
-                <webcola-cnd-graph 
-                    id="graph-container"
-                    width="800" 
-                    height="600">
-                </webcola-cnd-graph>
+            <div id="webcola-cnd-container">
+                <!-- React CND editor component attached here -->
             </div>
         </div>
         
-        <div id="status" class="status info">Ready to build your graph...</div>
+        <div>
+            <button onclick="clearGraph()">Clear All</button>
+            <select title="Choose the Layout Format" class="form-control" id="layoutFormat" name="layoutFormat" onchange="changeLayoutFormat()">
+                <option value="default" selected>Standard</option>
+                <option value="grid">Grid (Beta)</option>
+            </select>
+        </div>
+        
+        <!-- Use the webcola-cnd-graph custom element -->
+        <webcola-cnd-graph 
+            id="graph-container"
+            width="800" 
+            height="600"
+            layoutFormat="default">
+        </webcola-cnd-graph>
+        
+        <div id="status" class="status info">Add atoms and relations using the builder - visualization updates automatically!</div>
     </div>
 
     <!-- D3 v4 and WebCola -->
@@ -191,97 +133,156 @@
     <link rel="stylesheet" href="../dist/components/demo-integration.css">
     
     <script>
-        // Global state
+        // Variables to store data
         let currentInstance = null;
         let currentInstanceLayout = null;
-        
+
         /**
-         * Initialize the integrated demo
+         * Get current instance from the InstanceBuilder
+         * @returns {IDataInstance} Current data instance
          */
-        async function initializeIntegratedDemo() {
+        function getCurrentInstance() {
+            return currentInstance;
+        }
+
+        /**
+         * Get current CND specification from input field  
+         * @returns {string} CND layout specification
+         */
+        function getCurrentCNDSpec() {
+            // Try to get value from React component first
+            return window.getCurrentCNDSpecFromReact ? 
+                window.getCurrentCNDSpecFromReact() : 
+                document.getElementById('webcola-cnd')?.value?.trim();
+        }
+
+        /**
+         * Update status display with proper styling
+         * @param {string} message - Status message to display
+         * @param {string} type - Status type: 'info', 'success', 'error'
+         */
+        function updateStatus(message, type = 'info') {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = message;
+            statusElement.className = `status ${type}`;
+        }
+
+        /**
+         * Initialize the integrated demo pipeline
+         * @returns {boolean} Success status
+         */
+        async function initializePipeline() {
             try {
-                updateStatus('Initializing CND visual builder...', 'info');
+                console.log('Complete CND-Core browser bundle loaded successfully');
+                console.log('Available on global CndCore:', Object.keys(CndCore));
                 
-                // Initialize with empty DOT instance
-                if (window.CndCore && window.CndCore.DotDataInstance) {
-                    currentInstance = new window.CndCore.DotDataInstance('digraph G {}');
-                    updateStatus('CND visual builder ready!', 'success');
-                } else {
-                    throw new Error('CND Core library not loaded');
+                // Initialize with empty AlloyDataInstance
+                if (window.CndCore && window.CndCore.createEmptyAlloyDataInstance) {
+                    currentInstance = window.CndCore.createEmptyAlloyDataInstance();
+                    console.log('Initialized empty Alloy data instance:', currentInstance);
                 }
                 
+                // Check for required components
+                console.log('ForgeEvaluator available:', !!CndCore.ForgeEvaluator);
+                console.log('LayoutInstance available:', !!CndCore.LayoutInstance);
+                console.log('parseLayoutSpec available:', !!CndCore.parseLayoutSpec);
+                
+                updateStatus('Visual builder ready! Start adding atoms and relations above.', 'success');
+                
+                return true;
             } catch (error) {
-                console.error('Failed to initialize demo:', error);
-                updateStatus(`Initialization failed: ${error.message}`, 'error');
+                console.error('Failed to initialize pipeline:', error);
+                updateStatus(`Pipeline init failed: ${error.message}`, 'error');
+                return false;
             }
         }
 
         /**
-         * Update the instance summary display
+         * Process current instance data using the ForgeEvaluator → Layout pipeline
          */
-        function updateInstanceSummary() {
-            // Remove summary display - simplified demo
-        }
-
-        /**
-         * Update status display
-         */
-        async function renderGraph() {
+        async function loadInstanceData() {
             try {
+                updateStatus('Processing instance data with SGQL...', 'info');
+
+                // Get current instance from InstanceBuilder
                 if (!currentInstance || currentInstance.getAtoms().length === 0) {
+                    // Allow empty instances - just clear the graph
                     clearGraph();
                     return;
                 }
 
-                updateStatus('Rendering graph...', 'info');
+                // Get CND specification from input field - ALWAYS enforce
+                const cndSpec = getCurrentCNDSpec() || "";
 
-                // Get CND specification
-                const cndSpec = document.getElementById('webcola-cnd').value.trim();
-                if (!cndSpec) {
-                    updateStatus('No CND specification provided', 'error');
-                    return;
-                }
+                console.log('Using current instance:', currentInstance);
+                console.log('Atoms:', currentInstance.getAtoms().length);
+                console.log('Relations:', currentInstance.getRelations().length);
+                console.log('Using CND Spec:', cndSpec.substring(0, 200) + '...');
 
-
-                // The source Data Here has to be an IDataInstance!!
-
-
-
-                // Step 1: Create evaluation context with the current instance
                 const evaluationContext = {
-                    dataInstance: currentInstance,
-                    sourceData: currentInstance,
-                    processedData: currentInstance
+                    sourceData: currentInstance 
                 };
 
-                // Step 2: Create and initialize SGraphQueryEvaluator
-                const evaluator = new window.CndCore.SGraphQueryEvaluator();
-                evaluator.initialize(evaluationContext);
+                // Step 2: Create and initialize ForgeEvaluator (not SGraphQueryEvaluator)
+                updateStatus('Creating SGraphQueryEvaluator...', 'info');
+                const sgqevaluator = new CndCore.SGraphQueryEvaluator();
+                sgqevaluator.initialize(evaluationContext);
+                console.log('Created SGQEvaluator:', sgqevaluator);
 
-                // Step 3: Parse layout specification
-                const layoutSpec = window.CndCore.parseLayoutSpec(cndSpec);
+                // Step 3: Parse layout specification - ENFORCE CnD constraints
+                updateStatus('Parsing and enforcing CND specification...', 'info');
+                const layoutSpec = CndCore.parseLayoutSpec(cndSpec);
+                console.log('Parsed Layout Spec (enforced):', layoutSpec);
 
-                // Step 4: Create LayoutInstance
+                // Step 4: Create LayoutInstance with sgqevaluator
+                updateStatus('Creating layout instance with sgqevaluator...', 'info');
                 const ENABLE_ALIGNMENT_EDGES = true;
                 const instanceNumber = 0;
-                const layoutInstance = new window.CndCore.LayoutInstance(
+                
+                const layoutInstance = new CndCore.LayoutInstance(
                     layoutSpec, 
-                    evaluator, 
+                    sgqevaluator, 
                     instanceNumber, 
                     ENABLE_ALIGNMENT_EDGES
                 );
+                console.log('Created Layout Instance with sgqevaluator:', layoutInstance);
 
-                // Step 5: Generate layout
+                // Step 5: Generate layout using current data instance with CnD enforcement
+                updateStatus('Generating layout with CnD constraints enforced...', 'info');
                 const projections = {};
                 const layoutResult = layoutInstance.generateLayout(currentInstance, projections);
                 currentInstanceLayout = layoutResult.layout;
+                console.log('Generated Instance Layout with enforced CnD:', currentInstanceLayout);
 
-                // Render with WebCola custom element
-                const graphElement = document.getElementById('graph-container');
+                updateStatus('sgqevaluator pipeline complete with CnD enforcement!', 'success');
+                
+            } catch (error) {
+                console.error('Failed to load instance data:', error);
+                updateStatus(`Data loading failed: ${error.message}`, 'error');
+            }
+        }
+
+        /**
+         * Render the graph using the webcola-cnd-graph custom element
+         */
+        async function renderGraph() {
+            const graphElement = document.getElementById('graph-container');
+            
+            try {
+                if (!currentInstanceLayout) {
+                    updateStatus('No layout data available. Processing instance data first...', 'info');
+                    await loadInstanceData();
+                    if (!currentInstanceLayout) {
+                        throw new Error('Failed to generate layout data from instance');
+                    }
+                }
+
+                updateStatus('Rendering graph with WebCola...', 'info');
+                
+                // Use the real InstanceLayout data with WebCola custom element
                 await graphElement.renderLayout(currentInstanceLayout);
                 
                 updateStatus('Graph rendered successfully!', 'success');
-                
             } catch (error) {
                 console.error('Error rendering graph:', error);
                 updateStatus(`Render error: ${error.message}`, 'error');
@@ -289,14 +290,46 @@
         }
 
         /**
-         * Auto-render when instance changes (for smooth updates)
+         * Load data and render in one step
          */
-        async function autoRenderGraph() {
+        async function loadGraph() {
+            await loadInstanceData();
+            await renderGraph();
+        }
+
+        /**
+         * Load example data into the InstanceBuilder
+         */
+        function loadExampleData() {
             try {
-                await renderGraph();
+                // Create a simple example using DOT notation
+                const exampleDot = `digraph example {
+  A [label="User", type="Entity"];
+  B [label="System", type="Entity"];
+  C [label="Database", type="Data"];
+  
+  A -> B [label="interacts"];
+  B -> C [label="stores"];
+  C -> A [label="provides"];
+}`;
+                
+                // Update current instance (convert DOT to Alloy if needed)
+                // For now, keep DOT for example, but this could be converted to Alloy format
+                currentInstance = new window.CndCore.DotDataInstance(exampleDot);
+                
+                // Update the InstanceBuilder component if available
+                if (window.updateBuilderInstance) {
+                    window.updateBuilderInstance(currentInstance);
+                }
+                
+                updateStatus('Example data loaded successfully!', 'success');
+                
+                // Auto-render the example
+                setTimeout(loadGraph, 100);
+                
             } catch (error) {
-                // Silent fail for auto-render
-                console.log('Auto-render failed:', error.message);
+                console.error('Error loading example:', error);
+                updateStatus(`Failed to load example: ${error.message}`, 'error');
             }
         }
 
@@ -306,16 +339,27 @@
         function clearGraph() {
             const graphElement = document.getElementById('graph-container');
             
+            // Clear the graph
             if (graphElement.clear) {
                 graphElement.clear();
             }
             
+            // Reset state
             currentInstanceLayout = null;
-            updateStatus('Graph cleared.', 'info');
+            
+            // Reset instance to empty AlloyDataInstance
+            currentInstance = window.CndCore.createEmptyAlloyDataInstance();
+            
+            // Update the InstanceBuilder component if available
+            if (window.updateBuilderInstance) {
+                window.updateBuilderInstance(currentInstance);
+            }
+            
+            updateStatus('All cleared - start building!', 'info');
         }
 
         /**
-         * Update status display
+         * Update from InstanceBuilder component - ENFORCE CnD on every change
          */
         function updateFromBuilder() {
             // Get current instance from React component
@@ -326,43 +370,64 @@
                 }
             }
             
-            updateInstanceSummary();
-            updateStatus('Updated from visual builder', 'success');
+            updateStatus('Instance updated - enforcing CnD constraints...', 'info');
             
-            // Auto-render for smooth updates
-            setTimeout(autoRenderGraph, 100);
+            // ENFORCE CnD constraints on EVERY element addition/change
+            setTimeout(async () => {
+                try {
+                    // Always run the full ForgeEvaluator pipeline with CnD enforcement
+                    await loadInstanceData();
+                    if (currentInstanceLayout) {
+                        await renderGraph();
+                    }
+                } catch (error) {
+                    console.log('CnD enforcement failed:', error.message);
+                    updateStatus(`CnD constraint enforcement failed: ${error.message}`, 'error');
+                }
+            }, 100);
         }
 
         /**
-         * Update status display
+         * Update from CnD spec changes - ENFORCE immediately
          */
-        function updateStatus(message, type = 'info') {
-            const statusElement = document.getElementById('status');
-            if (statusElement) {
-                statusElement.textContent = message;
-                statusElement.className = `status ${type}`;
-            }
+        function updateFromCnDSpec() {
+            updateStatus('CnD specification changed - re-enforcing constraints...', 'info');
+            
+            // Re-run pipeline with new CnD spec
+            setTimeout(async () => {
+                try {
+                    if (currentInstance && currentInstance.getAtoms().length > 0) {
+                        await loadInstanceData();
+                        if (currentInstanceLayout) {
+                            await renderGraph();
+                        }
+                    }
+                } catch (error) {
+                    console.log('CnD spec update failed:', error.message);
+                    updateStatus(`CnD spec update failed: ${error.message}`, 'error');
+                }
+            }, 300); // Slightly longer debounce for text input
+        }
+
+        /**
+         * Change layout format (for future extensibility)
+         */
+        function changeLayoutFormat() {
+            const format = document.getElementById('layoutFormat').value;
+            console.log('Layout format changed to:', format);
+            // For now, just log - can be extended later
         }
 
         // Initialize when page loads
         window.addEventListener('load', () => {
-            initializeIntegratedDemo();
-            
-            // Add listener to CND textarea for auto-updates
-            const cndTextarea = document.getElementById('webcola-cnd');
-            if (cndTextarea) {
-                cndTextarea.addEventListener('input', () => {
-                    // Debounce auto-render
-                    clearTimeout(window.cndRenderTimeout);
-                    window.cndRenderTimeout = setTimeout(autoRenderGraph, 500);
-                });
-            }
+            initializePipeline();
         });
 
-        // Expose functions globally
-        window.autoRenderGraph = autoRenderGraph;
+        // Expose functions globally for React integration
+        window.autoRenderGraph = loadGraph;
         window.clearGraph = clearGraph;
         window.updateFromBuilder = updateFromBuilder;
+        window.updateFromCnDSpec = updateFromCnDSpec;  // Expose CnD spec update handler
     </script>
 </body>
 </html>

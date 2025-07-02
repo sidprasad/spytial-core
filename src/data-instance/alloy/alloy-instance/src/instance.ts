@@ -84,17 +84,28 @@ export function removeInstanceAtom(
 
 export function addInstanceAtom(instance: AlloyInstance, atom: AlloyAtom): AlloyInstance {
   const newTypes = { ...instance.types };
+  
+  // If the type EXISTS, we can add the atom to it.
+  // ELSE, we need to create a new type for the atom.
+
+  
   const type = newTypes[atom.type];
-  if (!type) throw new Error(`Could not find type for atom ${atom.id}`);
 
-  // Add the atom to the type
-  type.atoms.push(atom);
 
-  // If the type is not already in the instance, add it
-  if (!newTypes[type.id]) {
-    newTypes[type.id] = type;
+  // [SP TODO]: This isn't super robust to type heirarchies, but it works for now.
+  if (!type) {
+    // Create a new type for the atom
+    const newType : AlloyType = {
+      _: 'type',
+      id: atom.type,
+      types: [atom.type], // The type hierarchy is just the atom's type for now
+      atoms: [atom]
+    };
+    newTypes[newType.id] = newType;
   }
-
+  else {
+      type.atoms.push(atom);
+  }
   return {
     ...instance,
     types: newTypes
@@ -149,7 +160,7 @@ export function addInstanceRelationTuple(
   } else {
     newRelations[relation.id] = relation;
   }
-  // TODO: Don't worry about skolems for now
+  // [SP TODO]: Don't worry about skolems for now
   return {
     ...instance,
     relations: newRelations,

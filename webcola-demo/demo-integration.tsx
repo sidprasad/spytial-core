@@ -11,7 +11,7 @@ import { CndLayoutInterface } from '../src/components/CndLayoutInterface';
 import { InstanceBuilder } from '../src/components/InstanceBuilder/InstanceBuilder';
 import { ConstraintData, DirectiveData } from '../src/components/NoCodeView/interfaces';
 import { generateLayoutSpecYaml } from '../src/components/NoCodeView/CodeView';
-import { DotDataInstance } from '../src/data-instance/dot/dot-data-instance';
+import { createEmptyAlloyDataInstance } from '../src/data-instance/alloy-data-instance';
 import { IInputDataInstance } from '../src/data-instance/interfaces';
 
 class CndLayoutStateManager {
@@ -95,7 +95,7 @@ class IntegratedDemoStateManager {
   private instanceChangeCallbacks: ((instance: IInputDataInstance) => void)[] = [];
 
   constructor() {
-    this.currentInstance = new DotDataInstance('digraph G {}');
+    this.currentInstance = createEmptyAlloyDataInstance();
   }
 
   public static getInstance(): IntegratedDemoStateManager {
@@ -162,9 +162,13 @@ function CndLayoutInterfaceWrapper() {
   const handleYamlChange = React.useCallback((newValue: string) => {
     setYamlValue(newValue);
     
-    // Optionally trigger any global state updates needed by the demo
-    // For example, if there's a global event system:
-    // window.dispatchEvent(new CustomEvent('cnd-spec-changed', { detail: newValue }));
+    // ENFORCE CnD constraints on every spec change
+    if ((window as any).updateFromCnDSpec) {
+      (window as any).updateFromCnDSpec();
+    }
+    
+    // Also trigger custom event for other listeners
+    window.dispatchEvent(new CustomEvent('cnd-spec-changed', { detail: newValue }));
   }, []);
 
   /**
@@ -180,6 +184,11 @@ function CndLayoutInterfaceWrapper() {
    */
   const handleSetConstraints = React.useCallback((updater: (prev: ConstraintData[]) => ConstraintData[]) => {
     setConstraints(updater);
+    
+    // ENFORCE CnD constraints when constraints change in No-Code view
+    if ((window as any).updateFromCnDSpec) {
+      setTimeout(() => (window as any).updateFromCnDSpec(), 100);
+    }
   }, []);
 
   /**
@@ -187,6 +196,11 @@ function CndLayoutInterfaceWrapper() {
    */
   const handleSetDirectives = React.useCallback((updater: (prev: DirectiveData[]) => DirectiveData[]) => {
     setDirectives(updater);
+    
+    // ENFORCE CnD constraints when directives change in No-Code view
+    if ((window as any).updateFromCnDSpec) {
+      setTimeout(() => (window as any).updateFromCnDSpec(), 100);
+    }
   }, []);
 
   return (

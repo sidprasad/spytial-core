@@ -211,3 +211,13 @@ export function createAlloyDataInstance(alloyInstance: AlloyInstance): IDataInst
 export function isAlloyDataInstance(instance: IDataInstance): instance is AlloyDataInstance {
   return instance instanceof AlloyDataInstance;
 }
+
+
+export function createEmptyAlloyDataInstance(): AlloyDataInstance {
+  const emptyAlloyInstance : AlloyInstance = {
+    types: {},
+    relations: {},
+    skolems: {},
+    };
+  return new AlloyDataInstance(emptyAlloyInstance);
+}

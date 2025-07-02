@@ -2,6 +2,24 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { IAtom, IRelation, ITuple, IInputDataInstance } from '../../data-instance/interfaces';
 import './InstanceBuilder.css';
 
+/**
+ * Generate a unique atom ID based on existing atoms in the instance
+ */
+function generateAtomId(instance: IInputDataInstance): string {
+  const existingAtoms = instance.getAtoms();
+  const existingIds = new Set(existingAtoms.map(atom => atom.id));
+  
+  let counter = 1;
+  let candidateId = `atom-${counter}`;
+  
+  while (existingIds.has(candidateId)) {
+    counter++;
+    candidateId = `atom-${counter}`;
+  }
+  
+  return candidateId;
+}
+
 export interface InstanceBuilderProps {
   /** The data instance to build/modify - REQUIRED */
   instance: IInputDataInstance;
@@ -14,7 +32,6 @@ export interface InstanceBuilderProps {
 }
 
 interface AtomForm {
-  id: string;
   label: string;
   type: string;
 }
@@ -39,7 +56,6 @@ export const InstanceBuilder: React.FC<InstanceBuilderProps> = ({
 }) => {
   // Form state for adding atoms
   const [atomForm, setAtomForm] = useState<AtomForm>({
-    id: '',
     label: '',
     type: 'Entity'
   });
@@ -70,20 +86,20 @@ export const InstanceBuilder: React.FC<InstanceBuilderProps> = ({
    */
   const handleAddAtom = useCallback((e: React.FormEvent) => {
     e.preventDefault();
-    if (!atomForm.id.trim() || !atomForm.label.trim()) {
-      setError('Atom ID and label are required');
+    if (!atomForm.label.trim()) {
+      setError('Atom label is required');
       return;
     }
 
     try {
       const newAtom: IAtom = {
-        id: atomForm.id.trim(),
+        id: generateAtomId(instance),
         label: atomForm.label.trim(),
         type: atomForm.type.trim() || 'Entity'
       };
 
       instance.addAtom(newAtom);
-      setAtomForm({ id: '', label: '', type: 'Entity' });
+      setAtomForm({ label: '', type: 'Entity' });
       setError('');
       notifyChange();
     } catch (err) {
@@ -197,14 +213,6 @@ export const InstanceBuilder: React.FC<InstanceBuilderProps> = ({
           {/* Add Atom Form */}
           <form onSubmit={handleAddAtom} className="instance-builder__form">
             <div className="form-row">
-              <input
-                type="text"
-                placeholder="Atom ID"
-                value={atomForm.id}
-                onChange={(e) => setAtomForm(prev => ({ ...prev, id: e.target.value }))}
-                disabled={disabled}
-                required
-              />
               <input
                 type="text"
                 placeholder="Label"
