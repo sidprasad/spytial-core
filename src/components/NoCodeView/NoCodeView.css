@@ -1,6 +1,49 @@
+.cardContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;;
+}
+
+.noCodeCard {
+    background: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.06);
+    padding: 10px 16px;
+}
+
+.input-group-text.stretch-height {
+    height: 100%;
+}
+
+.closeButton {
+    float: right;
+    background-color: transparent;
+    color: grey;
+    font-size: 1.5rem;
+    padding: 0;
+}
+
+.closeButton:hover {
+    color: black;
+    cursor: pointer;
+    background-color: transparent;
+}
+
+/** Styles for informational labels */
+.infolabel {
+    cursor: help; /* Changes the cursor to a question mark */
+    text-decoration: underline; /* Adds an underline to indicate interactivity */
+    color: #007bff; /* Makes the text look like a link */
+}
+
+.infolabel:hover {
+    color: #0056b3; /* Darkens the color on hover */
+    text-decoration: none; /* Optionally remove underline on hover */
+}
+
 /* Highlight effect for newly added elements */
 .highlight {
-    border: 2px solid #007bff; /* Thin blue border */
+    border: 1px solid #007bff; /* Thin blue border */
     animation: fadeBorder 1s ease-out forwards; /* Fade out the border */
 }
 

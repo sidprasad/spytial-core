@@ -57,9 +57,15 @@ const ConstraintCard = (props: ConstraintCardProps) => {
         props.onUpdate({ type: selectedValue, params: {} });
     }, [props.onUpdate, props.constraintData]);
 
+    const classes = [
+        props.className ? props.className : '',
+        isHighlighted ? 'highlight' : '',
+        'noCodeCard',
+    ].filter(Boolean).join(' ');
+
     return (
-        <div className={ isHighlighted ? 'highlight' : '' }>
-            <button className="close" title="Remove constraint" type="button" onClick= { props.onRemove }>
+        <div className={classes}>
+            <button className="closeButton" title="Remove constraint" type="button" onClick= { props.onRemove }>
                 <span aria-hidden="true">&times;</span>
             </button>
             <div className="input-group"> 
