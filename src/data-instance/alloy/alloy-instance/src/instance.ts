@@ -94,11 +94,15 @@ export function addInstanceAtom(instance: AlloyInstance, atom: AlloyAtom): Alloy
 
   // [SP TODO]: This isn't super robust to type heirarchies, but it works for now.
   if (!type) {
+
+
+    // Get the type
+
     // Create a new type for the atom
     const newType : AlloyType = {
       _: 'type',
       id: atom.type,
-      types: [atom.type], // The type hierarchy is just the atom's type for now
+      types: [atom.type, 'univ'], // The type hierarchy is just the atom's type for now
       atoms: [atom]
     };
     newTypes[newType.id] = newType;

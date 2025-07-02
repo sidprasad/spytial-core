@@ -269,11 +269,80 @@ export function isAlloyDataInstance(instance: IDataInstance): instance is AlloyD
 }
 
 
+/**
+ * Creates an empty AlloyDataInstance with default Alloy built-in types
+ * Includes fundamental types like univ, Int, seq/Int that are always present in Alloy
+ * 
+ * @returns A new AlloyDataInstance with built-in types but no user-defined atoms or relations
+ */
 export function createEmptyAlloyDataInstance(): AlloyDataInstance {
-  const emptyAlloyInstance : AlloyInstance = {
-    types: {},
+  // Default built-in types that should always be present in Alloy instances
+  const defaultTypes: Record<string, AlloyType> = {
+    'univ': {
+      _: 'type',
+      id: 'univ',
+      types: [],
+      atoms: [],
+      meta: {
+        builtin: true,
+        abstract: false,
+        enum: false,
+        one: false,
+        private: false
+      }
+    },
+    'Int': {
+      _: 'type', 
+      id: 'Int',
+      types: ['univ'],
+      atoms: [
+        // Include some default integer atoms
+        { _: 'atom', id: '-8', type: 'Int' },
+        { _: 'atom', id: '-7', type: 'Int' },
+        { _: 'atom', id: '-6', type: 'Int' },
+        { _: 'atom', id: '-5', type: 'Int' },
+        { _: 'atom', id: '-4', type: 'Int' },
+        { _: 'atom', id: '-3', type: 'Int' },
+        { _: 'atom', id: '-2', type: 'Int' },
+        { _: 'atom', id: '-1', type: 'Int' },
+        { _: 'atom', id: '0', type: 'Int' },
+        { _: 'atom', id: '1', type: 'Int' },
+        { _: 'atom', id: '2', type: 'Int' },
+        { _: 'atom', id: '3', type: 'Int' },
+        { _: 'atom', id: '4', type: 'Int' },
+        { _: 'atom', id: '5', type: 'Int' },
+        { _: 'atom', id: '6', type: 'Int' },
+        { _: 'atom', id: '7', type: 'Int' }
+      ],
+      meta: {
+        builtin: true,
+        abstract: false,
+        enum: false,
+        one: false,
+        private: false
+      }
+    },
+    'seq/Int': {
+      _: 'type',
+      id: 'seq/Int', 
+      types: ['univ'],
+      atoms: [],
+      meta: {
+        builtin: true,
+        abstract: false,
+        enum: false,
+        one: false,
+        private: false
+      }
+    }
+  };
+
+
+  const emptyAlloyInstance: AlloyInstance = {
+    types: defaultTypes,
     relations: {},
-    skolems: {},
-    };
+    skolems: {}
+  };
+
   return new AlloyDataInstance(emptyAlloyInstance);
 }
