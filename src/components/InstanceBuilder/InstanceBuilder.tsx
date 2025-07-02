@@ -1,20 +1,21 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import * as React from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { IAtom, IRelation, ITuple, IInputDataInstance } from '../../data-instance/interfaces';
 import './InstanceBuilder.css';
 
 /**
  * Generate a unique atom ID based on existing atoms in the instance
  */
-function generateAtomId(instance: IInputDataInstance): string {
+function generateAtomId(instance: IInputDataInstance, typeName : string): string {
   const existingAtoms = instance.getAtoms();
   const existingIds = new Set(existingAtoms.map(atom => atom.id));
   
   let counter = 1;
-  let candidateId = `atom-${counter}`;
+  let candidateId = `${typeName}-${counter}`;
   
   while (existingIds.has(candidateId)) {
     counter++;
-    candidateId = `atom-${counter}`;
+    candidateId = `${typeName}-${counter}`;
   }
   
   return candidateId;
@@ -32,6 +33,7 @@ export interface InstanceBuilderProps {
 }
 
 interface AtomForm {
+  id: string;
   label: string;
   type: string;
 }
@@ -56,9 +58,13 @@ export const InstanceBuilder: React.FC<InstanceBuilderProps> = ({
 }) => {
   // Form state for adding atoms
   const [atomForm, setAtomForm] = useState<AtomForm>({
+    id: '',
     label: '',
     type: 'Entity'
   });
+
+  // Compute a suggested ID based on type and current atoms
+  const suggestedId = generateAtomId(instance, atomForm.type.trim() || 'Entity');
 
   // Form state for adding relations
   const [relationForm, setRelationForm] = useState<RelationForm>({
@@ -90,16 +96,26 @@ export const InstanceBuilder: React.FC<InstanceBuilderProps> = ({
       setError('Atom label is required');
       return;
     }
-
+    const typeInfo = atomForm.type.trim() || 'Entity';
+    // Use user-provided ID if present, otherwise use suggested
+    const id = atomForm.id.trim() || generateAtomId(instance, typeInfo);
+    if (!id) {
+      setError('Atom ID could not be generated');
+      return;
+    }
+    // Check for duplicate ID
+    if (instance.getAtoms().some(atom => atom.id === id)) {
+      setError('Atom ID already exists');
+      return;
+    }
     try {
       const newAtom: IAtom = {
-        id: generateAtomId(instance),
+        id,
         label: atomForm.label.trim(),
-        type: atomForm.type.trim() || 'Entity'
+        type: typeInfo
       };
-
       instance.addAtom(newAtom);
-      setAtomForm({ label: '', type: 'Entity' });
+      setAtomForm({ id: '', label: '', type: 'Entity' });
       setError('');
       notifyChange();
     } catch (err) {
@@ -182,6 +198,23 @@ export const InstanceBuilder: React.FC<InstanceBuilderProps> = ({
     }
   }, [instance, notifyChange]);
 
+  // State for re-ify result
+  const [reifyResult, setReifyResult] = useState<any>(null);
+
+  // Handler for re-ify button
+  const handleReify = useCallback(() => {
+    if (typeof instance.reify === 'function') {
+      try {
+        const result = instance.reify();
+        setReifyResult(result);
+      } catch (err) {
+        setReifyResult('Re-ify failed: ' + (err instanceof Error ? err.message : String(err)));
+      }
+    } else {
+      setReifyResult('Re-ify not supported on this instance.');
+    }
+  }, [instance]);
+
   return (
     <div className={`instance-builder ${className}`}>
       <div className="instance-builder__header">
@@ -215,6 +248,14 @@ export const InstanceBuilder: React.FC<InstanceBuilderProps> = ({
             <div className="form-row">
               <input
                 type="text"
+                placeholder={`ID (suggested: ${suggestedId})`}
+                value={atomForm.id}
+                onChange={(e: any) => setAtomForm(prev => ({ ...prev, id: e.target.value }))}
+                disabled={disabled}
+                aria-label="Atom ID"
+              />
+              <input
+                type="text"
                 placeholder="Label"
                 value={atomForm.label}
                 onChange={(e) => setAtomForm(prev => ({ ...prev, label: e.target.value }))}
@@ -232,6 +273,11 @@ export const InstanceBuilder: React.FC<InstanceBuilderProps> = ({
                 Add Atom
               </button>
             </div>
+            {atomForm.id === '' && (
+              <div style={{ fontSize: '0.85em', color: '#888', marginTop: 2 }}>
+                Suggested ID: <code>{suggestedId}</code>
+              </div>
+            )}
           </form>
 
           {/* Atoms List */}
@@ -344,7 +390,25 @@ export const InstanceBuilder: React.FC<InstanceBuilderProps> = ({
           >
             Clear All
           </button>
+          <button
+            type="button"
+            onClick={handleReify}
+            disabled={disabled}
+            className="reify-button"
+            style={{ marginLeft: 8 }}
+          >
+            Re-ify
+          </button>
         </section>
+        {/* Re-ify Result Display */}
+        {reifyResult !== null && (
+          <section className="instance-builder__reify-result" style={{ marginTop: 12, background: '#f8f8f8', border: '1px solid #eee', borderRadius: 4, padding: 10 }}>
+            <strong>Re-ify Result:</strong>
+            <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0 }}>
+              {typeof reifyResult === 'string' ? reifyResult : JSON.stringify(reifyResult, null, 2)}
+            </pre>
+          </section>
+        )}
       </div>
     </div>
   );
