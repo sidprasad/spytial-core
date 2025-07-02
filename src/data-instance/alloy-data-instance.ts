@@ -295,25 +295,7 @@ export function createEmptyAlloyDataInstance(): AlloyDataInstance {
       _: 'type', 
       id: 'Int',
       types: ['univ'],
-      atoms: [
-        // Include some default integer atoms
-        { _: 'atom', id: '-8', type: 'Int' },
-        { _: 'atom', id: '-7', type: 'Int' },
-        { _: 'atom', id: '-6', type: 'Int' },
-        { _: 'atom', id: '-5', type: 'Int' },
-        { _: 'atom', id: '-4', type: 'Int' },
-        { _: 'atom', id: '-3', type: 'Int' },
-        { _: 'atom', id: '-2', type: 'Int' },
-        { _: 'atom', id: '-1', type: 'Int' },
-        { _: 'atom', id: '0', type: 'Int' },
-        { _: 'atom', id: '1', type: 'Int' },
-        { _: 'atom', id: '2', type: 'Int' },
-        { _: 'atom', id: '3', type: 'Int' },
-        { _: 'atom', id: '4', type: 'Int' },
-        { _: 'atom', id: '5', type: 'Int' },
-        { _: 'atom', id: '6', type: 'Int' },
-        { _: 'atom', id: '7', type: 'Int' }
-      ],
+      atoms: [  ],
       meta: {
         builtin: true,
         abstract: false,
