@@ -26,12 +26,33 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             margin-bottom: 20px;
         }
+        #graph-container-wrapper {
+            position: relative;
+            width: 100%;
+            height: 600px;
+            margin: 20px 0;
+        }
         #graph-container {
             width: 100%;
             height: 600px;
             border: 2px solid #007acc;
             border-radius: 8px;
-            margin: 20px 0;
+            display: block; /* Why? Because it's an inline SVG by default */
+        }
+        #graph-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 8px 12px;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(0, 0, 0, 0.1);
         }
         button {
             background-color: #007acc;
@@ -83,6 +104,31 @@
         .status.info { background: #e3f2fd; color: #1976d2; }
         .status.success { background: #e8f5e8; color: #2e7d32; }
         .status.error { background: #ffebee; color: #c62828; }
+
+        /** TODO: Add support for smaller screen sizes */
+        /**
+         * Responsive design for smaller screens
+         * Following modern browser compatibility guidelines
+         */
+        @media (max-width: 768px) {
+            #graph-controls {
+                top: 5px;
+                right: 5px;
+                padding: 6px 8px;
+                gap: 6px;
+            }
+            
+            #graph-controls #clearGraphButton {
+                padding: 4px 8px;
+                font-size: 12px;
+            }
+            
+            #graph-controls #layoutFormat {
+                padding: 4px 6px;
+                font-size: 12px;
+                min-width: 80px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -96,22 +142,23 @@
                 <textarea id="webcola-alloy" placeholder="Paste your Alloy XML instance here..."></textarea>
             </div>
             <div id="left-panel">
-                <div id="control-panel" class="d-flex align-items-center gap-2">
-                    <button id="clearGraphButton" onclick="clearGraph()">Clear Graph</button>
-                    <select title="Choose the Layout Format" class="form-control-sm" id="layoutFormat" name="layoutFormat" onchange="changeLayoutFormat()">
-                        <option value="default" selected>Standard</option>
-                        <option value="grid">Grid (Beta)</option>
-                    </select>
-                </div>
             </div>
             <div id="status" class="status info">Ready to load Alloy graph...</div>
             <div id="graph-container-wrapper">
+                <div id="graph-controls">
+                    <select title="Choose the Layout Format" class="form-select form-select-sm" id="layoutFormat" name="layoutFormat" onchange="changeLayoutFormat()" aria-label="Layout format selection">
+                        <option value="default" selected>Standard</option>
+                        <option value="grid">Grid (Beta)</option>
+                    </select>
+                    <button id="clearGraphButton" onclick="clearGraph()" title="Clear the current graph visualization" aria-label="Clear graph">Clear</button>
+                </div>
                 <!-- Use the webcola-cnd-graph custom element -->
                 <webcola-cnd-graph 
                     id="graph-container"
                     width="800" 
                     height="600"
-                    layoutFormat="default">
+                    layoutFormat="default"
+                    aria-label="Interactive graph visualization">
                 </webcola-cnd-graph>
             </div>
         </div>
