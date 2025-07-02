@@ -424,6 +424,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         return "link";
       })
       .attr("data-link-id", (d: any) => d.id || "")
+      .attr("stroke", (d: any) => d.color)
       .attr("fill", "none")
       .attr("stroke-width", 1)
       .attr("marker-end", (d: any) => {
@@ -1778,7 +1779,6 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       }
       
       .link {
-        stroke: #333;
         stroke-width: 1px;
         fill: none;
         marker-end: url(#end-arrow);
