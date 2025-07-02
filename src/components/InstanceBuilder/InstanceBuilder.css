@@ -66,6 +66,53 @@
   gap: 30px;
 }
 
+/* N-ary relation styles */
+.relation-atoms {
+  background: #f9f9f9;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 12px;
+  margin: 8px 0;
+}
+
+.atom-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.atom-selector label {
+  min-width: 80px;
+  font-weight: 500;
+}
+
+.atom-selector select {
+  flex: 1;
+  min-width: 200px;
+}
+
+.arity-controls {
+  display: flex;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.arity-controls button {
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.arity-controls button:hover:not(:disabled) {
+  background: #5a6268;
+}
+
 .instance-builder__section {
   border: 1px solid #f0f0f0;
   border-radius: 6px;
