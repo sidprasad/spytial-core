@@ -203,6 +203,11 @@ export const InstanceBuilder: React.FC<InstanceBuilderProps> = ({
 
   // Handler for re-ify button
   const handleReify = useCallback(() => {
+    // Debug: log the instance and its methods
+    // eslint-disable-next-line no-console
+    console.log('Instance in handleReify:', instance);
+    // eslint-disable-next-line no-console
+    console.log('typeof instance.reify:', typeof (instance as any).reify);
     if (typeof instance.reify === 'function') {
       try {
         const result = instance.reify();
