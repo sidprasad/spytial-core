@@ -41,6 +41,143 @@ export function getInstanceAtoms(instance: AlloyInstance): AlloyAtom[] {
     .reduce((prev, curr) => prev.concat(curr), []);
 }
 
+/**
+ * 
+ * @param instance AlloyInstance
+ * @param atomId Id of the atom to remove
+ * @returns A new AlloyInstance with the atom removed.
+ */
+export function removeInstanceAtom(
+  instance: AlloyInstance,
+  atomId: string): AlloyInstance {
+  const atom = getInstanceAtom(instance, atomId);
+  const newTypes = { ...instance.types };
+  const newRelations = { ...instance.relations };
+  const newSkolems = { ...instance.skolems };
+  // Remove the atom from its type
+  const type = newTypes[atom.type];
+  if (type) {
+    type.atoms = type.atoms.filter((a) => a.id !== atomId);
+    if (type.atoms.length === 0) {
+      delete newTypes[type.id];
+    }
+    // Remove from relations
+    Object.values(newRelations).forEach((relation) => {
+      relation.tuples = relation.tuples.filter((tuple) => !tuple.atoms.includes(atomId));
+    });
+    // Remove from skolems
+    Object.values(newSkolems).forEach((skolem) => {
+      skolem.tuples = skolem.tuples.filter((tuple) => !tuple.atoms.includes(atomId));
+    });
+    return {
+      types: newTypes,
+      relations: newRelations,
+      skolems: newSkolems
+    };
+
+
+  } else {
+    throw new Error(`Could not find type for atom ${atomId}`);
+  }
+
+}
+
+export function addInstanceAtom(instance: AlloyInstance, atom: AlloyAtom): AlloyInstance {
+  const newTypes = { ...instance.types };
+  
+  // If the type EXISTS, we can add the atom to it.
+  // ELSE, we need to create a new type for the atom.
+
+  
+  const type = newTypes[atom.type];
+
+
+  // [SP TODO]: This isn't super robust to type heirarchies, but it works for now.
+  if (!type) {
+    // Create a new type for the atom
+    const newType : AlloyType = {
+      _: 'type',
+      id: atom.type,
+      types: [atom.type], // The type hierarchy is just the atom's type for now
+      atoms: [atom]
+    };
+    newTypes[newType.id] = newType;
+  }
+  else {
+      type.atoms.push(atom);
+  }
+  return {
+    ...instance,
+    types: newTypes
+  };
+}
+
+
+export function removeInstanceRelationTuple(
+  instance: AlloyInstance,
+  relationId: string,
+  tuple: AlloyTuple): AlloyInstance {
+  const relation = getInstanceRelation(instance, relationId);
+  const newRelations = { ...instance.relations };
+  const newSkolems = { ...instance.skolems };
+  // Remove the tuple from the relation
+  relation.tuples = relation.tuples.filter((t) => t !== tuple);
+  // If the relation has no tuples left, remove it from the instance
+  if (relation.tuples.length === 0) {
+    delete newRelations[relation.id];
+  } else {
+    newRelations[relation.id] = relation;
+  }
+  // Remove the tuple from skolems
+  Object.values(newSkolems).forEach((skolem) => {
+    skolem.tuples = skolem.tuples.filter((t) => t !== tuple);
+    if (skolem.tuples.length === 0) {
+      delete newSkolems[skolem.id];
+    } else {
+      newSkolems[skolem.id] = skolem;
+    }
+  });
+  return {
+    ...instance,
+    relations: newRelations,
+    skolems: newSkolems
+  };
+}
+
+
+export function addInstanceRelationTuple(
+  instance: AlloyInstance,
+  relationId: string,
+  tuple: AlloyTuple): AlloyInstance {
+  let relation = instance.relations[relationId];
+  const newRelations = { ...instance.relations };
+  const newSkolems = { ...instance.skolems };
+
+  if (!relation) {
+    // Create a new relation if it doesn't exist
+    relation = {
+      id: relationId,
+      name: relationId,
+      tuples: [tuple],
+      types: tuple.types,
+      _: 'relation',
+    };
+    newRelations[relationId] = relation;
+  } else {
+    // Add the tuple to the relation
+    relation.tuples.push(tuple);
+    newRelations[relation.id] = relation;
+  }
+  // [SP TODO]: Don't worry about skolems for now
+  return {
+    ...instance,
+    relations: newRelations,
+    skolems: newSkolems
+  };
+}
+
+
+
 export function getInstanceAtomsOfType(
   instance: AlloyInstance,
   type: AlloyType | string
@@ -116,7 +253,7 @@ export function instanceFromElement(element: Element): AlloyInstance {
     typeNames,
     element.querySelectorAll('field')
   );
-  
+
   const skolems = relationsFromElements(
     typeNames,
     element.querySelectorAll('skolem')

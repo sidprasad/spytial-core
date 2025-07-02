@@ -1,5 +1,8 @@
 /**
- * Alloy Instance module for handling Alloy model instances
+ * Alloy Instance module for handling Alloy model instances.
+ * 
+ * 
+ * // PErhaps this needs to be removed?
  */
 
 export interface AlloyAtom {
@@ -92,6 +95,10 @@ export class AlloyInstance {
       throw new Error(`Signature ${atom.signature} not found`);
     }
   }
+
+
+
+
 
   /**
    * Get a signature by name
@@ -227,6 +234,47 @@ export class AlloyInstance {
       });
     });
   }
+
+
+
+  /** Remove Atoms */
+  removeAtom(atomId: string): void {
+    if (this.atoms.has(atomId)) {
+      this.atoms.delete(atomId);
+      
+      // Remove from all signatures
+      this.signatures.forEach(signature => {
+        signature.atoms = signature.atoms.filter(atom => atom.id !== atomId);
+      });
+
+      // And remove from all relations
+      this.relations.forEach(relation => {
+        relation.tuples = relation.tuples.filter(tuple => !tuple.includes(atomId));
+      });
+
+
+    } else if (this.config.strictMode) {
+      throw new Error(`Atom ${atomId} not found in instance`);
+    }
+  }
+
+
+
+  /** Remove Relation Tuple */
+  removeRelationTuple(relationName: string, tuple: string[]): void {
+    const relation = this.relations.get(relationName);
+    if (!relation) {
+      throw new Error(`Relation ${relationName} not found`);
+    }
+
+    const index = relation.tuples.findIndex(t => t.length === tuple.length && t.every((atom, i) => atom === tuple[i]));
+    if (index === -1) {
+      throw new Error(`Tuple ${tuple.join(', ')} not found in relation ${relationName}`);
+    }
+
+    relation.tuples.splice(index, 1);
+  }
+
 }
 
 /**

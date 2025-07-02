@@ -25,11 +25,6 @@ interface RacketGRelation {
     label: string;
 }
 
-interface IAtomWithLabel extends IAtom {
-    label: string; // Adding label to the IAtom interface for consistency
-}
-
-
 export function generateEdgeId(
     relation: IRelation,
     tuple: ITuple
@@ -53,7 +48,7 @@ function atomListToTuple(atoms: IAtom[]): ITuple {
  * Adapts a RacketG-style datum to the IDataInstance interface.
  */
 export class RacketGDataInstance implements IDataInstance {
-    private readonly atoms: IAtomWithLabel[];
+    private readonly atoms: IAtom[];
     private readonly types: IType[];
     private readonly relations: IRelation[];
 

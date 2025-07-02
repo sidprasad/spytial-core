@@ -1,15 +1,18 @@
 /**
- * Example integration of CndLayoutInterface with webcola-demo.html
+ * Example integration of CndLayoutInterface and InstanceBuilder with webcola-integrated-demo.html
  * 
- * This file demonstrates how to mount the React component into the existing demo page
- * and integrate it with the existing JavaScript functions.
+ * This file demonstrates how to mount the React components into the existing demo page
+ * and integrate them with the existing JavaScript functions.
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { CndLayoutInterface } from '../src/components/CndLayoutInterface';
+import { InstanceBuilder } from '../src/components/InstanceBuilder/InstanceBuilder';
 import { ConstraintData, DirectiveData } from '../src/components/NoCodeView/interfaces';
 import { generateLayoutSpecYaml } from '../src/components/NoCodeView/CodeView';
+import { createEmptyAlloyDataInstance } from '../src/data-instance/alloy-data-instance';
+import { IInputDataInstance } from '../src/data-instance/interfaces';
 
 class CndLayoutStateManager {
   private static instance: CndLayoutStateManager;
@@ -84,6 +87,49 @@ class CndLayoutStateManager {
 }
 
 /**
+ * Global state manager for the integrated demo
+ */
+class IntegratedDemoStateManager {
+  private static instance: IntegratedDemoStateManager;
+  private currentInstance: IInputDataInstance;
+  private instanceChangeCallbacks: ((instance: IInputDataInstance) => void)[] = [];
+
+  constructor() {
+    this.currentInstance = createEmptyAlloyDataInstance();
+  }
+
+  public static getInstance(): IntegratedDemoStateManager {
+    if (!IntegratedDemoStateManager.instance) {
+      IntegratedDemoStateManager.instance = new IntegratedDemoStateManager();
+    }
+    return IntegratedDemoStateManager.instance;
+  }
+
+  public getCurrentInstance(): IInputDataInstance {
+    return this.currentInstance;
+  }
+
+  public setCurrentInstance(instance: IInputDataInstance): void {
+    this.currentInstance = instance;
+    this.notifyInstanceChange();
+  }
+
+  public onInstanceChange(callback: (instance: IInputDataInstance) => void): void {
+    this.instanceChangeCallbacks.push(callback);
+  }
+
+  private notifyInstanceChange(): void {
+    this.instanceChangeCallbacks.forEach(callback => {
+      try {
+        callback(this.currentInstance);
+      } catch (error) {
+        console.error('Error in instance change callback:', error);
+      }
+    });
+  }
+}
+
+/**
  * Integration wrapper component that connects the React component
  * with the existing demo page's JavaScript functions
  */
@@ -116,9 +162,13 @@ function CndLayoutInterfaceWrapper() {
   const handleYamlChange = React.useCallback((newValue: string) => {
     setYamlValue(newValue);
     
-    // Optionally trigger any global state updates needed by the demo
-    // For example, if there's a global event system:
-    // window.dispatchEvent(new CustomEvent('cnd-spec-changed', { detail: newValue }));
+    // ENFORCE CnD constraints on every spec change
+    if ((window as any).updateFromCnDSpec) {
+      (window as any).updateFromCnDSpec();
+    }
+    
+    // Also trigger custom event for other listeners
+    window.dispatchEvent(new CustomEvent('cnd-spec-changed', { detail: newValue }));
   }, []);
 
   /**
@@ -134,6 +184,11 @@ function CndLayoutInterfaceWrapper() {
    */
   const handleSetConstraints = React.useCallback((updater: (prev: ConstraintData[]) => ConstraintData[]) => {
     setConstraints(updater);
+    
+    // ENFORCE CnD constraints when constraints change in No-Code view
+    if ((window as any).updateFromCnDSpec) {
+      setTimeout(() => (window as any).updateFromCnDSpec(), 100);
+    }
   }, []);
 
   /**
@@ -141,6 +196,11 @@ function CndLayoutInterfaceWrapper() {
    */
   const handleSetDirectives = React.useCallback((updater: (prev: DirectiveData[]) => DirectiveData[]) => {
     setDirectives(updater);
+    
+    // ENFORCE CnD constraints when directives change in No-Code view
+    if ((window as any).updateFromCnDSpec) {
+      setTimeout(() => (window as any).updateFromCnDSpec(), 100);
+    }
   }, []);
 
   return (
@@ -157,6 +217,62 @@ function CndLayoutInterfaceWrapper() {
     />
   );
 }
+
+/**
+ * React component wrapper for InstanceBuilder with integrated demo state
+ */
+const IntegratedInstanceBuilder: React.FC = () => {
+  const [instance, setInstance] = useState<IInputDataInstance>(() => 
+    IntegratedDemoStateManager.getInstance().getCurrentInstance()
+  );
+
+  useEffect(() => {
+    const stateManager = IntegratedDemoStateManager.getInstance();
+    
+    // Listen for external instance changes
+    const handleInstanceChange = (newInstance: IInputDataInstance) => {
+      setInstance(newInstance);
+    };
+    
+    stateManager.onInstanceChange(handleInstanceChange);
+    
+    // Expose instance to global scope for the HTML demo
+    (window as any).currentInstance = instance;
+    
+    // Trigger update in the HTML demo
+    if ((window as any).updateFromBuilder) {
+      (window as any).updateFromBuilder();
+    }
+  }, [instance]);
+
+  const handleInstanceChange = (newInstance: IInputDataInstance) => {
+    setInstance(newInstance);
+    
+    // Update global state
+    IntegratedDemoStateManager.getInstance().setCurrentInstance(newInstance);
+    
+    // Update global reference
+    (window as any).currentInstance = newInstance;
+    
+    // Notify the HTML demo
+    if ((window as any).updateFromBuilder) {
+      (window as any).updateFromBuilder();
+    }
+    
+    // Auto-render for smooth updates
+    if ((window as any).autoRenderGraph) {
+      setTimeout(() => (window as any).autoRenderGraph(), 50);
+    }
+  };
+
+  return (
+    <InstanceBuilder
+      instance={instance}
+      onChange={handleInstanceChange}
+      className="integrated-demo-builder"
+    />
+  );
+};
 
 /**
  * Mount the React component into the demo page
@@ -176,6 +292,52 @@ export function mountCndLayoutInterface(): void {
     console.log('✅ CndLayoutInterface mounted successfully');
   } catch (error) {
     console.error('Failed to mount CndLayoutInterface:', error);
+  }
+}
+
+/**
+ * Mount InstanceBuilder component into the demo page
+ * 
+ * @example
+ * ```javascript
+ * // In your demo page JavaScript:
+ * window.addEventListener('load', () => {
+ *   mountInstanceBuilder();
+ * });
+ * ```
+ */
+export function mountInstanceBuilder(): void {
+  try {
+    const container = document.getElementById('instance-builder-container');
+    if (!container) {
+      console.error('InstanceBuilder container not found. Make sure element with id "instance-builder-container" exists.');
+      return;
+    }
+
+    console.log('Mounting InstanceBuilder component...');
+    const root = createRoot(container);
+    root.render(<IntegratedInstanceBuilder />);
+    console.log('✅ InstanceBuilder mounted successfully');
+
+    // Expose instance update function globally
+    (window as any).updateBuilderInstance = (newInstance: IInputDataInstance) => {
+      IntegratedDemoStateManager.getInstance().setCurrentInstance(newInstance);
+    };
+
+  } catch (error) {
+    console.error('Failed to mount InstanceBuilder:', error);
+  }
+}
+
+/**
+ * Get current instance from InstanceBuilder component
+ */
+export function getCurrentInstanceFromReact(): IInputDataInstance | undefined {
+  try {
+    return IntegratedDemoStateManager.getInstance().getCurrentInstance();
+  } catch (error) {
+    console.error('Error accessing InstanceBuilder instance:', error);
+    return undefined;
   }
 }
 
@@ -217,24 +379,33 @@ export function getCurrentCNDSpecFromReact(): string | undefined {
 }
 
 /**
- * Example of how to update the demo page's JavaScript to use the React component
- * 
- * Replace the original getCurrentCNDSpec function with:
- * 
- * function getCurrentCNDSpec() {
- *   return getCurrentCNDSpecFromReact();
- * }
- * 
- * And add this to the window load event:
- * 
- * window.addEventListener('load', () => {
- *   initializePipeline();
- *   mountCndLayoutInterface();
- * });
+ * Mount both InstanceBuilder and CndLayoutInterface components
  */
+export function mountIntegratedComponents(): void {
+  console.log('Mounting integrated demo components...');
+  
+  try {
+    mountInstanceBuilder();
+    mountCndLayoutInterface();
+    console.log('✅ All integrated components mounted successfully');
+  } catch (error) {
+    console.error('Failed to mount integrated components:', error);
+  }
+}
 
 // For global access in the demo page
 if (typeof window !== 'undefined') {
   (window as any).mountCndLayoutInterface = mountCndLayoutInterface;
   (window as any).getCurrentCNDSpecFromReact = getCurrentCNDSpecFromReact;
+  (window as any).mountInstanceBuilder = mountInstanceBuilder;
+  (window as any).getCurrentInstanceFromReact = getCurrentInstanceFromReact;
+  (window as any).mountIntegratedComponents = mountIntegratedComponents;
+  
+  // Auto-mount components when page loads
+  window.addEventListener('load', () => {
+    // Give the page time to initialize
+    setTimeout(() => {
+      mountIntegratedComponents();
+    }, 1000);
+  });
 }

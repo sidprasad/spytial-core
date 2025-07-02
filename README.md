@@ -134,3 +134,7 @@ MIT
 
 ---
 
+
+## For Input
+
+What I really envision is an extension to `IDataInstance` that allows atoms / relations to be ADDED in.

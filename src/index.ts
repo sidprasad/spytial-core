@@ -11,7 +11,7 @@ export * as Translators from './translators';
 
 // Export new data instance abstraction
 export * from './data-instance/interfaces';
-export { AlloyDataInstance } from './data-instance/alloy-data-instance';
+export { AlloyDataInstance, createEmptyAlloyDataInstance } from './data-instance/alloy-data-instance';
 export { DotDataInstance } from './data-instance/dot/dot-data-instance';
 export { RacketGDataInstance } from './data-instance/racket/racket-g-data-instance';
 
@@ -22,8 +22,7 @@ export { setupLayout } from './layout';
 export { type default as IEvaluator } from './evaluators/interfaces';
 export { ForgeEvaluator, WrappedForgeEvaluator } from './evaluators/forge-evaluator';
 export { WebColaTranslator } from './translators';
-export { DotEvaluator } from './evaluators/dot-evalutator';
-export { SimpleGraphQueryEvaluator } from "./evaluators/sgq-evaluator";
+export { SGraphQueryEvaluator } from "./evaluators/sgq-evaluator";
 
 // Browser-specific exports and initialization
 if (typeof window !== 'undefined') {
@@ -92,3 +91,7 @@ export const createCndCore = (config?: CoreConfig): CndCore => {
 };
 
 export const version = '1.0.0';
+
+// Export React components
+export { InstanceBuilder } from './components/InstanceBuilder/InstanceBuilder';
+export type { InstanceBuilderProps } from './components/InstanceBuilder/InstanceBuilder';

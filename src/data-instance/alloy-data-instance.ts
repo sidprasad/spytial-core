@@ -1,5 +1,6 @@
-import type { IDataInstance, IAtom, IType, IRelation, ITuple } from './interfaces';
-import type { AlloyInstance, AlloyType, AlloyAtom, AlloyRelation, AlloyTuple } from './alloy/alloy-instance';
+import type { IDataInstance, IAtom, IType, IRelation, ITuple, IInputDataInstance } from './interfaces';
+import type { AlloyType, AlloyAtom, AlloyRelation, AlloyTuple } from './alloy/alloy-instance';
+import { addInstanceAtom, addInstanceRelationTuple, removeInstanceRelationTuple, AlloyInstance, removeInstanceAtom } from './alloy/alloy-instance';
 import { 
   getInstanceAtoms,
   getInstanceTypes,
@@ -16,8 +17,8 @@ import { Graph } from 'graphlib';
  * Implementation of IDataInstance for Alloy instances
  * Wraps the existing AlloyInstance to provide the IDataInstance interface
  */
-export class AlloyDataInstance implements IDataInstance {
-  constructor(private readonly alloyInstance: AlloyInstance) {}
+export class AlloyDataInstance implements IInputDataInstance {
+  constructor(private alloyInstance: AlloyInstance) {}
 
   /**
    * Get type information for a specific atom
@@ -34,6 +35,7 @@ export class AlloyDataInstance implements IDataInstance {
       types: alloyType.types,
       atoms: alloyType.atoms.map((atom: AlloyAtom) => ({
         id: atom.id,
+        label: atom.id, // Label is the same as ID in Alloy
         type: atom.type,
         name: atom.id // In Alloy, atoms are identified by their ID.
       })),
@@ -55,7 +57,9 @@ export class AlloyDataInstance implements IDataInstance {
       atoms: alloyType.atoms.map((atom: AlloyAtom) => ({
         id: atom.id,
         type: atom.type,
+        label: atom.id, // Label is the same as ID in Alloy
         name: atom.id // In Alloy, atoms are identified by their ID.
+
       })),
       isBuiltin: isBuiltin(alloyType)
     }));
@@ -72,7 +76,7 @@ export class AlloyDataInstance implements IDataInstance {
     return alloyAtoms.map((alloyAtom: AlloyAtom) => ({
       id: alloyAtom.id,
       type: alloyAtom.type,
-      name: alloyAtom.id // In Alloy, atoms are identified by their ID.
+      label: alloyAtom.id 
     }));
   }
 
@@ -127,6 +131,121 @@ export class AlloyDataInstance implements IDataInstance {
   public getAlloyInstance(): AlloyInstance {
     return this.alloyInstance;
   }
+
+
+  /**
+   * Reify the instance to a Forge INST.
+   * 
+   * @returns An inst string representation of the AlloyInstance
+   */
+  public reify(): string {
+    let inst = "";
+
+    const instName = "builtinstance"; // Generate a unique name readable name.
+
+
+    const PREFIX = `inst ${instName} {`;
+
+    const POSTFIX = "}";
+
+    // First declare all the ATOMS (I think in order?)
+    let instanceTypes = this.alloyInstance.types;
+    
+    // Create a dict where the key is the type id and the value is the atoms
+    let typeAtoms : Record<string, string[]> = {};
+    for (let typeId in instanceTypes) {
+        let type = instanceTypes[typeId];
+        let atoms = type.atoms;
+        typeAtoms[typeId] = atoms.map(atom => `\`${atom.id}`);
+    }
+
+    // Then declare all the relations
+    let instanceRelations = this.alloyInstance.relations;
+    let relationDecls : Record<string, string[]> = {};
+
+    for (let relationId in instanceRelations) {
+        let relation = instanceRelations[relationId];
+        let tuples = relation.tuples;
+        let tupleStrings = tuples.map(tuple => {
+            let tupleString = tuple.atoms.map(a => `\`${a}`).join("->");
+            return `(${tupleString})`;
+        });
+
+        let relName = relation.name;
+
+        relationDecls[relName] = tupleStrings;
+    }
+
+    // Now we can create the inst string
+    // First, declare all the atoms in order
+    for (let typeId in typeAtoms) {
+        let atoms = typeAtoms[typeId];
+        if(atoms.length > 0) {
+            inst += `${typeId} = ${atoms.join("+")}\n`;
+        }
+    }
+
+    // Then declare all the relations
+    for (let relationId in relationDecls) {
+        let tuples = relationDecls[relationId];
+        if (tuples.length > 0) {
+            inst += `${relationId} = ${tuples.join("+")}\n`;
+        }
+        else {
+            inst += `no ${relationId}\n`;
+        }
+    }
+    return `${PREFIX}\n${inst}\n${POSTFIX}`;
+  }
+
+
+
+  /**
+   * Remove an atom by ID
+   * 
+   * @param id - ID of the atom to remove
+   */
+  public removeAtom(id: string): void {
+    
+    // We actually have to 
+    this.alloyInstance = removeInstanceAtom(this.alloyInstance, id);
+  }
+
+  public addAtom(atom: IAtom): void {
+    // Convert IAtom to AlloyAtom
+    const alloyAtom: AlloyAtom = {
+      _: 'atom',
+      id: atom.id,
+      type: atom.type,
+      
+    };
+    this.alloyInstance = addInstanceAtom(this.alloyInstance, alloyAtom);
+  }
+
+  public addRelationTuple(relationId: string, tuple: ITuple): void {
+    // Convert ITuple to AlloyTuple
+    const alloyTuple: AlloyTuple = {
+      _: 'tuple',
+      atoms: tuple.atoms,
+      types: tuple.types
+    };
+    this.alloyInstance = addInstanceRelationTuple(this.alloyInstance, relationId, alloyTuple);
+  }
+
+  public removeRelationTuple(relationId: string, t: ITuple): void {
+    
+    // Convert ITuple to AlloyTuple
+    const alloyTuple: AlloyTuple = {
+      _: 'tuple',
+      atoms: t.atoms,
+      types: t.types
+    };
+
+
+    this.alloyInstance = removeInstanceRelationTuple(this.alloyInstance, relationId, alloyTuple);
+  }
+
+
 }
 
 /**
@@ -147,4 +266,14 @@ export function createAlloyDataInstance(alloyInstance: AlloyInstance): IDataInst
  */
 export function isAlloyDataInstance(instance: IDataInstance): instance is AlloyDataInstance {
   return instance instanceof AlloyDataInstance;
+}
+
+
+export function createEmptyAlloyDataInstance(): AlloyDataInstance {
+  const emptyAlloyInstance : AlloyInstance = {
+    types: {},
+    relations: {},
+    skolems: {},
+    };
+  return new AlloyDataInstance(emptyAlloyInstance);
 }
