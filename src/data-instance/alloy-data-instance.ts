@@ -294,7 +294,7 @@ export function createEmptyAlloyDataInstance(): AlloyDataInstance {
     'Int': {
       _: 'type', 
       id: 'Int',
-      types: ['univ'],
+      types: ['Int', 'univ'],
       atoms: [  ],
       meta: {
         builtin: true,
@@ -307,7 +307,7 @@ export function createEmptyAlloyDataInstance(): AlloyDataInstance {
     'seq/Int': {
       _: 'type',
       id: 'seq/Int', 
-      types: ['univ'],
+      types: ['seq/Int', 'univ'],
       atoms: [],
       meta: {
         builtin: true,
