@@ -40,8 +40,7 @@ interface AtomForm {
 
 interface RelationForm {
   name: string;
-  sourceId: string;
-  targetId: string;
+  atomIds: string[]; // Changed from sourceId/targetId to support n-ary
 }
 
 /**
@@ -66,11 +65,10 @@ export const InstanceBuilder: React.FC<InstanceBuilderProps> = ({
   // Compute a suggested ID based on type and current atoms
   const suggestedId = generateAtomId(instance, atomForm.type.trim() || 'Entity');
 
-  // Form state for adding relations
+  // Form state for adding relations - start with binary (2 atoms)
   const [relationForm, setRelationForm] = useState<RelationForm>({
     name: '',
-    sourceId: '',
-    targetId: ''
+    atomIds: ['', ''] // Start with binary relation
   });
 
   // Error state
@@ -137,23 +135,64 @@ export const InstanceBuilder: React.FC<InstanceBuilderProps> = ({
   }, [instance, notifyChange]);
 
   /**
+   * Add a new atom position to the relation form
+   */
+  const handleAddAtomPosition = useCallback(() => {
+    setRelationForm(prev => ({
+      ...prev,
+      atomIds: [...prev.atomIds, '']
+    }));
+  }, []);
+
+  /**
+   * Remove the last atom position from the relation form (minimum 2)
+   */
+  const handleRemoveAtomPosition = useCallback(() => {
+    setRelationForm(prev => ({
+      ...prev,
+      atomIds: prev.atomIds.length > 2 ? prev.atomIds.slice(0, -1) : prev.atomIds
+    }));
+  }, []);
+
+  /**
+   * Update a specific atom ID in the relation form
+   */
+  const handleUpdateAtomId = useCallback((index: number, atomId: string) => {
+    setRelationForm(prev => ({
+      ...prev,
+      atomIds: prev.atomIds.map((id, i) => i === index ? atomId : id)
+    }));
+  }, []);
+
+  /**
    * Add a new relation tuple to the instance
    */
   const handleAddRelation = useCallback((e: React.FormEvent) => {
     e.preventDefault();
-    if (!relationForm.name.trim() || !relationForm.sourceId.trim() || !relationForm.targetId.trim()) {
-      setError('Relation name, source, and target are required');
+    if (!relationForm.name.trim()) {
+      setError('Relation name is required');
+      return;
+    }
+
+    // Validate all atom positions are filled
+    const cleanAtomIds = relationForm.atomIds.map(id => id.trim()).filter(id => id !== '');
+    if (cleanAtomIds.length < 2) {
+      setError('At least 2 atoms are required for a relation');
+      return;
+    }
+    if (cleanAtomIds.length !== relationForm.atomIds.length) {
+      setError('All atom positions must be selected');
       return;
     }
 
     try {
       const tuple: ITuple = {
-        atoms: [relationForm.sourceId.trim(), relationForm.targetId.trim()],
-        types: ['unknown', 'unknown'] // Types will be inferred from actual atoms
+        atoms: cleanAtomIds,
+        types: cleanAtomIds.map(() => 'unknown') // Types will be inferred from actual atoms
       };
 
       instance.addRelationTuple(relationForm.name.trim(), tuple);
-      setRelationForm({ name: '', sourceId: '', targetId: '' });
+      setRelationForm({ name: '', atomIds: ['', ''] }); // Reset to binary
       setError('');
       notifyChange();
     } catch (err) {
@@ -219,6 +258,16 @@ export const InstanceBuilder: React.FC<InstanceBuilderProps> = ({
       setReifyResult('Re-ify not supported on this instance.');
     }
   }, [instance]);
+
+  /**
+   * Format tuple atoms for display with proper n-ary notation
+   */
+  const formatTupleDisplay = useCallback((tuple: ITuple): string => {
+    if (tuple.atoms.length === 2) {
+      return `${tuple.atoms[0]} → ${tuple.atoms[1]}`;
+    }
+    return `(${tuple.atoms.join(', ')})`;
+  }, []);
 
   return (
     <div className={`instance-builder ${className}`}>
@@ -314,7 +363,7 @@ export const InstanceBuilder: React.FC<InstanceBuilderProps> = ({
 
         {/* Relation Management Section */}
         <section className="instance-builder__section">
-          <h3>Relations</h3>
+          <h3>Relations (N-ary Support)</h3>
           
           {/* Add Relation Form */}
           <form onSubmit={handleAddRelation} className="instance-builder__form">
@@ -327,29 +376,58 @@ export const InstanceBuilder: React.FC<InstanceBuilderProps> = ({
                 disabled={disabled}
                 required
               />
-              <select
-                value={relationForm.sourceId}
-                onChange={(e) => setRelationForm(prev => ({ ...prev, sourceId: e.target.value }))}
-                disabled={disabled}
-                required
-              >
-                <option value="">Select Source</option>
-                {atoms.map(atom => (
-                  <option key={atom.id} value={atom.id}>{atom.id} ({atom.label})</option>
-                ))}
-              </select>
-              <select
-                value={relationForm.targetId}
-                onChange={(e) => setRelationForm(prev => ({ ...prev, targetId: e.target.value }))}
-                disabled={disabled}
-                required
-              >
-                <option value="">Select Target</option>
-                {atoms.map(atom => (
-                  <option key={atom.id} value={atom.id}>{atom.id} ({atom.label})</option>
-                ))}
-              </select>
-              <button type="submit" disabled={disabled}>
+            </div>
+            
+            {/* Dynamic atom selectors for n-ary relations */}
+            <div className="relation-atoms">
+              <div style={{ fontSize: '0.9em', color: '#666', marginBottom: 8 }}>
+                Atoms (arity: {relationForm.atomIds.length}):
+              </div>
+              {relationForm.atomIds.map((atomId, index) => (
+                <div key={index} className="atom-selector">
+                  <label style={{ fontSize: '0.85em', color: '#666' }}>
+                    Position {index + 1}:
+                  </label>
+                  <select
+                    value={atomId}
+                    onChange={(e) => handleUpdateAtomId(index, e.target.value)}
+                    disabled={disabled}
+                    required
+                  >
+                    <option value="">Select Atom</option>
+                    {atoms.map(atom => (
+                      <option key={atom.id} value={atom.id}>
+                        {atom.id} ({atom.label})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+              
+              {/* Add/Remove atom position buttons */}
+              <div className="arity-controls" style={{ marginTop: 8 }}>
+                <button
+                  type="button"
+                  onClick={handleAddAtomPosition}
+                  disabled={disabled}
+                  style={{ marginRight: 8 }}
+                >
+                  + Add Position
+                </button>
+                {relationForm.atomIds.length > 2 && (
+                  <button
+                    type="button"
+                    onClick={handleRemoveAtomPosition}
+                    disabled={disabled}
+                  >
+                    - Remove Position
+                  </button>
+                )}
+              </div>
+            </div>
+            
+            <div className="form-row" style={{ marginTop: 12 }}>
+              <button type="submit" disabled={disabled || relationForm.atomIds.some(id => !id.trim())}>
                 Add Relation
               </button>
             </div>
@@ -366,14 +444,17 @@ export const InstanceBuilder: React.FC<InstanceBuilderProps> = ({
                   {relation.tuples.map((tuple, tupleIndex) => (
                     <div key={tupleIndex} className="list-item">
                       <div className="item-info">
-                        <span>{tuple.atoms[0]} → {tuple.atoms[tuple.atoms.length - 1]}</span>
+                        <span>{formatTupleDisplay(tuple)}</span>
+                        <span className="item-type" style={{ fontSize: '0.8em', color: '#666' }}>
+                          arity: {tuple.atoms.length}
+                        </span>
                       </div>
                       <button
                         type="button"
                         onClick={() => handleRemoveRelationTuple(relation.id, tuple)}
                         disabled={disabled}
                         className="remove-button"
-                        aria-label={`Remove relation ${relation.name} from ${tuple.atoms[0]} to ${tuple.atoms[tuple.atoms.length - 1]}`}
+                        aria-label={`Remove relation ${relation.name} tuple`}
                       >
                         Remove
                       </button>

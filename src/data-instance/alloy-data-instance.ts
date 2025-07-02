@@ -269,11 +269,62 @@ export function isAlloyDataInstance(instance: IDataInstance): instance is AlloyD
 }
 
 
+/**
+ * Creates an empty AlloyDataInstance with default Alloy built-in types
+ * Includes fundamental types like univ, Int, seq/Int that are always present in Alloy
+ * 
+ * @returns A new AlloyDataInstance with built-in types but no user-defined atoms or relations
+ */
 export function createEmptyAlloyDataInstance(): AlloyDataInstance {
-  const emptyAlloyInstance : AlloyInstance = {
-    types: {},
+  // Default built-in types that should always be present in Alloy instances
+  const defaultTypes: Record<string, AlloyType> = {
+    'univ': {
+      _: 'type',
+      id: 'univ',
+      types: [],
+      atoms: [],
+      meta: {
+        builtin: true,
+        abstract: false,
+        enum: false,
+        one: false,
+        private: false
+      }
+    },
+    'Int': {
+      _: 'type', 
+      id: 'Int',
+      types: ['Int', 'univ'],
+      atoms: [  ],
+      meta: {
+        builtin: true,
+        abstract: false,
+        enum: false,
+        one: false,
+        private: false
+      }
+    },
+    'seq/Int': {
+      _: 'type',
+      id: 'seq/Int', 
+      types: ['seq/Int', 'univ'],
+      atoms: [],
+      meta: {
+        builtin: true,
+        abstract: false,
+        enum: false,
+        one: false,
+        private: false
+      }
+    }
+  };
+
+
+  const emptyAlloyInstance: AlloyInstance = {
+    types: defaultTypes,
     relations: {},
-    skolems: {},
-    };
+    skolems: {}
+  };
+
   return new AlloyDataInstance(emptyAlloyInstance);
 }
