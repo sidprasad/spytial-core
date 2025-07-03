@@ -91,4 +91,5 @@ export interface InstanceLayout {
     edges: LayoutEdge[];
     constraints: LayoutConstraint[];
     groups: LayoutGroup[];
+    conflictingConstraints?: LayoutConstraint[];
 }

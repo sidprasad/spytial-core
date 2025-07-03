@@ -141,7 +141,8 @@
                 <label for="webcola-alloy">Alloy XML Instance:</label>
                 <textarea id="webcola-alloy" placeholder="Paste your Alloy XML instance here..."></textarea>
             </div>
-            <div id="status" class="status info">Ready to load Alloy graph...</div>
+            <div id="error-messages"></div>
+            <!-- <div id="status" class="status info">Ready to load Alloy graph...</div> -->
             <div id="graph-container-wrapper">
                 <div id="graph-controls">
                     <select title="Choose the Layout Format" class="form-select form-select-sm" id="layoutFormat" name="layoutFormat" onchange="changeLayoutFormat()" aria-label="Layout format selection">
@@ -208,9 +209,25 @@
          * @param {string} type - Status type: 'info', 'success', 'error'
          */
         function updateStatus(message, type = 'info') {
-            const statusElement = document.getElementById('status');
-            statusElement.textContent = message;
-            statusElement.className = `status ${type}`;
+            if (type === 'error') {
+                const errorElement = document.getElementById('error-messages');
+                if (errorElement) {
+                    errorElement.textContent = message;
+                    errorElement.className = 'status error';
+                } else {
+                    console.error('Error container not found. Please ensure it exists in the HTML.');
+                }
+            } else {
+                // const errorElement = document.getElementById('error-messages');
+                // if (errorElement) {
+                //     errorElement.textContent = '';
+                //     errorElement.className = '';
+                // }
+                // const statusElement = document.getElementById('status');
+                // statusElement.textContent = message;
+                // statusElement.className = `status ${type}`;
+            }
+
         }
 
         /**
@@ -313,6 +330,12 @@
                 const projections = {};
                 const layoutResult = layoutInstance.generateLayout(alloyDataInstance, projections);
                 currentInstanceLayout = layoutResult.layout;
+
+                if (layoutResult.error) {
+                    console.error('Layout generation error:', layoutResult.error);
+                    updateStatus(`Layout generation error: ${layoutResult.error.message}`, 'error');
+                }
+
                 console.log('Generated Instance Layout using Alloy pipeline:', currentInstanceLayout);
 
                 updateStatus('Alloy pipeline complete with ForgeEvaluator! Ready to render.', 'success');

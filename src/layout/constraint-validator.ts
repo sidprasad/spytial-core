@@ -33,7 +33,7 @@ interface GroupOverlapError extends ConstraintError {
     overlappingNodes: LayoutNode[];
 }
 
-
+export { type PositionalConstraintError, type GroupOverlapError }
 
 
 class ConstraintValidator {

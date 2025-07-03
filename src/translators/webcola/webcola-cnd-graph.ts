@@ -1,5 +1,5 @@
 import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator } from './webcolatranslator';
-import { InstanceLayout } from '../../layout/interfaces';
+import { InstanceLayout, isAlignmentConstraint, isLeftConstraint, isTopConstraint, LayoutNode } from '../../layout/interfaces';
 import { GridRouter, Group, Layout, Node, Link } from 'webcola';
 
 // Use global D3 v4 and WebCola from external scripts (CDN + vendor)
@@ -129,6 +129,19 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
     // Check name first, fall back to id if name is not available
     const identifier = node.name || node.id;
     return identifier ? identifier.startsWith("_") : false;
+  }
+
+  /**
+   * Determines if a node is an error node.
+   * @param node - Node object to check
+   * @returns True if the node is in the set of conflicting constraints
+   */
+  private isErrorNode(node: {name: string, id: string}): boolean {
+    // Check if this node appears in any constraint that's in conflictingConstraints
+    const conflictingNodes = this.currentLayout.conflictingNodes;
+    return conflictingNodes.some((conflictingNode: LayoutNode) => 
+      conflictingNode.id === node.id || (conflictingNode as any).name === node.name  // NOTE: Is `name` check necessary?
+    );
   }
 
   /**
@@ -601,7 +614,9 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       .data(nodes)
       .enter()
       .append("g")
-      .attr("class", "node")
+      .attr("class", (d: any) => {
+        return this.isErrorNode(d) ? "error-node" : "node";
+      })
       .call(layout.drag);
 
     // Add rectangle backgrounds for nodes
@@ -1776,6 +1791,19 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       
       .node rect {
         cursor: move;
+      }
+
+      .error-node rect {
+        stroke: red;
+        stroke-width: 2px;
+        stroke-dasharray: 5 5;
+        animation: dash 1s linear infinite;
+      }
+
+      @keyframes dash {
+        to {
+          stroke-dashoffset: -10;
+        }
       }
       
       .link {
