@@ -169,7 +169,7 @@ export class DotDataInstance implements IInputDataInstance {
     this.graph.edges().forEach(edge => {
       const source = edge.v;
       const target = edge.w;
-      const label = this.graph.edge(edge).label || '';
+      const label = this.graph.edge(edge) || '';
       
       // Create a tuple from the edge
       const tuple: ITuple = {
