@@ -106,13 +106,7 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
 
   return (
     <div className={containerClasses} aria-label={ariaLabel}>
-      {/* Header with Bootstrap flex utilities */}
       <div className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
-        <label htmlFor="cnd-layout-toggle" className="h6 mb-0 text-dark">
-          CND Layout Specification:
-        </label>
-        
-        {/* Toggle container with Bootstrap spacing */}
         <div className="d-flex align-items-center gap-3">
           <span className={toggleLabelCodeClasses}>
             Code View
