@@ -5,7 +5,8 @@
   "main": "./dist/browser/cnd-core-complete.global.js",
   "types": "./dist/browser/cnd-core-complete.global.d.ts",
   "files": [
-    "dist/browser"
+    "dist/browser",
+    "dist/components"
   ],
   "exports": {
     ".": {
