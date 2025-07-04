@@ -2,3 +2,13 @@
     min-width: 320px;
     max-width: 100%;
 }
+
+.highlight {
+    background-color: #ffeb3b; /* Highlight color */
+    border-radius: 4px;
+    padding: 2px 4px;
+
+    /** Undo previous styling */
+    border: none;
+    animation: none;
+}
