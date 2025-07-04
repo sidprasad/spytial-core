@@ -45,8 +45,8 @@ const ErrorMessageModal: React.FC<ErrorMessageModalProps> = (
           <strong>In terms of CnD</strong>
         </div>
         <div className="card-body">
-          Constraint: <br />{' '}
-          <code> {props.messages.conflictingSourceConstraint} </code> <br />{' '}
+          Constraint: <br />
+          <code dangerouslySetInnerHTML={{__html: props.messages.conflictingSourceConstraint}}></code> <br />
           conflicts with one (or some) the following source constraints: <br />
           {[...props.messages.minimalConflictingConstraints.keys()].map(
             (key: string, index) => {
@@ -59,8 +59,8 @@ const ErrorMessageModal: React.FC<ErrorMessageModalProps> = (
                     onMouseEnter={addHighlightOnMouseEnter}
                     onMouseLeave={removeHighlightOnMouseLeave}
                     className={`error-message-${index}`}
+                    dangerouslySetInnerHTML={{__html: key }}
                   >
-                    {key}
                   </code>
                   <br />
                 </React.Fragment>

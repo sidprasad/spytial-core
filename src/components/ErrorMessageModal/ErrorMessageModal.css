@@ -6,9 +6,14 @@
 .highlight {
     background-color: #ffeb3b; /* Highlight color */
     border-radius: 4px;
-    padding: 2px 4px;
 
     /** Undo previous styling */
     border: none;
     animation: none;
+}
+
+code > code, code > pre {
+    border: 1px solid var(--bs-code-color);
+    padding: 0.2em 0.4em;
+    border-radius: 4px;
 }

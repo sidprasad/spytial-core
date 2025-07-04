@@ -92,7 +92,7 @@ export class RelativeOrientationConstraint extends ConstraintOperation {
 
     override inconsistencyMessage(): string {
         let dirStr : string = this.directions.join(", ");
-        return `Orientation Constraint with directions  <code>[${dirStr}]</code> and selector <code> ${this.selector} </code> is internally inconsistent.`;  
+        return `Orientation Constraint with directions [${dirStr}] and selector <code>${this.selector}</code> is internally inconsistent.`;  
     }
 
     override toHTML(): string {
@@ -157,11 +157,11 @@ export class CyclicOrientationConstraint extends ConstraintOperation {
     }
 
     override inconsistencyMessage(): string {
-        return `Cyclic constraint with direction <code>${this.direction}</code> with selector <code>${this.selector}</code> is inconsistent.`;  
+        return `Cyclic constraint with direction [${this.direction}] with selector <code>${this.selector}</code> is inconsistent.`;  
     }
 
     override toHTML(): string {
-        return `Cyclic constraint with direction ${this.direction} and selector ${this.selector}`;
+        return `Cyclic constraint with direction [${this.direction}] and selector <code>${this.selector}</code>`;
     }
 }
 
