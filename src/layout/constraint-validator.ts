@@ -6,6 +6,12 @@ import { RelativeOrientationConstraint, CyclicOrientationConstraint } from './la
 
 type SourceConstraint = RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint;
 
+export interface ErrorMessages {
+    conflictingConstraint: string;
+    conflictingSourceConstraint: string;
+    minimalConflictingConstraints: Map<string, string[]>;
+}
+
 /**
  * Represents a constraint validation error with structured data
  * Provides detailed information about constraint conflicts for programmatic handling
@@ -24,6 +30,7 @@ interface PositionalConstraintError extends ConstraintError {
     conflictingConstraint: LayoutConstraint;
     conflictingSourceConstraint: SourceConstraint;
     minimalConflictingSet: Map<SourceConstraint, LayoutConstraint[]>;
+    errorMessages?: ErrorMessages;
 }
 
 interface GroupOverlapError extends ConstraintError {
@@ -34,6 +41,33 @@ interface GroupOverlapError extends ConstraintError {
 }
 
 export { type PositionalConstraintError, type GroupOverlapError }
+
+export function orientationConstraintToString(constraint: LayoutConstraint) {
+    if (isTopConstraint(constraint)) {
+        let tc = constraint as TopConstraint;
+        return `ENSURE: ${tc.top.id} is above ${tc.bottom.id}`;
+    }
+    else if (isLeftConstraint(constraint)) {
+        let lc = constraint as LeftConstraint;
+        return `ENSURE: ${lc.left.id} is to the left of ${lc.right.id}`;
+    }
+    else if (isAlignmentConstraint(constraint)) {
+        let ac = constraint as AlignmentConstraint;
+        let axis = ac.axis;
+        let node1 = ac.node1;
+        let node2 = ac.node2;
+
+        if (axis === 'x') {
+            return `ENSURE: ${node1.id} is vertically aligned with ${node2.id}`;
+        }
+        else if (axis === 'y') {
+            return `ENSURE: ${node1.id} is horizontally aligned with ${node2.id}`;
+        }
+
+        return `ENSURE: ${node1.id} is aligned with ${node2.id} along the ${axis} axis`;
+    }
+    return `ENSURE: Unknown constraint type: ${constraint}`;
+}
 
 
 class ConstraintValidator {
@@ -146,34 +180,6 @@ class ConstraintValidator {
 
     private getNodeIndex(nodeId: string) {
         return this.nodes.findIndex(node => node.id === nodeId);
-    }
-
-    private orientationConstraintToString(constraint: LayoutConstraint) {
-
-        if (isTopConstraint(constraint)) {
-            let tc = constraint as TopConstraint;
-            return `ENSURE: ${tc.top.id} is above ${tc.bottom.id}`;
-        }
-        else if (isLeftConstraint(constraint)) {
-            let lc = constraint as LeftConstraint;
-            return `ENSURE: ${lc.left.id} is to the left of ${lc.right.id}`;
-        }
-        else if (isAlignmentConstraint(constraint)) {
-            let ac = constraint as AlignmentConstraint;
-            let axis = ac.axis;
-            let node1 = ac.node1;
-            let node2 = ac.node2;
-
-            if (axis === 'x') {
-                return `ENSURE: ${node1.id} is vertically aligned with ${node2.id}`;
-            }
-            else if (axis === 'y') {
-                return `ENSURE: ${node1.id} is horizontally aligned with ${node2.id}`;
-            }
-
-            return `ENSURE: ${node1.id} is aligned with ${node2.id} along the ${axis} axis`;
-        }
-        return `ENSURE: Unknown constraint type: ${constraint}`;
     }
 
 
@@ -304,6 +310,7 @@ class ConstraintValidator {
 
 
             let sourceConstraintToLayoutConstraints: Map<SourceConstraint, LayoutConstraint[]> = new Map();
+            let sourceConstraintHTMLToLayoutConstraintsHTML: Map<string, string[]> = new Map();
 
             minimal_conflicting_constraints.forEach((c) => {
                 const sourceConstraint = c.sourceConstraint;
@@ -311,19 +318,29 @@ class ConstraintValidator {
                 if (!sourceConstraintToLayoutConstraints.has(sourceConstraint)) {
                     sourceConstraintToLayoutConstraints.set(sourceConstraint, []);
                 }
+
+                if (!sourceConstraintHTMLToLayoutConstraintsHTML.has(sourceConstraint.toHTML())) {
+                    sourceConstraintHTMLToLayoutConstraintsHTML.set(sourceConstraint.toHTML(), []);
+                }
                 
                 sourceConstraintToLayoutConstraints.get(sourceConstraint)!.push(c);
+                sourceConstraintHTMLToLayoutConstraintsHTML.get(sourceConstraint.toHTML())!.push(orientationConstraintToString(c));
             });
 
 
             const constraintError : PositionalConstraintError = {
-                  name: "PositionalConstraintError", // Add this required property
-
+                name: "PositionalConstraintError", // Add this required property
                 type: 'positional-conflict',
-                message: `Constraint "${this.orientationConstraintToString(constraint)}" conflicts with existing constraints`,
+                message: `Constraint "${orientationConstraintToString(constraint)}" conflicts with existing constraints`,
                 conflictingConstraint: constraint,
                 conflictingSourceConstraint: constraint.sourceConstraint,
                 minimalConflictingSet: sourceConstraintToLayoutConstraints,
+                // TODO: Migrate this to `webcola-demo.html`
+                errorMessages: {
+                    conflictingConstraint: `${orientationConstraintToString(constraint)}`,
+                    conflictingSourceConstraint: `${constraint.sourceConstraint.toHTML()}`,
+                    minimalConflictingConstraints: sourceConstraintHTMLToLayoutConstraintsHTML,
+                }
             };
             return constraintError;
         }

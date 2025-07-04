@@ -13,6 +13,8 @@ import { ConstraintData, DirectiveData } from '../src/components/NoCodeView/inte
 import { generateLayoutSpecYaml } from '../src/components/NoCodeView/CodeView';
 import { createEmptyAlloyDataInstance } from '../src/data-instance/alloy-data-instance';
 import { IInputDataInstance } from '../src/data-instance/interfaces';
+import { ErrorMessageModal } from '../src/components/ErrorMessageModal/ErrorMessageModal';
+import { ErrorMessages } from '../src/layout/constraint-validator';
 
 class CndLayoutStateManager {
   private static instance: CndLayoutStateManager;
@@ -393,6 +395,25 @@ export function mountIntegratedComponents(): void {
   }
 }
 
+/**
+ * Mount the ErrorMessageModal React component to replace the error-messages div
+ * @param containerId - ID of the container element (default: 'error-messages')
+ */
+export function mountErrorMessageModal(messages: ErrorMessages, containerId: string = 'error-messages'): void {
+  const container = document.getElementById(containerId);
+  
+  if (!container) {
+    console.error(`Error messages container with ID '${containerId}' not found`);
+    return;
+  }
+
+  // Create React root and render the component
+  const root = createRoot(container);
+  root.render(<ErrorMessageModal messages={messages} />);
+
+  console.log(`ErrorMessageModal component mounted to #${containerId}`);
+}
+
 // For global access in the demo page
 if (typeof window !== 'undefined') {
   (window as any).mountCndLayoutInterface = mountCndLayoutInterface;
@@ -400,6 +421,7 @@ if (typeof window !== 'undefined') {
   (window as any).mountInstanceBuilder = mountInstanceBuilder;
   (window as any).getCurrentInstanceFromReact = getCurrentInstanceFromReact;
   (window as any).mountIntegratedComponents = mountIntegratedComponents;
+  (window as any).mountErrorMessageModal = mountErrorMessageModal;
   
   // Auto-mount components when page loads
   window.addEventListener('load', () => {
