@@ -37,9 +37,18 @@ registerWebColaCnDGraph();
 // Export for programmatic use
 export { WebColaCnDGraph, registerWebColaCnDGraph };
 
+// Export all the main CnD Core functionality
+export * from './index';
+
 // Also expose on global object for script tag usage
 if (typeof window !== 'undefined') {
   const globalWindow = window as any;
   globalWindow.WebColaCnDGraph = WebColaCnDGraph;
   globalWindow.registerWebColaCnDGraph = registerWebColaCnDGraph;
+  
+  // Import and expose CnD Core on the global object
+  import('./index').then((CndCore) => {
+    globalWindow.CndCore = CndCore;
+    console.log('✅ CndCore library loaded globally with JSONDataInstance support');
+  }).catch(console.error);
 }

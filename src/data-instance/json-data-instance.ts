@@ -1,0 +1,697 @@
+import { IAtom, IRelation, IType, IInputDataInstance, ITuple } from './interfaces';
+
+/**
+ * JSON representation of a data instance for easy serialization/deserialization.
+ * This is the format expected from VS Code extensions, web APIs, and other external tools.
+ * 
+ * @example
+ * ```typescript
+ * const jsonData: IJsonDataInstance = {
+ *   atoms: [
+ *     { id: "person1", type: "Person", label: "Alice" },
+ *     { id: "person2", type: "Person", label: "Bob" }
+ *   ],
+ *   relations: [
+ *     {
+ *       id: "friendship", 
+ *       name: "friends", 
+ *       types: ["Person", "Person"],
+ *       tuples: [{ atoms: ["person1", "person2"], types: ["Person", "Person"] }]
+ *     }
+ *   ]
+ * };
+ * ```
+ */
+export interface IJsonDataInstance {
+  /** Array of atoms/nodes in the graph */
+  atoms: IAtom[];
+  /** Array of relations/edges in the graph */
+  relations: IRelation[];
+  /** Optional type definitions - will be inferred from atoms if not provided */
+  types?: IType[];
+}
+
+/**
+ * Configuration options for normalizing and importing JSON data instances.
+ * These options help handle common data quality issues when importing from external sources.
+ */
+export interface IJsonImportOptions {
+  /** 
+   * Whether to merge relations with the same name by combining their tuples.
+   * Useful when data comes from multiple sources that define the same relation.
+   * @default true 
+   */
+  mergeRelations?: boolean;
+  
+  /** 
+   * Whether to auto-generate missing type definitions from atom types.
+   * If false, you must provide explicit type definitions.
+   * @default true 
+   */
+  inferTypes?: boolean;
+  
+  /** 
+   * Whether to validate that all atom references in relation tuples exist.
+   * Catches broken references but may fail on incomplete data.
+   * @default true 
+   */
+  validateReferences?: boolean;
+  
+  /** 
+   * Whether to remove duplicate atoms with the same ID, keeping the first occurrence.
+   * Helps with data deduplication from multiple sources.
+   * @default true 
+   */
+  deduplicateAtoms?: boolean;
+}
+
+/**
+ * A data instance implementation that can be created directly from JSON data.
+ * 
+ * This class provides a convenient way for external tools (VS Code extensions, web APIs, etc.)
+ * to create data instances without needing to understand the internal data model specifics.
+ * It automatically handles common data quality issues through normalization and validation.
+ * 
+ * @example Basic usage from JSON string:
+ * ```typescript
+ * const instance = new JSONDataInstance('{"atoms": [...], "relations": [...]}');
+ * ```
+ * 
+ * @example Usage from JavaScript object:
+ * ```typescript
+ * const instance = new JSONDataInstance({
+ *   atoms: [{ id: "a1", type: "Entity", label: "Alice" }],
+ *   relations: []
+ * });
+ * ```
+ * 
+ * @example With custom normalization options:
+ * ```typescript
+ * const instance = new JSONDataInstance(jsonData, {
+ *   mergeRelations: false,
+ *   validateReferences: false
+ * });
+ * ```
+ */
+export class JSONDataInstance implements IInputDataInstance {
+  private atoms: IAtom[] = [];
+  private relations: IRelation[] = [];
+  private types: IType[] = [];
+  private errors: string[] = [];
+
+  /**
+   * Create a new JSONDataInstance from JSON data.
+   * 
+   * @param jsonData - Either a JSON string or a JavaScript object conforming to IJsonDataInstance
+   * @param options - Normalization and validation options
+   * @throws {SyntaxError} If jsonData is an invalid JSON string
+   * @throws {Error} If the data structure is invalid
+   */
+  constructor(
+    jsonData: string | IJsonDataInstance, 
+    options: IJsonImportOptions = {}
+  ) {
+    try {
+      // Parse JSON string if needed
+      const data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
+      
+      // Validate basic structure
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid data: expected object with atoms and relations');
+      }
+      
+      if (!Array.isArray(data.atoms)) {
+        throw new Error('Invalid data: atoms must be an array');
+      }
+      
+      if (!Array.isArray(data.relations)) {
+        throw new Error('Invalid data: relations must be an array');
+      }
+      
+      // Normalize the data
+      const normalized = DataInstanceNormalizer.normalize(data, options);
+      this.atoms = normalized.atoms;
+      this.relations = normalized.relations;
+      this.types = normalized.types;
+      this.errors = normalized.errors;
+      
+    } catch (error) {
+      // Re-throw with more context
+      throw new Error(`Failed to create JSONDataInstance: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  // === IDataInstance Implementation ===
+
+  /**
+   * Get the type definition for an atom by its ID.
+   * @param id - The atom ID to look up
+   * @returns The type definition for the atom
+   * @throws {Error} If the atom or its type is not found
+   */
+  getAtomType(id: string): IType {
+    const atom = this.atoms.find(a => a.id === id);
+    if (!atom) {
+      throw new Error(`Atom with ID '${id}' not found`);
+    }
+    
+    const type = this.types.find(t => t.id === atom.type);
+    if (!type) {
+      throw new Error(`Type '${atom.type}' not found for atom '${id}'`);
+    }
+    
+    return type;
+  }
+
+  /**
+   * Get all type definitions in this instance.
+   * @returns Read-only array of all types
+   */
+  getTypes(): readonly IType[] {
+    return this.types;
+  }
+
+  /**
+   * Get all atoms in this instance.
+   * @returns Read-only array of all atoms
+   */
+  getAtoms(): readonly IAtom[] {
+    return this.atoms;
+  }
+
+  /**
+   * Get all relations in this instance.
+   * @returns Read-only array of all relations
+   */
+  getRelations(): readonly IRelation[] {
+    return this.relations;
+  }
+
+  /**
+   * Create a new instance containing only the specified atoms and their related tuples.
+   * This is useful for creating focused views or subgraphs.
+   * 
+   * @param atomIds - Array of atom IDs to include in the projection
+   * @returns A new JSONDataInstance containing only the projected data
+   */
+  applyProjections(atomIds: string[]): IInputDataInstance {
+    const atomIdSet = new Set(atomIds);
+    
+    // Filter atoms
+    const filteredAtoms = this.atoms.filter(a => atomIdSet.has(a.id));
+    
+    // Filter relation tuples to only include those with all atoms in the projection
+    const filteredRelations = this.relations.map(r => ({
+      ...r,
+      tuples: r.tuples.filter(t => t.atoms.every(atomId => atomIdSet.has(atomId)))
+    })).filter(r => r.tuples.length > 0); // Remove relations with no remaining tuples
+    
+    // Keep all types (they might be referenced by the remaining atoms)
+    return new JSONDataInstance({
+      atoms: filteredAtoms,
+      relations: filteredRelations,
+      types: this.types
+    });
+  }
+
+  /**
+   * Generate a graphlib Graph representation of this data instance.
+   * 
+   * @param hideDisconnected - Whether to hide atoms with no relations
+   * @param hideDisconnectedBuiltIns - Whether to hide disconnected built-in types
+   * @returns A graphlib Graph object
+   * @todo Implement this method based on your graph generation requirements
+   */
+  generateGraph(hideDisconnected: boolean, hideDisconnectedBuiltIns: boolean): import("graphlib").Graph {
+    // TODO: Implement graph generation logic
+    // This should create a graphlib Graph from the atoms and relations
+    throw new Error('generateGraph method not yet implemented - please implement based on your graph generation requirements');
+  }
+
+  // === IInputDataInstance Implementation ===
+
+  /**
+   * Add a new atom to this instance.
+   * Automatically creates the atom's type if it doesn't exist.
+   * 
+   * @param atom - The atom to add
+   * @throws {Error} If an atom with the same ID already exists
+   */
+  addAtom(atom: IAtom): void {
+    // Check for duplicates
+    if (this.atoms.some(a => a.id === atom.id)) {
+      throw new Error(`Atom with ID '${atom.id}' already exists`);
+    }
+    
+    this.atoms.push(atom);
+    
+    // Add type if it doesn't exist
+    let type = this.types.find(t => t.id === atom.type);
+    if (!type) {
+      type = {
+        id: atom.type,
+        types: [atom.type],
+        atoms: [],
+        isBuiltin: false
+      };
+      this.types.push(type);
+    }
+    
+    // Add atom to type
+    type.atoms.push(atom);
+  }
+
+  /**
+   * Add a new tuple to a relation. Creates the relation if it doesn't exist.
+   * 
+   * @param relationId - The ID/name of the relation
+   * @param tuple - The tuple to add
+   * @throws {Error} If any referenced atoms don't exist
+   */
+  addRelationTuple(relationId: string, tuple: ITuple): void {
+    // Validate atom references first
+    for (const atomId of tuple.atoms) {
+      if (!this.atoms.some(a => a.id === atomId)) {
+        throw new Error(`Cannot add tuple: referenced atom '${atomId}' does not exist`);
+      }
+    }
+    
+    // Find or create relation
+    let relation = this.relations.find(r => r.id === relationId || r.name === relationId);
+    if (!relation) {
+      relation = {
+        id: relationId,
+        name: relationId,
+        types: [...tuple.types], // Copy the types
+        tuples: []
+      };
+      this.relations.push(relation);
+    } else {
+      // Merge types if relation exists
+      const existingTypes = new Set(relation.types);
+      for (const type of tuple.types) {
+        if (!existingTypes.has(type)) {
+          relation.types.push(type);
+        }
+      }
+    }
+    
+    relation.tuples.push(tuple);
+  }
+
+  /**
+   * Remove an atom and all references to it in relation tuples.
+   * 
+   * @param id - The ID of the atom to remove
+   * @throws {Error} If the atom doesn't exist
+   */
+  removeAtom(id: string): void {
+    const atomIndex = this.atoms.findIndex(a => a.id === id);
+    if (atomIndex === -1) {
+      throw new Error(`Cannot remove atom: atom with ID '${id}' not found`);
+    }
+    
+    const atom = this.atoms[atomIndex];
+    
+    // Remove atom from atoms array
+    this.atoms.splice(atomIndex, 1);
+    
+    // Remove from type
+    const type = this.types.find(t => t.id === atom.type);
+    if (type) {
+      type.atoms = type.atoms.filter(a => a.id !== id);
+    }
+    
+    // Remove from all relation tuples
+    for (const relation of this.relations) {
+      relation.tuples = relation.tuples.filter(t => !t.atoms.includes(id));
+    }
+  }
+
+  /**
+   * Remove a specific tuple from a relation.
+   * 
+   * @param relationId - The ID/name of the relation
+   * @param tuple - The tuple to remove (must match exactly)
+   * @throws {Error} If the relation doesn't exist
+   */
+  removeRelationTuple(relationId: string, tuple: ITuple): void {
+    const relation = this.relations.find(r => r.id === relationId || r.name === relationId);
+    if (!relation) {
+      throw new Error(`Cannot remove tuple: relation '${relationId}' not found`);
+    }
+    
+    // Use JSON comparison for exact match (order-sensitive)
+    const tupleKey = JSON.stringify(tuple);
+    const initialLength = relation.tuples.length;
+    relation.tuples = relation.tuples.filter(t => JSON.stringify(t) !== tupleKey);
+    
+    if (relation.tuples.length === initialLength) {
+      throw new Error(`Tuple not found in relation '${relationId}'`);
+    }
+  }
+
+  /**
+   * Convert this instance back to its JSON representation.
+   * This is useful for serialization or sending data back to external tools.
+   * 
+   * @returns A plain JavaScript object that can be JSON.stringify'd
+   */
+  reify(): IJsonDataInstance {
+    return {
+      atoms: [...this.atoms], // Create copies to prevent mutation
+      relations: this.relations.map(r => ({ ...r, tuples: [...r.tuples] })),
+      types: this.types.map(t => ({ ...t, atoms: [...t.atoms] }))
+    };
+  }
+
+  // === Additional Utility Methods ===
+
+  /**
+   * Get any normalization errors that occurred during construction.
+   * These are validation warnings/errors that didn't prevent instance creation.
+   * 
+   * @returns Array of error messages
+   */
+  getErrors(): string[] {
+    return [...this.errors]; // Return copy to prevent mutation
+  }
+
+  /**
+   * Check if the instance has any validation errors.
+   * 
+   * @returns true if the instance is valid (no errors), false otherwise
+   */
+  isValid(): boolean {
+    return this.errors.length === 0;
+  }
+
+  /**
+   * Get statistics about this data instance.
+   * Useful for debugging and logging.
+   * 
+   * @returns Object containing counts and other metadata
+   */
+  getStatistics(): {
+    atomCount: number;
+    relationCount: number;
+    typeCount: number;
+    tupleCount: number;
+    errorCount: number;
+    hasBuiltinTypes: boolean;
+  } {
+    return {
+      atomCount: this.atoms.length,
+      relationCount: this.relations.length,
+      typeCount: this.types.length,
+      tupleCount: this.relations.reduce((sum, r) => sum + r.tuples.length, 0),
+      errorCount: this.errors.length,
+      hasBuiltinTypes: this.types.some(t => t.isBuiltin)
+    };
+  }
+
+  /**
+   * Create a deep copy of this instance.
+   * Useful for creating modified versions without affecting the original.
+   * 
+   * @returns A new JSONDataInstance with the same data
+   */
+  clone(): JSONDataInstance {
+    return new JSONDataInstance(this.reify());
+  }
+}
+
+/**
+ * Utility class for normalizing and cleaning JSON data instances.
+ * 
+ * This class provides static methods to handle common data quality issues
+ * when importing data from external sources. Each method can be used independently
+ * or as part of the full normalization pipeline.
+ * 
+ * @example Normalize data manually:
+ * ```typescript
+ * const cleanedRelations = DataInstanceNormalizer.mergeRelations(rawRelations);
+ * const inferredTypes = DataInstanceNormalizer.inferTypes(atoms);
+ * ```
+ */
+export class DataInstanceNormalizer {
+  /**
+   * Merge relations with the same name by combining their tuples.
+   * This is useful when data comes from multiple sources that define the same logical relation.
+   * 
+   * @param relations - Array of relations to merge
+   * @returns Array of merged relations with unique tuples
+   * 
+   * @example
+   * ```typescript
+   * const input = [
+   *   { id: "rel1", name: "knows", types: ["Person"], tuples: [tuple1] },
+   *   { id: "rel2", name: "knows", types: ["Person"], tuples: [tuple2] }
+   * ];
+   * const merged = DataInstanceNormalizer.mergeRelations(input);
+   * // Result: [{ id: "rel1", name: "knows", types: ["Person"], tuples: [tuple1, tuple2] }]
+   * ```
+   */
+  static mergeRelations(relations: IRelation[]): IRelation[] {
+    const relationMap = new Map<string, IRelation>();
+    
+    for (const relation of relations) {
+      const existing = relationMap.get(relation.name);
+      if (existing) {
+        // Merge tuples, avoiding duplicates using JSON comparison
+        const existingTupleKeys = new Set(existing.tuples.map(t => JSON.stringify(t)));
+        
+        for (const tuple of relation.tuples) {
+          const tupleKey = JSON.stringify(tuple);
+          if (!existingTupleKeys.has(tupleKey)) {
+            existing.tuples.push(tuple);
+            existingTupleKeys.add(tupleKey);
+          }
+        }
+        
+        // Merge types, preserving order and removing duplicates
+        const existingTypeSet = new Set(existing.types);
+        for (const type of relation.types) {
+          if (!existingTypeSet.has(type)) {
+            existing.types.push(type);
+            existingTypeSet.add(type);
+          }
+        }
+      } else {
+        // Create new relation entry with defensive copies
+        relationMap.set(relation.name, {
+          id: relation.id || relation.name,
+          name: relation.name,
+          types: [...relation.types],
+          tuples: [...relation.tuples]
+        });
+      }
+    }
+    
+    return Array.from(relationMap.values());
+  }
+
+  /**
+   * Infer type definitions from atoms when explicit types are not provided.
+   * Creates a basic type hierarchy where each type contains itself.
+   * 
+   * @param atoms - Array of atoms to analyze
+   * @returns Array of inferred type definitions
+   * 
+   * @example
+   * ```typescript
+   * const atoms = [
+   *   { id: "p1", type: "Person", label: "Alice" },
+   *   { id: "p2", type: "Person", label: "Bob" },
+   *   { id: "c1", type: "Car", label: "Toyota" }
+   * ];
+   * const types = DataInstanceNormalizer.inferTypes(atoms);
+   * // Result: [PersonType, CarType] with atoms grouped by type
+   * ```
+   */
+  static inferTypes(atoms: IAtom[]): IType[] {
+    const typeMap = new Map<string, IType>();
+    
+    for (const atom of atoms) {
+      if (!typeMap.has(atom.type)) {
+        typeMap.set(atom.type, {
+          id: atom.type,
+          types: [atom.type], // Simple hierarchy - could be enhanced with inheritance detection
+          atoms: [],
+          isBuiltin: DataInstanceNormalizer.isBuiltinType(atom.type)
+        });
+      }
+      typeMap.get(atom.type)!.atoms.push(atom);
+    }
+    
+    return Array.from(typeMap.values());
+  }
+
+  /**
+   * Determine if a type name represents a built-in type.
+   * This can be customized based on your domain's built-in types.
+   * 
+   * @param typeName - The type name to check
+   * @returns true if the type is considered built-in
+   */
+  private static isBuiltinType(typeName: string): boolean {
+    const builtinTypes = new Set([
+      'String', 'Int', 'Bool', 'seq/Int', 'univ', 'none',
+      'Entity', 'Object', 'Node', 'Edge', 'Atom'
+    ]);
+    return builtinTypes.has(typeName);
+  }
+
+  /**
+   * Remove duplicate atoms with the same ID, keeping the first occurrence.
+   * Useful for deduplicating data from multiple sources.
+   * 
+   * @param atoms - Array of atoms that may contain duplicates
+   * @returns Array of unique atoms (by ID)
+   * 
+   * @example
+   * ```typescript
+   * const atoms = [
+   *   { id: "a1", type: "Person", label: "Alice" },
+   *   { id: "a1", type: "Person", label: "Alice Updated" }, // duplicate
+   *   { id: "a2", type: "Person", label: "Bob" }
+   * ];
+   * const unique = DataInstanceNormalizer.deduplicateAtoms(atoms);
+   * // Result: [{ id: "a1", type: "Person", label: "Alice" }, { id: "a2", ... }]
+   * ```
+   */
+  static deduplicateAtoms(atoms: IAtom[]): IAtom[] {
+    const atomMap = new Map<string, IAtom>();
+    const duplicateIds = new Set<string>();
+    
+    for (const atom of atoms) {
+      if (atomMap.has(atom.id)) {
+        duplicateIds.add(atom.id);
+      } else {
+        atomMap.set(atom.id, atom);
+      }
+    }
+    
+    // Log warning if duplicates were found
+    if (duplicateIds.size > 0) {
+      console.warn(`Found duplicate atoms with IDs: ${Array.from(duplicateIds).join(', ')}`);
+    }
+    
+    return Array.from(atomMap.values());
+  }
+
+  /**
+   * Validate that all atom references in relation tuples actually exist.
+   * This catches broken references and helps identify data integrity issues.
+   * 
+   * @param atoms - Array of available atoms
+   * @param relations - Array of relations to validate
+   * @returns Validation result with success status and any error messages
+   * 
+   * @example
+   * ```typescript
+   * const validation = DataInstanceNormalizer.validateReferences(atoms, relations);
+   * if (!validation.isValid) {
+   *   console.error('Validation errors:', validation.errors);
+   * }
+   * ```
+   */
+  static validateReferences(
+    atoms: IAtom[], 
+    relations: IRelation[]
+  ): { isValid: boolean; errors: string[] } {
+    const atomIds = new Set(atoms.map(a => a.id));
+    const errors: string[] = [];
+    
+    for (const relation of relations) {
+      for (let tupleIndex = 0; tupleIndex < relation.tuples.length; tupleIndex++) {
+        const tuple = relation.tuples[tupleIndex];
+        
+        for (let atomIndex = 0; atomIndex < tuple.atoms.length; atomIndex++) {
+          const atomId = tuple.atoms[atomIndex];
+          if (!atomIds.has(atomId)) {
+            errors.push(
+              `Relation "${relation.name}" tuple ${tupleIndex} position ${atomIndex}: ` +
+              `references unknown atom "${atomId}"`
+            );
+          }
+        }
+      }
+    }
+    
+    return { isValid: errors.length === 0, errors };
+  }
+
+  /**
+   * Normalize a JSON data instance with the given options.
+   * This is the main entry point that orchestrates all normalization steps.
+   * 
+   * @param jsonData - The raw JSON data to normalize
+   * @param options - Normalization options (all default to true)
+   * @returns Normalized data with atoms, relations, types, and any validation errors
+   * 
+   * @example
+   * ```typescript
+   * const result = DataInstanceNormalizer.normalize(rawData, {
+   *   mergeRelations: true,
+   *   inferTypes: true,
+   *   validateReferences: true,
+   *   deduplicateAtoms: true
+   * });
+   * 
+   * if (result.errors.length > 0) {
+   *   console.warn('Normalization warnings:', result.errors);
+   * }
+   * ```
+   */
+  static normalize(
+    jsonData: IJsonDataInstance, 
+    options: IJsonImportOptions = {}
+  ): { atoms: IAtom[]; relations: IRelation[]; types: IType[]; errors: string[] } {
+    // Apply defaults
+    const opts: Required<IJsonImportOptions> = {
+      mergeRelations: true,
+      inferTypes: true,
+      validateReferences: true,
+      deduplicateAtoms: true,
+      ...options
+    };
+
+    let atoms = jsonData.atoms || [];
+    let relations = jsonData.relations || [];
+    let types = jsonData.types || [];
+    const errors: string[] = [];
+
+    // Step 1: Deduplicate atoms
+    if (opts.deduplicateAtoms && atoms.length > 0) {
+      const originalCount = atoms.length;
+      atoms = this.deduplicateAtoms(atoms);
+      if (atoms.length < originalCount) {
+        errors.push(`Removed ${originalCount - atoms.length} duplicate atoms`);
+      }
+    }
+
+    // Step 2: Merge relations with same name
+    if (opts.mergeRelations && relations.length > 0) {
+      const originalCount = relations.length;
+      relations = this.mergeRelations(relations);
+      if (relations.length < originalCount) {
+        errors.push(`Merged ${originalCount - relations.length} duplicate relations`);
+      }
+    }
+
+    // Step 3: Infer types if not provided
+    if (opts.inferTypes && types.length === 0 && atoms.length > 0) {
+      types = this.inferTypes(atoms);
+      errors.push(`Inferred ${types.length} types from atoms`);
+    }
+
+    // Step 4: Validate references
+    if (opts.validateReferences) {
+      const validation = this.validateReferences(atoms, relations);
+      errors.push(...validation.errors);
+    }
+
+    return { atoms, relations, types, errors };
+  }
+}

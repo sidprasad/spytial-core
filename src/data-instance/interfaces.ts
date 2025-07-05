@@ -1,5 +1,3 @@
-
-
 import { Graph } from "graphlib";
 
 export interface IAtom  {
@@ -66,5 +64,5 @@ export interface IInputDataInstance  extends IDataInstance {
   // And a method to re-ify the data instance
   // to something in the source language / format.
   // E.g. in Forge this would return a Forge instance.
-  reify(): any;
+  reify(): unknown;
 }
