@@ -3,7 +3,7 @@
     max-width: 100%;
 }
 
-.highlight {
+.error-message-modal .highlight {
     background-color: #ffeb3b; /* Highlight color */
     border-radius: 4px;
 

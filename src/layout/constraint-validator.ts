@@ -25,6 +25,14 @@ export interface ConstraintError  extends Error {
 
 }
 
+export function isPositionalConstraintError(error: unknown): error is PositionalConstraintError {
+    return (error as PositionalConstraintError).type === 'positional-conflict';
+}
+
+export function isGroupOverlapError(error: unknown): error is GroupOverlapError {
+    return (error as GroupOverlapError).type === 'group-overlap';
+}
+
 interface PositionalConstraintError extends ConstraintError {
     type: 'positional-conflict';
     conflictingConstraint: LayoutConstraint;

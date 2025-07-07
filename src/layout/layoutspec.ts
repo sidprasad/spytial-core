@@ -296,6 +296,7 @@ function DEFAULT_LAYOUT() : LayoutSpec
  * Parses a YAML string into a LayoutSpec object.
  * @param s YAML string to parse into a LayoutSpec.
  * @returns LayoutSpec object containing constraints and directives.
+ * @throws Error if there are inconsistencies in the constraints or directives.
  */
 export function parseLayoutSpec(s: string): LayoutSpec {
 
@@ -326,11 +327,7 @@ export function parseLayoutSpec(s: string): LayoutSpec {
         }
         catch (e) {
             const errorMessage = e instanceof Error ? e.message : String(e);
-            throw new Error(`
-
-                <div class="container mt-4 mb-4">
-                    <p> ${errorMessage} </p
-                </div>`);
+            throw new Error(`${errorMessage}`);
         }
     }
 
@@ -342,12 +339,7 @@ export function parseLayoutSpec(s: string): LayoutSpec {
 
         catch (e) {
             const errorMessage = e instanceof Error ? e.message : String(e);
-            throw new Error(`                
-                <div class="container mt-4 mb-4">
-                <p>
-                    ${errorMessage}
-                    </p>
-                </div>`);
+            throw new Error(`${errorMessage}`);
         }
     }
     return layoutSpec;
@@ -357,6 +349,7 @@ export function parseLayoutSpec(s: string): LayoutSpec {
  * Parses the constraints from the YAML specification.
  * @param constraints List of constraints from the YAML specification.
  * @returns List of CnD constraints
+ * @throws Error if there are inconsistencies in the constraints.
  */
 function parseConstraints(constraints: unknown[]):   ConstraintsBlock
 {
@@ -482,6 +475,7 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
  * Parses the directives from the YAML specification.
  * @param directives List of directives from the YAML specification.
  * @returns List of CnD directives
+ * @throws Error if there are inconsistencies in the directives.
  */
 function parseDirectives(directives: unknown[]): DirectivesBlock {
     // Type assertion since we expect specific structure from YAML

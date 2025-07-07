@@ -9,10 +9,6 @@ interface ErrorMessageModalProps {
 const ErrorMessageModal: React.FC<ErrorMessageModalProps> = (
   props: ErrorMessageModalProps
 ) => {
-  console.log('Rendering ErrorMessageModal with messages:', props.messages);
-
-  // Grab the DOM element for the modal
-
 
   const addHighlightOnMouseEnter = (e: React.MouseEvent<HTMLCodeElement>) => {
     if (e.currentTarget.className.startsWith('error-message-')) {

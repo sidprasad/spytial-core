@@ -1,6 +1,6 @@
 import { Graph, Edge } from 'graphlib';
 import {IAtom, IDataInstance, IType} from '../data-instance/interfaces';
-import { PositionalConstraintError, GroupOverlapError } from './constraint-validator';
+import { PositionalConstraintError, GroupOverlapError, isPositionalConstraintError } from './constraint-validator';
 
 
 import {
@@ -18,7 +18,7 @@ import {
 
 import IEvaluator from '../evaluators/interfaces';
 import { ColorPicker } from './colorpicker';
-import { ConstraintError, ConstraintValidator } from './constraint-validator';
+import { type ConstraintError, ConstraintValidator } from './constraint-validator';
 const UNIVERSAL_TYPE = "univ";
 
 
@@ -488,10 +488,6 @@ export class LayoutInstance {
         let projectedInstance = ai.applyProjections( projectedAtomIds);
         return { projectedInstance, finalProjectionChoices };
     }
-
-
-
-
 
     /**
      * Generates the layout for the given data instance and projections.

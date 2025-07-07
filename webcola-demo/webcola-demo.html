@@ -178,8 +178,8 @@
     <script src="../dist/browser/cnd-core-complete.global.js"></script>
     
     <!-- Your React component bundle (includes React runtime) -->
-    <script src="../dist/components/demo-integration.global.js"></script>
-    <link rel="stylesheet" href="../dist/components/demo-integration.css">
+    <script src="../dist/components/react-component-integration.global.js"></script>
+    <link rel="stylesheet" href="../dist/components/react-component-integration.css">
     <script>
         // Variables to store data
         let currentInstanceLayout = null;
@@ -300,7 +300,21 @@
 
                 // Step 3: Parse layout specification
                 updateStatus('Parsing layout specification...', 'info');
-                const layoutSpec = CndCore.parseLayoutSpec(cndSpec);
+                let layoutSpec = null;
+                try {
+                    layoutSpec = CndCore.parseLayoutSpec(cndSpec);
+                    if (window.clearAllErrors) {
+                        window.clearAllErrors();
+                    }
+                } catch (error) {
+                    console.error('Layout spec parse error:', error);
+                    if (window.showParseError) {
+                        window.showParseError(error.message, 'Layout Specification');
+                    } else {
+                        updateStatus(`Layout spec parse error: ${error.message}`, 'error');
+                    }
+                    return;
+                }
                 console.log('Parsed Layout Spec:', layoutSpec);
 
                 // Step 4: Create LayoutInstance with ForgeEvaluator
@@ -326,7 +340,28 @@
                 if (layoutResult.error) {
                     console.error('Layout generation error:', layoutResult.error);
                     // updateStatus(`Layout generation error: ${layoutResult.error.message}`, 'error');
-                    renderErrorMessages(layoutResult.error.errorMessages);
+                    // renderErrorMessages(layoutResult.error.errorMessages);
+
+                    // Check if this is a constraint conflict error
+                    if (layoutResult.error.errorMessages) {
+                        if (window.showConstraintError) {
+                            window.showConstraintError(layoutResult.error.errorMessages);
+                        } else {
+                            updateStatus(`Constraint conflict: ${layoutResult.error.message}`, 'error');
+                        }
+                    } else {
+                        if (window.showGeneralError) {
+                            window.showGeneralError(`Layout generation error: ${layoutResult.error.message}`);
+                        } else {
+                            updateStatus(`Layout generation error: ${layoutResult.error.message}`, 'error');
+                        }
+                    }
+                    return;
+                }
+
+                // Clear errors on successful layout generation
+                if (window.clearAllErrors) {
+                    window.clearAllErrors();
                 }
 
                 console.log('Generated Instance Layout using Alloy pipeline:', currentInstanceLayout);
@@ -428,6 +463,11 @@
             // Mount React component if available
             if (window.mountCndLayoutInterface) {
                 window.mountCndLayoutInterface();
+            }
+
+            // Mount error message system
+            if (window.mountErrorMessageModal) {
+                window.mountErrorMessageModal();
             }
         });
 
