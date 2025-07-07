@@ -204,14 +204,6 @@
         }
 
         /**
-         * Render error messages in a modal
-         * @param {ErrorMessages} messages - Error messages to display
-         */
-        function renderErrorMessages(messages) {
-            window.mountErrorMessageModal(messages, 'error-messages');
-        }
-
-        /**
          * Update status display with proper styling
          * @param {string} message - Status message to display
          * @param {string} type - Status type: 'info', 'success', 'error'
@@ -339,8 +331,6 @@
 
                 if (layoutResult.error) {
                     console.error('Layout generation error:', layoutResult.error);
-                    // updateStatus(`Layout generation error: ${layoutResult.error.message}`, 'error');
-                    // renderErrorMessages(layoutResult.error.errorMessages);
 
                     // Check if this is a constraint conflict error
                     if (layoutResult.error.errorMessages) {
@@ -378,6 +368,7 @@
          * Render the graph using the webcola-cnd-graph custom element
          */
         async function renderGraph() {
+            clearGraph(); // Clear existing graph first
             const graphElement = document.getElementById('graph-container');
             
             try {
