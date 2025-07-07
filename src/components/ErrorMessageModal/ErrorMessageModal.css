@@ -1,7 +1,11 @@
 .error-card {
     min-width: 320px;
     max-width: 100%;
-    border: 1px var(--bs-danger) solid !important;
+}
+
+#error-message-modal {
+    border-radius: 0.5rem;
+    border: 2px var(--bs-danger) solid;
 }
 
 #error-message-modal .highlight {
