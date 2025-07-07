@@ -435,13 +435,14 @@
         async function changeLayoutFormat() {
             const graphElement = document.getElementById('graph-container');
             const layoutFormat = document.getElementById('layoutFormat').value;
+            const statusElement = document.getElementById('status');
             graphElement.setAttribute('layoutFormat', layoutFormat);
             console.log(`Layout format changed to: ${layoutFormat}`);
 
             // Re-render the graph with the new layout format
             try {
                 await graphElement.renderLayout(currentInstanceLayout);
-                statusElement.textContent = 'Real graph rendered successfully!';
+                statusElement.textContent = 'Graph layout changed successfully!';
             } catch (error) {
                 console.error('Error rendering graph:', error);
                 statusElement.textContent = `Render error: ${error.message}`;
