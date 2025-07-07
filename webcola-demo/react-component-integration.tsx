@@ -455,30 +455,7 @@ export function mountErrorMessageModal(messages: ErrorMessages, containerId: str
     globalErrorManager.clearError();
   };
 
-  // Backward compatibility with existing updateStatus function
-  // (window as any).updateStatus = (message: string, type: 'info' | 'success' | 'error' = 'info') => {
-  //   if (type === 'error') {
-  //     globalErrorManager.setError({
-  //       type: 'general-error',
-  //       message
-  //     });
-  //   } else {
-  //     // Clear errors on successful operations
-  //     globalErrorManager.clearError();
-      
-  //     // Update status div for non-error messages
-  //     const statusElement = document.getElementById('status');
-  //     if (statusElement) {
-  //       statusElement.textContent = message;
-  //       statusElement.className = `status ${type}`;
-  //     }
-  //   }
-  // };
-
-  // console.log(`ErrorMessageModal component mounted to #${containerId}`);
   console.log(`ErrorMessageContainer component mounted to #${containerId}`);
-
-
 }
 
 // For global access in the demo page

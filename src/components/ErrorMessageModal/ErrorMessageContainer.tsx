@@ -35,27 +35,14 @@ export const ErrorMessageContainer: React.FC<ErrorMessageContainerProps> = ({
   }
 
   const containerClassName = `error-message-container ${className}`.trim();
-
+  
   return (
     <div className={containerClassName}>
-      {/* Show ErrorMessageModal for constraint conflicts */}
-      {currentError.type === 'constraint-error' && (
-        <ErrorMessageModal messages={currentError.messages} />
-      )}
-      
-      {/* Show simple error message for parse errors */}
-      {(currentError.type === 'parse-error' || currentError.type === 'general-error') && (
-        <div 
-          className="status error"
-          role="alert" 
-          aria-live="polite"
-        >
-          {currentError.type === 'parse-error' && currentError.source && (
-            <strong>Parse Error ({currentError.source}): </strong>
-          )}
-          <code dangerouslySetInnerHTML={{__html: currentError.message}}></code>
-        </div>
-      )}
+      {/* Use ErrorMessageModal for all error types */}
+      <ErrorMessageModal 
+        messages={currentError.type === 'constraint-error' ? currentError.messages : undefined}
+        systemError={currentError.type !== 'constraint-error' ? currentError : undefined}
+      />
     </div>
   );
 };

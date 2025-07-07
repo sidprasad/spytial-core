@@ -1,9 +1,10 @@
 .error-card {
     min-width: 320px;
     max-width: 100%;
+    border: 1px var(--bs-danger) solid !important;
 }
 
-.error-message-modal .highlight {
+#error-message-modal .highlight {
     background-color: #ffeb3b; /* Highlight color */
     border-radius: 4px;
 
