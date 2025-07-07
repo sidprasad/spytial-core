@@ -7,6 +7,7 @@ This major update introduces several new components including:
 - [Instance builder](#instance-builder) – an independent component where users can handcraft their own input data instance
 - IDataInstance – an interface for defining data instances; unique to each input programming language
 - [NoCodeView](#nocodeview) – a standalone React component where users can configure Cope and Drag specifications without writing YAML by hand
+- [ErrorMessageModal](#errormessagemodal) – a standalone React component that displays error messages and manages error states
 
 ## Instance Builder
 
@@ -93,8 +94,89 @@ const CndLayoutInterface: React.FC = {
 
 ### Props
 
-- `yamlValue?: string` (optional) – YAML string of CnD layout spec
+- `yamlValue?: string` – YAML string of CnD layout spec
 - `constraints: ConstraintData[]` – List of CnD constraints
 - `setConstraints: (updater: (prev: ConstraintData[]) => ConstraintData[]) => void` – Callback to set constraints
 - `directives: DirectiveData[]` – List of CnD directives
 - `setDirectives: (updater: (prev: DirectiveData[]) => DirectiveData[]) => void` – Callback to set directives
+
+## ErrorMessageModal
+
+The ErrorMessageModal is a React component for displaying structured error messages in Cope and Drag applications. It provides a unified interface for showing constraint conflicts, parse errors, and group overlap errors with detailed context and interactive highlighting.
+
+### Supported Error Types
+
+- Constraint Conflicts – Shows positional constraint conflicts with source constraint mapping
+- Parse Errors – Displays YAML/specification parsing errors with source context
+- Group Overlap Errors – Reports when layout groups have overlapping nodes
+- General Errors – Handles other system errors with customizable messaging
+
+### Usage
+
+```tsx
+import React, { useState } from 'react';
+import { ErrorMessageModal, ErrorStateManager } from 'cnd-core';
+
+const MyApp: React.FC = () => {
+  const [errorManager] = useState(() => new ErrorStateManager());
+
+  // Handle constraint conflicts
+  const handleConstraintError = (errorMessages: ErrorMessages) => {
+    errorManager.setError({
+      type: 'positional-error',
+      messages: errorMessages
+    });
+  };
+
+  // Handle parse errors
+  const handleParseError = (message: string, source: string) => {
+    errorManager.setError({
+      type: 'parse-error',
+      message,
+      source
+    });
+  };
+
+  return (
+    <ErrorMessageContainer 
+      errorManager={errorManager}
+      className="my-error-styles"
+    />
+  );
+};
+```
+
+### Props
+
+- `errorManager: ErorStateManager` - **Required**. Manages error state and notifications
+- `className?: string` - CSS class name for styling
+- `messages?: ErrorMessages` - Constraint conflict details for positional errors
+- `systemError?: SystemError` - Parse, group overlap, or general error information
+
+### Integration with Custom Error Handlers
+
+The ErrorMessageModal uses a pluggable architecture allowing developers to create custom error display components:
+```tsx
+// Replace the default modal with your custom component
+const CustomErrorHandler: React.FC<{ errorManager: ErrorStateManager }> = ({ errorManager }) => {
+  const [error, setError] = useState(errorManager.getCurrentError());
+  
+  useEffect(() => {
+    errorManager.onErrorChange(setError);
+  }, [errorManager]);
+
+  return error ? <MyCustomErrorDisplay error={error} /> : null;
+};
+```
+
+---
+
+*Some additional sections to consider adding...*
+
+## Testing
+
+# Migration Guide
+
+## Breaking Changes
+
+## API changes and deprecations
