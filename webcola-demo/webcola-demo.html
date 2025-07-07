@@ -142,6 +142,7 @@
                 <textarea id="webcola-alloy" placeholder="Paste your Alloy XML instance here..."></textarea>
             </div>
             <div id="status" class="status info">Ready to load Alloy graph...</div>
+            <div id="error-messages"></div>
             <div id="graph-container-wrapper">
                 <div id="graph-controls">
                     <select title="Choose the Layout Format" class="form-select form-select-sm" id="layoutFormat" name="layoutFormat" onchange="changeLayoutFormat()" aria-label="Layout format selection">
@@ -177,8 +178,8 @@
     <script src="../dist/browser/cnd-core-complete.global.js"></script>
     
     <!-- Your React component bundle (includes React runtime) -->
-    <script src="../dist/components/demo-integration.global.js"></script>
-    <link rel="stylesheet" href="../dist/components/demo-integration.css">
+    <script src="../dist/components/react-component-integration.global.js"></script>
+    <link rel="stylesheet" href="../dist/components/react-component-integration.css">
     <script>
         // Variables to store data
         let currentInstanceLayout = null;
@@ -291,7 +292,21 @@
 
                 // Step 3: Parse layout specification
                 updateStatus('Parsing layout specification...', 'info');
-                const layoutSpec = CndCore.parseLayoutSpec(cndSpec);
+                let layoutSpec = null;
+                try {
+                    layoutSpec = CndCore.parseLayoutSpec(cndSpec);
+                    if (window.clearAllErrors) {
+                        window.clearAllErrors();
+                    }
+                } catch (error) {
+                    console.error('Layout spec parse error:', error);
+                    if (window.showParseError) {
+                        window.showParseError(error.message, 'Layout Specification');
+                    } else {
+                        updateStatus(`Layout spec parse error: ${error.message}`, 'error');
+                    }
+                    return;
+                }
                 console.log('Parsed Layout Spec:', layoutSpec);
 
                 // Step 4: Create LayoutInstance with ForgeEvaluator
@@ -313,6 +328,38 @@
                 const projections = {};
                 const layoutResult = layoutInstance.generateLayout(alloyDataInstance, projections);
                 currentInstanceLayout = layoutResult.layout;
+
+                if (layoutResult.error) {
+                    console.error('Layout generation error:', layoutResult.error);
+
+                    // Check if this is a constraint conflict error
+                    if (layoutResult.error.errorMessages) {
+                        if (window.showPositionalError) {
+                            window.showPositionalError(layoutResult.error.errorMessages);
+                        } else {
+                            updateStatus(`Positional constraint conflict: ${layoutResult.error.message}`, 'error');
+                        }
+                    } else if (layoutResult.error.overlappingNodes) {
+                        if (window.showGroupOverlapError) {
+                            window.showGroupOverlapError(layoutResult.error.message);
+                        } else {
+                            updateStatus(`Group overlap error: ${layoutResult.error.message}`, 'error');
+                        }
+                    } else {
+                        if (window.showGeneralError) {
+                            window.showGeneralError(`Layout generation error: ${layoutResult.error.message}`);
+                        } else {
+                            updateStatus(`Layout generation error: ${layoutResult.error.message}`, 'error');
+                        }
+                    }
+                    return;
+                }
+
+                // Clear errors on successful layout generation
+                if (window.clearAllErrors) {
+                    window.clearAllErrors();
+                }
+
                 console.log('Generated Instance Layout using Alloy pipeline:', currentInstanceLayout);
 
                 updateStatus('Alloy pipeline complete with ForgeEvaluator! Ready to render.', 'success');
@@ -327,6 +374,7 @@
          * Render the graph using the webcola-cnd-graph custom element
          */
         async function renderGraph() {
+            clearGraph(); // Clear existing graph first
             const graphElement = document.getElementById('graph-container');
             
             try {
@@ -398,11 +446,14 @@
 
             // Re-render the graph with the new layout format
             try {
+                if (!currentInstanceLayout) {
+                    throw new Error('No layout data available. Please load an Alloy graph first.');
+                }
                 await graphElement.renderLayout(currentInstanceLayout);
-                statusElement.textContent = 'Real graph rendered successfully!';
+                updateStatus('Graph layout changed successfully!', 'success');
             } catch (error) {
                 console.error('Error rendering graph:', error);
-                statusElement.textContent = `Render error: ${error.message}`;
+                updateStatus(`Render error: ${error.message}`, 'error');
             }
         }
 
@@ -412,6 +463,11 @@
             // Mount React component if available
             if (window.mountCndLayoutInterface) {
                 window.mountCndLayoutInterface();
+            }
+
+            // Mount error message system
+            if (window.mountErrorMessageModal) {
+                window.mountErrorMessageModal();
             }
         });
 

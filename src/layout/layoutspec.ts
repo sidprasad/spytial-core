@@ -92,7 +92,7 @@ export class RelativeOrientationConstraint extends ConstraintOperation {
 
     override inconsistencyMessage(): string {
         let dirStr : string = this.directions.join(", ");
-        return `Orientation Constraint with directions  <code>[${dirStr}]</code> and selector <code> ${this.selector} </code> is internally inconsistent.`;  
+        return `Orientation Constraint with directions [${dirStr}] and selector <code>${this.selector}</code> is internally inconsistent.`;  
     }
 
     override toHTML(): string {
@@ -157,11 +157,11 @@ export class CyclicOrientationConstraint extends ConstraintOperation {
     }
 
     override inconsistencyMessage(): string {
-        return `Cyclic constraint with direction <code>${this.direction}</code> with selector <code>${this.selector}</code> is inconsistent.`;  
+        return `Cyclic constraint with direction [${this.direction}] with selector <code>${this.selector}</code> is inconsistent.`;  
     }
 
     override toHTML(): string {
-        return `Cyclic constraint with direction ${this.direction} and selector ${this.selector}`;
+        return `Cyclic constraint with direction [${this.direction}] and selector <code>${this.selector}</code>`;
     }
 }
 
@@ -296,6 +296,7 @@ function DEFAULT_LAYOUT() : LayoutSpec
  * Parses a YAML string into a LayoutSpec object.
  * @param s YAML string to parse into a LayoutSpec.
  * @returns LayoutSpec object containing constraints and directives.
+ * @throws Error if there are inconsistencies in the constraints or directives.
  */
 export function parseLayoutSpec(s: string): LayoutSpec {
 
@@ -326,11 +327,7 @@ export function parseLayoutSpec(s: string): LayoutSpec {
         }
         catch (e) {
             const errorMessage = e instanceof Error ? e.message : String(e);
-            throw new Error(`
-
-                <div class="container mt-4 mb-4">
-                    <p> ${errorMessage} </p
-                </div>`);
+            throw new Error(`${errorMessage}`);
         }
     }
 
@@ -342,12 +339,7 @@ export function parseLayoutSpec(s: string): LayoutSpec {
 
         catch (e) {
             const errorMessage = e instanceof Error ? e.message : String(e);
-            throw new Error(`                
-                <div class="container mt-4 mb-4">
-                <p>
-                    ${errorMessage}
-                    </p>
-                </div>`);
+            throw new Error(`${errorMessage}`);
         }
     }
     return layoutSpec;
@@ -357,6 +349,7 @@ export function parseLayoutSpec(s: string): LayoutSpec {
  * Parses the constraints from the YAML specification.
  * @param constraints List of constraints from the YAML specification.
  * @returns List of CnD constraints
+ * @throws Error if there are inconsistencies in the constraints.
  */
 function parseConstraints(constraints: unknown[]):   ConstraintsBlock
 {
@@ -482,6 +475,7 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
  * Parses the directives from the YAML specification.
  * @param directives List of directives from the YAML specification.
  * @returns List of CnD directives
+ * @throws Error if there are inconsistencies in the directives.
  */
 function parseDirectives(directives: unknown[]): DirectivesBlock {
     // Type assertion since we expect specific structure from YAML

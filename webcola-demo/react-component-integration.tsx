@@ -13,6 +13,14 @@ import { ConstraintData, DirectiveData } from '../src/components/NoCodeView/inte
 import { generateLayoutSpecYaml } from '../src/components/NoCodeView/CodeView';
 import { createEmptyAlloyDataInstance } from '../src/data-instance/alloy-data-instance';
 import { IInputDataInstance } from '../src/data-instance/interfaces';
+import { ErrorMessageContainer, ErrorMessageModal, ErrorStateManager } from '../src/components/ErrorMessageModal/index'
+import { ErrorMessages, GroupOverlapError } from '../src/layout/constraint-validator';
+
+/****
+ * 
+ * STATE MANAGERS
+ * 
+ */
 
 class CndLayoutStateManager {
   private static instance: CndLayoutStateManager;
@@ -274,6 +282,12 @@ const IntegratedInstanceBuilder: React.FC = () => {
   );
 };
 
+/****
+ * 
+ * MOUNTING AND INTEGRATION FUNCTIONS
+ * 
+ */
+
 /**
  * Mount the React component into the demo page
  * Call this function after the DOM is loaded
@@ -381,6 +395,8 @@ export function getCurrentCNDSpecFromReact(): string | undefined {
 /**
  * Mount both InstanceBuilder and CndLayoutInterface components
  */
+
+// TODO: Use this function to mount integrated components in the demo page??
 export function mountIntegratedComponents(): void {
   console.log('Mounting integrated demo components...');
   
@@ -393,6 +409,62 @@ export function mountIntegratedComponents(): void {
   }
 }
 
+const globalErrorManager = new ErrorStateManager();
+
+/**
+ * Mount the ErrorMessageModal React component to replace the error-messages div
+ * @param containerId - ID of the container element (default: 'error-messages')
+ */
+export function mountErrorMessageModal(messages: ErrorMessages, containerId: string = 'error-messages'): void {
+  const container = document.getElementById(containerId);
+  
+  if (!container) {
+    console.error(`Error messages container with ID '${containerId}' not found`);
+    return;
+  }
+
+  // Create React root and render the component
+  const root = createRoot(container);
+  // root.render(<ErrorMessageModal messages={messages} />);
+  root.render(<ErrorMessageContainer errorManager={globalErrorManager} />);
+
+  /** Expose functions to global scope for demo integration */
+  (window as any).showParseError = (message: string, source?: string) => {
+    globalErrorManager.setError({
+      type: 'parse-error',
+      message,
+      source
+    });
+  };
+
+  (window as any).showGroupOverlapError = (message: string, source?: string) => {
+    globalErrorManager.setError({
+      type: 'group-overlap-error',
+      message: message,
+    });
+  };
+
+  (window as any).showPositionalError = (errorMessages: ErrorMessages) => {
+    globalErrorManager.setError({
+      type: 'positional-error',
+      messages: errorMessages
+    });
+  };
+
+  (window as any).showGeneralError = (message: string) => {
+    globalErrorManager.setError({
+      type: 'general-error',
+      message
+    });
+  };
+
+  (window as any).clearAllErrors = () => {
+    globalErrorManager.clearError();
+  };
+
+  console.log(`ErrorMessageContainer component mounted to #${containerId}`);
+}
+
 // For global access in the demo page
 if (typeof window !== 'undefined') {
   (window as any).mountCndLayoutInterface = mountCndLayoutInterface;
@@ -400,6 +472,7 @@ if (typeof window !== 'undefined') {
   (window as any).mountInstanceBuilder = mountInstanceBuilder;
   (window as any).getCurrentInstanceFromReact = getCurrentInstanceFromReact;
   (window as any).mountIntegratedComponents = mountIntegratedComponents;
+  (window as any).mountErrorMessageModal = mountErrorMessageModal;
   
   // Auto-mount components when page loads
   window.addEventListener('load', () => {

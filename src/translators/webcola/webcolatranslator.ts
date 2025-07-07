@@ -84,6 +84,7 @@ export class WebColaLayout {
   readonly colaNodes: NodeWithMetadata[];
   readonly colaEdges: EdgeWithMetadata[];
   readonly groupDefinitions: any;
+  readonly conflictingConstraints: LayoutConstraint[];
 
   private readonly DEFAULT_X: number;
   private readonly DEFAULT_Y: number;
@@ -133,7 +134,7 @@ export class WebColaLayout {
 
     this.groupDefinitions = this.determineGroups(instanceLayout.groups);
 
-
+    this.conflictingConstraints = instanceLayout.conflictingConstraints || [];
     this.colaConstraints = instanceLayout.constraints.map(constraint => this.toColaConstraint(constraint));
 
     if (this.colaConstraints.length === 0 && this.dagre_graph) {
@@ -440,8 +441,24 @@ export class WebColaLayout {
   get groups(): any {
     // TODO: Make sure the leaves and 
     // groups are well defined here (i.e. not defined by index by object?)
-
     return this.groupDefinitions;
+  }
+
+  get conflictingNodes(): LayoutNode[] {
+    const conflictingNodes: LayoutNode[] = [];
+    this.conflictingConstraints.forEach(constraint => {
+      if (isLeftConstraint(constraint)) {
+        conflictingNodes.push(constraint.left);
+        conflictingNodes.push(constraint.right);
+      } else if (isTopConstraint(constraint)) {
+        conflictingNodes.push(constraint.top);
+        conflictingNodes.push(constraint.bottom);
+      } else if (isAlignmentConstraint(constraint)) {
+        conflictingNodes.push(constraint.node1);
+        conflictingNodes.push(constraint.node2);
+      }
+    });
+    return conflictingNodes;
   }
 }
 

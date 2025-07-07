@@ -1,5 +1,6 @@
 import { Graph, Edge } from 'graphlib';
 import {IAtom, IDataInstance, IType} from '../data-instance/interfaces';
+import { PositionalConstraintError, GroupOverlapError, isPositionalConstraintError } from './constraint-validator';
 
 
 import {
@@ -17,7 +18,7 @@ import {
 
 import IEvaluator from '../evaluators/interfaces';
 import { ColorPicker } from './colorpicker';
-import { ConstraintValidator } from './constraint-validator';
+import { type ConstraintError, ConstraintValidator } from './constraint-validator';
 const UNIVERSAL_TYPE = "univ";
 
 
@@ -488,18 +489,24 @@ export class LayoutInstance {
         return { projectedInstance, finalProjectionChoices };
     }
 
-
-
-
-
-
-    public generateLayout(a: IDataInstance, projections: Record<string, string>): { layout: InstanceLayout, projectionData: { type: string, projectedAtom: string, atoms: string[] }[] } {
+    /**
+     * Generates the layout for the given data instance and projections.
+     * @param a - The data instance to generate the layout for.
+     * @param projections - ...
+     * @returns An object containing the layout and projection data.
+     */
+    public generateLayout(
+        a: IDataInstance, 
+        projections: Record<string, string>
+    ): { 
+        layout: InstanceLayout, 
+        projectionData: { type: string, projectedAtom: string, atoms: string[] }[], 
+        error: ConstraintError | null 
+    } {
 
         let projectionResult = this.applyLayoutProjections(a, projections);
         let ai = projectionResult.projectedInstance;
         let projectionData = projectionResult.finalProjectionChoices;
-
-
         
         let g: Graph = ai.generateGraph( this.hideDisconnected, this.hideDisconnectedBuiltIns);
 
@@ -614,6 +621,45 @@ export class LayoutInstance {
         const nonCyclicConstraintError = validatorWithoutCyclic.validateConstraints();
 
         if (nonCyclicConstraintError) {
+            if ((nonCyclicConstraintError as PositionalConstraintError).minimalConflictingSet) {
+                const minimalConflictingSet = (nonCyclicConstraintError as PositionalConstraintError).minimalConflictingSet;
+                // If the error is a positional constraint error, we can try to return the last known good layout by removing all conflicting constraints.
+                const layoutWithErrorMetadata: InstanceLayout = {
+                    nodes: layoutWithoutCyclicConstraints.nodes,
+                    edges: layoutWithoutCyclicConstraints.edges,
+                    // FIXME: This is a hacky way to remove the conflicting constraints.
+                    // There is some inconsistency between what the graph shows and what the error message shows.
+                    constraints: layoutWithoutCyclicConstraints.constraints.filter(c => 
+                        ![...minimalConflictingSet.values()].flat().includes(c)
+                    ),
+                    groups: layoutWithoutCyclicConstraints.groups,
+                    conflictingConstraints: [...minimalConflictingSet.values()].flat()
+                };
+                return { 
+                    layout: layoutWithErrorMetadata, 
+                    projectionData, 
+                    error: nonCyclicConstraintError 
+                };
+            }
+
+            if ((nonCyclicConstraintError as GroupOverlapError).overlappingNodes) {
+                // If the error is a group overlap error, we can return the error as is.
+                const layoutWithErrorMetadata: InstanceLayout = {
+                    nodes: layoutWithoutCyclicConstraints.nodes,
+                    edges: layoutWithoutCyclicConstraints.edges,
+                    constraints: layoutWithoutCyclicConstraints.constraints,
+                    groups: layoutWithoutCyclicConstraints.groups,
+                    // TODO: Add conflicting groups metadata
+                }
+                return { 
+                    layout: layoutWithoutCyclicConstraints, 
+                    projectionData, 
+                    error: nonCyclicConstraintError 
+                };
+            }
+
+            // console.log("Layout is unsatisfiable even without cyclic constraints.")
+
             throw nonCyclicConstraintError;
         }
         // And updating constraints, since the validator may add constraints.
@@ -653,10 +699,30 @@ export class LayoutInstance {
         let finalConstraintValidator = new ConstraintValidator(layout);
         let finalLayoutError = finalConstraintValidator.validateConstraints();
         if (finalLayoutError) {
+            if ((finalLayoutError as PositionalConstraintError).minimalConflictingSet) {
+                const minimalConflictingSet = (finalLayoutError as PositionalConstraintError).minimalConflictingSet;
+                // If the error is a positional constraint error, we can try to return the last known good layout by removing all conflicting constraints.
+                const layoutWithErrorMetadata: InstanceLayout = {
+                    nodes: layoutWithoutCyclicConstraints.nodes,
+                    edges: layoutWithoutCyclicConstraints.edges,
+                    constraints: layoutWithoutCyclicConstraints.constraints.filter(c => 
+                        ![...minimalConflictingSet.values()].flat().includes(c)
+                    ),
+                    groups: layoutWithoutCyclicConstraints.groups
+                };
+                return { 
+                    layout: layoutWithErrorMetadata, 
+                    projectionData, 
+                    error: finalLayoutError 
+                };
+            }
+
+            // console.log("Layout is unsatisfiable even after applying cyclic constraints.")
+
             throw finalLayoutError;
         }
 
-        return { layout, projectionData };
+        return { layout, projectionData, error: null };
     }
 
     /**

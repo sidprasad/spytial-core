@@ -44,11 +44,11 @@
 /* Highlight effect for newly added elements */
 .highlight {
     border: 1px solid #007bff; /* Thin blue border */
-    animation: fadeBorder 1s ease-out forwards; /* Fade out the border */
+    animation: fadeConstraintBorder 1s ease-out forwards; /* Fade out the border */
 }
 
 /* Keyframes for fading out the border */
-@keyframes fadeBorder {
+@keyframes fadeConstraintBorder {
     0% {
         border-color: #007bff; /* Start with blue */
     }

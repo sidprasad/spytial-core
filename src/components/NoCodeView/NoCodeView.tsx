@@ -168,7 +168,7 @@ const NoCodeView = ({
             type: "orientation",
             params: {},
         };
-        setConstraints((prev) => [...prev, newConstraint]);
+        setConstraints((prev) => [newConstraint, ...prev]);
     }
 
     /**
@@ -202,7 +202,7 @@ const NoCodeView = ({
             type: "flag",
             params: {},
         };
-        setDirectives((prev) => [...prev, newDirective]);
+        setDirectives((prev) => [newDirective, ...prev]);
     }
 
     /**

@@ -6,6 +6,12 @@ import { RelativeOrientationConstraint, CyclicOrientationConstraint } from './la
 
 type SourceConstraint = RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint;
 
+export interface ErrorMessages {
+    conflictingConstraint: string;
+    conflictingSourceConstraint: string;
+    minimalConflictingConstraints: Map<string, string[]>;
+}
+
 /**
  * Represents a constraint validation error with structured data
  * Provides detailed information about constraint conflicts for programmatic handling
@@ -19,11 +25,20 @@ export interface ConstraintError  extends Error {
 
 }
 
+export function isPositionalConstraintError(error: unknown): error is PositionalConstraintError {
+    return (error as PositionalConstraintError).type === 'positional-conflict';
+}
+
+export function isGroupOverlapError(error: unknown): error is GroupOverlapError {
+    return (error as GroupOverlapError).type === 'group-overlap';
+}
+
 interface PositionalConstraintError extends ConstraintError {
     type: 'positional-conflict';
     conflictingConstraint: LayoutConstraint;
     conflictingSourceConstraint: SourceConstraint;
     minimalConflictingSet: Map<SourceConstraint, LayoutConstraint[]>;
+    errorMessages?: ErrorMessages;
 }
 
 interface GroupOverlapError extends ConstraintError {
@@ -33,7 +48,34 @@ interface GroupOverlapError extends ConstraintError {
     overlappingNodes: LayoutNode[];
 }
 
+export { type PositionalConstraintError, type GroupOverlapError }
 
+export function orientationConstraintToString(constraint: LayoutConstraint) {
+    if (isTopConstraint(constraint)) {
+        let tc = constraint as TopConstraint;
+        return `ENSURE: ${tc.top.id} is above ${tc.bottom.id}`;
+    }
+    else if (isLeftConstraint(constraint)) {
+        let lc = constraint as LeftConstraint;
+        return `ENSURE: ${lc.left.id} is to the left of ${lc.right.id}`;
+    }
+    else if (isAlignmentConstraint(constraint)) {
+        let ac = constraint as AlignmentConstraint;
+        let axis = ac.axis;
+        let node1 = ac.node1;
+        let node2 = ac.node2;
+
+        if (axis === 'x') {
+            return `ENSURE: ${node1.id} is vertically aligned with ${node2.id}`;
+        }
+        else if (axis === 'y') {
+            return `ENSURE: ${node1.id} is horizontally aligned with ${node2.id}`;
+        }
+
+        return `ENSURE: ${node1.id} is aligned with ${node2.id} along the ${axis} axis`;
+    }
+    return `ENSURE: Unknown constraint type: ${constraint}`;
+}
 
 
 class ConstraintValidator {
@@ -99,81 +141,49 @@ class ConstraintValidator {
         return null;
     }
 
+    /**
+     * Validates group constraints and returns the first overlap error found
+     * @returns GroupOverlapError if groups overlap, null otherwise
+     */
     public validateGroupConstraints(): GroupOverlapError | null {
-
-        // This identifies if there ARE any overlapping non-subgroups
-        let overlappingNonSubgroups = false;
-
-        this.groups.forEach(group => {
-            this.groups.forEach(otherGroup => {
-
-                // const groupIndex = this.getGroupIndex(group.name);
-                // const otherGroupIndex = this.getGroupIndex(otherGroup.name);
-
-                if (group.name === otherGroup.name || overlappingNonSubgroups) {
-                    return;
+        for (let i = 0; i < this.groups.length; i++) {
+            const group = this.groups[i];
+            
+            for (let j = i + 1; j < this.groups.length; j++) {
+                const otherGroup = this.groups[j];
+                
+                // Skip if one group is a subgroup of the other
+                if (this.isSubGroup(group, otherGroup) || this.isSubGroup(otherGroup, group)) {
+                    continue;
                 }
-
-
-                if (!this.isSubGroup(group, otherGroup) && !this.isSubGroup(otherGroup, group)) {
-
-                    let intersection = this.groupIntersection(group, otherGroup);
-                    overlappingNonSubgroups = intersection.length > 0;
-
-                    if (overlappingNonSubgroups) {
-
-
-                        // Fix the overlapping nodes mapping with proper type handling
-                        const overlappingNodes: LayoutNode[] = intersection
-                            .map(nid => this.nodes.find(n => n.id === nid))
-                            .filter((node): node is LayoutNode => node !== undefined);
-
-                        const gOverlap: GroupOverlapError = {
-                            name: 'GroupOverlapError',
-                            type: 'group-overlap',
-                            message: `Groups "${group.name}" and "${otherGroup.name}" overlap with nodes: ${intersection.join(', ')}`,
-                            group1: group,
-                            group2: otherGroup,
-                            overlappingNodes: overlappingNodes
-                        };
-                        return gOverlap;
-                    }
+                
+                const intersection = this.groupIntersection(group, otherGroup);
+                
+                if (intersection.length > 0) {
+                    // Map node IDs to actual LayoutNode objects
+                    const overlappingNodes: LayoutNode[] = intersection
+                        .map(nodeId => this.nodes.find(n => n.id === nodeId))
+                        .filter((node): node is LayoutNode => node !== undefined);
+                    
+                    const groupOverlapError: GroupOverlapError = {
+                        name: 'GroupOverlapError',
+                        type: 'group-overlap',
+                        message: `Groups <b>"${group.name}"</b> and <b>"${otherGroup.name}"</b> overlap with nodes: ${intersection.join(', ')}`,
+                        group1: group,
+                        group2: otherGroup,
+                        overlappingNodes: overlappingNodes
+                    };
+                    
+                    return groupOverlapError; // ✅ Properly returns from the method
                 }
-            })
-        });
-        return null;
+            }
+        }
+        
+        return null; // No overlaps found
     }
 
     private getNodeIndex(nodeId: string) {
         return this.nodes.findIndex(node => node.id === nodeId);
-    }
-
-    private orientationConstraintToString(constraint: LayoutConstraint) {
-
-        if (isTopConstraint(constraint)) {
-            let tc = constraint as TopConstraint;
-            return `ENSURE: ${tc.top.id} is above ${tc.bottom.id}`;
-        }
-        else if (isLeftConstraint(constraint)) {
-            let lc = constraint as LeftConstraint;
-            return `ENSURE: ${lc.left.id} is to the left of ${lc.right.id}`;
-        }
-        else if (isAlignmentConstraint(constraint)) {
-            let ac = constraint as AlignmentConstraint;
-            let axis = ac.axis;
-            let node1 = ac.node1;
-            let node2 = ac.node2;
-
-            if (axis === 'x') {
-                return `ENSURE: ${node1.id} is vertically aligned with ${node2.id}`;
-            }
-            else if (axis === 'y') {
-                return `ENSURE: ${node1.id} is horizontally aligned with ${node2.id}`;
-            }
-
-            return `ENSURE: ${node1.id} is aligned with ${node2.id} along the ${axis} axis`;
-        }
-        return `ENSURE: Unknown constraint type: ${constraint}`;
     }
 
 
@@ -304,6 +314,7 @@ class ConstraintValidator {
 
 
             let sourceConstraintToLayoutConstraints: Map<SourceConstraint, LayoutConstraint[]> = new Map();
+            let sourceConstraintHTMLToLayoutConstraintsHTML: Map<string, string[]> = new Map();
 
             minimal_conflicting_constraints.forEach((c) => {
                 const sourceConstraint = c.sourceConstraint;
@@ -311,21 +322,31 @@ class ConstraintValidator {
                 if (!sourceConstraintToLayoutConstraints.has(sourceConstraint)) {
                     sourceConstraintToLayoutConstraints.set(sourceConstraint, []);
                 }
+
+                if (!sourceConstraintHTMLToLayoutConstraintsHTML.has(sourceConstraint.toHTML())) {
+                    sourceConstraintHTMLToLayoutConstraintsHTML.set(sourceConstraint.toHTML(), []);
+                }
                 
                 sourceConstraintToLayoutConstraints.get(sourceConstraint)!.push(c);
+                sourceConstraintHTMLToLayoutConstraintsHTML.get(sourceConstraint.toHTML())!.push(orientationConstraintToString(c));
             });
 
 
-            const constraintError : PositionalConstraintError = {
-                  name: "PositionalConstraintError", // Add this required property
-
+            const positionalConstraintError : PositionalConstraintError = {
+                name: "PositionalConstraintError", // Add this required property
                 type: 'positional-conflict',
-                message: `Constraint "${this.orientationConstraintToString(constraint)}" conflicts with existing constraints`,
+                message: `Constraint "${orientationConstraintToString(constraint)}" conflicts with existing constraints`,
                 conflictingConstraint: constraint,
                 conflictingSourceConstraint: constraint.sourceConstraint,
                 minimalConflictingSet: sourceConstraintToLayoutConstraints,
+                // TODO: Migrate this to `webcola-demo.html`
+                errorMessages: {
+                    conflictingConstraint: `${orientationConstraintToString(constraint)}`,
+                    conflictingSourceConstraint: `${constraint.sourceConstraint.toHTML()}`,
+                    minimalConflictingConstraints: sourceConstraintHTMLToLayoutConstraintsHTML,
+                }
             };
-            return constraintError;
+            return positionalConstraintError;
         }
         return null;
     }
