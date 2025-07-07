@@ -1,5 +1,5 @@
 import { IAtom, IRelation, IType, IInputDataInstance, ITuple } from './interfaces';
-
+import { Graph } from 'graphlib';
 /**
  * JSON representation of a data instance for easy serialization/deserialization.
  * This is the format expected from VS Code extensions, web APIs, and other external tools.
@@ -217,15 +217,103 @@ export class JSONDataInstance implements IInputDataInstance {
   /**
    * Generate a graphlib Graph representation of this data instance.
    * 
+   * This method creates a directed multigraph where:
+   * - Each atom becomes a node with its label and type as metadata
+   * - Each relation tuple becomes an edge between atoms
+   * - Multi-atom tuples (arity > 2) are handled by connecting first to last atom
+   * - Disconnected nodes can be optionally filtered out
+   * 
    * @param hideDisconnected - Whether to hide atoms with no relations
    * @param hideDisconnectedBuiltIns - Whether to hide disconnected built-in types
-   * @returns A graphlib Graph object
-   * @todo Implement this method based on your graph generation requirements
+   * @returns A graphlib Graph object ready for layout algorithms
+   * 
+   * @example
+   * ```typescript
+   * const graph = instance.generateGraph(true, true);
+   * // Use with WebCola or other layout algorithms
+   * const layout = new cola.Layout().nodes(graph.nodes()).edges(graph.edges());
+   * ```
    */
-  generateGraph(hideDisconnected: boolean, hideDisconnectedBuiltIns: boolean): import("graphlib").Graph {
-    // TODO: Implement graph generation logic
-    // This should create a graphlib Graph from the atoms and relations
-    throw new Error('generateGraph method not yet implemented - please implement based on your graph generation requirements');
+  generateGraph(hideDisconnected: boolean = false, hideDisconnectedBuiltIns: boolean = false): Graph {
+    const graph = new Graph({ directed: true, multigraph: true });
+
+    // Step 1: Add all atoms as nodes with their metadata
+    this.atoms.forEach(atom => {
+      graph.setNode(atom.id, {
+        id: atom.id,
+        label: atom.label,
+        type: atom.type,
+        isBuiltin: this.isAtomBuiltin(atom)
+      });
+    });
+
+    // Step 2: Add all relation tuples as edges
+    this.relations.forEach(relation => {
+      relation.tuples.forEach((tuple, tupleIndex) => {
+        if (tuple.atoms.length >= 2) {
+          // For binary relations, connect first to second atom
+          // For higher-arity relations, connect first to last atom
+          const sourceId = tuple.atoms[0];
+          const targetId = tuple.atoms[tuple.atoms.length - 1];
+          
+          // Create edge label that includes middle atoms for higher-arity relations
+          const middleAtoms = tuple.atoms.slice(1, -1);
+          const edgeLabel = middleAtoms.length > 0
+            ? `${relation.name}[${middleAtoms.join(', ')}]`
+            : relation.name;
+
+          // Use tuple index to create unique edge names for multigraph
+          const edgeName = `${relation.id}_${tupleIndex}`;
+          
+          graph.setEdge(sourceId, targetId, {
+            label: edgeLabel,
+            relation: relation.name,
+            relationId: relation.id,
+            tupleIndex: tupleIndex,
+            middleAtoms: middleAtoms
+          }, edgeName);
+        } else if (tuple.atoms.length === 1) {
+          // Handle unary relations as self-loops
+          const atomId = tuple.atoms[0];
+          const edgeName = `${relation.id}_${tupleIndex}`;
+          
+          graph.setEdge(atomId, atomId, {
+            label: relation.name,
+            relation: relation.name,
+            relationId: relation.id,
+            tupleIndex: tupleIndex,
+            isUnary: true
+          }, edgeName);
+        }
+      });
+    });
+
+    // Step 3: Handle disconnected node filtering
+    if (hideDisconnected || hideDisconnectedBuiltIns) {
+      const nodesToRemove: string[] = [];
+      
+      graph.nodes().forEach(nodeId => {
+        const inEdges = graph.inEdges(nodeId) || [];
+        const outEdges = graph.outEdges(nodeId) || [];
+        const isDisconnected = inEdges.length === 0 && outEdges.length === 0;
+        
+        if (isDisconnected) {
+          const nodeData = graph.node(nodeId);
+          const isBuiltin = nodeData?.isBuiltin || false;
+          
+          if (hideDisconnected || (isBuiltin && hideDisconnectedBuiltIns)) {
+            nodesToRemove.push(nodeId);
+          }
+        }
+      });
+      
+      // Remove disconnected nodes
+      nodesToRemove.forEach(nodeId => {
+        graph.removeNode(nodeId);
+      });
+    }
+
+    return graph;
   }
 
   // === IInputDataInstance Implementation ===
