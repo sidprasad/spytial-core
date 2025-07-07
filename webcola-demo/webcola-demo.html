@@ -435,17 +435,19 @@
         async function changeLayoutFormat() {
             const graphElement = document.getElementById('graph-container');
             const layoutFormat = document.getElementById('layoutFormat').value;
-            const statusElement = document.getElementById('status');
             graphElement.setAttribute('layoutFormat', layoutFormat);
             console.log(`Layout format changed to: ${layoutFormat}`);
 
             // Re-render the graph with the new layout format
             try {
+                if (!currentInstanceLayout) {
+                    throw new Error('No layout data available. Please load an Alloy graph first.');
+                }
                 await graphElement.renderLayout(currentInstanceLayout);
-                statusElement.textContent = 'Graph layout changed successfully!';
+                updateStatus('Graph layout changed successfully!', 'success');
             } catch (error) {
                 console.error('Error rendering graph:', error);
-                statusElement.textContent = `Render error: ${error.message}`;
+                updateStatus(`Render error: ${error.message}`, 'error');
             }
         }
 
