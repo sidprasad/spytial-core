@@ -2,6 +2,22 @@ import { Graph } from 'graphlib';
 import { IDataInstance, IAtom, IRelation, ITuple, IType } from '../interfaces';
 
 /**
+ * Pyret Lists and Tables are going to be really tricky here.
+ * What about images, or other Pyret representations?
+ */
+
+
+export function generateEdgeId(
+    relation: IRelation,
+    tuple: ITuple
+): string {
+
+    const relationId = relation.id;
+    const atoms = tuple.atoms;
+    return `${relationId}:${atoms.join('->')}`;
+}
+
+/**
  * Pyret data instance implementation for parsing Pyret runtime objects
  * 
  * Handles Pyret's object representation where:
@@ -20,10 +36,10 @@ import { IDataInstance, IAtom, IRelation, ITuple, IType } from '../interfaces';
  * ```
  */
 export class PyretDataInstance implements IDataInstance {
-  private readonly atoms = new Map<string, IAtom>();
-  private readonly relations = new Map<string, IRelation>();
-  private readonly types = new Map<string, IType>();
-  private readonly objectToAtomId = new WeakMap<object, string>();
+  private atoms = new Map<string, IAtom>();
+  private relations = new Map<string, IRelation>();
+  private types = new Map<string, IType>();
+  private objectToAtomId = new WeakMap<object, string>();
   private atomCounter = 0;
 
   /**
@@ -292,7 +308,12 @@ export class PyretDataInstance implements IDataInstance {
   }
 
   getRelations(): readonly IRelation[] {
-    return Array.from(this.relations.values());
+    
+    const values = this.relations.values();
+    return Array.from(values);
+    
+    //return Array.from(this.relations.values());
+
   }
 
   getTypes(): readonly IType[] {
@@ -344,7 +365,10 @@ export class PyretDataInstance implements IDataInstance {
             ? `${relation.name}[${middleAtoms.join(', ')}]`
             : relation.name;
 
-          graph.setEdge(sourceId, targetId, { label: edgeLabel });
+            // Generate a unique edge ID
+            const edgeId = generateEdgeId(relation, tuple);
+
+          graph.setEdge(sourceId, targetId,  edgeLabel, edgeId );
         }
       });
     });
