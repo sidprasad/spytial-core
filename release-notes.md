@@ -156,6 +156,7 @@ const MyApp: React.FC = () => {
 ### Integration with Custom Error Handlers
 
 The ErrorMessageModal uses a pluggable architecture allowing developers to create custom error display components:
+
 ```tsx
 // Replace the default modal with your custom component
 const CustomErrorHandler: React.FC<{ errorManager: ErrorStateManager }> = ({ errorManager }) => {
