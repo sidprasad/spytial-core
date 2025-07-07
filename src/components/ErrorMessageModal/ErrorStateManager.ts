@@ -1,4 +1,4 @@
-import type { ErrorMessages } from '../../layout/constraint-validator';
+import type { ErrorMessages, GroupOverlapError } from './index';
 
 /**
  * Represents different types of errors that can occur in the system
@@ -8,8 +8,12 @@ export type SystemError = {
   message: string;
   source?: string;
 } | {
-  type: 'constraint-error';
+  type: 'positional-error';
   messages: ErrorMessages;
+} | {
+  type: 'group-overlap-error';  // New type
+  message: string;
+  source?: string;
 } | {
   type: 'general-error';
   message: string;

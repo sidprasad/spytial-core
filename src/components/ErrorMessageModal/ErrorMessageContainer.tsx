@@ -40,8 +40,8 @@ export const ErrorMessageContainer: React.FC<ErrorMessageContainerProps> = ({
     <div className={containerClassName}>
       {/* Use ErrorMessageModal for all error types */}
       <ErrorMessageModal 
-        messages={currentError.type === 'constraint-error' ? currentError.messages : undefined}
-        systemError={currentError.type !== 'constraint-error' ? currentError : undefined}
+        messages={currentError.type === 'positional-error' ? currentError.messages : undefined}
+        systemError={currentError.type !== 'positional-error' ? currentError : undefined}
       />
     </div>
   );

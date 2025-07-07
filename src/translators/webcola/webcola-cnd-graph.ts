@@ -1415,7 +1415,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       const sourceIndex = this.getNodeIndex(edgeData.source);
       const targetIndex = this.getNodeIndex(edgeData.target);
       const potentialGroups = this.getContainingGroups(this.currentLayout?.groups || [], edgeData.source);
-      const sourceGroup = potentialGroups.find(group => group.keyNode === targetIndex);
+      const sourceGroup = potentialGroups.find(group => group.keyNode === targetIndex); // NOTE: Could the keyNode not be set?
       
       if (sourceGroup) {
         const inflatedBounds = sourceGroup.bounds?.inflate(-1);

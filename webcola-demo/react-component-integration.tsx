@@ -14,7 +14,7 @@ import { generateLayoutSpecYaml } from '../src/components/NoCodeView/CodeView';
 import { createEmptyAlloyDataInstance } from '../src/data-instance/alloy-data-instance';
 import { IInputDataInstance } from '../src/data-instance/interfaces';
 import { ErrorMessageContainer, ErrorMessageModal, ErrorStateManager } from '../src/components/ErrorMessageModal/index'
-import { ErrorMessages } from '../src/layout/constraint-validator';
+import { ErrorMessages, GroupOverlapError } from '../src/layout/constraint-validator';
 
 /****
  * 
@@ -437,9 +437,16 @@ export function mountErrorMessageModal(messages: ErrorMessages, containerId: str
     });
   };
 
-  (window as any).showConstraintError = (errorMessages: ErrorMessages) => {
+  (window as any).showGroupOverlapError = (message: string, source?: string) => {
     globalErrorManager.setError({
-      type: 'constraint-error',
+      type: 'group-overlap-error',
+      message: message,
+    });
+  };
+
+  (window as any).showPositionalError = (errorMessages: ErrorMessages) => {
+    globalErrorManager.setError({
+      type: 'positional-error',
       messages: errorMessages
     });
   };

@@ -47,26 +47,41 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = (
   };
 
   // Validate systemError type
-  const isSystemError = systemError && (systemError.type === 'parse-error' || systemError.type === 'general-error');
+  const isSystemError = systemError && 
+    (systemError.type === 'parse-error' 
+      || systemError.type === 'general-error' 
+      || systemError.type === 'group-overlap-error'
+    );
+  
+  // If neither messages nor positional error is provided, log error and return null
   if (!isSystemError && !messages) {
     console.error('SystemError is of invalid type:', systemError);
     return null; // Nothing to display
+  }
+
+  /** Helper function to generate error header */
+  const generateErrorHeader = (systemError: SystemError): string => {
+    const errorType = systemError.type;
+    if (errorType === 'parse-error') {
+      return `Parse Error ${systemError.source ? `(${systemError.source})` : ''}`;
+    } else if (errorType === 'group-overlap-error') {
+      return `Group Overlap Error ${systemError.source ? `(${systemError.source})` : ''}`;
+    } else {
+      return 'Error';
+    }
   }
 
   return (
     <div id="error-message-modal" className="mt-3 d-flex flex-column overflow-x-auto p-3 rounded border border-danger border-2">
       <h4 style={{color: 'var(--bs-danger)'}}>Could not produce a diagram</h4>
       <p>The instance being visualized is inconsistent with the Cope and Drag spec.</p>
-      {/* Parse Error Card */}
+      {/* Parse/Generic/Group Error Card */}
       {isSystemError && (
         <>
           <div className="card error-card">
             <div className="card-header bg-light">
               <strong>
-                {systemError.type === 'parse-error' && systemError.source 
-                  ? `Parse Error (${systemError.source})`
-                  : 'Error'
-                }
+                { generateErrorHeader(systemError) }
               </strong>
             </div>
             <div className="card-body">
@@ -76,7 +91,7 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = (
         </>
       )}
 
-      {/* Constraint Error Cards */}
+      {/* (Positional) Constraint Error Cards */}
       { messages && (
         <>
           <p><i>The graph below visualizes the localized area of the error on a valid instance with the conflicting set of constraints removed.</i></p>

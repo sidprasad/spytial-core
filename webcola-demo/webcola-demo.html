@@ -334,10 +334,16 @@
 
                     // Check if this is a constraint conflict error
                     if (layoutResult.error.errorMessages) {
-                        if (window.showConstraintError) {
-                            window.showConstraintError(layoutResult.error.errorMessages);
+                        if (window.showPositionalError) {
+                            window.showPositionalError(layoutResult.error.errorMessages);
                         } else {
-                            updateStatus(`Constraint conflict: ${layoutResult.error.message}`, 'error');
+                            updateStatus(`Positional constraint conflict: ${layoutResult.error.message}`, 'error');
+                        }
+                    } else if (layoutResult.error.overlappingNodes) {
+                        if (window.showGroupOverlapError) {
+                            window.showGroupOverlapError(layoutResult.error.message);
+                        } else {
+                            updateStatus(`Group overlap error: ${layoutResult.error.message}`, 'error');
                         }
                     } else {
                         if (window.showGeneralError) {

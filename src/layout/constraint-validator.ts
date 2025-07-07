@@ -141,49 +141,45 @@ class ConstraintValidator {
         return null;
     }
 
+    /**
+     * Validates group constraints and returns the first overlap error found
+     * @returns GroupOverlapError if groups overlap, null otherwise
+     */
     public validateGroupConstraints(): GroupOverlapError | null {
-
-        // This identifies if there ARE any overlapping non-subgroups
-        let overlappingNonSubgroups = false;
-
-        this.groups.forEach(group => {
-            this.groups.forEach(otherGroup => {
-
-                // const groupIndex = this.getGroupIndex(group.name);
-                // const otherGroupIndex = this.getGroupIndex(otherGroup.name);
-
-                if (group.name === otherGroup.name || overlappingNonSubgroups) {
-                    return;
+        for (let i = 0; i < this.groups.length; i++) {
+            const group = this.groups[i];
+            
+            for (let j = i + 1; j < this.groups.length; j++) {
+                const otherGroup = this.groups[j];
+                
+                // Skip if one group is a subgroup of the other
+                if (this.isSubGroup(group, otherGroup) || this.isSubGroup(otherGroup, group)) {
+                    continue;
                 }
-
-
-                if (!this.isSubGroup(group, otherGroup) && !this.isSubGroup(otherGroup, group)) {
-
-                    let intersection = this.groupIntersection(group, otherGroup);
-                    overlappingNonSubgroups = intersection.length > 0;
-
-                    if (overlappingNonSubgroups) {
-
-
-                        // Fix the overlapping nodes mapping with proper type handling
-                        const overlappingNodes: LayoutNode[] = intersection
-                            .map(nid => this.nodes.find(n => n.id === nid))
-                            .filter((node): node is LayoutNode => node !== undefined);
-
-                        const gOverlap: GroupOverlapError = {
-                            name: 'GroupOverlapError',
-                            type: 'group-overlap',
-                            message: `Groups "${group.name}" and "${otherGroup.name}" overlap with nodes: ${intersection.join(', ')}`,
-                            group1: group,
-                            group2: otherGroup,
-                            overlappingNodes: overlappingNodes
-                        };
-                        return gOverlap;
-                    }
+                
+                const intersection = this.groupIntersection(group, otherGroup);
+                
+                if (intersection.length > 0) {
+                    // Map node IDs to actual LayoutNode objects
+                    const overlappingNodes: LayoutNode[] = intersection
+                        .map(nodeId => this.nodes.find(n => n.id === nodeId))
+                        .filter((node): node is LayoutNode => node !== undefined);
+                    
+                    const groupOverlapError: GroupOverlapError = {
+                        name: 'GroupOverlapError',
+                        type: 'group-overlap',
+                        message: `Groups <b>"${group.name}"</b> and <b>"${otherGroup.name}"</b> overlap with nodes: ${intersection.join(', ')}`,
+                        group1: group,
+                        group2: otherGroup,
+                        overlappingNodes: overlappingNodes
+                    };
+                    
+                    return groupOverlapError; // ✅ Properly returns from the method
                 }
-            })
-        });
-        return null;
+            }
+        }
+        
+        return null; // No overlaps found
     }
 
     private getNodeIndex(nodeId: string) {
@@ -336,7 +332,7 @@ class ConstraintValidator {
             });
 
 
-            const constraintError : PositionalConstraintError = {
+            const positionalConstraintError : PositionalConstraintError = {
                 name: "PositionalConstraintError", // Add this required property
                 type: 'positional-conflict',
                 message: `Constraint "${orientationConstraintToString(constraint)}" conflicts with existing constraints`,
@@ -350,7 +346,7 @@ class ConstraintValidator {
                     minimalConflictingConstraints: sourceConstraintHTMLToLayoutConstraintsHTML,
                 }
             };
-            return constraintError;
+            return positionalConstraintError;
         }
         return null;
     }
