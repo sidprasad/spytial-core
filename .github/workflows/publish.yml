@@ -18,10 +18,7 @@ jobs:
 
       - run: npm install
       - run: npm run clean
-      - run: npm run build:browser
-
-      # Optional: verify only dist/browser exists
-      - run: ls -l dist/browser
+      - run: npm run build:all
 
       - run: npm publish --access public
         env:

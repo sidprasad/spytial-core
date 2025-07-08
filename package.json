@@ -13,9 +13,9 @@
       "import": "./dist/browser/cnd-core-complete.global.js",
       "require": "./dist/browser/cnd-core-complete.global.js"
     },
-    "./components/demo-integration": {
-      "import": "./dist/components/demo-integration.global.js",
-      "require": "./dist/components/demo-integration.global.js"
+    "./components/*": {
+      "import": "./dist/components/*.global.js",
+      "require": "./dist/components/*.global.js"
     }
   },
   "scripts": {
