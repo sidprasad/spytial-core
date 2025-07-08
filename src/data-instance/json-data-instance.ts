@@ -141,6 +141,12 @@ export class JSONDataInstance implements IInputDataInstance {
     }
   }
 
+  private isAtomBuiltin(atom: IAtom): boolean {
+    // Check if the atom's type is a built-in type
+    return false;
+  }
+
+
   // === IDataInstance Implementation ===
 
   /**

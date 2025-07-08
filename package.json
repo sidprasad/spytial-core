@@ -1,6 +1,6 @@
 {
   "name": "cnd-core",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "A fully client-side application for CnD.",
   "main": "./dist/browser/cnd-core-complete.global.js",
   "types": "./dist/browser/cnd-core-complete.global.d.ts",
@@ -32,7 +32,7 @@
     "format": "prettier --write src/**/*.{ts,tsx,json,md}",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
-    "prepublishOnly": "npm run clean && npm run build:browser",
+    "prepublishOnly": "npm run clean && npm run build:all",
     "serve": "python3 -m http.server 8080"
   },
   "keywords": [
