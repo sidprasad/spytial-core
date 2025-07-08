@@ -191,10 +191,20 @@ export class JSONDataInstance implements IInputDataInstance {
    * Create a new instance containing only the specified atoms and their related tuples.
    * This is useful for creating focused views or subgraphs.
    * 
+   * // TODO: This is a very different view of projections compared to Alloy right?
+   * 
+   * 
    * @param atomIds - Array of atom IDs to include in the projection
    * @returns A new JSONDataInstance containing only the projected data
    */
   applyProjections(atomIds: string[]): IInputDataInstance {
+
+
+
+    if (atomIds.length === 0) {
+      return this.clone();
+    }
+
     const atomIdSet = new Set(atomIds);
     
     // Filter atoms
