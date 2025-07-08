@@ -281,25 +281,13 @@ export class JSONDataInstance implements IInputDataInstance {
           // Use tuple index to create unique edge names for multigraph
           const edgeName = `${relation.id}_${tupleIndex}`;
           
-          graph.setEdge(sourceId, targetId, {
-            label: edgeLabel,
-            relation: relation.name,
-            relationId: relation.id,
-            tupleIndex: tupleIndex,
-            middleAtoms: middleAtoms
-          }, edgeName);
+          graph.setEdge(sourceId, targetId, edgeLabel, edgeName);
         } else if (tuple.atoms.length === 1) {
           // Handle unary relations as self-loops
           const atomId = tuple.atoms[0];
           const edgeName = `${relation.id}_${tupleIndex}`;
           
-          graph.setEdge(atomId, atomId, {
-            label: relation.name,
-            relation: relation.name,
-            relationId: relation.id,
-            tupleIndex: tupleIndex,
-            isUnary: true
-          }, edgeName);
+          graph.setEdge(atomId, atomId,relation.name, edgeName);
         }
       });
     });
