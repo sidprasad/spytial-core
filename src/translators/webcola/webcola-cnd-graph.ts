@@ -14,16 +14,21 @@ declare global {
 const cola = (typeof window !== 'undefined') ? (window as any).cola : null;
 //const d3 = (typeof window !== 'undefined') ? (window as any).d3 : null;
 
-// Lazy getter for D3
-const getD3 = (): any => {
-  if (typeof window !== 'undefined' && window.d3) {
-    console.log('Using global D3 from window');
-    return window.d3;
-  } else {
-    console.log('D3 library not available. Please ensure D3 is loaded.');
-    return null;
+const D3Accessor = {
+  get d3(): any {
+    if (typeof window !== 'undefined' && window.d3) {
+      console.log('Using global D3 from window');
+      return window.d3;
+    } else {
+      console.warn('D3 library not available. Please ensure D3 is loaded.');
+      return null;
+    }
   }
 };
+
+// Example usage
+const d3 = D3Accessor.d3;
+
 
 const DEFAULT_SCALE_FACTOR = 5;
 
@@ -94,7 +99,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
 
   constructor() {
     super();
-    const d3 = getD3();
+    
     this.attachShadow({ mode: 'open' });
     this.initializeDOM();
     this.initializeD3();
@@ -261,7 +266,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    * Initialize D3 selections and zoom behavior
    */
   private initializeD3(): void {
-    const d3 = getD3();
+    
     this.svg = d3.select(this.shadowRoot!.querySelector('#svg'));
     this.container = this.svg.select('.zoomable');
 
@@ -287,7 +292,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    */
   public async renderLayout(instanceLayout: InstanceLayout): Promise<void> {
     try {
-      const d3 = getD3();
+      
       // Check if D3 and WebCola are available
       if (!d3) {
         throw new Error('D3 library not available. Please ensure D3 v3 is loaded from CDN.');
@@ -673,8 +678,12 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       .attr("stroke-width", WebColaCnDGraph.NODE_STROKE_WIDTH)
       .attr("fill", (d: any) => {
         const isHidden = this.isHiddenNode(d);
-        const hasIcon = d.icon != null;
-        return isHidden || hasIcon ? "transparent" : "white";
+        const hasIcon = !! d.icon;
+        
+        const fill = isHidden || hasIcon ? "transparent" : "white";
+        //console.log(`Node ${d.id} - isHidden: ${isHidden}, hasIcon: ${hasIcon} ${d.icon}, fill: ${fill}`);
+
+        return fill;
       });
   }
 
@@ -687,7 +696,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    */
   private setupNodeIcons(nodeSelection: d3.Selection<SVGGElement, any, any, unknown>): void {
     
-    const d3 = getD3();
+    
     nodeSelection
       .filter((d: any) => d.icon) // Only nodes with icons
       .append("image")
@@ -745,7 +754,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    * @param nodeSelection - D3 selection of node groups
    */
   private setupNodeLabels(nodeSelection: d3.Selection<SVGGElement, any, any, unknown>): void {
-    const d3 = getD3();
+    
     nodeSelection
       .append("text")
       .attr("class", "label")
@@ -856,7 +865,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    */
   private updatePositions(): void {
     console.log('tick - updating positions');
-    const d3 = getD3();
+    
     // Update group positions and sizes first (lower layer)
     this.svgGroups
       .attr('x', (d: any) => d.bounds.x)
@@ -1011,7 +1020,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
 
   private gridUpdatePositions() {
     console.log('grid tick - updating positions');
-    const d3 = getD3();
+    
     const node = this.container.selectAll(".node");
     const mostSpecificTypeLabel = this.container.selectAll(".mostSpecificTypeLabel");
     const label = this.container.selectAll(".label");
