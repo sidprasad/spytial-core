@@ -32,7 +32,7 @@
     "format": "prettier --write src/**/*.{ts,tsx,json,md}",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
-    "prepublishOnly": "npm run clean && npm run build:browser",
+    "prepublishOnly": "npm run clean && npm run build:all",
     "serve": "python3 -m http.server 8080"
   },
   "keywords": [
