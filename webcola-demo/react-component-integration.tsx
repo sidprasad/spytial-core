@@ -13,8 +13,8 @@ import { ConstraintData, DirectiveData } from '../src/components/NoCodeView/inte
 import { generateLayoutSpecYaml } from '../src/components/NoCodeView/CodeView';
 import { createEmptyAlloyDataInstance } from '../src/data-instance/alloy-data-instance';
 import { IInputDataInstance } from '../src/data-instance/interfaces';
-import { ErrorMessageContainer, ErrorMessageModal, ErrorStateManager } from '../src/components/ErrorMessageModal/index'
-import { ErrorMessages, GroupOverlapError } from '../src/layout/constraint-validator';
+import { ErrorMessageContainer, ErrorStateManager } from '../src/components/ErrorMessageModal/index'
+import { ErrorMessages } from '../src/layout/constraint-validator';
 
 /****
  * 
@@ -291,12 +291,14 @@ const IntegratedInstanceBuilder: React.FC = () => {
 /**
  * Mount the React component into the demo page
  * Call this function after the DOM is loaded
+ * 
+ * @param containerId - ID of the container element (default: 'webcola-cnd-container')
  */
-export function mountCndLayoutInterface(): void {
-  const container = document.getElementById('webcola-cnd-container');
+export function mountCndLayoutInterface(containerId: string = 'webcola-cnd-container'): void {
+  const container = document.getElementById(containerId);
   
   if (!container) {
-    console.error('Container #webcola-cnd-container not found');
+    console.error(`Container ${containerId} not found`);
     return;
   }
 
@@ -311,6 +313,7 @@ export function mountCndLayoutInterface(): void {
 
 /**
  * Mount InstanceBuilder component into the demo page
+ * @param containerId - ID of the container element (default: 'instance-builder-container')
  * 
  * @example
  * ```javascript
@@ -320,11 +323,11 @@ export function mountCndLayoutInterface(): void {
  * });
  * ```
  */
-export function mountInstanceBuilder(): void {
+export function mountInstanceBuilder(containerId: string = 'instance-builder-container'): void {
   try {
-    const container = document.getElementById('instance-builder-container');
+    const container = document.getElementById(containerId);
     if (!container) {
-      console.error('InstanceBuilder container not found. Make sure element with id "instance-builder-container" exists.');
+      console.error(`InstanceBuilder container not found. Make sure element with id "${containerId}" exists.`);
       return;
     }
 
@@ -394,6 +397,15 @@ export function getCurrentCNDSpecFromReact(): string | undefined {
 
 /**
  * Mount both InstanceBuilder and CndLayoutInterface components
+ * @example
+ * ```javascript
+ * // In your demo page JavaScript:
+ * window.addEventListener('load', () => {
+ *  // Give the page time to initialize
+ *  setTimeout(() => {
+ *    mountIntegratedComponents();
+ *  }, 1000);
+ * });
  */
 
 // TODO: Use this function to mount integrated components in the demo page??
@@ -473,12 +485,4 @@ if (typeof window !== 'undefined') {
   (window as any).getCurrentInstanceFromReact = getCurrentInstanceFromReact;
   (window as any).mountIntegratedComponents = mountIntegratedComponents;
   (window as any).mountErrorMessageModal = mountErrorMessageModal;
-  
-  // Auto-mount components when page loads
-  window.addEventListener('load', () => {
-    // Give the page time to initialize
-    setTimeout(() => {
-      mountIntegratedComponents();
-    }, 1000);
-  });
 }
