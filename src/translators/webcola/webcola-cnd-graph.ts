@@ -673,8 +673,12 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       .attr("stroke-width", WebColaCnDGraph.NODE_STROKE_WIDTH)
       .attr("fill", (d: any) => {
         const isHidden = this.isHiddenNode(d);
-        const hasIcon = d.icon != null;
-        return isHidden || hasIcon ? "transparent" : "white";
+        const hasIcon = !! d.icon;
+        
+        const fill = isHidden || hasIcon ? "transparent" : "white";
+        //console.log(`Node ${d.id} - isHidden: ${isHidden}, hasIcon: ${hasIcon} ${d.icon}, fill: ${fill}`);
+
+        return fill;
       });
   }
 
