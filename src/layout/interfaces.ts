@@ -92,4 +92,5 @@ export interface InstanceLayout {
     constraints: LayoutConstraint[];
     groups: LayoutGroup[];
     conflictingConstraints?: LayoutConstraint[];
+    overlappingNodes?: LayoutNode[]; // IDs of overlapping nodes
 }

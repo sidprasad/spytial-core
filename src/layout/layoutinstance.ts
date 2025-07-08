@@ -650,9 +650,10 @@ export class LayoutInstance {
                     constraints: layoutWithoutCyclicConstraints.constraints,
                     groups: layoutWithoutCyclicConstraints.groups,
                     // TODO: Add conflicting groups metadata
+                    overlappingNodes: (nonCyclicConstraintError as GroupOverlapError).overlappingNodes,
                 }
                 return { 
-                    layout: layoutWithoutCyclicConstraints, 
+                    layout: layoutWithErrorMetadata, 
                     projectionData, 
                     error: nonCyclicConstraintError 
                 };
@@ -717,7 +718,7 @@ export class LayoutInstance {
                 };
             }
 
-            // console.log("Layout is unsatisfiable even after applying cyclic constraints.")
+            // TODO: Add group overlap handling here
 
             throw finalLayoutError;
         }

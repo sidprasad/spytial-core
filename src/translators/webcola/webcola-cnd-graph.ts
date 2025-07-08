@@ -139,9 +139,31 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
   private isErrorNode(node: {name: string, id: string}): boolean {
     // Check if this node appears in any constraint that's in conflictingConstraints
     const conflictingNodes = this.currentLayout.conflictingNodes;
-    return conflictingNodes.some((conflictingNode: LayoutNode) => 
-      conflictingNode.id === node.id || (conflictingNode as any).name === node.name  // NOTE: Is `name` check necessary?
+
+    // Check if this node appear in overlapping nodes
+    const overlappingNodes = this.currentLayout.overlappingNodes;
+
+    if (conflictingNodes.length > 0 && overlappingNodes.length > 0) {
+      throw new Error("Layout cannot have both conflictingConstraints and overlappingNodes");
+    }
+
+    const errorNodes = [...conflictingNodes, ...overlappingNodes];
+
+    console.log("ErrorNodes", errorNodes);
+
+    return errorNodes.some((errorNode: LayoutNode) => 
+      errorNode.id === node.id || (errorNode as any).name === node.name  // NOTE: Is `name` check necessary?
     );
+  }
+
+  private isErrorGroup(group: {name: string}): boolean {
+    const overlappingGroups = this.currentLayout.overlappingGroups;
+    console.log("Overlapping groups", overlappingGroups);
+    if (!overlappingGroups) {
+      console.error("Overlapping groups data not available in current layout");
+      throw new Error("Overlapping groups data not available in current layout");
+    }
+    return overlappingGroups.some((g: any) => g.name === group.name);
   }
 
   /**
@@ -523,7 +545,13 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       .enter()
       .append("rect")
       .attr("class", (d: any) => {
-        return this.isDisconnectedGroup(d) ? "disconnectedNode" : "group";
+        if (this.isDisconnectedGroup(d))
+          return "disconnectedNode"
+        else if (this.isErrorGroup(d)) {
+          return "error-group";
+        } else {
+          return "group";
+        }
       })
       .attr("rx", WebColaCnDGraph.GROUP_BORDER_RADIUS)
       .attr("ry", WebColaCnDGraph.GROUP_BORDER_RADIUS)
@@ -982,6 +1010,8 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
     // Ensure proper layering - raise important elements
     this.svgLinkGroups.selectAll('marker').raise();
     this.svgLinkGroups.selectAll('.linklabel').raise();
+    this.svgGroups.selectAll('.error-group').raise();
+    this.svgNodes.selectAll('.error-node').raise();
   }
 
   private gridUpdatePositions() {
@@ -1793,7 +1823,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         cursor: move;
       }
 
-      .error-node rect {
+      .error-node rect, .error-group {
         stroke: red;
         stroke-width: 2px;
         stroke-dasharray: 5 5;

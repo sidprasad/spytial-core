@@ -85,6 +85,7 @@ export class WebColaLayout {
   readonly colaEdges: EdgeWithMetadata[];
   readonly groupDefinitions: any;
   readonly conflictingConstraints: LayoutConstraint[];
+  readonly overlappingNodesData: LayoutNode[];
 
   private readonly DEFAULT_X: number;
   private readonly DEFAULT_Y: number;
@@ -135,6 +136,7 @@ export class WebColaLayout {
     this.groupDefinitions = this.determineGroups(instanceLayout.groups);
 
     this.conflictingConstraints = instanceLayout.conflictingConstraints || [];
+    this.overlappingNodesData = instanceLayout.overlappingNodes || [];
     this.colaConstraints = instanceLayout.constraints.map(constraint => this.toColaConstraint(constraint));
 
     if (this.colaConstraints.length === 0 && this.dagre_graph) {
@@ -385,6 +387,7 @@ export class WebColaLayout {
       const disconnectedNodePadding = 30;
       const disconnectedNodeMarker = LayoutInstance.DISCONNECTED_PREFIX;
 
+      // FIXME: At some point, leaves don't become node indices, but objects...
       let leaves = value.map((nodeId) => this.getNodeIndex(nodeId));  
       let name = key;
 
@@ -459,6 +462,29 @@ export class WebColaLayout {
       }
     });
     return conflictingNodes;
+  }
+
+  get overlappingNodes(): LayoutNode[] {
+    return this.overlappingNodesData;
+  }
+
+  get overlappingGroups(): any {
+    if (this.overlappingNodesData.length === 0) {
+      return [];
+    }
+
+    const uniqueGroups = new Set<any>();
+
+    this.groupDefinitions.forEach((g: any) => {
+      const hasOverlappingNode = g.leaves.some((leaf: any) => this.overlappingNodesData.some((node: LayoutNode) => node.id === leaf.id));
+      if (hasOverlappingNode) {
+        uniqueGroups.add(g);
+      }
+    });
+
+    console.log("Overlapping groups", uniqueGroups);
+
+    return Array.from(uniqueGroups);
   }
 }
 
