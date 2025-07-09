@@ -5,7 +5,7 @@
  * and integrate them with the existing JavaScript functions.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { CndLayoutInterface } from '../src/components/CndLayoutInterface';
 import { InstanceBuilder } from '../src/components/InstanceBuilder/InstanceBuilder';
@@ -22,7 +22,14 @@ import { ErrorMessages } from '../src/layout/constraint-validator';
  * 
  */
 
-class CndLayoutStateManager {
+
+/**
+ * Singleton state manager for CnD layout specifications
+ * Handles constraints, directives, and YAML generation
+ * 
+ * @public
+ */
+export class CndLayoutStateManager {
   private static instance: CndLayoutStateManager;
   private constraints: ConstraintData[] = [];
   private directives: DirectiveData[] = [];
@@ -95,37 +102,64 @@ class CndLayoutStateManager {
 }
 
 /**
- * Global state manager for the integrated demo
+ * Singleton state manager for data instances
+ * Manages current data instance and change notifications
+ * 
+ * @public
  */
-class IntegratedDemoStateManager {
-  private static instance: IntegratedDemoStateManager;
+export class InstanceStateManager {
+  private static instance: InstanceStateManager;
   private currentInstance: IInputDataInstance;
   private instanceChangeCallbacks: ((instance: IInputDataInstance) => void)[] = [];
 
-  constructor() {
+  private constructor() {
     this.currentInstance = createEmptyAlloyDataInstance();
   }
 
-  public static getInstance(): IntegratedDemoStateManager {
-    if (!IntegratedDemoStateManager.instance) {
-      IntegratedDemoStateManager.instance = new IntegratedDemoStateManager();
+  /**
+   * Get singleton instance
+   * @returns The global instance state manager
+   * @public
+   */
+  public static getInstance(): InstanceStateManager {
+    if (!InstanceStateManager.instance) {
+      InstanceStateManager.instance = new InstanceStateManager();
     }
-    return IntegratedDemoStateManager.instance;
+    return InstanceStateManager.instance;
   }
 
+  /**
+   * Get current data instance
+   * @returns Current data instance
+   * @public
+   */
   public getCurrentInstance(): IInputDataInstance {
     return this.currentInstance;
   }
 
+  /**
+   * Set current data instance and notify callbacks
+   * @param instance - New data instance
+   * @public
+   */
   public setCurrentInstance(instance: IInputDataInstance): void {
     this.currentInstance = instance;
     this.notifyInstanceChange();
   }
 
+  /**
+   * Register callback for instance changes
+   * @param callback - Function to call when instance changes
+   * @public
+   */
   public onInstanceChange(callback: (instance: IInputDataInstance) => void): void {
     this.instanceChangeCallbacks.push(callback);
   }
 
+  /**
+   * Notify all registered callbacks of instance change
+   * @private
+   */
   private notifyInstanceChange(): void {
     this.instanceChangeCallbacks.forEach(callback => {
       try {
@@ -138,36 +172,50 @@ class IntegratedDemoStateManager {
 }
 
 /**
- * Integration wrapper component that connects the React component
- * with the existing demo page's JavaScript functions
+ * Global error state manager instance
+ * Singleton for managing error display across the application
+ * 
+ * @public
  */
-function CndLayoutInterfaceWrapper() {
-  const [yamlValue, setYamlValue] = React.useState<string>('');
-  const [isNoCodeView, setIsNoCodeView] = React.useState<boolean>(false);
-  const [constraints, setConstraints] = React.useState<ConstraintData[]>([]);
-  const [directives, setDirectives] = React.useState<DirectiveData[]>([]);
+export const globalErrorManager = new ErrorStateManager();
+
+/****
+ * REACT COMPONENT WRAPPERS
+ */
+
+/**
+ * React wrapper component for CndLayoutInterface
+ * Integrates with global state management and provides compatibility hooks
+ * 
+ * @private
+ */
+const CndLayoutInterfaceWrapper: React.FC = () => {
+  const [yamlValue, setYamlValue] = useState<string>('');
+  const [isNoCodeView, setIsNoCodeView] = useState<boolean>(false);
+  const [constraints, setConstraints] = useState<ConstraintData[]>([]);
+  const [directives, setDirectives] = useState<DirectiveData[]>([]);
 
   /** Get state manager instance */
-  const stateManager = React.useMemo(() => CndLayoutStateManager.getInstance(), []);
+  const stateManager = useMemo(() => CndLayoutStateManager.getInstance(), []);
 
   /** Sync with class state variables */
-  React.useEffect(() => {
+  useEffect(() => {
     stateManager.setConstraints(constraints);
-  }, [constraints]);
+  }, [constraints, stateManager]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     stateManager.setDirectives(directives);
-  }, [directives]);
+  }, [directives, stateManager]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     stateManager.setYamlValue(yamlValue);
-  }, [yamlValue]);
+  }, [yamlValue, stateManager]);
 
   /**
    * Handle YAML value changes and update the global state
    * This ensures compatibility with the existing getCurrentCNDSpec() function
    */
-  const handleYamlChange = React.useCallback((newValue: string) => {
+  const handleYamlChange = useCallback((newValue: string) => {
     setYamlValue(newValue);
     
     // ENFORCE CnD constraints on every spec change
@@ -175,14 +223,14 @@ function CndLayoutInterfaceWrapper() {
       (window as any).updateFromCnDSpec();
     }
     
-    // Also trigger custom event for other listeners
+    // Dispatch custom event for other listeners
     window.dispatchEvent(new CustomEvent('cnd-spec-changed', { detail: newValue }));
   }, []);
 
   /**
    * Handle view mode changes
    */
-  const handleViewChange = React.useCallback((newIsNoCodeView: boolean) => {
+  const handleViewChange = useCallback((newIsNoCodeView: boolean) => {
     setIsNoCodeView(newIsNoCodeView);
     console.log(`Switched to ${newIsNoCodeView ? 'No Code' : 'Code'} View`);
   }, []);
@@ -190,7 +238,7 @@ function CndLayoutInterfaceWrapper() {
   /**
    * Handle constraints updates with functional setState
    */
-  const handleSetConstraints = React.useCallback((updater: (prev: ConstraintData[]) => ConstraintData[]) => {
+  const handleSetConstraints = useCallback((updater: (prev: ConstraintData[]) => ConstraintData[]) => {
     setConstraints(updater);
     
     // ENFORCE CnD constraints when constraints change in No-Code view
@@ -202,7 +250,7 @@ function CndLayoutInterfaceWrapper() {
   /**
    * Handle directives updates with functional setState
    */
-  const handleSetDirectives = React.useCallback((updater: (prev: DirectiveData[]) => DirectiveData[]) => {
+  const handleSetDirectives = useCallback((updater: (prev: DirectiveData[]) => DirectiveData[]) => {
     setDirectives(updater);
     
     // ENFORCE CnD constraints when directives change in No-Code view
@@ -227,122 +275,144 @@ function CndLayoutInterfaceWrapper() {
 }
 
 /**
- * React component wrapper for InstanceBuilder with integrated demo state
+ * React wrapper component for InstanceBuilder
+ * Connects with global instance state management
+ * 
+ * @private
  */
-const IntegratedInstanceBuilder: React.FC = () => {
+const InstanceBuilderWrapper: React.FC = () => {
   const [instance, setInstance] = useState<IInputDataInstance>(() => 
-    IntegratedDemoStateManager.getInstance().getCurrentInstance()
+    InstanceStateManager.getInstance().getCurrentInstance()
   );
 
   useEffect(() => {
-    const stateManager = IntegratedDemoStateManager.getInstance();
+    const stateManager = InstanceStateManager.getInstance();
     
-    // Listen for external instance changes
     const handleInstanceChange = (newInstance: IInputDataInstance) => {
       setInstance(newInstance);
     };
     
     stateManager.onInstanceChange(handleInstanceChange);
     
-    // Expose instance to global scope for the HTML demo
+    // Expose to global scope for legacy compatibility
     (window as any).currentInstance = instance;
     
-    // Trigger update in the HTML demo
+    // Trigger legacy update functions
     if ((window as any).updateFromBuilder) {
       (window as any).updateFromBuilder();
     }
   }, [instance]);
 
-  const handleInstanceChange = (newInstance: IInputDataInstance) => {
+  const handleInstanceChange = useCallback((newInstance: IInputDataInstance) => {
     setInstance(newInstance);
     
     // Update global state
-    IntegratedDemoStateManager.getInstance().setCurrentInstance(newInstance);
+    InstanceStateManager.getInstance().setCurrentInstance(newInstance);
     
-    // Update global reference
+    // Update global reference for legacy compatibility
     (window as any).currentInstance = newInstance;
     
-    // Notify the HTML demo
+    // Notify legacy demo code
     if ((window as any).updateFromBuilder) {
       (window as any).updateFromBuilder();
     }
     
-    // Auto-render for smooth updates
+    // Auto-render with delay for smooth updates
     if ((window as any).autoRenderGraph) {
       setTimeout(() => (window as any).autoRenderGraph(), 50);
     }
-  };
+  }, []);
 
   return (
     <InstanceBuilder
       instance={instance}
       onChange={handleInstanceChange}
-      className="integrated-demo-builder"
+      className="cnd-integrated-builder"
     />
   );
 };
 
 /****
  * 
- * MOUNTING AND INTEGRATION FUNCTIONS
+ * PUBLIC MOUNTING FUNCTIONS
  * 
  */
 
 /**
- * Mount the React component into the demo page
- * Call this function after the DOM is loaded
+ * Mount CndLayoutInterface component into specified container
  * 
- * @param containerId - ID of the container element (default: 'webcola-cnd-container')
+ * @param containerId - DOM element ID to mount into (default: 'webcola-cnd-container')
+ * @returns Boolean indicating success
+ * 
+ * @example
+ * ```javascript
+ * // Mount into default container
+ * CnDCore.mountLayoutInterface();
+ * 
+ * // Mount into custom container
+ * CnDCore.mountLayoutInterface('my-custom-container');
+ * ```
+ * 
+ * @public
  */
-export function mountCndLayoutInterface(containerId: string = 'webcola-cnd-container'): void {
+export function mountCnDLayoutInterface(containerId: string = 'webcola-cnd-container'): boolean {
   const container = document.getElementById(containerId);
   
   if (!container) {
-    console.error(`Container ${containerId} not found`);
-    return;
+    console.error(`CnD Layout Interface: Container '${containerId}' not found`);
+    return false;
   }
 
   try {
     const root = createRoot(container);
     root.render(<CndLayoutInterfaceWrapper />);
-    console.log('✅ CndLayoutInterface mounted successfully');
+    console.log(`✅ CnD Layout Interface mounted to #${containerId}`);
+    return true;
   } catch (error) {
-    console.error('Failed to mount CndLayoutInterface:', error);
+    console.error('Failed to mount CnD Layout Interface:', error);
+    return false;
   }
 }
 
 /**
- * Mount InstanceBuilder component into the demo page
- * @param containerId - ID of the container element (default: 'instance-builder-container')
+ * Mount InstanceBuilder component into specified container
+ * 
+ * @param containerId - DOM element ID to mount into (default: 'instance-builder-container')
+ * @returns Boolean indicating success
  * 
  * @example
  * ```javascript
- * // In your demo page JavaScript:
- * window.addEventListener('load', () => {
- *   mountInstanceBuilder();
- * });
+ * // Mount into default container  
+ * CnDCore.mountInstanceBuilder();
+ * 
+ * // Mount into custom container
+ * CnDCore.mountInstanceBuilder('my-builder-container');
  * ```
+ * 
+ * @public
  */
-export function mountInstanceBuilder(containerId: string = 'instance-builder-container'): void {
+export function mountInstanceBuilder(containerId: string = 'instance-builder-container'): boolean {
+  const container = document.getElementById(containerId);
+  
+  if (!container) {
+    console.error(`Instance Builder: Container '${containerId}' not found`);
+    return false;
+  }
+
   try {
-    const container = document.getElementById(containerId);
-    if (!container) {
-      console.error(`InstanceBuilder container not found. Make sure element with id "${containerId}" exists.`);
-      return;
-    }
-
-    console.log('Mounting InstanceBuilder component...');
     const root = createRoot(container);
-    root.render(<IntegratedInstanceBuilder />);
-    console.log('✅ InstanceBuilder mounted successfully');
+    root.render(<InstanceBuilderWrapper />);
+    console.log(`✅ Instance Builder mounted to #${containerId}`);
 
-    // Expose instance update function globally
+    // Expose instance update function globally for legacy compatibility
     (window as any).updateBuilderInstance = (newInstance: IInputDataInstance) => {
-      IntegratedDemoStateManager.getInstance().setCurrentInstance(newInstance);
+      InstanceStateManager.getInstance().setCurrentInstance(newInstance);
     };
 
+    return true;
   } catch (error) {
-    console.error('Failed to mount InstanceBuilder:', error);
+    console.error('Failed to mount Instance Builder:', error);
+    return false;
   }
 }
 
@@ -351,7 +421,7 @@ export function mountInstanceBuilder(containerId: string = 'instance-builder-con
  */
 export function getCurrentInstanceFromReact(): IInputDataInstance | undefined {
   try {
-    return IntegratedDemoStateManager.getInstance().getCurrentInstance();
+    return InstanceStateManager.getInstance().getCurrentInstance();
   } catch (error) {
     console.error('Error accessing InstanceBuilder instance:', error);
     return undefined;
@@ -396,93 +466,314 @@ export function getCurrentCNDSpecFromReact(): string | undefined {
 }
 
 /**
- * Mount both InstanceBuilder and CndLayoutInterface components
- * @example
- * ```javascript
- * // In your demo page JavaScript:
- * window.addEventListener('load', () => {
- *  // Give the page time to initialize
- *  setTimeout(() => {
- *    mountIntegratedComponents();
- *  }, 1000);
- * });
- */
-
-// TODO: Use this function to mount integrated components in the demo page??
-export function mountIntegratedComponents(): void {
-  console.log('Mounting integrated demo components...');
-  
-  try {
-    mountInstanceBuilder();
-    mountCndLayoutInterface();
-    console.log('✅ All integrated components mounted successfully');
-  } catch (error) {
-    console.error('Failed to mount integrated components:', error);
-  }
-}
-
-const globalErrorManager = new ErrorStateManager();
-
-/**
  * Mount the ErrorMessageModal React component to replace the error-messages div
  * @param containerId - ID of the container element (default: 'error-messages')
  */
-export function mountErrorMessageModal(messages: ErrorMessages, containerId: string = 'error-messages'): void {
+// export function mountErrorMessageModal(containerId: string = 'error-messages'): void {
+//   const container = document.getElementById(containerId);
+  
+//   if (!container) {
+//     console.error(`Error messages container with ID '${containerId}' not found`);
+//     return;
+//   }
+
+//   // Create React root and render the component
+//   const root = createRoot(container);
+//   // root.render(<ErrorMessageModal messages={messages} />);
+//   root.render(<ErrorMessageContainer errorManager={globalErrorManager} />);
+
+//   /** Expose functions to global scope for demo integration */
+//   (window as any).showParseError = (message: string, source?: string) => {
+//     globalErrorManager.setError({
+//       type: 'parse-error',
+//       message,
+//       source
+//     });
+//   };
+
+//   (window as any).showGroupOverlapError = (message: string, source?: string) => {
+//     globalErrorManager.setError({
+//       type: 'group-overlap-error',
+//       message: message,
+//       source: source,
+//     });
+//   };
+
+//   (window as any).showPositionalError = (errorMessages: ErrorMessages) => {
+//     globalErrorManager.setError({
+//       type: 'positional-error',
+//       messages: errorMessages
+//     });
+//   };
+
+//   (window as any).showGeneralError = (message: string) => {
+//     globalErrorManager.setError({
+//       type: 'general-error',
+//       message
+//     });
+//   };
+
+//   (window as any).clearAllErrors = () => {
+//     globalErrorManager.clearError();
+//   };
+
+//   console.log(`ErrorMessageContainer component mounted to #${containerId}`);
+// }
+
+/**
+ * Mount ErrorMessageModal component into specified container
+ * 
+ * @param containerId - DOM element ID to mount into (default: 'error-messages')
+ * @returns Boolean indicating success
+ * 
+ * @example
+ * ```javascript
+ * // Mount into default container
+ * CnDCore.mountErrorModal();
+ * 
+ * // Mount into custom container
+ * CnDCore.mountErrorModal('my-error-container');
+ * ```
+ * 
+ * @public
+ */
+export function mountErrorMessageModal(containerId: string = 'error-messages'): boolean {
   const container = document.getElementById(containerId);
   
   if (!container) {
-    console.error(`Error messages container with ID '${containerId}' not found`);
-    return;
+    console.error(`Error Modal: Container '${containerId}' not found`);
+    return false;
   }
 
-  // Create React root and render the component
-  const root = createRoot(container);
-  // root.render(<ErrorMessageModal messages={messages} />);
-  root.render(<ErrorMessageContainer errorManager={globalErrorManager} />);
+  try {
+    const root = createRoot(container);
+    root.render(<ErrorMessageContainer errorManager={globalErrorManager} />);
+    console.log(`✅ Error Modal mounted to #${containerId}`);
+    return true;
+  } catch (error) {
+    console.error('Failed to mount Error Modal:', error);
+    return false;
+  }
+}
 
-  /** Expose functions to global scope for demo integration */
-  (window as any).showParseError = (message: string, source?: string) => {
+/**
+ * Mount all CnD components into their default containers
+ * Convenience function for quick setup
+ * 
+ * @returns Object with success status for each component
+ * 
+ * @example
+ * ```javascript
+ * // Mount all components at once
+ * const results = CnDCore.mountAllComponents();
+ * console.log('Mount results:', results);
+ * ```
+ * 
+ * @public
+ */
+export function mountAllComponents(): {
+  layoutInterface: boolean;
+  instanceBuilder: boolean;
+  errorModal: boolean;
+} {
+  console.log('🚀 Mounting all CnD components...');
+  
+  const results = {
+    layoutInterface: mountCnDLayoutInterface(),
+    instanceBuilder: mountInstanceBuilder(),
+    errorModal: mountErrorMessageModal()
+  };
+
+  const successCount = Object.values(results).filter(Boolean).length;
+  console.log(`✅ Successfully mounted ${successCount}/3 CnD components`);
+  
+  return results;
+}
+
+/****
+ * ERROR MANAGEMENT API
+ */
+
+/**
+ * Error management functions for CDN users
+ * Provides a clean API for displaying different types of errors
+ * 
+ * @public
+ */
+export const ErrorAPI = {
+  /**
+   * Display a parse error with optional source context
+   * @param message - Error message
+   * @param source - Optional source context (e.g., "Layout Specification")
+   */
+  showParseError: (message: string, source?: string): void => {
     globalErrorManager.setError({
       type: 'parse-error',
       message,
       source
     });
-  };
+  },
 
-  (window as any).showGroupOverlapError = (message: string, source?: string) => {
+  /**
+   * Display a group overlap error
+   * @param message - Error message
+   * @param source - Optional source context
+   */
+  showGroupOverlapError: (message: string, source?: string): void => {
     globalErrorManager.setError({
       type: 'group-overlap-error',
-      message: message,
+      message,
+      source
     });
-  };
+  },
 
-  (window as any).showPositionalError = (errorMessages: ErrorMessages) => {
+  /**
+   * Display constraint conflict errors
+   * @param errorMessages - Detailed constraint conflict information
+   */
+  showConstraintError: (errorMessages: ErrorMessages): void => {
     globalErrorManager.setError({
       type: 'positional-error',
       messages: errorMessages
     });
-  };
+  },
 
-  (window as any).showGeneralError = (message: string) => {
+  /**
+   * Display general error message
+   * @param message - Error message
+   */
+  showGeneralError: (message: string): void => {
     globalErrorManager.setError({
       type: 'general-error',
       message
     });
-  };
+  },
 
-  (window as any).clearAllErrors = () => {
+  /**
+   * Clear all error messages
+   */
+  clearAllErrors: (): void => {
     globalErrorManager.clearError();
-  };
+  },
 
-  console.log(`ErrorMessageContainer component mounted to #${containerId}`);
-}
+  /**
+   * Check if there are active errors
+   * @returns True if there are active errors
+   */
+  hasActiveErrors: (): boolean => {
+    return globalErrorManager.hasError();
+  }
+};
 
-// For global access in the demo page
+/****
+ * DATA ACCESS API  
+ */
+
+/**
+ * Data access functions for CDN users
+ * Provides access to current state and instances
+ * 
+ * @public
+ */
+export const DataAPI = {
+  /**
+   * Get current CND specification from React component state
+   * @returns Current CND specification string or undefined if not available
+   */
+  getCurrentCndSpec: (): string | undefined => {
+    try {
+      const stateManager = CndLayoutStateManager.getInstance();
+      const currentSpec = stateManager.getCurrentCndSpec();
+
+      if (currentSpec.trim()) {
+        return currentSpec;
+      }
+
+      // Fallback: Try to get value from DOM
+      const reactTextarea = document.querySelector('#webcola-cnd-container textarea');
+      if (reactTextarea instanceof HTMLTextAreaElement) {
+        return reactTextarea.value.trim();
+      }
+
+      console.warn('CndLayoutInterface not found or empty');
+      return undefined;
+    } catch (error) {
+      console.error('Error accessing CND specification:', error);
+      return undefined;
+    }
+  },
+
+  /**
+   * Get current data instance from InstanceBuilder component
+   * @returns Current data instance or undefined if not available
+   */
+  getCurrentInstance: (): IInputDataInstance | undefined => {
+    try {
+      return InstanceStateManager.getInstance().getCurrentInstance();
+    } catch (error) {
+      console.error('Error accessing current instance:', error);
+      return undefined;
+    }
+  },
+
+  /**
+   * Update current data instance programmatically
+   * @param instance - New data instance
+   */
+  updateInstance: (instance: IInputDataInstance): void => {
+    try {
+      InstanceStateManager.getInstance().setCurrentInstance(instance);
+    } catch (error) {
+      console.error('Error updating instance:', error);
+    }
+  }
+};
+
+/****
+ * GLOBAL EXPOSURE FOR CDN
+ */
+
+/**
+ * Global CnDCore object for CDN usage
+ * Exposes all public functions and classes in a clean namespace
+ * 
+ * @public
+ */
+export const CnDCore = {
+  // Mounting functions
+  mountCnDLayoutInterface,
+  mountInstanceBuilder, 
+  mountErrorMessageModal,
+  mountAllComponents,
+
+  // State managers
+  CndLayoutStateManager,
+  InstanceStateManager,
+  globalErrorManager,
+
+  // API namespaces
+  ErrorAPI,
+  DataAPI,
+};
+
+// Expose to global scope for legacy usage
 if (typeof window !== 'undefined') {
-  (window as any).mountCndLayoutInterface = mountCndLayoutInterface;
-  (window as any).getCurrentCNDSpecFromReact = getCurrentCNDSpecFromReact;
+  (window as any).CnDCore = CnDCore;
+  
+  // Legacy compatibility - expose individual functions
+  (window as any).mountCndLayoutInterface = mountCnDLayoutInterface;
   (window as any).mountInstanceBuilder = mountInstanceBuilder;
-  (window as any).getCurrentInstanceFromReact = getCurrentInstanceFromReact;
-  (window as any).mountIntegratedComponents = mountIntegratedComponents;
   (window as any).mountErrorMessageModal = mountErrorMessageModal;
+  (window as any).mountIntegratedComponents = mountAllComponents;
+  (window as any).getCurrentCNDSpecFromReact = DataAPI.getCurrentCndSpec;
+  (window as any).getCurrentInstanceFromReact = DataAPI.getCurrentInstance;
+  
+  // Expose error functions for legacy compatibility
+  (window as any).showParseError = ErrorAPI.showParseError;
+  (window as any).showGroupOverlapError = ErrorAPI.showGroupOverlapError;
+  (window as any).showPositionalError = ErrorAPI.showConstraintError;
+  (window as any).showGeneralError = ErrorAPI.showGeneralError;
+  (window as any).clearAllErrors = ErrorAPI.clearAllErrors;
+
+  console.log('🎉 CnD-Core CDN integration ready! Use window.CnDCore to access all features.');
 }
