@@ -3,63 +3,34 @@ import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator } 
 import { InstanceLayout, isAlignmentConstraint, isLeftConstraint, isTopConstraint, LayoutNode } from '../../layout/interfaces';
 import { GridRouter, Group, Layout, Node, Link } from 'webcola';
 
-// Use global D3 v4 and WebCola from external scripts (CDN + vendor)
-declare global {
-  interface Window {
-    cola: any;
-    d3: any;
+// Import D3 v4 and WebCola from vendor files (bundled at build time)
+import d3 from '../../vendor/d3.v4.min.js';
+import cola from '../../vendor/cola.js';
+
+/**
+ * Checks if two SVG elements are overlapping.
+ * 
+ * @param element1 - First element
+ * @param element2 - Second element
+ * @returns True if elements overlap
+ */
+function isOverlapping(element1: SVGElement, element2: SVGElement): boolean {
+  function hasgetBBox(target: any): target is { getBBox: any } {
+    return target && typeof target === 'object' && 'getBBox' in target;
   }
+
+  const bbox1 = hasgetBBox(element1) ? element1.getBBox() : { x: 0, y: 0, width: 0, height: 0 };
+  const bbox2 = hasgetBBox(element2) ? element2.getBBox() : { x: 0, y: 0, width: 0, height: 0 };
+  
+  return !(bbox2.x > bbox1.x + bbox1.width ||
+           bbox2.x + bbox2.width < bbox1.x ||
+           bbox2.y > bbox1.y + bbox1.height ||
+           bbox2.y + bbox2.height < bbox1.y);
 }
-
-
-  /**
-   * Checks if two SVG elements are overlapping.
-   * 
-   * @param element1 - First element
-   * @param element2 - Second element
-   * @returns True if elements overlap
-   */
-  function isOverlapping(element1: SVGElement, element2: SVGElement): boolean {
-
-    function hasgetBBox(target: any): target is { getBBox: any } {
-      return target && typeof target === 'object' && 'getBBox' in target;
-    }
-
-
-    const bbox1 = hasgetBBox(element1) ? element1.getBBox() : { x: 0, y: 0, width: 0, height: 0 };
-    const bbox2 = hasgetBBox(element2) ? element2.getBBox() : { x: 0, y: 0, width: 0, height: 0 };
-    
-    return !(bbox2.x > bbox1.x + bbox1.width ||
-             bbox2.x + bbox2.width < bbox1.x ||
-             bbox2.y > bbox1.y + bbox1.height ||
-             bbox2.y + bbox2.height < bbox1.y);
-  }
-
-
 
 function hasInnerBounds(target: any): target is { innerBounds: any } {
   return target && typeof target === 'object' && 'innerBounds' in target;
 }
-
-
-// Access global versions loaded by external scripts
-const cola = (typeof window !== 'undefined') ? (window as any).cola : null;
-//const d3 = (typeof window !== 'undefined') ? (window as any).d3 : null;
-
-const D3Accessor = {
-  get d3(): any {
-    if (typeof window !== 'undefined' && window.d3) {
-      console.log('Using global D3 from window');
-      return window.d3;
-    } else {
-      console.warn('D3 library not available. Please ensure D3 is loaded.');
-      return null;
-    }
-  }
-};
-
-// Example usage
-const d3 = D3Accessor.d3;
 
 
 const DEFAULT_SCALE_FACTOR = 5;
