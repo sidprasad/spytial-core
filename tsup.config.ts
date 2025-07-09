@@ -17,6 +17,8 @@ export default defineConfig({
   clean: true,
   minify: false,
   target: 'es2020',
+  // Assume a browser environment so DOM globals like HTMLElement are available
+  platform: 'browser',
   outDir: 'dist',
   external: ['react', 'react-dom'],
   bundle: true,
