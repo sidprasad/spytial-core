@@ -704,6 +704,18 @@ export const DataAPI = {
   },
 
   /**
+   * Set CND specification programmatically
+   */
+  setCurrentCndSpec: (newSpec: string): void => {
+    try {
+      const stateManager = CndLayoutStateManager.getInstance();
+      stateManager.setYamlValue(newSpec);      
+    } catch (error) {
+      console.error('Error setting CND specification:', error);
+    }
+  },
+
+  /**
    * Get current data instance from InstanceBuilder component
    * @returns Current data instance or undefined if not available
    */
@@ -767,6 +779,8 @@ if (typeof window !== 'undefined') {
   (window as any).mountIntegratedComponents = mountAllComponents;
   (window as any).getCurrentCNDSpecFromReact = DataAPI.getCurrentCndSpec;
   (window as any).getCurrentInstanceFromReact = DataAPI.getCurrentInstance;
+  (window as any).setCurrentCndSpec = DataAPI.setCurrentCndSpec;
+  (window as any).updateInstance = DataAPI.updateInstance;
   
   // Expose error functions for legacy compatibility
   (window as any).showParseError = ErrorAPI.showParseError;
