@@ -4,7 +4,7 @@ import { InstanceLayout, isAlignmentConstraint, isLeftConstraint, isTopConstrain
 import type { GridRouter, Group, Layout, Node, Link } from 'webcola';
 
 let d3 = window.d3v4 || window.d3; // Use d3 v4 if available, otherwise fallback to the default window.d3
-const cola = window.cola;
+let cola = window.cola;
 
 /**
  * Checks if two SVG elements are overlapping.
@@ -309,7 +309,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         throw new Error('D3 library not available. Please ensure D3 v4 is loaded from CDN.');
       }
       if (!cola) {
-        throw new Error('WebCola library not available. Please ensure vendor/cola.js is loaded.');
+        if(!window.cola) {
+
+          throw new Error('WebCola library not available. Please ensure vendor/cola.js is loaded.');
+        }
+        cola = window.cola;
       }
 
       // Ensure D3 and container are properly initialized
