@@ -10,6 +10,37 @@ declare global {
   }
 }
 
+
+  /**
+   * Checks if two SVG elements are overlapping.
+   * 
+   * @param element1 - First element
+   * @param element2 - Second element
+   * @returns True if elements overlap
+   */
+  function isOverlapping(element1: SVGElement, element2: SVGElement): boolean {
+
+    function hasgetBBox(target: any): target is { getBBox: any } {
+      return target && typeof target === 'object' && 'getBBox' in target;
+    }
+
+
+    const bbox1 = hasgetBBox(element1) ? element1.getBBox() : { x: 0, y: 0, width: 0, height: 0 };
+    const bbox2 = hasgetBBox(element2) ? element2.getBBox() : { x: 0, y: 0, width: 0, height: 0 };
+    
+    return !(bbox2.x > bbox1.x + bbox1.width ||
+             bbox2.x + bbox2.width < bbox1.x ||
+             bbox2.y > bbox1.y + bbox1.height ||
+             bbox2.y + bbox2.height < bbox1.y);
+  }
+
+
+
+function hasInnerBounds(target: any): target is { innerBounds: any } {
+  return target && typeof target === 'object' && 'innerBounds' in target;
+}
+
+
 // Access global versions loaded by external scripts
 const cola = (typeof window !== 'undefined') ? (window as any).cola : null;
 //const d3 = (typeof window !== 'undefined') ? (window as any).d3 : null;
@@ -950,7 +981,9 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
               target = targetGroup;
               // NOTE: I think this is a rectangle...
               // Just added this to the NodeWithMetadata interface
-              target.innerBounds = targetGroup.bounds?.inflate(-1 * (targetGroup.padding || 10));
+              if(hasInnerBounds(target)) {
+                target.innerBounds = targetGroup.bounds?.inflate(-1 * (targetGroup.padding || 10));
+              }
             } else {
               console.log('Target group not found', potentialGroups, this.getNodeIndex(target));
             }
@@ -960,7 +993,10 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
             
             if (sourceGroup) {
               source = sourceGroup;
-              source.innerBounds = sourceGroup.bounds?.inflate(-1 * (sourceGroup.padding || 10));
+              if(hasInnerBounds(source)) {
+                // Inflate inner bounds for source group
+                source.innerBounds = sourceGroup.bounds?.inflate(-1 * (sourceGroup.padding || 10));
+              }
             } else {
               console.log('Source group not found', potentialGroups, this.getNodeIndex(source));
             }
@@ -970,7 +1006,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         }
 
         // Use WebCola's edge routing if available and nodes have innerBounds
-        if (typeof (cola as any).makeEdgeBetween === 'function' && 
+        if (typeof (cola as any).makeEdgeBetween === 'function' && hasInnerBounds(source) && hasInnerBounds(target) &&
             source.innerBounds && target.innerBounds) {
           const route = (cola as any).makeEdgeBetween(source.innerBounds, target.innerBounds, 5);
           return this.lineFunction([route.sourceIntersection, route.arrowStart]);
@@ -1708,8 +1744,10 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
   private handleLabelOverlap(currentLabel: SVGTextElement): void {
     const overlapsWith: SVGTextElement[] = [];
 
+    const isoverlapping = this.isOverlapping;
+
     this.container.selectAll('.linklabel').each(function(this: SVGTextElement) {
-      if (this !== currentLabel && this.isOverlapping && this.isOverlapping(currentLabel)) {
+      if (this !== currentLabel && isOverlapping(this, currentLabel)) {
         overlapsWith.push(this);
       }
     });
@@ -1719,22 +1757,6 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
     }
   }
 
-  /**
-   * Checks if two SVG elements are overlapping.
-   * 
-   * @param element1 - First element
-   * @param element2 - Second element
-   * @returns True if elements overlap
-   */
-  private isOverlapping(element1: SVGElement, element2: SVGElement): boolean {
-    const bbox1 = element1.getBBox();
-    const bbox2 = element2.getBBox();
-    
-    return !(bbox2.x > bbox1.x + bbox1.width ||
-             bbox2.x + bbox2.width < bbox1.x ||
-             bbox2.y > bbox1.y + bbox1.height ||
-             bbox2.y + bbox2.height < bbox1.y);
-  }
 
   /**
    * Minimizes overlap between labels by repositioning.
