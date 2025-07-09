@@ -34,6 +34,7 @@ export class CndLayoutStateManager {
   private constraints: ConstraintData[] = [];
   private directives: DirectiveData[] = [];
   private yamlValue: string = '';
+  private isNoCodeView: boolean = false;
 
   public constructor() {}
 
@@ -70,6 +71,24 @@ export class CndLayoutStateManager {
    */
   public setYamlValue(yamlValue: string): void {
     this.yamlValue = yamlValue;
+  }
+
+  /**
+   * Update layout view mode
+   * @param isNoCodeView - Whether to use No-Code view
+   * @public
+   */
+  public setIsNoCodeView(isNoCodeView: boolean): void {
+    this.isNoCodeView = isNoCodeView;
+  }
+
+  /**
+   * Get current layout view mode
+   * @returns True if in No-Code view, false for Code view
+   * @public
+   */
+  public getIsNoCodeView(): boolean {
+    return this.isNoCodeView;
   }
 
   /**
@@ -210,6 +229,10 @@ const CndLayoutInterfaceWrapper: React.FC = () => {
   useEffect(() => {
     stateManager.setYamlValue(yamlValue);
   }, [yamlValue, stateManager]);
+
+  useEffect(() => {
+    stateManager.setIsNoCodeView(isNoCodeView);
+  }, [isNoCodeView, stateManager]);
 
   /**
    * Handle YAML value changes and update the global state
@@ -712,6 +735,38 @@ export const DataAPI = {
       stateManager.setYamlValue(newSpec);      
     } catch (error) {
       console.error('Error setting CND specification:', error);
+    }
+  },
+
+  /**
+   * Get current layout view mode
+   * @returns True if in No-Code view, false for Code view
+   */
+  getLayoutViewMode: (): boolean => {
+    try {
+      const stateManager = CndLayoutStateManager.getInstance();
+      return stateManager.getIsNoCodeView();
+    } catch (error) {
+      console.error('Error accessing layout view mode:', error);
+      return false;
+    }
+  },
+
+  /**
+   * Set layout view mode programmatically
+   * @param isNoCodeView - Whether to use No-Code view
+   */
+  setLayoutViewMode: (isNoCodeView: boolean): void => {
+    try {
+      const stateManager = CndLayoutStateManager.getInstance();
+      stateManager.setIsNoCodeView(isNoCodeView);
+      
+      // Dispatch custom event for component synchronization
+      window.dispatchEvent(new CustomEvent('cnd-view-mode-changed', { 
+        detail: { isNoCodeView } 
+      }));
+    } catch (error) {
+      console.error('Error setting layout view mode:', error);
     }
   },
 
