@@ -2,169 +2,119 @@ import { describe, it, expect } from 'vitest';
 import { PyretDataInstance, createPyretDataInstance } from '../src/data-instance/pyret/pyret-data-instance';
 
 describe('PyretDataInstance', () => {
-    
-    
+
+    /*
+    data RBNod:
+        | Black(value, left, right)
+        | Red(value, left, right)
+        | Leaf(value)
+        sharing:
+            method _output(self):
+            x = DR.genlayout( self, "")
+            VS.vs-constr-render("RBNod", [list: ], { cli: render, cpo: lam(a): x end })
+            end
+        end
+
+    rbt = Black( 5, Black( 1, Red( 2, Red( 1, Leaf(0), Leaf(0)), Leaf(0)), Leaf(0)), Red( 6, Leaf(0), Leaf(0)))
+
+    */
     const pyretData = {
         "dict": {
-            "value": 11,
+            "value": 5,
             "left": {
                 "dict": {
-                    "_output": {
-                        "name": "_output"
-                    },
-                    "_match": {
-                        "name": "leaf"
-                    }
-                },
-                "brands": {
-                    "$brandTree988": true,
-                    "$brandleaf990": true
-                },
-                "$name": "leaf",
-                "$loc": [
-                    "definitions://",
-                    10,
-                    2,
-                    157,
-                    10,
-                    8,
-                    163
-                ],
-                "$mut_fields_mask": [],
-                "$arity": -1,
-                "$constructor": {
-                    "_output": {
-                        "name": "_output"
-                    },
-                    "_match": {
-                        "name": "leaf"
-                    }
-                }
-            },
-            "right": {
-                "dict": {
-                    "value": -1,
+                    "value": 1,
                     "left": {
                         "dict": {
-                            "value": 1,
+                            "value": 2,
                             "left": {
                                 "dict": {
-                                    "_output": {
-                                        "name": "_output"
+                                    "value": 1,
+                                    "left": {
+                                        "dict": {
+                                            "value": 0
+                                        },
+                                        "brands": {
+                                            "$brandRBNod961": true,
+                                            "$brandLeaf964": true
+                                        }
                                     },
-                                    "_match": {
-                                        "name": "leaf"
+                                    "right": {
+                                        "dict": {
+                                            "value": 0
+                                        },
+                                        "brands": {
+                                            "$brandRBNod961": true,
+                                            "$brandLeaf964": true
+                                        }
                                     }
                                 },
                                 "brands": {
-                                    "$brandTree988": true,
-                                    "$brandleaf990": true
-                                },
-                                "$name": "leaf",
-                                "$loc": [
-                                    "definitions://",
-                                    10,
-                                    2,
-                                    157,
-                                    10,
-                                    8,
-                                    163
-                                ],
-                                "$mut_fields_mask": [],
-                                "$arity": -1,
-                                "$constructor": {
-                                    "_output": {
-                                        "name": "_output"
-                                    },
-                                    "_match": {
-                                        "name": "leaf"
-                                    }
+                                    "$brandRBNod961": true,
+                                    "$brandRed963": true
                                 }
                             },
                             "right": {
                                 "dict": {
-                                    "_output": {
-                                        "name": "_output"
-                                    },
-                                    "_match": {
-                                        "name": "leaf"
-                                    }
+                                    "value": 0
                                 },
                                 "brands": {
-                                    "$brandTree988": true,
-                                    "$brandleaf990": true
-                                },
-                                "$name": "leaf",
-                                "$loc": [
-                                    "definitions://",
-                                    10,
-                                    2,
-                                    157,
-                                    10,
-                                    8,
-                                    163
-                                ],
-                                "$mut_fields_mask": [],
-                                "$arity": -1,
-                                "$constructor": {
-                                    "_output": {
-                                        "name": "_output"
-                                    },
-                                    "_match": {
-                                        "name": "leaf"
-                                    }
+                                    "$brandRBNod961": true,
+                                    "$brandLeaf964": true
                                 }
                             }
                         },
                         "brands": {
-                            "$brandTree988": true,
-                            "$brandtnode989": true
+                            "$brandRBNod961": true,
+                            "$brandRed963": true
                         }
                     },
                     "right": {
                         "dict": {
-                            "_output": {
-                                "name": "_output"
-                            },
-                            "_match": {
-                                "name": "leaf"
-                            }
+                            "value": 0
                         },
                         "brands": {
-                            "$brandTree988": true,
-                            "$brandleaf990": true
-                        },
-                        "$name": "leaf",
-                        "$loc": [
-                            "definitions://",
-                            10,
-                            2,
-                            157,
-                            10,
-                            8,
-                            163
-                        ],
-                        "$mut_fields_mask": [],
-                        "$arity": -1,
-                        "$constructor": {
-                            "_output": {
-                                "name": "_output"
-                            },
-                            "_match": {
-                                "name": "leaf"
-                            }
+                            "$brandRBNod961": true,
+                            "$brandLeaf964": true
                         }
                     }
                 },
                 "brands": {
-                    "$brandTree988": true,
-                    "$brandtnode989": true
+                    "$brandRBNod961": true,
+                    "$brandBlack962": true
+                }
+            },
+            "right": {
+                "dict": {
+                    "value": 6,
+                    "left": {
+                        "dict": {
+                            "value": 0
+                        },
+                        "brands": {
+                            "$brandRBNod961": true,
+                            "$brandLeaf964": true
+                        }
+                    },
+                    "right": {
+                        "dict": {
+                            "value": 0
+                        },
+                        "brands": {
+                            "$brandRBNod961": true,
+                            "$brandLeaf964": true
+                        }
+                    }
+                },
+                "brands": {
+                    "$brandRBNod961": true,
+                    "$brandRed963": true
                 }
             }
         },
         "brands": {
-            "$brandTree988": true,
-            "$brandtnode989": true
+            "$brandRBNod961": true,
+            "$brandBlack962": true
         }
     };
 
@@ -172,9 +122,10 @@ describe('PyretDataInstance', () => {
         const instance = new PyretDataInstance(pyretData);
         const atoms = instance.getAtoms();
 
-        expect(atoms).toHaveLength(10); // tnode, leaf, tnode, and value atoms
-        // expect(atoms.map(atom => atom.type)).toContain('tnode');
-        // expect(atoms.map(atom => atom.type)).toContain('leaf');
+        expect(atoms).toHaveLength(16); 
+        expect(atoms.map(atom => atom.type)).toContain('Black');
+        expect(atoms.map(atom => atom.type)).toContain('Red');
+        expect(atoms.map(atom => atom.type)).toContain('Leaf');
     });
 
     it('should extract relations correctly', () => {
@@ -189,5 +140,18 @@ describe('PyretDataInstance', () => {
 
         const leftRelation = relations.find(relation => relation.name === 'left');
         expect(leftRelation).toBeDefined();
+    });
+
+    it('can create a proper graph', () => {
+        const instance = new PyretDataInstance(pyretData);
+        const graph = instance.generateGraph(false, false);
+
+        expect(graph).toBeDefined();
+        expect(graph.nodes()).toHaveLength(16); // 16 atoms
+        // How many nodes?
+        expect(graph.edges()).toHaveLength(21); // 
+
+        // And I want to make sure that the labels are correct for each node.
+
     });
 });

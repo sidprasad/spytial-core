@@ -42,6 +42,9 @@ export class PyretDataInstance implements IDataInstance {
   private objectToAtomId = new WeakMap<object, string>();
   private atomCounter = 0;
 
+  /** Map to keep track of label counts per type */
+  private typeLabelCounters = new Map<string, number>();
+
   /**
    * Creates a PyretDataInstance from a Pyret runtime object
    * 
@@ -156,6 +159,32 @@ export class PyretDataInstance implements IDataInstance {
     }
   }
 
+
+  /**
+   * Extracts the most specific brand name from a Pyret brands object.
+   * Returns the brand with the highest trailing number, with prefix and number removed.
+   *
+   * @param brands - The brands object from a Pyret object
+   * @returns The most specific brand name (without $brand and trailing number), or undefined if none found
+   */
+  private extractMostSpecificBrand(brands: Record<string, boolean>): string | undefined {
+    let maxNum = -1;
+    let result: string | undefined = undefined;
+
+    for (const brand of Object.keys(brands)) {
+      const match = /^\$brand([a-zA-Z_]+)(\d+)$/.exec(brand);
+      if (match) {
+        const [, name, numStr] = match;
+        const num = parseInt(numStr, 10);
+        if (num > maxNum) {
+          maxNum = num;
+          result = name;
+        }
+      }
+    }
+    return result;
+  }
+
   /**
    * Extracts the type name from a Pyret object
    */
@@ -167,14 +196,9 @@ export class PyretDataInstance implements IDataInstance {
 
     // Extract from brands
     if (obj.brands && typeof obj.brands === 'object') {
-      const brandNames = Object.keys(obj.brands)
-        .filter(brand => obj.brands![brand]) // Only active brands
-        .map(brand => brand.replace(/^\$brand/, '').replace(/\d+$/, '')) // Remove prefix and trailing numbers
-        .filter(name => name.length > 0); // Remove empty strings
-
-      if (brandNames.length > 0) {
-        // Return the last alphabetically (most specific)
-        return brandNames.sort().pop()!;
+      const brand = this.extractMostSpecificBrand(obj.brands);
+      if (brand) {
+        return brand;
       }
     }
 
@@ -182,7 +206,8 @@ export class PyretDataInstance implements IDataInstance {
   }
 
   /**
-   * Extracts a display label from a Pyret object
+   * Extracts a display label from a Pyret object, using a per-type counter.
+   * Labels will be of the form Type$<num>
    */
   private extractLabel(obj: PyretObject): string {
     if (obj.$name && typeof obj.$name === 'string') {
@@ -190,13 +215,13 @@ export class PyretDataInstance implements IDataInstance {
     }
 
     const type = this.extractType(obj);
-    
-    // For objects with a value field, include it in the label
-    if (obj.dict?.value !== undefined && this.isAtomicValue(obj.dict.value)) {
-      return `${type}(${obj.dict.value})`;
-    }
 
-    return type;
+    // Increment the counter for this type
+    const current = this.typeLabelCounters.get(type) ?? 0;
+    const next = current + 1;
+    this.typeLabelCounters.set(type, next);
+
+    return `${type}$${next}`;
   }
 
   /**
@@ -346,9 +371,7 @@ export class PyretDataInstance implements IDataInstance {
     
     // Add all atoms as nodes
     this.getAtoms().forEach(atom => {
-    this.getAtoms().forEach(atom => {
       graph.setNode(atom.id, atom.label);
-    });
     });
     
     // Add all relation tuples as edges
