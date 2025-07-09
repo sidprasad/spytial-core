@@ -128,6 +128,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private svgLinkGroups : any;
   private svgGroups : any;
   private svgGroupLabels: any;
+  /**
+   * Stores the starting coordinates when a node begins dragging so
+   * drag end events can report both the previous and new positions.
+   */
+  private dragStartPositions: Map<string, { x: number; y: number }> = new Map();
 
   constructor() {
     super();
@@ -431,6 +436,21 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
+   * Get the current positions of all nodes in the layout.
+   * Useful for reading coordinates after rendering or drag events.
+   */
+  public getNodePositions(): Array<{ id: string; x: number; y: number }> {
+    if (!this.currentLayout?.nodes) {
+      return [];
+    }
+    return this.currentLayout.nodes.map((n: any) => ({
+      id: n.id,
+      x: n.x,
+      y: n.y
+    }));
+  }
+
+  /**
    * Render groups using D3 data binding
    */
   private renderGroups(groups: any[], layout: Layout): void {
@@ -666,6 +686,28 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private setupNodes(nodes: Array<NodeWithMetadata>, layout: Layout): d3.Selection<SVGGElement, any, any, unknown> {
     // Create node groups with drag behavior
+    const nodeDrag = layout.drag();
+    nodeDrag
+      .on('start.cnd', (d: any) => {
+        const start = { x: d.x, y: d.y };
+        this.dragStartPositions.set(d.id, start);
+        this.dispatchEvent(
+          new CustomEvent('node-drag-start', {
+            detail: { id: d.id, position: start }
+          })
+        );
+      })
+      .on('end.cnd', (d: any) => {
+        const start = this.dragStartPositions.get(d.id);
+        this.dragStartPositions.delete(d.id);
+        const detail = {
+          id: d.id,
+          previous: start,
+          current: { x: d.x, y: d.y }
+        };
+        this.dispatchEvent(new CustomEvent('node-drag-end', { detail }));
+      });
+
     const nodeSelection = this.container
       .selectAll(".node")
       .data(nodes)
@@ -674,7 +716,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr("class", (d: any) => {
         return this.isErrorNode(d) ? "error-node" : "node";
       })
-      .call((layout as any).drag);
+      .call(nodeDrag as any);
 
     // Add rectangle backgrounds for nodes
     this.setupNodeRectangles(nodeSelection);

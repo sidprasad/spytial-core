@@ -21,6 +21,7 @@ export default [
         HTMLElement: 'readonly',
         customElements: 'readonly',
         CustomElementRegistry: 'readonly',
+        CustomEvent: 'readonly', 
         SVGElement: 'readonly',
         SVGGElement: 'readonly',
         SVGTextElement: 'readonly',
