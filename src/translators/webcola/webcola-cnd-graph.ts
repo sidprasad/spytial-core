@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator } from './webcolatranslator';
 import { InstanceLayout, isAlignmentConstraint, isLeftConstraint, isTopConstraint, LayoutNode } from '../../layout/interfaces';
-import { GridRouter, Group, Layout, Node, Link } from 'webcola';
+import type { GridRouter, Group, Layout, Node, Link } from 'webcola';
 
 // Import D3 v4 and WebCola from vendor files (bundled at build time)
 import d3 from '../../vendor/d3.v4.min.js';
