@@ -217,6 +217,31 @@ const CndLayoutInterfaceWrapper: React.FC = () => {
   /** Get state manager instance */
   const stateManager = useMemo(() => CndLayoutStateManager.getInstance(), []);
 
+  /** Listen for external state changes via custom events */
+  useEffect(() => {
+    const handleSpecChange = (event: CustomEvent) => {
+      const newSpec = event.detail;
+      if (typeof newSpec === 'string' && newSpec !== yamlValue) {
+        setYamlValue(newSpec);
+      }
+    };
+
+    const handleViewModeChange = (event: CustomEvent) => {
+      const { isNoCodeView: newIsNoCodeView } = event.detail;
+      if (typeof newIsNoCodeView === 'boolean' && newIsNoCodeView !== isNoCodeView) {
+        setIsNoCodeView(newIsNoCodeView);
+      }
+    };
+
+    window.addEventListener('cnd-spec-changed', handleSpecChange as EventListener);
+    window.addEventListener('cnd-view-mode-changed', handleViewModeChange as EventListener);
+
+    return () => {
+      window.removeEventListener('cnd-spec-changed', handleSpecChange as EventListener);
+      window.removeEventListener('cnd-view-mode-changed', handleViewModeChange as EventListener);
+    };
+  }, [yamlValue, isNoCodeView]);
+
   /** Sync with class state variables */
   useEffect(() => {
     stateManager.setConstraints(constraints);
@@ -732,7 +757,12 @@ export const DataAPI = {
   setCurrentCndSpec: (newSpec: string): void => {
     try {
       const stateManager = CndLayoutStateManager.getInstance();
-      stateManager.setYamlValue(newSpec);      
+      stateManager.setYamlValue(newSpec);  
+      
+      // Dispatch custom event for component synchronization
+      window.dispatchEvent(new CustomEvent('cnd-spec-changed', { 
+        detail: newSpec 
+      }));
     } catch (error) {
       console.error('Error setting CND specification:', error);
     }
@@ -832,10 +862,14 @@ if (typeof window !== 'undefined') {
   (window as any).mountInstanceBuilder = mountInstanceBuilder;
   (window as any).mountErrorMessageModal = mountErrorMessageModal;
   (window as any).mountIntegratedComponents = mountAllComponents;
+
+  // Expose data functions for legacy compatibility
   (window as any).getCurrentCNDSpecFromReact = DataAPI.getCurrentCndSpec;
   (window as any).getCurrentInstanceFromReact = DataAPI.getCurrentInstance;
   (window as any).setCurrentCndSpec = DataAPI.setCurrentCndSpec;
   (window as any).updateInstance = DataAPI.updateInstance;
+  (window as any).getLayoutViewMode = DataAPI.getLayoutViewMode;
+  (window as any).setLayoutViewMode = DataAPI.setLayoutViewMode;
   
   // Expose error functions for legacy compatibility
   (window as any).showParseError = ErrorAPI.showParseError;
