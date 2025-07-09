@@ -5,16 +5,7 @@
 
 // Import the custom element class
 import { WebColaCnDGraph } from './translators/webcola/webcola-cnd-graph';
-// Import d3 and webcola to make them globally available
-import d3 from './vendor/d3.v4.min.js';
-import cola from './vendor/cola.js';
 
-// Make d3 and webcola available globally for WebCola d3adaptor
-if (typeof window !== 'undefined') {
-  const globalWindow = window as any;
-  globalWindow.d3 = d3;
-  globalWindow.cola = cola;
-}
 
 // Define a function to register the custom element
 function registerWebColaCnDGraph() {

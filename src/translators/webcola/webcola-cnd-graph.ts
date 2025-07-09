@@ -3,9 +3,8 @@ import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator } 
 import { InstanceLayout, isAlignmentConstraint, isLeftConstraint, isTopConstraint, LayoutNode } from '../../layout/interfaces';
 import type { GridRouter, Group, Layout, Node, Link } from 'webcola';
 
-// Import D3 v4 and WebCola from vendor files (bundled at build time)
-import d3 from '../../vendor/d3.v4.min.js';
-import cola from '../../vendor/cola.js';
+const d3 = window.d3v4 || window.d3; // Use d3 v4 if available, otherwise fallback to the default window.d3
+const cola = window.cola;
 
 /**
  * Checks if two SVG elements are overlapping.
@@ -300,10 +299,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   public async renderLayout(instanceLayout: InstanceLayout): Promise<void> {
     try {
-      
+      console.log('D3 version:', d3.version);
       // Check if D3 and WebCola are available
       if (!d3) {
-        throw new Error('D3 library not available. Please ensure D3 v3 is loaded from CDN.');
+        throw new Error('D3 library not available. Please ensure D3 v4 is loaded from CDN.');
       }
       if (!cola) {
         throw new Error('WebCola library not available. Please ensure vendor/cola.js is loaded.');
