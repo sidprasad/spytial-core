@@ -2019,4 +2019,5 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
 // Register the custom element only in browser environments
 if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined') {
-  customElements.define('webcola-cnd-graph', WebColaCnDGraph);}
+  customElements.define('webcola-cnd-graph', WebColaCnDGraph);
+}
