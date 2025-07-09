@@ -571,7 +571,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         return targetNode?.color || "#999999";
       })
       .attr("stroke-width", 1)
-      .call(layout.drag);
+      .call((layout as any).drag);
 
 
     return groupRects;
@@ -614,7 +614,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         }
         
         return "";
-      }).call(layout.drag);
+      }).call((layout as any).drag);
   }
 
   /**
@@ -642,7 +642,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       .attr("class", (d: any) => {
         return this.isErrorNode(d) ? "error-node" : "node";
       })
-      .call(layout.drag);
+      .call((layout as any).drag);
 
     // Add rectangle backgrounds for nodes
     this.setupNodeRectangles(nodeSelection);
@@ -727,7 +727,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       })
       .append("title")
       .text((d: any) => d.label || d.name || d.id || "Node")
-      .on("error", function(this: SVGImageElement, event: any, d: any) {
+      .on("error", function(this: any, event: any, d: any) {
 
         d3.select(this).attr("xlink:href", "img/default.png");
         console.error(`Failed to load icon for node ${d.id}: ${d.icon}`);
@@ -876,19 +876,19 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
 
     // Update node rectangles using bounds
     this.svgNodes.select('rect')
-      .each((d: NodeWithMetadata) => {
+      .each((d: any) => {
         if (d.bounds) {
           d.innerBounds = d.bounds.inflate(-1);
         }
       })
-      .attr('x', (d: NodeWithMetadata) => d.bounds.x )
-      .attr('y', (d: NodeWithMetadata) => d.bounds.y )
-      .attr('width', (d: NodeWithMetadata) => d.bounds.width() )
-      .attr('height', (d: NodeWithMetadata) => d.bounds.height());
+      .attr('x', (d: any) => d.bounds.x )
+      .attr('y', (d: any) => d.bounds.y )
+      .attr('width', (d: any) => d.bounds.width() )
+      .attr('height', (d: any) => d.bounds.height());
 
     // Update node icons with proper positioning
     this.svgNodes.select('image')
-      .attr('x', (d: NodeWithMetadata) => {
+      .attr('x', (d: any) => {
         if (d.showLabels) {
           // Move to the top-right corner
           return d.x + (d.width) / 2 - ((d.width) * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR);
@@ -897,7 +897,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
           return d.bounds.x;
         }
       })
-      .attr('y', (d: NodeWithMetadata) => {
+      .attr('y', (d: any) => {
         if (d.showLabels) {
           // Align with the top edge
           return d.y - (d.height) / 2;
@@ -909,8 +909,8 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
 
     // Update most specific type labels
     this.svgNodes.select('.mostSpecificTypeLabel')
-      .attr('x', (d: NodeWithMetadata) => d.x - (d.width) / 2 + 5)
-      .attr('y', (d: NodeWithMetadata) => d.y - (d.height) / 2 + 10)
+      .attr('x', (d: NodeWithMetadata) => d.x - (d.width || 0) / 2 + 5)
+      .attr('y', (d: NodeWithMetadata) => d.y - (d.height || 0) / 2 + 10)
       .raise();
 
     // Update main node labels with tspan positioning
@@ -1921,22 +1921,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         return axis === 'x' ? point.x : point.y;
     }
 
-  /**
-   * Create drag behavior for nodes and groups
-   * 
-   * @param layout - WebCola layout instance
-   * @returns D3 drag behavior for interactive node manipulation
-   * 
-   * @example
-   * ```typescript
-   * const dragBehavior = layout.drag;
-   * nodeSelection.call(dragBehavior);
-   * ```
-   */
-  private createDragBehavior(layout: any): any {
-    // Use WebCola's own drag behavior instead of D3's - this handles D3 version compatibility
-    return layout.drag;
-  }
+  
 
   /**
    * Show loading indicator
