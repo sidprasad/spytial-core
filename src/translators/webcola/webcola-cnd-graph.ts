@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator } from './webcolatranslator';
 import { InstanceLayout, isAlignmentConstraint, isLeftConstraint, isTopConstraint, LayoutNode } from '../../layout/interfaces';
 import { GridRouter, Group, Layout, Node, Link } from 'webcola';
@@ -1976,6 +1977,5 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
 // Register the custom element only in browser environments
 if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined') {
-  // eslint-disable-next-line no-undef
   customElements.define('webcola-cnd-graph', WebColaCnDGraph);
 }
