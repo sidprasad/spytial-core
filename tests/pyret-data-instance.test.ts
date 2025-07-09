@@ -188,9 +188,6 @@ describe('PyretDataInstance', () => {
         expect(relationNames).toContain('right');
 
         const leftRelation = relations.find(relation => relation.name === 'left');
-
-
+        expect(leftRelation).toBeDefined();
     });
-
- 
 });
