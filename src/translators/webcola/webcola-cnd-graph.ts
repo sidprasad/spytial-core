@@ -69,7 +69,7 @@ const DEFAULT_SCALE_FACTOR = 5;
  * @field currentLayout - Holds the current custom WebColaLayout instance
  * @field colaLayout - Holds the current layout instance used by WebCola
  */
-export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLElement : (class {} as any)) {
+export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'undefined' ? HTMLElement : (class {} as any)) {
   private svg!: any;
   private container!: any;
   private currentLayout!: WebColaLayout;
@@ -1744,7 +1744,6 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
   private handleLabelOverlap(currentLabel: SVGTextElement): void {
     const overlapsWith: SVGTextElement[] = [];
 
-    const isoverlapping = this.isOverlapping;
 
     this.container.selectAll('.linklabel').each(function(this: SVGTextElement) {
       if (this !== currentLabel && isOverlapping(this, currentLabel)) {
