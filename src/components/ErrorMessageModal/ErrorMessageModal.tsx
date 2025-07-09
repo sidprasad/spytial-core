@@ -22,7 +22,7 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = (
   { messages, systemError }: ErrorMessageModalProps
 ) => {
 
-  const addHighlightOnMouseEnter = (e: React.MouseEvent<HTMLCodeElement>) => {
+  const addHighlightOnMouseEnter = (e: React.MouseEvent<HTMLElement>) => {
     if (e.currentTarget.className.startsWith('error-message-')) {
       const constraintId = e.currentTarget.className.replace('error-message-', '');
       const correspondingElements = document.querySelectorAll(
@@ -34,7 +34,7 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = (
   };
 
   const removeHighlightOnMouseLeave = (
-    e: React.MouseEvent<HTMLCodeElement>
+    e: React.MouseEvent<HTMLElement>
   ) => {
     if (e.currentTarget.className.startsWith('error-message-')) {
       const constraintId = e.currentTarget.className.replace('error-message-', '');
