@@ -3,7 +3,7 @@ import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator } 
 import { InstanceLayout, isAlignmentConstraint, isLeftConstraint, isTopConstraint, LayoutNode } from '../../layout/interfaces';
 import type { GridRouter, Group, Layout, Node, Link } from 'webcola';
 
-const d3 = window.d3v4 || window.d3; // Use d3 v4 if available, otherwise fallback to the default window.d3
+let d3 = window.d3v4 || window.d3; // Use d3 v4 if available, otherwise fallback to the default window.d3
 const cola = window.cola;
 
 /**
@@ -274,6 +274,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private initializeD3(): void {
     
+    if (!d3) {
+      d3 = window.d3;
+    }
+
     this.svg = d3.select(this.shadowRoot!.querySelector('#svg'));
     this.container = this.svg.select('.zoomable');
 
