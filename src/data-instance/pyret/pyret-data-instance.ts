@@ -54,6 +54,54 @@ export class PyretDataInstance implements IInputDataInstance {
     this.initializeBuiltinTypes();
     this.parseObjectIteratively(pyretData);
   }
+  /**
+   * Adds an atom to the instance, updating types accordingly.
+   * If the atom already exists, it is replaced.
+   * @param atom - The atom to add
+   */
+  addAtom(atom: IAtom): void {
+    this.atoms.set(atom.id, atom);
+    this.ensureTypeExists(atom.type);
+    const type = this.types.get(atom.type);
+    if (type && !type.atoms.some(a => a.id === atom.id)) {
+      type.atoms.push(atom);
+    }
+  }
+
+  /**
+   * Removes an atom by id, and removes it from all types and relations.
+   * @param id - The atom id to remove
+   */
+  removeAtom(id: string): void {
+    this.atoms.delete(id);
+
+    // Remove from types
+    this.types.forEach(type => {
+      type.atoms = type.atoms.filter(atom => atom.id !== id);
+    });
+
+    // Remove from all relation tuples
+    this.relations.forEach(relation => {
+      relation.tuples = relation.tuples.filter(tuple => !tuple.atoms.includes(id));
+    });
+  }
+
+
+  removeRelationTuple(relationId: string, t: ITuple): void {
+    
+    // How would we do this?
+    const relation = this.relations.get(relationId);
+    if (relation) {
+      relation.tuples = relation.tuples.filter(tuple =>
+        !tuple.atoms.every((atomId, index) => atomId === t.atoms[index])
+      );
+    }
+  }
+
+  reify(): unknown {
+    throw new Error('Method not implemented.');
+    // And this should return a string!
+  }
 
   /**
    * Parses Pyret objects iteratively to avoid stack overflow and handle cycles
@@ -70,7 +118,10 @@ export class PyretDataInstance implements IInputDataInstance {
       if (this.objectToAtomId.has(obj)) {
         if (parentInfo) {
           const existingAtomId = this.objectToAtomId.get(obj)!;
-          this.addRelationTuple(parentInfo.relationName, parentInfo.parentId, existingAtomId);
+          this.addRelationTuple(
+            parentInfo.relationName,
+            { atoms: [parentInfo.parentId, existingAtomId], types: ['PyretObject', 'PyretObject'] }
+          );
         }
         continue;
       }
@@ -79,7 +130,10 @@ export class PyretDataInstance implements IInputDataInstance {
 
       // Add relation from parent if this is not the root object
       if (parentInfo) {
-        this.addRelationTuple(parentInfo.relationName, parentInfo.parentId, atomId);
+        this.addRelationTuple(
+          parentInfo.relationName,
+          { atoms: [parentInfo.parentId, atomId], types: ['PyretObject', 'PyretObject'] }
+        );
       }
 
       // Process all dict entries as relations
@@ -87,7 +141,10 @@ export class PyretDataInstance implements IInputDataInstance {
         Object.entries(obj.dict).forEach(([relationName, fieldValue]) => {
           if (this.isAtomicValue(fieldValue)) {
             const valueAtomId = this.createAtomFromPrimitive(fieldValue);
-            this.addRelationTuple(relationName, atomId, valueAtomId);
+            this.addRelationTuple(
+              relationName,
+              { atoms: [atomId, valueAtomId], types: ['PyretObject', 'PyretObject'] }
+            );
           } else if (this.isPyretObject(fieldValue)) {
             processingQueue.push({
               obj: fieldValue,
@@ -227,36 +284,39 @@ export class PyretDataInstance implements IInputDataInstance {
   /**
    * Adds a tuple to a relation, creating the relation if it doesn't exist
    */
-  private addRelationTuple(relationName: string, sourceId: string, targetId: string): void {
+  private addRelationTuple(relationId: string, tuple: ITuple): void {
+    // const [sourceId, targetId] = tuple.atoms;
+
+    const sourceId = tuple.atoms[0];
+    const targetId = tuple.atoms[tuple.atoms.length - 1];
+    const middleAtoms = tuple.atoms.slice(1, -1);
+
     const sourceAtom = this.atoms.get(sourceId);
     const targetAtom = this.atoms.get(targetId);
-    
+
     if (!sourceAtom || !targetAtom) {
-      console.warn(`Cannot create relation ${relationName}: missing atoms ${sourceId} or ${targetId}`);
+      console.warn(`Cannot create relation ${relationId}: missing atoms ${sourceId} or ${targetId}`);
       return;
     }
 
-    let relation = this.relations.get(relationName);
+    let relation = this.relations.get(relationId);
+    let name = relationId + (middleAtoms.length > 0 ? `[${middleAtoms.join(', ')}]` : '');
     if (!relation) {
       relation = {
-        id: relationName,
-        name: relationName,
+        id: relationId,
+        name: name,
         types: [sourceAtom.type, targetAtom.type],
         tuples: []
       };
-      this.relations.set(relationName, relation);
+      this.relations.set(relationId, relation);
     }
 
     // Check for duplicate tuples
-    const isDuplicate = relation.tuples.some(tuple => 
-      tuple.atoms[0] === sourceId && tuple.atoms[1] === targetId
+    const isDuplicate = relation.tuples.some(t =>
+      t.atoms[0] === sourceId && t.atoms[1] === targetId
     );
 
     if (!isDuplicate) {
-      const tuple: ITuple = {
-        atoms: [sourceId, targetId],
-        types: [sourceAtom.type, targetAtom.type]
-      };
       relation.tuples.push(tuple);
     }
   }
