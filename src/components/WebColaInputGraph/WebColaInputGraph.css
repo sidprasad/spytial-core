@@ -1,0 +1,10 @@
+.webcola-input-graph {
+  display: flex;
+  gap: 16px;
+}
+.webcola-input-graph .graph-wrapper {
+  position: relative;
+}
+.webcola-input-graph form {
+  margin-top: 8px;
+}

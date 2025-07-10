@@ -43,6 +43,13 @@ if (typeof window !== 'undefined') {
         customElements.define('webcola-cnd-graph', WebColaCnDGraph as any);
         console.log('✅ WebCola CnD Graph custom element registered');
       }
+
+      import('./translators/webcola/editable-webcola-cnd-graph').then(({ EditableWebColaGraph }) => {
+        if (!customElements.get('editable-webcola-graph')) {
+          customElements.define('editable-webcola-graph', EditableWebColaGraph as any);
+          console.log('✅ Editable WebCola graph custom element registered');
+        }
+      }).catch(console.error);
     }).catch(console.error);
   }).catch(console.error);
 }
@@ -97,3 +104,5 @@ export const version = '1.0.0';
 // Export React components
 export { InstanceBuilder } from './components/InstanceBuilder/InstanceBuilder';
 export type { InstanceBuilderProps } from './components/InstanceBuilder/InstanceBuilder';
+export { WebColaInputGraph } from './components/WebColaInputGraph/WebColaInputGraph';
+export type { WebColaInputGraphProps } from './components/WebColaInputGraph/WebColaInputGraph';

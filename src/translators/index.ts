@@ -7,6 +7,7 @@ export { WebColaTranslator } from './webcola/webcolatranslator';
 
 // WebColaCnDGraph web component for browser usage
 export { WebColaCnDGraph } from './webcola/webcola-cnd-graph';
+export { EditableWebColaGraph } from './webcola/editable-webcola-cnd-graph';
 
 // Re-export types for convenience
 export type { 
