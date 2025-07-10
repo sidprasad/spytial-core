@@ -371,7 +371,9 @@ export class PyretDataInstance implements IDataInstance {
     
     // Add all atoms as nodes
     this.getAtoms().forEach(atom => {
-      graph.setNode(atom.id, atom.label);
+      graph.setNode(atom.id, {
+        label: atom.label
+      });
     });
     
     // Add all relation tuples as edges
