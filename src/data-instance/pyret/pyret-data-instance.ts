@@ -49,13 +49,22 @@ export class PyretDataInstance implements IInputDataInstance {
   /** Map to store the original Pyret objects with their dict key order */
   private originalObjects = new Map<string, PyretObject>();
 
+
+  private readonly showFunctions: boolean;
+
+  /*
+    TODO: List handling
+    - Handle Pyret Lists and Tables as special cases. They currently show as (link (link (link (link )))) etc.
+  */
+
+
   /**
    * Creates a PyretDataInstance from a Pyret runtime object
    * 
    * @param pyretData - The root Pyret object to parse
    */
-  constructor(pyretData: PyretObject) {
-
+  constructor(pyretData: PyretObject, showFunctions = false) {
+    this.showFunctions = showFunctions;
     this.initializeBuiltinTypes();
     this.parseObjectIteratively(pyretData);
   }
@@ -311,9 +320,25 @@ export class PyretDataInstance implements IInputDataInstance {
         );
       }
 
-      // Process all dict entries as relations
+      // Process all dict entries as relations, but skip obvious function/method fields
       if (obj.dict && typeof obj.dict === 'object') {
         Object.entries(obj.dict).forEach(([relationName, fieldValue]) => {
+          
+          
+          // Heuristic: skip fields that look like Pyret methods (object with only a 'name' property)
+          if (
+            this.showFunctions &&
+            fieldValue && typeof fieldValue === 'object' &&
+            Object.keys(fieldValue).length === 1 &&
+            'name' in fieldValue &&
+            typeof (fieldValue as any).name === 'string'
+          ) {
+            // skip this field
+            return;
+          }
+          ////
+
+
           if (this.isAtomicValue(fieldValue)) {
             const valueAtomId = this.createAtomFromPrimitive(fieldValue);
             this.addRelationTuple(
