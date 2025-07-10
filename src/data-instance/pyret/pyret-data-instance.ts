@@ -1,5 +1,5 @@
 import { Graph } from 'graphlib';
-import { IDataInstance, IAtom, IRelation, ITuple, IType } from '../interfaces';
+import { IInputDataInstance, IAtom, IRelation, ITuple, IType } from '../interfaces';
 
 /**
  * Pyret Lists and Tables are going to be really tricky here.
@@ -35,7 +35,7 @@ export function generateEdgeId(
  * const instance = new PyretDataInstance(pyretData);
  * ```
  */
-export class PyretDataInstance implements IDataInstance {
+export class PyretDataInstance implements IInputDataInstance {
   private atoms = new Map<string, IAtom>();
   private relations = new Map<string, IRelation>();
   private types = new Map<string, IType>();
@@ -428,7 +428,7 @@ export class PyretDataInstance implements IDataInstance {
   /**
    * Applies projections to filter the data instance
    */
-  applyProjections(atomIds: string[]): IDataInstance {
+  applyProjections(atomIds: string[]): PyretDataInstance {
     if (atomIds.length === 0) {
       return this;
     }
