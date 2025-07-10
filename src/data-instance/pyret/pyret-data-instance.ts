@@ -46,6 +46,9 @@ export class PyretDataInstance implements IInputDataInstance {
   /** Map to keep track of label counts per type */
   private typeLabelCounters = new Map<string, number>();
 
+  /** Map to store the original Pyret objects with their dict key order */
+  private originalObjects = new Map<string, PyretObject>();
+
   /**
    * Creates a PyretDataInstance from a Pyret runtime object
    * 
@@ -100,15 +103,167 @@ export class PyretDataInstance implements IInputDataInstance {
     }
   }
 
-  reify(): PyretObject {
+  /**
+   * Converts the current data instance back to Pyret constructor notation
+   * 
+   * 
+   * TODO: this **may** be wrong, but nice to examine.
+   * 
+   * 
+   * @returns A string representation of the data in Pyret constructor syntax
+   * 
+   * @example
+   * ```typescript
+   * // For a red-black tree: Black(5, Red(3, Leaf(1), Leaf(2)), Leaf(7))
+   * const pyretCode = instance.reify();
+   * ```
+   */
+  reify(): string {
+    // Find the root atom (the one that's not referenced by any other atom)
+    const referencedAtoms = new Set<string>();
+    this.relations.forEach(relation => {
+      relation.tuples.forEach(tuple => {
+        // Skip the first atom (source), mark others as referenced
+        for (let i = 1; i < tuple.atoms.length; i++) {
+          referencedAtoms.add(tuple.atoms[i]);
+        }
+      });
+    });
 
-    // How would we do this?
-    const rootObject: PyretObject = {
-      dict: {},
-      brands: {}
-    };
+    const rootAtoms = Array.from(this.atoms.values())
+      .filter(atom => !referencedAtoms.has(atom.id) && !this.isBuiltinType(atom.type));
 
+    if (rootAtoms.length === 0) {
+      return "/* No root atoms found */";
+    }
 
+    // If multiple roots, wrap in a list
+    if (rootAtoms.length > 1) {
+      const rootExpressions = rootAtoms.map(atom => this.reifyAtom(atom.id, new Set()));
+      return `[list: ${rootExpressions.join(', ')}]`;
+    }
+
+    return this.reifyAtom(rootAtoms[0].id, new Set());
+  }
+
+  /**
+   * Recursively reifies a single atom and its relations, preserving constructor argument order
+   * 
+   * @param atomId - The atom ID to reify
+   * @param visited - Set of visited atom IDs to prevent infinite recursion
+   * @returns Pyret constructor notation for this atom
+   */
+  private reifyAtom(atomId: string, visited: Set<string>): string {
+    if (visited.has(atomId)) {
+      return `/* cycle: ${atomId} */`;
+    }
+
+    const atom = this.atoms.get(atomId);
+    if (!atom) {
+      return `/* missing atom: ${atomId} */`;
+    }
+
+    visited.add(atomId);
+
+    // Handle primitive types
+    if (this.isBuiltinType(atom.type)) {
+      const result = this.reifyPrimitive(atom);
+      visited.delete(atomId);
+      return result;
+    }
+
+    // Get the original object to preserve key order
+    const originalObject = this.originalObjects.get(atomId);
+    
+    if (!originalObject || !originalObject.dict) {
+      visited.delete(atomId);
+      return atom.type;
+    }
+
+    // Use the original dict key order to maintain constructor argument order
+    const orderedKeys = Object.keys(originalObject.dict);
+    
+    // Check if this looks like a list (all keys are numeric)
+    const isListLike = orderedKeys.every(key => /^\d+$/.test(key));
+    
+    if (isListLike && orderedKeys.length > 0) {
+      // Sort numeric keys and extract list items
+      const sortedKeys = orderedKeys.sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+      const listItems = sortedKeys.map(key => {
+        const targetAtomIds = this.getRelationTargets(atomId, key);
+        return targetAtomIds.map(targetId => this.reifyAtom(targetId, visited));
+      }).flat();
+      
+      visited.delete(atomId);
+      return `[list: ${listItems.join(', ')}]`;
+    }
+
+    // Regular constructor notation with preserved argument order
+    const args: string[] = [];
+    
+    for (const relationName of orderedKeys) {
+      const targetAtomIds = this.getRelationTargets(atomId, relationName);
+      for (const targetId of targetAtomIds) {
+        args.push(this.reifyAtom(targetId, visited));
+      }
+    }
+
+    visited.delete(atomId);
+
+    if (args.length === 0) {
+      return atom.type;
+    }
+
+    return `${atom.type}(${args.join(', ')})`;
+  }
+
+  /**
+   * Reifies primitive values with appropriate Pyret syntax
+   */
+  private reifyPrimitive(atom: IAtom): string {
+    switch (atom.type) {
+      case 'String':
+        return `"${atom.label.replace(/"/g, '\\"')}"`;
+      case 'Number':
+        return atom.label;
+      case 'Boolean':
+        return atom.label;
+      default:
+        return atom.label;
+    }
+  }
+
+  /**
+   * Determines if an atom's relations look like a list structure
+   * (has numeric indices like "0", "1", "2", etc.)
+   */
+  private isListLike(relations: Map<string, string[]>): boolean {
+    const relationNames = Array.from(relations.keys());
+    
+    // Check if all relation names are numeric strings
+    const numericNames = relationNames.filter(name => /^\d+$/.test(name));
+    
+    // Must have at least one numeric relation and all relations should be numeric
+    return numericNames.length > 0 && numericNames.length === relationNames.length;
+  }
+
+  /**
+   * Extracts list items in the correct order for Pyret list notation
+   */
+  private extractListItems(relations: Map<string, string[]>, visited: Set<string>): string[] {
+    const items: string[] = [];
+    const sortedIndices = Array.from(relations.keys())
+      .filter(key => /^\d+$/.test(key))
+      .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+
+    for (const index of sortedIndices) {
+      const targetIds = relations.get(index) || [];
+      for (const targetId of targetIds) {
+        items.push(this.reifyAtom(targetId, visited));
+      }
+    }
+
+    return items;
   }
 
   /**
@@ -121,6 +276,15 @@ export class PyretDataInstance implements IInputDataInstance {
 
     while (processingQueue.length > 0) {
       const { obj, parentInfo } = processingQueue.shift()!;
+
+
+
+      /** 
+       * 
+       * TODO: N-ary relations, etc for things like lists, tables, etc.
+       * 
+       * 
+       */
 
       // Skip if we've already processed this object (cycle detection)
       if (this.objectToAtomId.has(obj)) {
@@ -135,6 +299,9 @@ export class PyretDataInstance implements IInputDataInstance {
       }
 
       const atomId = this.createAtomFromObject(obj);
+
+      // Store the original object to preserve dict key order
+      this.originalObjects.set(atomId, obj);
 
       // Add relation from parent if this is not the root object
       if (parentInfo) {
@@ -534,6 +701,29 @@ export class PyretDataInstance implements IInputDataInstance {
 
     return projected;
   }
+
+  /**
+   * Gets target atom IDs for a specific relation from a source atom
+   * 
+   * @param sourceAtomId - The source atom ID
+   * @param relationName - The relation name
+   * @returns Array of target atom IDs
+   */
+  private getRelationTargets(sourceAtomId: string, relationName: string): string[] {
+    const targets: string[] = [];
+    
+    this.relations.forEach(relation => {
+      if (relation.name === relationName) {
+        relation.tuples.forEach(tuple => {
+          if (tuple.atoms[0] === sourceAtomId && tuple.atoms.length >= 2) {
+            targets.push(tuple.atoms[1]);
+          }
+        });
+      }
+    });
+    
+    return targets;
+  }
 }
 
 /**
@@ -572,11 +762,11 @@ export const createPyretDataInstance = (jsonString: string): PyretDataInstance =
 };
 
 /**
- * Type guard to check if an IDataInstance is a PyretDataInstance
+ * Type guard to check if an IInputDataInstance is a PyretDataInstance
  * 
- * @param instance - IDataInstance to check
+ * @param instance - IInputDataInstance to check
  * @returns True if the instance is a PyretDataInstance
  */
-export const isPyretDataInstance = (instance: IDataInstance): instance is PyretDataInstance => {
+export const isPyretDataInstance = (instance: IInputDataInstance): instance is PyretDataInstance => {
   return instance instanceof PyretDataInstance;
 };

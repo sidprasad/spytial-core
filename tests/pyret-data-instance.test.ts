@@ -118,6 +118,9 @@ describe('PyretDataInstance', () => {
         }
     };
 
+
+    const reifiedData = "Black( 5, Black( 1, Red( 2, Red( 1, Leaf(0), Leaf(0)), Leaf(0)), Leaf(0)), Red( 6, Leaf(0), Leaf(0)))";
+
     it('should parse atoms correctly', () => {
         const instance = new PyretDataInstance(pyretData);
         const atoms = instance.getAtoms();
@@ -159,5 +162,19 @@ describe('PyretDataInstance', () => {
 
 
 
+    });
+
+    it('should reify the instance correctly', () => {
+        const instance = new PyretDataInstance(pyretData);
+        const reified = instance.reify();
+
+        // What about whitespace mismatch or something?
+        expect(reified).toBeDefined();
+        expect(typeof reified).toBe('string');
+
+        // Remove whitespace for comparison
+        const normalizedReified = reified.replace(/\s+/g, '');
+        const normalizedReifiedData = reifiedData.replace(/\s+/g, '');
+        expect(normalizedReified).toBe(normalizedReifiedData);
     });
 });
