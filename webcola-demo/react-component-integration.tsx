@@ -16,6 +16,21 @@ import { IInputDataInstance } from '../src/data-instance/interfaces';
 import { ErrorMessageContainer, ErrorStateManager } from '../src/components/ErrorMessageModal/index'
 import { ErrorMessages } from '../src/layout/constraint-validator';
 
+/**
+ * Configuration options for mounting CndLayoutInterface
+ * @public
+ */
+export interface CndLayoutMountConfig {
+  /** Initial YAML specification value */
+  initialYamlValue?: string;
+  /** Initial view mode - true for No-Code, false for Code */
+  initialIsNoCodeView?: boolean;
+  /** Initial constraints array */
+  initialConstraints?: ConstraintData[];
+  /** Initial directives array */
+  initialDirectives?: DirectiveData[];
+}
+
 /****
  * 
  * STATE MANAGERS
@@ -47,6 +62,27 @@ export class CndLayoutStateManager {
       CndLayoutStateManager.instance = new CndLayoutStateManager();
     }
     return CndLayoutStateManager.instance;
+  }
+
+  /**
+   * Initialize state manager with configuration values
+   * Overrides existing values completely
+   * @param config - Configuration object
+   * @public
+   */
+  public initializeWithConfig(config: CndLayoutMountConfig): void {
+    if (config.initialYamlValue !== undefined) {
+      this.yamlValue = config.initialYamlValue;
+    }
+    if (config.initialIsNoCodeView !== undefined) {
+      this.isNoCodeView = config.initialIsNoCodeView;
+    }
+    if (config.initialConstraints !== undefined) {
+      this.constraints = [...config.initialConstraints];
+    }
+    if (config.initialDirectives !== undefined) {
+      this.directives = [...config.initialDirectives];
+    }
   }
 
   /**
@@ -89,6 +125,33 @@ export class CndLayoutStateManager {
    */
   public getIsNoCodeView(): boolean {
     return this.isNoCodeView;
+  }
+
+  /**
+   * Get current constraints
+   * @returns Current constraints array
+   * @public
+   */
+  public getConstraints(): ConstraintData[] {
+    return [...this.constraints];
+  }
+
+  /**
+   * Get current directives
+   * @returns Current directives array
+   * @public
+   */
+  public getDirectives(): DirectiveData[] {
+    return [...this.directives];
+  }
+
+  /**
+   * Get current YAML value
+   * @returns Current YAML string
+   * @public
+   */
+  public getYamlValue(): string {
+    return this.yamlValue;
   }
 
   /**
@@ -208,39 +271,46 @@ export const globalErrorManager = new ErrorStateManager();
  * 
  * @private
  */
-const CndLayoutInterfaceWrapper: React.FC = () => {
-  const [yamlValue, setYamlValue] = useState<string>('');
-  const [isNoCodeView, setIsNoCodeView] = useState<boolean>(false);
-  const [constraints, setConstraints] = useState<ConstraintData[]>([]);
-  const [directives, setDirectives] = useState<DirectiveData[]>([]);
-
+const CndLayoutInterfaceWrapper: React.FC<{ config?: CndLayoutMountConfig }> = ({ config }) => {
   /** Get state manager instance */
   const stateManager = useMemo(() => CndLayoutStateManager.getInstance(), []);
+  
+  /** Initialize state with config values or state manager values */
+  // Initialize state with config values or state manager values
+  const [yamlValue, setYamlValue] = useState<string>(() => {
+    if (config?.initialYamlValue !== undefined) {
+      return config.initialYamlValue;
+    }
+    return stateManager.getYamlValue();
+  });
+  
+  const [isNoCodeView, setIsNoCodeView] = useState<boolean>(() => {
+    if (config?.initialIsNoCodeView !== undefined) {
+      return config.initialIsNoCodeView;
+    }
+    return stateManager.getIsNoCodeView();
+  });
+  
+  const [constraints, setConstraints] = useState<ConstraintData[]>(() => {
+    if (config?.initialConstraints !== undefined) {
+      return [...config.initialConstraints];
+    }
+    return stateManager.getConstraints();
+  });
+  
+  const [directives, setDirectives] = useState<DirectiveData[]>(() => {
+    if (config?.initialDirectives !== undefined) {
+      return [...config.initialDirectives];
+    }
+    return stateManager.getDirectives();
+  });
 
-  /** Listen for external state changes via custom events */
+  // Initialize state manager with config on mount
   useEffect(() => {
-    const handleSpecChange = (event: CustomEvent) => {
-      const newSpec = event.detail;
-      if (typeof newSpec === 'string' && newSpec !== yamlValue) {
-        setYamlValue(newSpec);
-      }
-    };
-
-    const handleViewModeChange = (event: CustomEvent) => {
-      const { isNoCodeView: newIsNoCodeView } = event.detail;
-      if (typeof newIsNoCodeView === 'boolean' && newIsNoCodeView !== isNoCodeView) {
-        setIsNoCodeView(newIsNoCodeView);
-      }
-    };
-
-    window.addEventListener('cnd-spec-changed', handleSpecChange as EventListener);
-    window.addEventListener('cnd-view-mode-changed', handleViewModeChange as EventListener);
-
-    return () => {
-      window.removeEventListener('cnd-spec-changed', handleSpecChange as EventListener);
-      window.removeEventListener('cnd-view-mode-changed', handleViewModeChange as EventListener);
-    };
-  }, [yamlValue, isNoCodeView]);
+    if (config) {
+      stateManager.initializeWithConfig(config);
+    }
+  }, [config, stateManager]);
 
   /** Sync with class state variables */
   useEffect(() => {
@@ -403,7 +473,10 @@ const InstanceBuilderWrapper: React.FC = () => {
  * 
  * @public
  */
-export function mountCnDLayoutInterface(containerId: string = 'webcola-cnd-container'): boolean {
+export function mountCnDLayoutInterface(
+  containerId: string = 'webcola-cnd-container',
+  config?: CndLayoutMountConfig
+): boolean {
   const container = document.getElementById(containerId);
   
   if (!container) {
@@ -411,10 +484,26 @@ export function mountCnDLayoutInterface(containerId: string = 'webcola-cnd-conta
     return false;
   }
 
+  // TODO: Validate YAML, if provided
+  if (config?.initialYamlValue /*&& !validateYamlValue(config.initialYamlValue)*/) {
+    console.error('Invalid YAML value provided in configuration');
+    return false;
+  }
+
   try {
     const root = createRoot(container);
-    root.render(<CndLayoutInterfaceWrapper />);
-    console.log(`✅ CnD Layout Interface mounted to #${containerId}`);
+    root.render(<CndLayoutInterfaceWrapper config={config} />);
+
+    if (config) {
+      console.log(`✅ CnD Layout Interface mounted to #${containerId} with initial config:`, {
+        yamlValue: config.initialYamlValue ? `${config.initialYamlValue.length} characters` : 'none',
+        isNoCodeView: config.initialIsNoCodeView ?? 'default',
+        constraints: config.initialConstraints?.length ?? 0,
+        directives: config.initialDirectives?.length ?? 0
+      });
+    } else {
+      console.log(`✅ CnD Layout Interface mounted to #${containerId}`);
+    }
     return true;
   } catch (error) {
     console.error('Failed to mount CnD Layout Interface:', error);
@@ -512,61 +601,6 @@ export function getCurrentCNDSpecFromReact(): string | undefined {
     console.error('Error accessing CndLayoutInterface instance:', error);
   }
 }
-
-/**
- * Mount the ErrorMessageModal React component to replace the error-messages div
- * @param containerId - ID of the container element (default: 'error-messages')
- */
-// export function mountErrorMessageModal(containerId: string = 'error-messages'): void {
-//   const container = document.getElementById(containerId);
-  
-//   if (!container) {
-//     console.error(`Error messages container with ID '${containerId}' not found`);
-//     return;
-//   }
-
-//   // Create React root and render the component
-//   const root = createRoot(container);
-//   // root.render(<ErrorMessageModal messages={messages} />);
-//   root.render(<ErrorMessageContainer errorManager={globalErrorManager} />);
-
-//   /** Expose functions to global scope for demo integration */
-//   (window as any).showParseError = (message: string, source?: string) => {
-//     globalErrorManager.setError({
-//       type: 'parse-error',
-//       message,
-//       source
-//     });
-//   };
-
-//   (window as any).showGroupOverlapError = (message: string, source?: string) => {
-//     globalErrorManager.setError({
-//       type: 'group-overlap-error',
-//       message: message,
-//       source: source,
-//     });
-//   };
-
-//   (window as any).showPositionalError = (errorMessages: ErrorMessages) => {
-//     globalErrorManager.setError({
-//       type: 'positional-error',
-//       messages: errorMessages
-//     });
-//   };
-
-//   (window as any).showGeneralError = (message: string) => {
-//     globalErrorManager.setError({
-//       type: 'general-error',
-//       message
-//     });
-//   };
-
-//   (window as any).clearAllErrors = () => {
-//     globalErrorManager.clearError();
-//   };
-
-//   console.log(`ErrorMessageContainer component mounted to #${containerId}`);
-// }
 
 /**
  * Mount ErrorMessageModal component into specified container
@@ -752,55 +786,6 @@ export const DataAPI = {
   },
 
   /**
-   * Set CND specification programmatically
-   */
-  setCurrentCndSpec: (newSpec: string): void => {
-    try {
-      const stateManager = CndLayoutStateManager.getInstance();
-      stateManager.setYamlValue(newSpec);  
-      
-      // Dispatch custom event for component synchronization
-      window.dispatchEvent(new CustomEvent('cnd-spec-changed', { 
-        detail: newSpec 
-      }));
-    } catch (error) {
-      console.error('Error setting CND specification:', error);
-    }
-  },
-
-  /**
-   * Get current layout view mode
-   * @returns True if in No-Code view, false for Code view
-   */
-  getLayoutViewMode: (): boolean => {
-    try {
-      const stateManager = CndLayoutStateManager.getInstance();
-      return stateManager.getIsNoCodeView();
-    } catch (error) {
-      console.error('Error accessing layout view mode:', error);
-      return false;
-    }
-  },
-
-  /**
-   * Set layout view mode programmatically
-   * @param isNoCodeView - Whether to use No-Code view
-   */
-  setLayoutViewMode: (isNoCodeView: boolean): void => {
-    try {
-      const stateManager = CndLayoutStateManager.getInstance();
-      stateManager.setIsNoCodeView(isNoCodeView);
-      
-      // Dispatch custom event for component synchronization
-      window.dispatchEvent(new CustomEvent('cnd-view-mode-changed', { 
-        detail: { isNoCodeView } 
-      }));
-    } catch (error) {
-      console.error('Error setting layout view mode:', error);
-    }
-  },
-
-  /**
    * Get current data instance from InstanceBuilder component
    * @returns Current data instance or undefined if not available
    */
@@ -866,10 +851,6 @@ if (typeof window !== 'undefined') {
   // Expose data functions for legacy compatibility
   (window as any).getCurrentCNDSpecFromReact = DataAPI.getCurrentCndSpec;
   (window as any).getCurrentInstanceFromReact = DataAPI.getCurrentInstance;
-  (window as any).setCurrentCndSpec = DataAPI.setCurrentCndSpec;
-  (window as any).updateInstance = DataAPI.updateInstance;
-  (window as any).getLayoutViewMode = DataAPI.getLayoutViewMode;
-  (window as any).setLayoutViewMode = DataAPI.setLayoutViewMode;
   
   // Expose error functions for legacy compatibility
   (window as any).showParseError = ErrorAPI.showParseError;
