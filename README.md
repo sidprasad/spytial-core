@@ -113,6 +113,16 @@ const { layout } = layoutInstance.generateLayout(dataInstance, {});
   // Assuming CndCore is loaded globally
   const graphElement = document.getElementById('graph');
   graphElement.renderLayout(layout); // layout from the pipeline above
+  // Listen for drag events
+  graphElement.addEventListener('node-drag-start', (e) => {
+    console.log('drag start', e.detail);
+  });
+  graphElement.addEventListener('node-drag-end', (e) => {
+    console.log('drag end', e.detail);
+  });
+  // Read positions programmatically
+  const positions = graphElement.getNodePositions();
+  console.log('node positions', positions);
 </script>
 ```
 

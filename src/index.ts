@@ -32,8 +32,8 @@ if (typeof window !== 'undefined') {
   import('./translators/webcola/webcola-cnd-graph').then(({ WebColaCnDGraph }) => {
     // Make d3 and webcola available globally for WebCola d3adaptor
     Promise.all([
-      import('d3'),
-      import('webcola')
+      import('./vendor/d3.v4.min.js'),
+      import('./vendor/cola.js')
     ]).then(([d3Module, colaModule]) => {
       (window as any).d3 = d3Module;
       (window as any).cola = colaModule;

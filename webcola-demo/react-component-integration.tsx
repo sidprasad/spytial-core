@@ -325,6 +325,10 @@ const CndLayoutInterfaceWrapper: React.FC<{ config?: CndLayoutMountConfig }> = (
     stateManager.setYamlValue(yamlValue);
   }, [yamlValue, stateManager]);
 
+  useEffect(() => {
+    stateManager.setIsNoCodeView(isNoCodeView);
+  }, [isNoCodeView, stateManager]);
+
   /**
    * Handle YAML value changes and update the global state
    * This ensures compatibility with the existing getCurrentCNDSpec() function
@@ -843,6 +847,8 @@ if (typeof window !== 'undefined') {
   (window as any).mountInstanceBuilder = mountInstanceBuilder;
   (window as any).mountErrorMessageModal = mountErrorMessageModal;
   (window as any).mountIntegratedComponents = mountAllComponents;
+
+  // Expose data functions for legacy compatibility
   (window as any).getCurrentCNDSpecFromReact = DataAPI.getCurrentCndSpec;
   (window as any).getCurrentInstanceFromReact = DataAPI.getCurrentInstance;
   

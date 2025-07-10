@@ -21,6 +21,8 @@ export default defineConfig({
   external: ['react', 'react-dom'],
   bundle: true,
   treeshake: true,
+    // Ensure DOM types are available
+  platform: 'browser',
   // Ensure all dependencies are bundled for client-side use
   noExternal: [
     'graphlib',

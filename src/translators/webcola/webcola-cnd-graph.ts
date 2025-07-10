@@ -1,33 +1,35 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator } from './webcolatranslator';
 import { InstanceLayout, isAlignmentConstraint, isLeftConstraint, isTopConstraint, LayoutNode } from '../../layout/interfaces';
-import { GridRouter, Group, Layout, Node, Link } from 'webcola';
+import type { GridRouter, Group, Layout, Node, Link } from 'webcola';
 
-// Use global D3 v4 and WebCola from external scripts (CDN + vendor)
-declare global {
-  interface Window {
-    cola: any;
-    d3: any;
+let d3 = window.d3v4 || window.d3; // Use d3 v4 if available, otherwise fallback to the default window.d3
+let cola = window.cola;
+
+/**
+ * Checks if two SVG elements are overlapping.
+ * 
+ * @param element1 - First element
+ * @param element2 - Second element
+ * @returns True if elements overlap
+ */
+function isOverlapping(element1: SVGElement, element2: SVGElement): boolean {
+  function hasgetBBox(target: any): target is { getBBox: any } {
+    return target && typeof target === 'object' && 'getBBox' in target;
   }
+
+  const bbox1 = hasgetBBox(element1) ? element1.getBBox() : { x: 0, y: 0, width: 0, height: 0 };
+  const bbox2 = hasgetBBox(element2) ? element2.getBBox() : { x: 0, y: 0, width: 0, height: 0 };
+  
+  return !(bbox2.x > bbox1.x + bbox1.width ||
+           bbox2.x + bbox2.width < bbox1.x ||
+           bbox2.y > bbox1.y + bbox1.height ||
+           bbox2.y + bbox2.height < bbox1.y);
 }
 
-// Access global versions loaded by external scripts
-const cola = (typeof window !== 'undefined') ? (window as any).cola : null;
-//const d3 = (typeof window !== 'undefined') ? (window as any).d3 : null;
-
-const D3Accessor = {
-  get d3(): any {
-    if (typeof window !== 'undefined' && window.d3) {
-      console.log('Using global D3 from window');
-      return window.d3;
-    } else {
-      console.warn('D3 library not available. Please ensure D3 is loaded.');
-      return null;
-    }
-  }
-};
-
-// Example usage
-const d3 = D3Accessor.d3;
+function hasInnerBounds(target: any): target is { innerBounds: any } {
+  return target && typeof target === 'object' && 'innerBounds' in target;
+}
 
 
 const DEFAULT_SCALE_FACTOR = 5;
@@ -38,7 +40,7 @@ const DEFAULT_SCALE_FACTOR = 5;
  * @field currentLayout - Holds the current custom WebColaLayout instance
  * @field colaLayout - Holds the current layout instance used by WebCola
  */
-export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLElement : (class {} as any)) {
+export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'undefined' ? HTMLElement : (class {} as any)) {
   private svg!: any;
   private container!: any;
   private currentLayout!: WebColaLayout;
@@ -96,6 +98,11 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
   private svgLinkGroups : any;
   private svgGroups : any;
   private svgGroupLabels: any;
+  /**
+   * Stores the starting coordinates when a node begins dragging so
+   * drag end events can report both the previous and new positions.
+   */
+  private dragStartPositions: Map<string, { x: number; y: number }> = new Map();
 
   constructor() {
     super();
@@ -267,6 +274,10 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    */
   private initializeD3(): void {
     
+    if (!d3) {
+      d3 = window.d3;
+    }
+
     this.svg = d3.select(this.shadowRoot!.querySelector('#svg'));
     this.container = this.svg.select('.zoomable');
 
@@ -292,13 +303,17 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    */
   public async renderLayout(instanceLayout: InstanceLayout): Promise<void> {
     try {
-      
+      console.log('D3 version:', d3.version);
       // Check if D3 and WebCola are available
       if (!d3) {
-        throw new Error('D3 library not available. Please ensure D3 v3 is loaded from CDN.');
+        throw new Error('D3 library not available. Please ensure D3 v4 is loaded from CDN.');
       }
       if (!cola) {
-        throw new Error('WebCola library not available. Please ensure vendor/cola.js is loaded.');
+        if(!window.cola) {
+
+          throw new Error('WebCola library not available. Please ensure vendor/cola.js is loaded.');
+        }
+        cola = window.cola;
       }
 
       // Ensure D3 and container are properly initialized
@@ -396,6 +411,21 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       console.error('Error rendering layout:', error);
       this.showError(`Layout rendering failed: ${(error as Error).message}`);
     }
+  }
+
+  /**
+   * Get the current positions of all nodes in the layout.
+   * Useful for reading coordinates after rendering or drag events.
+   */
+  public getNodePositions(): Array<{ id: string; x: number; y: number }> {
+    if (!this.currentLayout?.nodes) {
+      return [];
+    }
+    return this.currentLayout.nodes.map((n: any) => ({
+      id: n.id,
+      x: n.x,
+      y: n.y
+    }));
   }
 
   /**
@@ -571,7 +601,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         return targetNode?.color || "#999999";
       })
       .attr("stroke-width", 1)
-      .call(layout.drag);
+      .call((layout as any).drag);
 
 
     return groupRects;
@@ -614,7 +644,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         }
         
         return "";
-      }).call(layout.drag);
+      }).call((layout as any).drag);
   }
 
   /**
@@ -634,6 +664,28 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    */
   private setupNodes(nodes: Array<NodeWithMetadata>, layout: Layout): d3.Selection<SVGGElement, any, any, unknown> {
     // Create node groups with drag behavior
+    const nodeDrag = layout.drag();
+    nodeDrag
+      .on('start.cnd', (d: any) => {
+        const start = { x: d.x, y: d.y };
+        this.dragStartPositions.set(d.id, start);
+        this.dispatchEvent(
+          new CustomEvent('node-drag-start', {
+            detail: { id: d.id, position: start }
+          })
+        );
+      })
+      .on('end.cnd', (d: any) => {
+        const start = this.dragStartPositions.get(d.id);
+        this.dragStartPositions.delete(d.id);
+        const detail = {
+          id: d.id,
+          previous: start,
+          current: { x: d.x, y: d.y }
+        };
+        this.dispatchEvent(new CustomEvent('node-drag-end', { detail }));
+      });
+
     const nodeSelection = this.container
       .selectAll(".node")
       .data(nodes)
@@ -642,7 +694,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       .attr("class", (d: any) => {
         return this.isErrorNode(d) ? "error-node" : "node";
       })
-      .call(layout.drag);
+      .call(nodeDrag as any);
 
     // Add rectangle backgrounds for nodes
     this.setupNodeRectangles(nodeSelection);
@@ -727,7 +779,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       })
       .append("title")
       .text((d: any) => d.label || d.name || d.id || "Node")
-      .on("error", function(this: SVGImageElement, event: any, d: any) {
+      .on("error", function(this: any, event: any, d: any) {
 
         d3.select(this).attr("xlink:href", "img/default.png");
         console.error(`Failed to load icon for node ${d.id}: ${d.icon}`);
@@ -876,19 +928,19 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
 
     // Update node rectangles using bounds
     this.svgNodes.select('rect')
-      .each((d: NodeWithMetadata) => {
+      .each((d: any) => {
         if (d.bounds) {
           d.innerBounds = d.bounds.inflate(-1);
         }
       })
-      .attr('x', (d: NodeWithMetadata) => d.bounds.x )
-      .attr('y', (d: NodeWithMetadata) => d.bounds.y )
-      .attr('width', (d: NodeWithMetadata) => d.bounds.width() )
-      .attr('height', (d: NodeWithMetadata) => d.bounds.height());
+      .attr('x', (d: any) => d.bounds.x )
+      .attr('y', (d: any) => d.bounds.y )
+      .attr('width', (d: any) => d.bounds.width() )
+      .attr('height', (d: any) => d.bounds.height());
 
     // Update node icons with proper positioning
     this.svgNodes.select('image')
-      .attr('x', (d: NodeWithMetadata) => {
+      .attr('x', (d: any) => {
         if (d.showLabels) {
           // Move to the top-right corner
           return d.x + (d.width) / 2 - ((d.width) * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR);
@@ -897,7 +949,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
           return d.bounds.x;
         }
       })
-      .attr('y', (d: NodeWithMetadata) => {
+      .attr('y', (d: any) => {
         if (d.showLabels) {
           // Align with the top edge
           return d.y - (d.height) / 2;
@@ -909,8 +961,8 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
 
     // Update most specific type labels
     this.svgNodes.select('.mostSpecificTypeLabel')
-      .attr('x', (d: NodeWithMetadata) => d.x - (d.width) / 2 + 5)
-      .attr('y', (d: NodeWithMetadata) => d.y - (d.height) / 2 + 10)
+      .attr('x', (d: NodeWithMetadata) => d.x - (d.width || 0) / 2 + 5)
+      .attr('y', (d: NodeWithMetadata) => d.y - (d.height || 0) / 2 + 10)
       .raise();
 
     // Update main node labels with tspan positioning
@@ -950,7 +1002,9 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
               target = targetGroup;
               // NOTE: I think this is a rectangle...
               // Just added this to the NodeWithMetadata interface
-              target.innerBounds = targetGroup.bounds?.inflate(-1 * (targetGroup.padding || 10));
+              if(hasInnerBounds(target)) {
+                target.innerBounds = targetGroup.bounds?.inflate(-1 * (targetGroup.padding || 10));
+              }
             } else {
               console.log('Target group not found', potentialGroups, this.getNodeIndex(target));
             }
@@ -960,7 +1014,10 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
             
             if (sourceGroup) {
               source = sourceGroup;
-              source.innerBounds = sourceGroup.bounds?.inflate(-1 * (sourceGroup.padding || 10));
+              if(hasInnerBounds(source)) {
+                // Inflate inner bounds for source group
+                source.innerBounds = sourceGroup.bounds?.inflate(-1 * (sourceGroup.padding || 10));
+              }
             } else {
               console.log('Source group not found', potentialGroups, this.getNodeIndex(source));
             }
@@ -970,7 +1027,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         }
 
         // Use WebCola's edge routing if available and nodes have innerBounds
-        if (typeof (cola as any).makeEdgeBetween === 'function' && 
+        if (typeof (cola as any).makeEdgeBetween === 'function' && hasInnerBounds(source) && hasInnerBounds(target) &&
             source.innerBounds && target.innerBounds) {
           const route = (cola as any).makeEdgeBetween(source.innerBounds, target.innerBounds, 5);
           return this.lineFunction([route.sourceIntersection, route.arrowStart]);
@@ -1708,8 +1765,9 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
   private handleLabelOverlap(currentLabel: SVGTextElement): void {
     const overlapsWith: SVGTextElement[] = [];
 
+
     this.container.selectAll('.linklabel').each(function(this: SVGTextElement) {
-      if (this !== currentLabel && this.isOverlapping && this.isOverlapping(currentLabel)) {
+      if (this !== currentLabel && isOverlapping(this, currentLabel)) {
         overlapsWith.push(this);
       }
     });
@@ -1719,22 +1777,6 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
     }
   }
 
-  /**
-   * Checks if two SVG elements are overlapping.
-   * 
-   * @param element1 - First element
-   * @param element2 - Second element
-   * @returns True if elements overlap
-   */
-  private isOverlapping(element1: SVGElement, element2: SVGElement): boolean {
-    const bbox1 = element1.getBBox();
-    const bbox2 = element2.getBBox();
-    
-    return !(bbox2.x > bbox1.x + bbox1.width ||
-             bbox2.x + bbox2.width < bbox1.x ||
-             bbox2.y > bbox1.y + bbox1.height ||
-             bbox2.y + bbox2.height < bbox1.y);
-  }
 
   /**
    * Minimizes overlap between labels by repositioning.
@@ -1921,22 +1963,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         return axis === 'x' ? point.x : point.y;
     }
 
-  /**
-   * Create drag behavior for nodes and groups
-   * 
-   * @param layout - WebCola layout instance
-   * @returns D3 drag behavior for interactive node manipulation
-   * 
-   * @example
-   * ```typescript
-   * const dragBehavior = layout.drag;
-   * nodeSelection.call(dragBehavior);
-   * ```
-   */
-  private createDragBehavior(layout: any): any {
-    // Use WebCola's own drag behavior instead of D3's - this handles D3 version compatibility
-    return layout.drag;
-  }
+  
 
   /**
    * Show loading indicator
@@ -1970,6 +1997,5 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
 
 // Register the custom element only in browser environments
 if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined') {
-  // eslint-disable-next-line no-undef
   customElements.define('webcola-cnd-graph', WebColaCnDGraph);
 }

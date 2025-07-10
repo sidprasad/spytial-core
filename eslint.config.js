@@ -18,6 +18,15 @@ export default [
         document: 'readonly',
         d3: 'readonly',
         cola: 'readonly',
+        HTMLElement: 'readonly',
+        customElements: 'readonly',
+        CustomElementRegistry: 'readonly',
+        CustomEvent: 'readonly',
+        SVGElement: 'readonly',
+        SVGGElement: 'readonly',
+        SVGTextElement: 'readonly',
+        SVGRectElement: 'readonly',
+        SVGPathElement: 'readonly',
       },
     },
     plugins: {
@@ -32,6 +41,13 @@ export default [
       '@typescript-eslint/no-inferrable-types': 'off',
       'prefer-const': 'off',
       'no-var': 'off',
+    },
+  },
+  {
+    // Disable no-explicit-any for vendor files
+    files: ['src/vendor/**/*.{ts,js}'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
     },
   },
   {
