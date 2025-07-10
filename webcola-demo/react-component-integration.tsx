@@ -484,8 +484,12 @@ export function mountCnDLayoutInterface(
     return false;
   }
 
-  // TODO: Validate YAML, if provided
-  if (config?.initialYamlValue /*&& !validateYamlValue(config.initialYamlValue)*/) {
+  // TODO: Write an actual YAML validator
+  function validateYamlValue(yaml: string): boolean {
+    return true;
+  }
+
+  if (config?.initialYamlValue && !validateYamlValue(config.initialYamlValue)) {
     console.error('Invalid YAML value provided in configuration');
     return false;
   }
