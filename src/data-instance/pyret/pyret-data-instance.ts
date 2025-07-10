@@ -36,6 +36,7 @@ export function generateEdgeId(
  * ```
  */
 export class PyretDataInstance implements IInputDataInstance {
+
   private atoms = new Map<string, IAtom>();
   private relations = new Map<string, IRelation>();
   private types = new Map<string, IType>();
@@ -51,6 +52,7 @@ export class PyretDataInstance implements IInputDataInstance {
    * @param pyretData - The root Pyret object to parse
    */
   constructor(pyretData: PyretObject) {
+
     this.initializeBuiltinTypes();
     this.parseObjectIteratively(pyretData);
   }
@@ -98,9 +100,15 @@ export class PyretDataInstance implements IInputDataInstance {
     }
   }
 
-  reify(): unknown {
-    throw new Error('Method not implemented.');
-    // And this should return a string!
+  reify(): PyretObject {
+
+    // How would we do this?
+    const rootObject: PyretObject = {
+      dict: {},
+      brands: {}
+    };
+
+
   }
 
   /**
@@ -284,7 +292,7 @@ export class PyretDataInstance implements IInputDataInstance {
   /**
    * Adds a tuple to a relation, creating the relation if it doesn't exist
    */
-  private addRelationTuple(relationId: string, tuple: ITuple): void {
+  addRelationTuple(relationId: string, tuple: ITuple): void {
     // const [sourceId, targetId] = tuple.atoms;
 
     const sourceId = tuple.atoms[0];
