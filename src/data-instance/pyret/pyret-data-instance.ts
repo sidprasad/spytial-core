@@ -345,7 +345,7 @@ export class PyretDataInstance implements IInputDataInstance {
     builtinTypes.forEach(typeName => {
       const type: IType = {
         id: typeName,
-        types: typeName === 'PyretObject' ? [] : ['PyretObject'],
+        types: typeName === 'PyretObject' ?  ['PyretObject'] : [typeName, 'PyretObject'], // All types inherit from PyretObject
         atoms: [],
         isBuiltin: true
       };

@@ -126,6 +126,7 @@ describe('PyretDataInstance', () => {
         expect(atoms.map(atom => atom.type)).toContain('Black');
         expect(atoms.map(atom => atom.type)).toContain('Red');
         expect(atoms.map(atom => atom.type)).toContain('Leaf');
+        expect(atoms.map(atom => atom.type)).toContain('Number');
 
         // And the types
 
