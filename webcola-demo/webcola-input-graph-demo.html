@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WebCola Input Graph Demo</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    #react-root {
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Editable WebCola Graph Demo</h1>
+  <p>Interactively add atoms and relations using the new <code>WebColaInputGraph</code> component.</p>
+  <div id="react-root"></div>
+
+  <!-- D3 v4 and WebCola -->
+  <script src="https://d3js.org/d3.v4.min.js"></script>
+  <script src="../vendor/cola.js"></script>
+
+  <!-- React runtime for demo -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+  <!-- Complete CND-Core browser bundle (registers custom elements and exports React components) -->
+  <script src="../dist/browser/cnd-core-complete.global.js"></script>
+
+  <script>
+    // Initialize an empty DOT data instance
+    const { DotDataInstance, WebColaInputGraph } = window.CndCore;
+    const instance = new DotDataInstance('digraph G {}');
+
+    const cndSpec = `constraints: []\ndirectives:\n  - flag: hideDisconnectedBuiltIns`;
+
+    function handleChange(updated) {
+      console.log('Instance updated:', updated.getAtoms().length, 'atoms');
+    }
+
+    const rootEl = document.getElementById('react-root');
+    const root = ReactDOM.createRoot(rootEl);
+    root.render(
+      React.createElement(WebColaInputGraph, {
+        instance,
+        cndSpec,
+        onChange: handleChange,
+        width: 800,
+        height: 600,
+      })
+    );
+  </script>
+</body>
+</html>
