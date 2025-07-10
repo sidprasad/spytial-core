@@ -13,5 +13,9 @@ export { OrientationSelector } from './Selectors/OrientationSelector';
 export { ProjectionSelector } from './Selectors/ProjectionSelector';
 export { SizeSelector } from './Selectors/SizeSelector';
 
+// Export data functions
+export { parseLayoutSpecToData } from './NoCodeView';
+export { generateLayoutSpecYaml } from './CodeView';
+
 // Export constants and types
 export * from './constants';
