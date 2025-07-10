@@ -126,6 +126,9 @@ describe('PyretDataInstance', () => {
         expect(atoms.map(atom => atom.type)).toContain('Black');
         expect(atoms.map(atom => atom.type)).toContain('Red');
         expect(atoms.map(atom => atom.type)).toContain('Leaf');
+
+        // And the types
+
     });
 
     it('should extract relations correctly', () => {
@@ -153,7 +156,7 @@ describe('PyretDataInstance', () => {
 
         // And I want to make sure that the labels are correct for each node.
 
-        
+
 
     });
 });

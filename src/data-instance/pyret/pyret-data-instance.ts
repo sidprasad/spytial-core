@@ -268,7 +268,7 @@ export class PyretDataInstance implements IDataInstance {
     if (!this.types.has(typeName)) {
       const type: IType = {
         id: typeName,
-        types: ['PyretObject'], // All types inherit from PyretObject
+        types: [typeName, 'PyretObject'], // All types inherit from PyretObject
         atoms: [],
         isBuiltin: this.isBuiltinType(typeName)
       };
