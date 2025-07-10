@@ -328,10 +328,10 @@ export class PyretDataInstance implements IInputDataInstance {
           // Heuristic: skip fields that look like Pyret methods (object with only a 'name' property)
           if (
             !this.showFunctions &&
-            fieldValue && typeof fieldValue === 'object' &&
-            Object.keys(fieldValue).length === 1 &&
-            'name' in fieldValue &&
-            typeof (fieldValue as any).name === 'string'
+            fieldValue &&
+            typeof fieldValue === 'object' &&
+            'meth' in fieldValue &&
+            'full_meth' in fieldValue
           ) {
             // skip this field
             return;
