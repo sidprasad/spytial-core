@@ -12,4 +12,8 @@ constraints:
 directives:
   - attribute:
       field: key
-  - flag: hideDisconnectedBuiltIns
+  # New hideAtom directive - more flexible than hideDisconnectedBuiltIns
+  - hideAtom:
+      selector: univ  # Hide all atoms from builtin 'univ' type
+  # Legacy flag still supported for backwards compatibility
+  # - flag: hideDisconnectedBuiltIns
