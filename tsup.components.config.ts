@@ -1,9 +1,9 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: ['./webcola-demo/react-component-integration.tsx'],
+  entry: ['./webcola-demo/integrated-demo-components.tsx'],
   format: ['iife'], // Immediately Invoked Function Expression for HTML
-  globalName: 'CndComponents',
+  globalName: 'IntegratedDemo',
   outDir: 'dist/components',
   clean: true,
   minify: false, // Set to true for production
@@ -14,6 +14,6 @@ export default defineConfig({
   splitting: false,
   dts: true,
   onSuccess: async () => {
-    console.log('✅ React components built successfully for HTML integration');
+    console.log('✅ Integrated demo components built successfully for HTML integration');
   },
 });
