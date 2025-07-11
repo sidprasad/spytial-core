@@ -392,7 +392,26 @@ export class LayoutInstance {
                 const isDisconnected = inEdges.length === 0 && outEdges.length === 0;
 
 
-                const hideNode = isDisconnected && ((this.hideDisconnectedBuiltIns && isAtomBuiltin) || this.hideDisconnected);
+                // Legacy hiding logic for backwards compatibility
+                const hideLegacy = isDisconnected && ((this.hideDisconnectedBuiltIns && isAtomBuiltin) || this.hideDisconnected);
+
+                // New selector-based hiding logic
+                let hideBySelector = false;
+                const hiddenAtomDirectives = this._layoutSpec.directives.hiddenAtoms;
+                for (const directive of hiddenAtomDirectives) {
+                    try {
+                        const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
+                        const selectedAtoms = selectorResult.selectedAtoms();
+                        if (selectedAtoms.includes(node)) {
+                            hideBySelector = true;
+                            break;
+                        }
+                    } catch (error) {
+                        console.error(`Failed to evaluate hideAtom selector "${directive.selector}":`, error);
+                    }
+                }
+
+                const hideNode = hideLegacy || hideBySelector;
 
                 if (hideNode) {
                     g.removeNode(node);
