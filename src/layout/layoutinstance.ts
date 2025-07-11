@@ -351,13 +351,16 @@ export class LayoutInstance {
                 let source = edge.v;
                 let target = edge.w;
 
+                // Really, we should be pushing the target node's LABEL.
+                let targetLabel = g.node(target)?.label || target; // Use the node's label or the node ID if no label exists.
+
                 let nodeAttributes = attributes[source] || {};
 
                 if (!nodeAttributes[attributeKey]) {
                     nodeAttributes[attributeKey] = [];
                     attributes[source] = nodeAttributes;
                 }
-                nodeAttributes[attributeKey].push(target);
+                nodeAttributes[attributeKey].push(targetLabel);
 
                 // Now remove the edge from the graph
                 g.removeEdge(edge.v, edge.w, edgeId);
