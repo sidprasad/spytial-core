@@ -14,7 +14,7 @@ interface HideAtomSelectorProps {
  * Simple selector input to specify which atoms to hide.
  */
 export const HideAtomSelector: React.FC<HideAtomSelectorProps> = (props: HideAtomSelectorProps) => {
-  const handleInputChange = useCallback((event) => {
+  const handleInputChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
     props.onUpdate({
       params: {
@@ -35,6 +35,7 @@ export const HideAtomSelector: React.FC<HideAtomSelectorProps> = (props: HideAto
         type="text"
         name="selector"
         className="form-control"
+        defaultValue={props.directiveData.params.selector as string || ''}
         onChange={handleInputChange}
         required
       />
