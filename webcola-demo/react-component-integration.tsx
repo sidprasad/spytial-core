@@ -847,7 +847,7 @@ if (typeof window !== 'undefined') {
   (window as any).CnDCore = CnDCore;
   
   // Legacy compatibility - expose individual functions
-  (window as any).mountCndLayoutInterface = mountCnDLayoutInterface;
+  (window as any).mountCnDLayoutInterface = mountCnDLayoutInterface;
   (window as any).mountInstanceBuilder = mountInstanceBuilder;
   (window as any).mountErrorMessageModal = mountErrorMessageModal;
   (window as any).mountIntegratedComponents = mountAllComponents;
