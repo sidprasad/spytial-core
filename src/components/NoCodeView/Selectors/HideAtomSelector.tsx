@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useCallback } from 'react';
+import { UNARY_SELECTOR_TEXT } from '../constants';
 import { DirectiveData } from '../interfaces';
 
 interface HideAtomSelectorProps {
@@ -9,31 +10,33 @@ interface HideAtomSelectorProps {
 }
 
 /**
- * React component for hideAtom directive configuration.
- * Provides a text input for entering selector expressions to hide atoms.
- * 
- * Supports any selector expression that can be evaluated by the layout evaluator,
- * enabling flexible atom hiding based on type, name, or complex expressions.
+ * Minimal React component for hide atom directive.
+ * Simple selector input to specify which atoms to hide.
  */
-export const HideAtomSelector: React.FC<HideAtomSelectorProps> = ({
-  directiveData,
-  onUpdate
-}) => {
-  const selector = directiveData.params.selector as string || '';
+export const HideAtomSelector: React.FC<HideAtomSelectorProps> = (props: HideAtomSelectorProps) => {
+  const handleInputChange = useCallback((event) => {
+    const { name, value } = event.target;
+    props.onUpdate({
+      params: {
+        ...props.directiveData.params,
+        [name]: value
+      }
+    });
+  }, [props.onUpdate, props.directiveData.params]);
 
   return (
     <div className="input-group">
       <div className="input-group-prepend">
-        <span className="input-group-text">Selector</span>
+        <span className="input-group-text infolabel" title={UNARY_SELECTOR_TEXT}>
+          Selector
+        </span>
       </div>
       <input
         type="text"
         name="selector"
         className="form-control"
-        placeholder="e.g., Int, univ, A + B"
-        value={selector}
-        onChange={(e) => onUpdate({ params: { ...directiveData.params, selector: e.target.value } })}
-        title="Enter a selector expression to hide matching atoms. Examples: 'Int' (hide all Int atoms), 'univ' (hide builtin types), 'A + B' (hide atoms A and B)"
+        onChange={handleInputChange}
+        required
       />
     </div>
   );

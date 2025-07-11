@@ -6,8 +6,4 @@ constraints:
 directives:
   - attribute:
       field: value
-  # New hideAtom directive - hide atoms of specific types
-  - hideAtom:
-      selector: Boolean  # Hide Boolean type atoms
-  # Legacy flag still supported for backwards compatibility
-  # - flag: hideDisconnectedBuiltIns
+  - flag: hideDisconnectedBuiltIns
