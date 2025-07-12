@@ -1,7 +1,11 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: ['./webcola-demo/integrated-demo-components.tsx', './webcola-demo/react-component-integration.tsx'],
+  entry: [
+    './webcola-demo/integrated-demo-components.tsx', 
+    './webcola-demo/react-component-integration.tsx',
+    './webcola-demo/pyret-demo-components.tsx'
+  ],
   format: ['iife'], // Immediately Invoked Function Expression for HTML
   globalName: 'IntegratedDemo',
   outDir: 'dist/components',
