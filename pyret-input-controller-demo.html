@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pyret Input Controller Demo</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f7fa;
+        }
+        
+        .demo-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-top: 20px;
+        }
+        
+        .demo-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .demo-section h2 {
+            margin-top: 0;
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        
+        .comparison-table th,
+        .comparison-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .comparison-table th {
+            background: #3498db;
+            color: white;
+        }
+        
+        .feature-highlight {
+            background: #e8f5e8;
+            color: #27ae60;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.9rem;
+        }
+        
+        .code-example {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            overflow-x: auto;
+            margin: 15px 0;
+        }
+        
+        .usage-steps {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .usage-steps li {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-left: 4px solid #3498db;
+            border-radius: 4px;
+        }
+        
+        .usage-steps li:before {
+            content: "→";
+            color: #3498db;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>🐍 Pyret Input Controller</h1>
+        <p>A specialized React component for constructing Pyret data instances with an improved programming-language-friendly interface.</p>
+    </header>
+
+    <div class="demo-container">
+        <section class="demo-section">
+            <h2>Key Features</h2>
+            
+            <h3>Programming-Language Optimized</h3>
+            <ul>
+                <li><span class="feature-highlight">Constructor Dropdowns</span> - Select from predefined Pyret data types (List, Tree, RBTree, Option)</li>
+                <li><span class="feature-highlight">Auto ID Generation</span> - IDs generated automatically with compact display</li>
+                <li><span class="feature-highlight">PyretExpression Support</span> - Free-form expression input to avoid structured editor pitfalls</li>
+                <li><span class="feature-highlight">Real-time Preview</span> - Live Pyret code generation as you build</li>
+            </ul>
+
+            <h3>Improved UX vs InstanceBuilder</h3>
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Feature</th>
+                        <th>InstanceBuilder</th>
+                        <th>PyretInputController</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Data Type Support</td>
+                        <td>Generic atoms/relations</td>
+                        <td>Pyret-specific constructors</td>
+                    </tr>
+                    <tr>
+                        <td>ID Management</td>
+                        <td>Manual ID entry required</td>
+                        <td>Auto-generated with compact view</td>
+                    </tr>
+                    <tr>
+                        <td>Constructor Selection</td>
+                        <td>Free-form text input</td>
+                        <td>Dropdown with predefined types</td>
+                    </tr>
+                    <tr>
+                        <td>Expression Support</td>
+                        <td>Not available</td>
+                        <td>Built-in PyretExpression type</td>
+                    </tr>
+                    <tr>
+                        <td>Code Generation</td>
+                        <td>Via reify() method only</td>
+                        <td>Live preview panel</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="demo-section">
+            <h2>Usage Example</h2>
+            
+            <div class="code-example">
+import { PyretInputController } from 'cnd-core';
+
+// Basic usage
+&lt;PyretInputController 
+  onChange={(instance) => console.log(instance.reify())}
+/&gt;
+
+// With configuration
+&lt;PyretInputController 
+  config={{
+    compactDisplay: true,
+    allowExpressions: true,
+    autoGenerateIds: true,
+    customTypes: [
+      {
+        name: 'MyData',
+        constructors: ['Variant1', 'Variant2'],
+        fields: {
+          'Variant1': ['field1'],
+          'Variant2': ['field1', 'field2']
+        }
+      }
+    ]
+  }}
+  onChange={(instance) => handleDataChange(instance)}
+/&gt;
+            </div>
+
+            <h3>How to Use</h3>
+            <ol class="usage-steps">
+                <li>Select value type (Data Constructor, Primitive Value, or Free Expression)</li>
+                <li>For constructors: Choose from dropdown (empty, link, Leaf, Node, etc.)</li>
+                <li>For primitives: Select type (Number/String/Boolean) and enter value</li>
+                <li>For expressions: Enter any valid Pyret code</li>
+                <li>Click "Add Value" to create the value</li>
+                <li>Set a root value using the star button (☆/★)</li>
+                <li>View generated Pyret code in real-time</li>
+            </ol>
+        </section>
+
+        <section class="demo-section">
+            <h2>Example Output</h2>
+            
+            <h3>Building a Binary Tree</h3>
+            <p>Creating: <code>Node(5, Leaf(3), Leaf(7))</code></p>
+            
+            <div class="code-example">
+// 1. Add Leaf(3)
+Constructor: Leaf
+Fields: value = 3
+
+// 2. Add Leaf(7)  
+Constructor: Leaf
+Fields: value = 7
+
+// 3. Add Node(5, left, right)
+Constructor: Node
+Fields: 
+  value = 5
+  left = reference to leaf-1
+  right = reference to leaf-2
+
+// Generated Pyret Code:
+Node(5, Leaf(3), Leaf(7))
+            </div>
+
+            <h3>Supported Data Types</h3>
+            <ul>
+                <li><strong>List:</strong> empty, link(first, rest)</li>
+                <li><strong>Tree:</strong> Leaf(value), Node(value, left, right)</li>
+                <li><strong>RBTree:</strong> Leaf(value), Red(value, left, right), Black(value, left, right)</li>
+                <li><strong>Option:</strong> none, some(value)</li>
+                <li><strong>Custom:</strong> Add your own data types via config</li>
+            </ul>
+        </section>
+
+        <section class="demo-section">
+            <h2>Integration & Next Steps</h2>
+            
+            <h3>Current Integration</h3>
+            <ul>
+                <li>✅ Works with existing PyretDataInstance</li>
+                <li>✅ Exports through main cnd-core package</li>
+                <li>✅ Supports TypeScript with full type definitions</li>
+                <li>✅ Tested and documented</li>
+            </ul>
+
+            <h3>Future Enhancements (Reach Goals)</h3>
+            <ul>
+                <li>🚀 <strong>CodeMirror Integration:</strong> Embed structured editing directly in code editor</li>
+                <li>🚀 <strong>Visual Tree Builder:</strong> Drag-and-drop interface for complex structures</li>
+                <li>🚀 <strong>Import from Code:</strong> Parse existing Pyret code into structured representation</li>
+                <li>🚀 <strong>Advanced Validation:</strong> Type checking and constraint validation</li>
+            </ul>
+
+            <h3>How It Addresses HCI Pitfalls</h3>
+            <p>The component carefully avoids common structured editor problems:</p>
+            <ul>
+                <li><strong>Escape Hatch:</strong> PyretExpression allows free-form input when needed</li>
+                <li><strong>Familiar Patterns:</strong> Dropdown selection follows standard UI patterns</li>
+                <li><strong>Progressive Disclosure:</strong> Compact mode hides complexity by default</li>
+                <li><strong>Flexible Architecture:</strong> Can be extended with custom data types</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>
