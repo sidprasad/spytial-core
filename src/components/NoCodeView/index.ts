@@ -7,6 +7,7 @@ export { FlagSelector } from './Selectors/FlagSelector';
 export { GroupByFieldSelector } from './Selectors/GroupByFieldSelector';
 export { GroupBySelectorSelector } from './Selectors/GroupBySelectorSelector';
 export { HelperEdgeSelector } from './Selectors/HelperEdgeSelector';
+export { HideAtomSelector } from './Selectors/HideAtomSelector';
 export { HideFieldSelector } from './Selectors/HideFieldSelector';
 export { IconSelector } from './Selectors/IconSelector';
 export { OrientationSelector } from './Selectors/OrientationSelector';

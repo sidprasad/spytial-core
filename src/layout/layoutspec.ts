@@ -192,6 +192,10 @@ export interface InferredEdgeDirective extends VisualManipulation {
     name : string;
 }
 
+export interface AtomHidingDirective extends VisualManipulation {
+    // Uses selector to determine which atoms to hide
+}
+
 
 // Right now, we don't support applies To on these.
 export interface FieldDirective extends Operation {
@@ -236,6 +240,7 @@ interface DirectivesBlock {
     attributes: AttributeDirective[];
     hiddenFields: FieldHidingDirective[];
     inferredEdges: InferredEdgeDirective[];
+    hiddenAtoms: AtomHidingDirective[];
     hideDisconnected : boolean;
     hideDisconnectedBuiltIns : boolean;
 }
@@ -271,6 +276,7 @@ function DEFAULT_LAYOUT() : LayoutSpec
             attributes: [],
             hiddenFields: [],
             inferredEdges: [],
+            hiddenAtoms: [],
             hideDisconnected: false,
             hideDisconnectedBuiltIns: false
         }
@@ -547,6 +553,12 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
         }
     });
 
+    let hiddenAtoms : AtomHidingDirective[] = typedDirectives.filter(d => d.hideAtom).map(d => {
+        return {
+            selector: d.hideAtom.selector
+        }
+    });
+
     return {
         atomColors,
         sizes,
@@ -556,6 +568,7 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
         attributes,
         hiddenFields,
         inferredEdges,
+        hiddenAtoms,
         hideDisconnected,
         hideDisconnectedBuiltIns
     }
