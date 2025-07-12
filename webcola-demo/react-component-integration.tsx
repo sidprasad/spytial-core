@@ -473,7 +473,7 @@ const InstanceBuilderWrapper: React.FC = () => {
  * 
  * @public
  */
-export function mountCnDLayoutInterface(
+export function mountCndLayoutInterface(
   containerId: string = 'webcola-cnd-container',
   config?: CndLayoutMountConfig
 ): boolean {
@@ -665,7 +665,7 @@ export function mountAllComponents(): {
   console.log('🚀 Mounting all CnD components...');
   
   const results = {
-    layoutInterface: mountCnDLayoutInterface(),
+    layoutInterface: mountCndLayoutInterface(),
     instanceBuilder: mountInstanceBuilder(),
     errorModal: mountErrorMessageModal()
   };
@@ -827,7 +827,7 @@ export const DataAPI = {
  */
 export const CnDCore = {
   // Mounting functions
-  mountCnDLayoutInterface,
+  mountCndLayoutInterface,
   mountInstanceBuilder, 
   mountErrorMessageModal,
   mountAllComponents,
@@ -847,7 +847,7 @@ if (typeof window !== 'undefined') {
   (window as any).CnDCore = CnDCore;
   
   // Legacy compatibility - expose individual functions
-  (window as any).mountCnDLayoutInterface = mountCnDLayoutInterface;
+  (window as any).mountCndLayoutInterface = mountCndLayoutInterface;
   (window as any).mountInstanceBuilder = mountInstanceBuilder;
   (window as any).mountErrorMessageModal = mountErrorMessageModal;
   (window as any).mountIntegratedComponents = mountAllComponents;
