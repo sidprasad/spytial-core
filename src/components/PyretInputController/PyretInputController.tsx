@@ -135,7 +135,7 @@ export const PyretInputController: React.FC<PyretInputControllerProps> = ({
         
       case 'list-builder':
         // Convert list-builder to a Pyret list structure
-        let listObj = {
+        let listObj: any = {
           dict: {},
           brands: { '$brandempty1': true },
           $name: 'empty'

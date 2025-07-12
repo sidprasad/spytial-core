@@ -94,6 +94,12 @@ export const EXAMPLE_LIST_TYPE: PyretDataType = {
 };
 
 /**
+ * Example types array for demonstration purposes
+ * Contains just the List type as per feedback to keep only List example
+ */
+export const EXAMPLE_PYRET_TYPES: PyretDataType[] = [EXAMPLE_LIST_TYPE];
+
+/**
  * Configuration for the PyretInputController
  */
 export interface PyretInputControllerConfig {
