@@ -1,0 +1,366 @@
+/* PyretInputController.css */
+
+.pyret-input-controller {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  max-width: 800px;
+  padding: 20px;
+  border: 1px solid #e1e5e9;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.pyret-input-controller__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #f0f3f6;
+}
+
+.pyret-input-controller__header h2 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 1.5rem;
+}
+
+.pyret-input-controller__stats {
+  display: flex;
+  gap: 15px;
+  font-size: 0.9rem;
+  color: #7f8c8d;
+}
+
+.pyret-input-controller__stats span {
+  background: #ecf0f1;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #bdc3c7;
+}
+
+.pyret-input-controller__error {
+  background: #ffebee;
+  border: 1px solid #ef5350;
+  color: #c62828;
+  padding: 12px;
+  margin-bottom: 20px;
+  border-radius: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pyret-input-controller__error button {
+  background: none;
+  border: none;
+  color: #c62828;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 10px;
+}
+
+.pyret-input-controller__content {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.pyret-input-controller__section {
+  background: #fafafa;
+  border: 1px solid #e1e5e9;
+  border-radius: 6px;
+  padding: 20px;
+}
+
+.pyret-input-controller__section h3 {
+  margin: 0 0 15px 0;
+  color: #34495e;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+/* Form Styles */
+.pyret-input-controller__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.form-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.form-row input,
+.form-row select {
+  padding: 8px 12px;
+  border: 1px solid #bdc3c7;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  background: white;
+}
+
+.form-row input:focus,
+.form-row select:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.form-row button {
+  padding: 8px 16px;
+  background: #3498db;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.form-row button:hover:not(:disabled) {
+  background: #2980b9;
+}
+
+.form-row button:disabled {
+  background: #95a5a6;
+  cursor: not-allowed;
+}
+
+/* Values List */
+.pyret-input-controller__values {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.empty-state {
+  color: #7f8c8d;
+  font-style: italic;
+  text-align: center;
+  padding: 30px;
+  background: #ecf0f1;
+  border-radius: 4px;
+  margin: 0;
+}
+
+.value-item {
+  background: white;
+  border: 1px solid #e1e5e9;
+  border-radius: 6px;
+  padding: 15px;
+  transition: box-shadow 0.2s ease;
+}
+
+.value-item:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.value-item.constructor {
+  border-left: 4px solid #9b59b6;
+}
+
+.value-item.expression {
+  border-left: 4px solid #e67e22;
+}
+
+.value-item.primitive {
+  border-left: 4px solid #27ae60;
+}
+
+.value-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.value-info {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.value-id {
+  font-family: 'Courier New', monospace;
+  background: #ecf0f1;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.8rem;
+  color: #7f8c8d;
+}
+
+.value-type {
+  background: #3498db;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.constructor-name {
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.value-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.root-button {
+  background: none;
+  border: 1px solid #f39c12;
+  color: #f39c12;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.root-button.active {
+  background: #f39c12;
+  color: white;
+}
+
+.root-button:hover:not(:disabled) {
+  background: #f39c12;
+  color: white;
+}
+
+.remove-button {
+  background: #e74c3c;
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.remove-button:hover:not(:disabled) {
+  background: #c0392b;
+}
+
+/* Constructor Fields */
+.constructor-fields {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #ecf0f1;
+}
+
+.field-item {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.field-item label {
+  font-weight: 500;
+  color: #34495e;
+  min-width: 80px;
+}
+
+.field-value {
+  font-family: 'Courier New', monospace;
+  background: #f8f9fa;
+  padding: 4px 8px;
+  border-radius: 3px;
+  font-size: 0.9rem;
+  color: #2c3e50;
+  border: 1px solid #e9ecef;
+}
+
+/* Expression Content */
+.expression-content {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #ecf0f1;
+}
+
+.expression-content code {
+  background: #f8f9fa;
+  padding: 8px 12px;
+  border-radius: 4px;
+  display: block;
+  font-family: 'Courier New', monospace;
+  color: #e67e22;
+  border: 1px solid #e9ecef;
+}
+
+/* Primitive Content */
+.primitive-content {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #ecf0f1;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.primitive-type {
+  font-weight: 500;
+  color: #27ae60;
+}
+
+.primitive-value {
+  font-family: 'Courier New', monospace;
+  background: #f8f9fa;
+  padding: 4px 8px;
+  border-radius: 3px;
+  border: 1px solid #e9ecef;
+}
+
+/* Generated Code */
+.generated-code {
+  background: #2c3e50;
+  color: #ecf0f1;
+  padding: 20px;
+  border-radius: 6px;
+  overflow-x: auto;
+}
+
+.generated-code pre {
+  margin: 0;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.generated-code code {
+  color: #ecf0f1;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .pyret-input-controller {
+    padding: 15px;
+  }
+  
+  .pyret-input-controller__header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  
+  .form-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .value-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  
+  .value-actions {
+    justify-content: flex-end;
+  }
+}

@@ -97,3 +97,6 @@ export const version = '1.0.0';
 // Export React components
 export { InstanceBuilder } from './components/InstanceBuilder/InstanceBuilder';
 export type { InstanceBuilderProps } from './components/InstanceBuilder/InstanceBuilder';
+export { PyretInputController } from './components/PyretInputController/PyretInputController';
+export type { PyretInputControllerProps } from './components/PyretInputController/PyretInputController';
+export * from './components/PyretInputController/types';
