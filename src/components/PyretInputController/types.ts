@@ -33,13 +33,23 @@ export interface PyretField {
 }
 
 /**
+ * A list builder helper for easy list construction
+ */
+export interface PyretListBuilder {
+  id: string;
+  elements: PyretValue[];
+  type: 'list-builder';
+}
+
+/**
  * Union type for different types of Pyret values
  */
 export type PyretValue = 
   | PyretExpression
   | PyretConstructor
   | PyretPrimitive
-  | PyretReference;
+  | PyretReference
+  | PyretListBuilder;
 
 /**
  * A primitive Pyret value (number, string, boolean)
@@ -71,44 +81,17 @@ export interface PyretDataType {
 }
 
 /**
- * Example Pyret data types that can be used as defaults or reference
- * These are not automatically included - users must pass them via customTypes config
+ * Example List data type that can be used as reference
+ * This is not automatically included - users must pass it via customTypes config
  */
-export const EXAMPLE_PYRET_TYPES: PyretDataType[] = [
-  {
-    name: 'List',
-    constructors: ['empty', 'link'],
-    fields: {
-      'empty': [],
-      'link': ['first', 'rest']
-    }
-  },
-  {
-    name: 'Tree',
-    constructors: ['Leaf', 'Node'],
-    fields: {
-      'Leaf': ['value'],
-      'Node': ['value', 'left', 'right']
-    }
-  },
-  {
-    name: 'RBTree',
-    constructors: ['Leaf', 'Red', 'Black'],
-    fields: {
-      'Leaf': ['value'],
-      'Red': ['value', 'left', 'right'],
-      'Black': ['value', 'left', 'right']
-    }
-  },
-  {
-    name: 'Option',
-    constructors: ['none', 'some'],
-    fields: {
-      'none': [],
-      'some': ['value']
-    }
+export const EXAMPLE_LIST_TYPE: PyretDataType = {
+  name: 'List',
+  constructors: ['empty', 'link'],
+  fields: {
+    'empty': [],
+    'link': ['first', 'rest']
   }
-];
+};
 
 /**
  * Configuration for the PyretInputController

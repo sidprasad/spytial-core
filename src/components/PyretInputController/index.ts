@@ -16,7 +16,8 @@ export {
   type PyretReference,
   type PyretField,
   type PyretDataType,
+  type PyretListBuilder,
   type PyretInputControllerConfig,
   type PyretInputState,
-  EXAMPLE_PYRET_TYPES
+  EXAMPLE_LIST_TYPE
 } from './types';

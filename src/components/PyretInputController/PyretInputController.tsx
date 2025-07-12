@@ -8,10 +8,11 @@ import {
   PyretExpression,
   PyretPrimitive,
   PyretReference,
+  PyretListBuilder,
   PyretDataType,
   PyretInputControllerConfig,
   PyretInputState,
-  EXAMPLE_PYRET_TYPES
+  EXAMPLE_LIST_TYPE
 } from './types';
 import './PyretInputController.css';
 
@@ -76,12 +77,13 @@ export const PyretInputController: React.FC<PyretInputControllerProps> = ({
 
   // Form state for creating new values
   const [newValueForm, setNewValueForm] = useState<{
-    type: 'constructor' | 'expression' | 'primitive';
+    type: 'constructor' | 'expression' | 'primitive' | 'list-builder';
     dataType?: string;
     constructorName?: string;
     expression?: string;
     primitiveType?: 'Number' | 'String' | 'Boolean';
     primitiveValue?: string;
+    listElements?: string; // Comma-separated values for list builder
   }>({
     type: 'constructor'
   });
@@ -131,6 +133,26 @@ export const PyretInputController: React.FC<PyretInputControllerProps> = ({
         }
         return { dict: {}, brands: {} };
         
+      case 'list-builder':
+        // Convert list-builder to a Pyret list structure
+        let listObj = {
+          dict: {},
+          brands: { '$brandEmpty': true },
+          $name: 'empty'
+        };
+        
+        // Build the list from right to left (rest to first)
+        for (let i = value.elements.length - 1; i >= 0; i--) {
+          const element = convertValueToPyretObject(value.elements[i], allValues);
+          listObj = {
+            dict: { first: element, rest: listObj },
+            brands: { '$brandLink': true },
+            $name: 'link'
+          };
+        }
+        
+        return listObj;
+        
       case 'constructor':
         const dict: any = {};
         value.fields.forEach(field => {
@@ -169,6 +191,46 @@ export const PyretInputController: React.FC<PyretInputControllerProps> = ({
       let newValue: PyretValue;
       
       switch (newValueForm.type) {
+        case 'list-builder':
+          // Parse comma-separated elements and create primitives
+          const elementsStr = newValueForm.listElements || '';
+          const elementValues: PyretValue[] = [];
+          
+          if (elementsStr.trim()) {
+            const elements = elementsStr.split(',').map(s => s.trim()).filter(s => s);
+            elements.forEach((element, index) => {
+              // Try to parse as number first, then boolean, then string
+              let value: string | number | boolean = element;
+              let dataType: 'Number' | 'String' | 'Boolean' = 'String';
+              
+              const numValue = parseFloat(element);
+              if (!isNaN(numValue) && isFinite(numValue) && element === numValue.toString()) {
+                value = numValue;
+                dataType = 'Number';
+              } else if (element.toLowerCase() === 'true' || element.toLowerCase() === 'false') {
+                value = element.toLowerCase() === 'true';
+                dataType = 'Boolean';
+              }
+              
+              const elementValue: PyretPrimitive = {
+                id: generatePyretId(`list-elem-${index}`, existingIds),
+                value,
+                type: 'primitive',
+                dataType
+              };
+              
+              elementValues.push(elementValue);
+              existingIds.add(elementValue.id);
+            });
+          }
+          
+          newValue = {
+            id: generatePyretId('list', existingIds),
+            elements: elementValues,
+            type: 'list-builder'
+          } as PyretListBuilder;
+          break;
+        
         case 'primitive':
           if (!newValueForm.primitiveType || !newValueForm.primitiveValue) {
             setError('Primitive type and value are required');
@@ -376,6 +438,7 @@ export const PyretInputController: React.FC<PyretInputControllerProps> = ({
                 disabled={disabled}
               >
                 <option value="constructor">Data Constructor</option>
+                <option value="list-builder">List (easy mode)</option>
                 <option value="primitive">Primitive Value</option>
                 {allowExpressions && <option value="expression">Free Expression</option>}
               </select>
@@ -399,6 +462,22 @@ export const PyretInputController: React.FC<PyretInputControllerProps> = ({
                     </option>
                   ))}
                 </select>
+              </div>
+            )}
+
+            {newValueForm.type === 'list-builder' && (
+              <div className="form-row">
+                <input
+                  type="text"
+                  placeholder="Enter list elements separated by commas (e.g., 1, 2, 3)"
+                  value={newValueForm.listElements || ''}
+                  onChange={(e) => setNewValueForm(prev => ({ 
+                    ...prev, 
+                    listElements: e.target.value 
+                  }))}
+                  disabled={disabled}
+                />
+                <small>Elements are auto-typed as Number, Boolean, or String</small>
               </div>
             )}
 
@@ -522,6 +601,15 @@ export const PyretInputController: React.FC<PyretInputControllerProps> = ({
                     <div className="primitive-content">
                       <span className="primitive-type">{value.dataType}:</span>
                       <span className="primitive-value">{String(value.value)}</span>
+                    </div>
+                  )}
+
+                  {value.type === 'list-builder' && (
+                    <div className="list-builder-content">
+                      <span className="list-length">{value.elements.length} elements:</span>
+                      <span className="list-elements">
+                        [{value.elements.map(elem => elem.type === 'primitive' ? String(elem.value) : elem.id).join(', ')}]
+                      </span>
                     </div>
                   )}
                 </div>
