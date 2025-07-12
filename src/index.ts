@@ -97,3 +97,5 @@ export const version = '1.0.0';
 // Export React components
 export { InstanceBuilder } from './components/InstanceBuilder/InstanceBuilder';
 export type { InstanceBuilderProps } from './components/InstanceBuilder/InstanceBuilder';
+export { ReplInterface } from './components/ReplInterface/ReplInterface';
+export type { ReplInterfaceProps } from './components/ReplInterface/ReplInterface';
