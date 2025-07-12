@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { PyretInputController, PyretInputControllerProps } from '../src/components/PyretInputController/PyretInputController';
+import { EXAMPLE_PYRET_TYPES } from '../src/components/PyretInputController/types';
 import { PyretDataInstance } from '../src/data-instance/pyret/pyret-data-instance';
 import { IInputDataInstance } from '../src/data-instance/interfaces';
 
@@ -72,7 +73,7 @@ const ConnectedPyretInputController: React.FC = () => {
     compactDisplay: true,
     allowExpressions: true,
     autoGenerateIds: true,
-    showBuiltinTypes: true
+    customTypes: EXAMPLE_PYRET_TYPES // Provide example types for the demo
   };
 
   return (

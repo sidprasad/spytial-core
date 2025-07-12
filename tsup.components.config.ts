@@ -4,10 +4,11 @@ export default defineConfig({
   entry: [
     './webcola-demo/integrated-demo-components.tsx', 
     './webcola-demo/react-component-integration.tsx',
-    './webcola-demo/pyret-demo-components.tsx'
+    './webcola-demo/pyret-demo-components.tsx',
+    './webcola-demo/pyret-integrated-demo-components.tsx'
   ],
   format: ['iife'], // Immediately Invoked Function Expression for HTML
-  globalName: 'IntegratedDemo',
+  globalName: 'PyretIntegratedDemo',
   outDir: 'dist/components',
   clean: true,
   minify: false, // Set to true for production

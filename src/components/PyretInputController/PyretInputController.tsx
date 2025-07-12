@@ -11,7 +11,7 @@ import {
   PyretDataType,
   PyretInputControllerConfig,
   PyretInputState,
-  COMMON_PYRET_TYPES
+  EXAMPLE_PYRET_TYPES
 } from './types';
 import './PyretInputController.css';
 
@@ -61,7 +61,6 @@ export const PyretInputController: React.FC<PyretInputControllerProps> = ({
   className = ''
 }) => {
   const {
-    showBuiltinTypes = true,
     allowExpressions = true,
     autoGenerateIds = true,
     customTypes = [],
@@ -71,7 +70,7 @@ export const PyretInputController: React.FC<PyretInputControllerProps> = ({
   // Internal state for Pyret values
   const [state, setState] = useState<PyretInputState>({
     values: new Map(),
-    declaredTypes: [...COMMON_PYRET_TYPES, ...customTypes],
+    declaredTypes: customTypes, // Only use the types passed by the user
     errors: new Map()
   });
 

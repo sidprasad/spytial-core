@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pyret Input Controller - Interactive Demo</title>
+    <title>Pyret Input Controller - Integrated Graph Demo</title>
     
     <!-- Bootstrap CSS for component styling -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -23,16 +23,20 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             margin-bottom: 20px;
         }
-        .pyret-builder-container, .pyret-output-container {
+        #graph-container {
+            width: 100%;
+            height: 600px;
+            border: 2px solid #007acc;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .pyret-builder-container, .layout-interface-container {
             border: 1px solid #ddd;
             border-radius: 8px;
             padding: 0;
             background: #fafafa;
             height: 500px;
-            overflow: hidden;
-        }
-        .pyret-output-container {
-            background: #2d3748;
+            overflow-y: auto;
         }
         button {
             background-color: #007acc;
@@ -61,19 +65,6 @@
         .status.info { background: #e3f2fd; color: #1976d2; }
         .status.success { background: #e8f5e8; color: #2e7d32; }
         .status.error { background: #ffebee; color: #c62828; }
-        .feature-highlight {
-            background: #e8f5e8;
-            color: #27ae60;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 0.9rem;
-        }
-        .demo-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin-bottom: 20px;
-        }
         .instructions {
             background: #f8f9fa;
             border-left: 4px solid #007acc;
@@ -85,49 +76,26 @@
             margin-top: 0;
             color: #007acc;
         }
-        .steps {
-            list-style: none;
-            padding: 0;
-        }
-        .steps li {
-            margin: 8px 0;
-            padding: 8px 0;
-            border-bottom: 1px solid #eee;
-        }
-        .steps li:before {
-            content: "→";
-            color: #007acc;
-            font-weight: bold;
-            margin-right: 10px;
-        }
-        .examples {
-            background: #fff3cd;
-            border: 1px solid #ffeaa7;
-            border-radius: 4px;
-            padding: 15px;
-            margin: 15px 0;
-        }
-        .examples h4 {
-            color: #856404;
-            margin-top: 0;
+        .demo-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🐍 Pyret Input Controller - Interactive Demo</h1>
-        <p>Build Pyret data structures visually and see the generated code in real-time. This component provides a programming-language-friendly interface for constructing complex Pyret objects.</p>
+        <h1>🐍 Pyret Input Controller - Integrated Graph Demo</h1>
+        <p>Build Pyret data structures visually and see them as interactive graphs with CnD constraints.</p>
         
         <div class="instructions">
             <h4>How to Use This Demo</h4>
-            <ol class="steps">
-                <li>Select a value type (Constructor, Primitive, or Expression) from the dropdown</li>
-                <li>For constructors: Choose from built-in types like List, Tree, RBTree, or Option</li>
-                <li>For primitives: Pick Number, String, or Boolean and enter a value</li>
-                <li>For expressions: Enter any valid Pyret code directly</li>
-                <li>Click "Add Value" to create the value in your data structure</li>
-                <li>Use the star (☆/★) button to set a root value</li>
-                <li>Watch the Pyret code update automatically on the right!</li>
+            <ol>
+                <li>Build Pyret data structures using the controller on the left</li>
+                <li>Configure layout constraints using the CnD interface on the right</li>
+                <li>Watch the interactive graph update automatically below</li>
+                <li>The graph shows the structure with proper CnD constraint visualization</li>
             </ol>
         </div>
         
@@ -143,97 +111,40 @@
                 </div>
             </div>
             <div>
-                <label for="pyret-output-container">Generated Pyret Code (Live):</label>
-                <div id="pyret-output-container" class="pyret-output-container">
-                    <div style="padding: 20px; text-align: center; color: #e2e8f0;">
-                        <p>Loading code output...</p>
-                        <p><em>Generated Pyret code will appear here</em></p>
+                <label for="layout-interface-container">CnD Layout Interface:</label>
+                <div id="layout-interface-container" class="layout-interface-container">
+                    <div style="padding: 20px; text-align: center; color: #666;">
+                        <p>Loading CnD Layout Interface...</p>
+                        <p><em>Configure layout constraints here</em></p>
                     </div>
                 </div>
             </div>
         </div>
-
-        <div class="examples">
-            <h4>Example: Building a Binary Tree</h4>
-            <p>Try building <code>Node(5, Leaf(3), Leaf(7))</code> by following these steps:</p>
-            <ol>
-                <li>Add a <strong>Leaf</strong> constructor with value = 3</li>
-                <li>Add another <strong>Leaf</strong> constructor with value = 7</li>
-                <li>Add a <strong>Node</strong> constructor with value = 5</li>
-                <li>Edit the Node's left and right fields to reference the Leaf values</li>
-                <li>Set the Node as the root using the star button</li>
-                <li>See the generated code: <code>Node(5, Leaf(3), Leaf(7))</code></li>
-            </ol>
-        </div>
         
         <div>
-            <button onclick="clearAll()">Clear All</button>
+            <button onclick="clearGraph()">Clear All</button>
             <button onclick="loadExample()">Load Tree Example</button>
-            <button onclick="showBuiltinTypes()">Show Built-in Types</button>
+            <select title="Choose the Layout Format" class="form-control" id="layoutFormat" name="layoutFormat" onchange="changeLayoutFormat()">
+                <option value="default" selected>Standard</option>
+                <option value="grid">Grid (Beta)</option>
+            </select>
         </div>
         
-        <div id="status" class="status info">React components loading - start building your Pyret data structure!</div>
-    </div>
-
-    <!-- Features and Information Section -->
-    <div class="container">
-        <h2>Key Features</h2>
+        <!-- Use the webcola-cnd-graph custom element -->
+        <webcola-cnd-graph 
+            id="graph-container"
+            width="800" 
+            height="600"
+            layoutFormat="default">
+        </webcola-cnd-graph>
         
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
-            <div>
-                <h3>Programming-Language Optimized</h3>
-                <ul>
-                    <li><span class="feature-highlight">Constructor Dropdowns</span> - Select from predefined Pyret data types</li>
-                    <li><span class="feature-highlight">Auto ID Generation</span> - IDs generated automatically with compact display</li>
-                    <li><span class="feature-highlight">PyretExpression Support</span> - Free-form expression input</li>
-                    <li><span class="feature-highlight">Real-time Preview</span> - Live Pyret code generation</li>
-                </ul>
-
-                <h3>Supported Data Types</h3>
-                <ul>
-                    <li><strong>List:</strong> empty, link(first, rest)</li>
-                    <li><strong>Tree:</strong> Leaf(value), Node(value, left, right)</li>
-                    <li><strong>RBTree:</strong> Leaf(value), Red(value, left, right), Black(value, left, right)</li>
-                    <li><strong>Option:</strong> none, some(value)</li>
-                </ul>
-            </div>
-            
-            <div>
-                <h3>Improved UX vs InstanceBuilder</h3>
-                <table style="width: 100%; border-collapse: collapse;">
-                    <thead>
-                        <tr style="background: #007acc; color: white;">
-                            <th style="padding: 8px; text-align: left;">Feature</th>
-                            <th style="padding: 8px; text-align: left;">PyretInputController</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr style="border-bottom: 1px solid #eee;">
-                            <td style="padding: 8px;">Data Type Support</td>
-                            <td style="padding: 8px;">Pyret-specific constructors</td>
-                        </tr>
-                        <tr style="border-bottom: 1px solid #eee;">
-                            <td style="padding: 8px;">ID Management</td>
-                            <td style="padding: 8px;">Auto-generated with compact view</td>
-                        </tr>
-                        <tr style="border-bottom: 1px solid #eee;">
-                            <td style="padding: 8px;">Constructor Selection</td>
-                            <td style="padding: 8px;">Dropdown with predefined types</td>
-                        </tr>
-                        <tr style="border-bottom: 1px solid #eee;">
-                            <td style="padding: 8px;">Expression Support</td>
-                            <td style="padding: 8px;">Built-in PyretExpression type</td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 8px;">Code Generation</td>
-                            <td style="padding: 8px;">Live preview panel</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+        <div id="status" class="status info">React components loading - start building your Pyret structure!</div>
     </div>
 
+    <!-- D3 v4 and WebCola -->
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="./vendor/cola.js"></script>
+    
     <!-- React for components -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -242,13 +153,13 @@
     <script src="./dist/browser/cnd-core-complete.global.js"></script>
     
     <!-- Pyret demo components bundle -->
-    <script src="./dist/components/pyret-demo-components.global.js"></script>
-    <link rel="stylesheet" href="./dist/components/pyret-demo-components.css">
+    <script src="./dist/components/pyret-integrated-demo-components.global.js"></script>
+    <link rel="stylesheet" href="./dist/components/pyret-integrated-demo-components.css">
     
     <script>
         // Variables to store data
         let currentPyretInstance = null;
-        let currentPyretCode = '';
+        let currentInstanceLayout = null;
 
         /**
          * Get current instance from the React PyretInputController component
@@ -258,11 +169,11 @@
         }
 
         /**
-         * Get current Pyret code from React component
+         * Get current CND specification from React CndLayoutInterface component
          */
-        function getCurrentPyretCode() {
-            return window.getCurrentPyretCodeFromReact ? 
-                window.getCurrentPyretCodeFromReact() : currentPyretCode;
+        function getCurrentCNDSpec() {
+            return window.getCurrentCNDSpecFromReact ? 
+                window.getCurrentCNDSpecFromReact() : '';
         }
 
         /**
@@ -275,45 +186,194 @@
         }
 
         /**
-         * Initialize the Pyret demo
+         * Initialize the integrated demo pipeline
          */
-        async function initializePyretDemo() {
+        async function initializePipeline() {
             try {
                 console.log('CnD-Core browser bundle loaded successfully');
                 console.log('Available on global CndCore:', Object.keys(CndCore || {}));
                 
-                updateStatus('React components loading - start building!', 'success');
+                updateStatus('React components loading - pipeline ready!', 'success');
                 
                 return true;
             } catch (error) {
-                console.error('Failed to initialize demo:', error);
-                updateStatus(`Demo init failed: ${error.message}`, 'error');
+                console.error('Failed to initialize pipeline:', error);
+                updateStatus(`Pipeline init failed: ${error.message}`, 'error');
                 return false;
             }
         }
 
         /**
-         * Update from builder changes
+         * Process current instance data using the PyretDataInstance → SGraphQueryEvaluator → Layout pipeline
          */
-        function updateFromPyretBuilder() {
-            const instance = getCurrentPyretInstance();
-            const code = getCurrentPyretCode();
-            
-            if (instance) {
-                updateStatus(`Built data structure with ${instance.getAtoms?.().length || 0} atoms`, 'success');
-            } else {
-                updateStatus('Build a data structure using the controls on the left', 'info');
+        async function loadInstanceData() {
+            try {
+                updateStatus('Processing Pyret instance data with SGraphQueryEvaluator...', 'info');
+
+                // Get current instance from React PyretInputController
+                const instance = getCurrentPyretInstance();
+                if (!instance || instance.getAtoms().length === 0) {
+                    // Allow empty instances - just clear the graph
+                    clearGraph();
+                    return;
+                }
+
+                // Get CND specification from React CndLayoutInterface
+                const cndSpec = getCurrentCNDSpec() || "";
+
+                console.log('Using current Pyret instance:', instance);
+                console.log('Atoms:', instance.getAtoms().length);
+                console.log('Relations:', instance.getRelations().length);
+                console.log('Using CND Spec:', cndSpec.substring(0, 200) + '...');
+
+                // Step 1: Create evaluation context  
+                const evaluationContext = {
+                    sourceData: instance 
+                };
+
+                // Step 2: Create and initialize SGraphQueryEvaluator
+                updateStatus('Creating SGraphQueryEvaluator...', 'info');
+                const sgqEvaluator = new CndCore.SGraphQueryEvaluator();
+                sgqEvaluator.initialize(evaluationContext);
+                console.log('Created SGraphQueryEvaluator:', sgqEvaluator);
+
+                // Step 3: Parse layout specification
+                updateStatus('Parsing CND specification...', 'info');
+                const layoutSpec = CndCore.parseLayoutSpec(cndSpec);
+                console.log('Parsed Layout Spec:', layoutSpec);
+
+                // Step 4: Create LayoutInstance with SGraphQueryEvaluator
+                updateStatus('Creating layout instance with SGraphQueryEvaluator...', 'info');
+                const ENABLE_ALIGNMENT_EDGES = true;
+                const instanceNumber = 0;
+                
+                const layoutInstance = new CndCore.LayoutInstance(
+                    layoutSpec, 
+                    sgqEvaluator, 
+                    instanceNumber, 
+                    ENABLE_ALIGNMENT_EDGES
+                );
+                console.log('Created Layout Instance with SGraphQueryEvaluator:', layoutInstance);
+
+                // Step 5: Generate layout using current Pyret data instance
+                updateStatus('Generating layout with CND constraints...', 'info');
+                const projections = {};
+                const layoutResult = layoutInstance.generateLayout(instance, projections);
+                currentInstanceLayout = layoutResult.layout;
+                console.log('Generated Instance Layout from Pyret:', currentInstanceLayout);
+
+                updateStatus('Pyret → SGraphQueryEvaluator pipeline complete!', 'success');
+                
+            } catch (error) {
+                console.error('Failed to load instance data:', error);
+                updateStatus(`Data loading failed: ${error.message}`, 'error');
             }
         }
 
         /**
-         * Clear all data
+         * Render the graph using the webcola-cnd-graph custom element
          */
-        function clearAll() {
+        async function renderGraph() {
+            const graphElement = document.getElementById('graph-container');
+            
+            try {
+                if (!currentInstanceLayout) {
+                    updateStatus('No layout data available. Processing instance data first...', 'info');
+                    await loadInstanceData();
+                    if (!currentInstanceLayout) {
+                        throw new Error('Failed to generate layout data from Pyret instance');
+                    }
+                }
+
+                updateStatus('Rendering graph with WebCola...', 'info');
+                
+                // Use the real InstanceLayout data with WebCola custom element
+                await graphElement.renderLayout(currentInstanceLayout);
+                
+                updateStatus('Graph rendered successfully!', 'success');
+            } catch (error) {
+                console.error('Error rendering graph:', error);
+                updateStatus(`Render error: ${error.message}`, 'error');
+            }
+        }
+
+        /**
+         * Load data and render in one step
+         */
+        async function loadGraph() {
+            await loadInstanceData();
+            await renderGraph();
+        }
+
+        /**
+         * Clear the graph and reset state
+         */
+        function clearGraph() {
+            const graphElement = document.getElementById('graph-container');
+            
+            // Clear the graph
+            if (graphElement.clear) {
+                graphElement.clear();
+            }
+            
+            // Reset state
+            currentInstanceLayout = null;
+            currentPyretInstance = null;
+            
+            // Update the React PyretInputController component if available
             if (window.updatePyretBuilderInstance) {
                 window.updatePyretBuilderInstance(null);
             }
-            updateStatus('Cleared all data - start building!', 'info');
+            
+            updateStatus('All cleared - start building!', 'info');
+        }
+
+        /**
+         * Update from React PyretInputController component
+         */
+        function updateFromPyretBuilder() {
+            // Get current instance from React component
+            const reactInstance = getCurrentPyretInstance();
+            if (reactInstance) {
+                currentPyretInstance = reactInstance;
+            }
+            
+            updateStatus('Pyret instance updated - processing with CND constraints...', 'info');
+            
+            // Auto-update with CND constraints on every change
+            setTimeout(async () => {
+                try {
+                    await loadInstanceData();
+                    if (currentInstanceLayout) {
+                        await renderGraph();
+                    }
+                } catch (error) {
+                    console.log('Auto-update failed:', error.message);
+                    updateStatus(`Auto-update failed: ${error.message}`, 'error');
+                }
+            }, 100);
+        }
+
+        /**
+         * Update from React CndLayoutInterface component
+         */
+        function updateFromCnDSpec() {
+            updateStatus('CND specification changed - re-applying constraints...', 'info');
+            
+            // Re-run pipeline with new CND spec
+            setTimeout(async () => {
+                try {
+                    if (currentPyretInstance && currentPyretInstance.getAtoms().length > 0) {
+                        await loadInstanceData();
+                        if (currentInstanceLayout) {
+                            await renderGraph();
+                        }
+                    }
+                } catch (error) {
+                    console.log('CND spec update failed:', error.message);
+                    updateStatus(`CND spec update failed: ${error.message}`, 'error');
+                }
+            }, 300); // Slightly longer debounce for text input
         }
 
         /**
@@ -324,26 +384,21 @@
         }
 
         /**
-         * Show built-in types
+         * Change layout format
          */
-        function showBuiltinTypes() {
-            const types = [
-                'List: empty, link(first, rest)',
-                'Tree: Leaf(value), Node(value, left, right)',
-                'RBTree: Leaf(value), Red(value, left, right), Black(value, left, right)',
-                'Option: none, some(value)'
-            ];
-            
-            alert('Built-in Pyret Types:\\n\\n' + types.join('\\n'));
+        function changeLayoutFormat() {
+            const format = document.getElementById('layoutFormat').value;
+            console.log('Layout format changed to:', format);
+            // For now, just log - can be extended later
         }
 
         // Initialize when DOM is loaded
         document.addEventListener('DOMContentLoaded', async () => {
-            await initializePyretDemo();
+            await initializePipeline();
             
             // Mount React components
-            if (window.IntegratedDemo && window.IntegratedDemo.mountPyretDemo) {
-                window.IntegratedDemo.mountPyretDemo();
+            if (window.PyretIntegratedDemo && window.PyretIntegratedDemo.mountPyretIntegratedDemo) {
+                window.PyretIntegratedDemo.mountPyretIntegratedDemo();
                 updateStatus('✅ Interactive demo ready - start building!', 'success');
             } else {
                 updateStatus('❌ Failed to load React components', 'error');
@@ -352,6 +407,8 @@
 
         // Expose functions for debugging
         window.updateFromPyretBuilder = updateFromPyretBuilder;
+        window.updateFromCnDSpec = updateFromCnDSpec;
+        window.clearGraph = clearGraph;
     </script>
 </body>
 </html>

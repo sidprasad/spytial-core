@@ -4,21 +4,21 @@ import {
   PyretConstructor, 
   PyretExpression, 
   PyretPrimitive,
-  COMMON_PYRET_TYPES
+  EXAMPLE_PYRET_TYPES
 } from '../src/components/PyretInputController/types';
 
 describe('PyretInputController Types', () => {
-  it('defines correct common Pyret types', () => {
-    expect(COMMON_PYRET_TYPES).toHaveLength(4);
+  it('defines correct example Pyret types', () => {
+    expect(EXAMPLE_PYRET_TYPES).toHaveLength(4);
     
-    const listType = COMMON_PYRET_TYPES.find(t => t.name === 'List');
+    const listType = EXAMPLE_PYRET_TYPES.find(t => t.name === 'List');
     expect(listType).toBeDefined();
     expect(listType?.constructors).toContain('empty');
     expect(listType?.constructors).toContain('link');
     expect(listType?.fields['empty']).toEqual([]);
     expect(listType?.fields['link']).toEqual(['first', 'rest']);
     
-    const treeType = COMMON_PYRET_TYPES.find(t => t.name === 'Tree');
+    const treeType = EXAMPLE_PYRET_TYPES.find(t => t.name === 'Tree');
     expect(treeType).toBeDefined();
     expect(treeType?.constructors).toContain('Leaf');
     expect(treeType?.constructors).toContain('Node');

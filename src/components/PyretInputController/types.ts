@@ -71,9 +71,10 @@ export interface PyretDataType {
 }
 
 /**
- * Common Pyret data types for the dropdown
+ * Example Pyret data types that can be used as defaults or reference
+ * These are not automatically included - users must pass them via customTypes config
  */
-export const COMMON_PYRET_TYPES: PyretDataType[] = [
+export const EXAMPLE_PYRET_TYPES: PyretDataType[] = [
   {
     name: 'List',
     constructors: ['empty', 'link'],
@@ -113,13 +114,11 @@ export const COMMON_PYRET_TYPES: PyretDataType[] = [
  * Configuration for the PyretInputController
  */
 export interface PyretInputControllerConfig {
-  /** Whether to show built-in data types in dropdowns */
-  showBuiltinTypes?: boolean;
   /** Whether to allow free-form expressions */
   allowExpressions?: boolean;
   /** Whether to auto-generate IDs */
   autoGenerateIds?: boolean;
-  /** Custom data types to include in dropdowns */
+  /** Custom data types to include in dropdowns - users must provide these */
   customTypes?: PyretDataType[];
   /** Whether to show compact display (hide IDs, etc.) */
   compactDisplay?: boolean;

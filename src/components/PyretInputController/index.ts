@@ -18,5 +18,5 @@ export {
   type PyretDataType,
   type PyretInputControllerConfig,
   type PyretInputState,
-  COMMON_PYRET_TYPES
+  EXAMPLE_PYRET_TYPES
 } from './types';
