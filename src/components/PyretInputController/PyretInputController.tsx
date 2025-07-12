@@ -122,7 +122,7 @@ export const PyretInputController: React.FC<PyretInputControllerProps> = ({
         // For expressions, we'll create a simple object representation
         return {
           dict: { expression: value.expression },
-          brands: { '$brandExpression': true },
+          brands: { '$brandExpression1': true },
           $name: 'Expression'
         };
         
@@ -137,7 +137,7 @@ export const PyretInputController: React.FC<PyretInputControllerProps> = ({
         // Convert list-builder to a Pyret list structure
         let listObj = {
           dict: {},
-          brands: { '$brandEmpty': true },
+          brands: { '$brandempty1': true },
           $name: 'empty'
         };
         
@@ -146,7 +146,7 @@ export const PyretInputController: React.FC<PyretInputControllerProps> = ({
           const element = convertValueToPyretObject(value.elements[i], allValues);
           listObj = {
             dict: { first: element, rest: listObj },
-            brands: { '$brandLink': true },
+            brands: { '$brandlink1': true },
             $name: 'link'
           };
         }
@@ -161,7 +161,7 @@ export const PyretInputController: React.FC<PyretInputControllerProps> = ({
         
         return {
           dict,
-          brands: { [`$brand${value.name}`]: true },
+          brands: { [`$brand${value.name}1`]: true },
           $name: value.name
         };
         
