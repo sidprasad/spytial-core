@@ -116,13 +116,14 @@ export const PyretInputController: React.FC<PyretInputControllerProps> = ({
   const convertValueToPyretObject = (value: PyretValue, allValues: Map<string, PyretValue>): any => {
     switch (value.type) {
       case 'primitive':
+        // Primitives should stay as primitives, not be wrapped in objects
         return value.value;
         
       case 'expression':
-        // For expressions, we'll create a simple object representation
+        // For expressions, create a simple object representation
         return {
           dict: { expression: value.expression },
-          brands: { '$brandExpression1': true },
+          brands: { [`$brandExpression${value.id}`]: true },
           $name: 'Expression'
         };
         
@@ -131,24 +132,28 @@ export const PyretInputController: React.FC<PyretInputControllerProps> = ({
         if (referencedValue) {
           return convertValueToPyretObject(referencedValue, allValues);
         }
-        return { dict: {}, brands: {} };
+        // Return null for broken references instead of empty object
+        return null;
         
       case 'list-builder':
         // Convert list-builder to a Pyret list structure
         let listObj: any = {
           dict: {},
-          brands: { '$brandempty1': true },
+          brands: { [`$brandempty${value.id}`]: true },
           $name: 'empty'
         };
         
         // Build the list from right to left (rest to first)
         for (let i = value.elements.length - 1; i >= 0; i--) {
           const element = convertValueToPyretObject(value.elements[i], allValues);
-          listObj = {
-            dict: { first: element, rest: listObj },
-            brands: { '$brandlink1': true },
-            $name: 'link'
-          };
+          // Skip null elements (broken references)
+          if (element !== null) {
+            listObj = {
+              dict: { first: element, rest: listObj },
+              brands: { [`$brandlink${value.id}_${i}`]: true },
+              $name: 'link'
+            };
+          }
         }
         
         return listObj;
@@ -156,12 +161,16 @@ export const PyretInputController: React.FC<PyretInputControllerProps> = ({
       case 'constructor':
         const dict: any = {};
         value.fields.forEach(field => {
-          dict[field.name] = convertValueToPyretObject(field.value, allValues);
+          const fieldValue = convertValueToPyretObject(field.value, allValues);
+          // Only add field if value is not null (broken reference)
+          if (fieldValue !== null) {
+            dict[field.name] = fieldValue;
+          }
         });
         
         return {
           dict,
-          brands: { [`$brand${value.name}1`]: true },
+          brands: { [`$brand${value.name}${value.id}`]: true },
           $name: value.name
         };
         
@@ -175,8 +184,14 @@ export const PyretInputController: React.FC<PyretInputControllerProps> = ({
    */
   const notifyChange = useCallback(() => {
     if (onChange) {
-      const newInstance = convertToPyretDataInstance();
-      onChange(newInstance);
+      try {
+        const newInstance = convertToPyretDataInstance();
+        onChange(newInstance);
+      } catch (error) {
+        console.error('Error creating PyretDataInstance:', error);
+        // Still notify with an empty instance to avoid breaking the graph
+        onChange(new PyretDataInstance({ dict: {}, brands: {} }));
+      }
     }
   }, [onChange, convertToPyretDataInstance]);
 
@@ -323,12 +338,50 @@ export const PyretInputController: React.FC<PyretInputControllerProps> = ({
   }, [newValueForm, state.values, state.declaredTypes, notifyChange]);
 
   /**
-   * Remove a value
+   * Remove a value and clean up any references to it
    */
   const handleRemoveValue = useCallback((valueId: string) => {
     setState(prev => {
       const newValues = new Map(prev.values);
       newValues.delete(valueId);
+      
+      // Clean up references to the deleted value
+      newValues.forEach((value, id) => {
+        if (value.type === 'constructor') {
+          // Clean up field references
+          const updatedFields = value.fields.map(field => {
+            if (field.value.type === 'reference' && field.value.targetId === valueId) {
+              // Replace broken reference with a placeholder expression
+              return {
+                ...field,
+                value: {
+                  id: generatePyretId('placeholder', new Set(newValues.keys())),
+                  expression: '...',
+                  type: 'expression'
+                } as PyretExpression
+              };
+            }
+            return field;
+          });
+          
+          // Update the constructor if any fields changed
+          if (JSON.stringify(updatedFields) !== JSON.stringify(value.fields)) {
+            newValues.set(id, { ...value, fields: updatedFields });
+          }
+        } else if (value.type === 'reference' && value.targetId === valueId) {
+          // Remove orphaned references entirely
+          newValues.delete(id);
+        } else if (value.type === 'list-builder') {
+          // Clean up list elements that reference the deleted value
+          const updatedElements = value.elements.filter(element => {
+            return !(element.type === 'reference' && element.targetId === valueId);
+          });
+          
+          if (updatedElements.length !== value.elements.length) {
+            newValues.set(id, { ...value, elements: updatedElements });
+          }
+        }
+      });
       
       // Clear root selection if it was the removed value
       const newSelectedRootId = prev.selectedRootId === valueId ? undefined : prev.selectedRootId;
