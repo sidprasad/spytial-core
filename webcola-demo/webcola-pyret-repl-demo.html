@@ -257,8 +257,11 @@
                 // Update the graph visualization
                 const graphElement = document.querySelector('webcola-cnd-graph');
                 if (graphElement) {
+
+                    //// TODO: This seems like the WRONG 
+                    // thing passed in?
                     console.log('Updating graph with layout instance...');
-                    await graphElement.renderLayout(layoutInstance);
+                    await graphElement.renderLayout(currentInstanceLayout);
                     
                     updateStatus(`✅ Visualization updated! ${instance.getAtoms().length} atoms, ${instance.getRelations().length} relations`, 'success');
                 } else {
