@@ -346,13 +346,52 @@
             }
         });
 
-        // Auto-refresh visualization when REPL changes
-        setInterval(() => {
-            if (window.currentInstance && window.currentInstance !== currentInstance) {
-                currentInstance = window.currentInstance;
-                loadInstanceData();
+        // Set up event-driven visualization updates
+        function setupInstanceEventListeners() {
+            if (window.currentInstance && typeof window.currentInstance.addEventListener === 'function') {
+                // Listen for all data instance events
+                const eventTypes = ['atomAdded', 'atomRemoved', 'relationTupleAdded', 'relationTupleRemoved'];
+                
+                eventTypes.forEach(eventType => {
+                    window.currentInstance.addEventListener(eventType, (event) => {
+                        console.log(`Data instance event: ${event.type}`, event.data);
+                        // Refresh visualization when data changes
+                        loadInstanceData();
+                    });
+                });
+                
+                console.log('Event listeners set up for data instance changes');
             }
-        }, 500);
+        }
+
+        // Replace polling with event-driven updates
+        function setupDataInstanceWatcher() {
+            let lastInstance = window.currentInstance;
+            
+            // Check for instance changes periodically (much less frequent than before)
+            const checkForInstanceChange = () => {
+                if (window.currentInstance !== lastInstance) {
+                    console.log('Data instance changed, setting up new event listeners');
+                    lastInstance = window.currentInstance;
+                    currentInstance = window.currentInstance;
+                    
+                    // Set up event listeners for the new instance
+                    setupInstanceEventListeners();
+                    
+                    // Initial load
+                    loadInstanceData();
+                }
+            };
+            
+            // Check every 2 seconds instead of every 500ms
+            setInterval(checkForInstanceChange, 2000);
+            
+            // Initial setup
+            setupInstanceEventListeners();
+        }
+        
+        // Start the watcher
+        setupDataInstanceWatcher();
     </script>
 </body>
 </html>

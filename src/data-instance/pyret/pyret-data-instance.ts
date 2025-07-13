@@ -1,5 +1,5 @@
 import { Graph } from 'graphlib';
-import { IInputDataInstance, IAtom, IRelation, ITuple, IType } from '../interfaces';
+import { IInputDataInstance, IAtom, IRelation, ITuple, IType, DataInstanceEventType, DataInstanceEventListener, DataInstanceEvent } from '../interfaces';
 
 /**
  * Pyret Lists and Tables are going to be really tricky here.
@@ -49,6 +49,8 @@ export class PyretDataInstance implements IInputDataInstance {
   /** Map to store the original Pyret objects with their dict key order */
   private originalObjects = new Map<string, PyretObject>();
 
+  /** Event listeners for data instance changes */
+  private eventListeners = new Map<DataInstanceEventType, Set<DataInstanceEventListener>>();
 
   private readonly showFunctions: boolean;
 
@@ -68,6 +70,43 @@ export class PyretDataInstance implements IInputDataInstance {
     this.initializeBuiltinTypes();
     this.parseObjectIteratively(pyretData);
   }
+
+  /**
+   * Add an event listener for data instance changes
+   */
+  addEventListener(type: DataInstanceEventType, listener: DataInstanceEventListener): void {
+    if (!this.eventListeners.has(type)) {
+      this.eventListeners.set(type, new Set());
+    }
+    this.eventListeners.get(type)!.add(listener);
+  }
+
+  /**
+   * Remove an event listener for data instance changes
+   */
+  removeEventListener(type: DataInstanceEventType, listener: DataInstanceEventListener): void {
+    const listeners = this.eventListeners.get(type);
+    if (listeners) {
+      listeners.delete(listener);
+    }
+  }
+
+  /**
+   * Emit an event to all registered listeners
+   */
+  private emitEvent(event: DataInstanceEvent): void {
+    const listeners = this.eventListeners.get(event.type);
+    if (listeners) {
+      listeners.forEach(listener => {
+        try {
+          listener(event);
+        } catch (error) {
+          console.error('Error in data instance event listener:', error);
+        }
+      });
+    }
+  }
+
   /**
    * Adds an atom to the instance, updating types accordingly.
    * If the atom already exists, it is replaced.
@@ -80,6 +119,12 @@ export class PyretDataInstance implements IInputDataInstance {
     if (type && !type.atoms.some(a => a.id === atom.id)) {
       type.atoms.push(atom);
     }
+    
+    // Emit event
+    this.emitEvent({
+      type: 'atomAdded',
+      data: { atom }
+    });
   }
 
   /**
@@ -87,6 +132,7 @@ export class PyretDataInstance implements IInputDataInstance {
    * @param id - The atom id to remove
    */
   removeAtom(id: string): void {
+    const removedAtom = this.atoms.get(id);
     this.atoms.delete(id);
 
     // Remove from types
@@ -98,6 +144,14 @@ export class PyretDataInstance implements IInputDataInstance {
     this.relations.forEach(relation => {
       relation.tuples = relation.tuples.filter(tuple => !tuple.atoms.includes(id));
     });
+    
+    // Emit event if atom was found
+    if (removedAtom) {
+      this.emitEvent({
+        type: 'atomRemoved',
+        data: { atomId: id }
+      });
+    }
   }
 
 
@@ -106,9 +160,18 @@ export class PyretDataInstance implements IInputDataInstance {
     // How would we do this?
     const relation = this.relations.get(relationId);
     if (relation) {
+      const oldLength = relation.tuples.length;
       relation.tuples = relation.tuples.filter(tuple =>
         !tuple.atoms.every((atomId, index) => atomId === t.atoms[index])
       );
+      
+      // Emit event if tuple was actually removed
+      if (relation.tuples.length < oldLength) {
+        this.emitEvent({
+          type: 'relationTupleRemoved',
+          data: { relationId, tuple: t }
+        });
+      }
     }
   }
 
@@ -518,6 +581,12 @@ export class PyretDataInstance implements IInputDataInstance {
 
     if (!isDuplicate) {
       relation.tuples.push(tuple);
+      
+      // Emit event
+      this.emitEvent({
+        type: 'relationTupleAdded',
+        data: { relationId, tuple }
+      });
     }
   }
 
