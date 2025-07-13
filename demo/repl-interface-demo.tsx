@@ -8,7 +8,7 @@ import { ReplInterface } from '../src/components/ReplInterface/ReplInterface';
  */
 export const ReplInterfaceDemo: React.FC = () => {
   // Create a PyretDataInstance for the demo with some initial data
-  const [instance] = useState(() => {
+  const [instance, setInstance] = useState(() => {
     // Sample Pyret object with initial data
     const initialPyretData = {
       dict: {
@@ -29,6 +29,39 @@ export const ReplInterfaceDemo: React.FC = () => {
 
   const handleInstanceChange = (updatedInstance: PyretDataInstance) => {
     console.log('Pyret instance updated - atoms:', updatedInstance.getAtoms().length, 'relations:', updatedInstance.getRelations().length);
+    setInstance(updatedInstance);
+  };
+
+  const loadSampleData = () => {
+    const samplePyretData = {
+      dict: {
+        people: {
+          dict: {
+            alice: { dict: { name: "Alice", age: 25 }, brands: { "$brandPerson": true } },
+            bob: { dict: { name: "Bob", age: 30 }, brands: { "$brandPerson": true } },
+            charlie: { dict: { name: "Charlie", age: 28 }, brands: { "$brandPerson": true } }
+          },
+          brands: { "$brandDict": true }
+        },
+        projects: {
+          dict: {
+            proj1: { dict: { title: "WebApp", lead: "alice" }, brands: { "$brandProject": true } },
+            proj2: { dict: { title: "MobileApp", lead: "bob" }, brands: { "$brandProject": true } }
+          },
+          brands: { "$brandDict": true }
+        }
+      },
+      brands: { "$brandData": true }
+    };
+    
+    const newInstance = new PyretDataInstance(samplePyretData);
+    setInstance(newInstance);
+  };
+
+  const clearData = () => {
+    const emptyData = { dict: {}, brands: { "$brandData": true } };
+    const newInstance = new PyretDataInstance(emptyData);
+    setInstance(newInstance);
   };
 
   return (
@@ -41,6 +74,37 @@ export const ReplInterfaceDemo: React.FC = () => {
         <h2 style={{ marginTop: 0, color: '#555' }}>Instructions</h2>
         <p>This demo shows the REPL-like interface for building Pyret data instances with command-line style input.</p>
         
+        <h3>Data Controls:</h3>
+        <div style={{ marginBottom: '15px' }}>
+          <button 
+            onClick={loadSampleData}
+            style={{ 
+              marginRight: '10px', 
+              padding: '8px 16px', 
+              backgroundColor: '#007bff', 
+              color: 'white', 
+              border: 'none', 
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
+          >
+            Load Sample Data
+          </button>
+          <button 
+            onClick={clearData}
+            style={{ 
+              padding: '8px 16px', 
+              backgroundColor: '#dc3545', 
+              color: 'white', 
+              border: 'none', 
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
+          >
+            Clear Data
+          </button>
+        </div>
+
         <h3>Try these commands:</h3>
         <div style={{ fontFamily: 'monospace', backgroundColor: '#f8f8f8', padding: '10px', borderRadius: '4px' }}>
           <strong>Terminal 1 (Atoms):</strong><br/>

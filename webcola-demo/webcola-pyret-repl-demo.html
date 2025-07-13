@@ -288,7 +288,7 @@
                 const graphElement = document.querySelector('webcola-cnd-graph');
                 if (graphElement) {
                     console.log('Updating graph with layout instance...');
-                    graphElement.loadFromLayoutInstance(layoutInstance);
+                    await graphElement.renderLayout(layoutInstance);
                     
                     updateStatus(`✅ Visualization updated! ${instance.getAtoms().length} atoms, ${instance.getRelations().length} relations`, 'success');
                 } else {

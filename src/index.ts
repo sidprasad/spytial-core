@@ -99,3 +99,5 @@ export { InstanceBuilder } from './components/InstanceBuilder/InstanceBuilder';
 export type { InstanceBuilderProps } from './components/InstanceBuilder/InstanceBuilder';
 export { ReplInterface } from './components/ReplInterface/ReplInterface';
 export type { ReplInterfaceProps } from './components/ReplInterface/ReplInterface';
+export { ReplWithVisualization } from './components/ReplInterface/ReplWithVisualization';
+export type { ReplWithVisualizationProps } from './components/ReplInterface/ReplWithVisualization';

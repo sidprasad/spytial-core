@@ -55,8 +55,9 @@ export class PyretListParser implements ICommandParser {
 
       // Determine item type based on the list contents:
       // Case 1: All numeric items (e.g., "1,2,3,4") -> Number type
-      // Case 2: All existing atom IDs (e.g., "alice,bob") -> Use existing atom type
-      // Case 3: Mixed or new items -> Default to String type
+      // Case 2: All existing atom IDs (e.g., "alice,bob") -> Use existing atom type  
+      // Case 3: All quoted items (e.g., "red","green","blue") -> String type
+      // Case 4: Mixed or new items -> Default to String type
       let itemType = 'String'; // default fallback
       const existingAtoms = instance.getAtoms();
       const existingAtomIds = new Set(existingAtoms.map(a => a.id));
@@ -65,6 +66,14 @@ export class PyretListParser implements ICommandParser {
       if (items.every(item => /^\d+$/.test(item))) {
         itemType = 'Number';
       } 
+      // Check if all items are quoted strings
+      else if (items.every(item => /^".*"$/.test(item))) {
+        itemType = 'String';
+        // Remove quotes from items for processing
+        for (let i = 0; i < items.length; i++) {
+          items[i] = items[i].slice(1, -1); // Remove first and last character (quotes)
+        }
+      }
       // Check if all items are existing atoms
       else if (items.every(item => existingAtomIds.has(item))) {
         // Use the type of the first atom as the item type

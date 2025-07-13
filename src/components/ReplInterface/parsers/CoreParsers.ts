@@ -162,7 +162,17 @@ export class AtomCommandParser implements ICommandParser {
       candidateId = `${typeName}-${counter}`;
     }
     
-    return candidateId;
+    // Add 2-digit random suffix to ensure uniqueness and prevent clashing
+    const randomSuffix = Math.floor(Math.random() * 90) + 10; // 10-99
+    const finalId = `${candidateId}-${randomSuffix}`;
+    
+    // Check if this final ID exists (very unlikely but possible)
+    if (existingIds.has(finalId)) {
+      // Fallback to just the counter-based ID if random suffix conflicts
+      return candidateId;
+    }
+    
+    return finalId;
   }
 
   getHelp(): string[] {

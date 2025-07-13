@@ -175,6 +175,29 @@ describe('ReplInterface Parsers', () => {
       expect(relations.length).toBeGreaterThan(0);
     });
 
+    it('should add string lists with quoted items', () => {
+      const result = parser.execute('add [list: "red","green","blue"]:colors', instance);
+      
+      expect(result.success).toBe(true);
+      expect(result.action).toBe('add');
+      
+      const atoms = instance.getAtoms();
+      // Should have: red, green, blue (as atoms) + the list atom
+      expect(atoms.length).toBe(4);
+      
+      // Check that string atoms were created (unquoted labels)
+      const stringAtoms = atoms.filter(a => a.type === 'String');
+      expect(stringAtoms.length).toBe(3);
+      
+      // Check atom labels are correct (without quotes)
+      const labels = stringAtoms.map(a => a.label).sort();
+      expect(labels).toEqual(['blue', 'green', 'red']);
+      
+      // Check that list atom was created  
+      const listAtoms = atoms.filter(a => a.type === 'colors');
+      expect(listAtoms.length).toBe(1);
+    });
+
     it('should handle existing atoms in lists', () => {
       // Add some atoms first
       instance.addAtom({ id: 'alice', label: 'Alice', type: 'Person' });
