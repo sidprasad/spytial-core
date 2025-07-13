@@ -239,23 +239,14 @@
                 const cndSpec = getCurrentCNDSpec();
                 console.log('Current CND spec:', cndSpec);
 
-                let layoutSpec;
-                if (cndSpec && cndSpec.trim()) {
-                    try {
-                        layoutSpec = CndCore.parseLayoutSpec(cndSpec);
-                        console.log('Parsed Layout Spec:', layoutSpec);
-                    } catch (parseError) {
-                        console.warn('Failed to parse CND spec, using default layout:', parseError);
-                        layoutSpec = null;
-                    }
-                } else {
-                    console.log('No CND spec provided, using default layout');
-                    layoutSpec = null;
-                }
+                let layoutSpec = CndCore.parseLayoutSpec(cndSpec || "");
 
                 // Step 4: Create LayoutInstance with SGraphQueryEvaluator
                 updateStatus('Creating layout instance with SGraphQueryEvaluator...', 'info');
-                const layoutInstance = new CndCore.LayoutInstance(sgqEvaluator, layoutSpec);
+
+
+                //TODO: This is wrong. Look ata the doc string.
+                const layoutInstance = new CndCore.LayoutInstance(layoutSpec, sgqEvaluator, 0, true);
                 console.log('LayoutInstance created:', layoutInstance);
 
                 // Generate layout and store the result
