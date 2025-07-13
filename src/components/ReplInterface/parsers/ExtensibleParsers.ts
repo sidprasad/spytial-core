@@ -32,6 +32,8 @@ export class PyretListParser implements ICommandParser {
   private handleAdd(args: string, instance: IInputDataInstance): CommandResult {
     try {
       // Parse: [list: item1,item2,item3]:type
+      // Expected format: add [list: 1,2,3,4]:numbers
+      // Creates individual atoms for each item + a list atom + list relations
       const match = args.match(/^\[list:\s*([^\]]+)\]:(.+)$/);
       if (!match) {
         return {
@@ -51,8 +53,11 @@ export class PyretListParser implements ICommandParser {
         };
       }
 
-      // Determine item type - check if items are numbers or existing atoms
-      let itemType = 'String'; // default
+      // Determine item type based on the list contents:
+      // Case 1: All numeric items (e.g., "1,2,3,4") -> Number type
+      // Case 2: All existing atom IDs (e.g., "alice,bob") -> Use existing atom type
+      // Case 3: Mixed or new items -> Default to String type
+      let itemType = 'String'; // default fallback
       const existingAtoms = instance.getAtoms();
       const existingAtomIds = new Set(existingAtoms.map(a => a.id));
       
@@ -70,7 +75,9 @@ export class PyretListParser implements ICommandParser {
       const results: string[] = [];
       const atomsAdded: string[] = [];
 
-      // Add individual items as atoms if they don't exist
+      // Step 1: Create individual atoms for each list item
+      // - If item already exists as an atom, skip creation
+      // - If item is new, create an atom with the determined itemType
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
         
@@ -86,12 +93,13 @@ export class PyretListParser implements ICommandParser {
             atomsAdded.push(item);
             existingAtomIds.add(item);
           } catch (error) {
-            // Item might already exist, that's ok
+            // Item might already exist, that's ok - continue processing
           }
         }
       }
 
-      // Create list atom
+      // Step 2: Create the list atom that contains all items
+      // The list ID is generated to be unique (e.g., "numbers-1", "people-1")
       const listId = this.generateListId(instance, listType);
       const listAtom: IAtom = {
         id: listId,
@@ -102,7 +110,8 @@ export class PyretListParser implements ICommandParser {
       instance.addAtom(listAtom);
       atomsAdded.push(listId);
 
-      // Add list relations (first, rest, etc.)
+      // Step 3: Create Pyret-style list relations (first, rest, etc.)
+      // This establishes the structural relationships for list traversal
       this.addListRelations(instance, listId, items);
 
       const addedCount = atomsAdded.length;
@@ -224,9 +233,13 @@ export class PyretListParser implements ICommandParser {
       '  - first/rest relations for list structure',
       '',
       'Examples:',
-      '  add [list: 1,2,3,4]:numbers',
-      '  add [list: alice,bob,charlie]:people',
-      '  remove numbers-1'
+      '  add [list: 1,2,3,4]:numberList           - Creates numberList-1 as list ID',
+      '  add [list: alice,bob,charlie]:personList - Creates personList-1 as list ID',
+      '  add [list: red,green,blue]:colors        - Creates colors-1 as list ID',
+      '  remove numberList-1                      - Remove specific list instance',
+      '',
+      'Note: The list type name is used as-is to generate unique list IDs (type-1, type-2, etc.)',
+      'You control the naming - use singular, plural, or any descriptive name you prefer.'
     ];
   }
 }
