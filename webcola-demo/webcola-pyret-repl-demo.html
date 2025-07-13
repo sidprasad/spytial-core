@@ -114,7 +114,6 @@
         
         <div>
             <button onclick="clearGraph()">Clear All</button>
-            <button onclick="loadSampleData()">Load Sample Pyret Data</button>
             <select title="Choose the Layout Format" class="form-control" id="layoutFormat" name="layoutFormat" onchange="changeLayoutFormat()">
                 <option value="default" selected>Standard</option>
                 <option value="grid">Grid (Beta)</option>
@@ -224,20 +223,27 @@
 
                 console.log('Current instance - atoms:', instance.getAtoms().length, 'relations:', instance.getRelations().length);
                 
-                // Create SGraphQueryEvaluator from the Pyret instance
-                const evaluator = new CndCore.SGraphQueryEvaluator(instance);
-                console.log('SGraphQueryEvaluator created from Pyret instance');
+                // Step 1: Create evaluation context  
+                const evaluationContext = {
+                    sourceData: instance 
+                };
 
-                // Get CND specification
+                // Step 2: Create and initialize SGraphQueryEvaluator
+                updateStatus('Creating SGraphQueryEvaluator...', 'info');
+                const sgqEvaluator = new CndCore.SGraphQueryEvaluator();
+                sgqEvaluator.initialize(evaluationContext);
+                console.log('SGraphQueryEvaluator created and initialized');
+
+                // Step 3: Parse layout specification
+                updateStatus('Parsing CND specification...', 'info');
                 const cndSpec = getCurrentCNDSpec();
                 console.log('Current CND spec:', cndSpec);
 
-                // Create layout instance
                 let layoutSpec;
                 if (cndSpec && cndSpec.trim()) {
                     try {
                         layoutSpec = CndCore.parseLayoutSpec(cndSpec);
-                        console.log('Parsed CND layout spec:', layoutSpec);
+                        console.log('Parsed Layout Spec:', layoutSpec);
                     } catch (parseError) {
                         console.warn('Failed to parse CND spec, using default layout:', parseError);
                         layoutSpec = null;
@@ -247,10 +253,15 @@
                     layoutSpec = null;
                 }
 
-                const layoutInstance = new CndCore.LayoutInstance(evaluator, layoutSpec);
+                // Step 4: Create LayoutInstance with SGraphQueryEvaluator
+                updateStatus('Creating layout instance with SGraphQueryEvaluator...', 'info');
+                const layoutInstance = new CndCore.LayoutInstance(sgqEvaluator, layoutSpec);
                 console.log('LayoutInstance created:', layoutInstance);
 
-                currentInstanceLayout = layoutInstance;
+                // Generate layout and store the result
+                const projections = {};
+                const layoutResult = layoutInstance.generateLayout(instance, projections);
+                currentInstanceLayout = layoutResult.layout;
 
                 // Update the graph visualization
                 const graphElement = document.querySelector('webcola-cnd-graph');
@@ -267,66 +278,6 @@
             } catch (error) {
                 console.error('Error in loadInstanceData:', error);
                 updateStatus(`Error loading data: ${error.message}`, 'error');
-            }
-        }
-
-        /**
-         * Load sample Pyret data for demonstration
-         */
-        function loadSampleData() {
-            try {
-                // Sample Pyret object representing a simple tree structure
-                const samplePyretData = {
-                    dict: {
-                        value: 5,
-                        left: {
-                            dict: {
-                                value: 3,
-                                left: {
-                                    dict: { value: 1 },
-                                    brands: { "$brandNode": true, "$brandLeaf": true }
-                                },
-                                right: {
-                                    dict: { value: 4 },
-                                    brands: { "$brandNode": true, "$brandLeaf": true }
-                                }
-                            },
-                            brands: { "$brandNode": true, "$brandBranch": true }
-                        },
-                        right: {
-                            dict: {
-                                value: 7,
-                                left: {
-                                    dict: { value: 6 },
-                                    brands: { "$brandNode": true, "$brandLeaf": true }
-                                },
-                                right: {
-                                    dict: { value: 8 },
-                                    brands: { "$brandNode": true, "$brandLeaf": true }
-                                }
-                            },
-                            brands: { "$brandNode": true, "$brandBranch": true }
-                        }
-                    },
-                    brands: { "$brandNode": true, "$brandBranch": true }
-                };
-
-                // Create PyretDataInstance from sample data
-                const sampleInstance = new CndCore.PyretDataInstance(samplePyretData);
-                
-                // Update the REPL with this instance
-                if (window.updateReplInstance) {
-                    window.updateReplInstance(sampleInstance);
-                }
-                
-                updateStatus('Sample Pyret tree data loaded! Use REPL to modify it.', 'success');
-                
-                // Auto-update visualization
-                setTimeout(loadInstanceData, 100);
-                
-            } catch (error) {
-                console.error('Error loading sample data:', error);
-                updateStatus(`Error loading sample: ${error.message}`, 'error');
             }
         }
 
