@@ -1,0 +1,40 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [
+    "src/index.ts",
+    "src/data-instance/index.ts",
+    "src/evaluators/index.ts",
+    "src/layout/index.ts",
+    "src/translators/index.ts"
+  ],
+  "out": "docs",
+  "theme": "default",
+  "name": "CnD Core API Documentation",
+  "excludePrivate": true,
+  "excludeProtected": false,
+  "excludeInternal": true,
+  "includeVersion": true,
+  "readme": "README.md",
+  "exclude": [
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "**/vendor/**",
+    "**/node_modules/**",
+    "**/dist/**"
+  ],
+  "skipErrorChecking": true,
+  "tsconfig": "tsconfig.docs.json",
+  "plugin": ["typedoc-plugin-markdown"],
+  "gitRevision": "main",
+  "hideGenerator": false,
+  "searchInComments": true,
+  "categorizeByGroup": true,
+  "groupOrder": [
+    "Data Instances",
+    "Evaluators", 
+    "Layout",
+    "Translators",
+    "Interfaces",
+    "*"
+  ]
+}

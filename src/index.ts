@@ -1,5 +1,24 @@
 /**
- * Main entry point for the cnd-core library
+ * @fileoverview Main entry point for the cnd-core library - a fully-typed, tree-shakable TypeScript implementation of "Cope and Drag".
+ * 
+ * This library supports multiple data formats (Alloy, Forge, DOT, Racket, Pyret) with pluggable evaluators and layouts for extensibility.
+ * 
+ * @example
+ * ```typescript
+ * import { JSONDataInstance, LayoutInstance, SimpleGraphQueryEvaluator } from 'cnd-core';
+ * 
+ * // Create a data instance
+ * const data = new JSONDataInstance();
+ * data.addAtom({ id: 'A', type: 'Person', label: 'Alice' });
+ * data.addAtom({ id: 'B', type: 'Person', label: 'Bob' });
+ * 
+ * // Create a layout
+ * const layout = new LayoutInstance(data);
+ * const result = layout.generateLayout();
+ * ```
+ * 
+ * @module cnd-core
+ * @version 1.1.5-beta.2
  */
 
 // Export sub-modules

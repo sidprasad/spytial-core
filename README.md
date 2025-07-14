@@ -42,6 +42,29 @@ You can use the browser bundle directly from a CDN:
 
 ---
 
+## Documentation
+
+📖 **[Complete API Documentation](./docs/modules.md)**
+
+### Quick Start Guides
+
+- 🚀 [Basic Usage](./docs/examples/basic-usage.md) - Get started with data instances and layouts
+- 🎨 [Layout Configuration](./docs/examples/layout-configuration.md) - Customize your visualizations
+- 🏗️ [Architecture Overview](./docs/guides/architecture.md) - Understand the library structure
+
+### Generate Documentation Locally
+
+```bash
+# Generate API docs
+npm run docs
+
+# Generate docs with examples and serve locally
+npm run docs:generate
+npm run docs:serve-full
+```
+
+---
+
 ## Usage
 
 ### Importing

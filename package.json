@@ -33,7 +33,12 @@
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run clean && npm run build:all",
-    "serve": "python3 -m http.server 8080"
+    "serve": "python3 -m http.server 8080",
+    "docs": "typedoc",
+    "docs:serve": "npm run docs && cd docs && python3 -m http.server 8081",
+    "docs:clean": "rm -rf docs",
+    "docs:generate": "./scripts/generate-docs.sh",
+    "docs:serve-full": "./scripts/generate-docs.sh --serve"
   },
   "keywords": [
     "typescript",
@@ -72,6 +77,8 @@
     "jsdom": "^26.1.0",
     "prettier": "^3.5.3",
     "tsup": "^8.5.0",
+    "typedoc": "^0.28.7",
+    "typedoc-plugin-markdown": "^4.7.0",
     "typescript": "^5.8.3",
     "typescript-plugin-css-modules": "^5.1.0",
     "vite": "^6.3.5",
