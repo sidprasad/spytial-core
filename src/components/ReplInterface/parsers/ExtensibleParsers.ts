@@ -396,7 +396,11 @@ export class InfoCommandParser implements ICommandParser {
     if (atoms.length > 0) {
       message += 'Atoms:\n';
       atoms.forEach(atom => {
-        message += `  ${atom.id} (${atom.label}:${atom.type})\n`;
+        // Show ID and label separately when they differ
+        const idLabelDisplay = atom.id !== atom.label ? 
+          `ID: ${atom.id}, Label: ${atom.label}` : 
+          atom.id;
+        message += `  ${atom.type} (${idLabelDisplay})\n`;
       });
       message += '\n';
     }

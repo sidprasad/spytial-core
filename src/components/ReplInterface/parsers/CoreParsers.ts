@@ -143,9 +143,23 @@ export class AtomCommandParser implements ICommandParser {
 
       instance.addAtom(atom);
       
+      // Show different formats based on whether explicit ID was provided and if ID differs from label
+      let message: string;
+      if (explicitId?.trim()) {
+        // Explicit ID provided: show more detailed info
+        const idLabelInfo = explicitId.trim() !== atomLabel ? 
+          ` (ID: ${atomId}, Label: ${atomLabel})` : 
+          ` (ID: ${atomId})`;
+        message = `Added atom: ${atomLabel}:${atomType}${idLabelInfo}`;
+      } else {
+        // Generated ID: show standard format but note when ID differs from label
+        const idNote = atomId !== atomLabel ? ` (generated ID: ${atomId})` : '';
+        message = `Added atom: ${atomLabel}:${atomType}${idNote}`;
+      }
+      
       return {
         success: true,
-        message: `Added atom: ${atomId} (${atomLabel}:${atomType})`,
+        message,
         action: 'add'
       };
     } catch (error) {
@@ -184,9 +198,13 @@ export class AtomCommandParser implements ICommandParser {
 
       instance.removeAtom(atomToRemove.id);
       
+      // Show ID vs label info in removal message, keeping similar format
+      const baseMessage = `${atomToRemove.label}:${atomToRemove.type}`;
+      const idNote = atomToRemove.id !== atomToRemove.label ? ` (ID was: ${atomToRemove.id})` : '';
+      
       return {
         success: true,
-        message: `Removed atom: ${atomToRemove.id} (${atomToRemove.label}:${atomToRemove.type})`,
+        message: `Removed atom: ${baseMessage}${idNote}`,
         action: 'remove'
       };
     } catch (error) {
@@ -446,6 +464,224 @@ export class RelationCommandParser implements ICommandParser {
       '  add knows:alice->bob->charlie',
       '  remove friends:alice->bob',
       '  remove friends'
+    ];
+  }
+}
+
+/**
+ * Parser for batch/multiple commands in one line
+ * Supports:
+ * - Multiple atoms: add Alice:Person, Bob:Person, Charlie:Person
+ * - Atoms + relations: add Alice:Person; add Bob:Person; add friends:Alice->Bob
+ * - Mixed operations with semicolon separators
+ */
+export class BatchCommandParser implements ICommandParser {
+  private atomParser = new AtomCommandParser();
+  private relationParser = new RelationCommandParser();
+
+  canHandle(command: string): boolean {
+    const trimmed = command.trim();
+    
+    // Look for comma-separated atoms: add Type1:Label1, Type2:Label2, ...
+    if (this.isCommaSeperatedAtoms(trimmed)) {
+      return true;
+    }
+    
+    // Look for semicolon-separated commands: add Alice:Person; add Bob:Person; add friends:Alice->Bob
+    if (trimmed.includes(';')) {
+      const subCommands = trimmed.split(';').map(cmd => cmd.trim()).filter(cmd => cmd);
+      // Check if at least one subcommand can be handled by existing parsers
+      return subCommands.length >= 2 && 
+             subCommands.some(cmd => 
+               this.atomParser.canHandle(cmd) || this.relationParser.canHandle(cmd)
+             );
+    }
+    
+    return false;
+  }
+  
+  private isCommaSeperatedAtoms(command: string): boolean {
+    // Pattern: add Label1:Type1, Label2:Type2, Label3:Type3
+    if (!command.startsWith('add ')) return false;
+    
+    const args = command.substring(4).trim();
+    
+    // Must contain commas
+    if (!args.includes(',')) return false;
+    
+    // Split by commas and check if each part looks like Label:Type
+    const parts = args.split(',').map(part => part.trim());
+    if (parts.length < 2) return false;
+    
+    // At least some parts should match the atom pattern for this to be considered a batch atom command
+    // This allows for some invalid parts that will be handled during execution
+    const validParts = parts.filter(part => {
+      return /^([^=]+=)?[^:]+:.+$/.test(part) && !part.includes('->');
+    });
+    
+    // At least half of the parts should be valid atom patterns
+    return validParts.length >= Math.ceil(parts.length / 2);
+  }
+  
+  getPriority(): number {
+    return 115; // Higher than individual parsers to catch batch commands first
+  }
+  
+  getCommandPatterns(): string[] {
+    return [
+      'add Label1:Type1, Label2:Type2, Label3:Type3',
+      'add id1=Label1:Type1, id2=Label2:Type2',
+      'add Alice:Person; add Bob:Person; add friends:Alice->Bob',
+      'add Alice:Person; remove Bob:Person'
+    ];
+  }
+
+  execute(command: string, instance: IInputDataInstance): CommandResult {
+    const trimmed = command.trim();
+    
+    try {
+      // Handle comma-separated atoms
+      if (this.isCommaSeperatedAtoms(trimmed)) {
+        return this.handleCommaSeperatedAtoms(trimmed, instance);
+      }
+      
+      // Handle semicolon-separated commands
+      if (trimmed.includes(';')) {
+        return this.handleSemicolonSeperatedCommands(trimmed, instance);
+      }
+      
+      return {
+        success: false,
+        message: 'Unable to parse batch command'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to execute batch command'
+      };
+    }
+  }
+
+  private handleCommaSeperatedAtoms(command: string, instance: IInputDataInstance): CommandResult {
+    const args = command.substring(4).trim(); // Remove 'add '
+    const atomSpecs = args.split(',').map(spec => spec.trim());
+    
+    const results: string[] = [];
+    const errors: string[] = [];
+    let successCount = 0;
+    
+    for (const atomSpec of atomSpecs) {
+      const atomCommand = `add ${atomSpec}`;
+      try {
+        const result = this.atomParser.execute(atomCommand, instance);
+        if (result.success) {
+          results.push(result.message);
+          successCount++;
+        } else {
+          errors.push(`${atomSpec}: ${result.message}`);
+        }
+      } catch (error) {
+        errors.push(`${atomSpec}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+    
+    if (successCount === atomSpecs.length) {
+      return {
+        success: true,
+        message: `Added ${successCount} atoms:\n${results.join('\n')}`,
+        action: 'add'
+      };
+    } else if (successCount > 0) {
+      return {
+        success: true,
+        message: `Added ${successCount}/${atomSpecs.length} atoms:\n${results.join('\n')}\n\nErrors:\n${errors.join('\n')}`,
+        action: 'add'
+      };
+    } else {
+      return {
+        success: false,
+        message: `Failed to add atoms:\n${errors.join('\n')}`
+      };
+    }
+  }
+
+  private handleSemicolonSeperatedCommands(command: string, instance: IInputDataInstance): CommandResult {
+    const subCommands = command.split(';').map(cmd => cmd.trim()).filter(cmd => cmd);
+    
+    const results: string[] = [];
+    const errors: string[] = [];
+    let successCount = 0;
+    let addCount = 0;
+    let removeCount = 0;
+    
+    for (const subCommand of subCommands) {
+      try {
+        let result: CommandResult | null = null;
+        
+        // Try atom parser first
+        if (this.atomParser.canHandle(subCommand)) {
+          result = this.atomParser.execute(subCommand, instance);
+        }
+        // Then try relation parser
+        else if (this.relationParser.canHandle(subCommand)) {
+          result = this.relationParser.execute(subCommand, instance);
+        }
+        
+        if (result) {
+          if (result.success) {
+            results.push(result.message);
+            successCount++;
+            if (result.action === 'add') addCount++;
+            if (result.action === 'remove') removeCount++;
+          } else {
+            errors.push(`"${subCommand}": ${result.message}`);
+          }
+        } else {
+          errors.push(`"${subCommand}": No parser can handle this command`);
+        }
+      } catch (error) {
+        errors.push(`"${subCommand}": ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+    
+    const actionSummary = [];
+    if (addCount > 0) actionSummary.push(`${addCount} added`);
+    if (removeCount > 0) actionSummary.push(`${removeCount} removed`);
+    
+    if (successCount === subCommands.length) {
+      return {
+        success: true,
+        message: `Batch command completed (${actionSummary.join(', ')}):\n${results.join('\n')}`,
+        action: addCount > 0 ? 'add' : (removeCount > 0 ? 'remove' : 'info')
+      };
+    } else if (successCount > 0) {
+      return {
+        success: true,
+        message: `Batch command partially completed (${successCount}/${subCommands.length} commands):\n\nSuccessful:\n${results.join('\n')}\n\nErrors:\n${errors.join('\n')}`,
+        action: addCount > 0 ? 'add' : (removeCount > 0 ? 'remove' : 'info')
+      };
+    } else {
+      return {
+        success: false,
+        message: `Batch command failed:\n${errors.join('\n')}`
+      };
+    }
+  }
+
+  getHelp(): string[] {
+    return [
+      'Batch Commands:',
+      '  add Label1:Type1, Label2:Type2, ...        - Add multiple atoms',
+      '  add id1=Label1:Type1, id2=Label2:Type2     - Add multiple atoms with IDs',
+      '  command1; command2; command3               - Execute multiple commands',
+      '',
+      'Examples:',
+      '  add Alice:Person, Bob:Person, Charlie:Person',
+      '  add p1=Alice:Person, p2=Bob:Person',
+      '  add Alice:Person; add Bob:Person; add friends:Alice->Bob',
+      '  add Alice:Person; remove Bob:Person',
+      '',
+      'Note: Semicolon-separated commands support any mix of atom/relation commands'
     ];
   }
 }
