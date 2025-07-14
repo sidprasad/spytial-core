@@ -6,6 +6,12 @@ import { IAtom, ITuple, IInputDataInstance } from '../../../data-instance/interf
  * Supports:
  * - add [list: 1,2,3,4]:list_of_numbers
  * - add [list: atom1,atom2,atom3]:atom_list
+ * 
+ * 
+ * 
+ * TODO: This is wrong I think?
+ * 
+ * 
  */
 export class PyretListParser implements ICommandParser {
   canHandle(command: string): boolean {
@@ -199,33 +205,48 @@ export class PyretListParser implements ICommandParser {
   private addListRelations(instance: IInputDataInstance, listId: string, items: string[]): void {
     if (items.length === 0) return;
 
-    // Add first relation: list -> first_item
-    const firstTuple: ITuple = {
-      atoms: [listId, items[0]],
-      types: ['List', 'Item'] // Generic types
-    };
-    
-    try {
-      instance.addRelationTuple('first', firstTuple);
-    } catch (error) {
-      // Relation might already exist
+    // Create the linked list structure
+    let currentRest = 'empty'; // Start with the Pyret `empty` as the end of the list
+
+    for (let i = items.length - 1; i >= 0; i--) {
+      const currentItem = items[i];
+
+      // Create a `link` atom for the current item
+      const linkId = `${listId}-link-${i + 1}`;
+      const linkAtom: IAtom = {
+        id: linkId,
+        label: `link(${currentItem}, ${currentRest})`,
+        type: 'link'
+      };
+
+      instance.addAtom(linkAtom);
+
+      // Add the `link` relation: link(first, rest)
+      const linkTuple: ITuple = {
+        atoms: [currentItem, currentRest],
+        types: ['Item', 'link']
+      };
+
+      try {
+        instance.addRelationTuple('link', linkTuple);
+      } catch (error) {
+        // Relation might already exist
+      }
+
+      // Update the currentRest to point to the current link
+      currentRest = linkId;
     }
 
-    // Add rest relations for nested structure
-    if (items.length > 1) {
-      // For simplicity, create a chain of rest relations
-      for (let i = 0; i < items.length - 1; i++) {
-        const restTuple: ITuple = {
-          atoms: [items[i], items[i + 1]],
-          types: ['Item', 'Item']
-        };
-        
-        try {
-          instance.addRelationTuple('rest', restTuple);
-        } catch (error) {
-          // Relation might already exist
-        }
-      }
+    // Add the top-level list atom pointing to the first link
+    const topLevelTuple: ITuple = {
+      atoms: [listId, currentRest],
+      types: ['List', 'link']
+    };
+
+    try {
+      instance.addRelationTuple('link', topLevelTuple);
+    } catch (error) {
+      // Relation might already exist
     }
   }
 

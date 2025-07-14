@@ -91,22 +91,22 @@
         <p>Build Pyret data structures using REPL-style commands and visualize them with CnD layout specifications.</p>
 
         <!-- React Component Areas -->
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
-            <div>
-                <label for="repl-interface-container">Pyret REPL Interface:</label>
-                <div id="repl-interface-container" class="repl-interface-container">
-                    <div style="padding: 20px; text-align: center; color: #666;">
-                        <p>Loading REPL Interface...</p>
-                        <p><em>Use command-line syntax to build data here</em></p>
-                    </div>
-                </div>
-            </div>
+        <div style="display: flex; flex-direction: column; gap: 20px; margin-bottom: 20px;">
             <div>
                 <label for="layout-interface-container">CnD Layout Interface:</label>
                 <div id="layout-interface-container" class="layout-interface-container">
                     <div style="padding: 20px; text-align: center; color: #666;">
                         <p>Loading CnD Layout Interface...</p>
                         <p><em>Configure layout constraints here</em></p>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <label for="repl-interface-container">Pyret REPL Interface:</label>
+                <div id="repl-interface-container" class="repl-interface-container">
+                    <div style="padding: 20px; text-align: center; color: #666;">
+                        <p>Loading REPL Interface...</p>
+                        <p><em>Use command-line syntax to build data here</em></p>
                     </div>
                 </div>
             </div>

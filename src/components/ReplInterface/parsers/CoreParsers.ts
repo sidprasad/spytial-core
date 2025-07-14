@@ -71,7 +71,7 @@ export class AtomCommandParser implements ICommandParser {
       const [, explicitId, label, type] = match;
       const atomLabel = label.trim();
       const atomType = type.trim();
-      
+
       if (!atomLabel || !atomType) {
         return {
           success: false,
@@ -79,16 +79,8 @@ export class AtomCommandParser implements ICommandParser {
         };
       }
 
-      // Generate ID if not provided
-      const atomId = explicitId?.trim() || this.generateAtomId(instance, atomType);
-      
-      // Check for duplicate
-      if (instance.getAtoms().some(a => a.id === atomId)) {
-        return {
-          success: false,
-          message: `Atom with ID '${atomId}' already exists`
-        };
-      }
+      // Generate ID: Use explicit ID if provided, otherwise try to use the label as the ID
+      let atomId = explicitId?.trim() || this.generateAtomId(atomLabel, instance);
 
       const atom: IAtom = {
         id: atomId,
@@ -152,28 +144,24 @@ export class AtomCommandParser implements ICommandParser {
     }
   }
 
-  private generateAtomId(instance: IInputDataInstance, typeName: string): string {
-    const existingIds = new Set(instance.getAtoms().map(a => a.id));
-    let counter = 1;
-    let candidateId = `${typeName}-${counter}`;
-    
-    while (existingIds.has(candidateId)) {
-      counter++;
-      candidateId = `${typeName}-${counter}`;
-    }
-    
-    // Add 2-digit random suffix to ensure uniqueness and prevent clashing
-    const randomSuffix = Math.floor(Math.random() * 90) + 10; // 10-99
-    const finalId = `${candidateId}-${randomSuffix}`;
-    
-    // Check if this final ID exists (very unlikely but possible)
-    if (existingIds.has(finalId)) {
-      // Fallback to just the counter-based ID if random suffix conflicts
-      return candidateId;
-    }
-    
-    return finalId;
+  private generateAtomId(candidateId: string, instance: IInputDataInstance): string {
+  const existingIds = new Set(instance.getAtoms().map(a => a.id));
+
+  // If the candidate ID doesn't exist, return it as is
+  if (!existingIds.has(candidateId)) {
+    return candidateId;
   }
+
+  // Append a number to the candidate ID until a unique ID is found
+  let counter = 1;
+  let uniqueId = `${candidateId}$${counter}`;
+  while (existingIds.has(uniqueId)) {
+    counter++;
+    uniqueId = `${candidateId}$${counter}`;
+  }
+
+  return uniqueId;
+}
 
   getHelp(): string[] {
     return [
