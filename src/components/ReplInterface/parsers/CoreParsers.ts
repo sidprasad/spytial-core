@@ -39,7 +39,11 @@ export interface ICommandParser {
 export class AtomCommandParser implements ICommandParser {
   canHandle(command: string): boolean {
     const trimmed = command.trim();
-    return trimmed.startsWith('add ') || trimmed.startsWith('remove ');
+    // Handle add/remove commands that are NOT relations (don't contain ->) 
+    // and are NOT Pyret lists (don't contain [list:)
+    return (trimmed.startsWith('add ') || trimmed.startsWith('remove ')) && 
+           !trimmed.includes('->') && 
+           !trimmed.includes('[list:');
   }
 
   execute(command: string, instance: IInputDataInstance): CommandResult {

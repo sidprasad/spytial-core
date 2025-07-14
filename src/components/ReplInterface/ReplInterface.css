@@ -44,8 +44,8 @@
 }
 
 .repl-interface__terminals {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 20px;
   height: 100%;
 }
@@ -263,11 +263,6 @@
 
 /* Responsive design */
 @media (max-width: 1024px) {
-  .repl-interface__terminals {
-    grid-template-columns: 1fr;
-    gap: 15px;
-  }
-  
   .repl-terminal {
     min-height: 300px;
   }

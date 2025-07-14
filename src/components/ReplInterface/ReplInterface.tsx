@@ -52,45 +52,38 @@ interface TerminalState {
 }
 
 /**
- * Default terminal configurations
+ * Default terminal configuration - unified terminal supporting all commands
  */
 const DEFAULT_TERMINALS: TerminalConfig[] = [
   {
-    id: 'atoms',
-    title: 'Terminal 1: Elements (Atoms)',
-    description: 'Add/remove atoms with Label:Type syntax',
-    parsers: [new AtomCommandParser(), new InfoCommandParser()],
-    placeholder: 'add Alice:Person\nremove Bob:Person\nhelp'
-  },
-  {
-    id: 'relations', 
-    title: 'Terminal 2: Relations',
-    description: 'Add/remove relations with name:atom->atom syntax',
-    parsers: [new RelationCommandParser(), new InfoCommandParser()],
-    placeholder: 'add friends:alice->bob\nremove knows:alice->charlie\nhelp'
-  },
-  {
-    id: 'extensions',
-    title: 'Terminal 3: Extensions',
-    description: 'Language-specific extensions (Pyret lists, etc.)',
-    parsers: [new PyretListParser(), new InfoCommandParser()],
-    placeholder: 'add [list: 1,2,3,4]:numbers\nhelp'
+    id: 'unified',
+    title: 'Unified Terminal',
+    description: 'Supports atoms, relations, and extensions in one terminal',
+    parsers: [
+      new AtomCommandParser(), 
+      new RelationCommandParser(), 
+      new PyretListParser(), 
+      new InfoCommandParser()
+    ],
+    placeholder: 'Examples:\nadd Alice:Person\nadd friends:alice->bob\nadd [list: 1,2,3,4]:numbers\nhelp'
   }
 ];
 
 /**
  * REPL-like interface for building data instances with command-line style input
  * 
- * Provides three terminals:
- * 1. Atoms: add/remove atoms with Label:Type syntax
- * 2. Relations: add/remove relations with name:atom->atom syntax  
- * 3. Extensions: Language-specific commands (Pyret lists, etc.)
+ * Provides a unified terminal that supports:
+ * - Atoms: add/remove atoms with Label:Type syntax
+ * - Relations: add/remove relations with name:atom->atom syntax  
+ * - Extensions: Language-specific commands (Pyret lists, etc.)
+ * - Utility commands: help, info, list, clear
  * 
- * Each terminal supports:
+ * The terminal supports:
  * - Command history with up/down arrows
  * - Help system
  * - Multi-line input
  * - Extensible parser system
+ * - Auto-detection of command types
  */
 export const ReplInterface: React.FC<ReplInterfaceProps> = ({
   instance,
