@@ -1,6 +1,7 @@
 export { 
   AtomCommandParser, 
   RelationCommandParser,
+  BatchCommandParser,
   type ICommandParser,
   type CommandResult 
 } from './CoreParsers';

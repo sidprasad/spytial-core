@@ -6,18 +6,36 @@ import { IAtom, ITuple, IInputDataInstance } from '../../../data-instance/interf
  * Supports:
  * - add [list: 1,2,3,4]:list_of_numbers
  * - add [list: atom1,atom2,atom3]:atom_list
- * 
- * 
- * 
- * TODO: This is wrong I think?
- * 
- * 
  */
 export class PyretListParser implements ICommandParser {
   canHandle(command: string): boolean {
     const trimmed = command.trim();
-    return trimmed.startsWith('add [list:') || 
-           (trimmed.startsWith('remove ') && !trimmed.includes('->') && !trimmed.includes(':'));
+    
+    // Pattern 1: add [list: ...]:type
+    if (trimmed.startsWith('add [list:') && trimmed.includes(']:')) {
+      return true;
+    }
+    
+    // Pattern 2: remove list_id (single word ending in -number pattern)
+    if (trimmed.startsWith('remove ')) {
+      const args = trimmed.substring(7).trim();
+      // Check if it looks like a generated list ID (type-number)
+      return /^[a-zA-Z_][a-zA-Z0-9_]*-\d+$/.test(args);
+    }
+    
+    return false;
+  }
+  
+  getPriority(): number {
+    return 120; // Higher priority due to very specific [list: pattern
+  }
+  
+  getCommandPatterns(): string[] {
+    return [
+      'add [list: item1,item2,item3]:type',
+      'add [list: 1,2,3,4]:numbers',
+      'remove listId-1'
+    ];
   }
 
   execute(command: string, instance: IInputDataInstance): CommandResult {
@@ -280,8 +298,22 @@ export class PyretListParser implements ICommandParser {
 export class InfoCommandParser implements ICommandParser {
   canHandle(command: string): boolean {
     const trimmed = command.trim().toLowerCase();
-    return trimmed === 'help' || trimmed === 'info' || trimmed === 'status' || 
-           trimmed === 'list' || trimmed === 'clear';
+    const utilityCommands = ['help', 'info', 'status', 'list', 'clear'];
+    return utilityCommands.includes(trimmed);
+  }
+  
+  getPriority(): number {
+    return 50; // Lower priority - utility commands should be fallback
+  }
+  
+  getCommandPatterns(): string[] {
+    return [
+      'help',
+      'info', 
+      'status',
+      'list',
+      'clear'
+    ];
   }
 
   execute(command: string, instance: IInputDataInstance): CommandResult {
@@ -364,7 +396,11 @@ export class InfoCommandParser implements ICommandParser {
     if (atoms.length > 0) {
       message += 'Atoms:\n';
       atoms.forEach(atom => {
-        message += `  ${atom.id} (${atom.label}:${atom.type})\n`;
+        // Show ID and label separately when they differ
+        const idLabelDisplay = atom.id !== atom.label ? 
+          `ID: ${atom.id}, Label: ${atom.label}` : 
+          atom.id;
+        message += `  ${atom.type} (${idLabelDisplay})\n`;
       });
       message += '\n';
     }

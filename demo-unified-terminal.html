@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unified REPL Terminal Demo</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+        }
+        .demo-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .instructions {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .instructions h2 {
+            margin-top: 0;
+            color: #333;
+        }
+        .command-examples {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .command-category {
+            margin-bottom: 15px;
+        }
+        .command-category strong {
+            color: #007bff;
+        }
+        .command-category div {
+            margin-left: 10px;
+            color: #666;
+        }
+        #app {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-container">
+        <div class="instructions">
+            <h2>🎯 Unified REPL Terminal Demo</h2>
+            <p>
+                <strong>Successfully unified the three separate terminals into one!</strong> 
+                The unified terminal now supports all command types in a single interface.
+            </p>
+            
+            <h3>✅ What Changed:</h3>
+            <ul>
+                <li><strong>Before:</strong> 3 separate terminals (Atoms, Relations, Extensions)</li>
+                <li><strong>After:</strong> 1 unified terminal supporting all commands</li>
+                <li><strong>Layout:</strong> Changed from 3-column grid to single column</li>
+                <li><strong>Auto-detection:</strong> Commands are automatically routed to the correct parser</li>
+            </ul>
+
+            <h3>🚀 Try These Commands:</h3>
+            <div class="command-examples">
+                <div class="command-category">
+                    <strong>Atom Commands:</strong>
+                    <div>add Alice:Person</div>
+                    <div>add bob=Bob:Person</div>
+                    <div>remove Alice:Person</div>
+                </div>
+                
+                <div class="command-category">
+                    <strong>Relation Commands:</strong>
+                    <div>add friends:alice->bob</div>
+                    <div>add knows:alice->bob->charlie</div>
+                    <div>remove friends:alice->bob</div>
+                </div>
+                
+                <div class="command-category">
+                    <strong>Pyret Extensions:</strong>
+                    <div>add [list: 1,2,3,4]:numbers</div>
+                    <div>add [list: "red","green","blue"]:colors</div>
+                </div>
+                
+                <div class="command-category">
+                    <strong>Utility Commands:</strong>
+                    <div>help</div>
+                    <div>status</div>
+                    <div>list</div>
+                    <div>clear</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="app">
+            <!-- React component will be rendered here -->
+        </div>
+    </div>
+
+    <script>
+        // This would normally load the React component
+        // For now, just show a placeholder
+        document.getElementById('app').innerHTML = `
+            <div style="padding: 40px; text-align: center; color: #666;">
+                <h3>React Component Placeholder</h3>
+                <p>The unified REPL terminal would be rendered here.</p>
+                <p>Run the actual demo with React to see the interface in action.</p>
+            </div>
+        `;
+    </script>
+</body>
+</html>

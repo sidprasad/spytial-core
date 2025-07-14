@@ -91,23 +91,28 @@ export const ReplInterfaceDemo: React.FC = () => {
 
         <h3>Try these commands:</h3>
         <div style={{ fontFamily: 'monospace', backgroundColor: '#f8f8f8', padding: '10px', borderRadius: '4px' }}>
-          <strong>Terminal 1 (Atoms):</strong><br/>
+          <strong>Unified Terminal (supports all command types):</strong><br/>
+          <br/>
+          <strong>Atom Commands:</strong><br/>
           • add Charlie:Person<br/>
           • add p4=David:Person<br/>
           • add tree1=Node:TreeNode<br/>
-          • list<br/>
           <br/>
-          <strong>Terminal 2 (Relations):</strong><br/>
+          <strong>Relation Commands:</strong><br/>
           • add likes:alice-&gt;bob<br/>
           • add knows:alice-&gt;bob-&gt;charlie<br/>
           • add left:tree1-&gt;alice<br/>
-          • status<br/>
           <br/>
-          <strong>Terminal 3 (Pyret Extensions):</strong><br/>
+          <strong>Pyret Extension Commands:</strong><br/>
           • add [list: 1,2,3,4]:numberList<br/>
           • add [list: alice,bob]:personList<br/>
           • add [list: red,green,blue]:colors<br/>
+          <br/>
+          <strong>Utility Commands:</strong><br/>
           • help<br/>
+          • status<br/>
+          • list<br/>
+          • clear<br/>
         </div>
       </div>
 

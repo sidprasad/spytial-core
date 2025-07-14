@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { IInputDataInstance } from '../../data-instance/interfaces';
-import { ICommandParser, CommandResult, AtomCommandParser, RelationCommandParser } from './parsers/CoreParsers';
+import { ICommandParser, CommandResult, AtomCommandParser, RelationCommandParser, BatchCommandParser } from './parsers/CoreParsers';
 import { PyretListParser, InfoCommandParser } from './parsers/ExtensibleParsers';
 import './ReplInterface.css';
 
@@ -52,45 +52,40 @@ interface TerminalState {
 }
 
 /**
- * Default terminal configurations
+ * Default terminal configuration - unified terminal supporting all commands
+ * Parsers are ordered by priority (higher priority first)
  */
 const DEFAULT_TERMINALS: TerminalConfig[] = [
   {
-    id: 'atoms',
-    title: 'Terminal 1: Elements (Atoms)',
-    description: 'Add/remove atoms with Label:Type syntax',
-    parsers: [new AtomCommandParser(), new InfoCommandParser()],
-    placeholder: 'add Alice:Person\nremove Bob:Person\nhelp'
-  },
-  {
-    id: 'relations', 
-    title: 'Terminal 2: Relations',
-    description: 'Add/remove relations with name:atom->atom syntax',
-    parsers: [new RelationCommandParser(), new InfoCommandParser()],
-    placeholder: 'add friends:alice->bob\nremove knows:alice->charlie\nhelp'
-  },
-  {
-    id: 'extensions',
-    title: 'Terminal 3: Extensions',
-    description: 'Language-specific extensions (Pyret lists, etc.)',
-    parsers: [new PyretListParser(), new InfoCommandParser()],
-    placeholder: 'add [list: 1,2,3,4]:numbers\nhelp'
+    id: 'unified',
+    title: '',
+    description: 'Supports atoms, relations, and extensions in one terminal',
+    parsers: [
+      new PyretListParser(),     // Priority 120 - most specific pattern
+      new BatchCommandParser(),  // Priority 115 - multi-command patterns  
+      new RelationCommandParser(), // Priority 110 - specific -> pattern
+      new AtomCommandParser(),   // Priority 100 - standard priority
+      new InfoCommandParser()    // Priority 50 - fallback utility commands
+    ].sort((a, b) => b.getPriority() - a.getPriority()), // Sort by priority descending
+    placeholder: 'Examples:\nadd Alice:Person\nadd Alice:Person, Bob:Person, Charlie:Person\nadd Alice:Person; add Bob:Person; add friends(Alice, Bob)\nadd friends(alice, bob)\nadd [list: 1,2,3,4]:numbers\nhelp'
   }
 ];
 
 /**
  * REPL-like interface for building data instances with command-line style input
  * 
- * Provides three terminals:
- * 1. Atoms: add/remove atoms with Label:Type syntax
- * 2. Relations: add/remove relations with name:atom->atom syntax  
- * 3. Extensions: Language-specific commands (Pyret lists, etc.)
+ * Provides a unified terminal that supports:
+ * - Atoms: add/remove atoms with Label:Type syntax
+ * - Relations: add/remove relations with name:atom->atom syntax  
+ * - Extensions: Language-specific commands (Pyret lists, etc.)
+ * - Utility commands: help, info, list, clear
  * 
- * Each terminal supports:
+ * The terminal supports:
  * - Command history with up/down arrows
  * - Help system
  * - Multi-line input
  * - Extensible parser system
+ * - Auto-detection of command types
  */
 export const ReplInterface: React.FC<ReplInterfaceProps> = ({
   instance,
@@ -108,7 +103,7 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
         output: [{
           id: 'welcome',
           type: 'info',
-          message: `Welcome to ${terminal.title}! Type 'help' for available commands.`,
+          message: `Type 'help' for available commands.`,
           timestamp: new Date()
         }],
         isExecuting: false
@@ -184,11 +179,13 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
       message: trimmedCommand
     });
 
-    // Try to execute with each parser
+    // Try to execute with each parser (they are already sorted by priority)
     let result: CommandResult | null = null;
+    let handlingParser: ICommandParser | null = null;
     
     for (const parser of terminal.parsers) {
       if (parser.canHandle(trimmedCommand)) {
+        handlingParser = parser;
         try {
           result = parser.execute(trimmedCommand, instance);
           break;
@@ -202,11 +199,16 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
       }
     }
 
-    // If no parser handled it, show error
+    // If no parser handled it, provide helpful error with available patterns
     if (!result) {
+      const availablePatterns = terminal.parsers
+        .flatMap(parser => parser.getCommandPatterns())
+        .slice(0, 8) // Limit to avoid overwhelming output
+        .join('\n  ');
+      
       result = {
         success: false,
-        message: `Unknown command: ${trimmedCommand}. Type 'help' for available commands.`
+        message: `Unknown command: ${trimmedCommand}\n\nAvailable patterns:\n  ${availablePatterns}\n\nType 'help' for detailed information.`
       };
     }
 
@@ -322,106 +324,138 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
 
   return (
     <div className={`repl-interface ${className}`}>
-      <div className="repl-interface__header">
-        <h2>REPL Interface</h2>
-        <div className="repl-interface__stats">
-          <span>{atoms.length} atoms</span>
-          <span>{relations.length} relations</span>
-          <span>{tupleCount} tuples</span>
+      <div className="repl-interface__main">
+        <div className="repl-interface__header">
+          <div className="repl-interface__stats">
+            <span>{atoms.length} atoms</span>
+            <span>{relations.length} relations</span>
+            <span>{tupleCount} tuples</span>
+          </div>
+        </div>
+
+        <div className="repl-interface__terminals">
+          {terminals.map(terminal => {
+            const state = terminalStates[terminal.id];
+            if (!state) return null;
+
+            return (
+              <div key={terminal.id} className="repl-terminal">
+                <div className="repl-terminal__header">
+                  <div 
+                    className="repl-terminal__help"
+                    onClick={() => showHelp(terminal.id)}
+                    title="Show help"
+                  >
+                    ?
+                  </div>
+                </div>
+
+                <div 
+                  className="repl-terminal__output"
+                  ref={ref => { outputRefs.current[terminal.id] = ref; }}
+                >
+                  {state.output.map(line => (
+                    <div key={line.id} className={`repl-output-line ${line.type}`}>
+                      {line.message.split('\n').map((textLine, index) => (
+                        <div key={index}>{textLine}</div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="repl-terminal__input">
+                  <textarea
+                    value={state.input}
+                    onChange={(e) => handleInputChange(terminal.id, e.target.value)}
+                    onKeyDown={(e) => handleKeyPress(e, terminal.id)}
+                    placeholder={terminal.placeholder}
+                    disabled={disabled || state.isExecuting}
+                    rows={3}
+                  />
+                  
+                  <div className="repl-terminal__controls">
+                    <button
+                      className="repl-terminal__execute"
+                      onClick={() => handleExecute(terminal.id)}
+                      disabled={disabled || state.isExecuting || !state.input.trim()}
+                      title="Execute commands (Ctrl+Enter)"
+                    >
+                      {state.isExecuting ? 'Executing...' : 'Execute'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="repl-interface__actions">
+          <button
+            className="repl-interface__action-button danger"
+            onClick={clearAll}
+            disabled={disabled}
+            title="Clear entire instance"
+          >
+            Clear All Data
+          </button>
+          
+          <button
+            className="repl-interface__action-button"
+            onClick={() => {
+              terminals.forEach(terminal => {
+                addOutputLine(terminal.id, {
+                  type: 'info',
+                  message: `Instance Status: ${atoms.length} atoms, ${relations.length} relations, ${tupleCount} tuples`
+                });
+              });
+            }}
+            disabled={disabled}
+            title="Show status in all terminals"
+          >
+            Show Status
+          </button>
         </div>
       </div>
 
-      <div className="repl-interface__terminals">
-        {terminals.map(terminal => {
-          const state = terminalStates[terminal.id];
-          if (!state) return null;
-
-          return (
-            <div key={terminal.id} className="repl-terminal">
-              <div className="repl-terminal__header">
-                <div className="repl-terminal__title">{terminal.title}</div>
-                <div 
-                  className="repl-terminal__help"
-                  onClick={() => showHelp(terminal.id)}
-                  title="Show help"
-                >
-                  ?
-                </div>
+      <div className="repl-interface__sidebar">
+        <div className="repl-interface__sidebar-section">
+          <h3>Atoms ({atoms.length})</h3>
+          {atoms.length === 0 ? (
+            <div className="repl-interface__empty">No atoms</div>
+          ) : (
+            atoms.map(atom => (
+              <div key={atom.id} className="repl-interface__item">
+                <div className="repl-interface__item-header">{atom.label}:{atom.type}</div>
+                {atom.id !== atom.label && (
+                  <div className="repl-interface__item-detail">ID: {atom.id}</div>
+                )}
               </div>
+            ))
+          )}
+        </div>
 
-              <div 
-                className="repl-terminal__output"
-                ref={ref => { outputRefs.current[terminal.id] = ref; }}
-              >
-                {state.output.map(line => (
-                  <div key={line.id} className={`repl-output-line ${line.type}`}>
-                    {line.message.split('\n').map((textLine, index) => (
-                      <div key={index}>{textLine}</div>
-                    ))}
+        <div className="repl-interface__sidebar-section">
+          <h3>Relations ({relations.length})</h3>
+          {relations.length === 0 ? (
+            <div className="repl-interface__empty">No relations</div>
+          ) : (
+            relations.map(relation => (
+              <div key={relation.name} className="repl-interface__sidebar-section">
+                <div className="repl-interface__item">
+                  <div className="repl-interface__item-header">{relation.name}</div>
+                  <div className="repl-interface__item-detail">{relation.tuples.length} tuples</div>
+                </div>
+                {relation.tuples.map((tuple, index) => (
+                  <div key={index} className="repl-interface__item" style={{marginLeft: '10px', fontSize: '0.75rem'}}>
+                    <div className="repl-interface__item-detail">
+                      {relation.name}({tuple.atoms.join(', ')})
+                    </div>
                   </div>
                 ))}
               </div>
-
-              <div className="repl-terminal__input">
-                <textarea
-                  value={state.input}
-                  onChange={(e) => handleInputChange(terminal.id, e.target.value)}
-                  onKeyDown={(e) => handleKeyPress(e, terminal.id)}
-                  placeholder={terminal.placeholder}
-                  disabled={disabled || state.isExecuting}
-                  rows={3}
-                />
-                
-                <div className="repl-terminal__controls">
-                  <button
-                    className="repl-terminal__clear"
-                    onClick={() => clearTerminal(terminal.id)}
-                    disabled={disabled}
-                    title="Clear output"
-                  >
-                    Clear
-                  </button>
-                  
-                  <button
-                    className="repl-terminal__execute"
-                    onClick={() => handleExecute(terminal.id)}
-                    disabled={disabled || state.isExecuting || !state.input.trim()}
-                    title="Execute commands (Ctrl+Enter)"
-                  >
-                    {state.isExecuting ? 'Executing...' : 'Execute'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="repl-interface__actions">
-        <button
-          className="repl-interface__action-button danger"
-          onClick={clearAll}
-          disabled={disabled}
-          title="Clear entire instance"
-        >
-          Clear All Data
-        </button>
-        
-        <button
-          className="repl-interface__action-button"
-          onClick={() => {
-            terminals.forEach(terminal => {
-              addOutputLine(terminal.id, {
-                type: 'info',
-                message: `Instance Status: ${atoms.length} atoms, ${relations.length} relations, ${tupleCount} tuples`
-              });
-            });
-          }}
-          disabled={disabled}
-          title="Show status in all terminals"
-        >
-          Show Status
-        </button>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );
