@@ -91,28 +91,35 @@
   overflow-y: auto;
   font-size: 0.85rem;
   line-height: 1.4;
-  min-height: 200px;
-  max-height: 250px;
+  min-height: 150px;
+  max-height: 200px;
 }
 
 .repl-terminal__input {
-  border-top: 1px solid #3c3c3c;
-  padding: 10px;
+  border-top: 2px solid #4ec9b0;
+  padding: 15px;
   background: #1e1e1e;
 }
 
 .repl-terminal__input textarea {
   width: 100%;
   background: transparent;
-  border: none;
+  border: 2px solid #3c3c3c;
+  border-radius: 4px;
+  padding: 10px;
   color: #d4d4d4;
   font-family: inherit;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   line-height: 1.4;
   resize: none;
   outline: none;
-  min-height: 60px;
-  max-height: 120px;
+  min-height: 80px;
+  max-height: 150px;
+  transition: border-color 0.2s ease;
+}
+
+.repl-terminal__input textarea:focus {
+  border-color: #4ec9b0;
 }
 
 .repl-terminal__input textarea::placeholder {
@@ -123,23 +130,24 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-top: 8px;
-  border-top: 1px solid #3c3c3c;
+  padding-top: 12px;
+  border-top: 1px solid #4ec9b0;
 }
 
 .repl-terminal__execute {
-  background: #0e639c;
-  color: white;
+  background: #4ec9b0;
+  color: #1e1e1e;
   border: none;
-  padding: 6px 12px;
+  padding: 8px 16px;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   font-family: inherit;
+  font-weight: 600;
 }
 
 .repl-terminal__execute:hover:not(:disabled) {
-  background: #1177bb;
+  background: #6bd4ba;
 }
 
 .repl-terminal__execute:disabled {

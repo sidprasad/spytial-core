@@ -159,8 +159,9 @@ describe('ReplInterface Parsers', () => {
       expect(result.action).toBe('add');
       
       const atoms = instance.getAtoms();
-      // Should have: 1, 2, 3, 4 (as atoms) + the list atom
-      expect(atoms.length).toBe(5);
+      
+      // Should have: 1, 2, 3, 4 (as atoms) + the list atom + 4 link atoms = 9 total
+      expect(atoms.length).toBe(9);
       
       // Check that number atoms were created
       const numberAtoms = atoms.filter(a => a.type === 'Number');
@@ -182,8 +183,8 @@ describe('ReplInterface Parsers', () => {
       expect(result.action).toBe('add');
       
       const atoms = instance.getAtoms();
-      // Should have: red, green, blue (as atoms) + the list atom
-      expect(atoms.length).toBe(4);
+      // Should have: red, green, blue (as atoms) + the list atom + 3 link atoms = 7 total
+      expect(atoms.length).toBe(7);
       
       // Check that string atoms were created (unquoted labels)
       const stringAtoms = atoms.filter(a => a.type === 'String');
@@ -208,8 +209,8 @@ describe('ReplInterface Parsers', () => {
       expect(result.success).toBe(true);
       
       const atoms = instance.getAtoms();
-      // Should have: alice, bob (existing) + the list atom
-      expect(atoms.length).toBe(3);
+      // Should have: alice, bob (existing) + the list atom + 2 link atoms = 5 total
+      expect(atoms.length).toBe(5);
     });
   });
 

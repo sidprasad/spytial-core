@@ -27,6 +27,18 @@ export interface ICommandParser {
    * Check if this parser can handle the given command
    */
   canHandle(command: string): boolean;
+  
+  /**
+   * Get the priority of this parser (higher number = higher priority)
+   * Used to resolve conflicts when multiple parsers claim they can handle a command
+   */
+  getPriority(): number;
+  
+  /**
+   * Get the command patterns this parser recognizes
+   * Used for better debugging and maintainability
+   */
+  getCommandPatterns(): string[];
 }
 
 /**
@@ -39,11 +51,48 @@ export interface ICommandParser {
 export class AtomCommandParser implements ICommandParser {
   canHandle(command: string): boolean {
     const trimmed = command.trim();
-    // Handle add/remove commands that are NOT relations (don't contain ->) 
-    // and are NOT Pyret lists (don't contain [list:)
-    return (trimmed.startsWith('add ') || trimmed.startsWith('remove ')) && 
-           !trimmed.includes('->') && 
-           !trimmed.includes('[list:');
+    
+    // More principled detection: Use specific patterns for atom commands
+    if (!trimmed.startsWith('add ') && !trimmed.startsWith('remove ')) {
+      return false;
+    }
+    
+    const args = trimmed.substring(trimmed.indexOf(' ') + 1);
+    
+    // Exclude Pyret list commands (they start with [list:)
+    if (args.startsWith('[list:')) {
+      return false;
+    }
+    
+    // Pattern 1: add/remove Label:Type
+    if (/^[^:]+:.+$/.test(args) && !args.includes('->')) {
+      return true;
+    }
+    
+    // Pattern 2: add/remove id=Label:Type 
+    if (/^[^=]+=.+:.+$/.test(args) && !args.includes('->')) {
+      return true;
+    }
+    
+    // Pattern 3: remove by ID only (single word, no : or ->)
+    if (trimmed.startsWith('remove ') && /^[^\s:->]+$/.test(args)) {
+      return true;
+    }
+    
+    return false;
+  }
+  
+  getPriority(): number {
+    return 100; // Standard priority for core commands
+  }
+  
+  getCommandPatterns(): string[] {
+    return [
+      'add Label:Type',
+      'add id=Label:Type', 
+      'remove Label:Type',
+      'remove id'
+    ];
   }
 
   execute(command: string, instance: IInputDataInstance): CommandResult {
@@ -194,8 +243,39 @@ export class AtomCommandParser implements ICommandParser {
 export class RelationCommandParser implements ICommandParser {
   canHandle(command: string): boolean {
     const trimmed = command.trim();
-    return (trimmed.startsWith('add ') || trimmed.startsWith('remove ')) && 
-           trimmed.includes('->');
+    
+    if (!trimmed.startsWith('add ') && !trimmed.startsWith('remove ')) {
+      return false;
+    }
+    
+    const args = trimmed.substring(trimmed.indexOf(' ') + 1);
+    
+    // Pattern: name:atom1->atom2... or just name (for remove all)
+    if (args.includes('->')) {
+      // Validate format: name:atom1->atom2...
+      return /^[^:]+:.+->/.test(args);
+    }
+    
+    // For remove, also allow just relation name (removes entire relation)
+    if (trimmed.startsWith('remove ') && /^[^\s:->]+$/.test(args)) {
+      // Check if it's a known relation name by pattern (could be improved with context)
+      return true; // Allow single words for remove - will be validated during execution
+    }
+    
+    return false;
+  }
+  
+  getPriority(): number {
+    return 110; // Higher priority than atoms due to more specific -> pattern
+  }
+  
+  getCommandPatterns(): string[] {
+    return [
+      'add name:atom1->atom2',
+      'add name:atom1->atom2->atom3',
+      'remove name:atom1->atom2',
+      'remove name'
+    ];
   }
 
   execute(command: string, instance: IInputDataInstance): CommandResult {

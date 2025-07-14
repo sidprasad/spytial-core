@@ -53,6 +53,7 @@ interface TerminalState {
 
 /**
  * Default terminal configuration - unified terminal supporting all commands
+ * Parsers are ordered by priority (higher priority first)
  */
 const DEFAULT_TERMINALS: TerminalConfig[] = [
   {
@@ -60,11 +61,11 @@ const DEFAULT_TERMINALS: TerminalConfig[] = [
     title: 'Unified Terminal',
     description: 'Supports atoms, relations, and extensions in one terminal',
     parsers: [
-      new AtomCommandParser(), 
-      new RelationCommandParser(), 
-      new PyretListParser(), 
-      new InfoCommandParser()
-    ],
+      new PyretListParser(),     // Priority 120 - most specific pattern
+      new RelationCommandParser(), // Priority 110 - specific -> pattern
+      new AtomCommandParser(),   // Priority 100 - standard priority
+      new InfoCommandParser()    // Priority 50 - fallback utility commands
+    ].sort((a, b) => b.getPriority() - a.getPriority()), // Sort by priority descending
     placeholder: 'Examples:\nadd Alice:Person\nadd friends:alice->bob\nadd [list: 1,2,3,4]:numbers\nhelp'
   }
 ];
@@ -177,11 +178,13 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
       message: trimmedCommand
     });
 
-    // Try to execute with each parser
+    // Try to execute with each parser (they are already sorted by priority)
     let result: CommandResult | null = null;
+    let handlingParser: ICommandParser | null = null;
     
     for (const parser of terminal.parsers) {
       if (parser.canHandle(trimmedCommand)) {
+        handlingParser = parser;
         try {
           result = parser.execute(trimmedCommand, instance);
           break;
@@ -195,11 +198,16 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
       }
     }
 
-    // If no parser handled it, show error
+    // If no parser handled it, provide helpful error with available patterns
     if (!result) {
+      const availablePatterns = terminal.parsers
+        .flatMap(parser => parser.getCommandPatterns())
+        .slice(0, 8) // Limit to avoid overwhelming output
+        .join('\n  ');
+      
       result = {
         success: false,
-        message: `Unknown command: ${trimmedCommand}. Type 'help' for available commands.`
+        message: `Unknown command: ${trimmedCommand}\n\nAvailable patterns:\n  ${availablePatterns}\n\nType 'help' for detailed information.`
       };
     }
 
