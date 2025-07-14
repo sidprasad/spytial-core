@@ -40,14 +40,14 @@ describe('Unified Terminal Integration', () => {
     expect(instance.getAtoms()).toHaveLength(3);
     
     // Add relations (like a user would in the unified terminal)
-    result = relationParser.execute('add friends:alice->bob', instance);
+    result = relationParser.execute('add friends(alice, bob)', instance);
     expect(result.success).toBe(true);
     expect(result.message).toContain('Added relation');
     
-    result = relationParser.execute('add knows:alice->charlie', instance);
+    result = relationParser.execute('add knows(alice, charlie)', instance);
     expect(result.success).toBe(true);
     
-    result = relationParser.execute('add likes:bob->charlie', instance);
+    result = relationParser.execute('add likes(bob, charlie)', instance);
     expect(result.success).toBe(true);
     
     // Verify relations were added
@@ -91,10 +91,10 @@ describe('Unified Terminal Integration', () => {
       { parser: atomParser, command: 'add alice=Alice:Person' },
       { parser: infoParser, command: 'list' },
       { parser: atomParser, command: 'add bob=Bob:Person' },
-      { parser: relationParser, command: 'add friends:alice->bob' },
+      { parser: relationParser, command: 'add friends(alice, bob)' },
       { parser: infoParser, command: 'status' },
       { parser: atomParser, command: 'add charlie=Charlie:Person' },
-      { parser: relationParser, command: 'add knows:alice->charlie' },
+      { parser: relationParser, command: 'add knows(alice, charlie)' },
       { parser: infoParser, command: 'list' }
     ];
     

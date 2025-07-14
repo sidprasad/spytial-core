@@ -64,6 +64,11 @@ export class AtomCommandParser implements ICommandParser {
       return false;
     }
     
+    // Exclude relation commands (they have parentheses)
+    if (args.includes('(') && args.includes(')')) {
+      return false;
+    }
+    
     // Pattern 1: add/remove Label:Type
     if (/^[^:]+:.+$/.test(args) && !args.includes('->')) {
       return true;
@@ -74,8 +79,8 @@ export class AtomCommandParser implements ICommandParser {
       return true;
     }
     
-    // Pattern 3: remove by ID only (single word, no : or ->)
-    if (trimmed.startsWith('remove ') && /^[^\s:->]+$/.test(args)) {
+    // Pattern 3: remove by ID only (single word, no : or -> or ())
+    if (trimmed.startsWith('remove ') && /^[^\s:->()]+$/.test(args)) {
       return true;
     }
     
@@ -254,9 +259,9 @@ export class AtomCommandParser implements ICommandParser {
 /**
  * Parser for relation commands
  * Supports:
- * - add name:atom->atom (binary)
- * - add name:atom->atom->atom (ternary, etc.)
- * - remove name:atom->atom...
+ * - add name(atom1, atom2) (binary)
+ * - add name(atom1, atom2, atom3) (ternary, etc.)
+ * - remove name(atom1, atom2...)
  */
 export class RelationCommandParser implements ICommandParser {
   canHandle(command: string): boolean {
@@ -268,14 +273,14 @@ export class RelationCommandParser implements ICommandParser {
     
     const args = trimmed.substring(trimmed.indexOf(' ') + 1);
     
-    // Pattern: name:atom1->atom2... or just name (for remove all)
-    if (args.includes('->')) {
-      // Validate format: name:atom1->atom2...
-      return /^[^:]+:.+->/.test(args);
+    // Pattern: name(atom1, atom2, ...) or just name (for remove all)
+    if (args.includes('(') && args.includes(')')) {
+      // Validate format: name(atom1, atom2, ...)
+      return /^[^(]+\([^)]+\)$/.test(args);
     }
     
     // For remove, also allow just relation name (removes entire relation)
-    if (trimmed.startsWith('remove ') && /^[^\s:->]+$/.test(args)) {
+    if (trimmed.startsWith('remove ') && /^[^\s()]+$/.test(args)) {
       // Check if it's a known relation name by pattern (could be improved with context)
       return true; // Allow single words for remove - will be validated during execution
     }
@@ -284,14 +289,14 @@ export class RelationCommandParser implements ICommandParser {
   }
   
   getPriority(): number {
-    return 110; // Higher priority than atoms due to more specific -> pattern
+    return 110; // Higher priority than atoms due to more specific () pattern
   }
   
   getCommandPatterns(): string[] {
     return [
-      'add name:atom1->atom2',
-      'add name:atom1->atom2->atom3',
-      'remove name:atom1->atom2',
+      'add name(atom1, atom2)',
+      'add name(atom1, atom2, atom3)',
+      'remove name(atom1, atom2)',
       'remove name'
     ];
   }
@@ -313,17 +318,17 @@ export class RelationCommandParser implements ICommandParser {
 
   private handleAdd(args: string, instance: IInputDataInstance): CommandResult {
     try {
-      // Parse: name:atom->atom->...
-      const colonIndex = args.indexOf(':');
-      if (colonIndex === -1) {
+      // Parse: name(atom1, atom2, ...)
+      const match = args.match(/^([^(]+)\(([^)]+)\)$/);
+      if (!match) {
         return {
           success: false,
-          message: 'Invalid syntax. Use: add name:atom1->atom2->...'
+          message: 'Invalid syntax. Use: add name(atom1, atom2, ...)'
         };
       }
 
-      const relationName = args.substring(0, colonIndex).trim();
-      const atomChain = args.substring(colonIndex + 1).trim();
+      const relationName = match[1].trim();
+      const atomsString = match[2].trim();
       
       if (!relationName) {
         return {
@@ -332,8 +337,8 @@ export class RelationCommandParser implements ICommandParser {
         };
       }
 
-      // Split by ->
-      const atomIds = atomChain.split('->').map(id => id.trim()).filter(id => id);
+      // Split by commas
+      const atomIds = atomsString.split(',').map(id => id.trim()).filter(id => id);
       
       if (atomIds.length < 2) {
         return {
@@ -381,10 +386,10 @@ export class RelationCommandParser implements ICommandParser {
 
   private handleRemove(args: string, instance: IInputDataInstance): CommandResult {
     try {
-      // Parse: name:atom->atom->... or just name (removes all tuples)
-      const colonIndex = args.indexOf(':');
+      // Parse: name(atom1, atom2, ...) or just name (removes all tuples)
+      const match = args.match(/^([^(]+)\(([^)]+)\)$/);
       
-      if (colonIndex === -1) {
+      if (!match) {
         // Remove entire relation
         const relationName = args.trim();
         const relation = instance.getRelations().find(r => r.name === relationName);
@@ -409,11 +414,11 @@ export class RelationCommandParser implements ICommandParser {
         };
       }
 
-      const relationName = args.substring(0, colonIndex).trim();
-      const atomChain = args.substring(colonIndex + 1).trim();
+      const relationName = match[1].trim();
+      const atomsString = match[2].trim();
       
-      // Split by ->
-      const atomIds = atomChain.split('->').map(id => id.trim()).filter(id => id);
+      // Split by commas
+      const atomIds = atomsString.split(',').map(id => id.trim()).filter(id => id);
       
       // Find matching tuple
       const relation = instance.getRelations().find(r => r.name === relationName);
@@ -454,15 +459,15 @@ export class RelationCommandParser implements ICommandParser {
   getHelp(): string[] {
     return [
       'Relation Commands:',
-      '  add name:atom1->atom2              - Add binary relation',
-      '  add name:atom1->atom2->atom3       - Add ternary relation',
-      '  remove name:atom1->atom2           - Remove specific tuple',
-      '  remove name                        - Remove entire relation',
+      '  add name(atom1, atom2)              - Add binary relation',
+      '  add name(atom1, atom2, atom3)       - Add ternary relation',
+      '  remove name(atom1, atom2)           - Remove specific tuple',
+      '  remove name                         - Remove entire relation',
       '',
       'Examples:',
-      '  add friends:alice->bob',
-      '  add knows:alice->bob->charlie',
-      '  remove friends:alice->bob',
+      '  add friends(alice, bob)',
+      '  add knows(alice, bob, charlie)',
+      '  remove friends(alice, bob)',
       '  remove friends'
     ];
   }
@@ -516,7 +521,7 @@ export class BatchCommandParser implements ICommandParser {
     // At least some parts should match the atom pattern for this to be considered a batch atom command
     // This allows for some invalid parts that will be handled during execution
     const validParts = parts.filter(part => {
-      return /^([^=]+=)?[^:]+:.+$/.test(part) && !part.includes('->');
+      return /^([^=]+=)?[^:]+:.+$/.test(part) && !part.includes('->') && !part.includes('(') && !part.includes(')');
     });
     
     // At least half of the parts should be valid atom patterns
@@ -531,7 +536,7 @@ export class BatchCommandParser implements ICommandParser {
     return [
       'add Label1:Type1, Label2:Type2, Label3:Type3',
       'add id1=Label1:Type1, id2=Label2:Type2',
-      'add Alice:Person; add Bob:Person; add friends:Alice->Bob',
+      'add Alice:Person; add Bob:Person; add friends(Alice, Bob)',
       'add Alice:Person; remove Bob:Person'
     ];
   }
@@ -678,7 +683,7 @@ export class BatchCommandParser implements ICommandParser {
       'Examples:',
       '  add Alice:Person, Bob:Person, Charlie:Person',
       '  add p1=Alice:Person, p2=Bob:Person',
-      '  add Alice:Person; add Bob:Person; add friends:Alice->Bob',
+      '  add Alice:Person; add Bob:Person; add friends(Alice, Bob)',
       '  add Alice:Person; remove Bob:Person',
       '',
       'Note: Semicolon-separated commands support any mix of atom/relation commands'

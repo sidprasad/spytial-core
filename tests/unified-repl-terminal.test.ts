@@ -25,7 +25,7 @@ describe('Unified REPL Terminal', () => {
         new PyretListParser(), 
         new InfoCommandParser()
       ],
-      placeholder: 'Examples:\nadd Alice:Person\nadd friends:alice->bob\nadd [list: 1,2,3,4]:numbers\nhelp'
+      placeholder: 'Examples:\nadd Alice:Person\nadd friends(alice, bob)\nadd [list: 1,2,3,4]:numbers\nhelp'
     };
   });
 
@@ -59,8 +59,8 @@ describe('Unified REPL Terminal', () => {
     
     const relationParser = unifiedTerminal.parsers.find(p => p instanceof RelationCommandParser)!;
     
-    expect(relationParser.canHandle('add friends:alice->bob')).toBe(true);
-    const result = relationParser.execute('add friends:alice->bob', instance);
+    expect(relationParser.canHandle('add friends(alice, bob)')).toBe(true);
+    const result = relationParser.execute('add friends(alice, bob)', instance);
     
     expect(result.success).toBe(true);
     expect(result.action).toBe('add');
@@ -99,7 +99,7 @@ describe('Unified REPL Terminal', () => {
     
     // Test that each command type is handled by the correct parser
     const atomCommand = 'add Alice:Person';
-    const relationCommand = 'add friends:alice->bob';
+    const relationCommand = 'add friends(alice, bob)';
     const pyretCommand = 'add [list: 1,2,3]:numbers';
     const infoCommand = 'help';
     
@@ -132,7 +132,7 @@ describe('Unified REPL Terminal', () => {
     expect(instance.getAtoms()).toHaveLength(2);
     
     // Add relation
-    relationParser.execute('add friends:alice->bob', instance);
+    relationParser.execute('add friends(alice, bob)', instance);
     expect(instance.getRelations()).toHaveLength(1);
     
     // Get status

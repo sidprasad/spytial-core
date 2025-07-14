@@ -59,7 +59,7 @@ describe('BatchCommandParser', () => {
 
   describe('semicolon-separated commands', () => {
     it('should handle mixed atom and relation commands', () => {
-      const result = parser.execute('add Alice:Person; add Bob:Person; add friends:Alice->Bob', instance);
+      const result = parser.execute('add Alice:Person; add Bob:Person; add friends(Alice, Bob)', instance);
       
       expect(result.success).toBe(true);
       expect(result.action).toBe('add');
@@ -114,7 +114,7 @@ describe('BatchCommandParser', () => {
 
     it('should recognize semicolon-separated commands', () => {
       expect(parser.canHandle('add Alice:Person; add Bob:Person')).toBe(true);
-      expect(parser.canHandle('add Alice:Person; add friends:Alice->Bob')).toBe(true);
+      expect(parser.canHandle('add Alice:Person; add friends(Alice, Bob)')).toBe(true);
       expect(parser.canHandle('add Alice:Person; remove Bob:Person')).toBe(true);
       expect(parser.canHandle('add Alice:Person')).toBe(false); // Single command
     });
@@ -133,7 +133,7 @@ describe('BatchCommandParser', () => {
   it('should provide helpful command patterns', () => {
     const patterns = parser.getCommandPatterns();
     expect(patterns).toContain('add Label1:Type1, Label2:Type2, Label3:Type3');
-    expect(patterns).toContain('add Alice:Person; add Bob:Person; add friends:Alice->Bob');
+    expect(patterns).toContain('add Alice:Person; add Bob:Person; add friends(Alice, Bob)');
   });
 
   it('should provide comprehensive help', () => {

@@ -92,13 +92,13 @@ describe('ReplInterface Parsers', () => {
     });
 
     it('should handle relation commands', () => {
-      expect(parser.canHandle('add friends:alice->bob')).toBe(true);
-      expect(parser.canHandle('remove knows:alice->charlie')).toBe(true);
+      expect(parser.canHandle('add friends(alice, bob)')).toBe(true);
+      expect(parser.canHandle('remove knows(alice, charlie)')).toBe(true);
       expect(parser.canHandle('add Alice:Person')).toBe(false);
     });
 
     it('should add binary relations', () => {
-      const result = parser.execute('add friends:alice->bob', instance);
+      const result = parser.execute('add friends(alice, bob)', instance);
       
       expect(result.success).toBe(true);
       expect(result.action).toBe('add');
@@ -111,7 +111,7 @@ describe('ReplInterface Parsers', () => {
     });
 
     it('should add ternary relations', () => {
-      const result = parser.execute('add knows:alice->bob->charlie', instance);
+      const result = parser.execute('add knows(alice, bob, charlie)', instance);
       
       expect(result.success).toBe(true);
       
@@ -122,17 +122,17 @@ describe('ReplInterface Parsers', () => {
 
     it('should remove specific tuples', () => {
       // First add a relation
-      parser.execute('add friends:alice->bob', instance);
+      parser.execute('add friends(alice, bob)', instance);
       expect(instance.getRelations()[0].tuples.length).toBe(1);
       
       // Then remove the specific tuple
-      const result = parser.execute('remove friends:alice->bob', instance);
+      const result = parser.execute('remove friends(alice, bob)', instance);
       expect(result.success).toBe(true);
       expect(instance.getRelations()[0].tuples.length).toBe(0);
     });
 
     it('should validate atom existence', () => {
-      const result = parser.execute('add friends:alice->nonexistent', instance);
+      const result = parser.execute('add friends(alice, nonexistent)', instance);
       expect(result.success).toBe(false);
       expect(result.message).toContain('does not exist');
     });
@@ -149,7 +149,7 @@ describe('ReplInterface Parsers', () => {
       expect(parser.canHandle('add [list: 1,2,3]:numbers')).toBe(true);
       expect(parser.canHandle('remove numbers-1')).toBe(true);
       expect(parser.canHandle('add Alice:Person')).toBe(false);
-      expect(parser.canHandle('add friends:alice->bob')).toBe(false);
+      expect(parser.canHandle('add friends(alice, bob)')).toBe(false);
     });
 
     it('should add number lists', () => {
