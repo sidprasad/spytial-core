@@ -103,7 +103,7 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
         output: [{
           id: 'welcome',
           type: 'info',
-          message: `Welcome to ${terminal.title}! Type 'help' for available commands.`,
+          message: `Type 'help' for available commands.`,
           timestamp: new Date()
         }],
         isExecuting: false
