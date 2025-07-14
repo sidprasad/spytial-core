@@ -3,6 +3,14 @@
  * 
  * This component provides a REPL interface pre-configured for Pyret data instances.
  * It can be used as a standalone component or integrated into larger applications.
+ * 
+ * 
+ * 
+ * 
+ * 
+ * // TODO:
+ * - List functionality is not correct, but we can get there!
+ * - Relations can be 
  */
 
 import React, { useState, useEffect } from 'react';
