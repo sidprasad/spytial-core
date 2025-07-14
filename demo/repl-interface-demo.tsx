@@ -7,24 +7,9 @@ import { ReplInterface } from '../src/components/ReplInterface/ReplInterface';
  * Demo component showcasing the REPL Interface with PyretDataInstance
  */
 export const ReplInterfaceDemo: React.FC = () => {
-  // Create a PyretDataInstance for the demo with some initial data
+  // Create a PyretDataInstance for the demo starting empty
   const [instance, setInstance] = useState(() => {
-    // Sample Pyret object with initial data
-    const initialPyretData = {
-      dict: {
-        alice: {
-          dict: { name: "Alice", age: 25 },
-          brands: { "$brandPerson": true }
-        },
-        bob: {
-          dict: { name: "Bob", age: 30 },
-          brands: { "$brandPerson": true }
-        }
-      },
-      brands: { "$brandData": true }
-    };
-    
-    return new PyretDataInstance(initialPyretData);
+    return new PyretDataInstance();
   });
 
   const handleInstanceChange = (updatedInstance: PyretDataInstance) => {
@@ -59,8 +44,7 @@ export const ReplInterfaceDemo: React.FC = () => {
   };
 
   const clearData = () => {
-    const emptyData = { dict: {}, brands: { "$brandData": true } };
-    const newInstance = new PyretDataInstance(emptyData);
+    const newInstance = new PyretDataInstance();
     setInstance(newInstance);
   };
 

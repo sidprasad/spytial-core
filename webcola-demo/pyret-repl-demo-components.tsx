@@ -21,12 +21,8 @@ interface PyretReplDemoState {
  * Create an empty PyretDataInstance for the demo
  */
 function createEmptyPyretDataInstance(): PyretDataInstance {
-  // Create a minimal empty Pyret object
-  const emptyPyretObject = {
-    dict: {},
-    brands: {}
-  };
-  return new PyretDataInstance(emptyPyretObject);
+  // Create a truly empty PyretDataInstance without any initial objects
+  return new PyretDataInstance();
 }
 
 /**

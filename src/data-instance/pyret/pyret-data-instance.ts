@@ -63,12 +63,14 @@ export class PyretDataInstance implements IInputDataInstance {
   /**
    * Creates a PyretDataInstance from a Pyret runtime object
    * 
-   * @param pyretData - The root Pyret object to parse
+   * @param pyretData - The root Pyret object to parse, or null/undefined for an empty instance
    */
-  constructor(pyretData: PyretObject, showFunctions = false) {
+  constructor(pyretData?: PyretObject | null, showFunctions = false) {
     this.showFunctions = showFunctions;
     this.initializeBuiltinTypes();
-    this.parseObjectIteratively(pyretData);
+    if (pyretData) {
+      this.parseObjectIteratively(pyretData);
+    }
   }
 
   /**
