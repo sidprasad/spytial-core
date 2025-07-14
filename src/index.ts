@@ -17,6 +17,15 @@ export { DotDataInstance } from './data-instance/dot/dot-data-instance';
 export { RacketGDataInstance } from './data-instance/racket/racket-g-data-instance';
 export { PyretDataInstance } from './data-instance/pyret/pyret-data-instance';
 
+// Enhanced Pyret reification exports
+export { 
+  ReificationHelper, 
+  createReificationHelper,
+  type PyretTypeSchema,
+  type ReificationOptions 
+} from './data-instance/pyret/reification-helper';
+export { ReificationCommandParser } from './components/ReplInterface/parsers/ReificationParser';
+
 // Direct exports of key classes for convenience
 export { LayoutInstance } from './layout/layoutinstance';
 export { parseLayoutSpec } from './layout/layoutspec';
