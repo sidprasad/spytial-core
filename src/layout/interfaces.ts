@@ -93,3 +93,17 @@ export interface InstanceLayout {
     groups: LayoutGroup[];
     conflictingConstraints?: LayoutConstraint[];
 }
+
+// Can we write a typeguard for this?
+export function isInstanceLayout(obj: any): obj is InstanceLayout {
+    return (
+        Array.isArray(obj.nodes) &&
+        Array.isArray(obj.edges) &&
+        Array.isArray(obj.constraints) &&
+        Array.isArray(obj.groups) &&
+        obj.nodes.every((node: any) => typeof node.id === 'string') &&
+        obj.edges.every((edge: any) => typeof edge.source === 'object' && typeof edge.target === 'object') &&
+        obj.constraints.every((constraint: any) => typeof constraint.sourceConstraint === 'object') &&
+        obj.groups.every((group: any) => typeof group.name === 'string')
+    );
+}

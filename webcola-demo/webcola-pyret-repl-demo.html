@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pyret REPL Demo - Interactive Data Building with CnD Layout</title>
+    
+    <!-- Bootstrap CSS for component styling -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        #graph-container {
+            width: 100%;
+            height: 600px;
+            border: 2px solid #007acc;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .repl-interface-container, .layout-interface-container {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 0;
+            background: #fafafa;
+            height: 500px;
+            overflow-y: auto;
+        }
+        button {
+            background-color: #007acc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #005a9e;
+        }
+        label {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 5px;
+        }
+        .status {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .status.info { background: #e3f2fd; color: #1976d2; }
+        .status.success { background: #e8f5e8; color: #2e7d32; }
+        .status.error { background: #ffebee; color: #c62828; }
+        .demo-instructions {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .demo-instructions h4 {
+            color: #856404;
+            margin-top: 0;
+        }
+        .command-example {
+            font-family: 'Courier New', monospace;
+            background: #f8f9fa;
+            padding: 8px;
+            border-radius: 4px;
+            border-left: 3px solid #007acc;
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Pyret REPL Demo - Interactive Data Building</h1>
+        <p>Build Pyret data structures using REPL-style commands and visualize them with CnD layout specifications.</p>
+
+        <!-- React Component Areas -->
+        <div style="display: flex; flex-direction: column; gap: 20px; margin-bottom: 20px;">
+            <div>
+                <label for="layout-interface-container">CnD Layout Interface:</label>
+                <div id="layout-interface-container" class="layout-interface-container">
+                    <div style="padding: 20px; text-align: center; color: #666;">
+                        <p>Loading CnD Layout Interface...</p>
+                        <p><em>Configure layout constraints here</em></p>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <label for="repl-interface-container">Pyret REPL Interface:</label>
+                <div id="repl-interface-container" class="repl-interface-container">
+                    <div style="padding: 20px; text-align: center; color: #666;">
+                        <p>Loading REPL Interface...</p>
+                        <p><em>Use command-line syntax to build data here</em></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div>
+            <button onclick="clearGraph()">Clear All</button>
+            <select title="Choose the Layout Format" class="form-control" id="layoutFormat" name="layoutFormat" onchange="changeLayoutFormat()">
+                <option value="default" selected>Standard</option>
+                <option value="grid">Grid (Beta)</option>
+            </select>
+        </div>
+        
+        <!-- Use the webcola-cnd-graph custom element -->
+        <webcola-cnd-graph 
+            id="graph-container"
+            width="800" 
+            height="600"
+            layoutFormat="default">
+        </webcola-cnd-graph>
+        
+        <div id="status" class="status info">React components loading - start building your Pyret instance!</div>
+    </div>
+
+    <!-- D3 v4 and WebCola -->
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="../vendor/cola.js"></script>
+    
+    <!-- React for components -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- Complete CND-Core browser bundle -->
+    <script src="../dist/browser/cnd-core-complete.global.js"></script>
+    
+    <!-- Pyret REPL demo components bundle -->
+    <script src="../dist/components/pyret-repl-demo-components.global.js"></script>
+    <link rel="stylesheet" href="../dist/components/pyret-repl-demo-components.css">
+    
+    <script>
+        // Variables to store data
+        let currentInstance = null;
+        let currentInstanceLayout = null;
+
+        /**
+         * Get current instance from the React REPL component
+         * @returns {IInputDataInstance} Current data instance
+         */
+        function getCurrentInstance() {
+            return window.currentInstance || currentInstance;
+        }
+
+        /**
+         * Get current CND specification from React CndLayoutInterface component
+         * @returns {string} CND layout specification
+         */
+        function getCurrentCNDSpec() {
+            // Try to get value from React component first
+            return window.getCurrentCNDSpecFromReact ? 
+                window.getCurrentCNDSpecFromReact() : '';
+        }
+
+        /**
+         * Update status display with proper styling
+         * @param {string} message - Status message to display
+         * @param {string} type - Status type: 'info', 'success', 'error'
+         */
+        function updateStatus(message, type = 'info') {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = message;
+            statusElement.className = `status ${type}`;
+        }
+
+        /**
+         * Initialize the Pyret REPL demo pipeline
+         * @returns {boolean} Success status
+         */
+        async function initializePipeline() {
+            try {
+                console.log('CnD-Core browser bundle loaded successfully');
+                console.log('Available on global CndCore:', Object.keys(CndCore));
+                
+                // Initialize with empty PyretDataInstance (done in React components)
+                console.log('Pyret data instance will be initialized by React components');
+                
+                // Check for required components
+                console.log('SGraphQueryEvaluator available:', !!CndCore.SGraphQueryEvaluator);
+                console.log('LayoutInstance available:', !!CndCore.LayoutInstance);
+                console.log('parseLayoutSpec available:', !!CndCore.parseLayoutSpec);
+                console.log('PyretDataInstance available:', !!CndCore.PyretDataInstance);
+                
+                updateStatus('React components loading - pipeline ready!', 'success');
+                
+                return true;
+            } catch (error) {
+                console.error('Failed to initialize pipeline:', error);
+                updateStatus(`Pipeline init failed: ${error.message}`, 'error');
+                return false;
+            }
+        }
+
+        /**
+         * Process current instance data using the PyretDataInstance → SGraphQueryEvaluator → Layout pipeline
+         */
+        async function loadInstanceData() {
+            try {
+                updateStatus('Processing Pyret instance data with SGraphQueryEvaluator...', 'info');
+                
+                const instance = getCurrentInstance();
+                if (!instance) {
+                    updateStatus('No instance data available', 'error');
+                    return;
+                }
+
+                console.log('Current instance - atoms:', instance.getAtoms().length, 'relations:', instance.getRelations().length);
+                
+                // Step 1: Create evaluation context  
+                const evaluationContext = {
+                    sourceData: instance 
+                };
+
+                // Step 2: Create and initialize SGraphQueryEvaluator
+                updateStatus('Creating SGraphQueryEvaluator...', 'info');
+                const sgqEvaluator = new CndCore.SGraphQueryEvaluator();
+                sgqEvaluator.initialize(evaluationContext);
+                console.log('SGraphQueryEvaluator created and initialized');
+
+                // Step 3: Parse layout specification
+                updateStatus('Parsing CND specification...', 'info');
+                const cndSpec = getCurrentCNDSpec();
+                console.log('Current CND spec:', cndSpec);
+
+                let layoutSpec = CndCore.parseLayoutSpec(cndSpec || "");
+
+                // Step 4: Create LayoutInstance with SGraphQueryEvaluator
+                updateStatus('Creating layout instance with SGraphQueryEvaluator...', 'info');
+
+
+                //TODO: This is wrong. Look ata the doc string.
+                const layoutInstance = new CndCore.LayoutInstance(layoutSpec, sgqEvaluator, 0, true);
+                console.log('LayoutInstance created:', layoutInstance);
+
+                // Generate layout and store the result
+                const projections = {};
+                const layoutResult = layoutInstance.generateLayout(instance, projections);
+                currentInstanceLayout = layoutResult.layout;
+
+                // Update the graph visualization
+                const graphElement = document.querySelector('webcola-cnd-graph');
+                if (graphElement) {
+
+                    //// TODO: This seems like the WRONG 
+                    // thing passed in?
+                    console.log('Updating graph with layout instance...');
+                    await graphElement.renderLayout(currentInstanceLayout);
+                    
+                    updateStatus(`✅ Visualization updated! ${instance.getAtoms().length} atoms, ${instance.getRelations().length} relations`, 'success');
+                } else {
+                    console.error('Graph element not found');
+                    updateStatus('Graph element not found', 'error');
+                }
+
+            } catch (error) {
+                console.error('Error in loadInstanceData:', error);
+                updateStatus(`Error loading data: ${error.message}`, 'error');
+            }
+        }
+
+        /**
+         * Clear all data and reset the interface
+         */
+        function clearGraph() {
+            try {
+                const graphElement = document.querySelector('webcola-cnd-graph');
+                if (graphElement) {
+                    graphElement.clear();
+                }
+                
+                // Reset to empty Pyret instance
+                const emptyPyretObject = { dict: {}, brands: {} };
+                const emptyInstance = new CndCore.PyretDataInstance(emptyPyretObject);
+                
+                if (window.updateReplInstance) {
+                    window.updateReplInstance(emptyInstance);
+                }
+                
+                currentInstance = null;
+                currentInstanceLayout = null;
+                
+                updateStatus('Graph and data cleared', 'info');
+            } catch (error) {
+                console.error('Error clearing graph:', error);
+                updateStatus(`Error clearing: ${error.message}`, 'error');
+            }
+        }
+
+        /**
+         * Change the layout format of the graph
+         */
+        function changeLayoutFormat() {
+            const formatSelect = document.getElementById('layoutFormat');
+            const graphElement = document.querySelector('webcola-cnd-graph');
+            
+            if (graphElement && formatSelect) {
+                const newFormat = formatSelect.value;
+                graphElement.setAttribute('layoutFormat', newFormat);
+                
+                // Reload data with new format
+                if (currentInstanceLayout) {
+                    loadInstanceData();
+                }
+                
+                updateStatus(`Layout format changed to: ${newFormat}`, 'info');
+            }
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log('DOM loaded, initializing Pyret REPL demo...');
+            
+            // Wait for CnD-Core bundle to be available
+            let attempts = 0;
+            while (!window.CndCore && attempts < 50) {
+                console.log(`Waiting for CnD-Core bundle... (attempt ${attempts + 1})`);
+                await new Promise(resolve => setTimeout(resolve, 100));
+                attempts++;
+            }
+            
+            if (!window.CndCore) {
+                updateStatus('Failed to load CnD-Core bundle', 'error');
+                return;
+            }
+            
+            const success = await initializePipeline();
+            if (success) {
+                updateStatus('Demo ready! Try the REPL commands above.', 'success');
+            }
+        });
+
+        // Set up event-driven visualization updates
+        function setupInstanceEventListeners() {
+            if (window.currentInstance && typeof window.currentInstance.addEventListener === 'function') {
+                // Listen for all data instance events
+                const eventTypes = ['atomAdded', 'atomRemoved', 'relationTupleAdded', 'relationTupleRemoved'];
+                
+                eventTypes.forEach(eventType => {
+                    window.currentInstance.addEventListener(eventType, (event) => {
+                        console.log(`Data instance event: ${event.type}`, event.data);
+                        // Refresh visualization when data changes
+                        loadInstanceData();
+                    });
+                });
+                
+                console.log('Event listeners set up for data instance changes');
+            }
+        }
+
+        // Replace polling with event-driven updates
+        function setupDataInstanceWatcher() {
+            let lastInstance = window.currentInstance;
+            
+            // Check for instance changes periodically (much less frequent than before)
+            const checkForInstanceChange = () => {
+                if (window.currentInstance !== lastInstance) {
+                    console.log('Data instance changed, setting up new event listeners');
+                    lastInstance = window.currentInstance;
+                    currentInstance = window.currentInstance;
+                    
+                    // Set up event listeners for the new instance
+                    setupInstanceEventListeners();
+                    
+                    // Initial load
+                    loadInstanceData();
+                }
+            };
+            
+            // Check every 2 seconds instead of every 500ms
+            setInterval(checkForInstanceChange, 2000);
+            
+            // Initial setup
+            setupInstanceEventListeners();
+        }
+        
+        // Start the watcher
+        setupDataInstanceWatcher();
+    </script>
+</body>
+</html>

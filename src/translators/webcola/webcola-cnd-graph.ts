@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator } from './webcolatranslator';
-import { InstanceLayout, isAlignmentConstraint, isLeftConstraint, isTopConstraint, LayoutNode } from '../../layout/interfaces';
+import { InstanceLayout, isAlignmentConstraint, isInstanceLayout, isLeftConstraint, isTopConstraint, LayoutNode } from '../../layout/interfaces';
 import type { GridRouter, Group, Layout, Node, Link } from 'webcola';
 
 let d3 = window.d3v4 || window.d3; // Use d3 v4 if available, otherwise fallback to the default window.d3
@@ -302,6 +302,16 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * @param instanceLayout - The layout instance to render
    */
   public async renderLayout(instanceLayout: InstanceLayout): Promise<void> {
+
+
+    if (! isInstanceLayout(instanceLayout)) {
+      throw new Error('Invalid instance layout provided. Expected an InstanceLayout instance.');
+    }
+
+
+
+
+
     try {
       console.log('D3 version:', d3.version);
       // Check if D3 and WebCola are available
