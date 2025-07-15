@@ -129,7 +129,10 @@ export class WebColaLayout {
 
 
     this.colaNodes = instanceLayout.nodes.map(node => this.toColaNode(node));
-    this.colaEdges = instanceLayout.edges.map(edge => this.toColaEdge(edge));
+    
+    // Apply symmetric edge collapse before converting to cola edges
+    const collapsedEdges = this.collapseSymmetricEdges(instanceLayout.edges);
+    this.colaEdges = collapsedEdges.map(edge => this.toColaEdge(edge));
 
 
     this.groupDefinitions = this.determineGroups(instanceLayout.groups);
@@ -147,6 +150,58 @@ export class WebColaLayout {
 
   private getNodeIndex(nodeId: string) {
     return this.colaNodes.findIndex(node => node.id === nodeId);
+  }
+
+  /**
+   * Collapses symmetric edges that have the same label between the same two nodes.
+   * If two nodes have edges between them with the same label, they are collapsed
+   * into a single bidirectional edge. Edges with different labels are preserved.
+   * 
+   * @param edges - Array of layout edges to process
+   * @returns Array of edges with symmetric edges collapsed
+   */
+  private collapseSymmetricEdges(edges: LayoutEdge[]): LayoutEdge[] {
+    const collapsedEdges: LayoutEdge[] = [];
+    const processedPairs = new Set<string>();
+
+    for (const edge of edges) {
+      const sourceId = edge.source.id;
+      const targetId = edge.target.id;
+      const label = edge.label;
+
+      // Create a normalized pair key (always order node IDs consistently)
+      const pairKey = sourceId < targetId 
+        ? `${sourceId}-${targetId}-${label}`
+        : `${targetId}-${sourceId}-${label}`;
+
+      // Skip if we've already processed this pair
+      if (processedPairs.has(pairKey)) {
+        continue;
+      }
+
+      // Find the reverse edge with the same label
+      const reverseEdge = edges.find(e => 
+        e.source.id === targetId && 
+        e.target.id === sourceId && 
+        e.label === label
+      );
+
+      if (reverseEdge) {
+        // Found symmetric edges with same label - collapse into bidirectional edge
+        const bidirectionalEdge: LayoutEdge = {
+          ...edge,
+          id: `${edge.id}_bidirectional`,
+          label: edge.label // Keep the same label
+        };
+        collapsedEdges.push(bidirectionalEdge);
+        processedPairs.add(pairKey);
+      } else {
+        // No symmetric edge found or different labels - keep original edge
+        collapsedEdges.push(edge);
+      }
+    }
+
+    return collapsedEdges;
   }
 
 
