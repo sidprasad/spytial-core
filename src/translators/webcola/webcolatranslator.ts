@@ -190,7 +190,7 @@ export class WebColaLayout {
         // Found symmetric edges with same label - collapse into bidirectional edge
         const bidirectionalEdge: LayoutEdge = {
           ...edge,
-          id: `${edge.id}_bidirectional`,
+          id: `_b_${edge.id}`,
           label: edge.label // Keep the same label
         };
         collapsedEdges.push(bidirectionalEdge);

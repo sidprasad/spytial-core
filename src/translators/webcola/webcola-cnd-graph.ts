@@ -143,6 +143,23 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
+   * Determines if an edge is bidirectional.
+   * Bidirectional edges are identified by IDs starting with "_b_".
+   * 
+   * @param edge - Edge object to check
+   * @returns True if the edge is bidirectional
+   * 
+   * @example
+   * ```typescript
+   * const bidirEdge = { id: "_b_A-B-label" };
+   * const isBidir = this.isBidirectionalEdge(bidirEdge); // returns true
+   * ```
+   */
+  private isBidirectionalEdge(edge: { id?: string }): boolean {
+    return edge.id ? edge.id.startsWith("_b_") : false;
+  }
+
+  /**
    * Determines if a node is hidden based on naming convention.
    * Hidden nodes are identified by names starting with underscore.
    * 
@@ -498,6 +515,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .append("path")
       .attr("class", (d: any) => {
         if (this.isAlignmentEdge(d)) return "alignmentLink";
+        if (this.isBidirectionalEdge(d)) return "bidirectionalLink";
         if (this.isInferredEdge(d)) return "inferredLink";
         return "link";
       })
@@ -507,6 +525,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr("stroke-width", 1)
       .attr("marker-end", (d: any) => {
         if (this.isAlignmentEdge(d)) return "none";
+        if (this.isBidirectionalEdge(d)) return "none";
         return this.isInferredEdge(d) ? "url(#hand-drawn-arrow)" : "url(#end-arrow)";
       });
   }
@@ -1051,6 +1070,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       })
       .attr('marker-end', (d: EdgeWithMetadata) => {
         if (this.isAlignmentEdge(d)) return 'none';
+        if (this.isBidirectionalEdge(d)) return 'none';
         return this.isInferredEdge(d) ? 'url(#hand-drawn-arrow)' : 'url(#end-arrow)';
       })
       .raise();
@@ -1265,6 +1285,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           linkGroup.append('path')
               .attr("class", () => {
                   if (this.isAlignmentEdge(edgeData)) return "alignmentLink";
+                  if (this.isBidirectionalEdge(edgeData)) return "bidirectionalLink";
                   if (this.isInferredEdge(edgeData)) return "inferredLink";
                   return "link";
               })
@@ -1897,6 +1918,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         stroke-width: 1px;
         fill: none;
         marker-end: url(#end-arrow);
+      }
+
+      .bidirectionalLink {
+        stroke-width: 1.5px;
+        fill: none;
       }
       
       .inferredLink {

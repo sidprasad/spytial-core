@@ -101,7 +101,7 @@ describe('WebColaTranslator', () => {
       // Should have collapsed 2 edges into 1
       expect(result.colaEdges).toHaveLength(1);
       expect(result.colaEdges[0].label).toBe('sameLabel');
-      expect(result.colaEdges[0].id).toContain('bidirectional');
+      expect(result.colaEdges[0].id).toMatch(/^_b_/);
     });
 
     it('does not collapse edges with different labels', async () => {
@@ -158,7 +158,7 @@ describe('WebColaTranslator', () => {
       expect(labels).toContain('uniqueLabel');
 
       // Check that one edge is marked as bidirectional
-      const bidirectionalEdges = result.colaEdges.filter(e => e.id.includes('bidirectional'));
+      const bidirectionalEdges = result.colaEdges.filter(e => e.id.startsWith('_b_'));
       expect(bidirectionalEdges).toHaveLength(1);
       expect(bidirectionalEdges[0].label).toBe('sameLabel');
     });
@@ -183,7 +183,7 @@ describe('WebColaTranslator', () => {
       // Should keep the single edge as-is
       expect(result.colaEdges).toHaveLength(1);
       expect(result.colaEdges[0].label).toBe('onlyOneWay');
-      expect(result.colaEdges[0].id).not.toContain('bidirectional');
+      expect(result.colaEdges[0].id).not.toMatch(/^_b_/);
     });
 
     it('handles multiple node pairs with different collapse behaviors', async () => {
@@ -224,7 +224,7 @@ describe('WebColaTranslator', () => {
       expect(labels).toContain('knows');      // Single direction
 
       // Check that only one edge is marked as bidirectional
-      const bidirectionalEdges = result.colaEdges.filter(e => e.id.includes('bidirectional'));
+      const bidirectionalEdges = result.colaEdges.filter(e => e.id.startsWith('_b_'));
       expect(bidirectionalEdges).toHaveLength(1);
       expect(bidirectionalEdges[0].label).toBe('friendship');
     });
