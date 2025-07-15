@@ -10,7 +10,3 @@ export {
   PyretListParser, 
   InfoCommandParser 
 } from './ExtensibleParsers';
-
-export {
-  ReificationCommandParser
-} from './ReificationParser';

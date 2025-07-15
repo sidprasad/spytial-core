@@ -15,16 +15,7 @@ export { JSONDataInstance, DataInstanceNormalizer } from './data-instance/json-d
 export { AlloyDataInstance, createEmptyAlloyDataInstance } from './data-instance/alloy-data-instance';
 export { DotDataInstance } from './data-instance/dot/dot-data-instance';
 export { RacketGDataInstance } from './data-instance/racket/racket-g-data-instance';
-export { PyretDataInstance } from './data-instance/pyret/pyret-data-instance';
-
-// Enhanced Pyret reification exports
-export { 
-  ReificationHelper, 
-  createReificationHelper,
-  type PyretTypeSchema,
-  type ReificationOptions 
-} from './data-instance/pyret/reification-helper';
-export { ReificationCommandParser } from './components/ReplInterface/parsers/ReificationParser';
+export { PyretDataInstance, type PyretTypeSchema } from './data-instance/pyret/pyret-data-instance';
 
 // Direct exports of key classes for convenience
 export { LayoutInstance } from './layout/layoutinstance';

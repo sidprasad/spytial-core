@@ -2,6 +2,16 @@ import { Graph } from 'graphlib';
 import { IInputDataInstance, IAtom, IRelation, ITuple, IType, DataInstanceEventType, DataInstanceEventListener, DataInstanceEvent } from '../interfaces';
 
 /**
+ * Simple schema for defining constructor argument order for Pyret types
+ */
+export interface PyretTypeSchema {
+  /** Type name (constructor name) */
+  typeName: string;
+  /** Ordered list of field names that should appear as constructor arguments */
+  argumentFields: string[];
+}
+
+/**
  * Pyret Lists and Tables are going to be really tricky here.
  * What about images, or other Pyret representations?
  */
@@ -54,6 +64,9 @@ export class PyretDataInstance implements IInputDataInstance {
 
   private readonly showFunctions: boolean;
 
+  /** Optional type schemas for determining constructor argument order */
+  private typeSchemas = new Map<string, PyretTypeSchema>();
+
   /*
     TODO: List handling
     - Handle Pyret Lists and Tables as special cases. They currently show as (link (link (link (link )))) etc.
@@ -64,9 +77,17 @@ export class PyretDataInstance implements IInputDataInstance {
    * Creates a PyretDataInstance from a Pyret runtime object
    * 
    * @param pyretData - The root Pyret object to parse, or null/undefined for an empty instance
+   * @param showFunctions - Whether to show function objects in the visualization
+   * @param schemas - Optional type schemas for determining constructor argument order
    */
-  constructor(pyretData?: PyretObject | null, showFunctions = false) {
+  constructor(pyretData?: PyretObject | null, showFunctions = false, schemas: PyretTypeSchema[] = []) {
     this.showFunctions = showFunctions;
+    
+    // Store schemas in a map for quick lookup
+    for (const schema of schemas) {
+      this.typeSchemas.set(schema.typeName, schema);
+    }
+    
     this.initializeBuiltinTypes();
     if (pyretData) {
       this.parseObjectIteratively(pyretData);
@@ -180,9 +201,9 @@ export class PyretDataInstance implements IInputDataInstance {
   /**
    * Converts the current data instance back to Pyret constructor notation
    * 
-   * This method provides basic reification using the original implementation.
-   * For enhanced reification with fallback mechanisms and schema support,
-   * use the ReificationHelper class or the reifyWithOptions method.
+   * This method attempts to reproduce valid Pyret code that would create the same data structure.
+   * When type schemas are provided, they are used to determine constructor argument order.
+   * Otherwise, falls back to original object structure or alphabetical ordering.
    * 
    * @returns A string representation of the data in Pyret constructor syntax
    * 
@@ -221,36 +242,12 @@ export class PyretDataInstance implements IInputDataInstance {
   }
 
   /**
-   * Enhanced reification with options and schema support
-   * 
-   * @param options - Reification options including schemas and formatting preferences
-   * @returns A string representation of the data in Pyret constructor syntax
-   * 
-   * @example
-   * ```typescript
-   * const options = {
-   *   schemas: [{ typeName: 'Node', argumentFields: ['value', 'left', 'right'] }],
-   *   formatOutput: true,
-   *   includeDebugComments: true
-   * };
-   * const pyretCode = instance.reifyWithOptions(options);
-   * ```
-   */
-  reifyWithOptions(options: any = {}): string {
-    // Use dynamic import to avoid circular imports - we'll implement this properly
-    // For now, fall back to basic reify
-    return this.reify();
-  }
-
-  /**
    * Reify a specific atom by its ID
    * 
    * @param atomId - The ID of the atom to reify
-   * @param options - Optional reification options
    * @returns Pyret constructor notation for the specified atom
    */
-  reifyAtomById(atomId: string, options: any = {}): string {
-    // For now, use the private method for basic reification
+  reifyAtomById(atomId: string): string {
     return this.reifyAtom(atomId, new Set());
   }
 
@@ -284,13 +281,39 @@ export class PyretDataInstance implements IInputDataInstance {
     // Get the original object to preserve key order
     const originalObject = this.originalObjects.get(atomId);
     
-    if (!originalObject || !originalObject.dict) {
+    // Determine the order of constructor arguments
+    let orderedKeys: string[];
+    
+    if (originalObject && originalObject.dict) {
+      // Use the original dict key order to maintain constructor argument order
+      orderedKeys = Object.keys(originalObject.dict);
+    } else {
+      // No original object structure - try to use schema or fallback
+      const schema = this.typeSchemas.get(atom.type);
+      if (schema) {
+        // Use schema-defined argument order
+        orderedKeys = schema.argumentFields.filter(field => {
+          // Only include fields that have actual relations
+          return this.getRelationTargets(atomId, field).length > 0;
+        });
+      } else {
+        // Fallback: use alphabetical order of available relations
+        const availableRelations = new Set<string>();
+        this.relations.forEach(relation => {
+          relation.tuples.forEach(tuple => {
+            if (tuple.atoms[0] === atomId) {
+              availableRelations.add(relation.id);
+            }
+          });
+        });
+        orderedKeys = Array.from(availableRelations).sort();
+      }
+    }
+    
+    if (orderedKeys.length === 0) {
       visited.delete(atomId);
       return atom.type;
     }
-
-    // Use the original dict key order to maintain constructor argument order
-    const orderedKeys = Object.keys(originalObject.dict);
     
     // Check if this looks like a list (all keys are numeric)
     const isListLike = orderedKeys.every(key => /^\d+$/.test(key));
