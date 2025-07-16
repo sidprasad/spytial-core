@@ -51,14 +51,22 @@ const DEFAULT_SCALE_FACTOR = 5;
  * - Zoom/pan disable during input mode
  * - Comprehensive event system for external integration
  * 
- * Edge Input Integration:
- * When edges are created or modified through input mode, the component:
- * 1. Dispatches events with edge data for external systems to handle
- * 2. Allows external systems (React components) to manage state updates
- * 3. Relies on external systems to trigger layout regeneration when needed
+ * Events Fired:
+ * - 'input-mode-activated': When Cmd/Ctrl is pressed to activate input mode
+ * - 'input-mode-deactivated': When Cmd/Ctrl is released to deactivate input mode  
+ * - 'edge-creation-requested': When user drags between nodes to create a new edge
+ *   * event.detail: { relationId: string, sourceNodeId: string, targetNodeId: string, tuple: ITuple }
+ * - 'edge-modification-requested': When user clicks on existing edge to modify it
+ *   * event.detail: { oldRelationId: string, newRelationId: string, sourceNodeId: string, targetNodeId: string, tuple: ITuple }
  * 
- * This ensures proper separation of concerns with React components handling
- * state management and the WebCola component focusing on visualization.
+ * External State Management:
+ * React components should subscribe to these events and handle:
+ * 1. Updating the IInputDataInstance with new atoms/relations
+ * 2. Regenerating CnD layout constraints from the updated data
+ * 3. Calling renderLayout() to apply changes and re-render the visualization
+ * 
+ * This ensures React components serve as the single source of truth for state
+ * while the WebCola component focuses purely on visualization and user interaction.
  */
 export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'undefined' ? HTMLElement : (class {} as any)) {
   private svg!: any;
@@ -638,22 +646,29 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         types: [sourceNode.type || 'untyped', targetNode.type || 'untyped']
       };
 
-      console.log(`Requesting external state update for new edge: ${relationName}(${sourceNode.id}, ${targetNode.id})`);
+      console.log(`Dispatching edge creation request: ${relationName}(${sourceNode.id}, ${targetNode.id})`);
       
-      // Use external state update callback if available
+      // Dispatch edge creation event for React components to handle
+      const edgeCreationEvent = new CustomEvent('edge-creation-requested', {
+        detail: {
+          relationId: relationName,
+          sourceNodeId: sourceNode.id,
+          targetNodeId: targetNode.id,
+          tuple: tuple
+        },
+        bubbles: true
+      });
+      this.dispatchEvent(edgeCreationEvent);
+      
+      // Backward compatibility fallback
       if (this.externalStateUpdateCallback) {
         this.externalStateUpdateCallback({
           type: 'add-relation-tuple',
           relationId: relationName,
           tuple: tuple
         });
-      } else {
-        // Fallback to global window functions for backward compatibility
-        if (typeof window !== 'undefined' && (window as any).addRelationViaCentralizedState) {
-          (window as any).addRelationViaCentralizedState(relationName, tuple);
-        } else {
-          console.warn('No external state update mechanism available for edge creation');
-        }
+      } else if (typeof window !== 'undefined' && (window as any).addRelationViaCentralizedState) {
+        (window as any).addRelationViaCentralizedState(relationName, tuple);
       }
     } catch (error) {
       console.error('Failed to update external state for new edge:', error);
@@ -749,9 +764,22 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         types: [sourceNode.type || 'untyped', targetNode.type || 'untyped']
       };
 
-      console.log(`Requesting external state update for edge modification: ${oldRelationName} -> ${newRelationName}`);
+      console.log(`Dispatching edge modification request: ${oldRelationName} -> ${newRelationName}`);
 
-      // Use external state update callback if available
+      // Dispatch edge modification event for React components to handle
+      const edgeModificationEvent = new CustomEvent('edge-modification-requested', {
+        detail: {
+          oldRelationId: oldRelationName,
+          newRelationId: newRelationName,
+          sourceNodeId: sourceNode.id,
+          targetNodeId: targetNode.id,
+          tuple: tuple
+        },
+        bubbles: true
+      });
+      this.dispatchEvent(edgeModificationEvent);
+
+      // Backward compatibility fallback
       if (this.externalStateUpdateCallback) {
         // Remove old relation tuple if it exists and has a valid name
         if (oldRelationName.trim()) {
@@ -770,20 +798,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
             tuple: tuple
           });
         }
-      } else {
-        // Fallback to global window functions for backward compatibility
-        if (typeof window !== 'undefined') {
-          // Remove old relation if available
-          if (oldRelationName.trim() && (window as any).removeRelationViaCentralizedState) {
-            (window as any).removeRelationViaCentralizedState(oldRelationName, tuple);
-          }
-          
-          // Add new relation if available
-          if (newRelationName.trim() && (window as any).addRelationViaCentralizedState) {
-            (window as any).addRelationViaCentralizedState(newRelationName, tuple);
-          }
-        } else {
-          console.warn('No external state update mechanism available for edge modification');
+      } else if (typeof window !== 'undefined') {
+        // Remove old relation if available
+        if (oldRelationName.trim() && (window as any).removeRelationViaCentralizedState) {
+          (window as any).removeRelationViaCentralizedState(oldRelationName, tuple);
+        }
+        
+        // Add new relation if available
+        if (newRelationName.trim() && (window as any).addRelationViaCentralizedState) {
+          (window as any).addRelationViaCentralizedState(newRelationName, tuple);
         }
       }
     } catch (error) {
@@ -2533,10 +2556,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   // =========================================
-  // EXTERNAL STATE INTEGRATION API
+  // EVENT-BASED STATE INTEGRATION API
   // =========================================
 
   /**
+   * @deprecated Use event listeners instead of callbacks for better separation of concerns.
    * Set a callback for external state updates.
    * This allows React components or other external systems to handle state management.
    * 
@@ -2547,6 +2571,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
+   * @deprecated Use event listeners instead of callbacks.
    * Remove the external state update callback.
    */
   public removeExternalStateUpdateCallback(): void {

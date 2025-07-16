@@ -149,8 +149,12 @@
             </div>
         </div>
         
-        <div>
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
             <button onclick="clearGraph()">Clear All</button>
+            <button id="apply-layout-btn" onclick="applyLayoutManually()" disabled style="background-color: #28a745;">Apply CnD Layout</button>
+            <div id="layout-staleness" style="display: none; color: #ff6b35; font-weight: bold; background: #fff3cd; padding: 5px 10px; border-radius: 4px; border: 1px solid #ffeacc;">
+                ⚠️ CnD Layout Stale - Click "Apply CnD Layout" to update
+            </div>
             <select title="Choose the Layout Format" class="form-control" id="layoutFormat" name="layoutFormat" onchange="changeLayoutFormat()">
                 <option value="default" selected>Standard</option>
                 <option value="grid">Grid (Beta)</option>
@@ -187,6 +191,55 @@
         // Variables to store data
         let currentInstance = null;
         let currentInstanceLayout = null;
+        let currentCnDSpecVersion = 0; // Track CnD spec changes
+        let appliedCnDSpecVersion = 0; // Track which spec version was last applied
+        let hasDataChanges = false; // Track if data has changed since last CnD application
+
+        /**
+         * Update staleness indicators and button states
+         */
+        function updateLayoutStaleness() {
+            const stalenessIndicator = document.getElementById('layout-staleness');
+            const applyButton = document.getElementById('apply-layout-btn');
+            
+            const isStale = currentCnDSpecVersion > appliedCnDSpecVersion;
+            
+            if (isStale) {
+                stalenessIndicator.style.display = 'block';
+                applyButton.disabled = false;
+                applyButton.style.backgroundColor = '#ff6b35';
+                applyButton.textContent = '⚠️ Apply CnD Layout (Stale)';
+            } else {
+                stalenessIndicator.style.display = 'none';
+                applyButton.disabled = true;
+                applyButton.style.backgroundColor = '#28a745';
+                applyButton.textContent = 'Apply CnD Layout (Up to Date)';
+            }
+        }
+
+        /**
+         * Manual layout application for CnD spec changes
+         */
+        async function applyLayoutManually() {
+            try {
+                updateStatus('Applying CnD layout constraints manually...', 'info');
+                
+                if (currentInstance && currentInstance.getAtoms().length > 0) {
+                    await loadInstanceData();
+                    if (currentInstanceLayout) {
+                        await renderGraph();
+                    }
+                    appliedCnDSpecVersion = currentCnDSpecVersion;
+                    updateLayoutStaleness();
+                    updateStatus('CnD layout applied successfully!', 'success');
+                } else {
+                    updateStatus('No data available to apply CnD layout', 'warning');
+                }
+            } catch (error) {
+                console.error('Manual layout application failed:', error);
+                updateStatus(`Layout application failed: ${error.message}`, 'error');
+            }
+        }
 
         /**
          * Get current instance from the React InstanceBuilder component
@@ -388,12 +441,15 @@
             
             updateStatus('Instance updated - processing with CND constraints...', 'info');
             
-            // Auto-update with CND constraints on every change
+            // Auto-update with CND constraints on every data change (always enforced)
             setTimeout(async () => {
                 try {
                     await loadInstanceData();
                     if (currentInstanceLayout) {
                         await renderGraph();
+                        // Mark that layout has been applied with current spec
+                        appliedCnDSpecVersion = currentCnDSpecVersion;
+                        updateLayoutStaleness();
                     }
                 } catch (error) {
                     console.log('Auto-update failed:', error.message);
@@ -406,22 +462,10 @@
          * Update from React CndLayoutInterface component
          */
         function updateFromCnDSpec() {
-            updateStatus('CND specification changed - re-applying constraints...', 'info');
-            
-            // Re-run pipeline with new CND spec
-            setTimeout(async () => {
-                try {
-                    if (currentInstance && currentInstance.getAtoms().length > 0) {
-                        await loadInstanceData();
-                        if (currentInstanceLayout) {
-                            await renderGraph();
-                        }
-                    }
-                } catch (error) {
-                    console.log('CND spec update failed:', error.message);
-                    updateStatus(`CND spec update failed: ${error.message}`, 'error');
-                }
-            }, 300); // Slightly longer debounce for text input
+            // Mark CnD spec as changed (stale)
+            currentCnDSpecVersion++;
+            updateLayoutStaleness();
+            updateStatus('CnD specification changed - click "Apply CnD Layout" to update the visualization', 'warning');
         }
 
         /**
@@ -478,43 +522,73 @@
                 return;
             }
 
-            // Set up external state update callback for edge operations
-            graphElement.setExternalStateUpdateCallback((updates) => {
-                console.log('🔄 Handling state update request from WebCola component:', updates);
+            // Set up event-based state management instead of callbacks
+            console.log('🔄 Setting up event-based state management for edge operations');
+            
+            // Listen for edge creation requests
+            graphElement.addEventListener('edge-creation-requested', (event) => {
+                console.log('🆕 Edge creation requested:', event.detail);
                 
-                // Route state updates to React component handler
-                if (typeof window !== 'undefined' && window.handleEdgeStateUpdate) {
-                    window.handleEdgeStateUpdate(updates);
+                const { relationId, sourceNodeId, targetNodeId, tuple } = event.detail;
+                
+                // Update the current instance with the new relation tuple
+                if (currentInstance) {
+                    currentInstance.addRelationTuple(relationId, tuple);
+                    console.log(`✅ Added relation tuple: ${relationId}(${sourceNodeId}, ${targetNodeId})`);
+                    
+                    // Trigger layout regeneration and re-render
+                    updateFromBuilder();
+                    updateStatus(`Edge created: "${relationId}" from ${sourceNodeId} to ${targetNodeId}`, 'success');
                 } else {
-                    console.warn('React state handler not available, using fallback');
-                    // Fallback to global state management if React isn't ready
-                    if (updates.type === 'add-relation-tuple' && currentInstance) {
-                        currentInstance.addRelationTuple(updates.relationId, updates.tuple);
-                        updateFromBuilder(); // Trigger layout regeneration
-                    } else if (updates.type === 'remove-relation-tuple' && currentInstance) {
-                        currentInstance.removeRelationTuple(updates.relationId, updates.tuple);
-                        updateFromBuilder(); // Trigger layout regeneration
-                    }
+                    console.warn('No current instance available for edge creation');
                 }
             });
 
-            console.log('✅ React-based state management initialized for edge operations');
+            // Listen for edge modification requests  
+            graphElement.addEventListener('edge-modification-requested', (event) => {
+                console.log('✏️ Edge modification requested:', event.detail);
+                
+                const { oldRelationId, newRelationId, sourceNodeId, targetNodeId, tuple } = event.detail;
+                
+                if (currentInstance) {
+                    // Remove old relation tuple if it exists
+                    if (oldRelationId && oldRelationId.trim()) {
+                        currentInstance.removeRelationTuple(oldRelationId, tuple);
+                        console.log(`🗑️ Removed old relation tuple: ${oldRelationId}`);
+                    }
+                    
+                    // Add new relation tuple
+                    if (newRelationId && newRelationId.trim()) {
+                        currentInstance.addRelationTuple(newRelationId, tuple);
+                        console.log(`✅ Added new relation tuple: ${newRelationId}(${sourceNodeId}, ${targetNodeId})`);
+                    }
+                    
+                    // Trigger layout regeneration and re-render  
+                    updateFromBuilder();
+                    updateStatus(`Edge modified: "${oldRelationId}" → "${newRelationId}"`, 'success');
+                } else {
+                    console.warn('No current instance available for edge modification');
+                }
+            });
+
+            console.log('✅ Event-based state management initialized for edge operations');
             
             // Update status indicator
             const stateManagementStatus = document.getElementById('state-management-status');
             if (stateManagementStatus) {
-                stateManagementStatus.textContent = 'React-Based';
+                stateManagementStatus.textContent = 'Event-Based React Integration';
                 stateManagementStatus.style.color = '#4caf50';
                 stateManagementStatus.style.fontWeight = 'bold';
             }
             
-            updateStatus('React-based state management active for edge operations', 'success');
+            updateStatus('Event-based state management active for edge operations', 'success');
         }
 
         // Initialize when page loads
         window.addEventListener('load', () => {
             initializePipeline();
             initializeEdgeInputMode();
+            updateLayoutStaleness(); // Initialize staleness indicators
         });
 
         // Expose functions globally for React integration

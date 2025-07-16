@@ -112,8 +112,12 @@
             </div>
         </div>
         
-        <div>
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
             <button onclick="clearGraph()">Clear All</button>
+            <button id="apply-layout-btn" onclick="applyLayoutManually()" disabled style="background-color: #28a745;">Apply CnD Layout</button>
+            <div id="layout-staleness" style="display: none; color: #ff6b35; font-weight: bold; background: #fff3cd; padding: 5px 10px; border-radius: 4px; border: 1px solid #ffeacc;">
+                ⚠️ CnD Layout Stale - Click "Apply CnD Layout" to update
+            </div>
             <select title="Choose the Layout Format" class="form-control" id="layoutFormat" name="layoutFormat" onchange="changeLayoutFormat()">
                 <option value="default" selected>Standard</option>
                 <option value="grid">Grid (Beta)</option>
@@ -150,6 +154,52 @@
         // Variables to store data
         let currentInstance = null;
         let currentInstanceLayout = null;
+        let currentCnDSpecVersion = 0; // Track CnD spec changes
+        let appliedCnDSpecVersion = 0; // Track which spec version was last applied
+        let hasDataChanges = false; // Track if data has changed since last CnD application
+
+        /**
+         * Update staleness indicators and button states
+         */
+        function updateLayoutStaleness() {
+            const stalenessIndicator = document.getElementById('layout-staleness');
+            const applyButton = document.getElementById('apply-layout-btn');
+            
+            const isStale = currentCnDSpecVersion > appliedCnDSpecVersion;
+            
+            if (isStale) {
+                stalenessIndicator.style.display = 'block';
+                applyButton.disabled = false;
+                applyButton.style.backgroundColor = '#ff6b35';
+                applyButton.textContent = '⚠️ Apply CnD Layout (Stale)';
+            } else {
+                stalenessIndicator.style.display = 'none';
+                applyButton.disabled = true;
+                applyButton.style.backgroundColor = '#28a745';
+                applyButton.textContent = 'Apply CnD Layout (Up to Date)';
+            }
+        }
+
+        /**
+         * Manual layout application for CnD spec changes
+         */
+        async function applyLayoutManually() {
+            try {
+                updateStatus('Applying CnD layout constraints manually...', 'info');
+                
+                if (currentInstance && currentInstance.getAtoms().length > 0) {
+                    await loadInstanceData();
+                    appliedCnDSpecVersion = currentCnDSpecVersion;
+                    updateLayoutStaleness();
+                    updateStatus('CnD layout applied successfully!', 'success');
+                } else {
+                    updateStatus('No data available to apply CnD layout', 'warning');
+                }
+            } catch (error) {
+                console.error('Manual layout application failed:', error);
+                updateStatus(`Layout application failed: ${error.message}`, 'error');
+            }
+        }
 
         /**
          * Get current instance from the React REPL component
@@ -258,10 +308,14 @@
                 const graphElement = document.querySelector('webcola-cnd-graph');
                 if (graphElement) {
 
-                    //// TODO: This seems like the WRONG 
+                    // TODO: This seems like the WRONG 
                     // thing passed in?
                     console.log('Updating graph with layout instance...');
                     await graphElement.renderLayout(currentInstanceLayout);
+                    
+                    // Mark that layout has been applied with current spec
+                    appliedCnDSpecVersion = currentCnDSpecVersion;
+                    updateLayoutStaleness();
                     
                     updateStatus(`✅ Visualization updated! ${instance.getAtoms().length} atoms, ${instance.getRelations().length} relations`, 'success');
                 } else {
@@ -343,6 +397,7 @@
             const success = await initializePipeline();
             if (success) {
                 updateStatus('Demo ready! Try the REPL commands above.', 'success');
+                updateLayoutStaleness(); // Initialize staleness indicators
             }
         });
 
@@ -367,6 +422,7 @@
         // Replace polling with event-driven updates
         function setupDataInstanceWatcher() {
             let lastInstance = window.currentInstance;
+            let lastCnDSpec = '';
             
             // Check for instance changes periodically (much less frequent than before)
             const checkForInstanceChange = () => {
@@ -380,6 +436,16 @@
                     
                     // Initial load
                     loadInstanceData();
+                }
+                
+                // Check for CnD spec changes
+                const currentCnDSpec = getCurrentCNDSpec();
+                if (currentCnDSpec !== lastCnDSpec) {
+                    console.log('CnD specification change detected');
+                    lastCnDSpec = currentCnDSpec;
+                    currentCnDSpecVersion++;
+                    updateLayoutStaleness();
+                    updateStatus('CnD specification changed - click "Apply CnD Layout" to update the visualization', 'warning');
                 }
             };
             
