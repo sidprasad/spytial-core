@@ -3,25 +3,23 @@ import { IAtom, ITuple, IInputDataInstance } from '../../../data-instance/interf
 import { PyretDataInstance } from '../../../data-instance/pyret/pyret-data-instance';
 
 /**
- * Parser for Pyret-style list commands
+ * Parser for Pyret-style list commands (sugar syntax)
  * Supports:
- * - add [list: 1,2,3,4]:list_of_numbers
- * - add [list: atom1,atom2,atom3]:atom_list
+ * - [list: 1,2,3,4]:list_of_numbers
+ * - [list: atom1,atom2,atom3]:atom_list
  */
 export class PyretListParser implements ICommandParser {
   canHandle(command: string): boolean {
     const trimmed = command.trim();
     
-    // Pattern 1: add [list: ...]:type
-    if (trimmed.startsWith('add [list:') && trimmed.includes(']:')) {
-      return true;
+    // No more explicit add/remove - everything is sugar syntax
+    if (trimmed.startsWith('add ') || trimmed.startsWith('remove ')) {
+      return false;
     }
     
-    // Pattern 2: remove list_id (single word ending in -number pattern)
-    if (trimmed.startsWith('remove ')) {
-      const args = trimmed.substring(7).trim();
-      // Check if it looks like a generated list ID (type-number)
-      return /^[a-zA-Z_][a-zA-Z0-9_]*-\d+$/.test(args);
+    // Pattern: [list: ...]:type (sugar syntax)
+    if (trimmed.startsWith('[list:') && trimmed.includes(']:')) {
+      return true;
     }
     
     return false;
@@ -33,25 +31,16 @@ export class PyretListParser implements ICommandParser {
   
   getCommandPatterns(): string[] {
     return [
-      'add [list: item1,item2,item3]:type',
-      'add [list: 1,2,3,4]:numbers',
-      'remove listId-1'
+      '[list: item1,item2,item3]:type',
+      '[list: 1,2,3,4]:numbers'
     ];
   }
 
   execute(command: string, instance: IInputDataInstance): CommandResult {
     const trimmed = command.trim();
     
-    if (trimmed.startsWith('add ')) {
-      return this.handleAdd(trimmed.substring(4), instance);
-    } else if (trimmed.startsWith('remove ')) {
-      return this.handleRemove(trimmed.substring(7), instance);
-    }
-    
-    return {
-      success: false,
-      message: 'Unknown Pyret list command'
-    };
+    // All commands are now implicit "add" - sugar syntax gets desugared to internal operations
+    return this.handleAdd(trimmed, instance);
   }
 
   private handleAdd(args: string, instance: IInputDataInstance): CommandResult {
@@ -164,49 +153,7 @@ export class PyretListParser implements ICommandParser {
     }
   }
 
-  private handleRemove(args: string, instance: IInputDataInstance): CommandResult {
-    // For now, just support removing by list ID
-    const listId = args.trim();
-    
-    try {
-      // Find the list atom
-      const listAtom = instance.getAtoms().find(a => a.id === listId);
-      if (!listAtom) {
-        return {
-          success: false,
-          message: `List '${listId}' not found`
-        };
-      }
 
-      // Remove list-related relations first
-      const relations = instance.getRelations();
-      let removedRelations = 0;
-      
-      for (const relation of relations) {
-        if (relation.name === 'first' || relation.name === 'rest') {
-          const tuplesToRemove = relation.tuples.filter(t => t.atoms.includes(listId));
-          for (const tuple of tuplesToRemove) {
-            instance.removeRelationTuple(relation.name, tuple);
-            removedRelations++;
-          }
-        }
-      }
-
-      // Remove the list atom
-      instance.removeAtom(listId);
-      
-      return {
-        success: true,
-        message: `Removed Pyret list: ${listId} (1 atom, ${removedRelations} relations)`,
-        action: 'remove'
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Failed to remove Pyret list'
-      };
-    }
-  }
 
   private generateListId(instance: IInputDataInstance, typeName: string): string {
     const existingIds = new Set(instance.getAtoms().map(a => a.id));
@@ -271,10 +218,9 @@ export class PyretListParser implements ICommandParser {
 
   getHelp(): string[] {
     return [
-      'Pyret List Commands:',
-      '  add [list: item1,item2,item3]:list_type    - Add list with items',
-      '  add [list: 1,2,3,4]:numbers               - Add number list',
-      '  remove list_id                            - Remove list by ID',
+      'Pyret List Commands (sugar syntax):',
+      '  [list: item1,item2,item3]:list_type    - Add list with items',
+      '  [list: 1,2,3,4]:numbers               - Add number list',
       '',
       'This automatically creates:',
       '  - Individual atoms for each item (if they don\'t exist)',
@@ -282,13 +228,12 @@ export class PyretListParser implements ICommandParser {
       '  - first/rest relations for list structure',
       '',
       'Examples:',
-      '  add [list: 1,2,3,4]:numberList           - Creates numberList-1 as list ID',
-      '  add [list: alice,bob,charlie]:personList - Creates personList-1 as list ID',
-      '  add [list: red,green,blue]:colors        - Creates colors-1 as list ID',
-      '  remove numberList-1                      - Remove specific list instance',
+      '  [list: 1,2,3,4]:numberList           - Creates numberList-1 as list ID',
+      '  [list: alice,bob,charlie]:personList - Creates personList-1 as list ID',
+      '  [list: red,green,blue]:colors        - Creates colors-1 as list ID',
       '',
-      'Note: The list type name is used as-is to generate unique list IDs (type-1, type-2, etc.)',
-      'You control the naming - use singular, plural, or any descriptive name you prefer.'
+      'Note: All syntax is sugar that gets desugared to internal operations.',
+      'The list type name is used as-is to generate unique list IDs (type-1, type-2, etc.)'
     ];
   }
 }

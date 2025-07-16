@@ -68,15 +68,16 @@ describe('ReplInterface Parsers', () => {
       parser = new PyretListParser();
     });
 
-    it('should handle Pyret list commands', () => {
-      expect(parser.canHandle('add [list: 1,2,3]:numbers')).toBe(true);
-      expect(parser.canHandle('remove numbers-1')).toBe(true);
-      expect(parser.canHandle('add Alice:Person')).toBe(false);
-      expect(parser.canHandle('add friends(alice, bob)')).toBe(false);
+    it('should handle Pyret list commands (sugar syntax)', () => {
+      expect(parser.canHandle('[list: 1,2,3]:numbers')).toBe(true);
+      expect(parser.canHandle('add [list: 1,2,3]:numbers')).toBe(false); // No more explicit add
+      expect(parser.canHandle('remove numbers-1')).toBe(false); // No more explicit remove
+      expect(parser.canHandle('Alice:Person')).toBe(false);
+      expect(parser.canHandle('alice.friend=bob')).toBe(false);
     });
 
-    it('should add number lists', () => {
-      const result = parser.execute('add [list: 1,2,3,4]:numbers', instance);
+    it('should add number lists (sugar syntax)', () => {
+      const result = parser.execute('[list: 1,2,3,4]:numbers', instance);
       
       expect(result.success).toBe(true);
       expect(result.action).toBe('add');
@@ -99,8 +100,8 @@ describe('ReplInterface Parsers', () => {
       expect(relations.length).toBeGreaterThan(0);
     });
 
-    it('should add string lists with quoted items', () => {
-      const result = parser.execute('add [list: "red","green","blue"]:colors', instance);
+    it('should add string lists with quoted items (sugar syntax)', () => {
+      const result = parser.execute('[list: "red","green","blue"]:colors', instance);
       
       expect(result.success).toBe(true);
       expect(result.action).toBe('add');
@@ -122,12 +123,12 @@ describe('ReplInterface Parsers', () => {
       expect(listAtoms.length).toBe(1);
     });
 
-    it('should handle existing atoms in lists', () => {
+    it('should handle existing atoms in lists (sugar syntax)', () => {
       // Add some atoms first
       instance.addAtom({ id: 'alice', label: 'Alice', type: 'Person' });
       instance.addAtom({ id: 'bob', label: 'Bob', type: 'Person' });
       
-      const result = parser.execute('add [list: alice,bob]:people', instance);
+      const result = parser.execute('[list: alice,bob]:people', instance);
       
       expect(result.success).toBe(true);
       

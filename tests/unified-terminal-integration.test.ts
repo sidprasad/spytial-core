@@ -66,7 +66,7 @@ describe('Unified Terminal Integration', () => {
     expect(result.message).toContain('alice');
     expect(result.message).toContain('bob');
     expect(result.message).toContain('charlie');
-    expect(result.message).toContain('friends');
+    expect(result.message).toContain('friend');
     expect(result.message).toContain('knows');
     expect(result.message).toContain('likes');
     

@@ -87,8 +87,8 @@ describe('Unified REPL Terminal', () => {
   it('should handle pyret list commands in unified terminal', () => {
     const pyretParser = unifiedTerminal.parsers.find(p => p instanceof PyretListParser)!;
     
-    expect(pyretParser.canHandle('add [list: 1,2,3]:numbers')).toBe(true);
-    const result = pyretParser.execute('add [list: 1,2,3]:numbers', instance);
+    expect(pyretParser.canHandle('[list: 1,2,3]:numbers')).toBe(true);
+    const result = pyretParser.execute('[list: 1,2,3]:numbers', instance);
     
     expect(result.success).toBe(true);
     expect(result.action).toBe('add');
