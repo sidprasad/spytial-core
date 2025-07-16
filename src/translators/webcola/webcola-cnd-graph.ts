@@ -98,6 +98,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private svgLinkGroups : any;
   private svgGroups : any;
   private svgGroupLabels: any;
+  private zoomBehavior: any;
   /**
    * Stores the starting coordinates when a node begins dragging so
    * drag end events can report both the previous and new positions.
@@ -301,13 +302,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     if(d3.zoom) {
 
     // Set up zoom behavior (D3 v4 API - matches your working pattern)
-    const zoom = d3.zoom()
+    this.zoomBehavior = d3.zoom()
       .scaleExtent([0.5, 5])
       .on('zoom', () => {
         this.container.attr('transform', d3.event.transform);
       });
 
-    this.svg.call(zoom);
+    this.svg.call(this.zoomBehavior);
     }
     else {
       console.warn('D3 zoom behavior not available. Ensure D3 v4+ is loaded.');
@@ -351,8 +352,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       this.svg.classed('input-mode', true);
     }
 
-    // Disable node dragging
+    // Disable node dragging and zoom/translate
     this.disableNodeDragging();
+    this.disableZoom();
 
     // Dispatch event for external listeners
     this.dispatchEvent(new CustomEvent('input-mode-activated', {
@@ -374,8 +376,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // Clean up any temporary edge creation state
     this.cleanupEdgeCreation();
 
-    // Re-enable node dragging
+    // Re-enable node dragging and zoom/translate
     this.enableNodeDragging();
+    this.enableZoom();
 
     // Dispatch event for external listeners
     this.dispatchEvent(new CustomEvent('input-mode-deactivated', {
@@ -400,6 +403,24 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       const nodeDrag = this.colaLayout.drag();
       this.setupNodeDragHandlers(nodeDrag);
       this.svgNodes.call(nodeDrag);
+    }
+  }
+
+  /**
+   * Disable zoom/translate functionality when in input mode
+   */
+  private disableZoom(): void {
+    if (this.svg && this.zoomBehavior) {
+      this.svg.on('.zoom', null);
+    }
+  }
+
+  /**
+   * Re-enable zoom/translate functionality when exiting input mode
+   */
+  private enableZoom(): void {
+    if (this.svg && this.zoomBehavior) {
+      this.svg.call(this.zoomBehavior);
     }
   }
 
