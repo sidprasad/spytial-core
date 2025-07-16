@@ -48,16 +48,7 @@ describe('Pyret REPL Changes', () => {
       expect(atoms[0].type).toBe('Person');
     });
 
-    it('should still handle explicit "add" commands', () => {
-      const result = atomParser.execute('add Bob:Person', instance);
-      
-      expect(result.success).toBe(true);
-      expect(result.message).toContain('[Bob]');
-      
-      const atoms = instance.getAtoms();
-      expect(atoms.length).toBe(1);
-      expect(atoms[0].id).toBe('Bob');
-    });
+
   });
 
   describe('Dot notation relations', () => {
@@ -82,27 +73,7 @@ describe('Pyret REPL Changes', () => {
       expect(relations[0].tuples[0].atoms).toEqual(['alice', 'bob']);
     });
 
-    it('should handle explicit "add" with dot notation', () => {
-      const result = dotRelParser.execute('add alice.knows=bob', instance);
-      
-      expect(result.success).toBe(true);
-      expect(result.message).toContain('knows(alice, bob)');
-    });
 
-    it('should handle remove with dot notation', () => {
-      // First add a relation
-      dotRelParser.execute('alice.friend=bob', instance);
-      
-      const result = dotRelParser.execute('remove alice.friend=bob', instance);
-      
-      expect(result.success).toBe(true);
-      expect(result.action).toBe('remove');
-      expect(result.message).toContain('[alice.friend=bob]');
-      
-      const relations = instance.getRelations();
-      expect(relations.length).toBe(1); // Relation still exists but with no tuples
-      expect(relations[0].tuples).toHaveLength(0);
-    });
 
     it('should require atoms to exist before creating relations', () => {
       const result = dotRelParser.execute('charlie.friend=david', instance);
@@ -121,13 +92,7 @@ describe('Pyret REPL Changes', () => {
       expect(result.message).toContain('Added atom: Alice:Person');
     });
 
-    it('should show IDs prominently in atom removal messages', () => {
-      atomParser.execute('Alice:Person', instance);
-      const result = atomParser.execute('remove Alice', instance);
-      
-      expect(result.message).toMatch(/^\[Alice\]/);
-      expect(result.message).toContain('Removed atom: Alice:Person');
-    });
+
 
     it('should show IDs prominently in list command', () => {
       atomParser.execute('Alice:Person', instance);
@@ -164,17 +129,17 @@ describe('Pyret REPL Changes', () => {
   });
 
   describe('Parser priorities and handling', () => {
-    it('should detect atom commands correctly', () => {
+    it('should detect atom commands correctly (sugar syntax only)', () => {
       expect(atomParser.canHandle('Alice:Person')).toBe(true);
       expect(atomParser.canHandle('p1=Alice:Person')).toBe(true);
-      expect(atomParser.canHandle('add Alice:Person')).toBe(true);
-      expect(atomParser.canHandle('remove Alice')).toBe(true);
+      expect(atomParser.canHandle('add Alice:Person')).toBe(false); // No more explicit add
+      expect(atomParser.canHandle('remove Alice')).toBe(false); // No more explicit remove
     });
 
-    it('should detect dot notation relation commands correctly', () => {
+    it('should detect dot notation relation commands correctly (sugar syntax only)', () => {
       expect(dotRelParser.canHandle('alice.friend=bob')).toBe(true);
-      expect(dotRelParser.canHandle('add alice.friend=bob')).toBe(true);
-      expect(dotRelParser.canHandle('remove alice.friend=bob')).toBe(true);
+      expect(dotRelParser.canHandle('add alice.friend=bob')).toBe(false); // No more explicit add
+      expect(dotRelParser.canHandle('remove alice.friend=bob')).toBe(false); // No more explicit remove
     });
 
     it('should not confuse command types', () => {

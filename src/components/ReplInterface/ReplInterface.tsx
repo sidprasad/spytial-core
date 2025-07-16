@@ -64,7 +64,6 @@ const DEFAULT_TERMINALS: TerminalConfig[] = [
       new PyretListParser(),            // Priority 120 - most specific pattern
       new BatchCommandParser(),         // Priority 115 - multi-command patterns  
       new DotNotationRelationParser(),  // Priority 115 - dot notation relations
-      new RelationCommandParser(),      // Priority 110 - constructor notation relations
       new AtomCommandParser(),          // Priority 100 - standard priority
       new InfoCommandParser()           // Priority 50 - fallback utility commands
     ].sort((a, b) => b.getPriority() - a.getPriority()), // Sort by priority descending
