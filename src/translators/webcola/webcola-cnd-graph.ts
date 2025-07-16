@@ -40,6 +40,27 @@ const DEFAULT_SCALE_FACTOR = 5;
  * Full implementation using WebCola constraint-based layout with D3 integration
  * @field currentLayout - Holds the current custom WebColaLayout instance
  * @field colaLayout - Holds the current layout instance used by WebCola
+ * 
+ * Features:
+ * - Interactive edge input mode with keyboard shortcuts (Cmd/Ctrl)
+ * - Visual edge creation by clicking and dragging between nodes
+ * - Edge modification by clicking on existing edges in input mode
+ * - Centralized state management for IInputDataInstance
+ * - Automatic layout regeneration when data instance changes
+ * - Self-loop edge support with confirmation
+ * - Zoom/pan disable during input mode
+ * - Comprehensive event system for external integration
+ * 
+ * State Management:
+ * The component serves as the central state manager for the IInputDataInstance.
+ * When atoms or relations are added/modified through edge operations, the component:
+ * 1. Updates the IInputDataInstance directly
+ * 2. Notifies all subscribed state change listeners
+ * 3. Triggers layout regeneration callback (if set) to regenerate constraints
+ * 4. Re-renders the graph with updated layout
+ * 
+ * This ensures that layout constraints are always up-to-date with the current data
+ * and that all external components (React, etc.) stay synchronized.
  */
 export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'undefined' ? HTMLElement : (class {} as any)) {
   private svg!: any;
@@ -130,6 +151,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * State change listeners for external components to subscribe to data instance changes
    */
   private stateChangeListeners: Set<(instance: IInputDataInstance) => void> = new Set();
+
+  /**
+   * Layout regeneration callback for when data instance changes require layout constraints to be recalculated
+   * This allows external systems to handle the CnD spec → layout pipeline when data changes
+   */
+  private layoutRegenerationCallback: ((instance: IInputDataInstance) => Promise<void>) | null = null;
 
   constructor() {
     super();
@@ -519,7 +546,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   /**
    * Finish edge creation by connecting to a target node
    */
-  private finishEdgeCreation(targetNode: NodeWithMetadata): void {
+  private async finishEdgeCreation(targetNode: NodeWithMetadata): Promise<void> {
     if (!this.isInputModeActive || !this.edgeCreationState.isCreating || !this.edgeCreationState.sourceNode) {
       return;
     }
@@ -541,17 +568,17 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     this.svg.on('mousemove.edgecreation', null);
 
     // Show edge label input dialog
-    this.showEdgeLabelInput(sourceNode, targetNode);
+    await this.showEdgeLabelInput(sourceNode, targetNode);
   }
 
   /**
    * Show edge label input dialog and create the edge
    */
-  private showEdgeLabelInput(sourceNode: NodeWithMetadata, targetNode: NodeWithMetadata): void {
+  private async showEdgeLabelInput(sourceNode: NodeWithMetadata, targetNode: NodeWithMetadata): Promise<void> {
     const label = prompt(`Enter label for edge from "${sourceNode.label || sourceNode.id}" to "${targetNode.label || targetNode.id}":`);
     
     if (label !== null) { // User didn't cancel
-      this.createNewEdge(sourceNode, targetNode, label || '');
+      await this.createNewEdge(sourceNode, targetNode, label || '');
     }
 
     // Clean up edge creation state
@@ -561,7 +588,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   /**
    * Create a new edge between two nodes
    */
-  private createNewEdge(sourceNode: NodeWithMetadata, targetNode: NodeWithMetadata, label: string): void {
+  private async createNewEdge(sourceNode: NodeWithMetadata, targetNode: NodeWithMetadata, label: string): Promise<void> {
     if (!this.currentLayout) return;
 
     // Find node indices in the current layout
@@ -591,7 +618,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     this.currentLayout.links.push(newEdge);
 
     // Update the input data instance if available
-    this.updateDataInstanceForNewEdge(sourceNode, targetNode, label);
+    await this.updateDataInstanceForNewEdge(sourceNode, targetNode, label);
 
     // Dispatch event for external listeners
     this.dispatchEvent(new CustomEvent('edge-created', {
@@ -612,7 +639,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * @param targetNode - Target node of the edge 
    * @param relationName - Name/label of the relation
    */
-  private updateDataInstanceForNewEdge(sourceNode: NodeWithMetadata, targetNode: NodeWithMetadata, relationName: string): void {
+  private async updateDataInstanceForNewEdge(sourceNode: NodeWithMetadata, targetNode: NodeWithMetadata, relationName: string): Promise<void> {
     if (!this.inputDataInstance || !relationName.trim()) {
       return;
     }
@@ -630,7 +657,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       console.log(`Added relation tuple: ${relationName}(${sourceNode.id}, ${targetNode.id})`);
       
       // Notify state change for centralized state management
-      this.notifyStateChange();
+      await this.notifyStateChange();
     } catch (error) {
       console.error('Failed to update data instance for new edge:', error);
     }
@@ -656,7 +683,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   /**
    * Edit the label of an existing edge
    */
-  private editEdgeLabel(edgeData: EdgeWithMetadata): void {
+  private async editEdgeLabel(edgeData: EdgeWithMetadata): Promise<void> {
     if (!this.isInputModeActive) return;
 
     const currentLabel = edgeData.label || edgeData.relName || '';
@@ -668,7 +695,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       const targetNode = this.getNodeFromEdge(edgeData, 'target');
 
       // Update data instance if available
-      this.updateDataInstanceForEdgeModification(sourceNode, targetNode, currentLabel, newLabel);
+      await this.updateDataInstanceForEdgeModification(sourceNode, targetNode, currentLabel, newLabel);
 
       // Update edge data
       edgeData.label = newLabel;
@@ -708,12 +735,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * @param oldRelationName - Old relation name/label
    * @param newRelationName - New relation name/label
    */
-  private updateDataInstanceForEdgeModification(
+  private async updateDataInstanceForEdgeModification(
     sourceNode: NodeWithMetadata | null, 
     targetNode: NodeWithMetadata | null, 
     oldRelationName: string, 
     newRelationName: string
-  ): void {
+  ): Promise<void> {
     if (!this.inputDataInstance || !sourceNode || !targetNode) {
       return;
     }
@@ -738,7 +765,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       }
 
       // Notify state change for centralized state management
-      this.notifyStateChange();
+      await this.notifyStateChange();
     } catch (error) {
       console.error('Failed to update data instance for edge modification:', error);
     }
@@ -757,7 +784,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
     // Store the input data instance reference for edge operations using centralized state management
     if (inputDataInstance) {
-      this.setDataInstance(inputDataInstance);
+      await this.setDataInstance(inputDataInstance);
     }
 
 
@@ -964,7 +991,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .on('click.inputmode', (d: any) => {
         if (this.isInputModeActive && !this.isAlignmentEdge(d)) {
           d3.event.stopPropagation();
-          this.editEdgeLabel(d);
+          // Handle async operation without blocking the event
+          this.editEdgeLabel(d).catch(error => {
+            console.error('Error editing edge label:', error);
+          });
         }
       })
       .style('cursor', () => {
@@ -1156,7 +1186,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .on('mouseup.inputmode', (d: any) => {
         if (this.isInputModeActive && this.edgeCreationState.isCreating) {
           d3.event.stopPropagation();
-          this.finishEdgeCreation(d);
+          // Handle async operation without blocking the event
+          this.finishEdgeCreation(d).catch(error => {
+            console.error('Error finishing edge creation:', error);
+          });
         }
       });
 
@@ -2496,9 +2529,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * 
    * @param instance - The input data instance to manage
    */
-  public setDataInstance(instance: IInputDataInstance): void {
+  public async setDataInstance(instance: IInputDataInstance): Promise<void> {
     this.inputDataInstance = instance;
-    this.notifyStateChange();
+    await this.notifyStateChange();
   }
 
   /**
@@ -2517,13 +2550,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * @param atom - The atom to add
    * @throws Error if no data instance is set
    */
-  public addAtom(atom: IAtom): void {
+  public async addAtom(atom: IAtom): Promise<void> {
     if (!this.inputDataInstance) {
       throw new Error('No data instance set. Call setDataInstance() first.');
     }
     
     this.inputDataInstance.addAtom(atom);
-    this.notifyStateChange();
+    await this.notifyStateChange();
     
     // Dispatch event for external listeners
     this.dispatchEvent(new CustomEvent('atom-added', {
@@ -2538,13 +2571,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * @param atomId - The ID of the atom to remove
    * @throws Error if no data instance is set
    */
-  public removeAtom(atomId: string): void {
+  public async removeAtom(atomId: string): Promise<void> {
     if (!this.inputDataInstance) {
       throw new Error('No data instance set. Call setDataInstance() first.');
     }
     
     this.inputDataInstance.removeAtom(atomId);
-    this.notifyStateChange();
+    await this.notifyStateChange();
     
     // Dispatch event for external listeners
     this.dispatchEvent(new CustomEvent('atom-removed', {
@@ -2560,13 +2593,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * @param tuple - The tuple to add
    * @throws Error if no data instance is set
    */
-  public addRelationTuple(relationId: string, tuple: ITuple): void {
+  public async addRelationTuple(relationId: string, tuple: ITuple): Promise<void> {
     if (!this.inputDataInstance) {
       throw new Error('No data instance set. Call setDataInstance() first.');
     }
     
     this.inputDataInstance.addRelationTuple(relationId, tuple);
-    this.notifyStateChange();
+    await this.notifyStateChange();
     
     // Dispatch event for external listeners
     this.dispatchEvent(new CustomEvent('relation-tuple-added', {
@@ -2582,13 +2615,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * @param tuple - The tuple to remove
    * @throws Error if no data instance is set
    */
-  public removeRelationTuple(relationId: string, tuple: ITuple): void {
+  public async removeRelationTuple(relationId: string, tuple: ITuple): Promise<void> {
     if (!this.inputDataInstance) {
       throw new Error('No data instance set. Call setDataInstance() first.');
     }
     
     this.inputDataInstance.removeRelationTuple(relationId, tuple);
-    this.notifyStateChange();
+    await this.notifyStateChange();
     
     // Dispatch event for external listeners
     this.dispatchEvent(new CustomEvent('relation-tuple-removed', {
@@ -2617,10 +2650,28 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
+   * Set a callback to handle layout regeneration when data instance changes.
+   * This allows external systems to handle the CnD spec → layout pipeline when data changes.
+   * 
+   * @param callback - Function that will regenerate and re-render the layout when data changes
+   */
+  public setLayoutRegenerationCallback(callback: (instance: IInputDataInstance) => Promise<void>): void {
+    this.layoutRegenerationCallback = callback;
+  }
+
+  /**
+   * Remove the layout regeneration callback.
+   */
+  public removeLayoutRegenerationCallback(): void {
+    this.layoutRegenerationCallback = null;
+  }
+
+  /**
    * Notify all subscribed components that the state has changed.
    * This provides synchronous updates to all components using the centralized state.
+   * Also triggers layout regeneration if a callback is registered.
    */
-  private notifyStateChange(): void {
+  private async notifyStateChange(): Promise<void> {
     if (this.inputDataInstance) {
       // Notify all registered listeners synchronously
       this.stateChangeListeners.forEach(listener => {
@@ -2636,6 +2687,23 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         detail: { instance: this.inputDataInstance },
         bubbles: true
       }));
+
+      // Trigger layout regeneration if callback is set
+      // This ensures that layout constraints are recalculated when data changes
+      if (this.layoutRegenerationCallback) {
+        try {
+          console.log('🔄 Triggering layout regeneration due to data instance change...');
+          await this.layoutRegenerationCallback(this.inputDataInstance);
+          console.log('✅ Layout regeneration completed');
+        } catch (error) {
+          console.error('❌ Layout regeneration failed:', error);
+          // Dispatch error event for external handling
+          this.dispatchEvent(new CustomEvent('layout-regeneration-error', {
+            detail: { error: (error as Error).message, instance: this.inputDataInstance },
+            bubbles: true
+          }));
+        }
+      }
     }
   }
 

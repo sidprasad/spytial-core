@@ -496,6 +496,34 @@
                 }
             });
 
+            // Set up layout regeneration callback to handle constraint regeneration when data changes
+            graphElement.setLayoutRegenerationCallback(async (dataInstance) => {
+                console.log('🔄 Layout regeneration triggered due to data instance change');
+                updateStatus('Regenerating layout due to data changes...', 'info');
+                
+                try {
+                    // Store current data instance for regeneration
+                    currentInstance = dataInstance;
+                    window.currentInstance = dataInstance;
+                    
+                    // Regenerate the layout from the updated data instance
+                    await loadInstanceData();
+                    
+                    // Re-render with the new layout if successful
+                    if (currentInstanceLayout) {
+                        updateStatus('Re-rendering graph with updated constraints...', 'info');
+                        await renderGraph();
+                        updateStatus('Layout regeneration complete!', 'success');
+                    } else {
+                        throw new Error('Failed to regenerate layout from updated data instance');
+                    }
+                } catch (error) {
+                    console.error('Layout regeneration failed:', error);
+                    updateStatus(`Layout regeneration failed: ${error.message}`, 'error');
+                    throw error; // Re-throw so the component can handle it
+                }
+            });
+
             // Listen for specific data change events for debugging/monitoring
             graphElement.addEventListener('atom-added', (event) => {
                 console.log('➕ Atom added via centralized management:', event.detail.atom);
