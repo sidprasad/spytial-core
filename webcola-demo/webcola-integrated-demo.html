@@ -111,6 +111,21 @@
                 Edge Input Mode: <span id="mode-status">Inactive</span>
             </div>
         </div>
+
+        <!-- Centralized State Management Info -->
+        <div class="edge-instructions">
+            <h3>🏛️ Centralized State Management</h3>
+            <p>The graph component now serves as the central authority for data instance state, providing synchronous updates to all connected components.</p>
+            <ul>
+                <li><strong>Single Source of Truth:</strong> All atom and relation operations go through the graph component</li>
+                <li><strong>Synchronous Updates:</strong> Changes are immediately propagated to all subscribed components</li>
+                <li><strong>Event-Driven:</strong> Components can listen to specific state change events</li>
+                <li><strong>Console Monitoring:</strong> Check browser console for detailed state change logs</li>
+            </ul>
+            <div class="input-mode-status">
+                State Management: <span id="state-management-status">Initializing...</span>
+            </div>
+        </div>
         
         <!-- React Component Areas -->
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
@@ -418,10 +433,13 @@
             // For now, just log - can be extended later
         }
 
-        // Initialize edge input mode functionality
+        // Initialize edge input mode functionality and centralized state management
         function initializeEdgeInputMode() {
             const statusElement = document.getElementById('mode-status');
             const graphContainer = document.getElementById('graph-container');
+            
+            // Set up centralized state management
+            initializeCentralizedStateManagement(graphContainer);
             
             // Listen for input mode events
             graphContainer.addEventListener('input-mode-activated', () => {
@@ -446,6 +464,97 @@
                 console.log('Edge modified:', event.detail);
                 updateStatus(`Edge label changed from "${event.detail.oldLabel}" to "${event.detail.newLabel}"`, 'success');
             });
+        }
+
+        /**
+         * Initialize centralized state management for the graph component
+         * This makes the graph component the single source of truth for data instance state
+         */
+        function initializeCentralizedStateManagement(graphContainer) {
+            // Get reference to the graph web component
+            const graphElement = graphContainer.querySelector('webcola-cnd-graph');
+            if (!graphElement) {
+                console.warn('Graph element not found for centralized state management');
+                return;
+            }
+
+            // Set up state change listeners to keep other components synchronized
+            graphElement.addStateChangeListener((dataInstance) => {
+                console.log('🔄 Centralized state change detected:', {
+                    atoms: dataInstance.getAtoms().length,
+                    relations: dataInstance.getRelations().length,
+                    tuples: dataInstance.getRelations().reduce((sum, rel) => sum + rel.tuples.length, 0)
+                });
+                
+                // Update global reference so other components can access the latest state
+                currentInstance = dataInstance;
+                window.currentInstance = dataInstance;
+                
+                // Notify React components about state changes if they exist
+                if (window.notifyReactStateChange) {
+                    window.notifyReactStateChange(dataInstance);
+                }
+            });
+
+            // Listen for specific data change events for debugging/monitoring
+            graphElement.addEventListener('atom-added', (event) => {
+                console.log('➕ Atom added via centralized management:', event.detail.atom);
+                updateStatus(`Atom added: ${event.detail.atom.label} (${event.detail.atom.type})`, 'success');
+            });
+
+            graphElement.addEventListener('atom-removed', (event) => {
+                console.log('➖ Atom removed via centralized management:', event.detail.atomId);
+                updateStatus(`Atom removed: ${event.detail.atomId}`, 'info');
+            });
+
+            graphElement.addEventListener('relation-tuple-added', (event) => {
+                console.log('🔗 Relation tuple added via centralized management:', event.detail);
+                updateStatus(`Relation added: ${event.detail.relationId}(${event.detail.tuple.atoms.join(', ')})`, 'success');
+            });
+
+            graphElement.addEventListener('relation-tuple-removed', (event) => {
+                console.log('🔗 Relation tuple removed via centralized management:', event.detail);
+                updateStatus(`Relation removed: ${event.detail.relationId}(${event.detail.tuple.atoms.join(', ')})`, 'info');
+            });
+
+            // Expose centralized state management functions globally for external use
+            window.addAtomViaCentralizedState = (atom) => {
+                try {
+                    graphElement.addAtom(atom);
+                    return true;
+                } catch (error) {
+                    console.error('Failed to add atom via centralized state:', error);
+                    updateStatus(`Failed to add atom: ${error.message}`, 'error');
+                    return false;
+                }
+            };
+
+            window.addRelationViaCentralizedState = (relationId, tuple) => {
+                try {
+                    graphElement.addRelationTuple(relationId, tuple);
+                    return true;
+                } catch (error) {
+                    console.error('Failed to add relation via centralized state:', error);
+                    updateStatus(`Failed to add relation: ${error.message}`, 'error');
+                    return false;
+                }
+            };
+
+            window.getCentralizedDataInstanceStats = () => {
+                return graphElement.getDataInstanceStats();
+            };
+
+            console.log('✅ Centralized state management initialized');
+            
+            // Update status indicator
+            const stateManagementStatus = document.getElementById('state-management-status');
+            if (stateManagementStatus) {
+                stateManagementStatus.textContent = 'Active';
+                stateManagementStatus.style.color = '#4caf50';
+                stateManagementStatus.style.fontWeight = 'bold';
+            }
+            
+            updateStatus('Centralized state management active', 'success');
         }
 
         // Initialize when page loads

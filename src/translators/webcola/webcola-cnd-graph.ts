@@ -2,7 +2,7 @@
 import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator } from './webcolatranslator';
 import { InstanceLayout, isAlignmentConstraint, isInstanceLayout, isLeftConstraint, isTopConstraint, LayoutNode } from '../../layout/interfaces';
 import type { GridRouter, Group, Layout, Node, Link } from 'webcola';
-import { IInputDataInstance, ITuple } from '../../data-instance/interfaces';
+import { IInputDataInstance, ITuple, IAtom } from '../../data-instance/interfaces';
 
 let d3 = window.d3v4 || window.d3; // Use d3 v4 if available, otherwise fallback to the default window.d3
 let cola = window.cola;
@@ -122,8 +122,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
   /**
    * Reference to the input data instance for updating data when edges are modified
+   * This component can serve as the central state manager for the data instance
    */
   private inputDataInstance: IInputDataInstance | null = null;
+
+  /**
+   * State change listeners for external components to subscribe to data instance changes
+   */
+  private stateChangeListeners: Set<(instance: IInputDataInstance) => void> = new Set();
 
   constructor() {
     super();
@@ -622,6 +628,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       this.inputDataInstance.addRelationTuple(relationName, tuple);
       
       console.log(`Added relation tuple: ${relationName}(${sourceNode.id}, ${targetNode.id})`);
+      
+      // Notify state change for centralized state management
+      this.notifyStateChange();
     } catch (error) {
       console.error('Failed to update data instance for new edge:', error);
     }
@@ -727,6 +736,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         this.inputDataInstance.addRelationTuple(newRelationName, tuple);
         console.log(`Added relation tuple: ${newRelationName}(${sourceNode.id}, ${targetNode.id})`);
       }
+
+      // Notify state change for centralized state management
+      this.notifyStateChange();
     } catch (error) {
       console.error('Failed to update data instance for edge modification:', error);
     }
@@ -743,8 +755,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       throw new Error('Invalid instance layout provided. Expected an InstanceLayout instance.');
     }
 
-    // Store the input data instance reference for edge operations
-    this.inputDataInstance = inputDataInstance || null;
+    // Store the input data instance reference for edge operations using centralized state management
+    if (inputDataInstance) {
+      this.setDataInstance(inputDataInstance);
+    }
 
 
 
@@ -2470,6 +2484,181 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     loading.style.display = 'none';
     error.style.display = 'block';
     error.textContent = message;
+  }
+
+  // =========================================
+  // CENTRALIZED STATE MANAGEMENT API
+  // =========================================
+
+  /**
+   * Set the data instance that this component will manage as the central state.
+   * This makes the component the single source of truth for data instance state.
+   * 
+   * @param instance - The input data instance to manage
+   */
+  public setDataInstance(instance: IInputDataInstance): void {
+    this.inputDataInstance = instance;
+    this.notifyStateChange();
+  }
+
+  /**
+   * Get the current data instance managed by this component.
+   * 
+   * @returns The current input data instance or null if none is set
+   */
+  public getDataInstance(): IInputDataInstance | null {
+    return this.inputDataInstance;
+  }
+
+  /**
+   * Add an atom to the data instance through this component as the central state manager.
+   * This ensures all atom additions go through the centralized state management system.
+   * 
+   * @param atom - The atom to add
+   * @throws Error if no data instance is set
+   */
+  public addAtom(atom: IAtom): void {
+    if (!this.inputDataInstance) {
+      throw new Error('No data instance set. Call setDataInstance() first.');
+    }
+    
+    this.inputDataInstance.addAtom(atom);
+    this.notifyStateChange();
+    
+    // Dispatch event for external listeners
+    this.dispatchEvent(new CustomEvent('atom-added', {
+      detail: { atom },
+      bubbles: true
+    }));
+  }
+
+  /**
+   * Remove an atom from the data instance through this component as the central state manager.
+   * 
+   * @param atomId - The ID of the atom to remove
+   * @throws Error if no data instance is set
+   */
+  public removeAtom(atomId: string): void {
+    if (!this.inputDataInstance) {
+      throw new Error('No data instance set. Call setDataInstance() first.');
+    }
+    
+    this.inputDataInstance.removeAtom(atomId);
+    this.notifyStateChange();
+    
+    // Dispatch event for external listeners
+    this.dispatchEvent(new CustomEvent('atom-removed', {
+      detail: { atomId },
+      bubbles: true
+    }));
+  }
+
+  /**
+   * Add a relation tuple to the data instance through this component as the central state manager.
+   * 
+   * @param relationId - The ID of the relation
+   * @param tuple - The tuple to add
+   * @throws Error if no data instance is set
+   */
+  public addRelationTuple(relationId: string, tuple: ITuple): void {
+    if (!this.inputDataInstance) {
+      throw new Error('No data instance set. Call setDataInstance() first.');
+    }
+    
+    this.inputDataInstance.addRelationTuple(relationId, tuple);
+    this.notifyStateChange();
+    
+    // Dispatch event for external listeners
+    this.dispatchEvent(new CustomEvent('relation-tuple-added', {
+      detail: { relationId, tuple },
+      bubbles: true
+    }));
+  }
+
+  /**
+   * Remove a relation tuple from the data instance through this component as the central state manager.
+   * 
+   * @param relationId - The ID of the relation
+   * @param tuple - The tuple to remove
+   * @throws Error if no data instance is set
+   */
+  public removeRelationTuple(relationId: string, tuple: ITuple): void {
+    if (!this.inputDataInstance) {
+      throw new Error('No data instance set. Call setDataInstance() first.');
+    }
+    
+    this.inputDataInstance.removeRelationTuple(relationId, tuple);
+    this.notifyStateChange();
+    
+    // Dispatch event for external listeners
+    this.dispatchEvent(new CustomEvent('relation-tuple-removed', {
+      detail: { relationId, tuple },
+      bubbles: true
+    }));
+  }
+
+  /**
+   * Subscribe to state changes from this component.
+   * External components can use this to stay synchronized with the centralized state.
+   * 
+   * @param listener - Function to call when the data instance changes
+   */
+  public addStateChangeListener(listener: (instance: IInputDataInstance) => void): void {
+    this.stateChangeListeners.add(listener);
+  }
+
+  /**
+   * Unsubscribe from state changes.
+   * 
+   * @param listener - The listener function to remove
+   */
+  public removeStateChangeListener(listener: (instance: IInputDataInstance) => void): void {
+    this.stateChangeListeners.delete(listener);
+  }
+
+  /**
+   * Notify all subscribed components that the state has changed.
+   * This provides synchronous updates to all components using the centralized state.
+   */
+  private notifyStateChange(): void {
+    if (this.inputDataInstance) {
+      // Notify all registered listeners synchronously
+      this.stateChangeListeners.forEach(listener => {
+        try {
+          listener(this.inputDataInstance!);
+        } catch (error) {
+          console.error('Error in state change listener:', error);
+        }
+      });
+      
+      // Also dispatch a general state change event
+      this.dispatchEvent(new CustomEvent('data-instance-changed', {
+        detail: { instance: this.inputDataInstance },
+        bubbles: true
+      }));
+    }
+  }
+
+  /**
+   * Get current statistics about the managed data instance.
+   * Useful for debugging and monitoring state.
+   * 
+   * @returns Object with atom count, relation count, and tuple count
+   */
+  public getDataInstanceStats(): { atoms: number; relations: number; tuples: number } | null {
+    if (!this.inputDataInstance) {
+      return null;
+    }
+    
+    const atoms = this.inputDataInstance.getAtoms();
+    const relations = this.inputDataInstance.getRelations();
+    const tupleCount = relations.reduce((sum, rel) => sum + rel.tuples.length, 0);
+    
+    return {
+      atoms: atoms.length,
+      relations: relations.length,
+      tuples: tupleCount
+    };
   }
 }
 
