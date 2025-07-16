@@ -56,32 +56,11 @@ const ConnectedReplInterface: React.FC = () => {
       
       // Expose a getter for the React instance
       (window as any).getCurrentInstanceFromReact = () => instance;
-
-      // Register handler for edge input mode state updates
-      (window as any).handleEdgeStateUpdate = (updates: any) => {
-        console.log('🔗 Handling edge state update from WebCola component:', updates);
-        
-        const currentInstance = instance;
-        let updatedInstance = currentInstance;
-
-        if (updates.type === 'add-relation-tuple') {
-          console.log(`Adding relation tuple: ${updates.relationId}(${updates.tuple.atoms.join(', ')})`);
-          updatedInstance = { ...currentInstance };
-          updatedInstance.addRelationTuple(updates.relationId, updates.tuple);
-          setInstance(updatedInstance);
-        } else if (updates.type === 'remove-relation-tuple') {
-          console.log(`Removing relation tuple: ${updates.relationId}(${updates.tuple.atoms.join(', ')})`);
-          updatedInstance = { ...currentInstance };
-          updatedInstance.removeRelationTuple(updates.relationId, updates.tuple);
-          setInstance(updatedInstance);
-        }
-
-        // Trigger layout regeneration
-        if (typeof window !== 'undefined' && (window as any).updateFromRepl) {
-          setTimeout(() => {
-            (window as any).updateFromRepl();
-          }, 100);
-        }
+      
+      // Expose a function to update React state from edge events
+      (window as any).updateInstanceFromEdgeEvent = (updatedInstance: IInputDataInstance) => {
+        console.log('🔗 Updating React state from edge event - atoms:', updatedInstance.getAtoms().length, 'relations:', updatedInstance.getRelations().length);
+        setInstance(updatedInstance);
       };
     }
   }, [instance]);

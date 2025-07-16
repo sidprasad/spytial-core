@@ -250,12 +250,104 @@
                 
                 updateStatus('React components loading - pipeline ready!', 'success');
                 
+                // Set up edge event listeners
+                setupEdgeEventListeners();
+                
                 return true;
             } catch (error) {
                 console.error('Failed to initialize pipeline:', error);
                 updateStatus(`Pipeline init failed: ${error.message}`, 'error');
                 return false;
             }
+        }
+
+        /**
+         * Set up event listeners for edge input mode
+         */
+        function setupEdgeEventListeners() {
+            const graphElement = document.querySelector('webcola-cnd-graph');
+            if (!graphElement) {
+                console.warn('Graph element not found - edge event listeners not set up');
+                return;
+            }
+
+            // Listen for edge creation requests
+            graphElement.addEventListener('edge-creation-requested', (event) => {
+                console.log('🔗 Edge creation requested:', event.detail);
+                
+                const { relationId, sourceNodeId, targetNodeId, tuple } = event.detail;
+                
+                // Get current React instance
+                const currentInstance = window.getCurrentInstanceFromReact?.();
+                if (!currentInstance) {
+                    console.error('No React instance available for edge creation');
+                    updateStatus('Failed to create edge - no data instance available', 'error');
+                    return;
+                }
+                
+                try {
+                    // Add the relation tuple to the data instance
+                    currentInstance.addRelationTuple(relationId, tuple);
+                    console.log(`Added relation tuple: ${relationId}(${tuple.atoms.join(', ')})`);
+                    
+                    // Update the React component state (through a global function if available)
+                    if (window.updateInstanceFromEdgeEvent) {
+                        window.updateInstanceFromEdgeEvent(currentInstance);
+                    }
+                    
+                    // Trigger layout regeneration
+                    loadInstanceData();
+                    
+                    updateStatus(`✅ Edge created: ${relationId}(${tuple.atoms.join(', ')})`, 'success');
+                } catch (error) {
+                    console.error('Failed to add edge relation:', error);
+                    updateStatus(`Failed to create edge: ${error.message}`, 'error');
+                }
+            });
+
+            // Listen for edge modification requests
+            graphElement.addEventListener('edge-modification-requested', (event) => {
+                console.log('🔗 Edge modification requested:', event.detail);
+                
+                const { oldRelationId, newRelationId, sourceNodeId, targetNodeId, tuple } = event.detail;
+                
+                // Get current React instance
+                const currentInstance = window.getCurrentInstanceFromReact?.();
+                if (!currentInstance) {
+                    console.error('No React instance available for edge modification');
+                    updateStatus('Failed to modify edge - no data instance available', 'error');
+                    return;
+                }
+                
+                try {
+                    // Remove old relation tuple if it exists and has a valid name
+                    if (oldRelationId.trim()) {
+                        currentInstance.removeRelationTuple(oldRelationId, tuple);
+                        console.log(`Removed old relation tuple: ${oldRelationId}(${tuple.atoms.join(', ')})`);
+                    }
+                    
+                    // Add new relation tuple if it has a valid name
+                    if (newRelationId.trim()) {
+                        currentInstance.addRelationTuple(newRelationId, tuple);
+                        console.log(`Added new relation tuple: ${newRelationId}(${tuple.atoms.join(', ')})`);
+                    }
+                    
+                    // Update the React component state (through a global function if available)
+                    if (window.updateInstanceFromEdgeEvent) {
+                        window.updateInstanceFromEdgeEvent(currentInstance);
+                    }
+                    
+                    // Trigger layout regeneration
+                    loadInstanceData();
+                    
+                    updateStatus(`✅ Edge modified: ${oldRelationId} → ${newRelationId}`, 'success');
+                } catch (error) {
+                    console.error('Failed to modify edge relation:', error);
+                    updateStatus(`Failed to modify edge: ${error.message}`, 'error');
+                }
+            });
+            
+            console.log('🔗 Edge event listeners set up successfully');
         }
 
         /**

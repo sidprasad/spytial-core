@@ -147,12 +147,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     temporaryEdge: null
   };
 
-  /**
-   * Reference to external state update callback for edge operations
-   * This allows external systems (React components) to handle state updates
-   */
-  private externalStateUpdateCallback: ((updates: any) => void) | null = null;
-
   constructor() {
     super();
     
@@ -659,17 +653,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         bubbles: true
       });
       this.dispatchEvent(edgeCreationEvent);
-      
-      // Backward compatibility fallback
-      if (this.externalStateUpdateCallback) {
-        this.externalStateUpdateCallback({
-          type: 'add-relation-tuple',
-          relationId: relationName,
-          tuple: tuple
-        });
-      } else if (typeof window !== 'undefined' && (window as any).addRelationViaCentralizedState) {
-        (window as any).addRelationViaCentralizedState(relationName, tuple);
-      }
     } catch (error) {
       console.error('Failed to update external state for new edge:', error);
     }
@@ -778,37 +761,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         bubbles: true
       });
       this.dispatchEvent(edgeModificationEvent);
-
-      // Backward compatibility fallback
-      if (this.externalStateUpdateCallback) {
-        // Remove old relation tuple if it exists and has a valid name
-        if (oldRelationName.trim()) {
-          this.externalStateUpdateCallback({
-            type: 'remove-relation-tuple',
-            relationId: oldRelationName,
-            tuple: tuple
-          });
-        }
-
-        // Add new relation tuple if it has a valid name
-        if (newRelationName.trim()) {
-          this.externalStateUpdateCallback({
-            type: 'add-relation-tuple',
-            relationId: newRelationName,
-            tuple: tuple
-          });
-        }
-      } else if (typeof window !== 'undefined') {
-        // Remove old relation if available
-        if (oldRelationName.trim() && (window as any).removeRelationViaCentralizedState) {
-          (window as any).removeRelationViaCentralizedState(oldRelationName, tuple);
-        }
-        
-        // Add new relation if available
-        if (newRelationName.trim() && (window as any).addRelationViaCentralizedState) {
-          (window as any).addRelationViaCentralizedState(newRelationName, tuple);
-        }
-      }
     } catch (error) {
       console.error('Failed to update external state for edge modification:', error);
     }
@@ -2559,24 +2511,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   // EVENT-BASED STATE INTEGRATION API
   // =========================================
 
-  /**
-   * @deprecated Use event listeners instead of callbacks for better separation of concerns.
-   * Set a callback for external state updates.
-   * This allows React components or other external systems to handle state management.
-   * 
-   * @param callback - Function to call when edge operations need state updates
-   */
-  public setExternalStateUpdateCallback(callback: (updates: any) => void): void {
-    this.externalStateUpdateCallback = callback;
-  }
-
-  /**
-   * @deprecated Use event listeners instead of callbacks.
-   * Remove the external state update callback.
-   */
-  public removeExternalStateUpdateCallback(): void {
-    this.externalStateUpdateCallback = null;
-  }
 }
 
 // Register the custom element only in browser environments
