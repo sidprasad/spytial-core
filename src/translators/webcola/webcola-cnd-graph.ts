@@ -2,6 +2,7 @@
 import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator } from './webcolatranslator';
 import { InstanceLayout, isAlignmentConstraint, isInstanceLayout, isLeftConstraint, isTopConstraint, LayoutNode } from '../../layout/interfaces';
 import type { GridRouter, Group, Layout, Node, Link } from 'webcola';
+import { IInputDataInstance, ITuple } from '../../data-instance/interfaces';
 
 let d3 = window.d3v4 || window.d3; // Use d3 v4 if available, otherwise fallback to the default window.d3
 let cola = window.cola;
@@ -118,6 +119,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     sourceNode: null,
     temporaryEdge: null
   };
+
+  /**
+   * Reference to the input data instance for updating data when edges are modified
+   */
+  private inputDataInstance: IInputDataInstance | null = null;
 
   constructor() {
     super();
@@ -514,10 +520,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
     const sourceNode = this.edgeCreationState.sourceNode;
 
-    // Don't create self-loop edges for now
+    // Confirm self-loop edges
     if (sourceNode.id === targetNode.id) {
-      this.cleanupEdgeCreation();
-      return;
+      const confirmSelfLoop = confirm(
+        `Are you sure you want to create a self-loop edge on "${sourceNode.label || sourceNode.id}"?`
+      );
+      if (!confirmSelfLoop) {
+        this.cleanupEdgeCreation();
+        return;
+      }
     }
 
     // Clean up temporary edge visualization
@@ -573,6 +584,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // Add edge to current layout
     this.currentLayout.links.push(newEdge);
 
+    // Update the input data instance if available
+    this.updateDataInstanceForNewEdge(sourceNode, targetNode, label);
+
     // Dispatch event for external listeners
     this.dispatchEvent(new CustomEvent('edge-created', {
       detail: { 
@@ -584,6 +598,33 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
     // Re-render the graph to show the new edge
     this.rerenderGraph();
+  }
+
+  /**
+   * Update the input data instance when a new edge is created
+   * @param sourceNode - Source node of the edge
+   * @param targetNode - Target node of the edge 
+   * @param relationName - Name/label of the relation
+   */
+  private updateDataInstanceForNewEdge(sourceNode: NodeWithMetadata, targetNode: NodeWithMetadata, relationName: string): void {
+    if (!this.inputDataInstance || !relationName.trim()) {
+      return;
+    }
+
+    try {
+      // Create a tuple representing the edge/relation
+      const tuple: ITuple = {
+        atoms: [sourceNode.id, targetNode.id],
+        types: [sourceNode.type || 'untyped', targetNode.type || 'untyped']
+      };
+
+      // Add the relation tuple to the data instance
+      this.inputDataInstance.addRelationTuple(relationName, tuple);
+      
+      console.log(`Added relation tuple: ${relationName}(${sourceNode.id}, ${targetNode.id})`);
+    } catch (error) {
+      console.error('Failed to update data instance for new edge:', error);
+    }
   }
 
   /**
@@ -613,6 +654,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     const newLabel = prompt(`Edit edge label:`, currentLabel);
     
     if (newLabel !== null && newLabel !== currentLabel) {
+      // Get source and target nodes for data instance update
+      const sourceNode = this.getNodeFromEdge(edgeData, 'source');
+      const targetNode = this.getNodeFromEdge(edgeData, 'target');
+
+      // Update data instance if available
+      this.updateDataInstanceForEdgeModification(sourceNode, targetNode, currentLabel, newLabel);
+
       // Update edge data
       edgeData.label = newLabel;
       edgeData.relName = newLabel;
@@ -632,15 +680,71 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
+   * Get node from edge data based on source or target
+   * @param edgeData - Edge data
+   * @param position - 'source' or 'target'
+   * @returns Node data or null
+   */
+  private getNodeFromEdge(edgeData: EdgeWithMetadata, position: 'source' | 'target'): NodeWithMetadata | null {
+    if (!this.currentLayout) return null;
+    
+    const nodeIndex = typeof edgeData[position] === 'number' ? edgeData[position] : edgeData[position].index;
+    return this.currentLayout.nodes[nodeIndex] || null;
+  }
+
+  /**
+   * Update the input data instance when an edge is modified
+   * @param sourceNode - Source node of the edge
+   * @param targetNode - Target node of the edge 
+   * @param oldRelationName - Old relation name/label
+   * @param newRelationName - New relation name/label
+   */
+  private updateDataInstanceForEdgeModification(
+    sourceNode: NodeWithMetadata | null, 
+    targetNode: NodeWithMetadata | null, 
+    oldRelationName: string, 
+    newRelationName: string
+  ): void {
+    if (!this.inputDataInstance || !sourceNode || !targetNode) {
+      return;
+    }
+
+    try {
+      // Create tuple for the relation
+      const tuple: ITuple = {
+        atoms: [sourceNode.id, targetNode.id],
+        types: [sourceNode.type || 'untyped', targetNode.type || 'untyped']
+      };
+
+      // Remove old relation tuple if it exists and has a valid name
+      if (oldRelationName.trim()) {
+        this.inputDataInstance.removeRelationTuple(oldRelationName, tuple);
+        console.log(`Removed relation tuple: ${oldRelationName}(${sourceNode.id}, ${targetNode.id})`);
+      }
+
+      // Add new relation tuple if it has a valid name
+      if (newRelationName.trim()) {
+        this.inputDataInstance.addRelationTuple(newRelationName, tuple);
+        console.log(`Added relation tuple: ${newRelationName}(${sourceNode.id}, ${targetNode.id})`);
+      }
+    } catch (error) {
+      console.error('Failed to update data instance for edge modification:', error);
+    }
+  }
+
+  /**
    * Render layout using WebCola constraint solver
    * @param instanceLayout - The layout instance to render
+   * @param inputDataInstance - Optional input data instance for edge modifications
    */
-  public async renderLayout(instanceLayout: InstanceLayout): Promise<void> {
-
+  public async renderLayout(instanceLayout: InstanceLayout, inputDataInstance?: IInputDataInstance): Promise<void> {
 
     if (! isInstanceLayout(instanceLayout)) {
       throw new Error('Invalid instance layout provided. Expected an InstanceLayout instance.');
     }
+
+    // Store the input data instance reference for edge operations
+    this.inputDataInstance = inputDataInstance || null;
 
 
 

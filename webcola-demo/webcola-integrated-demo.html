@@ -317,7 +317,9 @@
                 updateStatus('Rendering graph with WebCola...', 'info');
                 
                 // Use the real InstanceLayout data with WebCola custom element
-                await graphElement.renderLayout(currentInstanceLayout);
+                // Pass the current data instance for edge operations
+                const currentDataInstance = getCurrentInstance();
+                await graphElement.renderLayout(currentInstanceLayout, currentDataInstance);
                 
                 updateStatus('Graph rendered successfully!', 'success');
             } catch (error) {
