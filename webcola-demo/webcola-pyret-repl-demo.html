@@ -320,17 +320,36 @@
                 }
                 
                 try {
+                    console.log(`🔍 Before modification - Relations:`, currentInstance.getRelations().map(r => `${r.id}(${r.tuples.length} tuples)`));
+                    
+                    // If we're renaming to the same relation ID, no need to modify data
+                    if (oldRelationId.trim() === newRelationId.trim()) {
+                        console.log('⏭️ Same relation name, no data changes needed');
+                        updateStatus(`✅ Edge label confirmed: ${newRelationId}`, 'success');
+                        return;
+                    }
+                    
                     // Remove old relation tuple if it exists and has a valid name
                     if (oldRelationId.trim()) {
-                        currentInstance.removeRelationTuple(oldRelationId, tuple);
-                        console.log(`Removed old relation tuple: ${oldRelationId}(${tuple.atoms.join(', ')})`);
+                        const oldRelation = currentInstance.getRelations().find(r => r.id === oldRelationId);
+                        if (oldRelation) {
+                            const beforeCount = oldRelation.tuples.length;
+                            currentInstance.removeRelationTuple(oldRelationId, tuple);
+                            const afterCount = oldRelation.tuples.length;
+                            console.log(`🗑️ Removed from ${oldRelationId}: ${beforeCount} → ${afterCount} tuples`);
+                        } else {
+                            console.log(`⚠️ Old relation ${oldRelationId} not found in data instance`);
+                        }
                     }
                     
                     // Add new relation tuple if it has a valid name
                     if (newRelationId.trim()) {
                         currentInstance.addRelationTuple(newRelationId, tuple);
-                        console.log(`Added new relation tuple: ${newRelationId}(${tuple.atoms.join(', ')})`);
+                        const newRelation = currentInstance.getRelations().find(r => r.id === newRelationId);
+                        console.log(`➕ Added to ${newRelationId}: ${newRelation ? newRelation.tuples.length : 0} tuples total`);
                     }
+                    
+                    console.log(`🔍 After modification - Relations:`, currentInstance.getRelations().map(r => `${r.id}(${r.tuples.length} tuples)`));
                     
                     // Update the React component state (through a global function if available)
                     if (window.updateInstanceFromEdgeEvent) {

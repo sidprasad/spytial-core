@@ -127,6 +127,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private svgGroups : any;
   private svgGroupLabels: any;
   private zoomBehavior: any;
+  private storedTransform: any;
   /**
    * Stores the starting coordinates when a node begins dragging so
    * drag end events can report both the previous and new positions.
@@ -439,6 +440,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private disableZoom(): void {
     if (this.svg && this.zoomBehavior) {
+      // Store current transform before disabling
+      this.storedTransform = d3.zoomTransform(this.svg.node());
+      // Disable zoom events but preserve the behavior
       this.svg.on('.zoom', null);
     }
   }
@@ -448,7 +452,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private enableZoom(): void {
     if (this.svg && this.zoomBehavior) {
+      // Re-enable zoom behavior
       this.svg.call(this.zoomBehavior);
+      // Restore the previous transform if we had one
+      if (this.storedTransform) {
+        this.svg.call(this.zoomBehavior.transform, this.storedTransform);
+      }
     }
   }
 
