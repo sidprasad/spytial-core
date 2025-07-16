@@ -51,16 +51,14 @@ const DEFAULT_SCALE_FACTOR = 5;
  * - Zoom/pan disable during input mode
  * - Comprehensive event system for external integration
  * 
- * State Management:
- * The component serves as the central state manager for the IInputDataInstance.
- * When atoms or relations are added/modified through edge operations, the component:
- * 1. Updates the IInputDataInstance directly
- * 2. Notifies all subscribed state change listeners
- * 3. Triggers layout regeneration callback (if set) to regenerate constraints
- * 4. Re-renders the graph with updated layout
+ * Edge Input Integration:
+ * When edges are created or modified through input mode, the component:
+ * 1. Dispatches events with edge data for external systems to handle
+ * 2. Allows external systems (React components) to manage state updates
+ * 3. Relies on external systems to trigger layout regeneration when needed
  * 
- * This ensures that layout constraints are always up-to-date with the current data
- * and that all external components (React, etc.) stay synchronized.
+ * This ensures proper separation of concerns with React components handling
+ * state management and the WebCola component focusing on visualization.
  */
 export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'undefined' ? HTMLElement : (class {} as any)) {
   private svg!: any;
@@ -142,21 +140,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   };
 
   /**
-   * Reference to the input data instance for updating data when edges are modified
-   * This component can serve as the central state manager for the data instance
+   * Reference to external state update callback for edge operations
+   * This allows external systems (React components) to handle state updates
    */
-  private inputDataInstance: IInputDataInstance | null = null;
-
-  /**
-   * State change listeners for external components to subscribe to data instance changes
-   */
-  private stateChangeListeners: Set<(instance: IInputDataInstance) => void> = new Set();
-
-  /**
-   * Layout regeneration callback for when data instance changes require layout constraints to be recalculated
-   * This allows external systems to handle the CnD spec → layout pipeline when data changes
-   */
-  private layoutRegenerationCallback: ((instance: IInputDataInstance) => Promise<void>) | null = null;
+  private externalStateUpdateCallback: ((updates: any) => void) | null = null;
 
   constructor() {
     super();
@@ -617,8 +604,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // Add edge to current layout
     this.currentLayout.links.push(newEdge);
 
-    // Update the input data instance if available
-    await this.updateDataInstanceForNewEdge(sourceNode, targetNode, label);
+    // Update external state with the new edge
+    await this.updateExternalStateForNewEdge(sourceNode, targetNode, label);
 
     // Dispatch event for external listeners
     this.dispatchEvent(new CustomEvent('edge-created', {
@@ -634,13 +621,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
-   * Update the input data instance when a new edge is created
+   * Update external state for a new edge through the external state management system
    * @param sourceNode - Source node of the edge
    * @param targetNode - Target node of the edge 
    * @param relationName - Name/label of the relation
    */
-  private async updateDataInstanceForNewEdge(sourceNode: NodeWithMetadata, targetNode: NodeWithMetadata, relationName: string): Promise<void> {
-    if (!this.inputDataInstance || !relationName.trim()) {
+  private async updateExternalStateForNewEdge(sourceNode: NodeWithMetadata, targetNode: NodeWithMetadata, relationName: string): Promise<void> {
+    if (!relationName.trim()) {
       return;
     }
 
@@ -651,15 +638,25 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         types: [sourceNode.type || 'untyped', targetNode.type || 'untyped']
       };
 
-      // Add the relation tuple to the data instance
-      this.inputDataInstance.addRelationTuple(relationName, tuple);
+      console.log(`Requesting external state update for new edge: ${relationName}(${sourceNode.id}, ${targetNode.id})`);
       
-      console.log(`Added relation tuple: ${relationName}(${sourceNode.id}, ${targetNode.id})`);
-      
-      // Notify state change for centralized state management
-      await this.notifyStateChange();
+      // Use external state update callback if available
+      if (this.externalStateUpdateCallback) {
+        this.externalStateUpdateCallback({
+          type: 'add-relation-tuple',
+          relationId: relationName,
+          tuple: tuple
+        });
+      } else {
+        // Fallback to global window functions for backward compatibility
+        if (typeof window !== 'undefined' && (window as any).addRelationViaCentralizedState) {
+          (window as any).addRelationViaCentralizedState(relationName, tuple);
+        } else {
+          console.warn('No external state update mechanism available for edge creation');
+        }
+      }
     } catch (error) {
-      console.error('Failed to update data instance for new edge:', error);
+      console.error('Failed to update external state for new edge:', error);
     }
   }
 
@@ -694,8 +691,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       const sourceNode = this.getNodeFromEdge(edgeData, 'source');
       const targetNode = this.getNodeFromEdge(edgeData, 'target');
 
-      // Update data instance if available
-      await this.updateDataInstanceForEdgeModification(sourceNode, targetNode, currentLabel, newLabel);
+      // Update external state if available
+      await this.updateExternalStateForEdgeModification(sourceNode, targetNode, currentLabel, newLabel);
 
       // Update edge data
       edgeData.label = newLabel;
@@ -729,19 +726,19 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
-   * Update the input data instance when an edge is modified
+   * Update external state for an edge modification through the external state management system
    * @param sourceNode - Source node of the edge
    * @param targetNode - Target node of the edge 
    * @param oldRelationName - Old relation name/label
    * @param newRelationName - New relation name/label
    */
-  private async updateDataInstanceForEdgeModification(
+  private async updateExternalStateForEdgeModification(
     sourceNode: NodeWithMetadata | null, 
     targetNode: NodeWithMetadata | null, 
     oldRelationName: string, 
     newRelationName: string
   ): Promise<void> {
-    if (!this.inputDataInstance || !sourceNode || !targetNode) {
+    if (!sourceNode || !targetNode) {
       return;
     }
 
@@ -752,22 +749,45 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         types: [sourceNode.type || 'untyped', targetNode.type || 'untyped']
       };
 
-      // Remove old relation tuple if it exists and has a valid name
-      if (oldRelationName.trim()) {
-        this.inputDataInstance.removeRelationTuple(oldRelationName, tuple);
-        console.log(`Removed relation tuple: ${oldRelationName}(${sourceNode.id}, ${targetNode.id})`);
-      }
+      console.log(`Requesting external state update for edge modification: ${oldRelationName} -> ${newRelationName}`);
 
-      // Add new relation tuple if it has a valid name
-      if (newRelationName.trim()) {
-        this.inputDataInstance.addRelationTuple(newRelationName, tuple);
-        console.log(`Added relation tuple: ${newRelationName}(${sourceNode.id}, ${targetNode.id})`);
-      }
+      // Use external state update callback if available
+      if (this.externalStateUpdateCallback) {
+        // Remove old relation tuple if it exists and has a valid name
+        if (oldRelationName.trim()) {
+          this.externalStateUpdateCallback({
+            type: 'remove-relation-tuple',
+            relationId: oldRelationName,
+            tuple: tuple
+          });
+        }
 
-      // Notify state change for centralized state management
-      await this.notifyStateChange();
+        // Add new relation tuple if it has a valid name
+        if (newRelationName.trim()) {
+          this.externalStateUpdateCallback({
+            type: 'add-relation-tuple',
+            relationId: newRelationName,
+            tuple: tuple
+          });
+        }
+      } else {
+        // Fallback to global window functions for backward compatibility
+        if (typeof window !== 'undefined') {
+          // Remove old relation if available
+          if (oldRelationName.trim() && (window as any).removeRelationViaCentralizedState) {
+            (window as any).removeRelationViaCentralizedState(oldRelationName, tuple);
+          }
+          
+          // Add new relation if available
+          if (newRelationName.trim() && (window as any).addRelationViaCentralizedState) {
+            (window as any).addRelationViaCentralizedState(newRelationName, tuple);
+          }
+        } else {
+          console.warn('No external state update mechanism available for edge modification');
+        }
+      }
     } catch (error) {
-      console.error('Failed to update data instance for edge modification:', error);
+      console.error('Failed to update external state for edge modification:', error);
     }
   }
 
@@ -776,18 +796,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * @param instanceLayout - The layout instance to render
    * @param inputDataInstance - Optional input data instance for edge modifications
    */
-  public async renderLayout(instanceLayout: InstanceLayout, inputDataInstance?: IInputDataInstance): Promise<void> {
+  public async renderLayout(instanceLayout: InstanceLayout): Promise<void> {
 
     if (! isInstanceLayout(instanceLayout)) {
       throw new Error('Invalid instance layout provided. Expected an InstanceLayout instance.');
     }
-
-    // Store the input data instance reference for edge operations using centralized state management
-    if (inputDataInstance) {
-      await this.setDataInstance(inputDataInstance);
-    }
-
-
 
 
 
@@ -2520,213 +2533,24 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   // =========================================
-  // CENTRALIZED STATE MANAGEMENT API
+  // EXTERNAL STATE INTEGRATION API
   // =========================================
 
   /**
-   * Set the data instance that this component will manage as the central state.
-   * This makes the component the single source of truth for data instance state.
+   * Set a callback for external state updates.
+   * This allows React components or other external systems to handle state management.
    * 
-   * @param instance - The input data instance to manage
+   * @param callback - Function to call when edge operations need state updates
    */
-  public async setDataInstance(instance: IInputDataInstance): Promise<void> {
-    this.inputDataInstance = instance;
-    await this.notifyStateChange();
+  public setExternalStateUpdateCallback(callback: (updates: any) => void): void {
+    this.externalStateUpdateCallback = callback;
   }
 
   /**
-   * Get the current data instance managed by this component.
-   * 
-   * @returns The current input data instance or null if none is set
+   * Remove the external state update callback.
    */
-  public getDataInstance(): IInputDataInstance | null {
-    return this.inputDataInstance;
-  }
-
-  /**
-   * Add an atom to the data instance through this component as the central state manager.
-   * This ensures all atom additions go through the centralized state management system.
-   * 
-   * @param atom - The atom to add
-   * @throws Error if no data instance is set
-   */
-  public async addAtom(atom: IAtom): Promise<void> {
-    if (!this.inputDataInstance) {
-      throw new Error('No data instance set. Call setDataInstance() first.');
-    }
-    
-    this.inputDataInstance.addAtom(atom);
-    await this.notifyStateChange();
-    
-    // Dispatch event for external listeners
-    this.dispatchEvent(new CustomEvent('atom-added', {
-      detail: { atom },
-      bubbles: true
-    }));
-  }
-
-  /**
-   * Remove an atom from the data instance through this component as the central state manager.
-   * 
-   * @param atomId - The ID of the atom to remove
-   * @throws Error if no data instance is set
-   */
-  public async removeAtom(atomId: string): Promise<void> {
-    if (!this.inputDataInstance) {
-      throw new Error('No data instance set. Call setDataInstance() first.');
-    }
-    
-    this.inputDataInstance.removeAtom(atomId);
-    await this.notifyStateChange();
-    
-    // Dispatch event for external listeners
-    this.dispatchEvent(new CustomEvent('atom-removed', {
-      detail: { atomId },
-      bubbles: true
-    }));
-  }
-
-  /**
-   * Add a relation tuple to the data instance through this component as the central state manager.
-   * 
-   * @param relationId - The ID of the relation
-   * @param tuple - The tuple to add
-   * @throws Error if no data instance is set
-   */
-  public async addRelationTuple(relationId: string, tuple: ITuple): Promise<void> {
-    if (!this.inputDataInstance) {
-      throw new Error('No data instance set. Call setDataInstance() first.');
-    }
-    
-    this.inputDataInstance.addRelationTuple(relationId, tuple);
-    await this.notifyStateChange();
-    
-    // Dispatch event for external listeners
-    this.dispatchEvent(new CustomEvent('relation-tuple-added', {
-      detail: { relationId, tuple },
-      bubbles: true
-    }));
-  }
-
-  /**
-   * Remove a relation tuple from the data instance through this component as the central state manager.
-   * 
-   * @param relationId - The ID of the relation
-   * @param tuple - The tuple to remove
-   * @throws Error if no data instance is set
-   */
-  public async removeRelationTuple(relationId: string, tuple: ITuple): Promise<void> {
-    if (!this.inputDataInstance) {
-      throw new Error('No data instance set. Call setDataInstance() first.');
-    }
-    
-    this.inputDataInstance.removeRelationTuple(relationId, tuple);
-    await this.notifyStateChange();
-    
-    // Dispatch event for external listeners
-    this.dispatchEvent(new CustomEvent('relation-tuple-removed', {
-      detail: { relationId, tuple },
-      bubbles: true
-    }));
-  }
-
-  /**
-   * Subscribe to state changes from this component.
-   * External components can use this to stay synchronized with the centralized state.
-   * 
-   * @param listener - Function to call when the data instance changes
-   */
-  public addStateChangeListener(listener: (instance: IInputDataInstance) => void): void {
-    this.stateChangeListeners.add(listener);
-  }
-
-  /**
-   * Unsubscribe from state changes.
-   * 
-   * @param listener - The listener function to remove
-   */
-  public removeStateChangeListener(listener: (instance: IInputDataInstance) => void): void {
-    this.stateChangeListeners.delete(listener);
-  }
-
-  /**
-   * Set a callback to handle layout regeneration when data instance changes.
-   * This allows external systems to handle the CnD spec → layout pipeline when data changes.
-   * 
-   * @param callback - Function that will regenerate and re-render the layout when data changes
-   */
-  public setLayoutRegenerationCallback(callback: (instance: IInputDataInstance) => Promise<void>): void {
-    this.layoutRegenerationCallback = callback;
-  }
-
-  /**
-   * Remove the layout regeneration callback.
-   */
-  public removeLayoutRegenerationCallback(): void {
-    this.layoutRegenerationCallback = null;
-  }
-
-  /**
-   * Notify all subscribed components that the state has changed.
-   * This provides synchronous updates to all components using the centralized state.
-   * Also triggers layout regeneration if a callback is registered.
-   */
-  private async notifyStateChange(): Promise<void> {
-    if (this.inputDataInstance) {
-      // Notify all registered listeners synchronously
-      this.stateChangeListeners.forEach(listener => {
-        try {
-          listener(this.inputDataInstance!);
-        } catch (error) {
-          console.error('Error in state change listener:', error);
-        }
-      });
-      
-      // Also dispatch a general state change event
-      this.dispatchEvent(new CustomEvent('data-instance-changed', {
-        detail: { instance: this.inputDataInstance },
-        bubbles: true
-      }));
-
-      // Trigger layout regeneration if callback is set
-      // This ensures that layout constraints are recalculated when data changes
-      if (this.layoutRegenerationCallback) {
-        try {
-          console.log('🔄 Triggering layout regeneration due to data instance change...');
-          await this.layoutRegenerationCallback(this.inputDataInstance);
-          console.log('✅ Layout regeneration completed');
-        } catch (error) {
-          console.error('❌ Layout regeneration failed:', error);
-          // Dispatch error event for external handling
-          this.dispatchEvent(new CustomEvent('layout-regeneration-error', {
-            detail: { error: (error as Error).message, instance: this.inputDataInstance },
-            bubbles: true
-          }));
-        }
-      }
-    }
-  }
-
-  /**
-   * Get current statistics about the managed data instance.
-   * Useful for debugging and monitoring state.
-   * 
-   * @returns Object with atom count, relation count, and tuple count
-   */
-  public getDataInstanceStats(): { atoms: number; relations: number; tuples: number } | null {
-    if (!this.inputDataInstance) {
-      return null;
-    }
-    
-    const atoms = this.inputDataInstance.getAtoms();
-    const relations = this.inputDataInstance.getRelations();
-    const tupleCount = relations.reduce((sum, rel) => sum + rel.tuples.length, 0);
-    
-    return {
-      atoms: atoms.length,
-      relations: relations.length,
-      tuples: tupleCount
-    };
+  public removeExternalStateUpdateCallback(): void {
+    this.externalStateUpdateCallback = null;
   }
 }
 

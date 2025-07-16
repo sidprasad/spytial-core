@@ -433,13 +433,13 @@
             // For now, just log - can be extended later
         }
 
-        // Initialize edge input mode functionality and centralized state management
+        // Initialize edge input mode functionality with React-based state management
         function initializeEdgeInputMode() {
             const statusElement = document.getElementById('mode-status');
             const graphContainer = document.getElementById('graph-container');
             
-            // Set up centralized state management
-            initializeCentralizedStateManagement(graphContainer);
+            // Set up React-based state management for edge operations
+            initializeReactBasedStateManagement(graphContainer);
             
             // Listen for input mode events
             graphContainer.addEventListener('input-mode-activated', () => {
@@ -467,122 +467,48 @@
         }
 
         /**
-         * Initialize centralized state management for the graph component
-         * This makes the graph component the single source of truth for data instance state
+         * Initialize React-based state management for edge operations
+         * This makes React components the single source of truth for data instance state
          */
-        function initializeCentralizedStateManagement(graphContainer) {
+        function initializeReactBasedStateManagement(graphContainer) {
             // Get reference to the graph web component
             const graphElement = graphContainer.querySelector('webcola-cnd-graph');
             if (!graphElement) {
-                console.warn('Graph element not found for centralized state management');
+                console.warn('Graph element not found for React-based state management');
                 return;
             }
 
-            // Set up state change listeners to keep other components synchronized
-            graphElement.addStateChangeListener((dataInstance) => {
-                console.log('🔄 Centralized state change detected:', {
-                    atoms: dataInstance.getAtoms().length,
-                    relations: dataInstance.getRelations().length,
-                    tuples: dataInstance.getRelations().reduce((sum, rel) => sum + rel.tuples.length, 0)
-                });
+            // Set up external state update callback for edge operations
+            graphElement.setExternalStateUpdateCallback((updates) => {
+                console.log('🔄 Handling state update request from WebCola component:', updates);
                 
-                // Update global reference so other components can access the latest state
-                currentInstance = dataInstance;
-                window.currentInstance = dataInstance;
-                
-                // Notify React components about state changes if they exist
-                if (window.notifyReactStateChange) {
-                    window.notifyReactStateChange(dataInstance);
-                }
-            });
-
-            // Set up layout regeneration callback to handle constraint regeneration when data changes
-            graphElement.setLayoutRegenerationCallback(async (dataInstance) => {
-                console.log('🔄 Layout regeneration triggered due to data instance change');
-                updateStatus('Regenerating layout due to data changes...', 'info');
-                
-                try {
-                    // Store current data instance for regeneration
-                    currentInstance = dataInstance;
-                    window.currentInstance = dataInstance;
-                    
-                    // Regenerate the layout from the updated data instance
-                    await loadInstanceData();
-                    
-                    // Re-render with the new layout if successful
-                    if (currentInstanceLayout) {
-                        updateStatus('Re-rendering graph with updated constraints...', 'info');
-                        await renderGraph();
-                        updateStatus('Layout regeneration complete!', 'success');
-                    } else {
-                        throw new Error('Failed to regenerate layout from updated data instance');
+                // Route state updates to React component handler
+                if (typeof window !== 'undefined' && window.handleEdgeStateUpdate) {
+                    window.handleEdgeStateUpdate(updates);
+                } else {
+                    console.warn('React state handler not available, using fallback');
+                    // Fallback to global state management if React isn't ready
+                    if (updates.type === 'add-relation-tuple' && currentInstance) {
+                        currentInstance.addRelationTuple(updates.relationId, updates.tuple);
+                        updateFromBuilder(); // Trigger layout regeneration
+                    } else if (updates.type === 'remove-relation-tuple' && currentInstance) {
+                        currentInstance.removeRelationTuple(updates.relationId, updates.tuple);
+                        updateFromBuilder(); // Trigger layout regeneration
                     }
-                } catch (error) {
-                    console.error('Layout regeneration failed:', error);
-                    updateStatus(`Layout regeneration failed: ${error.message}`, 'error');
-                    throw error; // Re-throw so the component can handle it
                 }
             });
 
-            // Listen for specific data change events for debugging/monitoring
-            graphElement.addEventListener('atom-added', (event) => {
-                console.log('➕ Atom added via centralized management:', event.detail.atom);
-                updateStatus(`Atom added: ${event.detail.atom.label} (${event.detail.atom.type})`, 'success');
-            });
-
-            graphElement.addEventListener('atom-removed', (event) => {
-                console.log('➖ Atom removed via centralized management:', event.detail.atomId);
-                updateStatus(`Atom removed: ${event.detail.atomId}`, 'info');
-            });
-
-            graphElement.addEventListener('relation-tuple-added', (event) => {
-                console.log('🔗 Relation tuple added via centralized management:', event.detail);
-                updateStatus(`Relation added: ${event.detail.relationId}(${event.detail.tuple.atoms.join(', ')})`, 'success');
-            });
-
-            graphElement.addEventListener('relation-tuple-removed', (event) => {
-                console.log('🔗 Relation tuple removed via centralized management:', event.detail);
-                updateStatus(`Relation removed: ${event.detail.relationId}(${event.detail.tuple.atoms.join(', ')})`, 'info');
-            });
-
-            // Expose centralized state management functions globally for external use
-            window.addAtomViaCentralizedState = (atom) => {
-                try {
-                    graphElement.addAtom(atom);
-                    return true;
-                } catch (error) {
-                    console.error('Failed to add atom via centralized state:', error);
-                    updateStatus(`Failed to add atom: ${error.message}`, 'error');
-                    return false;
-                }
-            };
-
-            window.addRelationViaCentralizedState = (relationId, tuple) => {
-                try {
-                    graphElement.addRelationTuple(relationId, tuple);
-                    return true;
-                } catch (error) {
-                    console.error('Failed to add relation via centralized state:', error);
-                    updateStatus(`Failed to add relation: ${error.message}`, 'error');
-                    return false;
-                }
-            };
-
-            window.getCentralizedDataInstanceStats = () => {
-                return graphElement.getDataInstanceStats();
-            };
-
-            console.log('✅ Centralized state management initialized');
+            console.log('✅ React-based state management initialized for edge operations');
             
             // Update status indicator
             const stateManagementStatus = document.getElementById('state-management-status');
             if (stateManagementStatus) {
-                stateManagementStatus.textContent = 'Active';
+                stateManagementStatus.textContent = 'React-Based';
                 stateManagementStatus.style.color = '#4caf50';
                 stateManagementStatus.style.fontWeight = 'bold';
             }
             
-            updateStatus('Centralized state management active', 'success');
+            updateStatus('React-based state management active for edge operations', 'success');
         }
 
         // Initialize when page loads
