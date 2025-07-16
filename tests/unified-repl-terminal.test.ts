@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { JSONDataInstance } from '../src/data-instance/json-data-instance';
 import { ReplInterface, TerminalConfig } from '../src/components/ReplInterface/ReplInterface';
-import { AtomCommandParser, RelationCommandParser } from '../src/components/ReplInterface/parsers/CoreParsers';
+import { AtomCommandParser, RelationCommandParser, DotNotationRelationParser, BatchCommandParser } from '../src/components/ReplInterface/parsers/CoreParsers';
 import { PyretListParser, InfoCommandParser } from '../src/components/ReplInterface/parsers/ExtensibleParsers';
 
 describe('Unified REPL Terminal', () => {
@@ -20,23 +20,27 @@ describe('Unified REPL Terminal', () => {
       title: 'Unified Terminal',
       description: 'Supports atoms, relations, and extensions in one terminal',
       parsers: [
-        new AtomCommandParser(), 
-        new RelationCommandParser(), 
-        new PyretListParser(), 
-        new InfoCommandParser()
-      ],
-      placeholder: 'Examples:\nadd Alice:Person\nadd friends(alice, bob)\nadd [list: 1,2,3,4]:numbers\nhelp'
+        new PyretListParser(),            // Priority 120 - most specific pattern
+        new BatchCommandParser(),         // Priority 115 - multi-command patterns  
+        new DotNotationRelationParser(),  // Priority 115 - dot notation relations
+        new RelationCommandParser(),      // Priority 110 - constructor notation relations
+        new AtomCommandParser(),          // Priority 100 - standard priority
+        new InfoCommandParser()           // Priority 50 - fallback utility commands
+      ].sort((a, b) => b.getPriority() - a.getPriority()), // Sort by priority descending
+      placeholder: 'Examples:\nAlice:Person\nalice.friend=bob\n[list: 1,2,3,4]:numbers\nhelp\nreify'
     };
   });
 
   it('should have all required parsers in unified terminal', () => {
-    expect(unifiedTerminal.parsers).toHaveLength(4);
+    expect(unifiedTerminal.parsers).toHaveLength(6);
     
     const parserTypes = unifiedTerminal.parsers.map(p => p.constructor.name);
     expect(parserTypes).toContain('AtomCommandParser');
     expect(parserTypes).toContain('RelationCommandParser');
+    expect(parserTypes).toContain('DotNotationRelationParser');
     expect(parserTypes).toContain('PyretListParser');
     expect(parserTypes).toContain('InfoCommandParser');
+    expect(parserTypes).toContain('BatchCommandParser');
   });
 
   it('should handle atom commands in unified terminal', () => {
@@ -92,6 +96,35 @@ describe('Unified REPL Terminal', () => {
     expect(result.action).toBe('add');
     // PyretListParser creates additional atoms, so we don't test exact count here
     expect(instance.getAtoms().length).toBeGreaterThan(0);
+  });
+
+  it('should handle dot notation relations in unified terminal', () => {
+    // First add some atoms using implicit add
+    const atomParser = unifiedTerminal.parsers.find(p => p instanceof AtomCommandParser)!;
+    atomParser.execute('alice=Alice:Person', instance);
+    atomParser.execute('bob=Bob:Person', instance);
+    
+    const dotRelParser = unifiedTerminal.parsers.find(p => p instanceof DotNotationRelationParser)!;
+    
+    expect(dotRelParser.canHandle('alice.friend=bob')).toBe(true);
+    const result = dotRelParser.execute('alice.friend=bob', instance);
+    
+    expect(result.success).toBe(true);
+    expect(result.action).toBe('add');
+    expect(instance.getRelations()).toHaveLength(1);
+    expect(instance.getRelations()[0].name).toBe('friend');
+    expect(instance.getRelations()[0].tuples[0].atoms).toEqual(['alice', 'bob']);
+  });
+
+  it('should handle reify command in unified terminal', () => {
+    const infoParser = unifiedTerminal.parsers.find(p => p instanceof InfoCommandParser)!;
+    
+    expect(infoParser.canHandle('reify')).toBe(true);
+    const result = infoParser.execute('reify', instance);
+    
+    expect(result.success).toBe(true);
+    expect(result.action).toBe('info');
+    expect(result.message).toContain('Data Instance Structure');
   });
 
   it('should auto-detect command types correctly', () => {
