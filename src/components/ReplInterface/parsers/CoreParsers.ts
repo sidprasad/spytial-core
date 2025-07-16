@@ -52,35 +52,73 @@ export class AtomCommandParser implements ICommandParser {
   canHandle(command: string): boolean {
     const trimmed = command.trim();
     
-    // More principled detection: Use specific patterns for atom commands
-    if (!trimmed.startsWith('add ') && !trimmed.startsWith('remove ')) {
+    // Handle explicit add/remove commands
+    if (trimmed.startsWith('add ') || trimmed.startsWith('remove ')) {
+      const args = trimmed.substring(trimmed.indexOf(' ') + 1);
+      
+      // Exclude Pyret list commands (they start with [list:)
+      if (args.startsWith('[list:')) {
+        return false;
+      }
+      
+      // Exclude relation commands (they have parentheses or dot notation)
+      if (args.includes('(') && args.includes(')')) {
+        return false;
+      }
+      
+      if (args.includes('.') && args.includes('=')) {
+        return false;
+      }
+      
+      // Pattern 1: add/remove Label:Type
+      if (/^[^:]+:.+$/.test(args) && !args.includes('->')) {
+        return true;
+      }
+      
+      // Pattern 2: add/remove id=Label:Type 
+      if (/^[^=]+=.+:.+$/.test(args) && !args.includes('->')) {
+        return true;
+      }
+      
+      // Pattern 3: remove by ID only (single word, no : or -> or () or .)
+      if (trimmed.startsWith('remove ') && /^[^\s:->().]+$/.test(args)) {
+        return true;
+      }
+      
       return false;
     }
     
-    const args = trimmed.substring(trimmed.indexOf(' ') + 1);
+    // Handle implicit "add" - commands without add/remove prefix
+    // These should be atom commands by default unless they look like other command types
+    
+    // Exclude utility commands
+    const utilityCommands = ['help', 'info', 'status', 'list', 'clear', 'reify'];
+    if (utilityCommands.includes(trimmed.toLowerCase())) {
+      return false;
+    }
     
     // Exclude Pyret list commands (they start with [list:)
-    if (args.startsWith('[list:')) {
+    if (trimmed.startsWith('[list:')) {
       return false;
     }
     
-    // Exclude relation commands (they have parentheses)
-    if (args.includes('(') && args.includes(')')) {
+    // Exclude dot notation relation commands (x.relation=y)
+    if (trimmed.includes('.') && trimmed.includes('=')) {
       return false;
     }
     
-    // Pattern 1: add/remove Label:Type
-    if (/^[^:]+:.+$/.test(args) && !args.includes('->')) {
+    // Exclude constructor notation relation commands (name(x,y))
+    if (trimmed.includes('(') && trimmed.includes(')')) {
+      return false;
+    }
+    
+    // Pattern 1: Label:Type (implicit add)
+    if (/^[^:]+:.+$/.test(trimmed) && !trimmed.includes('->')) {
       return true;
     }
     
-    // Pattern 2: add/remove id=Label:Type 
-    if (/^[^=]+=.+:.+$/.test(args) && !args.includes('->')) {
-      return true;
-    }
-    
-    // Pattern 3: remove by ID only (single word, no : or -> or ())
-    if (trimmed.startsWith('remove ') && /^[^\s:->()]+$/.test(args)) {
+    // Pattern 2: id=Label:Type (implicit add)
+    if (/^[^=]+=.+:.+$/.test(trimmed) && !trimmed.includes('->')) {
       return true;
     }
     
@@ -93,6 +131,8 @@ export class AtomCommandParser implements ICommandParser {
   
   getCommandPatterns(): string[] {
     return [
+      'Label:Type',
+      'id=Label:Type', 
       'add Label:Type',
       'add id=Label:Type', 
       'remove Label:Type',
@@ -103,16 +143,17 @@ export class AtomCommandParser implements ICommandParser {
   execute(command: string, instance: IInputDataInstance): CommandResult {
     const trimmed = command.trim();
     
+    // Handle explicit add/remove commands
     if (trimmed.startsWith('add ')) {
       return this.handleAdd(trimmed.substring(4), instance);
     } else if (trimmed.startsWith('remove ')) {
       return this.handleRemove(trimmed.substring(7), instance);
     }
     
-    return {
-      success: false,
-      message: 'Unknown atom command'
-    };
+    // Handle implicit "add" commands
+    else {
+      return this.handleAdd(trimmed, instance);
+    }
   }
 
   private handleAdd(args: string, instance: IInputDataInstance): CommandResult {
@@ -148,18 +189,14 @@ export class AtomCommandParser implements ICommandParser {
 
       instance.addAtom(atom);
       
-      // Show different formats based on whether explicit ID was provided and if ID differs from label
+      // Show ID on the left for easy referencing
       let message: string;
       if (explicitId?.trim()) {
-        // Explicit ID provided: show more detailed info
-        const idLabelInfo = explicitId.trim() !== atomLabel ? 
-          ` (ID: ${atomId}, Label: ${atomLabel})` : 
-          ` (ID: ${atomId})`;
-        message = `Added atom: ${atomLabel}:${atomType}${idLabelInfo}`;
+        // Explicit ID provided: show ID prominently on the left
+        message = `[${atomId}] Added atom: ${atomLabel}:${atomType}`;
       } else {
-        // Generated ID: show standard format but note when ID differs from label
-        const idNote = atomId !== atomLabel ? ` (generated ID: ${atomId})` : '';
-        message = `Added atom: ${atomLabel}:${atomType}${idNote}`;
+        // Generated ID: show ID prominently on the left
+        message = `[${atomId}] Added atom: ${atomLabel}:${atomType}`;
       }
       
       return {
@@ -203,13 +240,12 @@ export class AtomCommandParser implements ICommandParser {
 
       instance.removeAtom(atomToRemove.id);
       
-      // Show ID vs label info in removal message, keeping similar format
-      const baseMessage = `${atomToRemove.label}:${atomToRemove.type}`;
-      const idNote = atomToRemove.id !== atomToRemove.label ? ` (ID was: ${atomToRemove.id})` : '';
+      // Show ID prominently on the left for easy referencing
+      const message = `[${atomToRemove.id}] Removed atom: ${atomToRemove.label}:${atomToRemove.type}`;
       
       return {
         success: true,
-        message: `Removed atom: ${baseMessage}${idNote}`,
+        message,
         action: 'remove'
       };
     } catch (error) {
@@ -241,17 +277,21 @@ export class AtomCommandParser implements ICommandParser {
 
   getHelp(): string[] {
     return [
-      'Atom Commands:',
-      '  add Label:Type           - Add atom with generated ID',
-      '  add id=Label:Type        - Add atom with explicit ID',
-      '  remove ID                - Remove atom by ID',
-      '  remove Label:Type        - Remove atom by label and type',
+      'Atom Commands (implicit "add"):',
+      '  Label:Type                   - Add atom with generated ID',
+      '  id=Label:Type                - Add atom with explicit ID',
+      '  add Label:Type               - Explicit add atom with generated ID',
+      '  add id=Label:Type            - Explicit add atom with explicit ID',
+      '  remove ID                    - Remove atom by ID',
+      '  remove Label:Type            - Remove atom by label and type',
       '',
       'Examples:',
-      '  add Alice:Person',
-      '  add p1=Alice:Person',
-      '  remove p1',
-      '  remove Alice:Person'
+      '  Alice:Person                 - Creates [Alice] Alice:Person',
+      '  p1=Alice:Person              - Creates [p1] Alice:Person', 
+      '  remove p1                    - Remove by ID',
+      '  remove Alice:Person          - Remove by label and type',
+      '',
+      'Note: IDs are shown in [brackets] for easy referencing'
     ];
   }
 }
@@ -687,6 +727,225 @@ export class BatchCommandParser implements ICommandParser {
       '  add Alice:Person; remove Bob:Person',
       '',
       'Note: Semicolon-separated commands support any mix of atom/relation commands'
+    ];
+  }
+}
+
+/**
+ * Parser for dot notation relation commands (Pyret style)
+ * Supports:
+ * - source.relation=target (binary relations only)
+ * - remove source.relation=target
+ * - remove relation (removes entire relation)
+ */
+export class DotNotationRelationParser implements ICommandParser {
+  canHandle(command: string): boolean {
+    const trimmed = command.trim();
+    
+    // Handle explicit add/remove commands with dot notation
+    if (trimmed.startsWith('add ') || trimmed.startsWith('remove ')) {
+      const args = trimmed.substring(trimmed.indexOf(' ') + 1);
+      
+      // Pattern: source.relation=target
+      if (args.includes('.') && args.includes('=')) {
+        return /^[^.]+\.[^=]+=.+$/.test(args);
+      }
+      
+      // For remove, also allow just relation name
+      if (trimmed.startsWith('remove ') && /^[^\s().]+$/.test(args) && !args.includes(':')) {
+        return true;
+      }
+      
+      return false;
+    }
+    
+    // Handle implicit "add" with dot notation
+    if (trimmed.includes('.') && trimmed.includes('=')) {
+      return /^[^.]+\.[^=]+=.+$/.test(trimmed);
+    }
+    
+    return false;
+  }
+  
+  getPriority(): number {
+    return 115; // Higher priority than standard relation parser due to specific dot notation
+  }
+  
+  getCommandPatterns(): string[] {
+    return [
+      'source.relation=target',
+      'add source.relation=target',
+      'remove source.relation=target',
+      'remove relation'
+    ];
+  }
+
+  execute(command: string, instance: IInputDataInstance): CommandResult {
+    const trimmed = command.trim();
+    
+    // Handle explicit add/remove commands
+    if (trimmed.startsWith('add ')) {
+      return this.handleAdd(trimmed.substring(4), instance);
+    } else if (trimmed.startsWith('remove ')) {
+      return this.handleRemove(trimmed.substring(7), instance);
+    }
+    
+    // Handle implicit "add" commands
+    else {
+      return this.handleAdd(trimmed, instance);
+    }
+  }
+
+  private handleAdd(args: string, instance: IInputDataInstance): CommandResult {
+    try {
+      // Parse: source.relation=target
+      const match = args.match(/^([^.]+)\.([^=]+)=(.+)$/);
+      if (!match) {
+        return {
+          success: false,
+          message: 'Invalid syntax. Use: source.relation=target'
+        };
+      }
+
+      const sourceId = match[1].trim();
+      const relationName = match[2].trim();
+      const targetId = match[3].trim();
+      
+      if (!sourceId || !relationName || !targetId) {
+        return {
+          success: false,
+          message: 'Source, relation, and target cannot be empty'
+        };
+      }
+
+      // Validate atoms exist
+      const existingAtoms = instance.getAtoms();
+      const existingAtomIds = new Set(existingAtoms.map(a => a.id));
+      
+      if (!existingAtomIds.has(sourceId)) {
+        return {
+          success: false,
+          message: `Source atom '${sourceId}' does not exist`
+        };
+      }
+      
+      if (!existingAtomIds.has(targetId)) {
+        return {
+          success: false,
+          message: `Target atom '${targetId}' does not exist`
+        };
+      }
+
+      // Create tuple for binary relation
+      const sourceAtom = existingAtoms.find(a => a.id === sourceId)!;
+      const targetAtom = existingAtoms.find(a => a.id === targetId)!;
+      
+      const tuple: ITuple = {
+        atoms: [sourceId, targetId],
+        types: [sourceAtom.type, targetAtom.type]
+      };
+
+      instance.addRelationTuple(relationName, tuple);
+      
+      return {
+        success: true,
+        message: `[${sourceId}.${relationName}=${targetId}] Added relation: ${relationName}(${sourceId}, ${targetId})`,
+        action: 'add'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to add relation'
+      };
+    }
+  }
+
+  private handleRemove(args: string, instance: IInputDataInstance): CommandResult {
+    try {
+      // Parse: source.relation=target or just relation name
+      const match = args.match(/^([^.]+)\.([^=]+)=(.+)$/);
+      
+      if (!match) {
+        // Remove entire relation
+        const relationName = args.trim();
+        const relation = instance.getRelations().find(r => r.name === relationName);
+        
+        if (!relation) {
+          return {
+            success: false,
+            message: `Relation '${relationName}' not found`
+          };
+        }
+
+        // Remove all tuples
+        const tupleCount = relation.tuples.length;
+        relation.tuples.slice().forEach(tuple => {
+          instance.removeRelationTuple(relationName, tuple);
+        });
+        
+        return {
+          success: true,
+          message: `[${relationName}] Removed relation '${relationName}' (${tupleCount} tuples)`,
+          action: 'remove'
+        };
+      }
+
+      const sourceId = match[1].trim();
+      const relationName = match[2].trim();
+      const targetId = match[3].trim();
+      
+      // Find matching tuple
+      const relation = instance.getRelations().find(r => r.name === relationName);
+      if (!relation) {
+        return {
+          success: false,
+          message: `Relation '${relationName}' not found`
+        };
+      }
+
+      const tuple = relation.tuples.find(t => 
+        t.atoms.length === 2 &&
+        t.atoms[0] === sourceId &&
+        t.atoms[1] === targetId
+      );
+
+      if (!tuple) {
+        return {
+          success: false,
+          message: `Tuple not found: ${sourceId}.${relationName}=${targetId}`
+        };
+      }
+
+      instance.removeRelationTuple(relationName, tuple);
+      
+      return {
+        success: true,
+        message: `[${sourceId}.${relationName}=${targetId}] Removed tuple: ${relationName}(${sourceId}, ${targetId})`,
+        action: 'remove'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to remove relation'
+      };
+    }
+  }
+
+  getHelp(): string[] {
+    return [
+      'Dot Notation Relation Commands (implicit "add"):',
+      '  source.relation=target              - Add binary relation',
+      '  add source.relation=target          - Explicit add binary relation',
+      '  remove source.relation=target       - Remove specific tuple',
+      '  remove relation                     - Remove entire relation',
+      '',
+      'Examples:',
+      '  alice.friend=bob                    - Creates friend(alice, bob)',
+      '  alice.knows=charlie                 - Creates knows(alice, charlie)',
+      '  remove alice.friend=bob             - Remove specific tuple',
+      '  remove friend                       - Remove entire friend relation',
+      '',
+      'Note: Atoms must exist before creating relations'
     ];
   }
 }

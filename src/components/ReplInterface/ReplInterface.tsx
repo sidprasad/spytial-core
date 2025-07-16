@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { IInputDataInstance } from '../../data-instance/interfaces';
-import { ICommandParser, CommandResult, AtomCommandParser, RelationCommandParser, BatchCommandParser } from './parsers/CoreParsers';
+import { ICommandParser, CommandResult, AtomCommandParser, RelationCommandParser, DotNotationRelationParser, BatchCommandParser } from './parsers/CoreParsers';
 import { PyretListParser, InfoCommandParser } from './parsers/ExtensibleParsers';
 import './ReplInterface.css';
 
@@ -61,13 +61,14 @@ const DEFAULT_TERMINALS: TerminalConfig[] = [
     title: '',
     description: 'Supports atoms, relations, and extensions in one terminal',
     parsers: [
-      new PyretListParser(),     // Priority 120 - most specific pattern
-      new BatchCommandParser(),  // Priority 115 - multi-command patterns  
-      new RelationCommandParser(), // Priority 110 - specific -> pattern
-      new AtomCommandParser(),   // Priority 100 - standard priority
-      new InfoCommandParser()    // Priority 50 - fallback utility commands
+      new PyretListParser(),            // Priority 120 - most specific pattern
+      new BatchCommandParser(),         // Priority 115 - multi-command patterns  
+      new DotNotationRelationParser(),  // Priority 115 - dot notation relations
+      new RelationCommandParser(),      // Priority 110 - constructor notation relations
+      new AtomCommandParser(),          // Priority 100 - standard priority
+      new InfoCommandParser()           // Priority 50 - fallback utility commands
     ].sort((a, b) => b.getPriority() - a.getPriority()), // Sort by priority descending
-    placeholder: 'Examples:\nadd Alice:Person\nadd Alice:Person, Bob:Person, Charlie:Person\nadd Alice:Person; add Bob:Person; add friends(Alice, Bob)\nadd friends(alice, bob)\nadd [list: 1,2,3,4]:numbers\nhelp'
+    placeholder: 'Examples:\nAlice:Person\nalice.friend=bob\n[list: 1,2,3,4]:numbers\nhelp\nreify'
   }
 ];
 

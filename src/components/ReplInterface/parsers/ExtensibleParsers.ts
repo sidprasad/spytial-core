@@ -1,5 +1,6 @@
 import { ICommandParser, CommandResult } from './CoreParsers';
 import { IAtom, ITuple, IInputDataInstance } from '../../../data-instance/interfaces';
+import { PyretDataInstance } from '../../../data-instance/pyret/pyret-data-instance';
 
 /**
  * Parser for Pyret-style list commands
@@ -298,7 +299,7 @@ export class PyretListParser implements ICommandParser {
 export class InfoCommandParser implements ICommandParser {
   canHandle(command: string): boolean {
     const trimmed = command.trim().toLowerCase();
-    const utilityCommands = ['help', 'info', 'status', 'list', 'clear'];
+    const utilityCommands = ['help', 'info', 'status', 'list', 'clear', 'reify'];
     return utilityCommands.includes(trimmed);
   }
   
@@ -312,7 +313,8 @@ export class InfoCommandParser implements ICommandParser {
       'info', 
       'status',
       'list',
-      'clear'
+      'clear',
+      'reify'
     ];
   }
 
@@ -336,6 +338,9 @@ export class InfoCommandParser implements ICommandParser {
         
       case 'clear':
         return this.clearInstance(instance);
+        
+      case 'reify':
+        return this.reifyInstance(instance);
         
       default:
         return {
@@ -396,11 +401,8 @@ export class InfoCommandParser implements ICommandParser {
     if (atoms.length > 0) {
       message += 'Atoms:\n';
       atoms.forEach(atom => {
-        // Show ID and label separately when they differ
-        const idLabelDisplay = atom.id !== atom.label ? 
-          `ID: ${atom.id}, Label: ${atom.label}` : 
-          atom.id;
-        message += `  ${atom.type} (${idLabelDisplay})\n`;
+        // Always show ID prominently on the left for easy referencing
+        message += `  [${atom.id}] ${atom.label}:${atom.type}\n`;
       });
       message += '\n';
     }
@@ -445,6 +447,55 @@ export class InfoCommandParser implements ICommandParser {
     }
   }
 
+  private reifyInstance(instance: IInputDataInstance): CommandResult {
+    try {
+      // Check if this is a PyretDataInstance with reify capability
+      if (instance instanceof PyretDataInstance) {
+        const reifiedCode = instance.reify();
+        return {
+          success: true,
+          message: `Pyret Constructor Notation:\n\n${reifiedCode}`,
+          action: 'info'
+        };
+      } else {
+        // For other data instances, provide a generic representation
+        const atoms = instance.getAtoms();
+        const relations = instance.getRelations();
+        
+        let result = 'Data Instance Structure:\n\n';
+        
+        if (atoms.length > 0) {
+          result += 'Atoms:\n';
+          atoms.forEach(atom => {
+            result += `  [${atom.id}] ${atom.label}:${atom.type}\n`;
+          });
+          result += '\n';
+        }
+        
+        if (relations.length > 0) {
+          result += 'Relations:\n';
+          relations.forEach(rel => {
+            result += `  ${rel.name}:\n`;
+            rel.tuples.forEach(tuple => {
+              result += `    (${tuple.atoms.join(', ')})\n`;
+            });
+          });
+        }
+        
+        return {
+          success: true,
+          message: result,
+          action: 'info'
+        };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to reify instance'
+      };
+    }
+  }
+
   private getGeneralHelp(): string {
     return `REPL Interface Help:
 
@@ -454,6 +505,7 @@ Available commands across all terminals:
   status   - Same as info
   list     - List all atoms and relations
   clear    - Clear entire instance
+  reify    - Generate Pyret constructor notation (or generic representation)
 
 Terminal-specific commands vary by terminal type.
 Click the "?" button in each terminal header for specific help.`;
@@ -466,7 +518,8 @@ Click the "?" button in each terminal header for specific help.`;
       '  info     - Show instance status',
       '  status   - Same as info',
       '  list     - List all contents',
-      '  clear    - Clear entire instance'
+      '  clear    - Clear entire instance',
+      '  reify    - Generate Pyret constructor notation'
     ];
   }
 }
