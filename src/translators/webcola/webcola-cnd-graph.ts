@@ -104,6 +104,20 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private dragStartPositions: Map<string, { x: number; y: number }> = new Map();
 
+  /**
+   * Input mode state management for edge creation and modification
+   */
+  private isInputModeActive: boolean = false;
+  private edgeCreationState: {
+    isCreating: boolean;
+    sourceNode: NodeWithMetadata | null;
+    temporaryEdge: any;
+  } = {
+    isCreating: false,
+    sourceNode: null,
+    temporaryEdge: null
+  };
+
   constructor() {
     super();
     
@@ -116,6 +130,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .x((d: any) => d.x)
       .y((d: any) => d.y)
       .curve(d3.curveBasis);
+
+    // Initialize input mode keyboard event handlers
+    this.initializeInputModeHandlers();
   }
 
   /**
@@ -294,6 +311,302 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     }
     else {
       console.warn('D3 zoom behavior not available. Ensure D3 v4+ is loaded.');
+    }
+  }
+
+  /**
+   * Initialize keyboard event handlers for input mode activation
+   */
+  private initializeInputModeHandlers(): void {
+    // Handle keydown for Cmd/Ctrl press
+    document.addEventListener('keydown', (event) => {
+      if ((event.metaKey || event.ctrlKey) && !this.isInputModeActive) {
+        this.activateInputMode();
+      }
+    });
+
+    // Handle keyup for Cmd/Ctrl release
+    document.addEventListener('keyup', (event) => {
+      if (!event.metaKey && !event.ctrlKey && this.isInputModeActive) {
+        this.deactivateInputMode();
+      }
+    });
+
+    // Handle window blur to ensure input mode is deactivated
+    window.addEventListener('blur', () => {
+      if (this.isInputModeActive) {
+        this.deactivateInputMode();
+      }
+    });
+  }
+
+  /**
+   * Activate input mode for edge creation and modification
+   */
+  private activateInputMode(): void {
+    this.isInputModeActive = true;
+    
+    // Add input-mode class to SVG for styling
+    if (this.svg) {
+      this.svg.classed('input-mode', true);
+    }
+
+    // Disable node dragging
+    this.disableNodeDragging();
+
+    // Dispatch event for external listeners
+    this.dispatchEvent(new CustomEvent('input-mode-activated', {
+      detail: { active: true }
+    }));
+  }
+
+  /**
+   * Deactivate input mode and restore normal behavior
+   */
+  private deactivateInputMode(): void {
+    this.isInputModeActive = false;
+    
+    // Remove input-mode class from SVG
+    if (this.svg) {
+      this.svg.classed('input-mode', false);
+    }
+
+    // Clean up any temporary edge creation state
+    this.cleanupEdgeCreation();
+
+    // Re-enable node dragging
+    this.enableNodeDragging();
+
+    // Dispatch event for external listeners
+    this.dispatchEvent(new CustomEvent('input-mode-deactivated', {
+      detail: { active: false }
+    }));
+  }
+
+  /**
+   * Disable node dragging when in input mode
+   */
+  private disableNodeDragging(): void {
+    if (this.svgNodes && this.colaLayout) {
+      this.svgNodes.on('.drag', null);
+    }
+  }
+
+  /**
+   * Re-enable node dragging when exiting input mode
+   */
+  private enableNodeDragging(): void {
+    if (this.svgNodes && this.colaLayout && this.colaLayout.drag) {
+      const nodeDrag = this.colaLayout.drag();
+      this.setupNodeDragHandlers(nodeDrag);
+      this.svgNodes.call(nodeDrag);
+    }
+  }
+
+  /**
+   * Clean up temporary edge creation state
+   */
+  private cleanupEdgeCreation(): void {
+    // Remove temporary edge if it exists
+    if (this.edgeCreationState.temporaryEdge) {
+      this.edgeCreationState.temporaryEdge.remove();
+    }
+
+    // Reset edge creation state
+    this.edgeCreationState = {
+      isCreating: false,
+      sourceNode: null,
+      temporaryEdge: null
+    };
+  }
+
+  /**
+   * Setup drag handlers for nodes
+   */
+  private setupNodeDragHandlers(nodeDrag: any): void {
+    nodeDrag
+      .on('start.cnd', (d: any) => {
+        const start = { x: d.x, y: d.y };
+        this.dragStartPositions.set(d.id, start);
+        this.dispatchEvent(
+          new CustomEvent('node-drag-start', {
+            detail: { id: d.id, position: start }
+          })
+        );
+      })
+      .on('end.cnd', (d: any) => {
+        const start = this.dragStartPositions.get(d.id);
+        this.dragStartPositions.delete(d.id);
+        const detail = {
+          id: d.id,
+          previous: start,
+          current: { x: d.x, y: d.y }
+        };
+        this.dispatchEvent(new CustomEvent('node-drag-end', { detail }));
+      });
+  }
+
+  /**
+   * Start edge creation from a source node
+   */
+  private startEdgeCreation(sourceNode: NodeWithMetadata): void {
+    if (!this.isInputModeActive) return;
+
+    // Clean up any existing edge creation
+    this.cleanupEdgeCreation();
+
+    // Set edge creation state
+    this.edgeCreationState.isCreating = true;
+    this.edgeCreationState.sourceNode = sourceNode;
+
+    // Create temporary edge line
+    this.edgeCreationState.temporaryEdge = this.container
+      .append('line')
+      .attr('class', 'temporary-edge')
+      .attr('x1', sourceNode.x)
+      .attr('y1', sourceNode.y)
+      .attr('x2', sourceNode.x)
+      .attr('y2', sourceNode.y)
+      .attr('stroke', '#007bff')
+      .attr('stroke-width', 2)
+      .attr('stroke-dasharray', '5,5')
+      .attr('opacity', 0.7);
+
+    // Add mousemove listener for temporary edge visualization
+    this.svg.on('mousemove.edgecreation', () => {
+      if (this.edgeCreationState.isCreating && this.edgeCreationState.temporaryEdge) {
+        const [mouseX, mouseY] = d3.mouse(this.container.node());
+        this.edgeCreationState.temporaryEdge
+          .attr('x2', mouseX)
+          .attr('y2', mouseY);
+      }
+    });
+  }
+
+  /**
+   * Finish edge creation by connecting to a target node
+   */
+  private finishEdgeCreation(targetNode: NodeWithMetadata): void {
+    if (!this.isInputModeActive || !this.edgeCreationState.isCreating || !this.edgeCreationState.sourceNode) {
+      return;
+    }
+
+    const sourceNode = this.edgeCreationState.sourceNode;
+
+    // Don't create self-loop edges for now
+    if (sourceNode.id === targetNode.id) {
+      this.cleanupEdgeCreation();
+      return;
+    }
+
+    // Clean up temporary edge visualization
+    this.svg.on('mousemove.edgecreation', null);
+
+    // Show edge label input dialog
+    this.showEdgeLabelInput(sourceNode, targetNode);
+  }
+
+  /**
+   * Show edge label input dialog and create the edge
+   */
+  private showEdgeLabelInput(sourceNode: NodeWithMetadata, targetNode: NodeWithMetadata): void {
+    const label = prompt(`Enter label for edge from "${sourceNode.label || sourceNode.id}" to "${targetNode.label || targetNode.id}":`);
+    
+    if (label !== null) { // User didn't cancel
+      this.createNewEdge(sourceNode, targetNode, label || '');
+    }
+
+    // Clean up edge creation state
+    this.cleanupEdgeCreation();
+  }
+
+  /**
+   * Create a new edge between two nodes
+   */
+  private createNewEdge(sourceNode: NodeWithMetadata, targetNode: NodeWithMetadata, label: string): void {
+    if (!this.currentLayout) return;
+
+    // Find node indices in the current layout
+    const sourceIndex = this.currentLayout.nodes.findIndex(node => node.id === sourceNode.id);
+    const targetIndex = this.currentLayout.nodes.findIndex(node => node.id === targetNode.id);
+
+    if (sourceIndex === -1 || targetIndex === -1) {
+      console.error('Could not find node indices for edge creation');
+      return;
+    }
+
+    // Generate unique edge ID
+    const edgeId = `edge_${sourceNode.id}_${targetNode.id}_${Date.now()}`;
+
+    // Create new edge object
+    const newEdge: EdgeWithMetadata = {
+      id: edgeId,
+      source: sourceIndex,
+      target: targetIndex,
+      label: label,
+      relName: label,
+      color: '#333',
+      isUserCreated: true
+    } as EdgeWithMetadata;
+
+    // Add edge to current layout
+    this.currentLayout.links.push(newEdge);
+
+    // Dispatch event for external listeners
+    this.dispatchEvent(new CustomEvent('edge-created', {
+      detail: { 
+        edge: newEdge,
+        sourceNode: sourceNode,
+        targetNode: targetNode
+      }
+    }));
+
+    // Re-render the graph to show the new edge
+    this.rerenderGraph();
+  }
+
+  /**
+   * Re-render the graph with current layout data
+   */
+  private rerenderGraph(): void {
+    if (!this.currentLayout || !this.colaLayout) return;
+
+    // Update links in the layout
+    this.colaLayout.links(this.currentLayout.links);
+
+    // Re-render links
+    this.container.selectAll('.link-group').remove();
+    this.renderLinks(this.currentLayout.links, this.colaLayout);
+
+    // Restart the layout
+    this.colaLayout.start();
+  }
+
+  /**
+   * Edit the label of an existing edge
+   */
+  private editEdgeLabel(edgeData: EdgeWithMetadata): void {
+    if (!this.isInputModeActive) return;
+
+    const currentLabel = edgeData.label || edgeData.relName || '';
+    const newLabel = prompt(`Edit edge label:`, currentLabel);
+    
+    if (newLabel !== null && newLabel !== currentLabel) {
+      // Update edge data
+      edgeData.label = newLabel;
+      edgeData.relName = newLabel;
+
+      // Dispatch event for external listeners
+      this.dispatchEvent(new CustomEvent('edge-modified', {
+        detail: { 
+          edge: edgeData,
+          oldLabel: currentLabel,
+          newLabel: newLabel
+        }
+      }));
+
+      // Re-render to show updated label
+      this.rerenderGraph();
     }
   }
 
@@ -508,6 +821,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr("marker-end", (d: any) => {
         if (this.isAlignmentEdge(d)) return "none";
         return this.isInferredEdge(d) ? "url(#hand-drawn-arrow)" : "url(#end-arrow)";
+      })
+      .on('click.inputmode', (d: any) => {
+        if (this.isInputModeActive && !this.isAlignmentEdge(d)) {
+          d3.event.stopPropagation();
+          this.editEdgeLabel(d);
+        }
+      })
+      .style('cursor', () => {
+        return this.isInputModeActive ? 'pointer' : 'default';
       });
   }
 
@@ -675,26 +997,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private setupNodes(nodes: Array<NodeWithMetadata>, layout: Layout): d3.Selection<SVGGElement, any, any, unknown> {
     // Create node groups with drag behavior
     const nodeDrag = layout.drag();
-    nodeDrag
-      .on('start.cnd', (d: any) => {
-        const start = { x: d.x, y: d.y };
-        this.dragStartPositions.set(d.id, start);
-        this.dispatchEvent(
-          new CustomEvent('node-drag-start', {
-            detail: { id: d.id, position: start }
-          })
-        );
-      })
-      .on('end.cnd', (d: any) => {
-        const start = this.dragStartPositions.get(d.id);
-        this.dragStartPositions.delete(d.id);
-        const detail = {
-          id: d.id,
-          previous: start,
-          current: { x: d.x, y: d.y }
-        };
-        this.dispatchEvent(new CustomEvent('node-drag-end', { detail }));
-      });
+    this.setupNodeDragHandlers(nodeDrag);
 
     const nodeSelection = this.container
       .selectAll(".node")
@@ -704,7 +1007,19 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr("class", (d: any) => {
         return this.isErrorNode(d) ? "error-node" : "node";
       })
-      .call(nodeDrag as any);
+      .call(nodeDrag)
+      .on('mousedown.inputmode', (d: any) => {
+        if (this.isInputModeActive) {
+          d3.event.stopPropagation();
+          this.startEdgeCreation(d);
+        }
+      })
+      .on('mouseup.inputmode', (d: any) => {
+        if (this.isInputModeActive && this.edgeCreationState.isCreating) {
+          d3.event.stopPropagation();
+          this.finishEdgeCreation(d);
+        }
+      });
 
     // Add rectangle backgrounds for nodes
     this.setupNodeRectangles(nodeSelection);
@@ -1953,6 +2268,34 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         border: 1px solid #ccc;
         border-radius: 4px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      }
+
+      /* Input mode styles */
+      svg.input-mode {
+        cursor: crosshair !important;
+      }
+
+      svg.input-mode .node rect {
+        cursor: crosshair !important;
+      }
+
+      svg.input-mode:active {
+        cursor: crosshair !important;
+      }
+
+      .temporary-edge {
+        pointer-events: none;
+        z-index: 1000;
+      }
+
+      svg.input-mode .link {
+        cursor: pointer;
+        stroke-width: 2px;
+      }
+
+      svg.input-mode .link:hover {
+        stroke-width: 3px;
+        opacity: 0.8;
       }
     `;
   }
