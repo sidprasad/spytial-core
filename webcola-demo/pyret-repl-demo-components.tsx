@@ -56,8 +56,14 @@ const ConnectedReplInterface: React.FC = () => {
       
       // Expose a getter for the React instance
       (window as any).getCurrentInstanceFromReact = () => instance;
+      
+      // Expose a function to update React state from edge events
+      (window as any).updateInstanceFromEdgeEvent = (updatedInstance: IInputDataInstance) => {
+        console.log('🔗 Updating React state from edge event - atoms:', updatedInstance.getAtoms().length, 'relations:', updatedInstance.getRelations().length);
+        setInstance(updatedInstance);
+      };
     }
-  }, []);
+  }, [instance]);
 
   const handleInstanceChange = (updatedInstance: IInputDataInstance) => {
     console.log('REPL Instance updated - atoms:', updatedInstance.getAtoms().length, 'relations:', updatedInstance.getRelations().length);

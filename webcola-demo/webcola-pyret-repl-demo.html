@@ -112,8 +112,12 @@
             </div>
         </div>
         
-        <div>
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
             <button onclick="clearGraph()">Clear All</button>
+            <button id="apply-layout-btn" onclick="applyLayoutManually()" disabled style="background-color: #28a745;">Apply CnD Layout</button>
+            <div id="layout-staleness" style="display: none; color: #ff6b35; font-weight: bold; background: #fff3cd; padding: 5px 10px; border-radius: 4px; border: 1px solid #ffeacc;">
+                ⚠️ CnD Layout Stale - Click "Apply CnD Layout" to update
+            </div>
             <select title="Choose the Layout Format" class="form-control" id="layoutFormat" name="layoutFormat" onchange="changeLayoutFormat()">
                 <option value="default" selected>Standard</option>
                 <option value="grid">Grid (Beta)</option>
@@ -150,6 +154,52 @@
         // Variables to store data
         let currentInstance = null;
         let currentInstanceLayout = null;
+        let currentCnDSpecVersion = 0; // Track CnD spec changes
+        let appliedCnDSpecVersion = 0; // Track which spec version was last applied
+        let hasDataChanges = false; // Track if data has changed since last CnD application
+
+        /**
+         * Update staleness indicators and button states
+         */
+        function updateLayoutStaleness() {
+            const stalenessIndicator = document.getElementById('layout-staleness');
+            const applyButton = document.getElementById('apply-layout-btn');
+            
+            const isStale = currentCnDSpecVersion > appliedCnDSpecVersion;
+            
+            if (isStale) {
+                stalenessIndicator.style.display = 'block';
+                applyButton.disabled = false;
+                applyButton.style.backgroundColor = '#ff6b35';
+                applyButton.textContent = '⚠️ Apply CnD Layout (Stale)';
+            } else {
+                stalenessIndicator.style.display = 'none';
+                applyButton.disabled = true;
+                applyButton.style.backgroundColor = '#28a745';
+                applyButton.textContent = 'Apply CnD Layout (Up to Date)';
+            }
+        }
+
+        /**
+         * Manual layout application for CnD spec changes
+         */
+        async function applyLayoutManually() {
+            try {
+                updateStatus('Applying CnD layout constraints manually...', 'info');
+                
+                if (currentInstance && currentInstance.getAtoms().length > 0) {
+                    await loadInstanceData();
+                    appliedCnDSpecVersion = currentCnDSpecVersion;
+                    updateLayoutStaleness();
+                    updateStatus('CnD layout applied successfully!', 'success');
+                } else {
+                    updateStatus('No data available to apply CnD layout', 'warning');
+                }
+            } catch (error) {
+                console.error('Manual layout application failed:', error);
+                updateStatus(`Layout application failed: ${error.message}`, 'error');
+            }
+        }
 
         /**
          * Get current instance from the React REPL component
@@ -200,12 +250,123 @@
                 
                 updateStatus('React components loading - pipeline ready!', 'success');
                 
+                // Set up edge event listeners
+                setupEdgeEventListeners();
+                
                 return true;
             } catch (error) {
                 console.error('Failed to initialize pipeline:', error);
                 updateStatus(`Pipeline init failed: ${error.message}`, 'error');
                 return false;
             }
+        }
+
+        /**
+         * Set up event listeners for edge input mode
+         */
+        function setupEdgeEventListeners() {
+            const graphElement = document.querySelector('webcola-cnd-graph');
+            if (!graphElement) {
+                console.warn('Graph element not found - edge event listeners not set up');
+                return;
+            }
+
+            // Listen for edge creation requests
+            graphElement.addEventListener('edge-creation-requested', (event) => {
+                console.log('🔗 Edge creation requested:', event.detail);
+                
+                const { relationId, sourceNodeId, targetNodeId, tuple } = event.detail;
+                
+                // Get current React instance
+                const currentInstance = window.getCurrentInstanceFromReact?.();
+                if (!currentInstance) {
+                    console.error('No React instance available for edge creation');
+                    updateStatus('Failed to create edge - no data instance available', 'error');
+                    return;
+                }
+                
+                try {
+                    // Add the relation tuple to the data instance
+                    currentInstance.addRelationTuple(relationId, tuple);
+                    console.log(`Added relation tuple: ${relationId}(${tuple.atoms.join(', ')})`);
+                    
+                    // Update the React component state (through a global function if available)
+                    if (window.updateInstanceFromEdgeEvent) {
+                        window.updateInstanceFromEdgeEvent(currentInstance);
+                    }
+                    
+                    // Trigger layout regeneration
+                    loadInstanceData();
+                    
+                    updateStatus(`✅ Edge created: ${relationId}(${tuple.atoms.join(', ')})`, 'success');
+                } catch (error) {
+                    console.error('Failed to add edge relation:', error);
+                    updateStatus(`Failed to create edge: ${error.message}`, 'error');
+                }
+            });
+
+            // Listen for edge modification requests
+            graphElement.addEventListener('edge-modification-requested', (event) => {
+                console.log('🔗 Edge modification requested:', event.detail);
+                
+                const { oldRelationId, newRelationId, sourceNodeId, targetNodeId, tuple } = event.detail;
+                
+                // Get current React instance
+                const currentInstance = window.getCurrentInstanceFromReact?.();
+                if (!currentInstance) {
+                    console.error('No React instance available for edge modification');
+                    updateStatus('Failed to modify edge - no data instance available', 'error');
+                    return;
+                }
+                
+                try {
+                    console.log(`🔍 Before modification - Relations:`, currentInstance.getRelations().map(r => `${r.id}(${r.tuples.length} tuples)`));
+                    
+                    // If we're renaming to the same relation ID, no need to modify data
+                    if (oldRelationId.trim() === newRelationId.trim()) {
+                        console.log('⏭️ Same relation name, no data changes needed');
+                        updateStatus(`✅ Edge label confirmed: ${newRelationId}`, 'success');
+                        return;
+                    }
+                    
+                    // Remove old relation tuple if it exists and has a valid name
+                    if (oldRelationId.trim()) {
+                        const oldRelation = currentInstance.getRelations().find(r => r.id === oldRelationId);
+                        if (oldRelation) {
+                            const beforeCount = oldRelation.tuples.length;
+                            currentInstance.removeRelationTuple(oldRelationId, tuple);
+                            const afterCount = oldRelation.tuples.length;
+                            console.log(`🗑️ Removed from ${oldRelationId}: ${beforeCount} → ${afterCount} tuples`);
+                        } else {
+                            console.log(`⚠️ Old relation ${oldRelationId} not found in data instance`);
+                        }
+                    }
+                    
+                    // Add new relation tuple if it has a valid name
+                    if (newRelationId.trim()) {
+                        currentInstance.addRelationTuple(newRelationId, tuple);
+                        const newRelation = currentInstance.getRelations().find(r => r.id === newRelationId);
+                        console.log(`➕ Added to ${newRelationId}: ${newRelation ? newRelation.tuples.length : 0} tuples total`);
+                    }
+                    
+                    console.log(`🔍 After modification - Relations:`, currentInstance.getRelations().map(r => `${r.id}(${r.tuples.length} tuples)`));
+                    
+                    // Update the React component state (through a global function if available)
+                    if (window.updateInstanceFromEdgeEvent) {
+                        window.updateInstanceFromEdgeEvent(currentInstance);
+                    }
+                    
+                    // Trigger layout regeneration
+                    loadInstanceData();
+                    
+                    updateStatus(`✅ Edge modified: ${oldRelationId} → ${newRelationId}`, 'success');
+                } catch (error) {
+                    console.error('Failed to modify edge relation:', error);
+                    updateStatus(`Failed to modify edge: ${error.message}`, 'error');
+                }
+            });
+            
+            console.log('🔗 Edge event listeners set up successfully');
         }
 
         /**
@@ -258,10 +419,14 @@
                 const graphElement = document.querySelector('webcola-cnd-graph');
                 if (graphElement) {
 
-                    //// TODO: This seems like the WRONG 
+                    // TODO: This seems like the WRONG 
                     // thing passed in?
                     console.log('Updating graph with layout instance...');
                     await graphElement.renderLayout(currentInstanceLayout);
+                    
+                    // Mark that layout has been applied with current spec
+                    appliedCnDSpecVersion = currentCnDSpecVersion;
+                    updateLayoutStaleness();
                     
                     updateStatus(`✅ Visualization updated! ${instance.getAtoms().length} atoms, ${instance.getRelations().length} relations`, 'success');
                 } else {
@@ -343,6 +508,7 @@
             const success = await initializePipeline();
             if (success) {
                 updateStatus('Demo ready! Try the REPL commands above.', 'success');
+                updateLayoutStaleness(); // Initialize staleness indicators
             }
         });
 
@@ -367,6 +533,7 @@
         // Replace polling with event-driven updates
         function setupDataInstanceWatcher() {
             let lastInstance = window.currentInstance;
+            let lastCnDSpec = '';
             
             // Check for instance changes periodically (much less frequent than before)
             const checkForInstanceChange = () => {
@@ -380,6 +547,16 @@
                     
                     // Initial load
                     loadInstanceData();
+                }
+                
+                // Check for CnD spec changes
+                const currentCnDSpec = getCurrentCNDSpec();
+                if (currentCnDSpec !== lastCnDSpec) {
+                    console.log('CnD specification change detected');
+                    lastCnDSpec = currentCnDSpec;
+                    currentCnDSpecVersion++;
+                    updateLayoutStaleness();
+                    updateStatus('CnD specification changed - click "Apply CnD Layout" to update the visualization', 'warning');
                 }
             };
             

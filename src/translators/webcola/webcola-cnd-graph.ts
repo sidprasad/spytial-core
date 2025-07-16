@@ -2,6 +2,7 @@
 import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator } from './webcolatranslator';
 import { InstanceLayout, isAlignmentConstraint, isInstanceLayout, isLeftConstraint, isTopConstraint, LayoutNode } from '../../layout/interfaces';
 import type { GridRouter, Group, Layout, Node, Link } from 'webcola';
+import { IInputDataInstance, ITuple, IAtom } from '../../data-instance/interfaces';
 
 let d3 = window.d3v4 || window.d3; // Use d3 v4 if available, otherwise fallback to the default window.d3
 let cola = window.cola;
@@ -39,6 +40,33 @@ const DEFAULT_SCALE_FACTOR = 5;
  * Full implementation using WebCola constraint-based layout with D3 integration
  * @field currentLayout - Holds the current custom WebColaLayout instance
  * @field colaLayout - Holds the current layout instance used by WebCola
+ * 
+ * Features:
+ * - Interactive edge input mode with keyboard shortcuts (Cmd/Ctrl)
+ * - Visual edge creation by clicking and dragging between nodes
+ * - Edge modification by clicking on existing edges in input mode
+ * - Centralized state management for IInputDataInstance
+ * - Automatic layout regeneration when data instance changes
+ * - Self-loop edge support with confirmation
+ * - Zoom/pan disable during input mode
+ * - Comprehensive event system for external integration
+ * 
+ * Events Fired:
+ * - 'input-mode-activated': When Cmd/Ctrl is pressed to activate input mode
+ * - 'input-mode-deactivated': When Cmd/Ctrl is released to deactivate input mode  
+ * - 'edge-creation-requested': When user drags between nodes to create a new edge
+ *   * event.detail: { relationId: string, sourceNodeId: string, targetNodeId: string, tuple: ITuple }
+ * - 'edge-modification-requested': When user clicks on existing edge to modify it
+ *   * event.detail: { oldRelationId: string, newRelationId: string, sourceNodeId: string, targetNodeId: string, tuple: ITuple }
+ * 
+ * External State Management:
+ * React components should subscribe to these events and handle:
+ * 1. Updating the IInputDataInstance with new atoms/relations
+ * 2. Regenerating CnD layout constraints from the updated data
+ * 3. Calling renderLayout() to apply changes and re-render the visualization
+ * 
+ * This ensures React components serve as the single source of truth for state
+ * while the WebCola component focuses purely on visualization and user interaction.
  */
 export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'undefined' ? HTMLElement : (class {} as any)) {
   private svg!: any;
@@ -98,11 +126,27 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private svgLinkGroups : any;
   private svgGroups : any;
   private svgGroupLabels: any;
+  private zoomBehavior: any;
+  private storedTransform: any;
   /**
    * Stores the starting coordinates when a node begins dragging so
    * drag end events can report both the previous and new positions.
    */
   private dragStartPositions: Map<string, { x: number; y: number }> = new Map();
+
+  /**
+   * Input mode state management for edge creation and modification
+   */
+  private isInputModeActive: boolean = false;
+  private edgeCreationState: {
+    isCreating: boolean;
+    sourceNode: NodeWithMetadata | null;
+    temporaryEdge: any;
+  } = {
+    isCreating: false,
+    sourceNode: null,
+    temporaryEdge: null
+  };
 
   constructor() {
     super();
@@ -116,6 +160,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .x((d: any) => d.x)
       .y((d: any) => d.y)
       .curve(d3.curveBasis);
+
+    // Initialize input mode keyboard event handlers
+    this.initializeInputModeHandlers();
   }
 
   /**
@@ -284,13 +331,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     if(d3.zoom) {
 
     // Set up zoom behavior (D3 v4 API - matches your working pattern)
-    const zoom = d3.zoom()
+    this.zoomBehavior = d3.zoom()
       .scaleExtent([0.5, 5])
       .on('zoom', () => {
         this.container.attr('transform', d3.event.transform);
       });
 
-    this.svg.call(zoom);
+    this.svg.call(this.zoomBehavior);
     }
     else {
       console.warn('D3 zoom behavior not available. Ensure D3 v4+ is loaded.');
@@ -298,17 +345,446 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
+   * Initialize keyboard event handlers for input mode activation
+   */
+  private initializeInputModeHandlers(): void {
+    // Handle keydown for Cmd/Ctrl press
+    document.addEventListener('keydown', (event) => {
+      if ((event.metaKey || event.ctrlKey) && !this.isInputModeActive) {
+        this.activateInputMode();
+      }
+    });
+
+    // Handle keyup for Cmd/Ctrl release
+    document.addEventListener('keyup', (event) => {
+      if (!event.metaKey && !event.ctrlKey && this.isInputModeActive) {
+        this.deactivateInputMode();
+      }
+    });
+
+    // Handle window blur to ensure input mode is deactivated
+    window.addEventListener('blur', () => {
+      if (this.isInputModeActive) {
+        this.deactivateInputMode();
+      }
+    });
+  }
+
+  /**
+   * Activate input mode for edge creation and modification
+   */
+  private activateInputMode(): void {
+    this.isInputModeActive = true;
+    
+    // Add input-mode class to SVG for styling
+    if (this.svg) {
+      this.svg.classed('input-mode', true);
+    }
+
+    // Disable node dragging and zoom/translate
+    this.disableNodeDragging();
+    this.disableZoom();
+
+    // Dispatch event for external listeners
+    this.dispatchEvent(new CustomEvent('input-mode-activated', {
+      detail: { active: true }
+    }));
+  }
+
+  /**
+   * Deactivate input mode and restore normal behavior
+   */
+  private deactivateInputMode(): void {
+    this.isInputModeActive = false;
+    
+    // Remove input-mode class from SVG
+    if (this.svg) {
+      this.svg.classed('input-mode', false);
+    }
+
+    // Clean up any temporary edge creation state
+    this.cleanupEdgeCreation();
+
+    // Re-enable node dragging and zoom/translate
+    this.enableNodeDragging();
+    this.enableZoom();
+
+    // Dispatch event for external listeners
+    this.dispatchEvent(new CustomEvent('input-mode-deactivated', {
+      detail: { active: false }
+    }));
+  }
+
+  /**
+   * Disable node dragging when in input mode
+   */
+  private disableNodeDragging(): void {
+    if (this.svgNodes && this.colaLayout) {
+      this.svgNodes.on('.drag', null);
+    }
+  }
+
+  /**
+   * Re-enable node dragging when exiting input mode
+   */
+  private enableNodeDragging(): void {
+    if (this.svgNodes && this.colaLayout && this.colaLayout.drag) {
+      const nodeDrag = this.colaLayout.drag();
+      this.setupNodeDragHandlers(nodeDrag);
+      this.svgNodes.call(nodeDrag);
+    }
+  }
+
+  /**
+   * Disable zoom/translate functionality when in input mode
+   */
+  private disableZoom(): void {
+    if (this.svg && this.zoomBehavior) {
+      // Store current transform before disabling
+      this.storedTransform = d3.zoomTransform(this.svg.node());
+      // Disable zoom events but preserve the behavior
+      this.svg.on('.zoom', null);
+    }
+  }
+
+  /**
+   * Re-enable zoom/translate functionality when exiting input mode
+   */
+  private enableZoom(): void {
+    if (this.svg && this.zoomBehavior) {
+      // Re-enable zoom behavior
+      this.svg.call(this.zoomBehavior);
+      // Restore the previous transform if we had one
+      if (this.storedTransform) {
+        this.svg.call(this.zoomBehavior.transform, this.storedTransform);
+      }
+    }
+  }
+
+  /**
+   * Clean up temporary edge creation state
+   */
+  private cleanupEdgeCreation(): void {
+    // Remove temporary edge if it exists
+    if (this.edgeCreationState.temporaryEdge) {
+      this.edgeCreationState.temporaryEdge.remove();
+    }
+
+    // Reset edge creation state
+    this.edgeCreationState = {
+      isCreating: false,
+      sourceNode: null,
+      temporaryEdge: null
+    };
+  }
+
+  /**
+   * Setup drag handlers for nodes
+   */
+  private setupNodeDragHandlers(nodeDrag: any): void {
+    nodeDrag
+      .on('start.cnd', (d: any) => {
+        const start = { x: d.x, y: d.y };
+        this.dragStartPositions.set(d.id, start);
+        this.dispatchEvent(
+          new CustomEvent('node-drag-start', {
+            detail: { id: d.id, position: start }
+          })
+        );
+      })
+      .on('end.cnd', (d: any) => {
+        const start = this.dragStartPositions.get(d.id);
+        this.dragStartPositions.delete(d.id);
+        const detail = {
+          id: d.id,
+          previous: start,
+          current: { x: d.x, y: d.y }
+        };
+        this.dispatchEvent(new CustomEvent('node-drag-end', { detail }));
+      });
+  }
+
+  /**
+   * Start edge creation from a source node
+   */
+  private startEdgeCreation(sourceNode: NodeWithMetadata): void {
+    if (!this.isInputModeActive) return;
+
+    // Clean up any existing edge creation
+    this.cleanupEdgeCreation();
+
+    // Set edge creation state
+    this.edgeCreationState.isCreating = true;
+    this.edgeCreationState.sourceNode = sourceNode;
+
+    // Create temporary edge line
+    this.edgeCreationState.temporaryEdge = this.container
+      .append('line')
+      .attr('class', 'temporary-edge')
+      .attr('x1', sourceNode.x)
+      .attr('y1', sourceNode.y)
+      .attr('x2', sourceNode.x)
+      .attr('y2', sourceNode.y)
+      .attr('stroke', '#007bff')
+      .attr('stroke-width', 2)
+      .attr('stroke-dasharray', '5,5')
+      .attr('opacity', 0.7);
+
+    // Add mousemove listener for temporary edge visualization
+    this.svg.on('mousemove.edgecreation', () => {
+      if (this.edgeCreationState.isCreating && this.edgeCreationState.temporaryEdge) {
+        const [mouseX, mouseY] = d3.mouse(this.container.node());
+        this.edgeCreationState.temporaryEdge
+          .attr('x2', mouseX)
+          .attr('y2', mouseY);
+      }
+    });
+  }
+
+  /**
+   * Finish edge creation by connecting to a target node
+   */
+  private async finishEdgeCreation(targetNode: NodeWithMetadata): Promise<void> {
+    if (!this.isInputModeActive || !this.edgeCreationState.isCreating || !this.edgeCreationState.sourceNode) {
+      return;
+    }
+
+    const sourceNode = this.edgeCreationState.sourceNode;
+
+    // Confirm self-loop edges
+    if (sourceNode.id === targetNode.id) {
+      const confirmSelfLoop = confirm(
+        `Are you sure you want to create a self-loop edge on "${sourceNode.label || sourceNode.id}"?`
+      );
+      if (!confirmSelfLoop) {
+        this.cleanupEdgeCreation();
+        return;
+      }
+    }
+
+    // Clean up temporary edge visualization
+    this.svg.on('mousemove.edgecreation', null);
+
+    // Show edge label input dialog
+    await this.showEdgeLabelInput(sourceNode, targetNode);
+  }
+
+  /**
+   * Show edge label input dialog and create the edge
+   */
+  private async showEdgeLabelInput(sourceNode: NodeWithMetadata, targetNode: NodeWithMetadata): Promise<void> {
+    const label = prompt(`Enter label for edge from "${sourceNode.label || sourceNode.id}" to "${targetNode.label || targetNode.id}":`);
+    
+    if (label !== null) { // User didn't cancel
+      await this.createNewEdge(sourceNode, targetNode, label || '');
+    }
+
+    // Clean up edge creation state
+    this.cleanupEdgeCreation();
+  }
+
+  /**
+   * Create a new edge between two nodes
+   */
+  private async createNewEdge(sourceNode: NodeWithMetadata, targetNode: NodeWithMetadata, label: string): Promise<void> {
+    if (!this.currentLayout) return;
+
+    // Find node indices in the current layout
+    const sourceIndex = this.currentLayout.nodes.findIndex(node => node.id === sourceNode.id);
+    const targetIndex = this.currentLayout.nodes.findIndex(node => node.id === targetNode.id);
+
+    if (sourceIndex === -1 || targetIndex === -1) {
+      console.error('Could not find node indices for edge creation');
+      return;
+    }
+
+    // Generate unique edge ID
+    const edgeId = `edge_${sourceNode.id}_${targetNode.id}_${Date.now()}`;
+
+    // Create new edge object
+    const newEdge: EdgeWithMetadata = {
+      id: edgeId,
+      source: sourceIndex,
+      target: targetIndex,
+      label: label,
+      relName: label,
+      color: '#333',
+      isUserCreated: true
+    } as EdgeWithMetadata;
+
+    // Add edge to current layout
+    this.currentLayout.links.push(newEdge);
+
+    // Update external state with the new edge
+    await this.updateExternalStateForNewEdge(sourceNode, targetNode, label);
+
+    // Dispatch event for external listeners
+    this.dispatchEvent(new CustomEvent('edge-created', {
+      detail: { 
+        edge: newEdge,
+        sourceNode: sourceNode,
+        targetNode: targetNode
+      }
+    }));
+
+    // Re-render the graph to show the new edge
+    this.rerenderGraph();
+  }
+
+  /**
+   * Update external state for a new edge through the external state management system
+   * @param sourceNode - Source node of the edge
+   * @param targetNode - Target node of the edge 
+   * @param relationName - Name/label of the relation
+   */
+  private async updateExternalStateForNewEdge(sourceNode: NodeWithMetadata, targetNode: NodeWithMetadata, relationName: string): Promise<void> {
+    if (!relationName.trim()) {
+      return;
+    }
+
+    try {
+      // Create a tuple representing the edge/relation
+      const tuple: ITuple = {
+        atoms: [sourceNode.id, targetNode.id],
+        types: [sourceNode.type || 'untyped', targetNode.type || 'untyped']
+      };
+
+      console.log(`Dispatching edge creation request: ${relationName}(${sourceNode.id}, ${targetNode.id})`);
+      
+      // Dispatch edge creation event for React components to handle
+      const edgeCreationEvent = new CustomEvent('edge-creation-requested', {
+        detail: {
+          relationId: relationName,
+          sourceNodeId: sourceNode.id,
+          targetNodeId: targetNode.id,
+          tuple: tuple
+        },
+        bubbles: true
+      });
+      this.dispatchEvent(edgeCreationEvent);
+    } catch (error) {
+      console.error('Failed to update external state for new edge:', error);
+    }
+  }
+
+  /**
+   * Re-render the graph with current layout data
+   */
+  private rerenderGraph(): void {
+    if (!this.currentLayout || !this.colaLayout) return;
+
+    // Update links in the layout
+    this.colaLayout.links(this.currentLayout.links);
+
+    // Re-render links
+    this.container.selectAll('.link-group').remove();
+    this.renderLinks(this.currentLayout.links, this.colaLayout);
+
+    // Restart the layout
+    this.colaLayout.start();
+  }
+
+  /**
+   * Edit the label of an existing edge
+   */
+  private async editEdgeLabel(edgeData: EdgeWithMetadata): Promise<void> {
+    if (!this.isInputModeActive) return;
+
+    const currentLabel = edgeData.label || edgeData.relName || '';
+    const newLabel = prompt(`Edit edge label:`, currentLabel);
+    
+    if (newLabel !== null && newLabel !== currentLabel) {
+      // Get source and target nodes for data instance update
+      const sourceNode = this.getNodeFromEdge(edgeData, 'source');
+      const targetNode = this.getNodeFromEdge(edgeData, 'target');
+
+      // Update external state if available
+      await this.updateExternalStateForEdgeModification(sourceNode, targetNode, currentLabel, newLabel);
+
+      // Update edge data
+      edgeData.label = newLabel;
+      edgeData.relName = newLabel;
+
+      // Dispatch event for external listeners
+      this.dispatchEvent(new CustomEvent('edge-modified', {
+        detail: { 
+          edge: edgeData,
+          oldLabel: currentLabel,
+          newLabel: newLabel
+        }
+      }));
+
+      // Re-render to show updated label
+      this.rerenderGraph();
+    }
+  }
+
+  /**
+   * Get node from edge data based on source or target
+   * @param edgeData - Edge data
+   * @param position - 'source' or 'target'
+   * @returns Node data or null
+   */
+  private getNodeFromEdge(edgeData: EdgeWithMetadata, position: 'source' | 'target'): NodeWithMetadata | null {
+    if (!this.currentLayout) return null;
+    
+    const nodeIndex = typeof edgeData[position] === 'number' ? edgeData[position] : edgeData[position].index;
+    return this.currentLayout.nodes[nodeIndex] || null;
+  }
+
+  /**
+   * Update external state for an edge modification through the external state management system
+   * @param sourceNode - Source node of the edge
+   * @param targetNode - Target node of the edge 
+   * @param oldRelationName - Old relation name/label
+   * @param newRelationName - New relation name/label
+   */
+  private async updateExternalStateForEdgeModification(
+    sourceNode: NodeWithMetadata | null, 
+    targetNode: NodeWithMetadata | null, 
+    oldRelationName: string, 
+    newRelationName: string
+  ): Promise<void> {
+    if (!sourceNode || !targetNode) {
+      return;
+    }
+
+    try {
+      // Create tuple for the relation
+      const tuple: ITuple = {
+        atoms: [sourceNode.id, targetNode.id],
+        types: [sourceNode.type || 'untyped', targetNode.type || 'untyped']
+      };
+
+      console.log(`Dispatching edge modification request: ${oldRelationName} -> ${newRelationName}`);
+
+      // Dispatch edge modification event for React components to handle
+      const edgeModificationEvent = new CustomEvent('edge-modification-requested', {
+        detail: {
+          oldRelationId: oldRelationName,
+          newRelationId: newRelationName,
+          sourceNodeId: sourceNode.id,
+          targetNodeId: targetNode.id,
+          tuple: tuple
+        },
+        bubbles: true
+      });
+      this.dispatchEvent(edgeModificationEvent);
+    } catch (error) {
+      console.error('Failed to update external state for edge modification:', error);
+    }
+  }
+
+  /**
    * Render layout using WebCola constraint solver
    * @param instanceLayout - The layout instance to render
+   * @param inputDataInstance - Optional input data instance for edge modifications
    */
   public async renderLayout(instanceLayout: InstanceLayout): Promise<void> {
-
 
     if (! isInstanceLayout(instanceLayout)) {
       throw new Error('Invalid instance layout provided. Expected an InstanceLayout instance.');
     }
-
-
 
 
 
@@ -508,6 +984,18 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr("marker-end", (d: any) => {
         if (this.isAlignmentEdge(d)) return "none";
         return this.isInferredEdge(d) ? "url(#hand-drawn-arrow)" : "url(#end-arrow)";
+      })
+      .on('click.inputmode', (d: any) => {
+        if (this.isInputModeActive && !this.isAlignmentEdge(d)) {
+          d3.event.stopPropagation();
+          // Handle async operation without blocking the event
+          this.editEdgeLabel(d).catch(error => {
+            console.error('Error editing edge label:', error);
+          });
+        }
+      })
+      .style('cursor', () => {
+        return this.isInputModeActive ? 'pointer' : 'default';
       });
   }
 
@@ -675,26 +1163,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private setupNodes(nodes: Array<NodeWithMetadata>, layout: Layout): d3.Selection<SVGGElement, any, any, unknown> {
     // Create node groups with drag behavior
     const nodeDrag = layout.drag();
-    nodeDrag
-      .on('start.cnd', (d: any) => {
-        const start = { x: d.x, y: d.y };
-        this.dragStartPositions.set(d.id, start);
-        this.dispatchEvent(
-          new CustomEvent('node-drag-start', {
-            detail: { id: d.id, position: start }
-          })
-        );
-      })
-      .on('end.cnd', (d: any) => {
-        const start = this.dragStartPositions.get(d.id);
-        this.dragStartPositions.delete(d.id);
-        const detail = {
-          id: d.id,
-          previous: start,
-          current: { x: d.x, y: d.y }
-        };
-        this.dispatchEvent(new CustomEvent('node-drag-end', { detail }));
-      });
+    this.setupNodeDragHandlers(nodeDrag);
 
     const nodeSelection = this.container
       .selectAll(".node")
@@ -704,7 +1173,22 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr("class", (d: any) => {
         return this.isErrorNode(d) ? "error-node" : "node";
       })
-      .call(nodeDrag as any);
+      .call(nodeDrag)
+      .on('mousedown.inputmode', (d: any) => {
+        if (this.isInputModeActive) {
+          d3.event.stopPropagation();
+          this.startEdgeCreation(d);
+        }
+      })
+      .on('mouseup.inputmode', (d: any) => {
+        if (this.isInputModeActive && this.edgeCreationState.isCreating) {
+          d3.event.stopPropagation();
+          // Handle async operation without blocking the event
+          this.finishEdgeCreation(d).catch(error => {
+            console.error('Error finishing edge creation:', error);
+          });
+        }
+      });
 
     // Add rectangle backgrounds for nodes
     this.setupNodeRectangles(nodeSelection);
@@ -1954,6 +2438,34 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         border-radius: 4px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
       }
+
+      /* Input mode styles */
+      svg.input-mode {
+        cursor: crosshair !important;
+      }
+
+      svg.input-mode .node rect {
+        cursor: crosshair !important;
+      }
+
+      svg.input-mode:active {
+        cursor: crosshair !important;
+      }
+
+      .temporary-edge {
+        pointer-events: none;
+        z-index: 1000;
+      }
+
+      svg.input-mode .link {
+        cursor: pointer;
+        stroke-width: 2px;
+      }
+
+      svg.input-mode .link:hover {
+        stroke-width: 3px;
+        opacity: 0.8;
+      }
     `;
   }
 
@@ -2003,6 +2515,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     error.style.display = 'block';
     error.textContent = message;
   }
+
+  // =========================================
+  // EVENT-BASED STATE INTEGRATION API
+  // =========================================
+
 }
 
 // Register the custom element only in browser environments
