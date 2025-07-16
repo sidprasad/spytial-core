@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { IInputDataInstance } from '../../data-instance/interfaces';
-import { ICommandParser, CommandResult, AtomCommandParser, RelationCommandParser, DotNotationRelationParser, BatchCommandParser } from './parsers/CoreParsers';
+import { ICommandParser, CommandResult, AtomCommandParser, RelationCommandParser, DotNotationRelationParser, BatchCommandParser, RemoveCommandParser } from './parsers/CoreParsers';
 import { PyretListParser, InfoCommandParser } from './parsers/ExtensibleParsers';
 import './ReplInterface.css';
 
@@ -61,13 +61,14 @@ const DEFAULT_TERMINALS: TerminalConfig[] = [
     title: '',
     description: 'Supports atoms, relations, and extensions in one terminal',
     parsers: [
+      new RemoveCommandParser(),        // Priority 200 - highest priority for remove commands
       new PyretListParser(),            // Priority 120 - most specific pattern
       new BatchCommandParser(),         // Priority 115 - multi-command patterns  
       new DotNotationRelationParser(),  // Priority 115 - dot notation relations
       new AtomCommandParser(),          // Priority 100 - standard priority
       new InfoCommandParser()           // Priority 50 - fallback utility commands
     ].sort((a, b) => b.getPriority() - a.getPriority()), // Sort by priority descending
-    placeholder: 'Examples:\nAlice:Person\nalice.friend=bob\n[list: 1,2,3,4]:numbers\nhelp\nreify'
+    placeholder: 'Examples:\nAlice:Person\nalice.friend=bob\nremove alice\n[list: 1,2,3,4]:numbers\nhelp\nreify'
   }
 ];
 
