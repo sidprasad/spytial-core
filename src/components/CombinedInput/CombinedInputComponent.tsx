@@ -98,16 +98,28 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
   const [layoutStale, setLayoutStale] = useState<boolean>(false);
   const [currentLayout, setCurrentLayout] = useState<any>(null);
   
-  // Refs for managing the graph element
+  // Collapsible section states
+  const [replCollapsed, setReplCollapsed] = useState<boolean>(false);
+  const [layoutCollapsed, setLayoutCollapsed] = useState<boolean>(false);
+  const [graphCollapsed, setGraphCollapsed] = useState<boolean>(false);
+  
+  // Refs for managing the graph element and current instance access
   const graphContainerRef = useRef<HTMLDivElement>(null);
   const graphElementRef = useRef<HTMLElement | null>(null);
+  const currentInstanceRef = useRef<PyretDataInstance>(currentInstance);
 
   // Initialize or update data instance
   useEffect(() => {
     if (dataInstance && dataInstance !== currentInstance) {
       setCurrentInstance(dataInstance);
+      currentInstanceRef.current = dataInstance;
     }
   }, [dataInstance, currentInstance]);
+
+  // Keep the ref in sync with the current instance
+  useEffect(() => {
+    currentInstanceRef.current = currentInstance;
+  }, [currentInstance]);
 
   // Initialize or update CnD spec
   useEffect(() => {
@@ -119,6 +131,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
   // Handle instance changes from REPL
   const handleInstanceChange = useCallback((newInstance: PyretDataInstance) => {
     setCurrentInstance(newInstance);
+    currentInstanceRef.current = newInstance; // Keep ref in sync
     setLayoutStale(true);
     onInstanceChange?.(newInstance);
     
@@ -178,7 +191,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
       console.error('Failed to apply layout:', error);
       setLayoutStale(true);
     }
-  }, [projections, onLayoutApplied]);
+  }, []);
 
   // Manual layout application
   const handleApplyLayout = useCallback(() => {
@@ -197,7 +210,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
     }
   }, [onInstanceChange]);
 
-  // Initialize graph element when container is available
+  // Initialize graph element when container is available (runs only once)
   useEffect(() => {
     if (graphContainerRef.current && !graphElementRef.current) {
       // Create webcola-cnd-graph custom element
@@ -210,15 +223,102 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
       graphElement.style.border = '2px solid #007acc';
       graphElement.style.borderRadius = '8px';
       
+      // Set up edge input mode event listeners
+      const handleEdgeCreationRequested = (event: Event) => {
+        const customEvent = event as CustomEvent;
+        console.log('🔗 Edge creation requested in CombinedInput:', customEvent.detail);
+        const { relationId, sourceNodeId, targetNodeId, tuple } = customEvent.detail;
+        
+        try {
+          // Get the current instance and add the relation
+          const currentInstanceValue = currentInstanceRef.current;
+          currentInstanceValue.addRelationTuple(relationId, tuple);
+          console.log(`✅ Added relation tuple: ${relationId}(${tuple.atoms.join(', ')})`);
+          
+          // Trigger the handleInstanceChange callback 
+          handleInstanceChange(currentInstanceValue);
+        } catch (error) {
+          console.error('Failed to add edge relation:', error);
+        }
+      };
+
+      const handleEdgeModificationRequested = (event: Event) => {
+        const customEvent = event as CustomEvent;
+        console.log('🔗 Edge modification requested in CombinedInput:', customEvent.detail);
+        const { oldRelationId, newRelationId, sourceNodeId, targetNodeId, tuple } = customEvent.detail;
+        
+        try {
+          const currentInstanceValue = currentInstanceRef.current;
+          
+          // If we're renaming to the same relation ID, no need to modify data
+          if (oldRelationId.trim() === newRelationId.trim()) {
+            console.log('⏭️ Same relation name, no data changes needed');
+            return;
+          }
+          
+          // Remove old relation tuple if it exists and has a valid name
+          if (oldRelationId.trim()) {
+            const oldRelation = currentInstanceValue.getRelations().find(r => r.id === oldRelationId);
+            if (oldRelation) {
+              currentInstanceValue.removeRelationTuple(oldRelationId, tuple);
+              console.log(`🗑️ Removed from ${oldRelationId}`);
+            }
+          }
+          
+          // Add new relation tuple if it has a valid name
+          if (newRelationId.trim()) {
+            currentInstanceValue.addRelationTuple(newRelationId, tuple);
+            console.log(`➕ Added to ${newRelationId}`);
+          }
+          
+          // Trigger the handleInstanceChange callback 
+          handleInstanceChange(currentInstanceValue);
+        } catch (error) {
+          console.error('Failed to modify edge relation:', error);
+        }
+      };
+
+      // Confirmation event listeners for completeness
+      const handleEdgeCreated = (event: Event) => {
+        const customEvent = event as CustomEvent;
+        console.log('✅ Edge created confirmation:', customEvent.detail);
+      };
+
+      const handleEdgeModified = (event: Event) => {
+        const customEvent = event as CustomEvent;
+        console.log('✅ Edge modified confirmation:', customEvent.detail);
+      };
+
+      // Add event listeners for both request and confirmation events
+      graphElement.addEventListener('edge-creation-requested', handleEdgeCreationRequested);
+      graphElement.addEventListener('edge-modification-requested', handleEdgeModificationRequested);
+      graphElement.addEventListener('edge-created', handleEdgeCreated);
+      graphElement.addEventListener('edge-modified', handleEdgeModified);
+      
       graphContainerRef.current.appendChild(graphElement);
       graphElementRef.current = graphElement;
-      
-      // Apply initial layout if we have data
-      if (currentInstance.getAtoms().length > 0) {
-        setTimeout(() => applyLayout(currentInstance, currentSpec), 500);
+
+      // Clean up event listeners when component unmounts
+      return () => {
+        if (graphElement) {
+          graphElement.removeEventListener('edge-creation-requested', handleEdgeCreationRequested);
+          graphElement.removeEventListener('edge-modification-requested', handleEdgeModificationRequested);
+          graphElement.removeEventListener('edge-created', handleEdgeCreated);
+          graphElement.removeEventListener('edge-modified', handleEdgeModified);
+        }
+      };
+    }
+  }, []); // Only run once when component mounts
+
+  // Handle data and layout updates only when the instance actually changes 
+  useEffect(() => {
+    if (graphElementRef.current && currentInstance.getAtoms().length > 0) {
+      // Apply layout when data changes
+      if (autoApplyLayout) {
+        setTimeout(() => applyLayout(currentInstance, currentSpec), 100);
       }
     }
-  }, [currentInstance, currentSpec, applyLayout]);
+  }, [currentInstance, autoApplyLayout]); // Removed currentSpec to avoid continuous updates
 
   const containerStyle: React.CSSProperties = {
     width,
@@ -303,7 +403,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
         }}>
           {/* Pyret REPL */}
           <div style={{ 
-            flex: 1, 
+            flex: replCollapsed ? '0 0 auto' : 1, 
             border: '1px solid #ddd', 
             borderRadius: '6px',
             backgroundColor: '#fff',
@@ -313,27 +413,36 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
             <div style={{ 
               padding: '8px 12px', 
               backgroundColor: '#f8f9fa', 
-              borderBottom: '1px solid #e0e0e0',
+              borderBottom: replCollapsed ? 'none' : '1px solid #e0e0e0',
               borderRadius: '6px 6px 0 0',
               fontSize: '14px',
               fontWeight: 'bold',
-              color: '#495057'
-            }}>
-              Pyret REPL
+              color: '#495057',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              cursor: 'pointer'
+            }} onClick={() => setReplCollapsed(!replCollapsed)}>
+              <span>Pyret REPL</span>
+              <span style={{ fontSize: '12px', color: '#6c757d' }}>
+                {replCollapsed ? '▶' : '▼'}
+              </span>
             </div>
-            <div style={{ flex: 1, padding: '8px' }}>
-              <PyretReplInterface
-                initialInstance={currentInstance}
-                onChange={handleInstanceChange}
-                externalEvaluator={pyretEvaluator}
-              />
-            </div>
+            {!replCollapsed && (
+              <div style={{ flex: 1, padding: '8px' }}>
+                <PyretReplInterface
+                  initialInstance={currentInstance}
+                  onChange={handleInstanceChange}
+                  externalEvaluator={pyretEvaluator}
+                />
+              </div>
+            )}
           </div>
 
           {/* Layout Interface (if enabled) */}
           {showLayoutInterface && (
             <div style={{ 
-              flex: 1, 
+              flex: layoutCollapsed ? '0 0 auto' : 1, 
               border: '1px solid #ddd', 
               borderRadius: '6px',
               backgroundColor: '#fff',
@@ -343,26 +452,35 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
               <div style={{ 
                 padding: '8px 12px', 
                 backgroundColor: '#f8f9fa', 
-                borderBottom: '1px solid #e0e0e0',
+                borderBottom: layoutCollapsed ? 'none' : '1px solid #e0e0e0',
                 borderRadius: '6px 6px 0 0',
                 fontSize: '14px',
                 fontWeight: 'bold',
-                color: '#495057'
-              }}>
-                CnD Layout Interface
+                color: '#495057',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                cursor: 'pointer'
+              }} onClick={() => setLayoutCollapsed(!layoutCollapsed)}>
+                <span>CnD Layout Interface</span>
+                <span style={{ fontSize: '12px', color: '#6c757d' }}>
+                  {layoutCollapsed ? '▶' : '▼'}
+                </span>
               </div>
-              <div style={{ flex: 1, padding: '8px' }}>
-                <CndLayoutInterface
-                  yamlValue={currentSpec}
-                  onChange={handleSpecChange}
-                  isNoCodeView={isNoCodeView}
-                  onViewChange={setIsNoCodeView}
-                  constraints={constraints}
-                  setConstraints={setConstraints}
-                  directives={directives}
-                  setDirectives={setDirectives}
-                />
-              </div>
+              {!layoutCollapsed && (
+                <div style={{ flex: 1, padding: '8px' }}>
+                  <CndLayoutInterface
+                    yamlValue={currentSpec}
+                    onChange={handleSpecChange}
+                    isNoCodeView={isNoCodeView}
+                    onViewChange={setIsNoCodeView}
+                    constraints={constraints}
+                    setConstraints={setConstraints}
+                    directives={directives}
+                    setDirectives={setDirectives}
+                  />
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -379,45 +497,63 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
           <div style={{ 
             padding: '8px 12px', 
             backgroundColor: '#f8f9fa', 
-            borderBottom: '1px solid #e0e0e0',
+            borderBottom: graphCollapsed ? 'none' : '1px solid #e0e0e0',
             borderRadius: '6px 6px 0 0',
             fontSize: '14px',
             fontWeight: 'bold',
-            color: '#495057'
+            color: '#495057',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
           }}>
-            Graph Visualization
-            <span style={{ 
-              fontSize: '12px', 
-              fontWeight: 'normal', 
-              color: '#6c757d',
-              marginLeft: '10px'
-            }}>
-              {currentInstance.getAtoms().length} atoms, {currentInstance.getRelations().length} relations
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <span 
+                style={{ cursor: 'pointer', marginRight: '8px' }}
+                onClick={() => setGraphCollapsed(!graphCollapsed)}
+              >
+                {graphCollapsed ? '▶' : '▼'}
+              </span>
+              <span>Graph Visualization</span>
+              <span style={{ 
+                fontSize: '12px', 
+                fontWeight: 'normal', 
+                color: '#6c757d',
+                marginLeft: '10px'
+              }}>
+                {currentInstance.getAtoms().length} atoms, {currentInstance.getRelations().length} relations
+              </span>
+            </div>
+            <div style={{ fontSize: '10px', color: '#28a745' }}>
+              🎮 Cmd/Ctrl + Click for Edge Mode
+            </div>
           </div>
-          <div 
-            ref={graphContainerRef}
-            style={{ 
-              flex: 1, 
-              padding: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              minHeight: '300px'
-            }}
-          >
-            {/* Graph element will be created here */}
-            {!graphElementRef.current && (
-              <div style={{ color: '#6c757d', textAlign: 'center' }}>
-                <p>Loading graph visualization...</p>
-                <small>Add data using the REPL to see the visualization</small>
-              </div>
-            )}
-          </div>
+          {!graphCollapsed && (
+            <div 
+              ref={graphContainerRef}
+              style={{ 
+                flex: 1, 
+                padding: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: '300px'
+              }}
+            >
+              {/* Graph element will be created here */}
+              {!graphElementRef.current && (
+                <div style={{ color: '#6c757d', textAlign: 'center' }}>
+                  <p>Loading graph visualization...</p>
+                  <small>Add data using the REPL to see the visualization</small>
+                  <br />
+                  <small>Use <strong>Cmd/Ctrl + Click</strong> between nodes to create edges</small>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Status bar */}
+      {/* Status bar with live reified values */}
       <div style={{ 
         padding: '8px 12px', 
         backgroundColor: '#fff',
@@ -436,6 +572,65 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
         <span>
           {layoutStale ? 'Layout needs update' : 'Layout synchronized'}
         </span>
+      </div>
+
+      {/* Live reified values textbox */}
+      <div style={{ 
+        border: '1px solid #ddd', 
+        borderRadius: '6px',
+        backgroundColor: '#fff',
+        display: 'flex',
+        flexDirection: 'column'
+      }}>
+        <div style={{ 
+          padding: '8px 12px', 
+          backgroundColor: '#f8f9fa', 
+          borderBottom: '1px solid #e0e0e0',
+          borderRadius: '6px 6px 0 0',
+          fontSize: '14px',
+          fontWeight: 'bold',
+          color: '#495057',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <span>Live Reified Data (Pyret Constructor Notation)</span>
+          <button
+            onClick={() => {
+              const reifiedData = currentInstance.reify();
+              navigator.clipboard.writeText(reifiedData);
+            }}
+            style={{
+              backgroundColor: '#007bff',
+              color: 'white',
+              border: 'none',
+              padding: '4px 8px',
+              borderRadius: '3px',
+              cursor: 'pointer',
+              fontSize: '11px'
+            }}
+          >
+            Copy
+          </button>
+        </div>
+        <div style={{ padding: '8px' }}>
+          <textarea
+            value={currentInstance.reify()}
+            readOnly
+            style={{
+              width: '100%',
+              height: '100px',
+              fontSize: '11px',
+              fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
+              backgroundColor: '#f8f9fa',
+              border: '1px solid #e0e0e0',
+              borderRadius: '4px',
+              padding: '8px',
+              resize: 'vertical'
+            }}
+            placeholder="Reified data will appear here as you build your data instance..."
+          />
+        </div>
       </div>
     </div>
   );
