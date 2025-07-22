@@ -3,14 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pyret REPL with External Evaluator Demo</title>
+    <title>Combined Input Component Demo</title>
     
-    <!-- Bootstrap CSS for component styling -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-            max-width: 1400px;
+            max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
             background: #f5f5f5;
@@ -20,23 +18,7 @@
             border-radius: 8px;
             padding: 20px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
         }
-        .demo-section {
-            margin-bottom: 30px;
-            padding: 20px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-        }
-        .status {
-            padding: 10px;
-            border-radius: 4px;
-            margin-bottom: 15px;
-        }
-        .status.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .status.warning { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
-        .status.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        .status.info { background: #e3f2fd; color: #1976d2; }
         button {
             background: #007bff;
             color: white;
@@ -47,248 +29,31 @@
             margin-right: 10px;
         }
         button:hover { background: #0056b3; }
-        button:disabled { background: #6c757d; cursor: not-allowed; }
-        code {
-            background: #f8f9fa;
-            padding: 2px 4px;
-            border-radius: 3px;
-            font-family: 'Monaco', 'Menlo', monospace;
-        }
-        #graph-container {
-            width: 100%;
-            height: 600px;
-            border: 2px solid #007acc;
-            border-radius: 8px;
-            margin: 20px 0;
-        }
-        .repl-interface-container, .layout-interface-container {
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 0;
-            background: #fafafa;
-            height: 500px;
-            overflow-y: auto;
-        }
-        label {
-            font-weight: bold;
-            display: block;
-            margin-bottom: 5px;
-        }
-        .demo-instructions {
-            background: #fff3cd;
-            border: 1px solid #ffeaa7;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-        }
-        .demo-instructions h4 {
-            color: #856404;
-            margin-top: 0;
-        }
-        .command-example {
-            font-family: 'Courier New', monospace;
-            background: #f8f9fa;
-            padding: 8px;
-            border-radius: 4px;
-            border-left: 3px solid #007acc;
-            margin: 5px 0;
-        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🚀 Complete Pyret Integration Demo</h1>
-        <p>This demo showcases the complete Pyret REPL integration: <strong>Enhanced Pyret REPL + External Evaluator + CnD Layout Interface + Real-time Visualization</strong></p>
+        <h1>Combined Input Component Demo</h1>
+        <p>This demo shows the Combined Input Component with REPL, Layout Interface, and Graph visualization.</p>
         
-        <div class="demo-instructions">
-            <h4>🎯 What This Demo Shows</h4>
-            <ul>
-                <li><strong>Enhanced Pyret REPL</strong>: Full Pyret language support with external evaluator</li>
-                <li><strong>CnD Layout Interface</strong>: Visual constraint specification</li>
-                <li><strong>Real-time Synchronization</strong>: Changes in REPL instantly update visualization</li>
-                <li><strong>Fallback Mode</strong>: Graceful degradation when external evaluator unavailable</li>
-            </ul>
-        </div>
+        <button onclick="setupCombinedInputDemo()">Start Demo</button>
+        <button onclick="clearCombinedInputDemo()">Clear Demo</button>
         
-        <!-- Status Section -->
-        <div class="demo-section">
-            <h2>External Evaluator Status</h2>
-            <div id="evaluator-status" class="status warning">
-                Checking for external Pyret evaluator...
-            </div>
-            <button onclick="checkForEvaluator()">Check Again</button>
-            <button onclick="simulateEvaluator()">Simulate Evaluator</button>
-        </div>
-
-        <!-- New Combined Input Demo Section -->
-        <div class="demo-section" style="background: #e8f5e8; border: 2px solid #28a745;">
-            <h2>🆕 New Combined Input Component</h2>
-            <p>This section demonstrates the <strong>new simplified Combined Input Component</strong> that eliminates the complex setup above:</p>
-            
-            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                <button onclick="setupCombinedInputDemo()" style="background: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px; font-weight: bold;">
-                    🚀 Try Combined Input Component
-                </button>
-                <button onclick="clearCombinedInputDemo()" style="background: #dc3545; color: white; padding: 10px 20px; border: none; border-radius: 5px;">
-                    Clear Combined Demo
-                </button>
-            </div>
-            
-            <div id="combined-input-demo-container" style="height: 800px; border: 2px solid #28a745; border-radius: 8px; margin: 15px 0;">
-                <div style="padding: 40px; text-align: center; color: #666;">
-                    <h3>Combined Input Component</h3>
-                    <p>Click "Try Combined Input Component" above to see the new simplified interface</p>
-                    <ul style="text-align: left; display: inline-block;">
-                        <li>✅ All-in-one component with REPL, Layout, and Graph</li>
-                        <li>✅ Automatic bidirectional sync (REPL ↔ Graph)</li>
-                        <li>✅ Edge input mode with Cmd/Ctrl+Click</li>
-                        <li>✅ Collapsible sections for better space management</li>
-                        <li>✅ Live reified data display with copy functionality</li>
-                        <li>✅ Clear staleness indicators</li>
-                    </ul>
-                </div>
+        <div id="combined-input-demo-container" style="height: 800px; border: 1px solid #ddd; border-radius: 8px; margin: 15px 0;">
+            <div style="padding: 40px; text-align: center; color: #666;">
+                <h3>Combined Input Component</h3>
+                <p>Click "Start Demo" to see the Combined Input Component</p>
             </div>
         </div>
-
-        <!-- Legacy Demo Section -->
-        <div class="demo-section" style="background: #fff3cd; border: 1px solid #ffc107;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <h2>⚡ Legacy Integration Demo</h2>
-                <div style="background: #ffc107; color: #856404; padding: 5px 10px; border-radius: 4px; font-size: 12px; font-weight: bold;">
-                    LEGACY - Use Combined Input Above Instead
-                </div>
-            </div>
-            <p>This section shows the original complex setup. <strong>The Combined Input Component above is recommended for new projects.</strong></p>
-        </div>
-
-        <!-- React Component Areas with Complete Integration -->
-        <div style="display: flex; flex-direction: column; gap: 20px; margin-bottom: 20px;">
-            <div>
-                <label for="layout-interface-container">CnD Layout Interface:</label>
-                <div id="layout-interface-container" class="layout-interface-container">
-                    <div style="padding: 20px; text-align: center; color: #666;">
-                        <p>Loading CnD Layout Interface...</p>
-                        <p><em>Configure layout constraints here</em></p>
-                    </div>
-                </div>
-            </div>
-            <div>
-                <label for="repl-interface-container">Enhanced Pyret REPL with External Evaluator:</label>
-                <div id="repl-interface-container" class="repl-interface-container">
-                    <div style="padding: 20px; text-align: center; color: #666;">
-                        <p>Loading Enhanced Pyret REPL Interface...</p>
-                        <p><em>Full Pyret language support + CnD integration</em></p>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Alternative Combined REPL+Viz Container (hidden by default) -->
-            <div id="combined-repl-viz-container" style="display: none; height: 600px; border: 1px solid #ddd; border-radius: 8px;">
-                <div style="padding: 20px; text-align: center; color: #666;">
-                    <p>Combined REPL + Visualization Container</p>
-                    <p><em>Alternative layout for fallback mode</em></p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Complete Integration Instructions -->
-        <div class="demo-section">
-            <h2>🎮 Complete Integration Usage</h2>
-            <p>This demo demonstrates the <strong>recommended production setup</strong> with all features integrated:</p>
-            
-            <h4>1. Enhanced Pyret REPL Commands</h4>
-            <p>Try these commands in the Pyret REPL above (external evaluator required for full support):</p>
-            <ul>
-                <li><code>Alice:Person</code> - Add simple atom</li>
-                <li><code>alice.friend = bob</code> - Add relation (after creating bob)</li>
-                <li><code>[list: 1,2,3,4]:numbers</code> - Add Pyret list with external evaluator</li>
-                <li><code>edge("1", "knows", "2")</code> - Create edge using Pyret expression</li>
-                <li><code>help</code> - Show all available commands</li>
-                <li><code>reify</code> - Generate Pyret constructor notation</li>
-                <li><code>clear</code> - Clear current instance</li>
-            </ul>
-            
-            <h4>2. CnD Layout Interface</h4>
-            <p>Use the visual layout interface to:</p>
-            <ul>
-                <li>Add <strong>Node constraints</strong> (positioning, grouping)</li>
-                <li>Add <strong>Edge constraints</strong> (styling, routing)</li>
-                <li>Switch between <strong>No-Code</strong> (visual) and <strong>Code</strong> (YAML) views</li>
-                <li>Apply constraints in real-time to the visualization</li>
-            </ul>
-            
-            <h4>3. Real-time Synchronization</h4>
-            <p>Watch how:</p>
-            <ul>
-                <li>🔄 REPL changes instantly update the visualization</li>
-                <li>📐 Layout constraint changes trigger automatic re-rendering</li>
-                <li>📊 The visualization reflects both data and layout constraints</li>
-                <li>⚡ All components stay synchronized without manual refresh</li>
-            </ul>
-        </div>
-        
-        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
-            <button onclick="clearGraph()">Clear All</button>
-            <button id="apply-layout-btn" onclick="applyLayoutManually()" disabled style="background-color: #28a745;">Apply CnD Layout</button>
-            <div id="layout-staleness" style="display: none; color: #ff6b35; font-weight: bold; background: #fff3cd; padding: 5px 10px; border-radius: 4px; border: 1px solid #ffeacc;">
-                ⚠️ CnD Layout Stale - Click "Apply CnD Layout" to update
-            </div>
-            <select title="Choose the Layout Format" class="form-control" id="layoutFormat" name="layoutFormat" onchange="changeLayoutFormat()">
-                <option value="default" selected>Standard</option>
-                <option value="grid">Grid (Beta)</option>
-            </select>
-        </div>
-        
-        <!-- Use the webcola-cnd-graph custom element -->
-        <webcola-cnd-graph 
-            id="graph-container"
-            width="800" 
-            height="600"
-            layoutFormat="default">
-        </webcola-cnd-graph>
-
-        <!-- Instance Information -->
-        <div class="demo-section">
-            <h2>Data Instance Information</h2>
-            <div id="instance-info">
-                No data instance created yet.
-            </div>
-            <button onclick="logInstanceToConsole()">Log Instance to Console</button>
-        </div>
-        
-        <div id="status" class="status info">React components loading - start building your Pyret instance!</div>
     </div>
 
-    <!-- D3 v4 and WebCola -->
-    <script src="https://d3js.org/d3.v4.min.js"></script>
-    <script src="../vendor/cola.js"></script>
-    
-    <!-- React for components -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    
-    <!-- Complete CND-Core browser bundle -->
+    <!-- CnD Core Library (browser build) -->
     <script src="../dist/browser/cnd-core-complete.global.js"></script>
-    
-    <!-- Pyret REPL demo components bundle -->
-    <script src="../dist/components/pyret-repl-demo-components.global.js"></script>
-    <link rel="stylesheet" href="../dist/components/pyret-repl-demo-components.css">
-    
-    <script>
-        // Variables to store data
-        let currentInstance = null;
-        let currentInstanceLayout = null;
-        let currentCnDSpecVersion = 0; // Track CnD spec changes
-        let appliedCnDSpecVersion = 0; // Track which spec version was last applied
-        let hasDataChanges = false; // Track if data has changed since last CnD application
-        
-        // Mock external evaluator for demonstration
-        let mockEvaluator = null;
-        let replInstance = null;
-        let currentDataInstance = null;
+    <link rel="stylesheet" href="../dist/browser/cnd-core-complete.css">
 
+    <script>
         /**
-         * Set up the new Combined Input Component demo
+         * Set up the Combined Input Component demo
          */
         function setupCombinedInputDemo() {
             console.log('🚀 Setting up Combined Input Component demo...');
@@ -297,66 +62,47 @@
             clearCombinedInputDemo();
             
             // Check for external evaluator
-            const externalEvaluator = checkForEvaluator();
+            const externalEvaluator = window.__internalRepl || window.pyretREPLInternal;
             
-            // Create initial data instance with some sample data
-            const initialPyretData = {
-                dict: {
-                    'Alice': { tag: 'atom', type: 'Person' },
-                    'Bob': { tag: 'atom', type: 'Person' }
-                },
-                brands: { 'Person': true }
-            };
-            const dataInstance = new window.CndCore.PyretDataInstance(initialPyretData);
+            // Create empty data instance (no initial data)
+            const dataInstance = new window.CndCore.PyretDataInstance({
+                dict: {},
+                brands: {}
+            });
             
-            // CnD specification with person styling
+            // Simple CnD specification
             const cndSpec = `nodes:
-  - { id: "Person", type: "atom", color: "#FF6B35", size: 20 }
   - { id: "atom", type: "atom", color: "#4CAF50" }
 edges:
-  - { id: "friend", type: "relation", color: "#E91E63", width: 3 }
-  - { id: "knows", type: "relation", color: "#2196F3", width: 2 }
-  - { id: "relation", type: "relation", color: "#9E9E9E" }
-constraints:
-  - type: "align"
-    nodes: ["Person"]
-    axis: "x"
-directives:
-  - type: "hideDisconnected"
-    value: false`;
+  - { id: "relation", type: "relation", color: "#2196F3" }`;
 
             // Mount the combined input component
             const success = window.CndCore.mountCombinedInput({
                 containerId: 'combined-input-demo-container',
                 cndSpec: cndSpec,
                 dataInstance: dataInstance,
-                pyretEvaluator: externalEvaluator || mockEvaluator,
-                projections: {},
+                pyretEvaluator: externalEvaluator || createMockEvaluator(),
                 height: '800px',
                 showLayoutInterface: true,
                 autoApplyLayout: true,
                 onInstanceChange: (instance) => {
-                    console.log('🔄 Combined demo - Data updated:', {
+                    console.log('🔄 Data updated:', {
                         atoms: instance.getAtoms().length,
-                        relations: instance.getRelations().length,
-                        reified: instance.reify()
+                        relations: instance.getRelations().length
                     });
-                    updateInstanceInfo();
                 },
                 onSpecChange: (spec) => {
-                    console.log('📐 Combined demo - Layout spec updated:', spec.length, 'characters');
+                    console.log('📐 Layout spec updated');
                 },
                 onLayoutApplied: (layout) => {
-                    console.log('🎨 Combined demo - Layout applied with', layout?.nodes?.length || 0, 'nodes');
+                    console.log('🎨 Layout applied');
                 }
             });
             
             if (success) {
                 console.log('✅ Combined Input Component demo ready!');
-                updateStatus('🎉 Combined Input Component active! Try adding data or creating edges with Cmd/Ctrl+Click', 'success');
             } else {
                 console.error('❌ Failed to setup Combined Input Component demo');
-                updateStatus('❌ Failed to setup Combined Input Component demo', 'error');
             }
         }
 
@@ -369,43 +115,17 @@ directives:
                 container.innerHTML = `
                     <div style="padding: 40px; text-align: center; color: #666;">
                         <h3>Combined Input Component</h3>
-                        <p>Click "Try Combined Input Component" above to see the new simplified interface</p>
-                        <ul style="text-align: left; display: inline-block;">
-                            <li>✅ All-in-one component with REPL, Layout, and Graph</li>
-                            <li>✅ Automatic bidirectional sync (REPL ↔ Graph)</li>
-                            <li>✅ Edge input mode with Cmd/Ctrl+Click</li>
-                            <li>✅ Collapsible sections for better space management</li>
-                            <li>✅ Live reified data display with copy functionality</li>
-                            <li>✅ Clear staleness indicators</li>
-                        </ul>
+                        <p>Click "Start Demo" to see the Combined Input Component</p>
                     </div>
                 `;
-                console.log('Combined Input demo container cleared');
             }
         }
 
         /**
-         * Check if there's a real external evaluator available
+         * Create a mock evaluator for demo purposes
          */
-        function checkForEvaluator() {
-            const statusDiv = document.getElementById('evaluator-status');
-            
-            if (window.__internalRepl || window.pyretREPLInternal) {
-                statusDiv.className = 'status success';
-                statusDiv.innerHTML = '✅ External Pyret evaluator detected! Enhanced features available.';
-                return window.__internalRepl || window.pyretREPLInternal;
-            } else {
-                statusDiv.className = 'status warning';
-                statusDiv.innerHTML = '⚠️ No external Pyret evaluator found. Using mock for demonstration.';
-                return null;
-            }
-        }
-
-        // Simulate an external evaluator for demo purposes
-        function simulateEvaluator() {
-            const statusDiv = document.getElementById('evaluator-status');
-            
-            mockEvaluator = {
+        function createMockEvaluator() {
+            return {
                 run: async (code, sourceLocation) => {
                     console.log(`Mock evaluator running: ${code}`);
                     return {
@@ -420,558 +140,12 @@ directives:
                     isSuccessResult: (result) => result.success === true
                 }
             };
-            
-            statusDiv.className = 'status success';
-            statusDiv.innerHTML = '✅ Mock external Pyret evaluator created! You can test enhanced features.';
-            
-            updateStatus('Mock evaluator initialized - enhanced REPL features available!', 'success');
         }
 
-        /**
-         * Update staleness indicators and button states
-         */
-        function updateLayoutStaleness() {
-            const stalenessIndicator = document.getElementById('layout-staleness');
-            const applyButton = document.getElementById('apply-layout-btn');
-            
-            const isStale = currentCnDSpecVersion > appliedCnDSpecVersion;
-            
-            if (isStale) {
-                stalenessIndicator.style.display = 'block';
-                applyButton.disabled = false;
-                applyButton.style.backgroundColor = '#ff6b35';
-                applyButton.textContent = '⚠️ Apply CnD Layout (Stale)';
-            } else {
-                stalenessIndicator.style.display = 'none';
-                applyButton.disabled = true;
-                applyButton.style.backgroundColor = '#28a745';
-                applyButton.textContent = 'Apply CnD Layout (Up to Date)';
-            }
-        }
-
-        /**
-         * Manual layout application for CnD spec changes
-         */
-        async function applyLayoutManually() {
-            try {
-                updateStatus('Applying CnD layout constraints manually...', 'info');
-                
-                if (currentInstance && currentInstance.getAtoms().length > 0) {
-                    await loadInstanceData();
-                    appliedCnDSpecVersion = currentCnDSpecVersion;
-                    updateLayoutStaleness();
-                    updateStatus('CnD layout applied successfully!', 'success');
-                } else {
-                    updateStatus('No data available to apply CnD layout', 'warning');
-                }
-            } catch (error) {
-                console.error('Manual layout application failed:', error);
-                updateStatus(`Layout application failed: ${error.message}`, 'error');
-            }
-        }
-
-        /**
-         * Get current instance from the React REPL component
-         * @returns {IInputDataInstance} Current data instance
-         */
-        function getCurrentInstance() {
-            return window.currentInstance || currentInstance;
-        }
-
-        /**
-         * Get current CND specification from React CndLayoutInterface component
-         * @returns {string} CND layout specification
-         */
-        function getCurrentCNDSpec() {
-            // Try to get value from React component first
-            return window.getCurrentCNDSpecFromReact ? 
-                window.getCurrentCNDSpecFromReact() : '';
-        }
-
-        /**
-         * Update status display with proper styling
-         * @param {string} message - Status message to display
-         * @param {string} type - Status type: 'info', 'success', 'error'
-         */
-        function updateStatus(message, type = 'info') {
-            const statusElement = document.getElementById('status');
-            statusElement.textContent = message;
-            statusElement.className = `status ${type}`;
-        }
-
-        /**
-         * Complete Integration: Initialize Enhanced Pyret REPL + Layout + Visualization
-         * This demonstrates the recommended approach for production applications
-         */
-        async function initializeCompleteIntegration() {
-            try {
-                console.log('🚀 Initializing complete Pyret integration system...');
-                
-                // Check for external evaluator availability
-                const externalEvaluator = checkForEvaluator();
-                const hasRealEvaluator = !!(window.__internalRepl || window.pyretREPLInternal);
-                
-                if (hasRealEvaluator || mockEvaluator) {
-                    console.log('✅ Using enhanced mode with external evaluator support');
-                    
-                    // 1. Mount enhanced Pyret REPL with external evaluator
-                    const pyretReplSuccess = CndCore.mountPyretRepl('repl-interface-container', {
-                        externalEvaluator: externalEvaluator || mockEvaluator,
-                        className: 'enhanced-demo-repl'
-                    });
-                    
-                    // 2. Mount CnD layout interface
-                    const layoutSuccess = CndCore.mountCndLayoutInterface('layout-interface-container', {
-                        initialIsNoCodeView: true,  // Start with visual interface for demos
-                        initialYamlValue: 'nodes:\n  - { id: "node", type: "atom" }\nedges:\n  - { id: "edge", type: "relation" }'
-                    });
-                    
-                    if (pyretReplSuccess && layoutSuccess) {
-                        console.log('✅ Complete integration components mounted successfully');
-                        
-                        // 3. Set up real-time synchronization between components
-                        setupCompleteIntegrationSync();
-                        
-                        updateStatus('🎉 Complete Pyret integration ready! External evaluator + Layout + Visualization', 'success');
-                        return true;
-                    } else {
-                        throw new Error('Failed to mount one or more integration components');
-                    }
-                    
-                } else {
-                    console.log('⚠️ No external evaluator available, using fallback mode');
-                    
-                    // Fallback: Hide individual containers and show combined container
-                    document.querySelectorAll('#layout-interface-container, #repl-interface-container').forEach(el => {
-                        el.style.display = 'none';
-                    });
-                    document.getElementById('combined-repl-viz-container').style.display = 'block';
-                    
-                    // Mount combined REPL + visualization as fallback
-                    const fallbackSuccess = CndCore.mountReplWithVisualization('combined-repl-viz-container', {
-                        showLayoutInterface: true,
-                        replHeight: '250px',
-                        visualizationHeight: '300px'
-                    });
-                    
-                    if (fallbackSuccess) {
-                        console.log('✅ Fallback mode initialized successfully');
-                        updateStatus('⚠️ Fallback mode: Basic REPL + Visualization (no external evaluator)', 'warning');
-                        return true;
-                    } else {
-                        throw new Error('Failed to mount fallback components');
-                    }
-                }
-                
-            } catch (error) {
-                console.error('❌ Complete integration initialization failed:', error);
-                updateStatus(`Failed to initialize: ${error.message}`, 'error');
-                return false;
-            }
-        }
-        
-        /**
-         * Set up real-time synchronization between Pyret REPL, Layout Interface, and Visualization
-         */
-        function setupCompleteIntegrationSync() {
-            console.log('🔗 Setting up complete integration synchronization...');
-            
-            // Sync Pyret instance changes to visualization
-            window.addEventListener('pyret-instance-changed', (event) => {
-                const { instance } = event.detail;
-                console.log('🔄 Pyret instance changed:', {
-                    atoms: instance.getAtoms().length,
-                    relations: instance.getRelations().length
-                });
-                
-                // Update global instance reference for demo compatibility
-                currentInstance = instance;
-                window.currentInstance = instance;
-                
-                // Update visualization with new data
-                if (instance.getAtoms().length > 0 || instance.getRelations().length > 0) {
-                    loadInstanceData();
-                    updateInstanceInfo();
-                }
-                
-                // Log reified Pyret code for debugging
-                try {
-                    const pyretCode = instance.reify();
-                    console.log('📝 Current data as Pyret notation:', pyretCode);
-                } catch (error) {
-                    console.warn('Could not generate Pyret notation:', error.message);
-                }
-            });
-            
-            // Sync CnD specification changes to layout
-            window.addEventListener('cnd-spec-changed', (event) => {
-                console.log('📐 CnD specification changed');
-                currentCnDSpecVersion++;
-                updateLayoutStaleness();
-                
-                // Auto-apply layout if there's data to work with
-                if (currentInstance && currentInstance.getAtoms().length > 0) {
-                    setTimeout(() => {
-                        console.log('🔄 Auto-applying layout constraints...');
-                        applyLayoutManually();
-                    }, 500);
-                }
-            });
-            
-            // Sync visualization changes back to REPL
-            window.addEventListener('repl-visualization-changed', (event) => {
-                const { instance } = event.detail;
-                console.log('📊 Visualization data changed:', instance);
-                currentInstance = instance;
-                updateInstanceInfo();
-            });
-            
-            console.log('✅ Real-time synchronization setup complete');
-        }
-
-        /**
-         * Set up event listeners for edge input mode
-         */
-        function setupEdgeEventListeners() {
-            const graphElement = document.querySelector('webcola-cnd-graph');
-            if (!graphElement) {
-                console.warn('Graph element not found - edge event listeners not set up');
-                return;
-            }
-
-            // Listen for edge creation requests
-            graphElement.addEventListener('edge-creation-requested', (event) => {
-                console.log('🔗 Edge creation requested:', event.detail);
-                
-                const { relationId, sourceNodeId, targetNodeId, tuple } = event.detail;
-                
-                // Get current React instance
-                const currentInstance = window.getCurrentInstanceFromReact?.();
-                if (!currentInstance) {
-                    console.error('No React instance available for edge creation');
-                    updateStatus('Failed to create edge - no data instance available', 'error');
-                    return;
-                }
-                
-                try {
-                    // Add the relation tuple to the data instance
-                    currentInstance.addRelationTuple(relationId, tuple);
-                    console.log(`Added relation tuple: ${relationId}(${tuple.atoms.join(', ')})`);
-                    
-                    // Update the React component state (through a global function if available)
-                    if (window.updateInstanceFromEdgeEvent) {
-                        window.updateInstanceFromEdgeEvent(currentInstance);
-                    }
-                    
-                    // Trigger layout regeneration
-                    loadInstanceData();
-                    
-                    updateStatus(`✅ Edge created: ${relationId}(${tuple.atoms.join(', ')})`, 'success');
-                } catch (error) {
-                    console.error('Failed to add edge relation:', error);
-                    updateStatus(`Failed to create edge: ${error.message}`, 'error');
-                }
-            });
-
-            // Listen for edge modification requests
-            graphElement.addEventListener('edge-modification-requested', (event) => {
-                console.log('🔗 Edge modification requested:', event.detail);
-                
-                const { oldRelationId, newRelationId, sourceNodeId, targetNodeId, tuple } = event.detail;
-                
-                // Get current React instance
-                const currentInstance = window.getCurrentInstanceFromReact?.();
-                if (!currentInstance) {
-                    console.error('No React instance available for edge modification');
-                    updateStatus('Failed to modify edge - no data instance available', 'error');
-                    return;
-                }
-                
-                try {
-                    console.log(`🔍 Before modification - Relations:`, currentInstance.getRelations().map(r => `${r.id}(${r.tuples.length} tuples)`));
-                    
-                    // If we're renaming to the same relation ID, no need to modify data
-                    if (oldRelationId.trim() === newRelationId.trim()) {
-                        console.log('⏭️ Same relation name, no data changes needed');
-                        updateStatus(`✅ Edge label confirmed: ${newRelationId}`, 'success');
-                        return;
-                    }
-                    
-                    // Remove old relation tuple if it exists and has a valid name
-                    if (oldRelationId.trim()) {
-                        const oldRelation = currentInstance.getRelations().find(r => r.id === oldRelationId);
-                        if (oldRelation) {
-                            const beforeCount = oldRelation.tuples.length;
-                            currentInstance.removeRelationTuple(oldRelationId, tuple);
-                            const afterCount = oldRelation.tuples.length;
-                            console.log(`🗑️ Removed from ${oldRelationId}: ${beforeCount} → ${afterCount} tuples`);
-                        } else {
-                            console.log(`⚠️ Old relation ${oldRelationId} not found in data instance`);
-                        }
-                    }
-                    
-                    // Add new relation tuple if it has a valid name
-                    if (newRelationId.trim()) {
-                        currentInstance.addRelationTuple(newRelationId, tuple);
-                        const newRelation = currentInstance.getRelations().find(r => r.id === newRelationId);
-                        console.log(`➕ Added to ${newRelationId}: ${newRelation ? newRelation.tuples.length : 0} tuples total`);
-                    }
-                    
-                    console.log(`🔍 After modification - Relations:`, currentInstance.getRelations().map(r => `${r.id}(${r.tuples.length} tuples)`));
-                    
-                    // Update the React component state (through a global function if available)
-                    if (window.updateInstanceFromEdgeEvent) {
-                        window.updateInstanceFromEdgeEvent(currentInstance);
-                    }
-                    
-                    // Trigger layout regeneration
-                    loadInstanceData();
-                    
-                    updateStatus(`✅ Edge modified: ${oldRelationId} → ${newRelationId}`, 'success');
-                } catch (error) {
-                    console.error('Failed to modify edge relation:', error);
-                    updateStatus(`Failed to modify edge: ${error.message}`, 'error');
-                }
-            });
-            
-            console.log('🔗 Edge event listeners set up successfully');
-        }
-
-        /**
-         * Process current instance data using the PyretDataInstance → SGraphQueryEvaluator → Layout pipeline
-         */
-        async function loadInstanceData() {
-            try {
-                updateStatus('Processing Pyret instance data with SGraphQueryEvaluator...', 'info');
-                
-                const instance = getCurrentInstance();
-                if (!instance) {
-                    updateStatus('No instance data available', 'error');
-                    return;
-                }
-
-                console.log('Current instance - atoms:', instance.getAtoms().length, 'relations:', instance.getRelations().length);
-                
-                // Step 1: Create evaluation context  
-                const evaluationContext = {
-                    sourceData: instance 
-                };
-
-                // Step 2: Create and initialize SGraphQueryEvaluator
-                updateStatus('Creating SGraphQueryEvaluator...', 'info');
-                const sgqEvaluator = new CndCore.SGraphQueryEvaluator();
-                sgqEvaluator.initialize(evaluationContext);
-                console.log('SGraphQueryEvaluator created and initialized');
-
-                // Step 3: Parse layout specification
-                updateStatus('Parsing CND specification...', 'info');
-                const cndSpec = getCurrentCNDSpec();
-                console.log('Current CND spec:', cndSpec);
-
-                let layoutSpec = CndCore.parseLayoutSpec(cndSpec || "");
-
-                // Step 4: Create LayoutInstance with SGraphQueryEvaluator
-                updateStatus('Creating layout instance with SGraphQueryEvaluator...', 'info');
-
-                //TODO: This is wrong. Look ata the doc string.
-                const layoutInstance = new CndCore.LayoutInstance(layoutSpec, sgqEvaluator, 0, true);
-                console.log('LayoutInstance created:', layoutInstance);
-
-                // Generate layout and store the result
-                const projections = {};
-                const layoutResult = layoutInstance.generateLayout(instance, projections);
-                currentInstanceLayout = layoutResult.layout;
-
-                // Update the graph visualization
-                const graphElement = document.querySelector('webcola-cnd-graph');
-                if (graphElement) {
-
-                    // TODO: This seems like the WRONG 
-                    // thing passed in?
-                    console.log('Updating graph with layout instance...');
-                    await graphElement.renderLayout(currentInstanceLayout);
-                    
-                    // Mark that layout has been applied with current spec
-                    appliedCnDSpecVersion = currentCnDSpecVersion;
-                    updateLayoutStaleness();
-                    
-                    updateStatus(`✅ Visualization updated! ${instance.getAtoms().length} atoms, ${instance.getRelations().length} relations`, 'success');
-                } else {
-                    console.error('Graph element not found');
-                    updateStatus('Graph element not found', 'error');
-                }
-
-            } catch (error) {
-                console.error('Error in loadInstanceData:', error);
-                updateStatus(`Error loading data: ${error.message}`, 'error');
-            }
-        }
-
-        /**
-         * Clear all data and reset the interface
-         */
-        function clearGraph() {
-            try {
-                const graphElement = document.querySelector('webcola-cnd-graph');
-                if (graphElement) {
-                    graphElement.clear();
-                }
-                
-                // Reset to empty Pyret instance
-                const emptyPyretObject = { dict: {}, brands: {} };
-                const emptyInstance = new CndCore.PyretDataInstance(emptyPyretObject);
-                
-                if (window.updateReplInstance) {
-                    window.updateReplInstance(emptyInstance);
-                }
-                
-                currentInstance = null;
-                currentInstanceLayout = null;
-                
-                updateStatus('Graph and data cleared', 'info');
-            } catch (error) {
-                console.error('Error clearing graph:', error);
-                updateStatus(`Error clearing: ${error.message}`, 'error');
-            }
-        }
-
-        /**
-         * Change the layout format of the graph
-         */
-        function changeLayoutFormat() {
-            const formatSelect = document.getElementById('layoutFormat');
-            const graphElement = document.querySelector('webcola-cnd-graph');
-            
-            if (graphElement && formatSelect) {
-                const newFormat = formatSelect.value;
-                graphElement.setAttribute('layoutFormat', newFormat);
-                
-                // Reload data with new format
-                if (currentInstanceLayout) {
-                    loadInstanceData();
-                }
-                
-                updateStatus(`Layout format changed to: ${newFormat}`, 'info');
-            }
-        }
-
-        // Update instance information display
-        function updateInstanceInfo() {
-            const infoDiv = document.getElementById('instance-info');
-            infoDiv.innerHTML = `
-                <p><strong>Current Data Instance:</strong></p>
-                <ul>
-                    <li>Type: PyretDataInstance</li>
-                    <li>External Evaluator: ${mockEvaluator ? 'Available (Mock)' : 'Not Available'}</li>
-                    <li>Enhanced Features: ${mockEvaluator ? 'Enabled' : 'Disabled'}</li>
-                </ul>
-                <p><small>In a real implementation, this would show actual atoms, relations, and types.</small></p>
-            `;
-        }
-
-        // Log instance to console
-        function logInstanceToConsole() {
-            console.log('Current data instance state:', {
-                hasExternalEvaluator: !!mockEvaluator,
-                mockEvaluator: mockEvaluator,
-                currentInstance: currentInstance,
-                timestamp: new Date().toISOString()
-            });
-        }
-
-        // Initialize when page loads
-        document.addEventListener('DOMContentLoaded', async () => {
-            console.log('DOM loaded, initializing complete Pyret integration demo...');
-            
-            // Wait for CnD-Core bundle to be available
-            let attempts = 0;
-            while (!window.CndCore && attempts < 50) {
-                console.log(`Waiting for CnD-Core bundle... (attempt ${attempts + 1})`);
-                await new Promise(resolve => setTimeout(resolve, 100));
-                attempts++;
-            }
-            
-            if (!window.CndCore) {
-                updateStatus('Failed to load CnD-Core bundle', 'error');
-                return;
-            }
-            
-            console.log('✅ CnD-Core bundle loaded, available components:', Object.keys(window.CndCore));
-            
-            // Initialize the complete integration system
-            const success = await initializeCompleteIntegration();
-            if (success) {
-                console.log('🎉 Complete Pyret integration demo initialized successfully!');
-                updateLayoutStaleness(); // Initialize staleness indicators
-                updateInstanceInfo();
-                
-                // Set up legacy edge event listeners for graph interaction
-                setupEdgeEventListeners();
-                
-                // Start the data watcher for legacy compatibility
-                setupDataInstanceWatcher();
-            } else {
-                updateStatus('Failed to initialize complete integration demo', 'error');
-            }
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('Combined Input Component demo page loaded');
         });
-
-        // Set up event-driven visualization updates
-        function setupInstanceEventListeners() {
-            if (window.currentInstance && typeof window.currentInstance.addEventListener === 'function') {
-                // Listen for all data instance events
-                const eventTypes = ['atomAdded', 'atomRemoved', 'relationTupleAdded', 'relationTupleRemoved'];
-                
-                eventTypes.forEach(eventType => {
-                    window.currentInstance.addEventListener(eventType, (event) => {
-                        console.log(`Data instance event: ${event.type}`, event.data);
-                        // Refresh visualization when data changes
-                        loadInstanceData();
-                    });
-                });
-                
-                console.log('Event listeners set up for data instance changes');
-            }
-        }
-
-        // Replace polling with event-driven updates
-        function setupDataInstanceWatcher() {
-            let lastInstance = window.currentInstance;
-            let lastCnDSpec = '';
-            
-            // Check for instance changes periodically (much less frequent than before)
-            const checkForInstanceChange = () => {
-                if (window.currentInstance !== lastInstance) {
-                    console.log('Data instance changed, setting up new event listeners');
-                    lastInstance = window.currentInstance;
-                    currentInstance = window.currentInstance;
-                    
-                    // Set up event listeners for the new instance
-                    setupInstanceEventListeners();
-                    
-                    // Initial load
-                    loadInstanceData();
-                }
-                
-                // Check for CnD spec changes
-                const currentCnDSpec = getCurrentCNDSpec();
-                if (currentCnDSpec !== lastCnDSpec) {
-                    console.log('CnD specification change detected');
-                    lastCnDSpec = currentCnDSpec;
-                    currentCnDSpecVersion++;
-                    updateLayoutStaleness();
-                    updateStatus('CnD specification changed - click "Apply CnD Layout" to update the visualization', 'warning');
-                }
-            };
-            
-            // Check every 2 seconds instead of every 500ms
-            setInterval(checkForInstanceChange, 2000);
-            
-            // Initial setup
-            setupInstanceEventListeners();
-        }
-        
-        // Start the watcher
-        setupDataInstanceWatcher();
     </script>
 </body>
 </html>
