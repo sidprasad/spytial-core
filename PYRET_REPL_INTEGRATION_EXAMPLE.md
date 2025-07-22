@@ -60,6 +60,8 @@ This document demonstrates how to use the new Pyret REPL integration added to `r
 <html>
 <head>
     <title>Pyret REPL with Visualization</title>
+    <!-- Include Pyret's runtime for external evaluator -->
+    <script src="path/to/pyret-runtime.js"></script>
 </head>
 <body>
     <div id="repl-with-viz" style="width: 100%; height: 800px;"></div>
@@ -67,7 +69,7 @@ This document demonstrates how to use the new Pyret REPL integration added to `r
     <script src="path/to/react-component-integration.global.js"></script>
     
     <script>
-        // Mount combined REPL and visualization
+        // Mount combined REPL and visualization (basic data instance)
         CnDCore.mountReplWithVisualization('repl-with-viz', {
             showLayoutInterface: true,
             replHeight: '400px',
@@ -78,7 +80,152 @@ This document demonstrates how to use the new Pyret REPL integration added to `r
 </html>
 ```
 
+### 4. Complete Integration: Pyret REPL + External Evaluator + Visualization
+
+This is the most powerful setup, combining all features:
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Complete Pyret Integration with External Evaluator</title>
+    <!-- Include Pyret's runtime first -->
+    <script src="path/to/pyret-runtime.js"></script>
+</head>
+<body>
+    <!-- Container for Pyret REPL with external evaluator -->
+    <div id="enhanced-pyret-repl" style="height: 400px; margin-bottom: 20px;"></div>
+    
+    <!-- Container for layout specification -->
+    <div id="layout-interface" style="height: 300px; margin-bottom: 20px;"></div>
+    
+    <!-- Container for the visualization -->
+    <div id="visualization-container" style="height: 600px;"></div>
+    
+    <script src="path/to/react-component-integration.global.js"></script>
+    
+    <script>
+        // Wait for Pyret runtime to be ready
+        function initializeCompleteIntegration() {
+            if (window.__internalRepl) {
+                // 1. Mount enhanced Pyret REPL with external evaluator
+                CnDCore.mountPyretRepl('enhanced-pyret-repl', {
+                    externalEvaluator: window.__internalRepl,
+                    className: 'enhanced-pyret-repl'
+                });
+                
+                // 2. Mount CnD layout interface
+                CnDCore.mountCndLayoutInterface('layout-interface');
+                
+                // 3. Set up event listeners to sync Pyret instance with visualization
+                window.addEventListener('pyret-instance-changed', (event) => {
+                    const pyretInstance = event.detail.instance;
+                    console.log('Pyret instance changed:', pyretInstance);
+                    
+                    // Convert PyretDataInstance to regular data instance for visualization
+                    // This bridges the Pyret REPL with the general visualization system
+                    const atoms = pyretInstance.getAtoms();
+                    const relations = pyretInstance.getRelations();
+                    
+                    // Update visualization system
+                    if (window.updateVisualizationFromPyret) {
+                        window.updateVisualizationFromPyret(atoms, relations);
+                    }
+                    
+                    // Log reified code for debugging
+                    const pyretCode = pyretInstance.reify();
+                    console.log('Current data as Pyret code:', pyretCode);
+                });
+                
+                console.log('✅ Complete Pyret integration initialized!');
+            } else {
+                console.warn('⚠️ Pyret runtime not ready, falling back to basic integration');
+                // Fallback to basic REPL without external evaluator
+                CnDCore.mountPyretRepl('enhanced-pyret-repl');
+                CnDCore.mountCndLayoutInterface('layout-interface');
+            }
+        }
+        
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            // Give time for Pyret runtime to initialize
+            setTimeout(initializeCompleteIntegration, 1000);
+        });
+    </script>
+</body>
+</html>
+```
+
 ## Advanced Usage
+
+### Complete Integration: All Features Together
+
+For production use, you typically want the complete setup with external evaluator support, layout interface, and visualization:
+
+```javascript
+// Complete initialization function that coordinates all components
+function initializeCompleteSystem() {
+    // 1. Check for external evaluator
+    const hasExternalEvaluator = !!(window.__internalRepl || window.pyretREPLInternal);
+    
+    if (hasExternalEvaluator) {
+        // 2. Mount enhanced Pyret REPL with full language support
+        CnDCore.mountPyretRepl('pyret-repl-container', {
+            externalEvaluator: window.__internalRepl || window.pyretREPLInternal,
+            className: 'production-pyret-repl'
+        });
+        
+        // 3. Mount layout interface for CnD constraints
+        CnDCore.mountCndLayoutInterface('layout-container', {
+            initialIsNoCodeView: true  // Start with visual interface
+        });
+        
+        // 4. Set up real-time synchronization
+        setupRealtimeSynchronization();
+        
+        console.log('✅ Complete Pyret system initialized with external evaluator');
+    } else {
+        // Fallback: Use combined component without external evaluator
+        CnDCore.mountReplWithVisualization('fallback-container', {
+            showLayoutInterface: true,
+            replHeight: '350px',
+            visualizationHeight: '450px'
+        });
+        
+        console.log('⚠️ Fallback mode: Basic REPL + visualization (no external evaluator)');
+    }
+}
+
+function setupRealtimeSynchronization() {
+    // Sync Pyret instance changes with visualization
+    window.addEventListener('pyret-instance-changed', (event) => {
+        const { instance } = event.detail;
+        
+        // Update visualization system (your webcola-cnd-graph element)
+        const graphElement = document.querySelector('webcola-cnd-graph');
+        if (graphElement && instance) {
+            // Convert Pyret instance to layout format and update visualization
+            updateVisualizationFromPyretInstance(instance);
+        }
+        
+        // Log current state for debugging
+        console.log('Data updated:', {
+            atoms: instance.getAtoms().length,
+            relations: instance.getRelations().length,
+            pyretCode: instance.reify()
+        });
+    });
+    
+    // Sync layout changes back to visualization
+    window.addEventListener('cnd-spec-changed', (event) => {
+        console.log('Layout specification changed, applying constraints...');
+        // Your layout application logic here
+        if (window.applyLayoutConstraints) {
+            window.applyLayoutConstraints(event.detail);
+        }
+    });
+}
+```
 
 ### Programmatic Instance Management
 
