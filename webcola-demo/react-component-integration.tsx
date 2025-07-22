@@ -19,6 +19,8 @@ import { PyretReplInterface, PyretReplInterfaceProps } from '../src/components/R
 import { ReplWithVisualization, ReplWithVisualizationProps } from '../src/components/ReplInterface/ReplWithVisualization';
 import { PyretDataInstance } from '../src/data-instance/pyret/pyret-data-instance';
 import { PyretEvaluator } from '../src/components/ReplInterface/parsers/PyretExpressionParser';
+import { CombinedInputComponent, CombinedInputConfig } from '../src/components/CombinedInput/CombinedInputComponent';
+import { mountCombinedInput, CombinedInputMountConfig } from '../src/components/CombinedInput/mounting';
 
 /**
  * Configuration options for mounting CndLayoutInterface
@@ -1083,6 +1085,55 @@ export function mountAllComponents(): {
 }
 
 /**
+ * Mount CombinedInputComponent into specified container
+ * 
+ * This provides the simple API requested in the issue:
+ * - Pass in initial data, evaluator, and CnD spec
+ * - Get back a fully configured component with all sync logic handled internally
+ * 
+ * @param containerId - DOM element ID to mount into (default: 'combined-input-container')
+ * @param config - Configuration object with all the user's inputs
+ * @returns Boolean indicating success
+ * 
+ * @example
+ * ```javascript
+ * // Simple usage as requested in the issue
+ * const dataInstance = new CndCore.PyretDataInstance(v);
+ * const evaluationContext = { sourceData: dataInstance };
+ * const evaluator = new CndCore.Evaluators.SGraphQueryEvaluator();
+ * evaluator.initialize(evaluationContext);
+ * const pyretREPLInternal = window.__internalRepl;
+ * const projections = {};
+ * 
+ * const success = CndCore.mountCombinedInput('my-container', {
+ *   cndSpec: 'nodes:\n  - { id: node, type: atom }',
+ *   dataInstance: dataInstance,
+ *   pyretEvaluator: pyretREPLInternal,
+ *   projections: projections
+ * });
+ * 
+ * // With callbacks
+ * CndCore.mountCombinedInput('container', {
+ *   cndSpec: mySpec,
+ *   onInstanceChange: (instance) => console.log('Data updated:', instance),
+ *   onSpecChange: (spec) => console.log('Layout updated:', spec),
+ *   height: '800px'
+ * });
+ * ```
+ * 
+ * @public
+ */
+export function mountCombinedInputComponent(
+  containerId: string = 'combined-input-container',
+  config?: CombinedInputMountConfig
+): boolean {
+  return mountCombinedInput({
+    containerId,
+    ...config
+  });
+}
+
+/**
  * Mount all CnD components including Pyret REPL components into their default containers
  * Convenience function for comprehensive setup
  * 
@@ -1103,19 +1154,21 @@ export function mountAllComponentsWithPyret(): {
   errorModal: boolean;
   pyretRepl: boolean;
   replWithVisualization: boolean;
+  combinedInput: boolean;
 } {
-  console.log('🚀 Mounting all CnD components with Pyret REPL...');
+  console.log('🚀 Mounting all CnD components with Pyret REPL and Combined Input...');
   
   const results = {
     layoutInterface: mountCndLayoutInterface(),
     instanceBuilder: mountInstanceBuilder(),
     errorModal: mountErrorMessageModal(),
     pyretRepl: mountPyretRepl(),
-    replWithVisualization: mountReplWithVisualization()
+    replWithVisualization: mountReplWithVisualization(),
+    combinedInput: mountCombinedInputComponent()
   };
 
   const successCount = Object.values(results).filter(Boolean).length;
-  console.log(`✅ Successfully mounted ${successCount}/5 CnD components with Pyret integration`);
+  console.log(`✅ Successfully mounted ${successCount}/6 CnD components with Pyret integration and Combined Input`);
   
   return results;
 }
@@ -1342,6 +1395,8 @@ export const CnDCore = {
   mountPyretRepl,
   mountReplWithVisualization,
   mountAllComponentsWithPyret,
+  // Combined Input mounting functions
+  mountCombinedInput: mountCombinedInputComponent,
 
   // State managers
   CndLayoutStateManager,
@@ -1371,6 +1426,8 @@ if (typeof window !== 'undefined') {
   (window as any).mountPyretRepl = mountPyretRepl;
   (window as any).mountReplWithVisualization = mountReplWithVisualization;
   (window as any).mountAllComponentsWithPyret = mountAllComponentsWithPyret;
+  // Combined Input functions for legacy compatibility
+  (window as any).mountCombinedInput = mountCombinedInputComponent;
 
   // Expose data functions for legacy compatibility
   (window as any).getCurrentCNDSpecFromReact = DataAPI.getCurrentCndSpec;
