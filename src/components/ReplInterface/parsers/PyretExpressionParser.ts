@@ -34,6 +34,12 @@ export interface PyretEvaluationResult {
   success?: boolean;
 }
 
+
+/**
+ * 
+ * 
+ */
+
 /**
  * Parser for arbitrary Pyret expressions using an external Pyret evaluator
  * 
@@ -62,8 +68,59 @@ export class PyretExpressionParser implements ICommandParser {
     this.evaluator = evaluator;
   }
 
+
+  private async evaluateExpression(command: string): Promise<PyretEvaluationResult> {
+    if (!this.evaluator) {
+      throw new Error('No external Pyret evaluator available');
+    }
+    try {
+      const result = await this.evaluator.run(command);
+
+      // Check if the result is successful
+      if (!result.success) {
+        return {
+          success: false,
+          exn: result.exn || 'Unknown failure',
+        };
+      }
+
+      // Check if the result contains an "answer" field
+      if (result.result && typeof result.result === 'object' && 'answer' in (result.result as Record<string, unknown>)) {
+        return {
+          success: true,
+          result: (result.result as Record<string, unknown>).answer,
+        };
+      }
+
+      // Determine if the result is a single primitive value
+      if (typeof result.result === 'string' || typeof result.result === 'number' || typeof result.result === 'boolean') {
+        return {
+          success: true,
+          result: result.result,
+        };
+      }
+
+      // If none of the above, return failure
+      return {
+        success: false,
+        exn: 'Unexpected result format',
+      };
+    } catch (error) {
+      return {
+        success: false,
+        exn: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
   canHandle(command: string): boolean {
     const trimmed = command.trim();
+
+
+    // If the command is a string or number literal, we CAN handle it.
+    if (/^['"`].*['"`]$/.test(trimmed) || /^\d+(\.\d+)?$/.test(trimmed)) {
+      return true;
+    }
     
     // Only handle commands if we have an external evaluator
     if (!this.evaluator) {
@@ -129,19 +186,38 @@ export class PyretExpressionParser implements ICommandParser {
 
   execute(command: string, instance: IInputDataInstance): CommandResult {
     const trimmed = command.trim();
-    
+
     if (!this.evaluator) {
       return {
         success: false,
         message: 'No external Pyret evaluator available. Cannot evaluate Pyret expressions.\n\nTo enable this feature, ensure window.__internalRepl is available.'
       };
     }
-    
-    // For now, provide a helpful message about the detected evaluator
-    // In a future implementation, this could trigger async evaluation
+
+    // Start the evaluation asynchronously
+    this.evaluateExpression(trimmed)
+      .then((evaluationResult) => {
+        if (evaluationResult.success) {
+          // Add the result to the instance
+          this.addPyretResultToInstance(evaluationResult.result, instance, trimmed)
+            .then((result) => {
+              console.log(result.message); // Log success message
+            })
+            .catch((error) => {
+              console.error(`Failed to add result to instance: ${this.formatError(error)}`);
+            });
+        } else {
+          console.error(`Evaluation failed: ${this.formatError(evaluationResult.exn)}`);
+        }
+      })
+      .catch((error) => {
+        console.error(`Unexpected error during evaluation: ${this.formatError(error)}`);
+      });
+
+    // Return a placeholder result immediately
     return {
       success: true,
-      message: `Pyret evaluator detected! Expression would be evaluated: ${trimmed}\n\n⚠️  Full async evaluation not yet implemented in parser interface.\nThis is a foundation for future development.`,
+      message: `Evaluation started for: ${trimmed}\n\nThe result will be processed asynchronously.`,
       action: 'info'
     };
   }
@@ -150,41 +226,41 @@ export class PyretExpressionParser implements ICommandParser {
    * Add a Pyret evaluation result to the data instance
    */
   private async addPyretResultToInstance(
-    pyretResult: unknown, 
+    pyretResult: any, 
     instance: IInputDataInstance, 
     originalExpression: string
   ): Promise<CommandResult> {
     try {
       // Create a new PyretDataInstance from the result
-      const tempInstance = new PyretDataInstance(pyretResult as any);
-      
+      const tempInstance = new PyretDataInstance(pyretResult);
+
       // Get the new atoms and relations from the temp instance
       const newAtoms = tempInstance.getAtoms();
       const newRelations = tempInstance.getRelations();
-      
+
       if (newAtoms.length === 0) {
         return {
           success: false,
           message: 'Pyret expression did not produce any data structures'
         };
       }
-      
+
       // Add all atoms to the main instance
       let atomsAdded = 0;
       let relationsAdded = 0;
-      
+
       for (const atom of newAtoms) {
         try {
           // Generate unique ID if there's a conflict
           let uniqueId = atom.id;
           const existingIds = new Set(instance.getAtoms().map(a => a.id));
           let counter = 1;
-          
+
           while (existingIds.has(uniqueId)) {
             uniqueId = `${atom.id}_${counter}`;
             counter++;
           }
-          
+
           const atomToAdd = { ...atom, id: uniqueId };
           instance.addAtom(atomToAdd);
           atomsAdded++;
@@ -192,7 +268,7 @@ export class PyretExpressionParser implements ICommandParser {
           // Atom might already exist, continue
         }
       }
-      
+
       // Add all relation tuples to the main instance
       for (const relation of newRelations) {
         for (const tuple of relation.tuples) {
@@ -208,17 +284,17 @@ export class PyretExpressionParser implements ICommandParser {
           }
         }
       }
-      
+
       return {
         success: true,
         message: `Evaluated Pyret expression: ${originalExpression}\nAdded ${atomsAdded} atoms and ${relationsAdded} relation tuples`,
         action: 'add'
       };
-      
+
     } catch (error) {
       return {
         success: false,
-        message: `Failed to convert Pyret result to data instance: ${error instanceof Error ? error.message : 'Unknown error'}`
+        message: `Failed to convert Pyret result to data instance: ${this.formatError(error)}`
       };
     }
   }
@@ -226,28 +302,28 @@ export class PyretExpressionParser implements ICommandParser {
   /**
    * Format Pyret evaluation errors for display
    */
-  private formatError(error: unknown): string {
+  private formatError(error: any): string {
     if (!error) {
       return 'Unknown error';
     }
-    
+
     if (typeof error === 'string') {
       return error;
     }
-    
+
     if (typeof error === 'object' && error !== null) {
       // Try to extract useful error information from Pyret error objects
-      const errorObj = error as any;
-      
+      const errorObj = error;
+
       if (errorObj.message) {
         return errorObj.message;
       }
-      
+
       if (errorObj.toString && typeof errorObj.toString === 'function') {
         return errorObj.toString();
       }
     }
-    
+
     return String(error);
   }
 
