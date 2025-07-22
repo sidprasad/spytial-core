@@ -103,16 +103,23 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
   const [layoutCollapsed, setLayoutCollapsed] = useState<boolean>(false);
   const [graphCollapsed, setGraphCollapsed] = useState<boolean>(false);
   
-  // Refs for managing the graph element
+  // Refs for managing the graph element and current instance access
   const graphContainerRef = useRef<HTMLDivElement>(null);
   const graphElementRef = useRef<HTMLElement | null>(null);
+  const currentInstanceRef = useRef<PyretDataInstance>(currentInstance);
 
   // Initialize or update data instance
   useEffect(() => {
     if (dataInstance && dataInstance !== currentInstance) {
       setCurrentInstance(dataInstance);
+      currentInstanceRef.current = dataInstance;
     }
   }, [dataInstance, currentInstance]);
+
+  // Keep the ref in sync with the current instance
+  useEffect(() => {
+    currentInstanceRef.current = currentInstance;
+  }, [currentInstance]);
 
   // Initialize or update CnD spec
   useEffect(() => {
@@ -124,6 +131,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
   // Handle instance changes from REPL
   const handleInstanceChange = useCallback((newInstance: PyretDataInstance) => {
     setCurrentInstance(newInstance);
+    currentInstanceRef.current = newInstance; // Keep ref in sync
     setLayoutStale(true);
     onInstanceChange?.(newInstance);
     
@@ -183,7 +191,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
       console.error('Failed to apply layout:', error);
       setLayoutStale(true);
     }
-  }, [projections, onLayoutApplied]);
+  }, []);
 
   // Manual layout application
   const handleApplyLayout = useCallback(() => {
@@ -222,15 +230,13 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
         const { relationId, sourceNodeId, targetNodeId, tuple } = customEvent.detail;
         
         try {
-          // Modify the current instance directly and trigger updates
-          currentInstance.addRelationTuple(relationId, tuple);
+          // Get the current instance and add the relation
+          const currentInstanceValue = currentInstanceRef.current;
+          currentInstanceValue.addRelationTuple(relationId, tuple);
           console.log(`✅ Added relation tuple: ${relationId}(${tuple.atoms.join(', ')})`);
           
-          // Force a re-render by updating the state
-          setCurrentInstance(currentInstance);
-          
-          // Use the same handleInstanceChange flow that REPL uses
-          handleInstanceChange(currentInstance);
+          // Trigger the handleInstanceChange callback 
+          handleInstanceChange(currentInstanceValue);
         } catch (error) {
           console.error('Failed to add edge relation:', error);
         }
@@ -242,6 +248,8 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
         const { oldRelationId, newRelationId, sourceNodeId, targetNodeId, tuple } = customEvent.detail;
         
         try {
+          const currentInstanceValue = currentInstanceRef.current;
+          
           // If we're renaming to the same relation ID, no need to modify data
           if (oldRelationId.trim() === newRelationId.trim()) {
             console.log('⏭️ Same relation name, no data changes needed');
@@ -250,24 +258,21 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
           
           // Remove old relation tuple if it exists and has a valid name
           if (oldRelationId.trim()) {
-            const oldRelation = currentInstance.getRelations().find(r => r.id === oldRelationId);
+            const oldRelation = currentInstanceValue.getRelations().find(r => r.id === oldRelationId);
             if (oldRelation) {
-              currentInstance.removeRelationTuple(oldRelationId, tuple);
+              currentInstanceValue.removeRelationTuple(oldRelationId, tuple);
               console.log(`🗑️ Removed from ${oldRelationId}`);
             }
           }
           
           // Add new relation tuple if it has a valid name
           if (newRelationId.trim()) {
-            currentInstance.addRelationTuple(newRelationId, tuple);
+            currentInstanceValue.addRelationTuple(newRelationId, tuple);
             console.log(`➕ Added to ${newRelationId}`);
           }
           
-          // Force a re-render by updating the state
-          setCurrentInstance(currentInstance);
-          
-          // Use the same handleInstanceChange flow that REPL uses
-          handleInstanceChange(currentInstance);
+          // Trigger the handleInstanceChange callback 
+          handleInstanceChange(currentInstanceValue);
         } catch (error) {
           console.error('Failed to modify edge relation:', error);
         }
@@ -305,7 +310,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
     }
   }, []); // Only run once when component mounts
 
-  // Handle data and layout updates (separate from graph element creation)
+  // Handle data and layout updates only when the instance actually changes 
   useEffect(() => {
     if (graphElementRef.current && currentInstance.getAtoms().length > 0) {
       // Apply layout when data changes
@@ -313,7 +318,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
         setTimeout(() => applyLayout(currentInstance, currentSpec), 100);
       }
     }
-  }, [currentInstance, currentSpec, applyLayout, autoApplyLayout]);
+  }, [currentInstance, autoApplyLayout]); // Removed currentSpec to avoid continuous updates
 
   const containerStyle: React.CSSProperties = {
     width,
