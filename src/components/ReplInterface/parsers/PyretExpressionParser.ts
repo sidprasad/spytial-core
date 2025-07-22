@@ -73,42 +73,84 @@ export class PyretExpressionParser implements ICommandParser {
     if (!this.evaluator) {
       throw new Error('No external Pyret evaluator available');
     }
+    
     try {
       const result = await this.evaluator.run(command);
 
-      // Check if the result is successful
-      if (!result.success) {
-        return {
-          success: false,
-          exn: result.exn || 'Unknown failure',
-        };
+      // Handle the Pyret evaluator result format as shown in the JSON samples
+      // Success case: result has "result.dict.v.val" structure with "answer" field
+      // Failure case: result has "result.exn" structure
+      
+      if (result && typeof result === 'object' && 'result' in result) {
+        const resultObj = result as Record<string, unknown>;
+        
+        // Check for failure case (has exn field)
+        if (resultObj.result && typeof resultObj.result === 'object' && 'exn' in (resultObj.result as Record<string, unknown>)) {
+          return {
+            success: false,
+            exn: (resultObj.result as Record<string, unknown>).exn,
+          };
+        }
+        
+        // Check for success case (has dict.v.val structure with answer)
+        if (resultObj.result && typeof resultObj.result === 'object') {
+          const resultData = resultObj.result as Record<string, unknown>;
+          if (resultData.dict && typeof resultData.dict === 'object') {
+            const dictObj = resultData.dict as Record<string, unknown>;
+            if (dictObj.v && typeof dictObj.v === 'object') {
+              const vObj = dictObj.v as Record<string, unknown>;
+              if (vObj.val && typeof vObj.val === 'object') {
+                const valObj = vObj.val as Record<string, unknown>;
+                if (valObj.modules && typeof valObj.modules === 'object') {
+                  const modulesObj = valObj.modules as Record<string, unknown>;
+                  // Find the interaction module and extract the answer
+                  for (const [key, moduleData] of Object.entries(modulesObj)) {
+                    if (key.includes('interactions://') && moduleData && typeof moduleData === 'object') {
+                      const moduleDict = moduleData as Record<string, unknown>;
+                      if (moduleDict.dict && typeof moduleDict.dict === 'object') {
+                        const moduleDictObj = moduleDict.dict as Record<string, unknown>;
+                        if ('answer' in moduleDictObj) {
+                          return {
+                            success: true,
+                            result: moduleDictObj.answer,
+                          };
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
 
-      // Check if the result contains an "answer" field
-      if (result.result && typeof result.result === 'object' && 'answer' in (result.result as Record<string, unknown>)) {
+      // Fallback: check if this matches the simpler success format
+      if (result && typeof result === 'object' && 'answer' in result) {
         return {
           success: true,
-          result: (result.result as Record<string, unknown>).answer,
+          result: (result as Record<string, unknown>).answer,
         };
       }
 
-      // Determine if the result is a single primitive value
-      if (typeof result.result === 'string' || typeof result.result === 'number' || typeof result.result === 'boolean') {
+      // Check if the result is a primitive value directly
+      if (typeof result === 'string' || typeof result === 'number' || typeof result === 'boolean') {
         return {
           success: true,
-          result: result.result,
+          result: result,
         };
       }
 
-      // If none of the above, return failure
+      // If we can't parse the result, return failure
       return {
         success: false,
-        exn: 'Unexpected result format',
+        exn: 'Unable to parse evaluation result format',
       };
+      
     } catch (error) {
       return {
         success: false,
-        exn: error instanceof Error ? error.message : 'Unknown error',
+        exn: error instanceof Error ? error.message : 'Unknown evaluation error',
       };
     }
   }
@@ -116,6 +158,10 @@ export class PyretExpressionParser implements ICommandParser {
   canHandle(command: string): boolean {
     const trimmed = command.trim();
 
+    // Handle reify command
+    if (trimmed.toLowerCase() === 'reify') {
+      return true;
+    }
 
     // If the command is a string or number literal, we CAN handle it.
     if (/^['"`].*['"`]$/.test(trimmed) || /^\d+(\.\d+)?$/.test(trimmed)) {
@@ -136,7 +182,7 @@ export class PyretExpressionParser implements ICommandParser {
     }
     
     // Exclude utility commands
-    const utilityCommands = ['help', 'info', 'status', 'list', 'clear', 'reify'];
+    const utilityCommands = ['help', 'info', 'status', 'list', 'clear'];
     if (utilityCommands.includes(trimmed.toLowerCase())) {
       return false;
     }
@@ -180,51 +226,99 @@ export class PyretExpressionParser implements ICommandParser {
   
   getCommandPatterns(): string[] {
     return [
-      '[list: 1, 2, 3, 4]'
+      'reify',
+      '[list: 1, 2, 3, 4]',
+      'edge("id", "label", weight)'
     ];
   }
 
-  execute(command: string, instance: IInputDataInstance): CommandResult {
+  execute(command: string, instance: IInputDataInstance): Promise<CommandResult> {
     const trimmed = command.trim();
 
-    if (!this.evaluator) {
-      return {
-        success: false,
-        message: 'No external Pyret evaluator available. Cannot evaluate Pyret expressions.\n\nTo enable this feature, ensure window.__internalRepl is available.'
-      };
+    // Handle reify command
+    if (trimmed.toLowerCase() === 'reify') {
+      return this.reifyInstance(instance).then(lines => ({
+        success: true,
+        message: lines.length > 0 ? lines.join('\n') : 'No data to reify',
+        action: 'info' as const
+      }));
     }
 
-    // Start the evaluation asynchronously
-    this.evaluateExpression(trimmed)
-      .then((evaluationResult) => {
+    if (!this.evaluator) {
+      return Promise.resolve({
+        success: false,
+        message: 'No external Pyret evaluator available. Cannot evaluate Pyret expressions.\n\nTo enable this feature, ensure window.__internalRepl is available.'
+      });
+    }
+
+    // Return a promise that resolves with the actual result
+    return this.evaluateExpression(trimmed)
+      .then(async (evaluationResult) => {
         if (evaluationResult.success) {
           // Add the result to the instance
-          this.addPyretResultToInstance(evaluationResult.result, instance, trimmed)
-            .then((result) => {
-              console.log(result.message); // Log success message
-            })
-            .catch((error) => {
-              console.error(`Failed to add result to instance: ${this.formatError(error)}`);
-            });
+          const result = await this.addPyretResultToInstance(evaluationResult.result, instance, trimmed);
+          return result;
         } else {
-          console.error(`Evaluation failed: ${this.formatError(evaluationResult.exn)}`);
+          return {
+            success: false,
+            message: `Evaluation failed: ${this.formatError(evaluationResult.exn)}`
+          };
         }
       })
       .catch((error) => {
-        console.error(`Unexpected error during evaluation: ${this.formatError(error)}`);
+        return {
+          success: false,
+          message: `Unexpected error during evaluation: ${this.formatError(error)}`
+        };
       });
-
-    // Return a placeholder result immediately
-    return {
-      success: true,
-      message: `Evaluation started for: ${trimmed}\n\nThe result will be processed asynchronously.`,
-      action: 'info'
-    };
   }
 
   /**
-   * Add a Pyret evaluation result to the data instance
+   * Re-ify data instance back to Pyret expressions using the external evaluator
+   * This leverages the external evaluator for converting internal data back to Pyret form
    */
+  async reifyInstance(instance: IInputDataInstance): Promise<string[]> {
+    if (!this.evaluator) {
+      return ['// No external Pyret evaluator available for reification'];
+    }
+
+    const reifyLines: string[] = [];
+    
+    try {
+      // Re-ify atoms
+      const atoms = instance.getAtoms();
+      for (const atom of atoms) {
+        // Convert atom to Pyret syntax based on type
+        if (atom.type) {
+          reifyLines.push(`${atom.label}:${atom.type}`);
+        } else {
+          reifyLines.push(atom.label);
+        }
+      }
+
+      // Re-ify relations
+      const relations = instance.getRelations();
+      for (const relation of relations) {
+        for (const tuple of relation.tuples) {
+          if (tuple.atoms.length === 2) {
+            // Binary relation - use dot notation
+            reifyLines.push(`${tuple.atoms[0]}.${relation.name}=${tuple.atoms[1]}`);
+          } else {
+            // N-ary relation - use function-call syntax
+            const args = tuple.atoms.map(a => `"${a}"`).join(', ');
+            reifyLines.push(`${relation.name}(${args})`);
+          }
+        }
+      }
+
+      return reifyLines;
+    } catch (error) {
+      return [
+        '// Error during reification:',
+        `// ${error instanceof Error ? error.message : 'Unknown error'}`
+      ];
+    }
+  }
   private async addPyretResultToInstance(
     pyretResult: any, 
     instance: IInputDataInstance, 
@@ -330,9 +424,10 @@ export class PyretExpressionParser implements ICommandParser {
   getHelp(): string[] {
     const baseHelp = [
       'Pyret Expression Commands (requires external evaluator):',
-      '  edge("id", "label", weight)           - Add edge data structure',
-      '  [list: 1, 2, 3, 4]                   - Add Pyret list',
-      '  tree(left, right)                    - Add tree data structure',
+      '  reify                                - Convert current data instance back to Pyret expressions',
+      '  edge("id", "label", weight)          - Add edge data structure',
+      '  [list: 1, 2, 3, 4]                  - Add Pyret list',
+      '  tree(left, right)                   - Add tree data structure',
       '  table: col1, col2 row: val1, val2 end - Add table data structure',
       '',
       'This parser can evaluate arbitrary Pyret expressions and convert',
@@ -344,7 +439,8 @@ export class PyretExpressionParser implements ICommandParser {
         ...baseHelp,
         '',
         '⚠️  External Pyret evaluator not available.',
-        'This parser requires window.__internalRepl or similar.'
+        'This parser requires window.__internalRepl or similar.',
+        'The "reify" command works without external evaluator.'
       ];
     }
     

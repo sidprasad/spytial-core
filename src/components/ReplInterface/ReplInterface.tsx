@@ -158,7 +158,7 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
   }, [scrollToBottom]);
 
   // Execute command in terminal
-  const executeCommand = useCallback((terminalId: string, command: string) => {
+  const executeCommand = useCallback(async (terminalId: string, command: string) => {
     const terminal = terminals.find(t => t.id === terminalId);
     if (!terminal) return;
 
@@ -188,7 +188,9 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
       if (parser.canHandle(trimmedCommand)) {
         handlingParser = parser;
         try {
-          result = parser.execute(trimmedCommand, instance);
+          const executeResult = parser.execute(trimmedCommand, instance);
+          // Handle both sync and async results
+          result = await Promise.resolve(executeResult);
           break;
         } catch (error) {
           result = {
@@ -247,16 +249,16 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
   }, []);
 
   // Handle execute button click
-  const handleExecute = useCallback((terminalId: string) => {
+  const handleExecute = useCallback(async (terminalId: string) => {
     const state = terminalStates[terminalId];
     if (!state || state.isExecuting) return;
 
     const commands = state.input.split('\n').map(cmd => cmd.trim()).filter(cmd => cmd);
     
-    // Execute each command in sequence
-    commands.forEach(command => {
-      executeCommand(terminalId, command);
-    });
+    // Execute each command in sequence (await each one)
+    for (const command of commands) {
+      await executeCommand(terminalId, command);
+    }
   }, [terminalStates, executeCommand]);
 
   // Handle key press in input
