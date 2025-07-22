@@ -69,6 +69,39 @@ export class PyretExpressionParser implements ICommandParser {
   }
 
 
+  /**
+   * Recursively searches for a key at any level in an object
+   */
+  private findKeyAtAnyLevel(obj: unknown, keyName: string): unknown {
+    if (!obj || typeof obj !== 'object') {
+      return undefined;
+    }
+    
+    // Check if this object has the key directly
+    if (keyName in (obj as Record<string, unknown>)) {
+      return (obj as Record<string, unknown>)[keyName];
+    }
+    
+    // Recursively search in nested objects and arrays
+    for (const value of Object.values(obj as Record<string, unknown>)) {
+      if (value && typeof value === 'object') {
+        const found = this.findKeyAtAnyLevel(value, keyName);
+        if (found !== undefined) {
+          return found;
+        }
+      }
+    }
+    
+    return undefined;
+  }
+
+  /**
+   * Checks if a value is a primitive type (string, number, boolean)
+   */
+  private isPrimitive(value: unknown): value is string | number | boolean {
+    return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
+  }
+
   private async evaluateExpression(command: string): Promise<PyretEvaluationResult> {
     if (!this.evaluator) {
       throw new Error('No external Pyret evaluator available');
@@ -77,74 +110,36 @@ export class PyretExpressionParser implements ICommandParser {
     try {
       const result = await this.evaluator.run(command);
 
-      // Handle the Pyret evaluator result format as shown in the JSON samples
-      // Success case: result has "result.dict.v.val" structure with "answer" field
-      // Failure case: result has "result.exn" structure
-      
-      if (result && typeof result === 'object' && 'result' in result) {
-        const resultObj = result as Record<string, unknown>;
-        
-        // Check for failure case (has exn field)
-        if (resultObj.result && typeof resultObj.result === 'object' && 'exn' in (resultObj.result as Record<string, unknown>)) {
-          return {
-            success: false,
-            exn: (resultObj.result as Record<string, unknown>).exn,
-          };
-        }
-        
-        // Check for success case (has dict.v.val structure with answer)
-        if (resultObj.result && typeof resultObj.result === 'object') {
-          const resultData = resultObj.result as Record<string, unknown>;
-          if (resultData.dict && typeof resultData.dict === 'object') {
-            const dictObj = resultData.dict as Record<string, unknown>;
-            if (dictObj.v && typeof dictObj.v === 'object') {
-              const vObj = dictObj.v as Record<string, unknown>;
-              if (vObj.val && typeof vObj.val === 'object') {
-                const valObj = vObj.val as Record<string, unknown>;
-                if (valObj.modules && typeof valObj.modules === 'object') {
-                  const modulesObj = valObj.modules as Record<string, unknown>;
-                  // Find the interaction module and extract the answer
-                  for (const [key, moduleData] of Object.entries(modulesObj)) {
-                    if (key.includes('interactions://') && moduleData && typeof moduleData === 'object') {
-                      const moduleDict = moduleData as Record<string, unknown>;
-                      if (moduleDict.dict && typeof moduleDict.dict === 'object') {
-                        const moduleDictObj = moduleDict.dict as Record<string, unknown>;
-                        if ('answer' in moduleDictObj) {
-                          return {
-                            success: true,
-                            result: moduleDictObj.answer,
-                          };
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
+      // Step 1: Look for "exn" key at any level - if found, it's a failure
+      const exnValue = this.findKeyAtAnyLevel(result, 'exn');
+      if (exnValue !== undefined) {
+        return {
+          success: false,
+          exn: exnValue,
+        };
       }
-
-      // Fallback: check if this matches the simpler success format
-      if (result && typeof result === 'object' && 'answer' in result) {
+      
+      // Step 2: Look for "answer" key at any level - if found, process it
+      const answerValue = this.findKeyAtAnyLevel(result, 'answer');
+      if (answerValue !== undefined) {
         return {
           success: true,
-          result: (result as Record<string, unknown>).answer,
+          result: answerValue,
         };
       }
 
-      // Check if the result is a primitive value directly
-      if (typeof result === 'string' || typeof result === 'number' || typeof result === 'boolean') {
+      // Step 3: Check if the result is a primitive value directly
+      if (this.isPrimitive(result)) {
         return {
           success: true,
           result: result,
         };
       }
 
-      // If we can't parse the result, return failure
+      // If we can't find an answer or exn, return failure
       return {
         success: false,
-        exn: 'Unable to parse evaluation result format',
+        exn: 'Unable to find answer or exn in evaluation result',
       };
       
     } catch (error) {
@@ -325,7 +320,37 @@ export class PyretExpressionParser implements ICommandParser {
     originalExpression: string
   ): Promise<CommandResult> {
     try {
-      // Create a new PyretDataInstance from the result
+      // Check if the result is a primitive value
+      if (this.isPrimitive(pyretResult)) {
+        // Add primitive value directly to the current InputDataInstance with appropriate type
+        const atomType = typeof pyretResult === 'string' ? 'String' :
+                         typeof pyretResult === 'number' ? 'Number' : 'Boolean';
+        
+        // Generate a unique atom ID
+        const existingIds = new Set(instance.getAtoms().map(a => a.id));
+        let atomId = `result_${pyretResult}`;
+        let counter = 1;
+        while (existingIds.has(atomId)) {
+          atomId = `result_${pyretResult}_${counter}`;
+          counter++;
+        }
+        
+        const primitiveAtom = {
+          id: atomId,
+          label: String(pyretResult),
+          type: atomType
+        };
+        
+        instance.addAtom(primitiveAtom);
+        
+        return {
+          success: true,
+          message: `Evaluated Pyret expression: ${originalExpression}\nResult: ${pyretResult} (${atomType})\nAdded 1 atom`,
+          action: 'add'
+        };
+      }
+      
+      // For complex objects, convert to PyretDataInstance and merge all atoms/relations
       const tempInstance = new PyretDataInstance(pyretResult);
 
       // Get the new atoms and relations from the temp instance
