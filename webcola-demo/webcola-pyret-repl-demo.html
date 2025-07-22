@@ -97,8 +97,18 @@
 </head>
 <body>
     <div class="container">
-        <h1>🚀 Pyret REPL with External Evaluator Demo</h1>
-        <p>This demo shows the enhanced Pyret REPL interface with external evaluator support combined with interactive data building and CnD layout visualization.</p>
+        <h1>🚀 Complete Pyret Integration Demo</h1>
+        <p>This demo showcases the complete Pyret REPL integration: <strong>Enhanced Pyret REPL + External Evaluator + CnD Layout Interface + Real-time Visualization</strong></p>
+        
+        <div class="demo-instructions">
+            <h4>🎯 What This Demo Shows</h4>
+            <ul>
+                <li><strong>Enhanced Pyret REPL</strong>: Full Pyret language support with external evaluator</li>
+                <li><strong>CnD Layout Interface</strong>: Visual constraint specification</li>
+                <li><strong>Real-time Synchronization</strong>: Changes in REPL instantly update visualization</li>
+                <li><strong>Fallback Mode</strong>: Graceful degradation when external evaluator unavailable</li>
+            </ul>
+        </div>
         
         <!-- Status Section -->
         <div class="demo-section">
@@ -110,7 +120,7 @@
             <button onclick="simulateEvaluator()">Simulate Evaluator</button>
         </div>
 
-        <!-- React Component Areas -->
+        <!-- React Component Areas with Complete Integration -->
         <div style="display: flex; flex-direction: column; gap: 20px; margin-bottom: 20px;">
             <div>
                 <label for="layout-interface-container">CnD Layout Interface:</label>
@@ -122,27 +132,57 @@
                 </div>
             </div>
             <div>
-                <label for="repl-interface-container">Pyret REPL Interface:</label>
+                <label for="repl-interface-container">Enhanced Pyret REPL with External Evaluator:</label>
                 <div id="repl-interface-container" class="repl-interface-container">
                     <div style="padding: 20px; text-align: center; color: #666;">
-                        <p>Loading REPL Interface...</p>
-                        <p><em>Use command-line syntax to build data here</em></p>
+                        <p>Loading Enhanced Pyret REPL Interface...</p>
+                        <p><em>Full Pyret language support + CnD integration</em></p>
                     </div>
+                </div>
+            </div>
+            
+            <!-- Alternative Combined REPL+Viz Container (hidden by default) -->
+            <div id="combined-repl-viz-container" style="display: none; height: 600px; border: 1px solid #ddd; border-radius: 8px;">
+                <div style="padding: 20px; text-align: center; color: #666;">
+                    <p>Combined REPL + Visualization Container</p>
+                    <p><em>Alternative layout for fallback mode</em></p>
                 </div>
             </div>
         </div>
 
-        <!-- Enhanced REPL Instructions -->
+        <!-- Complete Integration Instructions -->
         <div class="demo-section">
-            <h2>Enhanced Pyret REPL Commands</h2>
-            <p>Try these commands in the REPL above:</p>
+            <h2>🎮 Complete Integration Usage</h2>
+            <p>This demo demonstrates the <strong>recommended production setup</strong> with all features integrated:</p>
+            
+            <h4>1. Enhanced Pyret REPL Commands</h4>
+            <p>Try these commands in the Pyret REPL above (external evaluator required for full support):</p>
             <ul>
                 <li><code>Alice:Person</code> - Add simple atom</li>
-                <li><code>alice.friend=bob</code> - Add relation (after creating bob)</li>
-                <li><code>[list: 1,2,3,4]:numbers</code> - Add Pyret list</li>
-                <li><code>edge("1", "label", 3)</code> - Try Pyret expression (requires evaluator)</li>
+                <li><code>alice.friend = bob</code> - Add relation (after creating bob)</li>
+                <li><code>[list: 1,2,3,4]:numbers</code> - Add Pyret list with external evaluator</li>
+                <li><code>edge("1", "knows", "2")</code> - Create edge using Pyret expression</li>
                 <li><code>help</code> - Show all available commands</li>
                 <li><code>reify</code> - Generate Pyret constructor notation</li>
+                <li><code>clear</code> - Clear current instance</li>
+            </ul>
+            
+            <h4>2. CnD Layout Interface</h4>
+            <p>Use the visual layout interface to:</p>
+            <ul>
+                <li>Add <strong>Node constraints</strong> (positioning, grouping)</li>
+                <li>Add <strong>Edge constraints</strong> (styling, routing)</li>
+                <li>Switch between <strong>No-Code</strong> (visual) and <strong>Code</strong> (YAML) views</li>
+                <li>Apply constraints in real-time to the visualization</li>
+            </ul>
+            
+            <h4>3. Real-time Synchronization</h4>
+            <p>Watch how:</p>
+            <ul>
+                <li>🔄 REPL changes instantly update the visualization</li>
+                <li>📐 Layout constraint changes trigger automatic re-rendering</li>
+                <li>📊 The visualization reflects both data and layout constraints</li>
+                <li>⚡ All components stay synchronized without manual refresh</li>
             </ul>
         </div>
         
@@ -320,34 +360,133 @@
         }
 
         /**
-         * Initialize the Pyret REPL demo pipeline
-         * @returns {boolean} Success status
+         * Complete Integration: Initialize Enhanced Pyret REPL + Layout + Visualization
+         * This demonstrates the recommended approach for production applications
          */
-        async function initializePipeline() {
+        async function initializeCompleteIntegration() {
             try {
-                console.log('CnD-Core browser bundle loaded successfully');
-                console.log('Available on global CndCore:', Object.keys(CndCore));
+                console.log('🚀 Initializing complete Pyret integration system...');
                 
-                // Initialize with empty PyretDataInstance (done in React components)
-                console.log('Pyret data instance will be initialized by React components');
+                // Check for external evaluator availability
+                const externalEvaluator = checkForEvaluator();
+                const hasRealEvaluator = !!(window.__internalRepl || window.pyretREPLInternal);
                 
-                // Check for required components
-                console.log('SGraphQueryEvaluator available:', !!CndCore.SGraphQueryEvaluator);
-                console.log('LayoutInstance available:', !!CndCore.LayoutInstance);
-                console.log('parseLayoutSpec available:', !!CndCore.parseLayoutSpec);
-                console.log('PyretDataInstance available:', !!CndCore.PyretDataInstance);
+                if (hasRealEvaluator || mockEvaluator) {
+                    console.log('✅ Using enhanced mode with external evaluator support');
+                    
+                    // 1. Mount enhanced Pyret REPL with external evaluator
+                    const pyretReplSuccess = CndCore.mountPyretRepl('repl-interface-container', {
+                        externalEvaluator: externalEvaluator || mockEvaluator,
+                        className: 'enhanced-demo-repl'
+                    });
+                    
+                    // 2. Mount CnD layout interface
+                    const layoutSuccess = CndCore.mountCndLayoutInterface('layout-interface-container', {
+                        initialIsNoCodeView: true,  // Start with visual interface for demos
+                        initialYamlValue: 'nodes:\n  - { id: "node", type: "atom" }\nedges:\n  - { id: "edge", type: "relation" }'
+                    });
+                    
+                    if (pyretReplSuccess && layoutSuccess) {
+                        console.log('✅ Complete integration components mounted successfully');
+                        
+                        // 3. Set up real-time synchronization between components
+                        setupCompleteIntegrationSync();
+                        
+                        updateStatus('🎉 Complete Pyret integration ready! External evaluator + Layout + Visualization', 'success');
+                        return true;
+                    } else {
+                        throw new Error('Failed to mount one or more integration components');
+                    }
+                    
+                } else {
+                    console.log('⚠️ No external evaluator available, using fallback mode');
+                    
+                    // Fallback: Hide individual containers and show combined container
+                    document.querySelectorAll('#layout-interface-container, #repl-interface-container').forEach(el => {
+                        el.style.display = 'none';
+                    });
+                    document.getElementById('combined-repl-viz-container').style.display = 'block';
+                    
+                    // Mount combined REPL + visualization as fallback
+                    const fallbackSuccess = CndCore.mountReplWithVisualization('combined-repl-viz-container', {
+                        showLayoutInterface: true,
+                        replHeight: '250px',
+                        visualizationHeight: '300px'
+                    });
+                    
+                    if (fallbackSuccess) {
+                        console.log('✅ Fallback mode initialized successfully');
+                        updateStatus('⚠️ Fallback mode: Basic REPL + Visualization (no external evaluator)', 'warning');
+                        return true;
+                    } else {
+                        throw new Error('Failed to mount fallback components');
+                    }
+                }
                 
-                updateStatus('React components loading - pipeline ready!', 'success');
-                
-                // Set up edge event listeners
-                setupEdgeEventListeners();
-                
-                return true;
             } catch (error) {
-                console.error('Failed to initialize pipeline:', error);
-                updateStatus(`Pipeline init failed: ${error.message}`, 'error');
+                console.error('❌ Complete integration initialization failed:', error);
+                updateStatus(`Failed to initialize: ${error.message}`, 'error');
                 return false;
             }
+        }
+        
+        /**
+         * Set up real-time synchronization between Pyret REPL, Layout Interface, and Visualization
+         */
+        function setupCompleteIntegrationSync() {
+            console.log('🔗 Setting up complete integration synchronization...');
+            
+            // Sync Pyret instance changes to visualization
+            window.addEventListener('pyret-instance-changed', (event) => {
+                const { instance } = event.detail;
+                console.log('🔄 Pyret instance changed:', {
+                    atoms: instance.getAtoms().length,
+                    relations: instance.getRelations().length
+                });
+                
+                // Update global instance reference for demo compatibility
+                currentInstance = instance;
+                window.currentInstance = instance;
+                
+                // Update visualization with new data
+                if (instance.getAtoms().length > 0 || instance.getRelations().length > 0) {
+                    loadInstanceData();
+                    updateInstanceInfo();
+                }
+                
+                // Log reified Pyret code for debugging
+                try {
+                    const pyretCode = instance.reify();
+                    console.log('📝 Current data as Pyret notation:', pyretCode);
+                } catch (error) {
+                    console.warn('Could not generate Pyret notation:', error.message);
+                }
+            });
+            
+            // Sync CnD specification changes to layout
+            window.addEventListener('cnd-spec-changed', (event) => {
+                console.log('📐 CnD specification changed');
+                currentCnDSpecVersion++;
+                updateLayoutStaleness();
+                
+                // Auto-apply layout if there's data to work with
+                if (currentInstance && currentInstance.getAtoms().length > 0) {
+                    setTimeout(() => {
+                        console.log('🔄 Auto-applying layout constraints...');
+                        applyLayoutManually();
+                    }, 500);
+                }
+            });
+            
+            // Sync visualization changes back to REPL
+            window.addEventListener('repl-visualization-changed', (event) => {
+                const { instance } = event.detail;
+                console.log('📊 Visualization data changed:', instance);
+                currentInstance = instance;
+                updateInstanceInfo();
+            });
+            
+            console.log('✅ Real-time synchronization setup complete');
         }
 
         /**
@@ -602,7 +741,7 @@
 
         // Initialize when page loads
         document.addEventListener('DOMContentLoaded', async () => {
-            console.log('DOM loaded, initializing Pyret REPL demo...');
+            console.log('DOM loaded, initializing complete Pyret integration demo...');
             
             // Wait for CnD-Core bundle to be available
             let attempts = 0;
@@ -617,12 +756,22 @@
                 return;
             }
             
-            checkForEvaluator();
-            const success = await initializePipeline();
+            console.log('✅ CnD-Core bundle loaded, available components:', Object.keys(window.CndCore));
+            
+            // Initialize the complete integration system
+            const success = await initializeCompleteIntegration();
             if (success) {
-                updateStatus('Demo ready! Try the REPL commands above.', 'success');
+                console.log('🎉 Complete Pyret integration demo initialized successfully!');
                 updateLayoutStaleness(); // Initialize staleness indicators
                 updateInstanceInfo();
+                
+                // Set up legacy edge event listeners for graph interaction
+                setupEdgeEventListeners();
+                
+                // Start the data watcher for legacy compatibility
+                setupDataInstanceWatcher();
+            } else {
+                updateStatus('Failed to initialize complete integration demo', 'error');
             }
         });
 

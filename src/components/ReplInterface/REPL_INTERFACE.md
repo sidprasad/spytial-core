@@ -291,3 +291,176 @@ function DataBuilderApp() {
   );
 }
 ```
+
+## Complete Integration: Pyret REPL + External Evaluator + Visualization
+
+For production applications, the recommended approach combines all features for a complete data exploration and visualization experience:
+
+### Complete Setup
+
+```tsx
+import { 
+  PyretReplInterface, 
+  CndLayoutInterface, 
+  ReplWithVisualization 
+} from 'cnd-core';
+
+function CompleteIntegrationApp() {
+  const [pyretInstance, setPyretInstance] = useState(new PyretDataInstance());
+  const [cndSpec, setCndSpec] = useState('');
+  
+  // Check for external evaluator
+  const externalEvaluator = window.__internalRepl || window.pyretREPLInternal;
+  
+  if (externalEvaluator) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+        {/* Enhanced Pyret REPL with full language support */}
+        <div style={{ height: '400px' }}>
+          <PyretReplInterface
+            externalEvaluator={externalEvaluator}
+            initialInstance={pyretInstance}
+            onChange={setPyretInstance}
+          />
+        </div>
+        
+        {/* CnD Layout Interface for constraint specification */}
+        <div style={{ height: '300px' }}>
+          <CndLayoutInterface
+            value={cndSpec}
+            onChange={setCndSpec}
+            instance={pyretInstance}
+          />
+        </div>
+        
+        {/* Visualization area would be integrated here */}
+        <div style={{ flex: 1, minHeight: '400px' }}>
+          <YourVisualizationComponent 
+            instance={pyretInstance}
+            layoutSpec={cndSpec}
+          />
+        </div>
+      </div>
+    );
+  } else {
+    // Fallback: Combined component without external evaluator
+    return (
+      <ReplWithVisualization
+        instance={pyretInstance}
+        onChange={setPyretInstance}
+        showLayoutInterface={true}
+        replHeight="350px"
+        visualizationHeight="450px"
+      />
+    );
+  }
+}
+```
+
+### Complete Integration via Mount Functions
+
+For CDN/browser usage, use the mounting functions for easier setup:
+
+```javascript
+// Complete integration initialization
+function initializeCompleteSystem() {
+  const hasExternalEvaluator = !!(window.__internalRepl || window.pyretREPLInternal);
+  
+  if (hasExternalEvaluator) {
+    // Enhanced mode with external evaluator
+    CnDCore.mountPyretRepl('pyret-repl-container', {
+      externalEvaluator: window.__internalRepl,
+      className: 'production-repl'
+    });
+    
+    CnDCore.mountCndLayoutInterface('layout-container', {
+      initialIsNoCodeView: true
+    });
+    
+    // Set up real-time synchronization
+    setupRealtimeSynchronization();
+    
+  } else {
+    // Fallback mode
+    CnDCore.mountReplWithVisualization('fallback-container', {
+      showLayoutInterface: true,
+      replHeight: '350px',
+      visualizationHeight: '450px'
+    });
+  }
+}
+
+function setupRealtimeSynchronization() {
+  // Sync Pyret instance changes with visualization
+  window.addEventListener('pyret-instance-changed', (event) => {
+    const { instance } = event.detail;
+    updateVisualizationFromPyretInstance(instance);
+  });
+  
+  // Sync layout changes
+  window.addEventListener('cnd-spec-changed', (event) => {
+    applyLayoutConstraints(event.detail);
+  });
+}
+```
+
+### Features of Complete Integration
+
+1. **Enhanced Pyret REPL**: Full Pyret language support via external evaluator
+2. **Real-time Synchronization**: Changes propagate instantly between components  
+3. **Visual Layout Interface**: No-code constraint specification
+4. **Graceful Fallback**: Works without external evaluator
+5. **Event-driven Architecture**: Components communicate via custom events
+6. **Production Ready**: Optimized for real applications
+
+### External Evaluator Commands
+
+With external evaluator available, the REPL supports full Pyret expressions:
+
+```pyret
+# Standard data building
+Alice:Person
+alice.friend = bob
+
+# Full Pyret expressions via external evaluator
+edge("node1", "knows", "node2")
+tree(node(1, empty, empty), node(2, empty, empty))
+table: name, age row: "Alice", 25 row: "Bob", 30 end
+
+# List expressions with proper Pyret semantics
+[list: 1, 2, 3, 4]:numbers
+[set: "red", "blue", "green"]:colors
+
+# Advanced data structures
+graph([list: node("A"), node("B")], [list: edge("A", "B")])
+```
+
+### Event System
+
+The complete integration uses a custom event system for coordination:
+
+```javascript
+// Listen for Pyret instance changes
+window.addEventListener('pyret-instance-changed', (event) => {
+  const { instance } = event.detail;
+  console.log('Data updated:', {
+    atoms: instance.getAtoms().length,
+    relations: instance.getRelations().length,
+    pyretCode: instance.reify()
+  });
+});
+
+// Listen for layout specification changes
+window.addEventListener('cnd-spec-changed', (event) => {
+  const cndSpec = event.detail;
+  console.log('Layout constraints updated');
+});
+
+// Listen for visualization changes
+window.addEventListener('repl-visualization-changed', (event) => {
+  const { instance } = event.detail;
+  console.log('Visualization data changed');
+});
+```
+
+This complete integration approach provides a production-ready solution for data exploration, constraint specification, and real-time visualization.
