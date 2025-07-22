@@ -1,6 +1,7 @@
 export { 
   AtomCommandParser, 
   RelationCommandParser,
+  DotNotationRelationParser,
   BatchCommandParser,
   type ICommandParser,
   type CommandResult 

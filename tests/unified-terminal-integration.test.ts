@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { JSONDataInstance } from '../src/data-instance/json-data-instance';
-import { AtomCommandParser, RelationCommandParser } from '../src/components/ReplInterface/parsers/CoreParsers';
+import { AtomCommandParser, DotNotationRelationParser } from '../src/components/ReplInterface/parsers/CoreParsers';
 import { InfoCommandParser } from '../src/components/ReplInterface/parsers/ExtensibleParsers';
 
 describe('Unified Terminal Integration', () => {
   let instance: JSONDataInstance;
   let atomParser: AtomCommandParser;
-  let relationParser: RelationCommandParser;
+  let relationParser: DotNotationRelationParser;
   let infoParser: InfoCommandParser;
 
   beforeEach(() => {
@@ -16,7 +16,7 @@ describe('Unified Terminal Integration', () => {
     });
     
     atomParser = new AtomCommandParser();
-    relationParser = new RelationCommandParser();
+    relationParser = new DotNotationRelationParser();
     infoParser = new InfoCommandParser();
   });
 
@@ -25,29 +25,29 @@ describe('Unified Terminal Integration', () => {
     expect(instance.getAtoms()).toHaveLength(0);
     expect(instance.getRelations()).toHaveLength(0);
     
-    // Add some atoms (like a user would in the unified terminal)
-    let result = atomParser.execute('add alice=Alice:Person', instance);
+    // Add some atoms (like a user would in the unified terminal with sugar syntax)
+    let result = atomParser.execute('alice=Alice:Person', instance);
     expect(result.success).toBe(true);
     expect(result.message).toContain('Added atom');
     
-    result = atomParser.execute('add bob=Bob:Person', instance);
+    result = atomParser.execute('bob=Bob:Person', instance);
     expect(result.success).toBe(true);
     
-    result = atomParser.execute('add charlie=Charlie:Person', instance);
+    result = atomParser.execute('charlie=Charlie:Person', instance);
     expect(result.success).toBe(true);
     
     // Verify atoms were added
     expect(instance.getAtoms()).toHaveLength(3);
     
-    // Add relations (like a user would in the unified terminal)
-    result = relationParser.execute('add friends(alice, bob)', instance);
+    // Add relations (like a user would in the unified terminal with sugar syntax)
+    result = relationParser.execute('alice.friend=bob', instance);
     expect(result.success).toBe(true);
     expect(result.message).toContain('Added relation');
     
-    result = relationParser.execute('add knows(alice, charlie)', instance);
+    result = relationParser.execute('alice.knows=charlie', instance);
     expect(result.success).toBe(true);
     
-    result = relationParser.execute('add likes(bob, charlie)', instance);
+    result = relationParser.execute('bob.likes=charlie', instance);
     expect(result.success).toBe(true);
     
     // Verify relations were added
@@ -66,35 +66,27 @@ describe('Unified Terminal Integration', () => {
     expect(result.message).toContain('alice');
     expect(result.message).toContain('bob');
     expect(result.message).toContain('charlie');
-    expect(result.message).toContain('friends');
+    expect(result.message).toContain('friend');
     expect(result.message).toContain('knows');
     expect(result.message).toContain('likes');
-    
-    // Remove an atom (like a user would in the unified terminal)
-    result = atomParser.execute('remove charlie', instance);
-    expect(result.success).toBe(true);
-    expect(result.message).toContain('Removed atom');
-    
-    // Verify the atom and related relations were cleaned up
-    expect(instance.getAtoms()).toHaveLength(2);
     
     // Final status check
     result = infoParser.execute('status', instance);
     expect(result.success).toBe(true);
-    expect(result.message).toContain('Atoms: 2');
+    expect(result.message).toContain('Atoms: 3');
   });
 
   it('should handle commands in any order like a unified terminal would', () => {
-    // Mix different command types randomly (simulating user input)
+    // Mix different command types randomly (simulating user input with sugar syntax)
     const commands = [
       { parser: infoParser, command: 'status' },
-      { parser: atomParser, command: 'add alice=Alice:Person' },
+      { parser: atomParser, command: 'alice=Alice:Person' },
       { parser: infoParser, command: 'list' },
-      { parser: atomParser, command: 'add bob=Bob:Person' },
-      { parser: relationParser, command: 'add friends(alice, bob)' },
+      { parser: atomParser, command: 'bob=Bob:Person' },
+      { parser: relationParser, command: 'alice.friend=bob' },
       { parser: infoParser, command: 'status' },
-      { parser: atomParser, command: 'add charlie=Charlie:Person' },
-      { parser: relationParser, command: 'add knows(alice, charlie)' },
+      { parser: atomParser, command: 'charlie=Charlie:Person' },
+      { parser: relationParser, command: 'alice.knows=charlie' },
       { parser: infoParser, command: 'list' }
     ];
     
