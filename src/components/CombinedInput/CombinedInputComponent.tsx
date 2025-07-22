@@ -202,7 +202,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
     }
   }, [onInstanceChange]);
 
-  // Initialize graph element when container is available
+  // Initialize graph element when container is available (runs only once)
   useEffect(() => {
     if (graphContainerRef.current && !graphElementRef.current) {
       // Create webcola-cnd-graph custom element
@@ -216,27 +216,27 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
       graphElement.style.borderRadius = '8px';
       
       // Set up edge input mode event listeners
-      const handleEdgeCreation = (event: Event) => {
+      const handleEdgeCreationRequested = (event: Event) => {
         const customEvent = event as CustomEvent;
         console.log('🔗 Edge creation requested in CombinedInput:', customEvent.detail);
         const { relationId, sourceNodeId, targetNodeId, tuple } = customEvent.detail;
         
         try {
-          // Modify the current instance and propagate through proper channels
+          // Modify the current instance directly and trigger updates
           currentInstance.addRelationTuple(relationId, tuple);
-          
           console.log(`✅ Added relation tuple: ${relationId}(${tuple.atoms.join(', ')})`);
           
-          // Use the same handleInstanceChange flow that REPL uses
-          // This ensures proper propagation to all components
-          handleInstanceChange(currentInstance);
+          // Force a re-render by updating the state
+          setCurrentInstance(currentInstance);
           
+          // Use the same handleInstanceChange flow that REPL uses
+          handleInstanceChange(currentInstance);
         } catch (error) {
           console.error('Failed to add edge relation:', error);
         }
       };
 
-      const handleEdgeModification = (event: Event) => {
+      const handleEdgeModificationRequested = (event: Event) => {
         const customEvent = event as CustomEvent;
         console.log('🔗 Edge modification requested in CombinedInput:', customEvent.detail);
         const { oldRelationId, newRelationId, sourceNodeId, targetNodeId, tuple } = customEvent.detail;
@@ -263,36 +263,57 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
             console.log(`➕ Added to ${newRelationId}`);
           }
           
-          // Use the same handleInstanceChange flow that REPL uses
-          // This ensures proper propagation to all components
-          handleInstanceChange(currentInstance);
+          // Force a re-render by updating the state
+          setCurrentInstance(currentInstance);
           
+          // Use the same handleInstanceChange flow that REPL uses
+          handleInstanceChange(currentInstance);
         } catch (error) {
           console.error('Failed to modify edge relation:', error);
         }
       };
 
-      // Add event listeners
-      graphElement.addEventListener('edge-creation-requested', handleEdgeCreation);
-      graphElement.addEventListener('edge-modification-requested', handleEdgeModification);
+      // Confirmation event listeners for completeness
+      const handleEdgeCreated = (event: Event) => {
+        const customEvent = event as CustomEvent;
+        console.log('✅ Edge created confirmation:', customEvent.detail);
+      };
+
+      const handleEdgeModified = (event: Event) => {
+        const customEvent = event as CustomEvent;
+        console.log('✅ Edge modified confirmation:', customEvent.detail);
+      };
+
+      // Add event listeners for both request and confirmation events
+      graphElement.addEventListener('edge-creation-requested', handleEdgeCreationRequested);
+      graphElement.addEventListener('edge-modification-requested', handleEdgeModificationRequested);
+      graphElement.addEventListener('edge-created', handleEdgeCreated);
+      graphElement.addEventListener('edge-modified', handleEdgeModified);
       
       graphContainerRef.current.appendChild(graphElement);
       graphElementRef.current = graphElement;
-      
-      // Apply initial layout if we have data
-      if (currentInstance.getAtoms().length > 0) {
-        setTimeout(() => applyLayout(currentInstance, currentSpec), 500);
-      }
 
       // Clean up event listeners when component unmounts
       return () => {
         if (graphElement) {
-          graphElement.removeEventListener('edge-creation-requested', handleEdgeCreation);
-          graphElement.removeEventListener('edge-modification-requested', handleEdgeModification);
+          graphElement.removeEventListener('edge-creation-requested', handleEdgeCreationRequested);
+          graphElement.removeEventListener('edge-modification-requested', handleEdgeModificationRequested);
+          graphElement.removeEventListener('edge-created', handleEdgeCreated);
+          graphElement.removeEventListener('edge-modified', handleEdgeModified);
         }
       };
     }
-  }, [currentInstance, currentSpec, applyLayout, autoApplyLayout, onInstanceChange]);
+  }, []); // Only run once when component mounts
+
+  // Handle data and layout updates (separate from graph element creation)
+  useEffect(() => {
+    if (graphElementRef.current && currentInstance.getAtoms().length > 0) {
+      // Apply layout when data changes
+      if (autoApplyLayout) {
+        setTimeout(() => applyLayout(currentInstance, currentSpec), 100);
+      }
+    }
+  }, [currentInstance, currentSpec, applyLayout, autoApplyLayout]);
 
   const containerStyle: React.CSSProperties = {
     width,
