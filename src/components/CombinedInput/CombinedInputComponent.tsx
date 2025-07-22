@@ -222,24 +222,14 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
         const { relationId, sourceNodeId, targetNodeId, tuple } = customEvent.detail;
         
         try {
-          // Create a new instance by cloning the current one
-          // Since PyretDataInstance doesn't have a built-in clone method, 
-          // we'll modify the current instance directly and then notify parent
+          // Modify the current instance and propagate through proper channels
           currentInstance.addRelationTuple(relationId, tuple);
           
           console.log(`✅ Added relation tuple: ${relationId}(${tuple.atoms.join(', ')})`);
           
-          // Trigger re-render by setting a new instance reference
-          const updatedInstance = currentInstance;
-          setCurrentInstance(updatedInstance);
-          onInstanceChange?.(updatedInstance);
-          
-          // Apply layout with the new data
-          if (autoApplyLayout) {
-            setTimeout(() => applyLayout(updatedInstance, currentSpec), 100);
-          } else {
-            setLayoutStale(true);
-          }
+          // Use the same handleInstanceChange flow that REPL uses
+          // This ensures proper propagation to all components
+          handleInstanceChange(currentInstance);
           
         } catch (error) {
           console.error('Failed to add edge relation:', error);
@@ -273,17 +263,9 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
             console.log(`➕ Added to ${newRelationId}`);
           }
           
-          // Trigger re-render by setting the updated instance
-          const updatedInstance = currentInstance;
-          setCurrentInstance(updatedInstance);
-          onInstanceChange?.(updatedInstance);
-          
-          // Apply layout with the new data
-          if (autoApplyLayout) {
-            setTimeout(() => applyLayout(updatedInstance, currentSpec), 100);
-          } else {
-            setLayoutStale(true);
-          }
+          // Use the same handleInstanceChange flow that REPL uses
+          // This ensures proper propagation to all components
+          handleInstanceChange(currentInstance);
           
         } catch (error) {
           console.error('Failed to modify edge relation:', error);

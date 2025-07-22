@@ -70,11 +70,8 @@
                 brands: {}
             });
             
-            // Simple CnD specification
-            const cndSpec = `nodes:
-  - { id: "atom", type: "atom", color: "#4CAF50" }
-edges:
-  - { id: "relation", type: "relation", color: "#2196F3" }`;
+            // Start with empty CnD specification
+            const cndSpec = ``;
 
             // Mount the combined input component
             const success = window.CndCore.mountCombinedInput({
