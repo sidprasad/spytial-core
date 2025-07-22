@@ -11,3 +11,9 @@ export {
   PyretListParser, 
   InfoCommandParser 
 } from './ExtensibleParsers';
+
+export {
+  PyretExpressionParser,
+  type PyretEvaluator,
+  type PyretEvaluationResult
+} from './PyretExpressionParser';
