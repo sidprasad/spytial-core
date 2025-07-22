@@ -18,8 +18,8 @@ import { ReplInterface, ReplInterfaceProps, TerminalConfig } from './ReplInterfa
 import { PyretDataInstance } from '../../data-instance/pyret/pyret-data-instance';
 import { IInputDataInstance } from '../../data-instance/interfaces';
 import { PyretEvaluator, PyretExpressionParser } from './parsers/PyretExpressionParser';
-import { RemoveCommandParser, AtomCommandParser, DotNotationRelationParser, BatchCommandParser } from './parsers/CoreParsers';
-import { PyretListParser, InfoCommandParser } from './parsers/ExtensibleParsers';
+import { RemoveCommandParser, AtomCommandParser, DotNotationRelationParser } from './parsers/CoreParsers';
+import { InfoCommandParser } from './parsers/ExtensibleParsers';
 
 export interface PyretReplInterfaceProps extends Omit<ReplInterfaceProps, 'instance'> {
   /** Initial Pyret data instance. If not provided, an empty instance will be created. */
@@ -61,19 +61,23 @@ export const PyretReplInterface: React.FC<PyretReplInterfaceProps> = ({
     const baseTerminals: TerminalConfig[] = [
       {
         id: 'unified',
-        title: externalEvaluator ? 'Pyret REPL (Enhanced)' : 'Pyret REPL',
+        title: externalEvaluator ? 'Full Pyret REPL' : 'Limited REPL',
         description: externalEvaluator 
           ? 'Supports atoms, relations, extensions, and Pyret expressions via external evaluator'
           : 'Supports atoms, relations, and extensions',
         parsers: [
           new RemoveCommandParser(),        // Priority 200 - highest priority for remove commands
-          new PyretListParser(),            // Priority 120 - most specific pattern
-          new BatchCommandParser(),         // Priority 115 - multi-command patterns  
           new DotNotationRelationParser(),  // Priority 115 - dot notation relations
-          new AtomCommandParser(),          // Priority 100 - standard priority
           pyretExpressionParser,            // Priority 90 - Pyret expressions (only if evaluator available)
+          new AtomCommandParser(),          // Priority 100 - standard priority
           new InfoCommandParser()           // Priority 50 - fallback utility commands
-        ].sort((a, b) => b.getPriority() - a.getPriority()), // Sort by priority descending
+        ].filter(parser => {
+          // Remove PyretExpressionParser if no external evaluator
+          if (parser instanceof PyretExpressionParser && !externalEvaluator) {
+            return false;
+          }
+          return true;
+        }).sort((a, b) => b.getPriority() - a.getPriority()), // Sort by priority descending
         placeholder: externalEvaluator
           ? 'Examples:\nAlice:Person\nalice.friend=bob\nedge("1", "label", 3)\n[list: 1,2,3,4]:numbers\nhelp\nreify'
           : 'Examples:\nAlice:Person\nalice.friend=bob\n[list: 1,2,3,4]:numbers\nhelp\nreify'

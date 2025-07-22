@@ -94,9 +94,8 @@ describe('PyretExpressionParser', () => {
 
     it('should provide appropriate command patterns', () => {
       const patterns = parser.getCommandPatterns();
-      expect(patterns).toContain('edge("1", "b", 3)');
       expect(patterns).toContain('[list: 1, 2, 3, 4]');
-      expect(patterns).toContain('tree(node(1, empty, empty), node(2, empty, empty))');
+      expect(patterns).toHaveLength(1); // Only show list for now
     });
 
     it('should indicate evaluator available in help', () => {

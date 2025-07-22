@@ -70,6 +70,9 @@ export class PyretExpressionParser implements ICommandParser {
       return false;
     }
     
+    // TODO: Improve this heuristic with deeper Pyret syntax analysis
+    // This is currently a hand-wavy heuristic that could be made more robust
+    
     // Exclude remove commands (handled by RemoveCommandParser)
     if (trimmed.startsWith('remove ')) {
       return false;
@@ -120,10 +123,7 @@ export class PyretExpressionParser implements ICommandParser {
   
   getCommandPatterns(): string[] {
     return [
-      'edge("1", "b", 3)',
-      '[list: 1, 2, 3, 4]',
-      'tree(node(1, empty, empty), node(2, empty, empty))',
-      'table: name, age row: "Alice", 25 row: "Bob", 30 end'
+      '[list: 1, 2, 3, 4]'
     ];
   }
 
