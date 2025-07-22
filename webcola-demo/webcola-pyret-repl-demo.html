@@ -120,6 +120,47 @@
             <button onclick="simulateEvaluator()">Simulate Evaluator</button>
         </div>
 
+        <!-- New Combined Input Demo Section -->
+        <div class="demo-section" style="background: #e8f5e8; border: 2px solid #28a745;">
+            <h2>🆕 New Combined Input Component</h2>
+            <p>This section demonstrates the <strong>new simplified Combined Input Component</strong> that eliminates the complex setup above:</p>
+            
+            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <button onclick="setupCombinedInputDemo()" style="background: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px; font-weight: bold;">
+                    🚀 Try Combined Input Component
+                </button>
+                <button onclick="clearCombinedInputDemo()" style="background: #dc3545; color: white; padding: 10px 20px; border: none; border-radius: 5px;">
+                    Clear Combined Demo
+                </button>
+            </div>
+            
+            <div id="combined-input-demo-container" style="height: 800px; border: 2px solid #28a745; border-radius: 8px; margin: 15px 0;">
+                <div style="padding: 40px; text-align: center; color: #666;">
+                    <h3>Combined Input Component</h3>
+                    <p>Click "Try Combined Input Component" above to see the new simplified interface</p>
+                    <ul style="text-align: left; display: inline-block;">
+                        <li>✅ All-in-one component with REPL, Layout, and Graph</li>
+                        <li>✅ Automatic bidirectional sync (REPL ↔ Graph)</li>
+                        <li>✅ Edge input mode with Cmd/Ctrl+Click</li>
+                        <li>✅ Collapsible sections for better space management</li>
+                        <li>✅ Live reified data display with copy functionality</li>
+                        <li>✅ Clear staleness indicators</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Legacy Demo Section -->
+        <div class="demo-section" style="background: #fff3cd; border: 1px solid #ffc107;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h2>⚡ Legacy Integration Demo</h2>
+                <div style="background: #ffc107; color: #856404; padding: 5px 10px; border-radius: 4px; font-size: 12px; font-weight: bold;">
+                    LEGACY - Use Combined Input Above Instead
+                </div>
+            </div>
+            <p>This section shows the original complex setup. <strong>The Combined Input Component above is recommended for new projects.</strong></p>
+        </div>
+
         <!-- React Component Areas with Complete Integration -->
         <div style="display: flex; flex-direction: column; gap: 20px; margin-bottom: 20px;">
             <div>
@@ -246,7 +287,106 @@
         let replInstance = null;
         let currentDataInstance = null;
 
-        // Check if there's a real external evaluator available
+        /**
+         * Set up the new Combined Input Component demo
+         */
+        function setupCombinedInputDemo() {
+            console.log('🚀 Setting up Combined Input Component demo...');
+            
+            // Clear existing content
+            clearCombinedInputDemo();
+            
+            // Check for external evaluator
+            const externalEvaluator = checkForEvaluator();
+            
+            // Create initial data instance with some sample data
+            const initialPyretData = {
+                dict: {
+                    'Alice': { tag: 'atom', type: 'Person' },
+                    'Bob': { tag: 'atom', type: 'Person' }
+                },
+                brands: { 'Person': true }
+            };
+            const dataInstance = new window.CndCore.PyretDataInstance(initialPyretData);
+            
+            // CnD specification with person styling
+            const cndSpec = `nodes:
+  - { id: "Person", type: "atom", color: "#FF6B35", size: 20 }
+  - { id: "atom", type: "atom", color: "#4CAF50" }
+edges:
+  - { id: "friend", type: "relation", color: "#E91E63", width: 3 }
+  - { id: "knows", type: "relation", color: "#2196F3", width: 2 }
+  - { id: "relation", type: "relation", color: "#9E9E9E" }
+constraints:
+  - type: "align"
+    nodes: ["Person"]
+    axis: "x"
+directives:
+  - type: "hideDisconnected"
+    value: false`;
+
+            // Mount the combined input component
+            const success = window.CndCore.mountCombinedInput({
+                containerId: 'combined-input-demo-container',
+                cndSpec: cndSpec,
+                dataInstance: dataInstance,
+                pyretEvaluator: externalEvaluator || mockEvaluator,
+                projections: {},
+                height: '800px',
+                showLayoutInterface: true,
+                autoApplyLayout: true,
+                onInstanceChange: (instance) => {
+                    console.log('🔄 Combined demo - Data updated:', {
+                        atoms: instance.getAtoms().length,
+                        relations: instance.getRelations().length,
+                        reified: instance.reify()
+                    });
+                    updateInstanceInfo();
+                },
+                onSpecChange: (spec) => {
+                    console.log('📐 Combined demo - Layout spec updated:', spec.length, 'characters');
+                },
+                onLayoutApplied: (layout) => {
+                    console.log('🎨 Combined demo - Layout applied with', layout?.nodes?.length || 0, 'nodes');
+                }
+            });
+            
+            if (success) {
+                console.log('✅ Combined Input Component demo ready!');
+                updateStatus('🎉 Combined Input Component active! Try adding data or creating edges with Cmd/Ctrl+Click', 'success');
+            } else {
+                console.error('❌ Failed to setup Combined Input Component demo');
+                updateStatus('❌ Failed to setup Combined Input Component demo', 'error');
+            }
+        }
+
+        /**
+         * Clear the combined input demo
+         */
+        function clearCombinedInputDemo() {
+            const container = document.getElementById('combined-input-demo-container');
+            if (container) {
+                container.innerHTML = `
+                    <div style="padding: 40px; text-align: center; color: #666;">
+                        <h3>Combined Input Component</h3>
+                        <p>Click "Try Combined Input Component" above to see the new simplified interface</p>
+                        <ul style="text-align: left; display: inline-block;">
+                            <li>✅ All-in-one component with REPL, Layout, and Graph</li>
+                            <li>✅ Automatic bidirectional sync (REPL ↔ Graph)</li>
+                            <li>✅ Edge input mode with Cmd/Ctrl+Click</li>
+                            <li>✅ Collapsible sections for better space management</li>
+                            <li>✅ Live reified data display with copy functionality</li>
+                            <li>✅ Clear staleness indicators</li>
+                        </ul>
+                    </div>
+                `;
+                console.log('Combined Input demo container cleared');
+            }
+        }
+
+        /**
+         * Check if there's a real external evaluator available
+         */
         function checkForEvaluator() {
             const statusDiv = document.getElementById('evaluator-status');
             
