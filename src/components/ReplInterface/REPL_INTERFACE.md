@@ -2,6 +2,19 @@
 
 A terminal-style interface for building data instances with command-line syntax.
 
+## Why REPL Makes Sense
+
+The REPL (Read-Eval-Print Loop) interface provides significant benefits for data exploration and construction:
+
+- **State preservation**: Unlike stateless interfaces, the REPL maintains the current data instance state across commands, allowing for incremental building and exploration
+- **Spatial constraints**: Unlike pure direct manipulation, the REPL can enforce constraints and relationships while providing immediate feedback
+- **Ergonomic for experienced users**: While visual interfaces may be better for novices, experienced users often prefer the precision and speed of command-line interfaces
+- **Composability**: Commands can be combined and scripted, enabling complex data construction workflows
+- **Discoverability**: Built-in help system and pattern recognition make it easy to learn available operations
+- **Extensibility**: Parser system allows for language-specific extensions and custom command types
+
+The REPL strikes a balance between the immediacy of direct manipulation and the precision of programmatic control.
+
 ## Overview
 
 The REPL Interface provides three terminals for interactive data instance construction:
@@ -212,6 +225,31 @@ add [list: Alice,Bob]:people
 // - Person atoms: Alice, Bob (if they don't exist)
 // - List atom: people-1
 // - first/rest relations for list structure
+```
+
+### External Pyret Evaluator Integration
+
+When an external Pyret evaluator is available (e.g., `window.__internalRepl`), the REPL interface gains enhanced capabilities:
+
+```tsx
+import { PyretReplInterface } from 'cnd-core';
+
+// Assuming window.__internalRepl is available from the Pyret environment
+const externalEvaluator = window.__internalRepl;
+
+function MyApp() {
+  return (
+    <PyretReplInterface 
+      externalEvaluator={externalEvaluator}
+      onChange={(instance) => console.log('Instance changed:', instance)}
+    />
+  );
+}
+
+// With external evaluator, you can use arbitrary Pyret expressions:
+// edge("id", "label", 3)
+// tree(node(1, empty, empty), node(2, empty, empty))  
+// table: name, age row: "Alice", 25 row: "Bob", 30 end
 ```
 
 ### Data Exploration

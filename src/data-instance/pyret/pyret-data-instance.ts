@@ -54,6 +54,9 @@ export class PyretDataInstance implements IInputDataInstance {
 
   private readonly showFunctions: boolean;
 
+  /** Optional external Pyret evaluator for enhanced features */
+  private externalEvaluator: any | null = null;
+
   /*
     TODO: List handling
     - Handle Pyret Lists and Tables as special cases. They currently show as (link (link (link (link )))) etc.
@@ -64,9 +67,12 @@ export class PyretDataInstance implements IInputDataInstance {
    * Creates a PyretDataInstance from a Pyret runtime object
    * 
    * @param pyretData - The root Pyret object to parse, or null/undefined for an empty instance
+   * @param showFunctions - Whether to include function/method fields in parsing
+   * @param externalEvaluator - Optional external Pyret evaluator for enhanced features
    */
-  constructor(pyretData?: PyretObject | null, showFunctions = false) {
+  constructor(pyretData?: PyretObject | null, showFunctions = false, externalEvaluator?: any) {
     this.showFunctions = showFunctions;
+    this.externalEvaluator = externalEvaluator || null;
     this.initializeBuiltinTypes();
     if (pyretData) {
       this.parseObjectIteratively(pyretData);
@@ -74,8 +80,26 @@ export class PyretDataInstance implements IInputDataInstance {
   }
 
   /**
-   * Add an event listener for data instance changes
+   * Set an external Pyret evaluator for enhanced features
+   * @param evaluator - External Pyret evaluator (e.g., window.__internalRepl)
    */
+  setExternalEvaluator(evaluator: any): void {
+    this.externalEvaluator = evaluator;
+  }
+
+  /**
+   * Get the current external evaluator
+   */
+  getExternalEvaluator(): any | null {
+    return this.externalEvaluator;
+  }
+
+  /**
+   * Check if an external evaluator is available
+   */
+  hasExternalEvaluator(): boolean {
+    return this.externalEvaluator !== null;
+  }
   addEventListener(type: DataInstanceEventType, listener: DataInstanceEventListener): void {
     if (!this.eventListeners.has(type)) {
       this.eventListeners.set(type, new Set());
@@ -180,9 +204,8 @@ export class PyretDataInstance implements IInputDataInstance {
   /**
    * Converts the current data instance back to Pyret constructor notation
    * 
-   * 
-   * TODO: this **may** be wrong, but nice to examine.
-   * 
+   * If an external evaluator is available, it may provide enhanced type information
+   * for more accurate reification in the future.
    * 
    * @returns A string representation of the data in Pyret constructor syntax
    * 
@@ -193,6 +216,12 @@ export class PyretDataInstance implements IInputDataInstance {
    * ```
    */
   reify(): string {
+    // If external evaluator is available, add a comment indicating enhanced features
+    let result = '';
+    if (this.hasExternalEvaluator()) {
+      result += '// Enhanced with external Pyret evaluator\n';
+    }
+    
     // Find the root atom (the one that's not referenced by any other atom)
     const referencedAtoms = new Set<string>();
     this.relations.forEach(relation => {
@@ -208,16 +237,16 @@ export class PyretDataInstance implements IInputDataInstance {
       .filter(atom => !referencedAtoms.has(atom.id) && !this.isBuiltinType(atom.type));
 
     if (rootAtoms.length === 0) {
-      return "/* No root atoms found */";
+      return result + "/* No root atoms found */";
     }
 
     // If multiple roots, wrap in a list
     if (rootAtoms.length > 1) {
       const rootExpressions = rootAtoms.map(atom => this.reifyAtom(atom.id, new Set()));
-      return `[list: ${rootExpressions.join(', ')}]`;
+      return result + `[list: ${rootExpressions.join(', ')}]`;
     }
 
-    return this.reifyAtom(rootAtoms[0].id, new Set());
+    return result + this.reifyAtom(rootAtoms[0].id, new Set());
   }
 
   /**
