@@ -216,36 +216,35 @@ export class PyretDataInstance implements IInputDataInstance {
    * ```
    */
   reify(): string {
-    // If external evaluator is available, add a comment indicating enhanced features
     let result = '';
     if (this.hasExternalEvaluator()) {
       result += '// Enhanced with external Pyret evaluator\n';
     }
-    
-    // Find the root atom (the one that's not referenced by any other atom)
+
+    // Find referenced atoms
     const referencedAtoms = new Set<string>();
     this.relations.forEach(relation => {
       relation.tuples.forEach(tuple => {
-        // Skip the first atom (source), mark others as referenced
         for (let i = 1; i < tuple.atoms.length; i++) {
           referencedAtoms.add(tuple.atoms[i]);
         }
       });
     });
 
-    const rootAtoms = Array.from(this.atoms.values())
-      .filter(atom => !referencedAtoms.has(atom.id) && !this.isBuiltinType(atom.type));
+    // Identify root atoms (not referenced by others, including builtins)
+    const rootAtoms = Array.from(this.atoms.values()).filter(atom => !referencedAtoms.has(atom.id));
 
     if (rootAtoms.length === 0) {
       return result + "/* No root atoms found */";
     }
 
-    // If multiple roots, wrap in a list
+    // If multiple roots, wrap in a Pyret set
     if (rootAtoms.length > 1) {
       const rootExpressions = rootAtoms.map(atom => this.reifyAtom(atom.id, new Set()));
-      return result + `[list: ${rootExpressions.join(', ')}]`;
+      return result + `[list-set: ${rootExpressions.join(', ')}]`;
     }
 
+    // If only one root atom, reify it directly
     return result + this.reifyAtom(rootAtoms[0].id, new Set());
   }
 
