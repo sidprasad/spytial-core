@@ -15,8 +15,9 @@ export interface CommandResult {
 export interface ICommandParser {
   /**
    * Parse and execute a command
+   * Can return either a synchronous result or a Promise for async operations
    */
-  execute(command: string, instance: IInputDataInstance): CommandResult;
+  execute(command: string, instance: IInputDataInstance): CommandResult | Promise<CommandResult>;
   
   /**
    * Get help text for this parser
