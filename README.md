@@ -338,6 +338,8 @@ MIT
 ---
 
 
-## For Input
+## TODO:
 
-What I really envision is an extension to `IDataInstance` that allows atoms / relations to be ADDED in.
+- remove SPECIFIC edges?
+- Pyret re-ify needs some work?
+  
