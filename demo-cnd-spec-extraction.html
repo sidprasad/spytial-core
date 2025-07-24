@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CnD Spec Extraction Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .demo-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .demo-title {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .demo-description {
+            background-color: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #2196f3;
+        }
+        .demo-steps {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .demo-steps h3 {
+            margin-top: 0;
+            color: #495057;
+        }
+        .demo-steps ol {
+            margin: 10px 0;
+        }
+        .demo-steps li {
+            margin: 8px 0;
+        }
+        code {
+            background-color: #f1f3f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        }
+        .code-block {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 12px;
+            margin: 10px 0;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            overflow-x: auto;
+        }
+        #combined-input-container {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-container">
+        <h1 class="demo-title">🎯 CnD Spec Extraction Demo</h1>
+        
+        <div class="demo-description">
+            <h3>What this demo shows:</h3>
+            <p>This demo demonstrates the new CnD specification extraction functionality. When you evaluate Pyret expressions that have a <code>_cndspec</code> method, the system will automatically extract the CnD specification and compose it with existing specs.</p>
+        </div>
+
+        <div class="demo-steps">
+            <h3>How to test CnD spec extraction:</h3>
+            <ol>
+                <li>Try evaluating a simple expression like: <code>Alice:Person</code></li>
+                <li>Add some relations: <code>alice.friend=bob</code></li>
+                <li>Create an object with a <code>_cndspec</code> method (simulated example):</li>
+            </ol>
+            <div class="code-block">
+// Example of what the system looks for:
+data RBNode:
+  | Black(value, left, right)
+  | Red(value, left, right)
+sharing:
+  method _cndspec(self):
+    "constraints:\n  - orientation:\n      selector: right\n      directions:\n        - right\n        - below"
+  end
+end
+
+// When you evaluate: Black(42, empty, empty)
+// The system will call ._cndspec() and extract the specification
+            </div>
+            <p><strong>Note:</strong> This demo shows the extraction infrastructure. In a full Pyret environment, the <code>_cndspec</code> methods would be defined as part of data definitions.</p>
+        </div>
+
+        <!-- The CombinedInputComponent will be mounted here -->
+        <div id="combined-input-container"></div>
+    </div>
+
+    <!-- Include the built CnD Core library -->
+    <script src="dist/browser/cnd-core-complete.global.js"></script>
+    
+    <script>
+        // Initialize the demo when the page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Initializing CnD Spec Extraction Demo...');
+            
+            // Create a mock Pyret evaluator for demonstration
+            const mockPyretEvaluator = {
+                run: async function(code) {
+                    console.log('📝 Evaluating:', code);
+                    
+                    // Simulate some responses for demo purposes
+                    if (code.includes('Black(') || code.includes('Red(')) {
+                        // Simulate a Pyret object with _cndspec method
+                        return {
+                            answer: {
+                                value: 42,
+                                left: null,
+                                right: null,
+                                _cndspec: function() {
+                                    return `constraints:
+  - orientation:
+      selector: right
+      directions:
+        - right
+        - below
+  - orientation:
+      selector: left
+      directions:
+        - left
+        - below`;
+                                }
+                            }
+                        };
+                    } else if (code.includes('tree(')) {
+                        // Another example with different spec
+                        return {
+                            answer: {
+                                root: 'value',
+                                children: [],
+                                _cndspec: function() {
+                                    return `nodes:
+  - id: root
+    type: tree-node
+constraints:
+  - hierarchy:
+      parent: root
+      children: children`;
+                                }
+                            }
+                        };
+                    } else {
+                        // Default response for other expressions
+                        return {
+                            answer: code.replace(/['"]/g, '') // Simple string response
+                        };
+                    }
+                },
+                runtime: {
+                    isSuccessResult: function(result) {
+                        return !!result.answer;
+                    }
+                }
+            };
+
+            // Initial CnD specification
+            const initialSpec = `nodes:
+  - id: node
+    type: atom
+
+layout:
+  type: force-directed`;
+
+            // Set up callbacks
+            const onInstanceChange = (instance) => {
+                console.log('📊 Data instance updated:', instance.getAtoms().length, 'atoms');
+            };
+
+            const onSpecChange = (spec) => {
+                console.log('🎯 CnD specification updated:');
+                console.log(spec);
+            };
+
+            const onLayoutApplied = (layout) => {
+                console.log('📐 Layout applied:', layout);
+            };
+
+            // Mount the combined input component
+            const success = window.CndCore.CombinedInput.mountCombinedInput({
+                containerId: 'combined-input-container',
+                cndSpec: initialSpec,
+                pyretEvaluator: mockPyretEvaluator,
+                projections: {},
+                height: '700px',
+                autoApplyLayout: true,
+                showLayoutInterface: true,
+                onInstanceChange: onInstanceChange,
+                onSpecChange: onSpecChange,
+                onLayoutApplied: onLayoutApplied
+            });
+
+            if (success) {
+                console.log('✅ Demo initialized successfully!');
+                console.log('');
+                console.log('Try these commands in the REPL:');
+                console.log('1. Alice:Person');
+                console.log('2. alice.friend=bob');
+                console.log('3. Black(42, empty, empty)  # This will extract a CnD spec!');
+                console.log('4. tree(root, [])  # This will extract another CnD spec!');
+            } else {
+                console.error('❌ Failed to initialize demo');
+            }
+        });
+    </script>
+</body>
+</html>

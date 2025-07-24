@@ -24,6 +24,8 @@ export interface ReplInterfaceProps {
   instance: IInputDataInstance;
   /** Callback when the instance changes */
   onChange?: (instance: IInputDataInstance) => void;
+  /** Callback when CnD specification is extracted from an expression */
+  onCndSpecExtracted?: (spec: string) => void;
   /** Whether the component is disabled */
   disabled?: boolean;
   /** CSS class name for styling */
@@ -91,6 +93,7 @@ const DEFAULT_TERMINALS: TerminalConfig[] = [
 export const ReplInterface: React.FC<ReplInterfaceProps> = ({
   instance,
   onChange,
+  onCndSpecExtracted,
   disabled = false,
   className = '',
   terminals = DEFAULT_TERMINALS
@@ -235,7 +238,12 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
     if (result.success && (result.action === 'add' || result.action === 'remove')) {
       notifyChange();
     }
-  }, [terminals, instance, addOutputLine, notifyChange]);
+
+    // Notify parent if CnD specification was extracted
+    if (result.success && result.extractedCndSpec && onCndSpecExtracted) {
+      onCndSpecExtracted(result.extractedCndSpec);
+    }
+  }, [terminals, instance, addOutputLine, notifyChange, onCndSpecExtracted]);
 
   // Handle input change
   const handleInputChange = useCallback((terminalId: string, value: string) => {

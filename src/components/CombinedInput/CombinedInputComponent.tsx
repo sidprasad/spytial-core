@@ -92,6 +92,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
   });
   
   const [currentSpec, setCurrentSpec] = useState<string>(cndSpec);
+  const [extractedSpecs, setExtractedSpecs] = useState<string[]>([]); // Store extracted specs
   const [constraints, setConstraints] = useState<ConstraintData[]>([]);
   const [directives, setDirectives] = useState<DirectiveData[]>([]);
   const [isNoCodeView, setIsNoCodeView] = useState<boolean>(false);
@@ -152,6 +153,45 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
       setTimeout(() => applyLayout(currentInstance, newSpec), 100);
     }
   }, [autoApplyLayout, currentInstance, onSpecChange]);
+
+  // Compose CnD specs by concatenating them with appropriate separators
+  const composeCndSpecs = useCallback((baseSpec: string, extractedSpecs: string[]): string => {
+    const specs = [baseSpec, ...extractedSpecs].filter(spec => spec && spec.trim());
+    
+    if (specs.length === 0) {
+      return '';
+    }
+    
+    if (specs.length === 1) {
+      return specs[0];
+    }
+    
+    // Join specs with YAML document separators
+    return specs.join('\n---\n');
+  }, []);
+
+  // Handle CnD spec extraction from REPL expressions
+  const handleCndSpecExtracted = useCallback((extractedSpec: string) => {
+    console.log('🎯 CnD spec extracted from expression:', extractedSpec);
+    
+    // Add to extracted specs list (avoid duplicates)
+    setExtractedSpecs(prev => {
+      if (!prev.includes(extractedSpec)) {
+        const newSpecs = [...prev, extractedSpec];
+        
+        // Compose the new complete spec
+        const composedSpec = composeCndSpecs(cndSpec, newSpecs);
+        
+        // Update the current spec with the composed result
+        setCurrentSpec(composedSpec);
+        setLayoutStale(true);
+        onSpecChange?.(composedSpec);
+        
+        return newSpecs;
+      }
+      return prev;
+    });
+  }, [cndSpec, composeCndSpecs, onSpecChange]);
 
   // Apply layout using the CnD pipeline
   const applyLayout = useCallback(async (instance: PyretDataInstance, spec: string) => {
@@ -433,6 +473,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
                 <PyretReplInterface
                   initialInstance={currentInstance}
                   onChange={handleInstanceChange}
+                  onCndSpecExtracted={handleCndSpecExtracted}
                   externalEvaluator={pyretEvaluator}
                 />
               </div>
