@@ -1,0 +1,60 @@
+.evaluator-repl {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  border-radius: 6px;
+  padding: 10px;
+  font-family: 'Courier New', 'Monaco', 'Menlo', monospace;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.evaluator-repl__output {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid #333;
+  padding: 8px;
+  margin-bottom: 8px;
+  background: #252526;
+}
+
+.evaluator-repl__line.command {
+  color: #9cdcfe;
+}
+
+.evaluator-repl__line.result {
+  color: #ce9178;
+}
+
+.evaluator-repl__line.error {
+  color: #f48771;
+}
+
+.evaluator-repl__input {
+  display: flex;
+  gap: 8px;
+}
+
+.evaluator-repl__input textarea {
+  flex: 1;
+  resize: vertical;
+  background: #1e1e1e;
+  color: #d4d4d4;
+  border: 1px solid #333;
+  padding: 6px;
+  border-radius: 4px;
+}
+
+.evaluator-repl__input button {
+  padding: 6px 12px;
+  background: #0e639c;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.evaluator-repl__input button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

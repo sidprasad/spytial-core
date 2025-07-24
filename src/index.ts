@@ -110,6 +110,10 @@ export type { CombinedInputConfig, CombinedInputProps } from './components/Combi
 export { mountCombinedInput, createCombinedInputSetup, setupCombinedInput } from './components/CombinedInput/mounting';
 export type { CombinedInputMountConfig } from './components/CombinedInput/mounting';
 
+// Export generic Evaluator REPL
+export { EvaluatorRepl } from './components/EvaluatorRepl';
+export type { EvaluatorReplProps } from './components/EvaluatorRepl';
+
 // Export REPL parsers
 export { PyretExpressionParser } from './components/ReplInterface/parsers/PyretExpressionParser';
 export type { PyretEvaluator, PyretEvaluationResult } from './components/ReplInterface/parsers/PyretExpressionParser';
