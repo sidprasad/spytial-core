@@ -154,7 +154,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
     }
   }, [autoApplyLayout, currentInstance, onSpecChange]);
 
-  // Compose CnD specs by concatenating them with appropriate separators
+  // Compose CnD specs by concatenating them with newlines
   const composeCndSpecs = useCallback((baseSpec: string, extractedSpecs: string[]): string => {
     const specs = [baseSpec, ...extractedSpecs].filter(spec => spec && spec.trim());
     
@@ -166,13 +166,13 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
       return specs[0];
     }
     
-    // Join specs with YAML document separators
-    return specs.join('\n---\n');
+    // Join specs with newlines
+    return specs.join('\n');
   }, []);
 
   // Handle CnD spec extraction from REPL expressions
   const handleCndSpecExtracted = useCallback((extractedSpec: string) => {
-    console.log('🎯 CnD spec extracted from expression:', extractedSpec);
+    console.log('CnD spec extracted from expression:', extractedSpec);
     
     // Add to extracted specs list (avoid duplicates)
     setExtractedSpecs(prev => {

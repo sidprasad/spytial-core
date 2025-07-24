@@ -315,56 +315,30 @@ export class PyretExpressionParser implements ICommandParser {
     }
   }
   /**
-   * Check if an object has a _cndspec method and extract the CnD specification
+   * Extract CnD specification from an expression by creating a faux expression and running it in the external evaluator
    */
   private async extractCndSpec(pyretResult: any, originalExpression: string): Promise<string | undefined> {
     try {
-      // Check if the result has a _cndspec method
-      if (pyretResult && typeof pyretResult === 'object' && typeof pyretResult._cndspec === 'function') {
-        console.log('🔍 Found _cndspec method, extracting CnD specification...');
-        
-        // Call the _cndspec method to get the specification
-        const cndSpecResult = pyretResult._cndspec();
-        
-        // The spec might be returned directly or might need to be converted to string
-        if (typeof cndSpecResult === 'string') {
-          return cndSpecResult;
-        } else if (cndSpecResult && typeof cndSpecResult === 'object') {
-          // Try to stringify the object to YAML-like format
-          return JSON.stringify(cndSpecResult, null, 2);
+      // Only proceed if we have an evaluator
+      if (!this.evaluator) {
+        return undefined;
+      }
+      
+      // Create a faux expression to call _cndspec on the result
+      const cndSpecCode = `(${originalExpression})._cndspec()`;
+      const specResult = await this.evaluateExpression(cndSpecCode);
+      
+      if (specResult.success && specResult.result) {
+        // If result is a string, that's the CnD spec
+        if (typeof specResult.result === 'string') {
+          return specResult.result;
         }
       }
       
-      // If we have an evaluator and the object doesn't have a direct _cndspec method,
-      // we can try calling _cndspec through the evaluator (for complex Pyret objects)
-      // Only attempt this if the original expression looks like it could be a Pyret data constructor
-      if (this.evaluator && 
-          pyretResult && 
-          typeof pyretResult === 'object' && 
-          typeof pyretResult._cndspec !== 'function' &&
-          originalExpression.includes('(') && originalExpression.includes(')')  // Looks like constructor call
-         ) {
-        try {
-          // Construct a call to _cndspec on the result
-          const cndSpecCode = `${originalExpression}._cndspec()`;
-          const specResult = await this.evaluateExpression(cndSpecCode);
-          
-          if (specResult.success && specResult.result) {
-            if (typeof specResult.result === 'string') {
-              return specResult.result;
-            } else if (typeof specResult.result === 'object') {
-              return JSON.stringify(specResult.result, null, 2);
-            }
-          }
-        } catch (error) {
-          // Silently ignore errors in spec extraction
-          console.log('Note: Could not extract CnD spec via evaluator:', error);
-        }
-      }
-      
+      // If error or no result, return undefined (no spec)
       return undefined;
     } catch (error) {
-      console.log('Note: Error during CnD spec extraction:', error);
+      // Default to undefined if error
       return undefined;
     }
   }
@@ -402,7 +376,7 @@ export class PyretExpressionParser implements ICommandParser {
         instance.addAtom(primitiveAtom);
         
         const message = `Evaluated Pyret expression: ${originalExpression}\nResult: ${pyretResult} (${atomType})\nAdded 1 atom` +
-                       (extractedCndSpec ? '\n🎯 Extracted CnD specification from result' : '');
+                       (extractedCndSpec ? '\nExtracted CnD specification from result' : '');
         
         return {
           success: true,
@@ -468,7 +442,7 @@ export class PyretExpressionParser implements ICommandParser {
       }
 
       const message = `Evaluated Pyret expression: ${originalExpression}\nAdded ${atomsAdded} atoms and ${relationsAdded} relation tuples` +
-                     (extractedCndSpec ? '\n🎯 Extracted CnD specification from result' : '');
+                     (extractedCndSpec ? '\nExtracted CnD specification from result' : '');
 
       return {
         success: true,
