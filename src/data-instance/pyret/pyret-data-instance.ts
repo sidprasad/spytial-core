@@ -276,6 +276,9 @@ export class PyretDataInstance implements IInputDataInstance {
 
     // Get the original object to preserve key order
     const originalObject = this.originalObjects.get(atomId);
+
+
+    // IF THERE IS NO ORIGINAL OBJECT, CAN WE SOMEHOW INSPECT TYPES FROM THE PYRET PARSER?
     
     if (!originalObject || !originalObject.dict) {
       visited.delete(atomId);
