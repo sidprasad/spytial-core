@@ -217,9 +217,7 @@ export class PyretDataInstance implements IInputDataInstance {
    */
   reify(): string {
     let result = '';
-    if (this.hasExternalEvaluator()) {
-      result += '// Enhanced with external Pyret evaluator\n';
-    }
+
 
     // Find referenced atoms
     const referencedAtoms = new Set<string>();
