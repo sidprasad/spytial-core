@@ -320,12 +320,6 @@ export class PyretDataInstance implements IInputDataInstance {
   reify(): string {
     let result = '';
 
-    // Add external evaluator enhancement comment if available
-    if (this.hasExternalEvaluator()) {
-      result += '// Enhanced with external Pyret evaluator\n';
-    }
-
-
     // Find referenced atoms
     const referencedAtoms = new Set<string>();
     this.relations.forEach(relation => {
