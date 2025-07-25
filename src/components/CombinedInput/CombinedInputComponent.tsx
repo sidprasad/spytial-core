@@ -8,7 +8,7 @@
  * between PyretReplInterface, CndLayoutInterface, and webcola-cnd-graph.
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { PyretReplInterface } from '../ReplInterface/PyretReplInterface';
 import { CndLayoutInterface } from '../CndLayoutInterface';
 import { PyretDataInstance } from '../../data-instance/pyret/pyret-data-instance';
@@ -122,12 +122,19 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
     currentInstanceRef.current = currentInstance;
   }, [currentInstance]);
 
-  // Initialize or update CnD spec
+  // Compute the complete spec by combining the base spec with all extracted specs
+  const completeSpec = useMemo(() => {
+    return composeCndSpecs(cndSpec, extractedSpecs);
+  }, [cndSpec, extractedSpecs, composeCndSpecs]);
+
+  // Update current spec when complete spec changes
   useEffect(() => {
-    if (cndSpec !== currentSpec) {
-      setCurrentSpec(cndSpec);
+    if (completeSpec !== currentSpec) {
+      setCurrentSpec(completeSpec);
+      setLayoutStale(true);
+      onSpecChange?.(completeSpec);
     }
-  }, [cndSpec, currentSpec]);
+  }, [completeSpec, currentSpec, onSpecChange]);
 
   // Handle instance changes from REPL
   const handleInstanceChange = useCallback((newInstance: PyretDataInstance) => {
@@ -177,25 +184,12 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
     // Add to extracted specs list (avoid duplicates)
     setExtractedSpecs(prev => {
       if (!prev.includes(extractedSpec)) {
-        const newSpecs = [...prev, extractedSpec];
-        
-        // Use the current spec state instead of the prop for proper composition
-        setCurrentSpec(currentSpecValue => {
-          // Compose the new complete spec using current state
-          const composedSpec = composeCndSpecs(currentSpecValue, [extractedSpec]);
-          
-          // Trigger layout update and callback
-          setLayoutStale(true);
-          onSpecChange?.(composedSpec);
-          
-          return composedSpec;
-        });
-        
-        return newSpecs;
+        console.log('Adding new extracted spec:', extractedSpec);
+        return [...prev, extractedSpec];
       }
       return prev;
     });
-  }, [composeCndSpecs, onSpecChange]);
+  }, []);
 
   // Apply layout using the CnD pipeline
   const applyLayout = useCallback(async (instance: PyretDataInstance, spec: string) => {
