@@ -334,7 +334,7 @@ export class PyretDataInstance implements IInputDataInstance {
     const rootAtoms = Array.from(this.atoms.values()).filter(atom => !referencedAtoms.has(atom.id));
 
     if (rootAtoms.length === 0) {
-      return result + "/* No root atoms found */";
+      return result + "# No root atoms found";
     }
 
     // If multiple roots, wrap in a Pyret set
@@ -355,6 +355,10 @@ export class PyretDataInstance implements IInputDataInstance {
    * @returns Pyret constructor notation for this atom
    */
   private reifyAtom(atomId: string, visited: Set<string>): string {
+
+
+    // TODO: I think this is broken -- it doesn't cache things correctly.
+
     if (visited.has(atomId)) {
       return `/* cycle: ${atomId} */`;
     }
