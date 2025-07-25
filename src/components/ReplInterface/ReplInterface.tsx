@@ -78,8 +78,8 @@ const DEFAULT_TERMINALS: TerminalConfig[] = [
  * REPL-like interface for building data instances with command-line style input
  * 
  * Provides a unified terminal that supports:
- * - Atoms: add/remove atoms with Label:Type syntax
- * - Relations: add/remove relations with name:atom->atom syntax  
+ * - Nodes: add/remove atoms with Label:Type syntax
+ * - Edges: add/remove relations with name:atom->atom syntax  
  * - Extensions: Language-specific commands (Pyret lists, etc.)
  * - Utility commands: help, info, list, clear
  * 
@@ -118,8 +118,8 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
 
   // State for collapsible drawers
   const [drawersOpen, setDrawersOpen] = useState<Record<string, boolean>>({
-    atoms: false,
-    relations: false
+    nodes: false,
+    edges: false
   });
 
   // References to terminal output containers for auto-scrolling
@@ -400,16 +400,14 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
       <div className="repl-interface__main">
         <div className="repl-interface__header">
           <div className="repl-interface__stats">
-            <span>{atoms.length} atoms</span>
-            <span>{relations.length} relations</span>
-            <span>{tupleCount} tuples</span>
+            <span>{atoms.length} nodes {relations.length} edges {tupleCount} tuples</span>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
-              onClick={() => toggleDrawer('atoms')}
+              onClick={() => toggleDrawer('nodes')}
               style={{
-                background: drawersOpen.atoms ? '#4ec9b0' : '#2d2d30',
-                color: drawersOpen.atoms ? '#1e1e1e' : '#cccccc',
+                background: drawersOpen.nodes ? '#4ec9b0' : '#2d2d30',
+                color: drawersOpen.nodes ? '#1e1e1e' : '#cccccc',
                 border: '1px solid #3c3c3c',
                 padding: '4px 8px',
                 borderRadius: '4px',
@@ -417,13 +415,13 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
                 fontSize: '0.8rem'
               }}
             >
-              Atoms ({atoms.length})
+              Nodes ({atoms.length})
             </button>
             <button
-              onClick={() => toggleDrawer('relations')}
+              onClick={() => toggleDrawer('edges')}
               style={{
-                background: drawersOpen.relations ? '#4ec9b0' : '#2d2d30',
-                color: drawersOpen.relations ? '#1e1e1e' : '#cccccc',
+                background: drawersOpen.edges ? '#4ec9b0' : '#2d2d30',
+                color: drawersOpen.edges ? '#1e1e1e' : '#cccccc',
                 border: '1px solid #3c3c3c',
                 padding: '4px 8px',
                 borderRadius: '4px',
@@ -431,7 +429,7 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
                 fontSize: '0.8rem'
               }}
             >
-              Relations ({relations.length})
+              Edges ({relations.length})
             </button>
           </div>
         </div>
@@ -523,19 +521,19 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
       {/* Collapsible Drawers */}
       {(drawersOpen.atoms || drawersOpen.relations) && (
         <div className="repl-interface__drawers">
-          {/* Atoms Drawer */}
-          {drawersOpen.atoms && (
+          {/* Nodes Drawer */}
+          {drawersOpen.nodes && (
             <div className="repl-interface__drawer">
               <div 
                 className="repl-interface__drawer-header"
-                onClick={() => toggleDrawer('atoms')}
+                onClick={() => toggleDrawer('nodes')}
               >
-                <span>Atoms ({atoms.length})</span>
+                <span>Nodes ({atoms.length})</span>
                 <span className="repl-interface__drawer-toggle">▼</span>
               </div>
               <div className="repl-interface__drawer-content">
                 {atoms.length === 0 ? (
-                  <div className="repl-interface__drawer-empty">No atoms</div>
+                  <div className="repl-interface__drawer-empty">No nodes</div>
                 ) : (
                   atoms.map(atom => (
                     <div key={atom.id} className="repl-interface__drawer-item">
@@ -552,7 +550,7 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
                       <button
                         className="repl-interface__drawer-delete"
                         onClick={() => deleteAtom(atom.id)}
-                        title={`Delete atom ${atom.label}`}
+                        title={`Delete node ${atom.label}`}
                       >
                         ✕
                       </button>
@@ -563,19 +561,19 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
             </div>
           )}
 
-          {/* Relations Drawer */}
-          {drawersOpen.relations && (
+          {/* Edges Drawer */}
+          {drawersOpen.edges && (
             <div className="repl-interface__drawer">
               <div 
                 className="repl-interface__drawer-header"
-                onClick={() => toggleDrawer('relations')}
+                onClick={() => toggleDrawer('edges')}
               >
-                <span>Relations ({relations.length})</span>
+                <span>Edges ({relations.length})</span>
                 <span className="repl-interface__drawer-toggle">▼</span>
               </div>
               <div className="repl-interface__drawer-content">
                 {relations.length === 0 ? (
-                  <div className="repl-interface__drawer-empty">No relations</div>
+                  <div className="repl-interface__drawer-empty">No edges</div>
                 ) : (
                   relations.map(relation => (
                     <div key={relation.name} style={{ marginBottom: '8px' }}>

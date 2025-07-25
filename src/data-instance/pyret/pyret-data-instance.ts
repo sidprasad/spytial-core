@@ -151,6 +151,29 @@ export class PyretDataInstance implements IInputDataInstance {
       }
     }
 
+    // If no cached pattern, try to infer from other instances of the same type
+    const sameTypeAtoms = Array.from(this.atoms.values()).filter(a => a.type === atom.type);
+    for (const sameTypeAtom of sameTypeAtoms) {
+      const originalObj = this.originalObjects.get(sameTypeAtom.id);
+      if (originalObj && originalObj.dict) {
+        const orderedKeys = Object.keys(originalObj.dict);
+        this.cacheConstructorPattern(atom.type, orderedKeys);
+        
+        // Now try again with the cached pattern
+        const args: string[] = [];
+        for (const fieldName of orderedKeys) {
+          const targetIds = relationMap.get(fieldName) || [];
+          for (const targetId of targetIds) {
+            args.push(this.reifyAtom(targetId, visited));
+          }
+        }
+        if (args.length > 0) {
+          return `${atom.type}(${args.join(', ')})`;
+        }
+        break; // Only need to check one instance
+      }
+    }
+
     // Fallback: try common field name patterns
     const commonPatterns = [
       // Common constructor patterns
@@ -320,6 +343,11 @@ export class PyretDataInstance implements IInputDataInstance {
   reify(): string {
     let result = '';
 
+    // Add external evaluator enhancement comment if available
+    if (this.hasExternalEvaluator()) {
+      result += '// Enhanced with external Pyret evaluator\n';
+    }
+
     // Find referenced atoms
     const referencedAtoms = new Set<string>();
     this.relations.forEach(relation => {
@@ -334,7 +362,7 @@ export class PyretDataInstance implements IInputDataInstance {
     const rootAtoms = Array.from(this.atoms.values()).filter(atom => !referencedAtoms.has(atom.id));
 
     if (rootAtoms.length === 0) {
-      return result + "# No root atoms found";
+      return result + "/* No root atoms found */";
     }
 
     // If multiple roots, wrap in a Pyret set
