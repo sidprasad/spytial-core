@@ -54,6 +54,9 @@ export class PyretDataInstance implements IInputDataInstance {
 
   private readonly showFunctions: boolean;
 
+  /** Map to store constructor patterns and field order for types */
+  private constructorCache = new Map<string, string[]>();
+
   /** Optional external Pyret evaluator for enhanced features */
   private externalEvaluator: any | null = null;
 
@@ -95,8 +98,107 @@ export class PyretDataInstance implements IInputDataInstance {
   }
 
   /**
-   * Check if an external evaluator is available
+   * Cache constructor field order for a type when we successfully parse an original object
    */
+  private cacheConstructorPattern(typeName: string, fieldOrder: string[]): void {
+    if (!this.constructorCache.has(typeName) && fieldOrder.length > 0) {
+      this.constructorCache.set(typeName, [...fieldOrder]);
+    }
+  }
+
+  /**
+   * Get cached constructor pattern for a type
+   */
+  private getCachedConstructorPattern(typeName: string): string[] | null {
+    return this.constructorCache.get(typeName) || null;
+  }
+
+  /**
+   * Try to rebuild constructor arguments from relations using cached patterns or heuristics
+   */
+  private tryReconstructFromRelations(atom: IAtom, visited: Set<string>): string {
+    // Get all relations where this atom is the source
+    const relationMap = new Map<string, string[]>();
+    this.relations.forEach(relation => {
+      relation.tuples.forEach(tuple => {
+        if (tuple.atoms.length >= 2 && tuple.atoms[0] === atom.id) {
+          const relationName = relation.name;
+          if (!relationMap.has(relationName)) {
+            relationMap.set(relationName, []);
+          }
+          // Skip the source atom, collect target atoms
+          relationMap.get(relationName)!.push(...tuple.atoms.slice(1));
+        }
+      });
+    });
+
+    if (relationMap.size === 0) {
+      return atom.type; // No relations, just return the type name
+    }
+
+    // Try to use cached constructor pattern
+    const cachedPattern = this.getCachedConstructorPattern(atom.type);
+    if (cachedPattern) {
+      const args: string[] = [];
+      for (const fieldName of cachedPattern) {
+        const targetIds = relationMap.get(fieldName) || [];
+        for (const targetId of targetIds) {
+          args.push(this.reifyAtom(targetId, visited));
+        }
+      }
+      if (args.length > 0) {
+        return `${atom.type}(${args.join(', ')})`;
+      }
+    }
+
+    // Fallback: try common field name patterns
+    const commonPatterns = [
+      // Common constructor patterns
+      ['value'], ['val'], ['data'],
+      ['first', 'second'], ['left', 'right'], 
+      ['head', 'tail'], ['key', 'value'],
+      ['x', 'y'], ['width', 'height'],
+      ['name', 'value'], ['id', 'data']
+    ];
+
+    for (const pattern of commonPatterns) {
+      const args: string[] = [];
+      let hasAllFields = true;
+      
+      for (const fieldName of pattern) {
+        const targetIds = relationMap.get(fieldName);
+        if (!targetIds || targetIds.length === 0) {
+          hasAllFields = false;
+          break;
+        }
+        for (const targetId of targetIds) {
+          args.push(this.reifyAtom(targetId, visited));
+        }
+      }
+      
+      if (hasAllFields && args.length > 0) {
+        return `${atom.type}(${args.join(', ')})`;
+      }
+    }
+
+    // Ultimate fallback: create string dict notation
+    const dictEntries: string[] = [];
+    const relationNames = Array.from(relationMap.keys()).sort(); // Sort for consistency
+    
+    for (const relationName of relationNames) {
+      const targetIds = relationMap.get(relationName) || [];
+      for (const targetId of targetIds) {
+        const targetValue = this.reifyAtom(targetId, visited);
+        dictEntries.push(`"${relationName}": ${targetValue}`);
+      }
+    }
+    
+    if (dictEntries.length > 0) {
+      return `[string-dict: ${dictEntries.join(', ')}]`;
+    }
+    
+    return atom.type; // Last resort: just the type name
+  }
   hasExternalEvaluator(): boolean {
     return this.externalEvaluator !== null;
   }
@@ -218,6 +320,11 @@ export class PyretDataInstance implements IInputDataInstance {
   reify(): string {
     let result = '';
 
+    // Add external evaluator enhancement comment if available
+    if (this.hasExternalEvaluator()) {
+      result += '// Enhanced with external Pyret evaluator\n';
+    }
+
 
     // Find referenced atoms
     const referencedAtoms = new Set<string>();
@@ -275,16 +382,17 @@ export class PyretDataInstance implements IInputDataInstance {
     // Get the original object to preserve key order
     const originalObject = this.originalObjects.get(atomId);
 
-
-    // IF THERE IS NO ORIGINAL OBJECT, CAN WE SOMEHOW INSPECT TYPES FROM THE PYRET PARSER?
-    
     if (!originalObject || !originalObject.dict) {
+      // No original object available - try to reconstruct using cached patterns or heuristics
       visited.delete(atomId);
-      return atom.type;
+      return this.tryReconstructFromRelations(atom, visited);
     }
 
     // Use the original dict key order to maintain constructor argument order
     const orderedKeys = Object.keys(originalObject.dict);
+    
+    // Cache this constructor pattern for future use
+    this.cacheConstructorPattern(atom.type, orderedKeys);
     
     // Check if this looks like a list (all keys are numeric)
     const isListLike = orderedKeys.every(key => /^\d+$/.test(key));
