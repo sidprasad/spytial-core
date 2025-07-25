@@ -336,17 +336,12 @@ export class PyretDataInstance implements IInputDataInstance {
    * 
    * @example
    * ```typescript
-   * // For a red-black tree: Black(5, Red(3, Leaf(1), Leaf(2)), Leaf(7))
    * const pyretCode = instance.reify();
    * ```
    */
   reify(): string {
     let result = '';
 
-    // Add external evaluator enhancement comment if available
-    if (this.hasExternalEvaluator()) {
-      result += '// Enhanced with external Pyret evaluator\n';
-    }
 
     // Find referenced atoms
     const referencedAtoms = new Set<string>();
