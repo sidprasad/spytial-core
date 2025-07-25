@@ -36,6 +36,21 @@
         <h1>Combined Input Component Demo</h1>
         <p>This demo shows the Combined Input Component with REPL, Layout Interface, and Graph visualization.</p>
         
+        <div style="background-color: #e3f2fd; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #2196f3;">
+            <h3 style="margin-top: 0;">CnD Specification Extraction</h3>
+            <p>This demo includes automatic CnD specification extraction functionality. When you evaluate Pyret expressions that have a <code>_cndspec</code> method, the system will automatically extract the CnD specification and compose it with existing specs.</p>
+            
+            <h4>Try these commands in the REPL:</h4>
+            <ul>
+                <li><code>Alice:Person</code> - Basic data structure</li>
+                <li><code>alice.friend=bob</code> - Relations</li>
+                <li><code>Black(42, empty, empty)</code> - Extract orientation constraints</li>
+                <li><code>tree(root, [])</code> - Extract hierarchy constraints</li>
+            </ul>
+            
+            <p><strong>Note:</strong> This demo simulates Pyret objects with <code>_cndspec</code> methods for demonstration purposes.</p>
+        </div>
+        
         <button onclick="setupCombinedInputDemo()">Start Demo</button>
         <button onclick="clearCombinedInputDemo()">Clear Demo</button>
         
@@ -119,15 +134,76 @@
         }
 
         /**
-         * Create a mock evaluator for demo purposes
+         * Create a mock evaluator for demo purposes with CnD spec extraction support
          */
         function createMockEvaluator() {
             return {
                 run: async (code, sourceLocation) => {
                     console.log(`Mock evaluator running: ${code}`);
+                    
+                    // Handle CnD spec extraction calls
+                    if (code.includes('._cndspec()')) {
+                        if (code.includes('Black(') || code.includes('Red(')) {
+                            return {
+                                success: true,
+                                answer: `constraints:
+  - orientation:
+      selector: right
+      directions:
+        - right
+        - below`
+                            };
+                        } else if (code.includes('tree(')) {
+                            return {
+                                success: true,
+                                answer: `constraints:
+  - hierarchy:
+      selector: children
+      type: tree`
+                            };
+                        }
+                        // Default case - no spec
+                        return { success: false };
+                    }
+                    
+                    // Simulate Pyret objects with _cndspec methods for demo
+                    if (code.includes('Black(') || code.includes('Red(')) {
+                        return {
+                            success: true,
+                            answer: {
+                                value: 42,
+                                left: null,
+                                right: null,
+                                _cndspec: function() {
+                                    return `constraints:
+  - orientation:
+      selector: right
+      directions:
+        - right
+        - below`;
+                                }
+                            }
+                        };
+                    } else if (code.includes('tree(')) {
+                        return {
+                            success: true,
+                            answer: {
+                                root: 'value',
+                                children: [],
+                                _cndspec: function() {
+                                    return `constraints:
+  - hierarchy:
+      selector: children
+      type: tree`;
+                                }
+                            }
+                        };
+                    }
+                    
+                    // Default mock response
                     return {
                         success: true,
-                        result: {
+                        answer: {
                             dict: { value: Math.random() * 100 },
                             brands: { '$brandmock': true }
                         }

@@ -314,12 +314,44 @@ export class PyretExpressionParser implements ICommandParser {
       ];
     }
   }
+  /**
+   * Extract CnD specification from an expression by creating a faux expression and running it in the external evaluator
+   */
+  private async extractCndSpec(pyretResult: any, originalExpression: string): Promise<string | undefined> {
+    try {
+      // Only proceed if we have an evaluator
+      if (!this.evaluator) {
+        return undefined;
+      }
+      
+      // Create a faux expression to call _cndspec on the result
+      const cndSpecCode = `(${originalExpression})._cndspec()`;
+      const specResult = await this.evaluateExpression(cndSpecCode);
+      
+      if (specResult.success && specResult.result) {
+        // If result is a string, that's the CnD spec
+        if (typeof specResult.result === 'string') {
+          return specResult.result;
+        }
+      }
+      
+
+    } catch (error) {
+      console.error('Error extracting CnD spec:', this.formatError(error));
+    }
+    // If error or no result, return undefined
+    return undefined;
+  }
+
   private async addPyretResultToInstance(
     pyretResult: any, 
     instance: IInputDataInstance, 
     originalExpression: string
   ): Promise<CommandResult> {
     try {
+      // First, attempt to extract CnD specification if available
+      const extractedCndSpec = await this.extractCndSpec(pyretResult, originalExpression);
+      
       // Check if the result is a primitive value
       if (this.isPrimitive(pyretResult)) {
         // Add primitive value directly to the current InputDataInstance with appropriate type
@@ -343,10 +375,14 @@ export class PyretExpressionParser implements ICommandParser {
         
         instance.addAtom(primitiveAtom);
         
+        const message = `Evaluated Pyret expression: ${originalExpression}\nResult: ${pyretResult} (${atomType})\nAdded 1 atom` +
+                       (extractedCndSpec ? '\nExtracted CnD specification from result' : '');
+        
         return {
           success: true,
-          message: `Evaluated Pyret expression: ${originalExpression}\nResult: ${pyretResult} (${atomType})\nAdded 1 atom`,
-          action: 'add'
+          message,
+          action: 'add',
+          extractedCndSpec
         };
       }
       
@@ -360,7 +396,8 @@ export class PyretExpressionParser implements ICommandParser {
       if (newAtoms.length === 0) {
         return {
           success: false,
-          message: 'Pyret expression did not produce any data structures'
+          message: 'Pyret expression did not produce any data structures',
+          extractedCndSpec
         };
       }
 
@@ -404,10 +441,14 @@ export class PyretExpressionParser implements ICommandParser {
         }
       }
 
+      const message = `Evaluated Pyret expression: ${originalExpression}\nAdded ${atomsAdded} atoms and ${relationsAdded} relation tuples` +
+                     (extractedCndSpec ? '\nExtracted CnD specification from result' : '');
+
       return {
         success: true,
-        message: `Evaluated Pyret expression: ${originalExpression}\nAdded ${atomsAdded} atoms and ${relationsAdded} relation tuples`,
-        action: 'add'
+        message,
+        action: 'add',
+        extractedCndSpec
       };
 
     } catch (error) {

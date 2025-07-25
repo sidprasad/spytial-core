@@ -26,6 +26,8 @@ export interface PyretReplInterfaceProps extends Omit<ReplInterfaceProps, 'insta
   initialInstance?: PyretDataInstance;
   /** Callback fired when the instance changes */
   onChange?: (instance: PyretDataInstance) => void;
+  /** Callback when CnD specification is extracted from an expression */
+  onCndSpecExtracted?: (spec: string) => void;
   /** Optional external Pyret evaluator (e.g., window.__internalRepl) */
   externalEvaluator?: PyretEvaluator;
 }
@@ -47,6 +49,7 @@ function createEmptyPyretDataInstance(): PyretDataInstance {
 export const PyretReplInterface: React.FC<PyretReplInterfaceProps> = ({
   initialInstance,
   onChange,
+  onCndSpecExtracted,
   externalEvaluator,
   ...replProps
 }) => {
@@ -106,6 +109,7 @@ export const PyretReplInterface: React.FC<PyretReplInterfaceProps> = ({
     <ReplInterface
       instance={instance}
       onChange={handleInstanceChange}
+      onCndSpecExtracted={onCndSpecExtracted}
       terminals={terminals}
       {...replProps}
     />

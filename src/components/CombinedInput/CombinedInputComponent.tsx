@@ -8,7 +8,7 @@
  * between PyretReplInterface, CndLayoutInterface, and webcola-cnd-graph.
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { PyretReplInterface } from '../ReplInterface/PyretReplInterface';
 import { CndLayoutInterface } from '../CndLayoutInterface';
 import { PyretDataInstance } from '../../data-instance/pyret/pyret-data-instance';
@@ -92,6 +92,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
   });
   
   const [currentSpec, setCurrentSpec] = useState<string>(cndSpec);
+  const [extractedSpecs, setExtractedSpecs] = useState<string[]>([]); // Store extracted specs
   const [constraints, setConstraints] = useState<ConstraintData[]>([]);
   const [directives, setDirectives] = useState<DirectiveData[]>([]);
   const [isNoCodeView, setIsNoCodeView] = useState<boolean>(false);
@@ -121,12 +122,35 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
     currentInstanceRef.current = currentInstance;
   }, [currentInstance]);
 
-  // Initialize or update CnD spec
-  useEffect(() => {
-    if (cndSpec !== currentSpec) {
-      setCurrentSpec(cndSpec);
+  // Compose CnD specs by concatenating them with newlines
+  const composeCndSpecs = useCallback((baseSpec: string, extractedSpecs: string[]): string => {
+    const specs = [baseSpec, ...extractedSpecs].filter(spec => spec && spec.trim());
+    
+    if (specs.length === 0) {
+      return '';
     }
-  }, [cndSpec, currentSpec]);
+    
+    if (specs.length === 1) {
+      return specs[0];
+    }
+    
+    // Join specs with newlines
+    return specs.join('\n');
+  }, []);
+
+  // Compute the complete spec by combining the base spec with all extracted specs
+  const completeSpec = useMemo(() => {
+    return composeCndSpecs(cndSpec, extractedSpecs);
+  }, [cndSpec, extractedSpecs]);
+
+  // Update current spec when complete spec changes
+  useEffect(() => {
+    if (completeSpec !== currentSpec) {
+      setCurrentSpec(completeSpec);
+      setLayoutStale(true);
+      onSpecChange?.(completeSpec);
+    }
+  }, [completeSpec, currentSpec, onSpecChange]);
 
   // Handle instance changes from REPL
   const handleInstanceChange = useCallback((newInstance: PyretDataInstance) => {
@@ -152,6 +176,20 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
       setTimeout(() => applyLayout(currentInstance, newSpec), 100);
     }
   }, [autoApplyLayout, currentInstance, onSpecChange]);
+
+  // Handle CnD spec extraction from REPL expressions
+  const handleCndSpecExtracted = useCallback((extractedSpec: string) => {
+    console.log('CnD spec extracted from expression:', extractedSpec);
+    
+    // Add to extracted specs list (avoid duplicates)
+    setExtractedSpecs(prev => {
+      if (!prev.includes(extractedSpec)) {
+        console.log('Adding new extracted spec:', extractedSpec, 'to list:', prev);
+        return [...prev, extractedSpec];
+      }
+      return prev;
+    });
+  }, []);
 
   // Apply layout using the CnD pipeline
   const applyLayout = useCallback(async (instance: PyretDataInstance, spec: string) => {
@@ -433,6 +471,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
                 <PyretReplInterface
                   initialInstance={currentInstance}
                   onChange={handleInstanceChange}
+                  onCndSpecExtracted={handleCndSpecExtracted}
                   externalEvaluator={pyretEvaluator}
                 />
               </div>
