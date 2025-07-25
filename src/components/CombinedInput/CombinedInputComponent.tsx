@@ -184,7 +184,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
     // Add to extracted specs list (avoid duplicates)
     setExtractedSpecs(prev => {
       if (!prev.includes(extractedSpec)) {
-        console.log('Adding new extracted spec:', extractedSpec);
+        console.log('Adding new extracted spec:', extractedSpec, 'to list:', prev);
         return [...prev, extractedSpec];
       }
       return prev;
