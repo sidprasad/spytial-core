@@ -166,54 +166,6 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
     }
   }, [instance, onChange]);
 
-  // Delete atom function
-  const deleteAtom = useCallback((atomId: string) => {
-    try {
-      instance.removeAtom(atomId);
-      notifyChange();
-      // Add feedback to the first terminal
-      const firstTerminalId = terminals[0]?.id;
-      if (firstTerminalId) {
-        addOutputLine(firstTerminalId, {
-          type: 'success',
-          message: `Deleted atom: ${atomId}`
-        });
-      }
-    } catch (error) {
-      const firstTerminalId = terminals[0]?.id;
-      if (firstTerminalId) {
-        addOutputLine(firstTerminalId, {
-          type: 'error',
-          message: `Failed to delete atom: ${error}`
-        });
-      }
-    }
-  }, [instance, notifyChange, terminals, addOutputLine]);
-
-  // Delete relation tuple function
-  const deleteRelationTuple = useCallback((relationName: string, tuple: any) => {
-    try {
-      instance.removeRelationTuple(relationName, tuple);
-      notifyChange();
-      // Add feedback to the first terminal
-      const firstTerminalId = terminals[0]?.id;
-      if (firstTerminalId) {
-        addOutputLine(firstTerminalId, {
-          type: 'success',
-          message: `Deleted tuple: ${relationName}(${tuple.atoms.join(', ')})`
-        });
-      }
-    } catch (error) {
-      const firstTerminalId = terminals[0]?.id;
-      if (firstTerminalId) {
-        addOutputLine(firstTerminalId, {
-          type: 'error',
-          message: `Failed to delete tuple: ${error}`
-        });
-      }
-    }
-  }, [instance, notifyChange, terminals, addOutputLine]);
-
   // Toggle drawer function
   const toggleDrawer = useCallback((drawerName: string) => {
     setDrawersOpen(prev => ({
@@ -399,9 +351,6 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
     <div className={`repl-interface ${className}`}>
       <div className="repl-interface__main">
         <div className="repl-interface__header">
-          <div className="repl-interface__stats">
-            <span>{atoms.length} nodes {relations.length} edges {tupleCount} tuples</span>
-          </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
               onClick={() => toggleDrawer('nodes')}
@@ -547,13 +496,6 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
                           </div>
                         )}
                       </div>
-                      <button
-                        className="repl-interface__drawer-delete"
-                        onClick={() => deleteAtom(atom.id)}
-                        title={`Delete node ${atom.label}`}
-                      >
-                        ✕
-                      </button>
                     </div>
                   ))
                 )}
@@ -595,13 +537,6 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
                               {relation.name}({tuple.atoms.join(', ')})
                             </div>
                           </div>
-                          <button
-                            className="repl-interface__drawer-delete"
-                            onClick={() => deleteRelationTuple(relation.name, tuple)}
-                            title={`Delete tuple ${relation.name}(${tuple.atoms.join(', ')})`}
-                          >
-                            ✕
-                          </button>
                         </div>
                       ))}
                     </div>

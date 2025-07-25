@@ -114,7 +114,8 @@ export class PyretDataInstance implements IInputDataInstance {
   }
 
   /**
-   * Try to rebuild constructor arguments from relations using cached patterns or heuristics
+   * Try to rebuild constructor arguments from relations using cached patterns
+   * Only uses patterns from previously seen constructor instances - no heuristics
    */
   private tryReconstructFromRelations(atom: IAtom, visited: Set<string>): string {
     // Get all relations where this atom is the source
@@ -136,7 +137,7 @@ export class PyretDataInstance implements IInputDataInstance {
       return atom.type; // No relations, just return the type name
     }
 
-    // Try to use cached constructor pattern
+    // Try to use cached constructor pattern from previously seen instances
     const cachedPattern = this.getCachedConstructorPattern(atom.type);
     if (cachedPattern) {
       const args: string[] = [];
@@ -152,6 +153,7 @@ export class PyretDataInstance implements IInputDataInstance {
     }
 
     // If no cached pattern, try to infer from other instances of the same type
+    // Look for other atoms of the same type that have original objects
     const sameTypeAtoms = Array.from(this.atoms.values()).filter(a => a.type === atom.type);
     for (const sameTypeAtom of sameTypeAtoms) {
       const originalObj = this.originalObjects.get(sameTypeAtom.id);
@@ -170,54 +172,25 @@ export class PyretDataInstance implements IInputDataInstance {
         if (args.length > 0) {
           return `${atom.type}(${args.join(', ')})`;
         }
-        break; // Only need to check one instance
+        break; // Only need to check one instance since constructors are nominal
       }
     }
 
-    // Fallback: try common field name patterns
-    const commonPatterns = [
-      // Common constructor patterns
-      ['value'], ['val'], ['data'],
-      ['first', 'second'], ['left', 'right'], 
-      ['head', 'tail'], ['key', 'value'],
-      ['x', 'y'], ['width', 'height'],
-      ['name', 'value'], ['id', 'data']
-    ];
-
-    for (const pattern of commonPatterns) {
-      const args: string[] = [];
-      let hasAllFields = true;
-      
-      for (const fieldName of pattern) {
-        const targetIds = relationMap.get(fieldName);
-        if (!targetIds || targetIds.length === 0) {
-          hasAllFields = false;
-          break;
-        }
-        for (const targetId of targetIds) {
-          args.push(this.reifyAtom(targetId, visited));
-        }
-      }
-      
-      if (hasAllFields && args.length > 0) {
-        return `${atom.type}(${args.join(', ')})`;
-      }
-    }
-
-    // Ultimate fallback: create string dict notation
-    const dictEntries: string[] = [];
+    // Final fallback: use sorted field order but print an error
+    console.error(`[PyretDataInstance] Could not determine constructor pattern for type '${atom.type}'. Falling back to sorted field order.`);
+    
     const relationNames = Array.from(relationMap.keys()).sort(); // Sort for consistency
+    const args: string[] = [];
     
     for (const relationName of relationNames) {
       const targetIds = relationMap.get(relationName) || [];
       for (const targetId of targetIds) {
-        const targetValue = this.reifyAtom(targetId, visited);
-        dictEntries.push(`"${relationName}": ${targetValue}`);
+        args.push(this.reifyAtom(targetId, visited));
       }
     }
     
-    if (dictEntries.length > 0) {
-      return `[string-dict: ${dictEntries.join(', ')}]`;
+    if (args.length > 0) {
+      return `${atom.type}(${args.join(', ')})`;
     }
     
     return atom.type; // Last resort: just the type name
