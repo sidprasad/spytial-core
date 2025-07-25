@@ -508,6 +508,13 @@ export class PyretDataInstance implements IInputDataInstance {
       // Store the original object to preserve dict key order
       this.originalObjects.set(atomId, obj);
 
+      // Cache constructor pattern for this type if it has a dict
+      if (obj.dict && typeof obj.dict === 'object') {
+        const type = this.extractType(obj);
+        const fieldOrder = Object.keys(obj.dict);
+        this.cacheConstructorPattern(type, fieldOrder);
+      }
+
       // Add relation from parent if this is not the root object
       if (parentInfo) {
         this.addRelationTuple(
@@ -616,6 +623,7 @@ export class PyretDataInstance implements IInputDataInstance {
   /**
    * Extracts the most specific brand name from a Pyret brands object.
    * Returns the brand with the highest trailing number, with prefix and number removed.
+   * If no brands have trailing numbers, returns the lexicographically last brand.
    *
    * @param brands - The brands object from a Pyret object
    * @returns The most specific brand name (without $brand and trailing number), or undefined if none found
@@ -623,19 +631,33 @@ export class PyretDataInstance implements IInputDataInstance {
   private extractMostSpecificBrand(brands: Record<string, boolean>): string | undefined {
     let maxNum = -1;
     let result: string | undefined = undefined;
+    let fallbackResult: string | undefined = undefined;
 
     for (const brand of Object.keys(brands)) {
-      const match = /^\$brand([a-zA-Z_]+)(\d+)$/.exec(brand);
-      if (match) {
-        const [, name, numStr] = match;
+      // Try pattern with trailing number
+      const matchWithNumber = /^\$brand([a-zA-Z_]+)(\d+)$/.exec(brand);
+      if (matchWithNumber) {
+        const [, name, numStr] = matchWithNumber;
         const num = parseInt(numStr, 10);
         if (num > maxNum) {
           maxNum = num;
           result = name;
         }
+      } else {
+        // Try pattern without trailing number
+        const matchWithoutNumber = /^\$brand_?([a-zA-Z_]+)$/.exec(brand);
+        if (matchWithoutNumber) {
+          const [, name] = matchWithoutNumber;
+          // Use as fallback if no numbered brands found
+          if (!fallbackResult || name > fallbackResult) {
+            fallbackResult = name;
+          }
+        }
       }
     }
-    return result;
+    
+    // Return numbered brand if found, otherwise fallback to non-numbered brand
+    return result || fallbackResult;
   }
 
   /**
