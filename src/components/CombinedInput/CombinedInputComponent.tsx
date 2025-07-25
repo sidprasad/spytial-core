@@ -434,7 +434,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
       <div style={{ display: 'flex', flex: 1, gap: '10px' }}>
         {/* Left side: REPL and Layout Interface */}
         <div style={{ 
-          width: showLayoutInterface ? '50%' : '30%', 
+          width: showLayoutInterface ? '35%' : '25%', 
           display: 'flex', 
           flexDirection: 'column', 
           gap: '10px' 
