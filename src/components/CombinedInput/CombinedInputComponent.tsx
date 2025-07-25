@@ -122,6 +122,22 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
     currentInstanceRef.current = currentInstance;
   }, [currentInstance]);
 
+  // Compose CnD specs by concatenating them with newlines
+  const composeCndSpecs = useCallback((baseSpec: string, extractedSpecs: string[]): string => {
+    const specs = [baseSpec, ...extractedSpecs].filter(spec => spec && spec.trim());
+    
+    if (specs.length === 0) {
+      return '';
+    }
+    
+    if (specs.length === 1) {
+      return specs[0];
+    }
+    
+    // Join specs with newlines
+    return specs.join('\n');
+  }, []);
+
   // Compute the complete spec by combining the base spec with all extracted specs
   const completeSpec = useMemo(() => {
     return composeCndSpecs(cndSpec, extractedSpecs);
@@ -160,22 +176,6 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
       setTimeout(() => applyLayout(currentInstance, newSpec), 100);
     }
   }, [autoApplyLayout, currentInstance, onSpecChange]);
-
-  // Compose CnD specs by concatenating them with newlines
-  const composeCndSpecs = useCallback((baseSpec: string, extractedSpecs: string[]): string => {
-    const specs = [baseSpec, ...extractedSpecs].filter(spec => spec && spec.trim());
-    
-    if (specs.length === 0) {
-      return '';
-    }
-    
-    if (specs.length === 1) {
-      return specs[0];
-    }
-    
-    // Join specs with newlines
-    return specs.join('\n');
-  }, []);
 
   // Handle CnD spec extraction from REPL expressions
   const handleCndSpecExtracted = useCallback((extractedSpec: string) => {

@@ -146,7 +146,7 @@
                         if (code.includes('Black(') || code.includes('Red(')) {
                             return {
                                 success: true,
-                                result: `constraints:
+                                answer: `constraints:
   - orientation:
       selector: right
       directions:
@@ -156,7 +156,7 @@
                         } else if (code.includes('tree(')) {
                             return {
                                 success: true,
-                                result: `constraints:
+                                answer: `constraints:
   - hierarchy:
       selector: children
       type: tree`
@@ -170,7 +170,7 @@
                     if (code.includes('Black(') || code.includes('Red(')) {
                         return {
                             success: true,
-                            result: {
+                            answer: {
                                 value: 42,
                                 left: null,
                                 right: null,
@@ -187,7 +187,7 @@
                     } else if (code.includes('tree(')) {
                         return {
                             success: true,
-                            result: {
+                            answer: {
                                 root: 'value',
                                 children: [],
                                 _cndspec: function() {
@@ -203,7 +203,7 @@
                     // Default mock response
                     return {
                         success: true,
-                        result: {
+                        answer: {
                             dict: { value: Math.random() * 100 },
                             brands: { '$brandmock': true }
                         }
