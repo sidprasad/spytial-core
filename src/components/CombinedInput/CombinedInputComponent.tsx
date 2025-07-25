@@ -141,7 +141,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
   // Compute the complete spec by combining the base spec with all extracted specs
   const completeSpec = useMemo(() => {
     return composeCndSpecs(cndSpec, extractedSpecs);
-  }, [cndSpec, extractedSpecs, composeCndSpecs]);
+  }, [cndSpec, extractedSpecs]);
 
   // Update current spec when complete spec changes
   useEffect(() => {
