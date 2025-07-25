@@ -179,19 +179,23 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
       if (!prev.includes(extractedSpec)) {
         const newSpecs = [...prev, extractedSpec];
         
-        // Compose the new complete spec
-        const composedSpec = composeCndSpecs(cndSpec, newSpecs);
-        
-        // Update the current spec with the composed result
-        setCurrentSpec(composedSpec);
-        setLayoutStale(true);
-        onSpecChange?.(composedSpec);
+        // Use the current spec state instead of the prop for proper composition
+        setCurrentSpec(currentSpecValue => {
+          // Compose the new complete spec using current state
+          const composedSpec = composeCndSpecs(currentSpecValue, [extractedSpec]);
+          
+          // Trigger layout update and callback
+          setLayoutStale(true);
+          onSpecChange?.(composedSpec);
+          
+          return composedSpec;
+        });
         
         return newSpecs;
       }
       return prev;
     });
-  }, [cndSpec, composeCndSpecs, onSpecChange]);
+  }, [composeCndSpecs, onSpecChange]);
 
   // Apply layout using the CnD pipeline
   const applyLayout = useCallback(async (instance: PyretDataInstance, spec: string) => {

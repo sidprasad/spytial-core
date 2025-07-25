@@ -317,11 +317,11 @@ export class PyretExpressionParser implements ICommandParser {
   /**
    * Extract CnD specification from an expression by creating a faux expression and running it in the external evaluator
    */
-  private async extractCndSpec(pyretResult: any, originalExpression: string): Promise<string> {
+  private async extractCndSpec(pyretResult: any, originalExpression: string): Promise<string | undefined> {
     try {
       // Only proceed if we have an evaluator
       if (!this.evaluator) {
-        return "";
+        return undefined;
       }
       
       // Create a faux expression to call _cndspec on the result
@@ -339,8 +339,8 @@ export class PyretExpressionParser implements ICommandParser {
     } catch (error) {
       console.error('Error extracting CnD spec:', this.formatError(error));
     }
-    // If error or no result, return the empty spec.
-    return "";
+    // If error or no result, return undefined
+    return undefined;
   }
 
   private async addPyretResultToInstance(
