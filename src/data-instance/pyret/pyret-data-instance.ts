@@ -316,6 +316,8 @@ export class PyretDataInstance implements IInputDataInstance {
     let result = '';
 
 
+    // TODO: This is still broken. Need to understand what is going on here!!
+
     // Find referenced atoms
     const referencedAtoms = new Set<string>();
     this.relations.forEach(relation => {
