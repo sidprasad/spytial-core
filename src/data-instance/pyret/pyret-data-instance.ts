@@ -6,6 +6,11 @@ import { IInputDataInstance, IAtom, IRelation, ITuple, IType, DataInstanceEventT
  * What about images, or other Pyret representations?
  */
 
+/** Global constructor cache entry with pattern and instantiation priority */
+interface ConstructorCacheEntry {
+  pattern: string[];
+  instantiation: number;
+}
 
 export function generateEdgeId(
     relation: IRelation,
@@ -55,7 +60,10 @@ export class PyretDataInstance implements IInputDataInstance {
   private readonly showFunctions: boolean;
 
   /** Global map to store constructor patterns and field order for types across all instances */
-  private static globalConstructorCache = new Map<string, string[]>();
+  private static globalConstructorCache = new Map<string, ConstructorCacheEntry>();
+  
+  /** Global counter for instantiation priority - higher numbers mean newer/higher priority */
+  private static instantiationCounter = 0;
 
   /** Optional external Pyret evaluator for enhanced features */
   private externalEvaluator: any | null = null;
@@ -99,11 +107,22 @@ export class PyretDataInstance implements IInputDataInstance {
 
   /**
    * Cache constructor field order for a type when we successfully parse an original object
-   * This now uses a global cache that persists across all PyretDataInstance instances
+   * This now uses a global cache with instantiation-based priority where newer patterns
+   * can override older ones for the same constructor name
    */
   private cacheConstructorPattern(typeName: string, fieldOrder: string[]): void {
-    if (!PyretDataInstance.globalConstructorCache.has(typeName) && fieldOrder.length > 0) {
-      PyretDataInstance.globalConstructorCache.set(typeName, [...fieldOrder]);
+    if (fieldOrder.length === 0) return;
+    
+    const currentEntry = PyretDataInstance.globalConstructorCache.get(typeName);
+    const newInstantiation = ++PyretDataInstance.instantiationCounter;
+    
+    // Always cache if no entry exists, or if we want to allow newer patterns to override
+    // For now, we always update to give priority to newer constructor patterns
+    if (!currentEntry || newInstantiation > currentEntry.instantiation) {
+      PyretDataInstance.globalConstructorCache.set(typeName, {
+        pattern: [...fieldOrder],
+        instantiation: newInstantiation
+      });
     }
   }
 
@@ -111,13 +130,27 @@ export class PyretDataInstance implements IInputDataInstance {
    * Get cached constructor pattern for a type from the global cache
    */
   private getCachedConstructorPattern(typeName: string): string[] | null {
-    return PyretDataInstance.globalConstructorCache.get(typeName) || null;
+    const entry = PyretDataInstance.globalConstructorCache.get(typeName);
+    return entry ? entry.pattern : null;
   }
 
   /**
    * Get the global constructor cache (for debugging or advanced use cases)
+   * Returns a map of type names to their patterns
    */
   static getGlobalConstructorCache(): Map<string, string[]> {
+    const result = new Map<string, string[]>();
+    for (const [typeName, entry] of PyretDataInstance.globalConstructorCache) {
+      result.set(typeName, [...entry.pattern]);
+    }
+    return result;
+  }
+
+  /**
+   * Get the global constructor cache with instantiation info (for debugging)
+   * Returns the raw cache with instantiation numbers
+   */
+  static getGlobalConstructorCacheWithPriority(): Map<string, ConstructorCacheEntry> {
     return new Map(PyretDataInstance.globalConstructorCache);
   }
 
