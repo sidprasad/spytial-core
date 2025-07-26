@@ -54,8 +54,8 @@ export class PyretDataInstance implements IInputDataInstance {
 
   private readonly showFunctions: boolean;
 
-  /** Map to store constructor patterns and field order for types */
-  private constructorCache = new Map<string, string[]>();
+  /** Global map to store constructor patterns and field order for types across all instances */
+  private static globalConstructorCache = new Map<string, string[]>();
 
   /** Optional external Pyret evaluator for enhanced features */
   private externalEvaluator: any | null = null;
@@ -99,21 +99,33 @@ export class PyretDataInstance implements IInputDataInstance {
 
   /**
    * Cache constructor field order for a type when we successfully parse an original object
-   * 
-   * TODO: The issue here is that constructor patterns aren't always shared across new Instances.
-   * 
+   * This now uses a global cache that persists across all PyretDataInstance instances
    */
   private cacheConstructorPattern(typeName: string, fieldOrder: string[]): void {
-    if (!this.constructorCache.has(typeName) && fieldOrder.length > 0) {
-      this.constructorCache.set(typeName, [...fieldOrder]);
+    if (!PyretDataInstance.globalConstructorCache.has(typeName) && fieldOrder.length > 0) {
+      PyretDataInstance.globalConstructorCache.set(typeName, [...fieldOrder]);
     }
   }
 
   /**
-   * Get cached constructor pattern for a type
+   * Get cached constructor pattern for a type from the global cache
    */
   private getCachedConstructorPattern(typeName: string): string[] | null {
-    return this.constructorCache.get(typeName) || null;
+    return PyretDataInstance.globalConstructorCache.get(typeName) || null;
+  }
+
+  /**
+   * Get the global constructor cache (for debugging or advanced use cases)
+   */
+  static getGlobalConstructorCache(): Map<string, string[]> {
+    return new Map(PyretDataInstance.globalConstructorCache);
+  }
+
+  /**
+   * Clear the global constructor cache (for testing or reset scenarios)
+   */
+  static clearGlobalConstructorCache(): void {
+    PyretDataInstance.globalConstructorCache.clear();
   }
 
   /**
