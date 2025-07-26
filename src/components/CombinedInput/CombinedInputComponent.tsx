@@ -103,6 +103,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
   const [replCollapsed, setReplCollapsed] = useState<boolean>(false);
   const [layoutCollapsed, setLayoutCollapsed] = useState<boolean>(false);
   const [graphCollapsed, setGraphCollapsed] = useState<boolean>(false);
+  const [reifyHidden, setReifyHidden] = useState<boolean>(false);
   
   // Refs for managing the graph element and current instance access
   const graphContainerRef = useRef<HTMLDivElement>(null);
@@ -159,9 +160,9 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
     setLayoutStale(true);
     onInstanceChange?.(newInstance);
     
-    // Auto-apply layout if enabled
+    // Auto-apply layout if enabled and we have data
     if (autoApplyLayout && newInstance.getAtoms().length > 0) {
-      setTimeout(() => applyLayout(newInstance, currentSpec), 100);
+      setTimeout(() => applyLayout(newInstance, currentSpec), 50);
     }
   }, [autoApplyLayout, currentSpec, onInstanceChange]);
 
@@ -171,9 +172,10 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
     setLayoutStale(true);
     onSpecChange?.(newSpec);
     
-    // Auto-apply layout if enabled
+    // Auto-apply layout if enabled and we have data
     if (autoApplyLayout && currentInstance.getAtoms().length > 0) {
-      setTimeout(() => applyLayout(currentInstance, newSpec), 100);
+      // Use a shorter timeout and ensure we're applying with the new spec
+      setTimeout(() => applyLayout(currentInstance, newSpec), 50);
     }
   }, [autoApplyLayout, currentInstance, onSpecChange]);
 
@@ -240,11 +242,20 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
   const handleClear = useCallback(() => {
     const emptyInstance = new PyretDataInstance();
     setCurrentInstance(emptyInstance);
+    currentInstanceRef.current = emptyInstance; // Keep ref in sync
     setCurrentLayout(null);
+    setLayoutStale(false); // No need to apply layout to empty data
     onInstanceChange?.(emptyInstance);
     
-    if (graphElementRef.current && typeof (graphElementRef.current as any).clear === 'function') {
-      (graphElementRef.current as any).clear();
+    // Clear the graph and force re-render with empty data
+    if (graphElementRef.current) {
+      if (typeof (graphElementRef.current as any).clear === 'function') {
+        (graphElementRef.current as any).clear();
+      }
+      // Also try to render empty layout to ensure graph updates
+      if (typeof (graphElementRef.current as any).renderLayout === 'function') {
+        (graphElementRef.current as any).renderLayout(null);
+      }
     }
   }, [onInstanceChange]);
 
@@ -430,108 +441,55 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
         </div>
       </div>
 
-      {/* Main content area */}
-      <div style={{ display: 'flex', flex: 1, gap: '10px' }}>
-        {/* Left side: REPL and Layout Interface */}
+      {/* Main content area - now vertical layout */}
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: '10px' }}>
+        
+        {/* Top: Pyret REPL - 100% width */}
         <div style={{ 
-          width: showLayoutInterface ? '35%' : '25%', 
-          display: 'flex', 
-          flexDirection: 'column', 
-          gap: '10px' 
-        }}>
-          {/* Pyret REPL */}
-          <div style={{ 
-            flex: replCollapsed ? '0 0 auto' : 1, 
-            border: '1px solid #ddd', 
-            borderRadius: '6px',
-            backgroundColor: '#fff',
-            display: 'flex',
-            flexDirection: 'column'
-          }}>
-            <div style={{ 
-              padding: '8px 12px', 
-              backgroundColor: '#f8f9fa', 
-              borderBottom: replCollapsed ? 'none' : '1px solid #e0e0e0',
-              borderRadius: '6px 6px 0 0',
-              fontSize: '14px',
-              fontWeight: 'bold',
-              color: '#495057',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              cursor: 'pointer'
-            }} onClick={() => setReplCollapsed(!replCollapsed)}>
-              <span>Pyret REPL</span>
-              <span style={{ fontSize: '12px', color: '#6c757d' }}>
-                {replCollapsed ? '▶' : '▼'}
-              </span>
-            </div>
-            {!replCollapsed && (
-              <div style={{ flex: 1, padding: '8px' }}>
-                <PyretReplInterface
-                  initialInstance={currentInstance}
-                  onChange={handleInstanceChange}
-                  onCndSpecExtracted={handleCndSpecExtracted}
-                  externalEvaluator={pyretEvaluator}
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Layout Interface (if enabled) */}
-          {showLayoutInterface && (
-            <div style={{ 
-              flex: layoutCollapsed ? '0 0 auto' : 1, 
-              border: '1px solid #ddd', 
-              borderRadius: '6px',
-              backgroundColor: '#fff',
-              display: 'flex',
-              flexDirection: 'column'
-            }}>
-              <div style={{ 
-                padding: '8px 12px', 
-                backgroundColor: '#f8f9fa', 
-                borderBottom: layoutCollapsed ? 'none' : '1px solid #e0e0e0',
-                borderRadius: '6px 6px 0 0',
-                fontSize: '14px',
-                fontWeight: 'bold',
-                color: '#495057',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                cursor: 'pointer'
-              }} onClick={() => setLayoutCollapsed(!layoutCollapsed)}>
-                <span>CnD Layout Interface</span>
-                <span style={{ fontSize: '12px', color: '#6c757d' }}>
-                  {layoutCollapsed ? '▶' : '▼'}
-                </span>
-              </div>
-              {!layoutCollapsed && (
-                <div style={{ flex: 1, padding: '8px' }}>
-                  <CndLayoutInterface
-                    yamlValue={currentSpec}
-                    onChange={handleSpecChange}
-                    isNoCodeView={isNoCodeView}
-                    onViewChange={setIsNoCodeView}
-                    constraints={constraints}
-                    setConstraints={setConstraints}
-                    directives={directives}
-                    setDirectives={setDirectives}
-                  />
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Right side: Graph visualization */}
-        <div style={{ 
-          flex: 1, 
           border: '1px solid #ddd', 
           borderRadius: '6px',
           backgroundColor: '#fff',
           display: 'flex',
           flexDirection: 'column'
+        }}>
+          <div style={{ 
+            padding: '8px 12px', 
+            backgroundColor: '#f8f9fa', 
+            borderBottom: replCollapsed ? 'none' : '1px solid #e0e0e0',
+            borderRadius: '6px 6px 0 0',
+            fontSize: '14px',
+            fontWeight: 'bold',
+            color: '#495057',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            cursor: 'pointer'
+          }} onClick={() => setReplCollapsed(!replCollapsed)}>
+            <span>Pyret REPL</span>
+            <span style={{ fontSize: '12px', color: '#6c757d' }}>
+              {replCollapsed ? '▶' : '▼'}
+            </span>
+          </div>
+          {!replCollapsed && (
+            <div style={{ padding: '8px' }}>
+              <PyretReplInterface
+                initialInstance={currentInstance}
+                onChange={handleInstanceChange}
+                onCndSpecExtracted={handleCndSpecExtracted}
+                externalEvaluator={pyretEvaluator}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Middle: Graph visualization - 100% width */}
+        <div style={{ 
+          border: '1px solid #ddd', 
+          borderRadius: '6px',
+          backgroundColor: '#fff',
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1
         }}>
           <div style={{ 
             padding: '8px 12px', 
@@ -575,7 +533,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                minHeight: '300px'
+                minHeight: '400px'
               }}
             >
               {/* Graph element will be created here */}
@@ -590,6 +548,50 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
             </div>
           )}
         </div>
+
+        {/* Bottom: CnD Layout Interface - horizontal if shown */}
+        {showLayoutInterface && (
+          <div style={{ 
+            border: '1px solid #ddd', 
+            borderRadius: '6px',
+            backgroundColor: '#fff',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            <div style={{ 
+              padding: '8px 12px', 
+              backgroundColor: '#f8f9fa', 
+              borderBottom: layoutCollapsed ? 'none' : '1px solid #e0e0e0',
+              borderRadius: '6px 6px 0 0',
+              fontSize: '14px',
+              fontWeight: 'bold',
+              color: '#495057',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              cursor: 'pointer'
+            }} onClick={() => setLayoutCollapsed(!layoutCollapsed)}>
+              <span>CnD Layout Interface</span>
+              <span style={{ fontSize: '12px', color: '#6c757d' }}>
+                {layoutCollapsed ? '▶' : '▼'}
+              </span>
+            </div>
+            {!layoutCollapsed && (
+              <div style={{ padding: '8px' }}>
+                <CndLayoutInterface
+                  yamlValue={currentSpec}
+                  onChange={handleSpecChange}
+                  isNoCodeView={isNoCodeView}
+                  onViewChange={setIsNoCodeView}
+                  constraints={constraints}
+                  setConstraints={setConstraints}
+                  directives={directives}
+                  setDirectives={setDirectives}
+                />
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Status bar with live reified values */}
@@ -608,69 +610,105 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
           Ready • {currentInstance.getAtoms().length} atoms • {currentInstance.getRelations().length} relations
           {pyretEvaluator && ' • External evaluator connected'}
         </span>
-        <span>
-          {layoutStale ? 'Layout needs update' : 'Layout synchronized'}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span>
+            {layoutStale ? 'Layout needs update' : 'Layout synchronized'}
+          </span>
+          {reifyHidden && (
+            <button
+              onClick={() => setReifyHidden(false)}
+              style={{
+                backgroundColor: '#28a745',
+                color: 'white',
+                border: 'none',
+                padding: '4px 8px',
+                borderRadius: '3px',
+                cursor: 'pointer',
+                fontSize: '11px'
+              }}
+            >
+              Show Reify
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Live reified values textbox */}
-      <div style={{ 
-        border: '1px solid #ddd', 
-        borderRadius: '6px',
-        backgroundColor: '#fff',
-        display: 'flex',
-        flexDirection: 'column'
-      }}>
+      {/* Live reified values textbox - optionally hideable */}
+      {!reifyHidden && (
         <div style={{ 
-          padding: '8px 12px', 
-          backgroundColor: '#f8f9fa', 
-          borderBottom: '1px solid #e0e0e0',
-          borderRadius: '6px 6px 0 0',
-          fontSize: '14px',
-          fontWeight: 'bold',
-          color: '#495057',
+          border: '1px solid #ddd', 
+          borderRadius: '6px',
+          backgroundColor: '#fff',
           display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
+          flexDirection: 'column'
         }}>
-          <span>Live Reified Data (Pyret Constructor Notation)</span>
-          <button
-            onClick={() => {
-              const reifiedData = currentInstance.reify();
-              navigator.clipboard.writeText(reifiedData);
-            }}
-            style={{
-              backgroundColor: '#007bff',
-              color: 'white',
-              border: 'none',
-              padding: '4px 8px',
-              borderRadius: '3px',
-              cursor: 'pointer',
-              fontSize: '11px'
-            }}
-          >
-            Copy
-          </button>
+          <div style={{ 
+            padding: '8px 12px', 
+            backgroundColor: '#f8f9fa', 
+            borderBottom: '1px solid #e0e0e0',
+            borderRadius: '6px 6px 0 0',
+            fontSize: '14px',
+            fontWeight: 'bold',
+            color: '#495057',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
+            <span>Live Reified Data (Pyret Constructor Notation)</span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={() => {
+                  const reifiedData = currentInstance.reify();
+                  navigator.clipboard.writeText(reifiedData);
+                }}
+                style={{
+                  backgroundColor: '#007bff',
+                  color: 'white',
+                  border: 'none',
+                  padding: '4px 8px',
+                  borderRadius: '3px',
+                  cursor: 'pointer',
+                  fontSize: '11px'
+                }}
+              >
+                Copy
+              </button>
+              <button
+                onClick={() => setReifyHidden(true)}
+                style={{
+                  backgroundColor: '#6c757d',
+                  color: 'white',
+                  border: 'none',
+                  padding: '4px 8px',
+                  borderRadius: '3px',
+                  cursor: 'pointer',
+                  fontSize: '11px'
+                }}
+              >
+                Hide
+              </button>
+            </div>
+          </div>
+          <div style={{ padding: '8px' }}>
+            <textarea
+              value={currentInstance.reify()}
+              readOnly
+              style={{
+                width: '100%',
+                height: '80px',
+                fontSize: '11px',
+                fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
+                backgroundColor: '#f8f9fa',
+                border: '1px solid #e0e0e0',
+                borderRadius: '4px',
+                padding: '8px',
+                resize: 'vertical'
+              }}
+              placeholder="Reified data will appear here as you build your data instance..."
+            />
+          </div>
         </div>
-        <div style={{ padding: '8px' }}>
-          <textarea
-            value={currentInstance.reify()}
-            readOnly
-            style={{
-              width: '100%',
-              height: '100px',
-              fontSize: '11px',
-              fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
-              backgroundColor: '#f8f9fa',
-              border: '1px solid #e0e0e0',
-              borderRadius: '4px',
-              padding: '8px',
-              resize: 'vertical'
-            }}
-            placeholder="Reified data will appear here as you build your data instance..."
-          />
-        </div>
-      </div>
+      )}
     </div>
   );
 };
