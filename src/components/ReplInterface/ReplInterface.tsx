@@ -78,8 +78,8 @@ const DEFAULT_TERMINALS: TerminalConfig[] = [
  * REPL-like interface for building data instances with command-line style input
  * 
  * Provides a unified terminal that supports:
- * - Atoms: add/remove atoms with Label:Type syntax
- * - Relations: add/remove relations with name:atom->atom syntax  
+ * - Nodes: add/remove atoms with Label:Type syntax
+ * - Edges: add/remove relations with name:atom->atom syntax  
  * - Extensions: Language-specific commands (Pyret lists, etc.)
  * - Utility commands: help, info, list, clear
  * 
@@ -116,6 +116,12 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
     return initialState;
   });
 
+  // State for collapsible drawers
+  const [drawersOpen, setDrawersOpen] = useState<Record<string, boolean>>({
+    nodes: false,
+    edges: false
+  });
+
   // References to terminal output containers for auto-scrolling
   const outputRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -123,13 +129,6 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
   const atoms = instance.getAtoms();
   const relations = instance.getRelations();
   const tupleCount = relations.reduce((sum, rel) => sum + rel.tuples.length, 0);
-
-  // Notify parent when instance changes
-  const notifyChange = useCallback(() => {
-    if (onChange) {
-      onChange(instance);
-    }
-  }, [instance, onChange]);
 
   // Auto-scroll terminal output to bottom
   const scrollToBottom = useCallback((terminalId: string) => {
@@ -159,6 +158,21 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
     // Scroll to bottom after state update
     setTimeout(() => scrollToBottom(terminalId), 0);
   }, [scrollToBottom]);
+
+  // Notify parent when instance changes
+  const notifyChange = useCallback(() => {
+    if (onChange) {
+      onChange(instance);
+    }
+  }, [instance, onChange]);
+
+  // Toggle drawer function
+  const toggleDrawer = useCallback((drawerName: string) => {
+    setDrawersOpen(prev => ({
+      ...prev,
+      [drawerName]: !prev[drawerName]
+    }));
+  }, []);
 
   // Execute command in terminal
   const executeCommand = useCallback(async (terminalId: string, command: string) => {
@@ -337,10 +351,35 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
     <div className={`repl-interface ${className}`}>
       <div className="repl-interface__main">
         <div className="repl-interface__header">
-          <div className="repl-interface__stats">
-            <span>{atoms.length} atoms</span>
-            <span>{relations.length} relations</span>
-            <span>{tupleCount} tuples</span>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={() => toggleDrawer('nodes')}
+              style={{
+                background: drawersOpen.nodes ? '#4ec9b0' : '#2d2d30',
+                color: drawersOpen.nodes ? '#1e1e1e' : '#cccccc',
+                border: '1px solid #3c3c3c',
+                padding: '4px 8px',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '0.8rem'
+              }}
+            >
+              Nodes ({atoms.length})
+            </button>
+            <button
+              onClick={() => toggleDrawer('edges')}
+              style={{
+                background: drawersOpen.edges ? '#4ec9b0' : '#2d2d30',
+                color: drawersOpen.edges ? '#1e1e1e' : '#cccccc',
+                border: '1px solid #3c3c3c',
+                padding: '4px 8px',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '0.8rem'
+              }}
+            >
+              Edges ({relations.length})
+            </button>
           </div>
         </div>
 
@@ -428,46 +467,86 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
         </div>
       </div>
 
-      <div className="repl-interface__sidebar">
-        <div className="repl-interface__sidebar-section">
-          <h3>Atoms ({atoms.length})</h3>
-          {atoms.length === 0 ? (
-            <div className="repl-interface__empty">No atoms</div>
-          ) : (
-            atoms.map(atom => (
-              <div key={atom.id} className="repl-interface__item">
-                <div className="repl-interface__item-header">{atom.label}:{atom.type}</div>
-                {atom.id !== atom.label && (
-                  <div className="repl-interface__item-detail">ID: {atom.id}</div>
+      {/* Collapsible Drawers */}
+      {(drawersOpen.atoms || drawersOpen.relations) && (
+        <div className="repl-interface__drawers">
+          {/* Nodes Drawer */}
+          {drawersOpen.nodes && (
+            <div className="repl-interface__drawer">
+              <div 
+                className="repl-interface__drawer-header"
+                onClick={() => toggleDrawer('nodes')}
+              >
+                <span>Nodes ({atoms.length})</span>
+                <span className="repl-interface__drawer-toggle">▼</span>
+              </div>
+              <div className="repl-interface__drawer-content">
+                {atoms.length === 0 ? (
+                  <div className="repl-interface__drawer-empty">No nodes</div>
+                ) : (
+                  atoms.map(atom => (
+                    <div key={atom.id} className="repl-interface__drawer-item">
+                      <div className="repl-interface__drawer-item-content">
+                        <div className="repl-interface__drawer-item-header">
+                          {atom.label}:{atom.type}
+                        </div>
+                        {atom.id !== atom.label && (
+                          <div className="repl-interface__drawer-item-detail">
+                            ID: {atom.id}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))
                 )}
               </div>
-            ))
+            </div>
           )}
-        </div>
 
-        <div className="repl-interface__sidebar-section">
-          <h3>Relations ({relations.length})</h3>
-          {relations.length === 0 ? (
-            <div className="repl-interface__empty">No relations</div>
-          ) : (
-            relations.map(relation => (
-              <div key={relation.name} className="repl-interface__sidebar-section">
-                <div className="repl-interface__item">
-                  <div className="repl-interface__item-header">{relation.name}</div>
-                  <div className="repl-interface__item-detail">{relation.tuples.length} tuples</div>
-                </div>
-                {relation.tuples.map((tuple, index) => (
-                  <div key={index} className="repl-interface__item" style={{marginLeft: '10px', fontSize: '0.75rem'}}>
-                    <div className="repl-interface__item-detail">
-                      {relation.name}({tuple.atoms.join(', ')})
-                    </div>
-                  </div>
-                ))}
+          {/* Edges Drawer */}
+          {drawersOpen.edges && (
+            <div className="repl-interface__drawer">
+              <div 
+                className="repl-interface__drawer-header"
+                onClick={() => toggleDrawer('edges')}
+              >
+                <span>Edges ({relations.length})</span>
+                <span className="repl-interface__drawer-toggle">▼</span>
               </div>
-            ))
+              <div className="repl-interface__drawer-content">
+                {relations.length === 0 ? (
+                  <div className="repl-interface__drawer-empty">No edges</div>
+                ) : (
+                  relations.map(relation => (
+                    <div key={relation.name} style={{ marginBottom: '8px' }}>
+                      <div className="repl-interface__drawer-item">
+                        <div className="repl-interface__drawer-item-content">
+                          <div className="repl-interface__drawer-item-header">
+                            {relation.name}
+                          </div>
+                          <div className="repl-interface__drawer-item-detail">
+                            {relation.tuples.length} tuples
+                          </div>
+                        </div>
+                      </div>
+                      {relation.tuples.map((tuple, index) => (
+                        <div key={index} className="repl-interface__drawer-item" 
+                             style={{marginLeft: '10px', fontSize: '0.75rem'}}>
+                          <div className="repl-interface__drawer-item-content">
+                            <div className="repl-interface__drawer-item-detail">
+                              {relation.name}({tuple.atoms.join(', ')})
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           )}
         </div>
-      </div>
+      )}
     </div>
   );
 };
