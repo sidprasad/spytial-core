@@ -99,6 +99,9 @@ export class PyretDataInstance implements IInputDataInstance {
 
   /**
    * Cache constructor field order for a type when we successfully parse an original object
+   * 
+   * TODO: The issue here is that constructor patterns aren't always shared across new Instances.
+   * 
    */
   private cacheConstructorPattern(typeName: string, fieldOrder: string[]): void {
     if (!this.constructorCache.has(typeName) && fieldOrder.length > 0) {
