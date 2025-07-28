@@ -89,8 +89,8 @@ describe('Pyret Async Integration', () => {
       />
     );
 
-    // Should include edge expression in placeholder when evaluator is available
-    expect(screen.getByPlaceholderText(/edge/)).toBeInTheDocument();
+    // Should render with simplified placeholder regardless of evaluator
+    expect(screen.getByPlaceholderText(/list/)).toBeInTheDocument();
   });
 
   it('should render PyretReplInterface without external evaluator', () => {
@@ -100,11 +100,11 @@ describe('Pyret Async Integration', () => {
       />
     );
 
-    // Should still render the REPL interface but without edge examples
-    expect(screen.getByText(/Type 'help' for available commands/)).toBeInTheDocument();
+    // Should render the REPL interface with minimal placeholder
+    expect(screen.getByPlaceholderText(/list/)).toBeInTheDocument();
   });
 
-  it('should handle reify command in placeholder text when evaluator available', () => {
+  it('should render with simplified placeholder regardless of evaluator presence', () => {
     render(
       <PyretReplInterface 
         initialInstance={instance}
@@ -112,12 +112,11 @@ describe('Pyret Async Integration', () => {
       />
     );
 
-    // Should include reify in examples
-    const textarea = screen.getByPlaceholderText(/reify/);
-    expect(textarea).toBeInTheDocument();
+    // Should use simplified placeholder regardless of evaluator
+    expect(screen.getByPlaceholderText(/list/)).toBeInTheDocument();
   });
 
-  it('should include edge expression example in placeholder when evaluator available', () => {
+  it('should render with simplified placeholder for edge expressions', () => {
     render(
       <PyretReplInterface 
         initialInstance={instance}
@@ -125,9 +124,8 @@ describe('Pyret Async Integration', () => {
       />
     );
 
-    // Should include edge example
-    const textarea = screen.getByPlaceholderText(/edge/);
-    expect(textarea).toBeInTheDocument();
+    // Should use simplified placeholder instead of verbose examples
+    expect(screen.getByPlaceholderText(/list/)).toBeInTheDocument();
   });
 
   it('should validate mock evaluator response format matches expected structure', async () => {
