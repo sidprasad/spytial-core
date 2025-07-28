@@ -70,7 +70,7 @@ const DEFAULT_TERMINALS: TerminalConfig[] = [
       new AtomCommandParser(),          // Priority 100 - standard priority
       new InfoCommandParser()           // Priority 50 - fallback utility commands
     ].sort((a, b) => b.getPriority() - a.getPriority()), // Sort by priority descending
-    placeholder: 'Examples:\nAlice:Person\nalice.friend=bob\nremove alice\n[list: 1,2,3,4]:numbers\nhelp\nreify'
+    placeholder: ''
   }
 ];
 
@@ -104,12 +104,7 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
     terminals.forEach(terminal => {
       initialState[terminal.id] = {
         input: '',
-        output: [{
-          id: 'welcome',
-          type: 'info',
-          message: `Type 'help' for available commands.`,
-          timestamp: new Date()
-        }],
+        output: [], // No welcome message - keep it minimal
         isExecuting: false
       };
     });
@@ -232,11 +227,13 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
       };
     }
 
-    // Add result to output
-    addOutputLine(terminalId, {
-      type: result.success ? (result.action === 'help' ? 'help' : result.action === 'info' ? 'info' : 'success') : 'error',
-      message: result.message
-    });
+    // Add result to output - only add error messages, skip success confirmations
+    if (!result.success || result.action === 'help' || result.action === 'info') {
+      addOutputLine(terminalId, {
+        type: result.success ? (result.action === 'help' ? 'help' : result.action === 'info' ? 'info' : 'success') : 'error',
+        message: result.message
+      });
+    }
 
     // Clear executing state and input
     setTerminalStates(prev => ({
@@ -350,6 +347,7 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
   return (
     <div className={`repl-interface ${className}`}>
       <div className="repl-interface__main">
+        {/* Minimal header with simplified stats */}
         <div className="repl-interface__header">
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
@@ -358,13 +356,13 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
                 background: drawersOpen.nodes ? '#4ec9b0' : '#2d2d30',
                 color: drawersOpen.nodes ? '#1e1e1e' : '#cccccc',
                 border: '1px solid #3c3c3c',
-                padding: '4px 8px',
-                borderRadius: '4px',
+                padding: '3px 6px',
+                borderRadius: '3px',
                 cursor: 'pointer',
-                fontSize: '0.8rem'
+                fontSize: '0.75rem'
               }}
             >
-              Nodes ({atoms.length})
+              {atoms.length}
             </button>
             <button
               onClick={() => toggleDrawer('edges')}
@@ -372,13 +370,13 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
                 background: drawersOpen.edges ? '#4ec9b0' : '#2d2d30',
                 color: drawersOpen.edges ? '#1e1e1e' : '#cccccc',
                 border: '1px solid #3c3c3c',
-                padding: '4px 8px',
-                borderRadius: '4px',
+                padding: '3px 6px',
+                borderRadius: '3px',
                 cursor: 'pointer',
-                fontSize: '0.8rem'
+                fontSize: '0.75rem'
               }}
             >
-              Edges ({relations.length})
+              {relations.length}
             </button>
           </div>
         </div>
@@ -390,16 +388,7 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
 
             return (
               <div key={terminal.id} className="repl-terminal">
-                <div className="repl-terminal__header">
-                  <div 
-                    className="repl-terminal__help"
-                    onClick={() => showHelp(terminal.id)}
-                    title="Show help"
-                  >
-                    ?
-                  </div>
-                </div>
-
+                {/* Remove terminal header - keep it minimal */}
                 <div 
                   className="repl-terminal__output"
                   ref={ref => { outputRefs.current[terminal.id] = ref; }}
@@ -420,17 +409,37 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
                     onKeyDown={(e) => handleKeyPress(e, terminal.id)}
                     placeholder={terminal.placeholder}
                     disabled={disabled || state.isExecuting}
-                    rows={3}
+                    rows={2}
                   />
                   
                   <div className="repl-terminal__controls">
+                    <button
+                      className="repl-interface__action-button danger"
+                      onClick={clearAll}
+                      disabled={disabled}
+                      title="Clear all data"
+                      style={{ marginRight: '4px', fontSize: '10px', padding: '2px 6px' }}
+                    >
+                      Clear
+                    </button>
+                    
+                    <button
+                      className="repl-interface__action-button"
+                      onClick={() => showHelp('unified')}
+                      disabled={disabled}
+                      title="Show help"
+                      style={{ marginRight: '4px', fontSize: '10px', padding: '2px 6px' }}
+                    >
+                      ?
+                    </button>
+                    
                     <button
                       className="repl-terminal__execute"
                       onClick={() => handleExecute(terminal.id)}
                       disabled={disabled || state.isExecuting || !state.input.trim()}
                       title="Execute commands (Ctrl+Enter)"
                     >
-                      {state.isExecuting ? 'Executing...' : 'Execute'}
+                      {state.isExecuting ? '...' : '▶'}
                     </button>
                   </div>
                 </div>
@@ -438,37 +447,10 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
             );
           })}
         </div>
-
-        <div className="repl-interface__actions">
-          <button
-            className="repl-interface__action-button danger"
-            onClick={clearAll}
-            disabled={disabled}
-            title="Clear entire instance"
-          >
-            Clear All Data
-          </button>
-          
-          <button
-            className="repl-interface__action-button"
-            onClick={() => {
-              terminals.forEach(terminal => {
-                addOutputLine(terminal.id, {
-                  type: 'info',
-                  message: `Instance Status: ${atoms.length} atoms, ${relations.length} relations, ${tupleCount} tuples`
-                });
-              });
-            }}
-            disabled={disabled}
-            title="Show status in all terminals"
-          >
-            Show Status
-          </button>
-        </div>
       </div>
 
-      {/* Collapsible Drawers */}
-      {(drawersOpen.atoms || drawersOpen.relations) && (
+      {/* Simplified collapsible drawers - only show when opened */}
+      {(drawersOpen.nodes || drawersOpen.edges) && (
         <div className="repl-interface__drawers">
           {/* Nodes Drawer */}
           {drawersOpen.nodes && (
@@ -477,12 +459,12 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
                 className="repl-interface__drawer-header"
                 onClick={() => toggleDrawer('nodes')}
               >
-                <span>Nodes ({atoms.length})</span>
+                <span>Atoms ({atoms.length})</span>
                 <span className="repl-interface__drawer-toggle">▼</span>
               </div>
               <div className="repl-interface__drawer-content">
                 {atoms.length === 0 ? (
-                  <div className="repl-interface__drawer-empty">No nodes</div>
+                  <div className="repl-interface__drawer-empty">No atoms</div>
                 ) : (
                   atoms.map(atom => (
                     <div key={atom.id} className="repl-interface__drawer-item">
@@ -490,11 +472,6 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
                         <div className="repl-interface__drawer-item-header">
                           {atom.label}:{atom.type}
                         </div>
-                        {atom.id !== atom.label && (
-                          <div className="repl-interface__drawer-item-detail">
-                            ID: {atom.id}
-                          </div>
-                        )}
                       </div>
                     </div>
                   ))
@@ -510,35 +487,37 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
                 className="repl-interface__drawer-header"
                 onClick={() => toggleDrawer('edges')}
               >
-                <span>Edges ({relations.length})</span>
+                <span>Relations ({relations.length})</span>
                 <span className="repl-interface__drawer-toggle">▼</span>
               </div>
               <div className="repl-interface__drawer-content">
                 {relations.length === 0 ? (
-                  <div className="repl-interface__drawer-empty">No edges</div>
+                  <div className="repl-interface__drawer-empty">No relations</div>
                 ) : (
                   relations.map(relation => (
-                    <div key={relation.name} style={{ marginBottom: '8px' }}>
+                    <div key={relation.name} style={{ marginBottom: '6px' }}>
                       <div className="repl-interface__drawer-item">
                         <div className="repl-interface__drawer-item-content">
                           <div className="repl-interface__drawer-item-header">
-                            {relation.name}
-                          </div>
-                          <div className="repl-interface__drawer-item-detail">
-                            {relation.tuples.length} tuples
+                            {relation.name} ({relation.tuples.length})
                           </div>
                         </div>
                       </div>
-                      {relation.tuples.map((tuple, index) => (
+                      {relation.tuples.slice(0, 3).map((tuple, index) => (
                         <div key={index} className="repl-interface__drawer-item" 
-                             style={{marginLeft: '10px', fontSize: '0.75rem'}}>
+                             style={{marginLeft: '8px', fontSize: '0.7rem'}}>
                           <div className="repl-interface__drawer-item-content">
                             <div className="repl-interface__drawer-item-detail">
-                              {relation.name}({tuple.atoms.join(', ')})
+                              {tuple.atoms.join(' → ')}
                             </div>
                           </div>
                         </div>
                       ))}
+                      {relation.tuples.length > 3 && (
+                        <div style={{marginLeft: '8px', fontSize: '0.7rem', color: '#6a737d'}}>
+                          ... and {relation.tuples.length - 3} more
+                        </div>
+                      )}
                     </div>
                   ))
                 )}

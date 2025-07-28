@@ -100,7 +100,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
   const [currentLayout, setCurrentLayout] = useState<any>(null);
   
   // Collapsible section states
-  const [replCollapsed, setReplCollapsed] = useState<boolean>(false);
+  const [replCollapsed, setReplCollapsed] = useState<boolean>(true);
   const [layoutCollapsed, setLayoutCollapsed] = useState<boolean>(false);
   const [graphCollapsed, setGraphCollapsed] = useState<boolean>(false);
   const [reifyHidden, setReifyHidden] = useState<boolean>(false);
@@ -153,46 +153,6 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
     }
   }, [completeSpec, currentSpec, onSpecChange]);
 
-  // Handle instance changes from REPL
-  const handleInstanceChange = useCallback((newInstance: PyretDataInstance) => {
-    setCurrentInstance(newInstance);
-    currentInstanceRef.current = newInstance; // Keep ref in sync
-    setLayoutStale(true);
-    onInstanceChange?.(newInstance);
-    
-    // Auto-apply layout if enabled and we have data
-    if (autoApplyLayout && newInstance.getAtoms().length > 0) {
-      setTimeout(() => applyLayout(newInstance, currentSpec), 50);
-    }
-  }, [autoApplyLayout, currentSpec, onInstanceChange]);
-
-  // Handle CnD spec changes from layout interface
-  const handleSpecChange = useCallback((newSpec: string) => {
-    setCurrentSpec(newSpec);
-    setLayoutStale(true);
-    onSpecChange?.(newSpec);
-    
-    // Auto-apply layout if enabled and we have data
-    if (autoApplyLayout && currentInstance.getAtoms().length > 0) {
-      // Use a shorter timeout and ensure we're applying with the new spec
-      setTimeout(() => applyLayout(currentInstance, newSpec), 50);
-    }
-  }, [autoApplyLayout, currentInstance, onSpecChange]);
-
-  // Handle CnD spec extraction from REPL expressions
-  const handleCndSpecExtracted = useCallback((extractedSpec: string) => {
-    console.log('CnD spec extracted from expression:', extractedSpec);
-    
-    // Add to extracted specs list (avoid duplicates)
-    setExtractedSpecs(prev => {
-      if (!prev.includes(extractedSpec)) {
-        console.log('Adding new extracted spec:', extractedSpec, 'to list:', prev);
-        return [...prev, extractedSpec];
-      }
-      return prev;
-    });
-  }, []);
-
   // Apply layout using the CnD pipeline
   const applyLayout = useCallback(async (instance: PyretDataInstance, spec: string) => {
     try {
@@ -231,6 +191,49 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
       console.error('Failed to apply layout:', error);
       setLayoutStale(true);
     }
+  }, [projections, onLayoutApplied]);
+
+  // Handle instance changes from REPL
+  const handleInstanceChange = useCallback((newInstance: PyretDataInstance) => {
+    setCurrentInstance(newInstance);
+    currentInstanceRef.current = newInstance; // Keep ref in sync
+    setLayoutStale(true);
+    onInstanceChange?.(newInstance);
+    
+    // Auto-apply layout if enabled and we have data - use debounced approach
+    if (autoApplyLayout && newInstance.getAtoms().length > 0) {
+      setTimeout(() => {
+        // Use the most up-to-date spec (completeSpec at time of execution)
+        const finalSpec = composeCndSpecs(cndSpec, extractedSpecs);
+        applyLayout(newInstance, finalSpec);
+      }, 100);
+    }
+  }, [autoApplyLayout, cndSpec, extractedSpecs, composeCndSpecs, applyLayout, onInstanceChange]);
+
+  // Handle CnD spec changes from layout interface
+  const handleSpecChange = useCallback((newSpec: string) => {
+    setCurrentSpec(newSpec);
+    setLayoutStale(true);
+    onSpecChange?.(newSpec);
+    
+    // Auto-apply layout if enabled and we have data - use debounced approach
+    if (autoApplyLayout && currentInstance.getAtoms().length > 0) {
+      setTimeout(() => applyLayout(currentInstance, newSpec), 100);
+    }
+  }, [autoApplyLayout, currentInstance, applyLayout, onSpecChange]);
+
+  // Handle CnD spec extraction from REPL expressions
+  const handleCndSpecExtracted = useCallback((extractedSpec: string) => {
+    console.log('CnD spec extracted from expression:', extractedSpec);
+    
+    // Add to extracted specs list (avoid duplicates)
+    setExtractedSpecs(prev => {
+      if (!prev.includes(extractedSpec)) {
+        console.log('Adding new extracted spec:', extractedSpec, 'to list:', prev);
+        return [...prev, extractedSpec];
+      }
+      return prev;
+    });
   }, []);
 
   // Manual layout application
@@ -359,92 +362,80 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
     }
   }, []); // Only run once when component mounts
 
-  // Handle data and layout updates only when the instance actually changes 
+  // Handle data and layout updates - remove the continuous update issue
   useEffect(() => {
-    if (graphElementRef.current && currentInstance.getAtoms().length > 0) {
-      // Apply layout when data changes
-      if (autoApplyLayout) {
-        setTimeout(() => applyLayout(currentInstance, currentSpec), 100);
-      }
+    if (graphElementRef.current && currentInstance.getAtoms().length > 0 && autoApplyLayout) {
+      // Only apply layout when instance genuinely changes, not when spec changes
+      const finalSpec = composeCndSpecs(cndSpec, extractedSpecs);
+      setTimeout(() => applyLayout(currentInstance, finalSpec), 150);
     }
-  }, [currentInstance, autoApplyLayout]); // Removed currentSpec to avoid continuous updates
+  }, [currentInstance.getAtoms().length]); // Only depend on the count of atoms, not the full instance
 
   const containerStyle: React.CSSProperties = {
     width,
     height,
     display: 'flex',
     flexDirection: 'column',
-    gap: '10px',
-    padding: '10px',
-    border: '1px solid #ddd',
-    borderRadius: '8px',
-    backgroundColor: '#f9f9f9',
+    gap: '16px',
+    padding: '12px',
+    border: '1px solid #e0e0e0',
+    borderRadius: '6px',
+    backgroundColor: '#fafafa',
     ...style,
   };
 
+  // Detect the platform
+  const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+
   return (
     <div className={className} style={containerStyle}>
-      {/* Header with controls */}
+      {/* Minimal header with essential controls only */}
       <div style={{ 
         display: 'flex', 
-        justifyContent: 'space-between', 
+        justifyContent: 'flex-end', 
         alignItems: 'center',
-        padding: '10px',
-        backgroundColor: '#fff',
-        borderRadius: '6px',
-        border: '1px solid #e0e0e0'
+        padding: '4px 8px',
+        backgroundColor: 'transparent',
+        gap: '8px'
       }}>
-        <h3 style={{ margin: 0, color: '#333' }}>CnD Combined Input</h3>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          {layoutStale && (
-            <span style={{ 
-              color: '#ff6b35', 
-              fontSize: '12px', 
-              fontWeight: 'bold',
-              padding: '4px 8px',
-              backgroundColor: '#fff3cd',
-              borderRadius: '4px',
-              border: '1px solid #ffeacc'
-            }}>
-              Layout Stale
-            </span>
-          )}
+        {layoutStale && (
           <button
             onClick={handleApplyLayout}
-            disabled={!layoutStale}
             style={{
-              backgroundColor: layoutStale ? '#ff6b35' : '#28a745',
+              backgroundColor: '#ff6b35',
               color: 'white',
               border: 'none',
-              padding: '6px 12px',
-              borderRadius: '4px',
-              cursor: layoutStale ? 'pointer' : 'not-allowed',
-              fontSize: '12px'
-            }}
-          >
-            {layoutStale ? 'Apply Layout' : 'Layout Current'}
-          </button>
-          <button
-            onClick={handleClear}
-            style={{
-              backgroundColor: '#dc3545',
-              color: 'white',
-              border: 'none',
-              padding: '6px 12px',
-              borderRadius: '4px',
+              padding: '4px 8px',
+              borderRadius: '3px',
               cursor: 'pointer',
-              fontSize: '12px'
+              fontSize: '11px',
+              fontWeight: '500'
             }}
           >
-            Clear
+            Apply Layout
           </button>
-        </div>
+        )}
+        <button
+          onClick={handleClear}
+          style={{
+            backgroundColor: '#dc3545',
+            color: 'white',
+            border: 'none',
+            padding: '4px 8px',
+            borderRadius: '3px',
+            cursor: 'pointer',
+            fontSize: '11px',
+            fontWeight: '500'
+          }}
+        >
+          Clear
+        </button>
       </div>
 
-      {/* Main content area - now vertical layout */}
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: '10px' }}>
+      {/* Main content area - improved spacing */}
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: '20px' }}>
         
-        {/* Top: Pyret REPL - 100% width */}
+        {/* Top: Pyret REPL - simplified header */}
         <div style={{ 
           border: '1px solid #ddd', 
           borderRadius: '6px',
@@ -453,25 +444,25 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
           flexDirection: 'column'
         }}>
           <div style={{ 
-            padding: '8px 12px', 
+            padding: '6px 12px', 
             backgroundColor: '#f8f9fa', 
             borderBottom: replCollapsed ? 'none' : '1px solid #e0e0e0',
             borderRadius: '6px 6px 0 0',
-            fontSize: '14px',
-            fontWeight: 'bold',
+            fontSize: '12px',
+            fontWeight: '500',
             color: '#495057',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
             cursor: 'pointer'
           }} onClick={() => setReplCollapsed(!replCollapsed)}>
-            <span>Pyret REPL</span>
-            <span style={{ fontSize: '12px', color: '#6c757d' }}>
+            <span>REPL</span>
+            <span style={{ fontSize: '10px', color: '#6c757d' }}>
               {replCollapsed ? '▶' : '▼'}
             </span>
           </div>
           {!replCollapsed && (
-            <div style={{ padding: '8px' }}>
+            <div style={{ padding: '12px' }}>
               <PyretReplInterface
                 initialInstance={currentInstance}
                 onChange={handleInstanceChange}
@@ -482,7 +473,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
           )}
         </div>
 
-        {/* Middle: Graph visualization - 100% width */}
+        {/* Middle: Graph visualization - better spacing and simplified header */}
         <div style={{ 
           border: '1px solid #ddd', 
           borderRadius: '6px',
@@ -492,12 +483,12 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
           flex: 1
         }}>
           <div style={{ 
-            padding: '8px 12px', 
+            padding: '6px 12px', 
             backgroundColor: '#f8f9fa', 
             borderBottom: graphCollapsed ? 'none' : '1px solid #e0e0e0',
             borderRadius: '6px 6px 0 0',
-            fontSize: '14px',
-            fontWeight: 'bold',
+            fontSize: '12px',
+            fontWeight: '500',
             color: '#495057',
             display: 'flex',
             justifyContent: 'space-between',
@@ -510,18 +501,36 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
               >
                 {graphCollapsed ? '▶' : '▼'}
               </span>
-              <span>Graph Visualization</span>
+              <span>Diagram</span>
               <span style={{ 
-                fontSize: '12px', 
+                fontSize: '10px', 
                 fontWeight: 'normal', 
                 color: '#6c757d',
-                marginLeft: '10px'
+                marginLeft: '8px'
               }}>
-                {currentInstance.getAtoms().length} atoms, {currentInstance.getRelations().length} relations
+                {currentInstance.getAtoms().length} • {currentInstance.getRelations().length}
               </span>
             </div>
-            <div style={{ fontSize: '10px', color: '#28a745' }}>
-              🎮 Cmd/Ctrl + Click for Edge Mode
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ fontSize: '9px', color: '#28a745', fontWeight: '400' }}>
+                <strong>{isMac ? 'Cmd' : 'Ctrl'} + Click</strong> between nodes to create edges.
+
+              </div>
+              <button
+                onClick={() => setReplCollapsed(false)}
+                style={{
+                  backgroundColor: '#007bff',
+                  color: 'white',
+                  border: 'none',
+                  padding: '4px 8px',
+                  borderRadius: '12px',
+                  cursor: 'pointer',
+                  fontSize: '10px',
+                  fontWeight: '500'
+                }}
+              >
+                + Add / Remove Nodes or Modify Edges
+              </button>
             </div>
           </div>
           {!graphCollapsed && (
@@ -529,7 +538,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
               ref={graphContainerRef}
               style={{ 
                 flex: 1, 
-                padding: '8px',
+                padding: '12px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -538,18 +547,17 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
             >
               {/* Graph element will be created here */}
               {!graphElementRef.current && (
-                <div style={{ color: '#6c757d', textAlign: 'center' }}>
-                  <p>Loading graph visualization...</p>
-                  <small>Add data using the REPL to see the visualization</small>
-                  <br />
-                  <small>Use <strong>Cmd/Ctrl + Click</strong> between nodes to create edges</small>
+                <div style={{ color: '#6c757d', textAlign: 'center', fontSize: '13px' }}>
+                  <p>Add data using the REPL to see visualization</p>
+                  <small>
+                      <strong>{isMac ? 'Cmd' : 'Ctrl'} + Click</strong> between nodes to create edges.                  </small>
                 </div>
               )}
             </div>
           )}
         </div>
 
-        {/* Bottom: CnD Layout Interface - horizontal if shown */}
+        {/* Bottom: CnD Layout Interface - simplified if shown */}
         {showLayoutInterface && (
           <div style={{ 
             border: '1px solid #ddd', 
@@ -559,25 +567,25 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
             flexDirection: 'column'
           }}>
             <div style={{ 
-              padding: '8px 12px', 
+              padding: '6px 12px', 
               backgroundColor: '#f8f9fa', 
               borderBottom: layoutCollapsed ? 'none' : '1px solid #e0e0e0',
               borderRadius: '6px 6px 0 0',
-              fontSize: '14px',
-              fontWeight: 'bold',
+              fontSize: '12px',
+              fontWeight: '500',
               color: '#495057',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
               cursor: 'pointer'
             }} onClick={() => setLayoutCollapsed(!layoutCollapsed)}>
-              <span>CnD Layout Interface</span>
-              <span style={{ fontSize: '12px', color: '#6c757d' }}>
+              <span>Layout</span>
+              <span style={{ fontSize: '10px', color: '#6c757d' }}>
                 {layoutCollapsed ? '▶' : '▼'}
               </span>
             </div>
             {!layoutCollapsed && (
-              <div style={{ padding: '8px' }}>
+              <div style={{ padding: '12px' }}>
                 <CndLayoutInterface
                   yamlValue={currentSpec}
                   onChange={handleSpecChange}
@@ -594,47 +602,8 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
         )}
       </div>
 
-      {/* Status bar with live reified values */}
-      <div style={{ 
-        padding: '8px 12px', 
-        backgroundColor: '#fff',
-        borderRadius: '6px',
-        border: '1px solid #e0e0e0',
-        fontSize: '12px',
-        color: '#6c757d',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-      }}>
-        <span>
-          Ready • {currentInstance.getAtoms().length} atoms • {currentInstance.getRelations().length} relations
-          {pyretEvaluator && ' • External evaluator connected'}
-        </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span>
-            {layoutStale ? 'Layout needs update' : 'Layout synchronized'}
-          </span>
-          {reifyHidden && (
-            <button
-              onClick={() => setReifyHidden(false)}
-              style={{
-                backgroundColor: '#28a745',
-                color: 'white',
-                border: 'none',
-                padding: '4px 8px',
-                borderRadius: '3px',
-                cursor: 'pointer',
-                fontSize: '11px'
-              }}
-            >
-              Show Reify
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Live reified values textbox - optionally hideable */}
-      {!reifyHidden && (
+      {/* Minimal status indicator - only show reify when needed */}
+      {!reifyHidden && currentInstance.getAtoms().length > 0 && (
         <div style={{ 
           border: '1px solid #ddd', 
           borderRadius: '6px',
@@ -643,19 +612,19 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
           flexDirection: 'column'
         }}>
           <div style={{ 
-            padding: '8px 12px', 
+            padding: '6px 12px', 
             backgroundColor: '#f8f9fa', 
             borderBottom: '1px solid #e0e0e0',
             borderRadius: '6px 6px 0 0',
-            fontSize: '14px',
-            fontWeight: 'bold',
+            fontSize: '12px',
+            fontWeight: '500',
             color: '#495057',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center'
           }}>
-            <span>Live Reified Data (Pyret Constructor Notation)</span>
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <span>Pyret Data</span>
+            <div style={{ display: 'flex', gap: '6px' }}>
               <button
                 onClick={() => {
                   const reifiedData = currentInstance.reify();
@@ -665,10 +634,10 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
                   backgroundColor: '#007bff',
                   color: 'white',
                   border: 'none',
-                  padding: '4px 8px',
-                  borderRadius: '3px',
+                  padding: '2px 6px',
+                  borderRadius: '2px',
                   cursor: 'pointer',
-                  fontSize: '11px'
+                  fontSize: '10px'
                 }}
               >
                 Copy
@@ -679,13 +648,13 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
                   backgroundColor: '#6c757d',
                   color: 'white',
                   border: 'none',
-                  padding: '4px 8px',
-                  borderRadius: '3px',
+                  padding: '2px 6px',
+                  borderRadius: '2px',
                   cursor: 'pointer',
-                  fontSize: '11px'
+                  fontSize: '10px'
                 }}
               >
-                Hide
+                ×
               </button>
             </div>
           </div>
@@ -695,16 +664,16 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
               readOnly
               style={{
                 width: '100%',
-                height: '80px',
-                fontSize: '11px',
+                height: '60px',
+                fontSize: '10px',
                 fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
                 backgroundColor: '#f8f9fa',
                 border: '1px solid #e0e0e0',
-                borderRadius: '4px',
-                padding: '8px',
+                borderRadius: '3px',
+                padding: '6px',
                 resize: 'vertical'
               }}
-              placeholder="Reified data will appear here as you build your data instance..."
+              placeholder="Pyret data will appear here..."
             />
           </div>
         </div>

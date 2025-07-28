@@ -81,9 +81,7 @@ export const PyretReplInterface: React.FC<PyretReplInterfaceProps> = ({
           }
           return true;
         }).sort((a, b) => b.getPriority() - a.getPriority()), // Sort by priority descending
-        placeholder: externalEvaluator
-          ? 'Examples:\nAlice:Person\nalice.friend=bob\nedge("1", "label", 3)\n[list: 1,2,3,4]:numbers\nhelp\nreify'
-          : 'Examples:\nAlice:Person\nalice.friend=bob\n[list: 1,2,3,4]:numbers\nhelp\nreify'
+        placeholder: 'x=[list: 1, 2,3]\n remove x'
       }
     ];
     
