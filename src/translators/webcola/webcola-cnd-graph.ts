@@ -93,12 +93,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Configuration constants for text sizing and layout
    */
   private static readonly DEFAULT_FONT_SIZE = 10;
-  private static readonly MIN_FONT_SIZE = 6;
-  private static readonly MAX_FONT_SIZE = 16;
+  private static readonly MIN_FONT_SIZE = 8;
+  private static readonly MAX_FONT_SIZE = 12;
   private static readonly TEXT_PADDING = 8; // Padding inside node for text
   private static readonly LINE_HEIGHT_RATIO = 1.2;
-  private static readonly MAX_VISIBLE_LINES = 3;
-  private static readonly TRUNCATE_SUFFIX = "...";
 
   /**
    * Configuration constants for group visualization
@@ -158,11 +156,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     sourceNode: null,
     temporaryEdge: null
   };
-
-  /**
-   * Node text expansion state management
-   */
-  private expandedNodes: Set<string> = new Set();
 
   /**
    * Temporary canvas for text measurement
@@ -1404,47 +1397,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     return lines;
   }
 
-  /**
-   * Checks if a node's text content should be expandable/collapsible
-   */
-  private shouldMakeTextExpandable(nodeData: NodeWithMetadata): boolean {
-    if (!nodeData.showLabels) return false;
-    
-    const mainLabel = nodeData.label || nodeData.name || nodeData.id || "Node";
-    const attributes = nodeData.attributes || {};
-    const totalLines = 1 + Object.keys(attributes).length; // Main label + attribute lines
-    
-    // Make expandable if we have more than max visible lines or if main label is very long
-    return totalLines > WebColaCnDGraph.MAX_VISIBLE_LINES || mainLabel.length > 30;
-  }
 
-  /**
-   * Toggles the expanded state of a node
-   */
-  private toggleNodeExpansion(nodeId: string): void {
-    if (this.expandedNodes.has(nodeId)) {
-      this.expandedNodes.delete(nodeId);
-    } else {
-      this.expandedNodes.add(nodeId);
-    }
-    
-    // Trigger a re-render of node labels
-    this.updateNodeLabelsAfterExpansion();
-  }
-
-  /**
-   * Updates node labels after expansion state change
-   */
-  private updateNodeLabelsAfterExpansion(): void {
-    if (!this.svgNodes) return;
-    
-    // Remove existing labels and recreate them
-    this.svgNodes.selectAll('.label').remove();
-    this.svgNodes.selectAll('.expand-button').remove();
-    
-    // Re-setup labels with current expansion state
-    this.setupNodeLabelsWithDynamicSizing(this.svgNodes);
-  }
 
   /**
    * Creates main node labels with attributes using dynamic sizing and expansion
@@ -1475,8 +1428,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         
         const displayLabel = d.label || d.name || d.id || "Node";
         const attributes = d.attributes || {};
-        const isExpandable = this.shouldMakeTextExpandable(d);
-        const isExpanded = this.expandedNodes.has(d.id);
         
         // Calculate optimal font size for the main label
         const mainLabelFontSize = this.calculateOptimalFontSize(
@@ -1502,7 +1453,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
             .text(line);
         });
 
-        // Handle attributes
+        // Handle attributes (show all that fit)
         const attributeEntries = Object.entries(attributes);
         if (attributeEntries.length > 0) {
           const remainingHeight = maxTextHeight - (mainLabelLines.length * lineHeight);
@@ -1516,11 +1467,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
             )
           );
           
-          let attributeLineIndex = mainLabelLines.length;
-          const maxAttributesToShow = isExpanded ? attributeEntries.length : 
-            Math.min(attributeEntries.length, WebColaCnDGraph.MAX_VISIBLE_LINES - mainLabelLines.length);
-          
-          for (let i = 0; i < maxAttributesToShow; i++) {
+          for (let i = 0; i < attributeEntries.length; i++) {
             const [key, value] = attributeEntries[i];
             const attributeText = `${key}: ${value}`;
             const attributeLines = this.wrapText(attributeText, maxTextWidth, attributeFontSize);
@@ -1533,81 +1480,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
                 .style("font-size", `${attributeFontSize}px`)
                 .text(line);
             });
-            
-            attributeLineIndex += attributeLines.length;
-          }
-          
-          // Add expand/collapse indicator if needed
-          if (isExpandable) {
-            const remainingAttributes = attributeEntries.length - maxAttributesToShow;
-            const expandText = isExpanded ? "▲ Collapse" : 
-              `▼ Show ${remainingAttributes} more`;
-            
-            if (!isExpanded && remainingAttributes > 0) {
-              textElement
-                .append("tspan")
-                .attr("x", 0)
-                .attr("dy", `${attributeFontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO}px`)
-                .style("font-size", `${attributeFontSize * 0.9}px`)
-                .style("fill", "#666")
-                .style("font-style", "italic")
-                .text(WebColaCnDGraph.TRUNCATE_SUFFIX);
-            }
-            
-            // Add clickable expand/collapse button
-            this.addExpandCollapseButton(nodeSelection, d, isExpanded);
           }
         }
       });
-  }
-
-  /**
-   * Adds an expand/collapse button to expandable nodes
-   */
-  private addExpandCollapseButton(
-    nodeSelection: d3.Selection<SVGGElement, any, any, unknown>,
-    nodeData: NodeWithMetadata,
-    isExpanded: boolean
-  ): void {
-    const buttonSize = 12;
-    const buttonMargin = 4;
-    
-    const button = nodeSelection
-      .filter((d: any) => d.id === nodeData.id)
-      .append("g")
-      .attr("class", "expand-button")
-      .style("cursor", "pointer")
-      .on("click", (event: any, d: any) => {
-        if (event && typeof event.stopPropagation === 'function') {
-          event.stopPropagation();
-        }
-        this.toggleNodeExpansion(d.id);
-      });
-    
-    // Position button at bottom-right of node (relative to node center)
-    const buttonX = (nodeData.width || 100) / 2 - buttonSize - buttonMargin;
-    const buttonY = (nodeData.height || 60) / 2 - buttonSize - buttonMargin;
-    
-    // Button background circle
-    button
-      .append("circle")
-      .attr("cx", buttonX)
-      .attr("cy", buttonY)
-      .attr("r", buttonSize / 2)
-      .attr("fill", "#f0f0f0")
-      .attr("stroke", "#ccc")
-      .attr("stroke-width", 1);
-    
-    // Button icon
-    button
-      .append("text")
-      .attr("x", buttonX)
-      .attr("y", buttonY)
-      .attr("text-anchor", "middle")
-      .attr("dominant-baseline", "middle")
-      .attr("font-size", "8px")
-      .attr("fill", "#666")
-      .text(isExpanded ? "▲" : "▼");
   }
 
   /**
@@ -1751,17 +1626,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
             lineOffset += 1;
             return lineOffset === 1 ? '0em' : '1em';
           });
-      })
-      .raise();
-
-    // Update expand/collapse buttons
-    this.svgNodes.selectAll('.expand-button')
-      .attr('transform', (d: NodeWithMetadata) => {
-        const buttonSize = 12;
-        const buttonMargin = 4;
-        const buttonX = d.x + (d.width || 100) / 2 - buttonSize - buttonMargin;
-        const buttonY = d.y + (d.height || 60) / 2 - buttonSize - buttonMargin;
-        return `translate(${buttonX - d.x}, ${buttonY - d.y})`;
       })
       .raise();
 
@@ -2755,24 +2619,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       svg.input-mode .link:hover {
         stroke-width: 3px;
         opacity: 0.8;
-      }
-
-      /* Expand/collapse button styles */
-      .expand-button {
-        opacity: 0.8;
-        transition: opacity 0.2s ease;
-      }
-
-      .expand-button:hover {
-        opacity: 1;
-      }
-
-      .expand-button circle {
-        transition: fill 0.2s ease;
-      }
-
-      .expand-button:hover circle {
-        fill: #e0e0e0;
       }
     `;
   }
