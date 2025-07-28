@@ -100,7 +100,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
   const [currentLayout, setCurrentLayout] = useState<any>(null);
   
   // Collapsible section states
-  const [replCollapsed, setReplCollapsed] = useState<boolean>(false);
+  const [replCollapsed, setReplCollapsed] = useState<boolean>(true);
   const [layoutCollapsed, setLayoutCollapsed] = useState<boolean>(false);
   const [graphCollapsed, setGraphCollapsed] = useState<boolean>(false);
   const [reifyHidden, setReifyHidden] = useState<boolean>(false);
@@ -508,8 +508,25 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
                 {currentInstance.getAtoms().length} • {currentInstance.getRelations().length}
               </span>
             </div>
-            <div style={{ fontSize: '9px', color: '#28a745', fontWeight: '400' }}>
-              Cmd+Click for edges
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ fontSize: '9px', color: '#28a745', fontWeight: '400' }}>
+                Click to add edges
+              </div>
+              <button
+                onClick={() => setReplCollapsed(false)}
+                style={{
+                  backgroundColor: '#007bff',
+                  color: 'white',
+                  border: 'none',
+                  padding: '4px 8px',
+                  borderRadius: '12px',
+                  cursor: 'pointer',
+                  fontSize: '10px',
+                  fontWeight: '500'
+                }}
+              >
+                + Add Data
+              </button>
             </div>
           </div>
           {!graphCollapsed && (
@@ -653,35 +670,6 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
               }}
               placeholder="Pyret data will appear here..."
             />
-          </div>
-        </div>
-      )}
-
-      {/* Minimal add button when data is empty */}
-      {currentInstance.getAtoms().length === 0 && (
-        <div style={{
-          textAlign: 'center',
-          padding: '20px',
-          color: '#6c757d',
-          fontSize: '13px'
-        }}>
-          <button
-            onClick={() => setReplCollapsed(false)}
-            style={{
-              backgroundColor: '#28a745',
-              color: 'white',
-              border: 'none',
-              padding: '8px 16px',
-              borderRadius: '20px',
-              cursor: 'pointer',
-              fontSize: '12px',
-              fontWeight: '500'
-            }}
-          >
-            + Add Data
-          </button>
-          <div style={{ marginTop: '8px', fontSize: '11px' }}>
-            Start by adding atoms like <code>Alice:Person</code>
           </div>
         </div>
       )}

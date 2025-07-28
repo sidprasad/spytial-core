@@ -70,7 +70,7 @@ const DEFAULT_TERMINALS: TerminalConfig[] = [
       new AtomCommandParser(),          // Priority 100 - standard priority
       new InfoCommandParser()           // Priority 50 - fallback utility commands
     ].sort((a, b) => b.getPriority() - a.getPriority()), // Sort by priority descending
-    placeholder: 'Alice:Person\nalice.friend=bob\n[list: 1,2,3]:numbers'
+    placeholder: 'list'
   }
 ];
 
@@ -414,6 +414,26 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
                   
                   <div className="repl-terminal__controls">
                     <button
+                      className="repl-interface__action-button danger"
+                      onClick={clearAll}
+                      disabled={disabled}
+                      title="Clear all data"
+                      style={{ marginRight: '4px', fontSize: '10px', padding: '2px 6px' }}
+                    >
+                      Clear
+                    </button>
+                    
+                    <button
+                      className="repl-interface__action-button"
+                      onClick={() => showHelp('unified')}
+                      disabled={disabled}
+                      title="Show help"
+                      style={{ marginRight: '4px', fontSize: '10px', padding: '2px 6px' }}
+                    >
+                      ?
+                    </button>
+                    
+                    <button
                       className="repl-terminal__execute"
                       onClick={() => handleExecute(terminal.id)}
                       disabled={disabled || state.isExecuting || !state.input.trim()}
@@ -426,27 +446,6 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
               </div>
             );
           })}
-        </div>
-
-        {/* Simplified actions - remove verbose buttons */}
-        <div className="repl-interface__actions">
-          <button
-            className="repl-interface__action-button danger"
-            onClick={clearAll}
-            disabled={disabled}
-            title="Clear all data"
-          >
-            Clear
-          </button>
-          
-          <button
-            className="repl-interface__action-button"
-            onClick={() => showHelp('unified')}
-            disabled={disabled}
-            title="Show help"
-          >
-            ?
-          </button>
         </div>
       </div>
 
