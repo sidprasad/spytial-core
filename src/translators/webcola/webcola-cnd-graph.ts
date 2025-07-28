@@ -1029,8 +1029,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr("text-anchor", "middle")
       .attr("dominant-baseline", "middle")
       .attr("font-family", "system-ui")
-      .attr("font-size", "8px")
-      .attr("fill", "#555")
+      //.attr("font-size", "8px")
+      //.attr("fill", "#555")
       .attr("pointer-events", "none")
       .text((d: any) => d.label || d.relName || "");
   }
@@ -2566,16 +2566,17 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         pointer-events: none;
       }
 
-      .linklabel {
-        text-anchor: middle;
-        dominant-baseline: middle;
-        font-size: 10px;
-        fill: #555;
-        pointer-events: none;
-        font-family: system-ui;
-        stroke: white; /* Add white shadow */
-        stroke-width: 0.5px; /* Thickness of the shadow */
-      }
+.linklabel {
+  text-anchor: middle;
+  dominant-baseline: middle;
+  font-size: 10px;
+  fill: #555;
+  pointer-events: none;
+  font-family: system-ui;
+  stroke: white; /* Add white shadow */
+  stroke-width: 0.2px; /* Reduced thickness of the shadow */
+  stroke-opacity: 0.7; /* Added opacity to make the shadow less intense */
+}
       
       .mostSpecificTypeLabel {
         font-size: 8px;
