@@ -97,3 +97,19 @@ export const version = '1.0.0';
 // Export React components
 export { InstanceBuilder } from './components/InstanceBuilder/InstanceBuilder';
 export type { InstanceBuilderProps } from './components/InstanceBuilder/InstanceBuilder';
+export { ReplInterface } from './components/ReplInterface/ReplInterface';
+export type { ReplInterfaceProps } from './components/ReplInterface/ReplInterface';
+export { PyretReplInterface } from './components/ReplInterface/PyretReplInterface';
+export type { PyretReplInterfaceProps } from './components/ReplInterface/PyretReplInterface';
+export { ReplWithVisualization } from './components/ReplInterface/ReplWithVisualization';
+export type { ReplWithVisualizationProps } from './components/ReplInterface/ReplWithVisualization';
+
+// Export Combined Input Component
+export { CombinedInputComponent } from './components/CombinedInput/CombinedInputComponent';
+export type { CombinedInputConfig, CombinedInputProps } from './components/CombinedInput/CombinedInputComponent';
+export { mountCombinedInput, createCombinedInputSetup, setupCombinedInput } from './components/CombinedInput/mounting';
+export type { CombinedInputMountConfig } from './components/CombinedInput/mounting';
+
+// Export REPL parsers
+export { PyretExpressionParser } from './components/ReplInterface/parsers/PyretExpressionParser';
+export type { PyretEvaluator, PyretEvaluationResult } from './components/ReplInterface/parsers/PyretExpressionParser';

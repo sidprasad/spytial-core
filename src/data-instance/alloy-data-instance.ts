@@ -1,4 +1,4 @@
-import type { IDataInstance, IAtom, IType, IRelation, ITuple, IInputDataInstance } from './interfaces';
+import type { IDataInstance, IAtom, IType, IRelation, ITuple, IInputDataInstance, DataInstanceEventType, DataInstanceEventListener, DataInstanceEvent } from './interfaces';
 import type { AlloyType, AlloyAtom, AlloyRelation, AlloyTuple } from './alloy/alloy-instance';
 import { addInstanceAtom, addInstanceRelationTuple, removeInstanceRelationTuple, AlloyInstance, removeInstanceAtom } from './alloy/alloy-instance';
 import { 
@@ -18,7 +18,46 @@ import { Graph } from 'graphlib';
  * Wraps the existing AlloyInstance to provide the IDataInstance interface
  */
 export class AlloyDataInstance implements IInputDataInstance {
+  /** Event listeners for data instance changes */
+  private eventListeners = new Map<DataInstanceEventType, Set<DataInstanceEventListener>>();
+
   constructor(private alloyInstance: AlloyInstance) {}
+
+  /**
+   * Add an event listener for data instance changes
+   */
+  addEventListener(type: DataInstanceEventType, listener: DataInstanceEventListener): void {
+    if (!this.eventListeners.has(type)) {
+      this.eventListeners.set(type, new Set());
+    }
+    this.eventListeners.get(type)!.add(listener);
+  }
+
+  /**
+   * Remove an event listener for data instance changes
+   */
+  removeEventListener(type: DataInstanceEventType, listener: DataInstanceEventListener): void {
+    const listeners = this.eventListeners.get(type);
+    if (listeners) {
+      listeners.delete(listener);
+    }
+  }
+
+  /**
+   * Emit an event to all registered listeners
+   */
+  private emitEvent(event: DataInstanceEvent): void {
+    const listeners = this.eventListeners.get(event.type);
+    if (listeners) {
+      listeners.forEach(listener => {
+        try {
+          listener(event);
+        } catch (error) {
+          console.error('Error in data instance event listener:', error);
+        }
+      });
+    }
+  }
 
   /**
    * Get type information for a specific atom
@@ -209,6 +248,12 @@ export class AlloyDataInstance implements IInputDataInstance {
     
     // We actually have to 
     this.alloyInstance = removeInstanceAtom(this.alloyInstance, id);
+    
+    // Emit event
+    this.emitEvent({
+      type: 'atomRemoved',
+      data: { atomId: id }
+    });
   }
 
   public addAtom(atom: IAtom): void {
@@ -220,6 +265,12 @@ export class AlloyDataInstance implements IInputDataInstance {
       
     };
     this.alloyInstance = addInstanceAtom(this.alloyInstance, alloyAtom);
+    
+    // Emit event
+    this.emitEvent({
+      type: 'atomAdded',
+      data: { atom }
+    });
   }
 
   public addRelationTuple(relationId: string, tuple: ITuple): void {
@@ -230,6 +281,12 @@ export class AlloyDataInstance implements IInputDataInstance {
       types: tuple.types
     };
     this.alloyInstance = addInstanceRelationTuple(this.alloyInstance, relationId, alloyTuple);
+    
+    // Emit event
+    this.emitEvent({
+      type: 'relationTupleAdded',
+      data: { relationId, tuple }
+    });
   }
 
   public removeRelationTuple(relationId: string, t: ITuple): void {
@@ -243,6 +300,12 @@ export class AlloyDataInstance implements IInputDataInstance {
 
 
     this.alloyInstance = removeInstanceRelationTuple(this.alloyInstance, relationId, alloyTuple);
+    
+    // Emit event
+    this.emitEvent({
+      type: 'relationTupleRemoved',
+      data: { relationId, tuple: t }
+    });
   }
 
 

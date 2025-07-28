@@ -4,11 +4,29 @@ A fully-typed, tree-shakable TypeScript implementation of `Cope and Drag`.
 Supports multiple languages (e.g. Alloy, Forge, DOT, Racket), 
 with pluggable evaluators and layouts for extensibility.
 
+## 🚀 New: Combined Input Component
+
+The **Combined Input Component** provides a simplified API that eliminates the need to write complex synchronization logic between REPL, layout interface, and visualization components.
+
+```javascript
+// Simple setup - just one function call!
+CndCore.mountCombinedInput('my-container', {
+  cndSpec: 'nodes:\n  - { id: node, type: atom }',
+  dataInstance: myPyretDataInstance,
+  pyretEvaluator: window.__internalRepl,
+  projections: {}
+});
+```
+
+This replaces the complex setup shown in the Pyret REPL demo with a single, easy-to-use component.
+
 ---
 
 ## Features
 - **Client-side only**: No Node.js dependencies and tree-shakable.
 - **Custom Elements** for easy embedding in web apps
+- **Combined Input Component**: Simplified API for complete data visualization setups
+- **Real-time Synchronization**: Automatic sync between REPL, layout, and visualization
 
 ---
 
@@ -125,6 +143,80 @@ const { layout } = layoutInstance.generateLayout(dataInstance, {});
   console.log('node positions', positions);
 </script>
 ```
+
+---
+
+### Combined Input Component (Simplified API)
+
+The **Combined Input Component** provides a single, easy-to-use interface that combines REPL, layout interface, and graph visualization with automatic synchronization.
+
+#### Basic Usage
+
+```javascript
+// Load the component bundle
+<script src="https://cdn.jsdelivr.net/npm/cnd-core/dist/components/react-component-integration.global.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cnd-core/dist/components/react-component-integration.css">
+
+// Simple setup
+CndCore.mountCombinedInput('my-container', {
+  cndSpec: 'nodes:\n  - { id: node, type: atom }',
+  dataInstance: myPyretDataInstance,
+  pyretEvaluator: window.__internalRepl,
+  projections: {}
+});
+```
+
+#### Advanced Configuration
+
+```javascript
+CndCore.mountCombinedInput('container-id', {
+  // Initial data and evaluator
+  cndSpec: 'nodes:\n  - { id: Person, type: atom, color: "#FF6B35" }',
+  dataInstance: new CndCore.PyretDataInstance(myData),
+  pyretEvaluator: window.__internalRepl,
+  projections: { people: 'Person' },
+  
+  // Layout and behavior
+  height: '800px',
+  showLayoutInterface: true,
+  autoApplyLayout: true,
+  
+  // Event callbacks
+  onInstanceChange: (instance) => console.log('Data updated:', instance),
+  onSpecChange: (spec) => console.log('Layout updated:', spec),
+  onLayoutApplied: (layout) => console.log('Layout applied:', layout)
+});
+```
+
+#### Alternative Usage Patterns
+
+```javascript
+// Create a div and append to document
+const div = CndCore.createCombinedInputSetup(
+  'nodes:\n  - { id: node, type: atom }',
+  dataInstance,
+  pyretREPLInternal,
+  projections
+);
+document.body.appendChild(div);
+
+// Direct setup function
+CndCore.setupCombinedInput(
+  'container-id',
+  'nodes:\n  - { id: node, type: atom }',
+  dataInstance,
+  pyretREPLInternal,
+  projections
+);
+```
+
+#### What You Get
+
+- **Pyret REPL Interface**: Command-line style data entry and manipulation
+- **CnD Layout Interface**: Visual constraint specification with No-Code and Code views
+- **Graph Visualization**: Real-time webcola-cnd-graph rendering
+- **Automatic Synchronization**: All components stay in sync without manual event handling
+- **Layout Management**: Automatic layout application with staleness indicators
 
 ---
 
@@ -246,6 +338,8 @@ MIT
 ---
 
 
-## For Input
+## TODO:
 
-What I really envision is an extension to `IDataInstance` that allows atoms / relations to be ADDED in.
+- remove SPECIFIC edges?
+- Pyret re-ify needs some work?
+  

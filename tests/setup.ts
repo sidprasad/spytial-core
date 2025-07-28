@@ -1,3 +1,7 @@
+import '@testing-library/jest-dom'
+
+/** THIS MAY BE A BREAKING CHANGE */
+
 /**
  * Vitest setup file for CnD Core testing
  * 

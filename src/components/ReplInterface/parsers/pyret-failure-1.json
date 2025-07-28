@@ -1,0 +1,3008 @@
+{
+    "result": {
+        "dict": {
+            "v": {
+                "val": {
+                    "runtime": {
+                        "builtins": {
+                            "dict": {
+                                "___debug": {
+                                    "name": "anonymous"
+                                },
+                                "open-table": {
+                                    "name": "anonymous"
+                                },
+                                "as-loader-option": {
+                                    "name": "anonymous"
+                                },
+                                "raw-make-row": {
+                                    "name": "anonymous"
+                                },
+                                "raw-array-from-list": {
+                                    "name": "raw-array-from-list"
+                                },
+                                "raw-array-sort-nums": {
+                                    "name": "raw-array-sort-nums"
+                                },
+                                "raw-array-sort-by": {
+                                    "name": "raw-array-sort-by"
+                                },
+                                "get-value": {
+                                    "name": "get-value"
+                                },
+                                "has-field": {
+                                    "name": "has-field"
+                                },
+                                "raw-each-loop": {
+                                    "name": "raw-each-loop"
+                                },
+                                "raw-array-to-list": {
+                                    "name": "raw-array-to-list"
+                                },
+                                "raw-list-map": {
+                                    "name": "raw-list-map"
+                                },
+                                "raw-list-filter": {
+                                    "name": "raw-list-filter"
+                                },
+                                "raw-list-fold": {
+                                    "name": "raw-list-fold"
+                                },
+                                "raw-list-join-str-last": {
+                                    "name": "raw-list-join-str-last"
+                                },
+                                "current-checker": {
+                                    "name": "current-checker"
+                                },
+                                "trace-value": {
+                                    "name": "trace-value"
+                                },
+                                "spy": {
+                                    "name": "spy"
+                                },
+                                "within-rel3": {
+                                    "name": "within-rel3"
+                                },
+                                "within3": {
+                                    "name": "within3"
+                                }
+                            },
+                            "brands": {
+                                "brandCount": 0
+                            }
+                        },
+                        "GAS": 998,
+                        "INITIAL_GAS": 1000,
+                        "NumberErrbacks": {},
+                        "pyretTrue": true,
+                        "pyretFalse": false,
+                        "ReprMethods": {
+                            "_torepr": {},
+                            "_tostring": {},
+                            "$cli": {},
+                            "$cpo": {}
+                        },
+                        "serial": 0.5224514527914347,
+                        "nothing": {
+                            "dict": {},
+                            "brands": {
+                                "brandCount": 0
+                            }
+                        },
+                        "globalModuleObject": {
+                            "dict": {
+                                "defined-values": {
+                                    "torepr": {
+                                        "name": "torepr"
+                                    },
+                                    "to-repr": {
+                                        "name": "torepr"
+                                    },
+                                    "tostring": {
+                                        "name": "tostring"
+                                    },
+                                    "to-string": {
+                                        "name": "tostring"
+                                    },
+                                    "test-print": {
+                                        "name": "print"
+                                    },
+                                    "print": {
+                                        "name": "print"
+                                    },
+                                    "display": {
+                                        "name": "display"
+                                    },
+                                    "print-error": {
+                                        "name": "print-error"
+                                    },
+                                    "display-error": {
+                                        "name": "display-error"
+                                    },
+                                    "brander": {
+                                        "name": "brander"
+                                    },
+                                    "raise": {
+                                        "name": "raise"
+                                    },
+                                    "builtins": {
+                                        "dict": {
+                                            "___debug": {
+                                                "name": "anonymous"
+                                            },
+                                            "open-table": {
+                                                "name": "anonymous"
+                                            },
+                                            "as-loader-option": {
+                                                "name": "anonymous"
+                                            },
+                                            "raw-make-row": {
+                                                "name": "anonymous"
+                                            },
+                                            "raw-array-from-list": {
+                                                "name": "raw-array-from-list"
+                                            },
+                                            "raw-array-sort-nums": {
+                                                "name": "raw-array-sort-nums"
+                                            },
+                                            "raw-array-sort-by": {
+                                                "name": "raw-array-sort-by"
+                                            },
+                                            "get-value": {
+                                                "name": "get-value"
+                                            },
+                                            "has-field": {
+                                                "name": "has-field"
+                                            },
+                                            "raw-each-loop": {
+                                                "name": "raw-each-loop"
+                                            },
+                                            "raw-array-to-list": {
+                                                "name": "raw-array-to-list"
+                                            },
+                                            "raw-list-map": {
+                                                "name": "raw-list-map"
+                                            },
+                                            "raw-list-filter": {
+                                                "name": "raw-list-filter"
+                                            },
+                                            "raw-list-fold": {
+                                                "name": "raw-list-fold"
+                                            },
+                                            "raw-list-join-str-last": {
+                                                "name": "raw-list-join-str-last"
+                                            },
+                                            "current-checker": {
+                                                "name": "current-checker"
+                                            },
+                                            "trace-value": {
+                                                "name": "trace-value"
+                                            },
+                                            "spy": {
+                                                "name": "spy"
+                                            },
+                                            "within-rel3": {
+                                                "name": "within-rel3"
+                                            },
+                                            "within3": {
+                                                "name": "within3"
+                                            }
+                                        },
+                                        "brands": {
+                                            "brandCount": 0
+                                        }
+                                    },
+                                    "nothing": {
+                                        "dict": {},
+                                        "brands": {
+                                            "brandCount": 0
+                                        }
+                                    },
+                                    "is-nothing": {
+                                        "name": "is-nothing"
+                                    },
+                                    "is-number": {
+                                        "name": "is-number"
+                                    },
+                                    "is-boolean": {
+                                        "name": "is-boolean"
+                                    },
+                                    "is-string": {
+                                        "name": "is-string"
+                                    },
+                                    "is-function": {
+                                        "name": "is-function"
+                                    },
+                                    "is-object": {
+                                        "name": "is-object"
+                                    },
+                                    "is-raw-array": {
+                                        "name": "is-raw-array"
+                                    },
+                                    "is-tuple": {
+                                        "name": "is-tuple"
+                                    },
+                                    "is-table": {
+                                        "name": "is-table"
+                                    },
+                                    "is-row": {
+                                        "name": "is-row"
+                                    },
+                                    "run-task": {
+                                        "name": "run-task"
+                                    },
+                                    "gensym": {
+                                        "name": "gensym"
+                                    },
+                                    "random": {
+                                        "name": "random"
+                                    },
+                                    "_plus": {
+                                        "name": "_plus"
+                                    },
+                                    "_minus": {
+                                        "name": "_minus"
+                                    },
+                                    "_times": {
+                                        "name": "_times"
+                                    },
+                                    "_divide": {
+                                        "name": "_divide"
+                                    },
+                                    "_lessthan": {
+                                        "name": "_lessthan"
+                                    },
+                                    "_greaterthan": {
+                                        "name": "_greaterthan"
+                                    },
+                                    "_greaterequal": {
+                                        "name": "_greaterequal"
+                                    },
+                                    "_lessequal": {
+                                        "name": "_lessequal"
+                                    },
+                                    "num-random": {
+                                        "name": "num-random"
+                                    },
+                                    "num-random-seed": {
+                                        "name": "num-random-seed"
+                                    },
+                                    "num-max": {
+                                        "name": "num-max"
+                                    },
+                                    "num-min": {
+                                        "name": "num-min"
+                                    },
+                                    "num-equal": {
+                                        "name": "num-equal"
+                                    },
+                                    "num-within-abs": {
+                                        "name": "num-within-abs"
+                                    },
+                                    "num-within-rel": {
+                                        "name": "num-within-rel"
+                                    },
+                                    "num-abs": {
+                                        "name": "num-abs"
+                                    },
+                                    "num-sin": {
+                                        "name": "num-sin"
+                                    },
+                                    "num-cos": {
+                                        "name": "num-cos"
+                                    },
+                                    "num-tan": {
+                                        "name": "num-tan"
+                                    },
+                                    "num-asin": {
+                                        "name": "num-asin"
+                                    },
+                                    "num-acos": {
+                                        "name": "num-acos"
+                                    },
+                                    "num-atan": {
+                                        "name": "num-atan"
+                                    },
+                                    "num-atan2": {
+                                        "name": "num-atan2"
+                                    },
+                                    "num-modulo": {
+                                        "name": "num-modulo"
+                                    },
+                                    "num-remainder": {
+                                        "name": "num-remainder"
+                                    },
+                                    "num-sqrt": {
+                                        "name": "num-sqrt"
+                                    },
+                                    "num-sqr": {
+                                        "name": "num-sqr"
+                                    },
+                                    "num-truncate": {
+                                        "name": "num-truncate"
+                                    },
+                                    "num-ceiling": {
+                                        "name": "num-ceiling"
+                                    },
+                                    "num-floor": {
+                                        "name": "num-floor"
+                                    },
+                                    "num-round": {
+                                        "name": "num-round"
+                                    },
+                                    "num-round-even": {
+                                        "name": "num-round-even"
+                                    },
+                                    "num-truncate-digits": {
+                                        "name": "num-truncate"
+                                    },
+                                    "num-ceiling-digits": {
+                                        "name": "num-ceiling-digits"
+                                    },
+                                    "num-floor-digits": {
+                                        "name": "num-floor-digits"
+                                    },
+                                    "num-round-digits": {
+                                        "name": "num-round-digits"
+                                    },
+                                    "num-round-even-digits": {
+                                        "name": "num-round-even-digits"
+                                    },
+                                    "num-truncate-place": {
+                                        "name": "num-truncate"
+                                    },
+                                    "num-ceiling-place": {
+                                        "name": "num-ceiling-place"
+                                    },
+                                    "num-floor-place": {
+                                        "name": "num-floor-place"
+                                    },
+                                    "num-round-place": {
+                                        "name": "num-round-place"
+                                    },
+                                    "num-round-even-place": {
+                                        "name": "num-round-even-place"
+                                    },
+                                    "num-log": {
+                                        "name": "num-log"
+                                    },
+                                    "num-exp": {
+                                        "name": "num-exp"
+                                    },
+                                    "num-exact": {
+                                        "name": "num-exact"
+                                    },
+                                    "num-to-rational": {
+                                        "name": "num-to-rational"
+                                    },
+                                    "num-to-roughnum": {
+                                        "name": "num-to-roughnum"
+                                    },
+                                    "num-to-fixnum": {
+                                        "name": "num-to-fixnum"
+                                    },
+                                    "num-is-integer": {
+                                        "name": "num-is-integer"
+                                    },
+                                    "num-is-rational": {
+                                        "name": "num-is-rational"
+                                    },
+                                    "num-is-roughnum": {
+                                        "name": "num-is-roughnum"
+                                    },
+                                    "num-is-positive": {
+                                        "name": "num-is-positive"
+                                    },
+                                    "num-is-negative": {
+                                        "name": "num-is-negative"
+                                    },
+                                    "num-is-non-positive": {
+                                        "name": "num-is-non-positive"
+                                    },
+                                    "num-is-non-negative": {
+                                        "name": "num-is-non-negative"
+                                    },
+                                    "num-is-fixnum": {
+                                        "name": "num-is-fixnum"
+                                    },
+                                    "num-expt": {
+                                        "name": "num-expt"
+                                    },
+                                    "num-tostring": {
+                                        "name": "num-tostring"
+                                    },
+                                    "num-to-string": {
+                                        "name": "num-to-string"
+                                    },
+                                    "num-to-string-digits": {
+                                        "name": "num-to-string-digits"
+                                    },
+                                    "string-equal": {
+                                        "name": "string-equal"
+                                    },
+                                    "string-contains": {
+                                        "name": "string-contains"
+                                    },
+                                    "string-starts-with": {
+                                        "name": "string-starts-with"
+                                    },
+                                    "string-ends-with": {
+                                        "name": "string-ends-with"
+                                    },
+                                    "string-append": {
+                                        "name": "string-append"
+                                    },
+                                    "string-length": {
+                                        "name": "string-length"
+                                    },
+                                    "string-isnumber": {
+                                        "name": "string-isnumber"
+                                    },
+                                    "string-is-number": {
+                                        "name": "string-is-number"
+                                    },
+                                    "string-tonumber": {
+                                        "name": "string-tonumber"
+                                    },
+                                    "string-to-number": {
+                                        "name": "string-to-number"
+                                    },
+                                    "string-repeat": {
+                                        "name": "string-repeat"
+                                    },
+                                    "string-substring": {
+                                        "name": "string-substring"
+                                    },
+                                    "string-replace": {
+                                        "name": "string-replace"
+                                    },
+                                    "string-split": {
+                                        "name": "string-split"
+                                    },
+                                    "string-split-all": {
+                                        "name": "string-split-all"
+                                    },
+                                    "string-char-at": {
+                                        "name": "string-char-at"
+                                    },
+                                    "string-toupper": {
+                                        "name": "string-toupper"
+                                    },
+                                    "string-to-upper": {
+                                        "name": "string-to-upper"
+                                    },
+                                    "string-tolower": {
+                                        "name": "string-tolower"
+                                    },
+                                    "string-to-lower": {
+                                        "name": "string-to-lower"
+                                    },
+                                    "string-explode": {
+                                        "name": "string-explode"
+                                    },
+                                    "string-index-of": {
+                                        "name": "string-index-of"
+                                    },
+                                    "string-find-index": {
+                                        "name": "string-find-index"
+                                    },
+                                    "string-get-index": {
+                                        "name": "string-get-index"
+                                    },
+                                    "string-to-code-point": {
+                                        "name": "string-to-code-point"
+                                    },
+                                    "string-from-code-point": {
+                                        "name": "string-from-code-point"
+                                    },
+                                    "string-to-code-points": {
+                                        "name": "string-to-code-points"
+                                    },
+                                    "string-from-code-points": {
+                                        "name": "string-from-code-points"
+                                    },
+                                    "time-now": {
+                                        "name": "time-now"
+                                    },
+                                    "raw-array-of": {
+                                        "name": "raw-array-of"
+                                    },
+                                    "raw-array-build": {
+                                        "name": "raw-array-build"
+                                    },
+                                    "raw-array-build-opt": {
+                                        "name": "raw-array-build-opt"
+                                    },
+                                    "raw-array-get": {
+                                        "name": "raw-array-get"
+                                    },
+                                    "raw-array-sort-nums": {
+                                        "name": "raw-array-sort-nums"
+                                    },
+                                    "raw-array-sort-by": {
+                                        "name": "raw-array-sort-by"
+                                    },
+                                    "raw-array-set": {
+                                        "name": "raw-array-set"
+                                    },
+                                    "raw-array-length": {
+                                        "name": "raw-array-length"
+                                    },
+                                    "raw-array-to-list": {
+                                        "name": "raw-array-to-list"
+                                    },
+                                    "raw-array-from-list": {
+                                        "name": "raw-array-from-list"
+                                    },
+                                    "raw-array-fold": {
+                                        "name": "raw-array-fold"
+                                    },
+                                    "raw-array-concat": {
+                                        "name": "raw-array-concat"
+                                    },
+                                    "raw-array-duplicate": {
+                                        "name": "raw-array-duplicate"
+                                    },
+                                    "raw-array-and-mapi": {
+                                        "name": "raw-array-and-mapi"
+                                    },
+                                    "raw-array-or-mapi": {
+                                        "name": "raw-array-or-mapi"
+                                    },
+                                    "raw-array-map": {
+                                        "name": "raw-array-map"
+                                    },
+                                    "raw-array-map-1": {
+                                        "name": "raw-array-map-1"
+                                    },
+                                    "raw-array-filter": {
+                                        "name": "raw-array-filter"
+                                    },
+                                    "raw-array": {
+                                        "dict": {
+                                            "make": {
+                                                "name": "raw-array:make"
+                                            },
+                                            "make0": {
+                                                "name": "raw-array:make0"
+                                            },
+                                            "make1": {
+                                                "name": "raw-array:make1"
+                                            },
+                                            "make2": {
+                                                "name": "raw-array:make2"
+                                            },
+                                            "make3": {
+                                                "name": "raw-array:make3"
+                                            },
+                                            "make4": {
+                                                "name": "raw-array:make4"
+                                            },
+                                            "make5": {
+                                                "name": "raw-array:make5"
+                                            }
+                                        },
+                                        "brands": {
+                                            "brandCount": 0
+                                        }
+                                    },
+                                    "raw-each-loop": {
+                                        "name": "raw-each-loop"
+                                    },
+                                    "not": {
+                                        "name": "not"
+                                    },
+                                    "ref-set": {
+                                        "name": "ref-set"
+                                    },
+                                    "ref-get": {
+                                        "name": "ref-get"
+                                    },
+                                    "ref-end-graph": {
+                                        "name": "ref-end-graph"
+                                    },
+                                    "ref-freeze": {
+                                        "name": "ref-freeze"
+                                    },
+                                    "identical3": {
+                                        "name": "identical3"
+                                    },
+                                    "identical": {
+                                        "name": "identical"
+                                    },
+                                    "equal-now3": {
+                                        "name": "equal-now3"
+                                    },
+                                    "equal-now": {
+                                        "name": "equal-now"
+                                    },
+                                    "equal-always3": {
+                                        "name": "equal-always3"
+                                    },
+                                    "equal-always": {
+                                        "name": "equal-always"
+                                    },
+                                    "roughly-equal": {
+                                        "name": "roughly-equal"
+                                    },
+                                    "roughly-equal-now3": {
+                                        "name": "roughly-equal-now3"
+                                    },
+                                    "roughly-equal-now": {
+                                        "name": "roughly-equal-now"
+                                    },
+                                    "roughly-equal-always3": {
+                                        "name": "roughly-equal-always3"
+                                    },
+                                    "roughly-equal-always": {
+                                        "name": "roughly-equal-always"
+                                    },
+                                    "within-abs-now3": {
+                                        "name": "within-abs-now3"
+                                    },
+                                    "within-rel-now3": {
+                                        "name": "within-rel-now3"
+                                    },
+                                    "within-abs3": {
+                                        "name": "within-abs3"
+                                    },
+                                    "within-rel3": {
+                                        "name": "within-rel3"
+                                    },
+                                    "within-abs-now": {
+                                        "name": "within-abs-now"
+                                    },
+                                    "within-rel-now": {
+                                        "name": "within-rel-now"
+                                    },
+                                    "within-abs": {
+                                        "name": "within-abs"
+                                    },
+                                    "within-rel": {
+                                        "name": "within-rel"
+                                    },
+                                    "num-within": {
+                                        "name": "num-within"
+                                    },
+                                    "within-now3": {
+                                        "name": "within-now3"
+                                    },
+                                    "within3": {
+                                        "name": "within3"
+                                    },
+                                    "within-now": {
+                                        "name": "within-now"
+                                    },
+                                    "within": {
+                                        "name": "within"
+                                    },
+                                    "exn-unwrap": {
+                                        "name": "exn-unwrap"
+                                    },
+                                    "$type$Number": {
+                                        "name": "Number",
+                                        "flat": true
+                                    },
+                                    "Number": {
+                                        "name": "Number",
+                                        "flat": true
+                                    },
+                                    "$type$Exactnum": {
+                                        "name": "Exactnum",
+                                        "flat": true
+                                    },
+                                    "Exactnum": {
+                                        "name": "Exactnum",
+                                        "flat": true
+                                    },
+                                    "$type$Roughnum": {
+                                        "name": "Roughnum",
+                                        "flat": true
+                                    },
+                                    "Roughnum": {
+                                        "name": "Roughnum",
+                                        "flat": true
+                                    },
+                                    "$type$NumInteger": {
+                                        "name": "NumInteger",
+                                        "flat": true
+                                    },
+                                    "NumInteger": {
+                                        "name": "NumInteger",
+                                        "flat": true
+                                    },
+                                    "$type$NumNatural": {
+                                        "name": "NumNatural",
+                                        "flat": true
+                                    },
+                                    "NumNatural": {
+                                        "name": "NumNatural",
+                                        "flat": true
+                                    },
+                                    "$type$NumRational": {
+                                        "name": "NumRational",
+                                        "flat": true
+                                    },
+                                    "NumRational": {
+                                        "name": "NumRational",
+                                        "flat": true
+                                    },
+                                    "$type$NumPositive": {
+                                        "name": "NumPositive",
+                                        "flat": true
+                                    },
+                                    "NumPositive": {
+                                        "name": "NumPositive",
+                                        "flat": true
+                                    },
+                                    "$type$NumNegative": {
+                                        "name": "NumNegative",
+                                        "flat": true
+                                    },
+                                    "NumNegative": {
+                                        "name": "NumNegative",
+                                        "flat": true
+                                    },
+                                    "$type$NumNonPositive": {
+                                        "name": "NumNonPositive",
+                                        "flat": true
+                                    },
+                                    "NumNonPositive": {
+                                        "name": "NumNonPositive",
+                                        "flat": true
+                                    },
+                                    "$type$NumNonNegative": {
+                                        "name": "NumNonNegative",
+                                        "flat": true
+                                    },
+                                    "NumNonNegative": {
+                                        "name": "NumNonNegative",
+                                        "flat": true
+                                    },
+                                    "$type$String": {
+                                        "name": "String",
+                                        "flat": true
+                                    },
+                                    "String": {
+                                        "name": "String",
+                                        "flat": true
+                                    },
+                                    "$type$Boolean": {
+                                        "name": "Boolean",
+                                        "flat": true
+                                    },
+                                    "Boolean": {
+                                        "name": "Boolean",
+                                        "flat": true
+                                    },
+                                    "$type$RawArray": {
+                                        "name": "RawArray",
+                                        "flat": true
+                                    },
+                                    "RawArray": {
+                                        "name": "RawArray",
+                                        "flat": true
+                                    },
+                                    "$type$Function": {
+                                        "name": "Function",
+                                        "flat": true
+                                    },
+                                    "Function": {
+                                        "name": "Function",
+                                        "flat": true
+                                    },
+                                    "$type$Method": {
+                                        "name": "Method",
+                                        "flat": true
+                                    },
+                                    "Method": {
+                                        "name": "Method",
+                                        "flat": true
+                                    },
+                                    "$type$Nothing": {
+                                        "name": "Nothing",
+                                        "flat": true
+                                    },
+                                    "Nothing": {
+                                        "name": "Nothing",
+                                        "flat": true
+                                    },
+                                    "$type$Object": {
+                                        "name": "Object",
+                                        "flat": true
+                                    },
+                                    "Object": {
+                                        "name": "Object",
+                                        "flat": true
+                                    },
+                                    "$type$Tuple": {
+                                        "name": "Tuple",
+                                        "flat": true
+                                    },
+                                    "Tuple": {
+                                        "name": "Tuple",
+                                        "flat": true
+                                    },
+                                    "$type$Any": {
+                                        "name": "Any",
+                                        "flat": true
+                                    },
+                                    "Any": {
+                                        "name": "Any",
+                                        "flat": true
+                                    },
+                                    "$type$List": {
+                                        "name": "List",
+                                        "flat": true
+                                    },
+                                    "List": {
+                                        "name": "List",
+                                        "flat": true
+                                    },
+                                    "$type$Table": {
+                                        "name": "Table",
+                                        "flat": true
+                                    },
+                                    "Table": {
+                                        "name": "Table",
+                                        "flat": true
+                                    },
+                                    "$type$Row": {
+                                        "name": "Row",
+                                        "flat": true
+                                    },
+                                    "Row": {
+                                        "name": "Row",
+                                        "flat": true
+                                    }
+                                },
+                                "defined-types": {
+                                    "Number": {
+                                        "name": "Number",
+                                        "flat": true
+                                    },
+                                    "Exactnum": {
+                                        "name": "Exactnum",
+                                        "flat": true
+                                    },
+                                    "Roughnum": {
+                                        "name": "Roughnum",
+                                        "flat": true
+                                    },
+                                    "NumInteger": {
+                                        "name": "NumInteger",
+                                        "flat": true
+                                    },
+                                    "NumNatural": {
+                                        "name": "NumNatural",
+                                        "flat": true
+                                    },
+                                    "NumRational": {
+                                        "name": "NumRational",
+                                        "flat": true
+                                    },
+                                    "NumPositive": {
+                                        "name": "NumPositive",
+                                        "flat": true
+                                    },
+                                    "NumNegative": {
+                                        "name": "NumNegative",
+                                        "flat": true
+                                    },
+                                    "NumNonPositive": {
+                                        "name": "NumNonPositive",
+                                        "flat": true
+                                    },
+                                    "NumNonNegative": {
+                                        "name": "NumNonNegative",
+                                        "flat": true
+                                    },
+                                    "String": {
+                                        "name": "String",
+                                        "flat": true
+                                    },
+                                    "Boolean": {
+                                        "name": "Boolean",
+                                        "flat": true
+                                    },
+                                    "RawArray": {
+                                        "name": "RawArray",
+                                        "flat": true
+                                    },
+                                    "Function": {
+                                        "name": "Function",
+                                        "flat": true
+                                    },
+                                    "Method": {
+                                        "name": "Method",
+                                        "flat": true
+                                    },
+                                    "Nothing": {
+                                        "name": "Nothing",
+                                        "flat": true
+                                    },
+                                    "Object": {
+                                        "name": "Object",
+                                        "flat": true
+                                    },
+                                    "Tuple": {
+                                        "name": "Tuple",
+                                        "flat": true
+                                    },
+                                    "Any": {
+                                        "name": "Any",
+                                        "flat": true
+                                    },
+                                    "List": {
+                                        "name": "List",
+                                        "flat": true
+                                    },
+                                    "Table": {
+                                        "name": "Table",
+                                        "flat": true
+                                    },
+                                    "Row": {
+                                        "name": "Row",
+                                        "flat": true
+                                    }
+                                },
+                                "provide-plus-types": {
+                                    "dict": {
+                                        "values": {
+                                            "dict": {
+                                                "torepr": {
+                                                    "name": "torepr"
+                                                },
+                                                "to-repr": {
+                                                    "name": "torepr"
+                                                },
+                                                "tostring": {
+                                                    "name": "tostring"
+                                                },
+                                                "to-string": {
+                                                    "name": "tostring"
+                                                },
+                                                "test-print": {
+                                                    "name": "print"
+                                                },
+                                                "print": {
+                                                    "name": "print"
+                                                },
+                                                "display": {
+                                                    "name": "display"
+                                                },
+                                                "print-error": {
+                                                    "name": "print-error"
+                                                },
+                                                "display-error": {
+                                                    "name": "display-error"
+                                                },
+                                                "brander": {
+                                                    "name": "brander"
+                                                },
+                                                "raise": {
+                                                    "name": "raise"
+                                                },
+                                                "builtins": {
+                                                    "dict": {
+                                                        "___debug": {
+                                                            "name": "anonymous"
+                                                        },
+                                                        "open-table": {
+                                                            "name": "anonymous"
+                                                        },
+                                                        "as-loader-option": {
+                                                            "name": "anonymous"
+                                                        },
+                                                        "raw-make-row": {
+                                                            "name": "anonymous"
+                                                        },
+                                                        "raw-array-from-list": {
+                                                            "name": "raw-array-from-list"
+                                                        },
+                                                        "raw-array-sort-nums": {
+                                                            "name": "raw-array-sort-nums"
+                                                        },
+                                                        "raw-array-sort-by": {
+                                                            "name": "raw-array-sort-by"
+                                                        },
+                                                        "get-value": {
+                                                            "name": "get-value"
+                                                        },
+                                                        "has-field": {
+                                                            "name": "has-field"
+                                                        },
+                                                        "raw-each-loop": {
+                                                            "name": "raw-each-loop"
+                                                        },
+                                                        "raw-array-to-list": {
+                                                            "name": "raw-array-to-list"
+                                                        },
+                                                        "raw-list-map": {
+                                                            "name": "raw-list-map"
+                                                        },
+                                                        "raw-list-filter": {
+                                                            "name": "raw-list-filter"
+                                                        },
+                                                        "raw-list-fold": {
+                                                            "name": "raw-list-fold"
+                                                        },
+                                                        "raw-list-join-str-last": {
+                                                            "name": "raw-list-join-str-last"
+                                                        },
+                                                        "current-checker": {
+                                                            "name": "current-checker"
+                                                        },
+                                                        "trace-value": {
+                                                            "name": "trace-value"
+                                                        },
+                                                        "spy": {
+                                                            "name": "spy"
+                                                        },
+                                                        "within-rel3": {
+                                                            "name": "within-rel3"
+                                                        },
+                                                        "within3": {
+                                                            "name": "within3"
+                                                        }
+                                                    },
+                                                    "brands": {
+                                                        "brandCount": 0
+                                                    }
+                                                },
+                                                "nothing": {
+                                                    "dict": {},
+                                                    "brands": {
+                                                        "brandCount": 0
+                                                    }
+                                                },
+                                                "is-nothing": {
+                                                    "name": "is-nothing"
+                                                },
+                                                "is-number": {
+                                                    "name": "is-number"
+                                                },
+                                                "is-boolean": {
+                                                    "name": "is-boolean"
+                                                },
+                                                "is-string": {
+                                                    "name": "is-string"
+                                                },
+                                                "is-function": {
+                                                    "name": "is-function"
+                                                },
+                                                "is-object": {
+                                                    "name": "is-object"
+                                                },
+                                                "is-raw-array": {
+                                                    "name": "is-raw-array"
+                                                },
+                                                "is-tuple": {
+                                                    "name": "is-tuple"
+                                                },
+                                                "is-table": {
+                                                    "name": "is-table"
+                                                },
+                                                "is-row": {
+                                                    "name": "is-row"
+                                                },
+                                                "run-task": {
+                                                    "name": "run-task"
+                                                },
+                                                "gensym": {
+                                                    "name": "gensym"
+                                                },
+                                                "random": {
+                                                    "name": "random"
+                                                },
+                                                "_plus": {
+                                                    "name": "_plus"
+                                                },
+                                                "_minus": {
+                                                    "name": "_minus"
+                                                },
+                                                "_times": {
+                                                    "name": "_times"
+                                                },
+                                                "_divide": {
+                                                    "name": "_divide"
+                                                },
+                                                "_lessthan": {
+                                                    "name": "_lessthan"
+                                                },
+                                                "_greaterthan": {
+                                                    "name": "_greaterthan"
+                                                },
+                                                "_greaterequal": {
+                                                    "name": "_greaterequal"
+                                                },
+                                                "_lessequal": {
+                                                    "name": "_lessequal"
+                                                },
+                                                "num-random": {
+                                                    "name": "num-random"
+                                                },
+                                                "num-random-seed": {
+                                                    "name": "num-random-seed"
+                                                },
+                                                "num-max": {
+                                                    "name": "num-max"
+                                                },
+                                                "num-min": {
+                                                    "name": "num-min"
+                                                },
+                                                "num-equal": {
+                                                    "name": "num-equal"
+                                                },
+                                                "num-within-abs": {
+                                                    "name": "num-within-abs"
+                                                },
+                                                "num-within-rel": {
+                                                    "name": "num-within-rel"
+                                                },
+                                                "num-abs": {
+                                                    "name": "num-abs"
+                                                },
+                                                "num-sin": {
+                                                    "name": "num-sin"
+                                                },
+                                                "num-cos": {
+                                                    "name": "num-cos"
+                                                },
+                                                "num-tan": {
+                                                    "name": "num-tan"
+                                                },
+                                                "num-asin": {
+                                                    "name": "num-asin"
+                                                },
+                                                "num-acos": {
+                                                    "name": "num-acos"
+                                                },
+                                                "num-atan": {
+                                                    "name": "num-atan"
+                                                },
+                                                "num-atan2": {
+                                                    "name": "num-atan2"
+                                                },
+                                                "num-modulo": {
+                                                    "name": "num-modulo"
+                                                },
+                                                "num-remainder": {
+                                                    "name": "num-remainder"
+                                                },
+                                                "num-sqrt": {
+                                                    "name": "num-sqrt"
+                                                },
+                                                "num-sqr": {
+                                                    "name": "num-sqr"
+                                                },
+                                                "num-truncate": {
+                                                    "name": "num-truncate"
+                                                },
+                                                "num-ceiling": {
+                                                    "name": "num-ceiling"
+                                                },
+                                                "num-floor": {
+                                                    "name": "num-floor"
+                                                },
+                                                "num-round": {
+                                                    "name": "num-round"
+                                                },
+                                                "num-round-even": {
+                                                    "name": "num-round-even"
+                                                },
+                                                "num-truncate-digits": {
+                                                    "name": "num-truncate"
+                                                },
+                                                "num-ceiling-digits": {
+                                                    "name": "num-ceiling-digits"
+                                                },
+                                                "num-floor-digits": {
+                                                    "name": "num-floor-digits"
+                                                },
+                                                "num-round-digits": {
+                                                    "name": "num-round-digits"
+                                                },
+                                                "num-round-even-digits": {
+                                                    "name": "num-round-even-digits"
+                                                },
+                                                "num-truncate-place": {
+                                                    "name": "num-truncate"
+                                                },
+                                                "num-ceiling-place": {
+                                                    "name": "num-ceiling-place"
+                                                },
+                                                "num-floor-place": {
+                                                    "name": "num-floor-place"
+                                                },
+                                                "num-round-place": {
+                                                    "name": "num-round-place"
+                                                },
+                                                "num-round-even-place": {
+                                                    "name": "num-round-even-place"
+                                                },
+                                                "num-log": {
+                                                    "name": "num-log"
+                                                },
+                                                "num-exp": {
+                                                    "name": "num-exp"
+                                                },
+                                                "num-exact": {
+                                                    "name": "num-exact"
+                                                },
+                                                "num-to-rational": {
+                                                    "name": "num-to-rational"
+                                                },
+                                                "num-to-roughnum": {
+                                                    "name": "num-to-roughnum"
+                                                },
+                                                "num-to-fixnum": {
+                                                    "name": "num-to-fixnum"
+                                                },
+                                                "num-is-integer": {
+                                                    "name": "num-is-integer"
+                                                },
+                                                "num-is-rational": {
+                                                    "name": "num-is-rational"
+                                                },
+                                                "num-is-roughnum": {
+                                                    "name": "num-is-roughnum"
+                                                },
+                                                "num-is-positive": {
+                                                    "name": "num-is-positive"
+                                                },
+                                                "num-is-negative": {
+                                                    "name": "num-is-negative"
+                                                },
+                                                "num-is-non-positive": {
+                                                    "name": "num-is-non-positive"
+                                                },
+                                                "num-is-non-negative": {
+                                                    "name": "num-is-non-negative"
+                                                },
+                                                "num-is-fixnum": {
+                                                    "name": "num-is-fixnum"
+                                                },
+                                                "num-expt": {
+                                                    "name": "num-expt"
+                                                },
+                                                "num-tostring": {
+                                                    "name": "num-tostring"
+                                                },
+                                                "num-to-string": {
+                                                    "name": "num-to-string"
+                                                },
+                                                "num-to-string-digits": {
+                                                    "name": "num-to-string-digits"
+                                                },
+                                                "string-equal": {
+                                                    "name": "string-equal"
+                                                },
+                                                "string-contains": {
+                                                    "name": "string-contains"
+                                                },
+                                                "string-starts-with": {
+                                                    "name": "string-starts-with"
+                                                },
+                                                "string-ends-with": {
+                                                    "name": "string-ends-with"
+                                                },
+                                                "string-append": {
+                                                    "name": "string-append"
+                                                },
+                                                "string-length": {
+                                                    "name": "string-length"
+                                                },
+                                                "string-isnumber": {
+                                                    "name": "string-isnumber"
+                                                },
+                                                "string-is-number": {
+                                                    "name": "string-is-number"
+                                                },
+                                                "string-tonumber": {
+                                                    "name": "string-tonumber"
+                                                },
+                                                "string-to-number": {
+                                                    "name": "string-to-number"
+                                                },
+                                                "string-repeat": {
+                                                    "name": "string-repeat"
+                                                },
+                                                "string-substring": {
+                                                    "name": "string-substring"
+                                                },
+                                                "string-replace": {
+                                                    "name": "string-replace"
+                                                },
+                                                "string-split": {
+                                                    "name": "string-split"
+                                                },
+                                                "string-split-all": {
+                                                    "name": "string-split-all"
+                                                },
+                                                "string-char-at": {
+                                                    "name": "string-char-at"
+                                                },
+                                                "string-toupper": {
+                                                    "name": "string-toupper"
+                                                },
+                                                "string-to-upper": {
+                                                    "name": "string-to-upper"
+                                                },
+                                                "string-tolower": {
+                                                    "name": "string-tolower"
+                                                },
+                                                "string-to-lower": {
+                                                    "name": "string-to-lower"
+                                                },
+                                                "string-explode": {
+                                                    "name": "string-explode"
+                                                },
+                                                "string-index-of": {
+                                                    "name": "string-index-of"
+                                                },
+                                                "string-find-index": {
+                                                    "name": "string-find-index"
+                                                },
+                                                "string-get-index": {
+                                                    "name": "string-get-index"
+                                                },
+                                                "string-to-code-point": {
+                                                    "name": "string-to-code-point"
+                                                },
+                                                "string-from-code-point": {
+                                                    "name": "string-from-code-point"
+                                                },
+                                                "string-to-code-points": {
+                                                    "name": "string-to-code-points"
+                                                },
+                                                "string-from-code-points": {
+                                                    "name": "string-from-code-points"
+                                                },
+                                                "time-now": {
+                                                    "name": "time-now"
+                                                },
+                                                "raw-array-of": {
+                                                    "name": "raw-array-of"
+                                                },
+                                                "raw-array-build": {
+                                                    "name": "raw-array-build"
+                                                },
+                                                "raw-array-build-opt": {
+                                                    "name": "raw-array-build-opt"
+                                                },
+                                                "raw-array-get": {
+                                                    "name": "raw-array-get"
+                                                },
+                                                "raw-array-sort-nums": {
+                                                    "name": "raw-array-sort-nums"
+                                                },
+                                                "raw-array-sort-by": {
+                                                    "name": "raw-array-sort-by"
+                                                },
+                                                "raw-array-set": {
+                                                    "name": "raw-array-set"
+                                                },
+                                                "raw-array-length": {
+                                                    "name": "raw-array-length"
+                                                },
+                                                "raw-array-to-list": {
+                                                    "name": "raw-array-to-list"
+                                                },
+                                                "raw-array-from-list": {
+                                                    "name": "raw-array-from-list"
+                                                },
+                                                "raw-array-fold": {
+                                                    "name": "raw-array-fold"
+                                                },
+                                                "raw-array-concat": {
+                                                    "name": "raw-array-concat"
+                                                },
+                                                "raw-array-duplicate": {
+                                                    "name": "raw-array-duplicate"
+                                                },
+                                                "raw-array-and-mapi": {
+                                                    "name": "raw-array-and-mapi"
+                                                },
+                                                "raw-array-or-mapi": {
+                                                    "name": "raw-array-or-mapi"
+                                                },
+                                                "raw-array-map": {
+                                                    "name": "raw-array-map"
+                                                },
+                                                "raw-array-map-1": {
+                                                    "name": "raw-array-map-1"
+                                                },
+                                                "raw-array-filter": {
+                                                    "name": "raw-array-filter"
+                                                },
+                                                "raw-array": {
+                                                    "dict": {
+                                                        "make": {
+                                                            "name": "raw-array:make"
+                                                        },
+                                                        "make0": {
+                                                            "name": "raw-array:make0"
+                                                        },
+                                                        "make1": {
+                                                            "name": "raw-array:make1"
+                                                        },
+                                                        "make2": {
+                                                            "name": "raw-array:make2"
+                                                        },
+                                                        "make3": {
+                                                            "name": "raw-array:make3"
+                                                        },
+                                                        "make4": {
+                                                            "name": "raw-array:make4"
+                                                        },
+                                                        "make5": {
+                                                            "name": "raw-array:make5"
+                                                        }
+                                                    },
+                                                    "brands": {
+                                                        "brandCount": 0
+                                                    }
+                                                },
+                                                "raw-each-loop": {
+                                                    "name": "raw-each-loop"
+                                                },
+                                                "not": {
+                                                    "name": "not"
+                                                },
+                                                "ref-set": {
+                                                    "name": "ref-set"
+                                                },
+                                                "ref-get": {
+                                                    "name": "ref-get"
+                                                },
+                                                "ref-end-graph": {
+                                                    "name": "ref-end-graph"
+                                                },
+                                                "ref-freeze": {
+                                                    "name": "ref-freeze"
+                                                },
+                                                "identical3": {
+                                                    "name": "identical3"
+                                                },
+                                                "identical": {
+                                                    "name": "identical"
+                                                },
+                                                "equal-now3": {
+                                                    "name": "equal-now3"
+                                                },
+                                                "equal-now": {
+                                                    "name": "equal-now"
+                                                },
+                                                "equal-always3": {
+                                                    "name": "equal-always3"
+                                                },
+                                                "equal-always": {
+                                                    "name": "equal-always"
+                                                },
+                                                "roughly-equal": {
+                                                    "name": "roughly-equal"
+                                                },
+                                                "roughly-equal-now3": {
+                                                    "name": "roughly-equal-now3"
+                                                },
+                                                "roughly-equal-now": {
+                                                    "name": "roughly-equal-now"
+                                                },
+                                                "roughly-equal-always3": {
+                                                    "name": "roughly-equal-always3"
+                                                },
+                                                "roughly-equal-always": {
+                                                    "name": "roughly-equal-always"
+                                                },
+                                                "within-abs-now3": {
+                                                    "name": "within-abs-now3"
+                                                },
+                                                "within-rel-now3": {
+                                                    "name": "within-rel-now3"
+                                                },
+                                                "within-abs3": {
+                                                    "name": "within-abs3"
+                                                },
+                                                "within-rel3": {
+                                                    "name": "within-rel3"
+                                                },
+                                                "within-abs-now": {
+                                                    "name": "within-abs-now"
+                                                },
+                                                "within-rel-now": {
+                                                    "name": "within-rel-now"
+                                                },
+                                                "within-abs": {
+                                                    "name": "within-abs"
+                                                },
+                                                "within-rel": {
+                                                    "name": "within-rel"
+                                                },
+                                                "num-within": {
+                                                    "name": "num-within"
+                                                },
+                                                "within-now3": {
+                                                    "name": "within-now3"
+                                                },
+                                                "within3": {
+                                                    "name": "within3"
+                                                },
+                                                "within-now": {
+                                                    "name": "within-now"
+                                                },
+                                                "within": {
+                                                    "name": "within"
+                                                },
+                                                "exn-unwrap": {
+                                                    "name": "exn-unwrap"
+                                                }
+                                            },
+                                            "brands": {
+                                                "brandCount": 0
+                                            }
+                                        },
+                                        "types": {
+                                            "Number": {
+                                                "name": "Number",
+                                                "flat": true
+                                            },
+                                            "Exactnum": {
+                                                "name": "Exactnum",
+                                                "flat": true
+                                            },
+                                            "Roughnum": {
+                                                "name": "Roughnum",
+                                                "flat": true
+                                            },
+                                            "NumInteger": {
+                                                "name": "NumInteger",
+                                                "flat": true
+                                            },
+                                            "NumNatural": {
+                                                "name": "NumNatural",
+                                                "flat": true
+                                            },
+                                            "NumRational": {
+                                                "name": "NumRational",
+                                                "flat": true
+                                            },
+                                            "NumPositive": {
+                                                "name": "NumPositive",
+                                                "flat": true
+                                            },
+                                            "NumNegative": {
+                                                "name": "NumNegative",
+                                                "flat": true
+                                            },
+                                            "NumNonPositive": {
+                                                "name": "NumNonPositive",
+                                                "flat": true
+                                            },
+                                            "NumNonNegative": {
+                                                "name": "NumNonNegative",
+                                                "flat": true
+                                            },
+                                            "String": {
+                                                "name": "String",
+                                                "flat": true
+                                            },
+                                            "Boolean": {
+                                                "name": "Boolean",
+                                                "flat": true
+                                            },
+                                            "RawArray": {
+                                                "name": "RawArray",
+                                                "flat": true
+                                            },
+                                            "Function": {
+                                                "name": "Function",
+                                                "flat": true
+                                            },
+                                            "Method": {
+                                                "name": "Method",
+                                                "flat": true
+                                            },
+                                            "Nothing": {
+                                                "name": "Nothing",
+                                                "flat": true
+                                            },
+                                            "Object": {
+                                                "name": "Object",
+                                                "flat": true
+                                            },
+                                            "Tuple": {
+                                                "name": "Tuple",
+                                                "flat": true
+                                            },
+                                            "Any": {
+                                                "name": "Any",
+                                                "flat": true
+                                            },
+                                            "List": {
+                                                "name": "List",
+                                                "flat": true
+                                            },
+                                            "Table": {
+                                                "name": "Table",
+                                                "flat": true
+                                            },
+                                            "Row": {
+                                                "name": "Row",
+                                                "flat": true
+                                            }
+                                        },
+                                        "modules": {}
+                                    },
+                                    "brands": {
+                                        "brandCount": 0
+                                    }
+                                }
+                            },
+                            "brands": {
+                                "brandCount": 0
+                            }
+                        },
+                        "modules": {},
+                        "console": {
+                            "memory": {}
+                        },
+                        "Number": {
+                            "name": "Number",
+                            "flat": true
+                        },
+                        "Exactnum": {
+                            "name": "Exactnum",
+                            "flat": true
+                        },
+                        "Roughnum": {
+                            "name": "Roughnum",
+                            "flat": true
+                        },
+                        "NumInteger": {
+                            "name": "NumInteger",
+                            "flat": true
+                        },
+                        "NumNatural": {
+                            "name": "NumNatural",
+                            "flat": true
+                        },
+                        "NumRational": {
+                            "name": "NumRational",
+                            "flat": true
+                        },
+                        "NumPositive": {
+                            "name": "NumPositive",
+                            "flat": true
+                        },
+                        "NumNegative": {
+                            "name": "NumNegative",
+                            "flat": true
+                        },
+                        "NumNonPositive": {
+                            "name": "NumNonPositive",
+                            "flat": true
+                        },
+                        "NumNonNegative": {
+                            "name": "NumNonNegative",
+                            "flat": true
+                        },
+                        "String": {
+                            "name": "String",
+                            "flat": true
+                        },
+                        "Boolean": {
+                            "name": "Boolean",
+                            "flat": true
+                        },
+                        "RawArray": {
+                            "name": "RawArray",
+                            "flat": true
+                        },
+                        "Function": {
+                            "name": "Function",
+                            "flat": true
+                        },
+                        "Method": {
+                            "name": "Method",
+                            "flat": true
+                        },
+                        "Nothing": {
+                            "name": "Nothing",
+                            "flat": true
+                        },
+                        "Object": {
+                            "name": "Object",
+                            "flat": true
+                        },
+                        "Tuple": {
+                            "name": "Tuple",
+                            "flat": true
+                        },
+                        "Any": {
+                            "name": "Any",
+                            "flat": true
+                        },
+                        "namespace": {
+                            "bindings": {
+                                "torepr": {
+                                    "name": "torepr"
+                                },
+                                "to-repr": {
+                                    "name": "torepr"
+                                },
+                                "tostring": {
+                                    "name": "tostring"
+                                },
+                                "to-string": {
+                                    "name": "tostring"
+                                },
+                                "test-print": {
+                                    "name": "print"
+                                },
+                                "print": {
+                                    "name": "print"
+                                },
+                                "display": {
+                                    "name": "display"
+                                },
+                                "print-error": {
+                                    "name": "print-error"
+                                },
+                                "display-error": {
+                                    "name": "display-error"
+                                },
+                                "brander": {
+                                    "name": "brander"
+                                },
+                                "raise": {
+                                    "name": "raise"
+                                },
+                                "builtins": {
+                                    "dict": {
+                                        "___debug": {
+                                            "name": "anonymous"
+                                        },
+                                        "open-table": {
+                                            "name": "anonymous"
+                                        },
+                                        "as-loader-option": {
+                                            "name": "anonymous"
+                                        },
+                                        "raw-make-row": {
+                                            "name": "anonymous"
+                                        },
+                                        "raw-array-from-list": {
+                                            "name": "raw-array-from-list"
+                                        },
+                                        "raw-array-sort-nums": {
+                                            "name": "raw-array-sort-nums"
+                                        },
+                                        "raw-array-sort-by": {
+                                            "name": "raw-array-sort-by"
+                                        },
+                                        "get-value": {
+                                            "name": "get-value"
+                                        },
+                                        "has-field": {
+                                            "name": "has-field"
+                                        },
+                                        "raw-each-loop": {
+                                            "name": "raw-each-loop"
+                                        },
+                                        "raw-array-to-list": {
+                                            "name": "raw-array-to-list"
+                                        },
+                                        "raw-list-map": {
+                                            "name": "raw-list-map"
+                                        },
+                                        "raw-list-filter": {
+                                            "name": "raw-list-filter"
+                                        },
+                                        "raw-list-fold": {
+                                            "name": "raw-list-fold"
+                                        },
+                                        "raw-list-join-str-last": {
+                                            "name": "raw-list-join-str-last"
+                                        },
+                                        "current-checker": {
+                                            "name": "current-checker"
+                                        },
+                                        "trace-value": {
+                                            "name": "trace-value"
+                                        },
+                                        "spy": {
+                                            "name": "spy"
+                                        },
+                                        "within-rel3": {
+                                            "name": "within-rel3"
+                                        },
+                                        "within3": {
+                                            "name": "within3"
+                                        }
+                                    },
+                                    "brands": {
+                                        "brandCount": 0
+                                    }
+                                },
+                                "nothing": {
+                                    "dict": {},
+                                    "brands": {
+                                        "brandCount": 0
+                                    }
+                                },
+                                "is-nothing": {
+                                    "name": "is-nothing"
+                                },
+                                "is-number": {
+                                    "name": "is-number"
+                                },
+                                "is-boolean": {
+                                    "name": "is-boolean"
+                                },
+                                "is-string": {
+                                    "name": "is-string"
+                                },
+                                "is-function": {
+                                    "name": "is-function"
+                                },
+                                "is-object": {
+                                    "name": "is-object"
+                                },
+                                "is-raw-array": {
+                                    "name": "is-raw-array"
+                                },
+                                "is-tuple": {
+                                    "name": "is-tuple"
+                                },
+                                "is-table": {
+                                    "name": "is-table"
+                                },
+                                "is-row": {
+                                    "name": "is-row"
+                                },
+                                "run-task": {
+                                    "name": "run-task"
+                                },
+                                "gensym": {
+                                    "name": "gensym"
+                                },
+                                "random": {
+                                    "name": "random"
+                                },
+                                "_plus": {
+                                    "name": "_plus"
+                                },
+                                "_minus": {
+                                    "name": "_minus"
+                                },
+                                "_times": {
+                                    "name": "_times"
+                                },
+                                "_divide": {
+                                    "name": "_divide"
+                                },
+                                "_lessthan": {
+                                    "name": "_lessthan"
+                                },
+                                "_greaterthan": {
+                                    "name": "_greaterthan"
+                                },
+                                "_greaterequal": {
+                                    "name": "_greaterequal"
+                                },
+                                "_lessequal": {
+                                    "name": "_lessequal"
+                                },
+                                "num-random": {
+                                    "name": "num-random"
+                                },
+                                "num-random-seed": {
+                                    "name": "num-random-seed"
+                                },
+                                "num-max": {
+                                    "name": "num-max"
+                                },
+                                "num-min": {
+                                    "name": "num-min"
+                                },
+                                "num-equal": {
+                                    "name": "num-equal"
+                                },
+                                "num-within-abs": {
+                                    "name": "num-within-abs"
+                                },
+                                "num-within-rel": {
+                                    "name": "num-within-rel"
+                                },
+                                "num-abs": {
+                                    "name": "num-abs"
+                                },
+                                "num-sin": {
+                                    "name": "num-sin"
+                                },
+                                "num-cos": {
+                                    "name": "num-cos"
+                                },
+                                "num-tan": {
+                                    "name": "num-tan"
+                                },
+                                "num-asin": {
+                                    "name": "num-asin"
+                                },
+                                "num-acos": {
+                                    "name": "num-acos"
+                                },
+                                "num-atan": {
+                                    "name": "num-atan"
+                                },
+                                "num-atan2": {
+                                    "name": "num-atan2"
+                                },
+                                "num-modulo": {
+                                    "name": "num-modulo"
+                                },
+                                "num-remainder": {
+                                    "name": "num-remainder"
+                                },
+                                "num-sqrt": {
+                                    "name": "num-sqrt"
+                                },
+                                "num-sqr": {
+                                    "name": "num-sqr"
+                                },
+                                "num-truncate": {
+                                    "name": "num-truncate"
+                                },
+                                "num-ceiling": {
+                                    "name": "num-ceiling"
+                                },
+                                "num-floor": {
+                                    "name": "num-floor"
+                                },
+                                "num-round": {
+                                    "name": "num-round"
+                                },
+                                "num-round-even": {
+                                    "name": "num-round-even"
+                                },
+                                "num-truncate-digits": {
+                                    "name": "num-truncate"
+                                },
+                                "num-ceiling-digits": {
+                                    "name": "num-ceiling-digits"
+                                },
+                                "num-floor-digits": {
+                                    "name": "num-floor-digits"
+                                },
+                                "num-round-digits": {
+                                    "name": "num-round-digits"
+                                },
+                                "num-round-even-digits": {
+                                    "name": "num-round-even-digits"
+                                },
+                                "num-truncate-place": {
+                                    "name": "num-truncate"
+                                },
+                                "num-ceiling-place": {
+                                    "name": "num-ceiling-place"
+                                },
+                                "num-floor-place": {
+                                    "name": "num-floor-place"
+                                },
+                                "num-round-place": {
+                                    "name": "num-round-place"
+                                },
+                                "num-round-even-place": {
+                                    "name": "num-round-even-place"
+                                },
+                                "num-log": {
+                                    "name": "num-log"
+                                },
+                                "num-exp": {
+                                    "name": "num-exp"
+                                },
+                                "num-exact": {
+                                    "name": "num-exact"
+                                },
+                                "num-to-rational": {
+                                    "name": "num-to-rational"
+                                },
+                                "num-to-roughnum": {
+                                    "name": "num-to-roughnum"
+                                },
+                                "num-to-fixnum": {
+                                    "name": "num-to-fixnum"
+                                },
+                                "num-is-integer": {
+                                    "name": "num-is-integer"
+                                },
+                                "num-is-rational": {
+                                    "name": "num-is-rational"
+                                },
+                                "num-is-roughnum": {
+                                    "name": "num-is-roughnum"
+                                },
+                                "num-is-positive": {
+                                    "name": "num-is-positive"
+                                },
+                                "num-is-negative": {
+                                    "name": "num-is-negative"
+                                },
+                                "num-is-non-positive": {
+                                    "name": "num-is-non-positive"
+                                },
+                                "num-is-non-negative": {
+                                    "name": "num-is-non-negative"
+                                },
+                                "num-is-fixnum": {
+                                    "name": "num-is-fixnum"
+                                },
+                                "num-expt": {
+                                    "name": "num-expt"
+                                },
+                                "num-tostring": {
+                                    "name": "num-tostring"
+                                },
+                                "num-to-string": {
+                                    "name": "num-to-string"
+                                },
+                                "num-to-string-digits": {
+                                    "name": "num-to-string-digits"
+                                },
+                                "string-equal": {
+                                    "name": "string-equal"
+                                },
+                                "string-contains": {
+                                    "name": "string-contains"
+                                },
+                                "string-starts-with": {
+                                    "name": "string-starts-with"
+                                },
+                                "string-ends-with": {
+                                    "name": "string-ends-with"
+                                },
+                                "string-append": {
+                                    "name": "string-append"
+                                },
+                                "string-length": {
+                                    "name": "string-length"
+                                },
+                                "string-isnumber": {
+                                    "name": "string-isnumber"
+                                },
+                                "string-is-number": {
+                                    "name": "string-is-number"
+                                },
+                                "string-tonumber": {
+                                    "name": "string-tonumber"
+                                },
+                                "string-to-number": {
+                                    "name": "string-to-number"
+                                },
+                                "string-repeat": {
+                                    "name": "string-repeat"
+                                },
+                                "string-substring": {
+                                    "name": "string-substring"
+                                },
+                                "string-replace": {
+                                    "name": "string-replace"
+                                },
+                                "string-split": {
+                                    "name": "string-split"
+                                },
+                                "string-split-all": {
+                                    "name": "string-split-all"
+                                },
+                                "string-char-at": {
+                                    "name": "string-char-at"
+                                },
+                                "string-toupper": {
+                                    "name": "string-toupper"
+                                },
+                                "string-to-upper": {
+                                    "name": "string-to-upper"
+                                },
+                                "string-tolower": {
+                                    "name": "string-tolower"
+                                },
+                                "string-to-lower": {
+                                    "name": "string-to-lower"
+                                },
+                                "string-explode": {
+                                    "name": "string-explode"
+                                },
+                                "string-index-of": {
+                                    "name": "string-index-of"
+                                },
+                                "string-find-index": {
+                                    "name": "string-find-index"
+                                },
+                                "string-get-index": {
+                                    "name": "string-get-index"
+                                },
+                                "string-to-code-point": {
+                                    "name": "string-to-code-point"
+                                },
+                                "string-from-code-point": {
+                                    "name": "string-from-code-point"
+                                },
+                                "string-to-code-points": {
+                                    "name": "string-to-code-points"
+                                },
+                                "string-from-code-points": {
+                                    "name": "string-from-code-points"
+                                },
+                                "time-now": {
+                                    "name": "time-now"
+                                },
+                                "raw-array-of": {
+                                    "name": "raw-array-of"
+                                },
+                                "raw-array-build": {
+                                    "name": "raw-array-build"
+                                },
+                                "raw-array-build-opt": {
+                                    "name": "raw-array-build-opt"
+                                },
+                                "raw-array-get": {
+                                    "name": "raw-array-get"
+                                },
+                                "raw-array-sort-nums": {
+                                    "name": "raw-array-sort-nums"
+                                },
+                                "raw-array-sort-by": {
+                                    "name": "raw-array-sort-by"
+                                },
+                                "raw-array-set": {
+                                    "name": "raw-array-set"
+                                },
+                                "raw-array-length": {
+                                    "name": "raw-array-length"
+                                },
+                                "raw-array-to-list": {
+                                    "name": "raw-array-to-list"
+                                },
+                                "raw-array-from-list": {
+                                    "name": "raw-array-from-list"
+                                },
+                                "raw-array-fold": {
+                                    "name": "raw-array-fold"
+                                },
+                                "raw-array-concat": {
+                                    "name": "raw-array-concat"
+                                },
+                                "raw-array-duplicate": {
+                                    "name": "raw-array-duplicate"
+                                },
+                                "raw-array-and-mapi": {
+                                    "name": "raw-array-and-mapi"
+                                },
+                                "raw-array-or-mapi": {
+                                    "name": "raw-array-or-mapi"
+                                },
+                                "raw-array-map": {
+                                    "name": "raw-array-map"
+                                },
+                                "raw-array-map-1": {
+                                    "name": "raw-array-map-1"
+                                },
+                                "raw-array-filter": {
+                                    "name": "raw-array-filter"
+                                },
+                                "raw-array": {
+                                    "dict": {
+                                        "make": {
+                                            "name": "raw-array:make"
+                                        },
+                                        "make0": {
+                                            "name": "raw-array:make0"
+                                        },
+                                        "make1": {
+                                            "name": "raw-array:make1"
+                                        },
+                                        "make2": {
+                                            "name": "raw-array:make2"
+                                        },
+                                        "make3": {
+                                            "name": "raw-array:make3"
+                                        },
+                                        "make4": {
+                                            "name": "raw-array:make4"
+                                        },
+                                        "make5": {
+                                            "name": "raw-array:make5"
+                                        }
+                                    },
+                                    "brands": {
+                                        "brandCount": 0
+                                    }
+                                },
+                                "raw-each-loop": {
+                                    "name": "raw-each-loop"
+                                },
+                                "not": {
+                                    "name": "not"
+                                },
+                                "ref-set": {
+                                    "name": "ref-set"
+                                },
+                                "ref-get": {
+                                    "name": "ref-get"
+                                },
+                                "ref-end-graph": {
+                                    "name": "ref-end-graph"
+                                },
+                                "ref-freeze": {
+                                    "name": "ref-freeze"
+                                },
+                                "identical3": {
+                                    "name": "identical3"
+                                },
+                                "identical": {
+                                    "name": "identical"
+                                },
+                                "equal-now3": {
+                                    "name": "equal-now3"
+                                },
+                                "equal-now": {
+                                    "name": "equal-now"
+                                },
+                                "equal-always3": {
+                                    "name": "equal-always3"
+                                },
+                                "equal-always": {
+                                    "name": "equal-always"
+                                },
+                                "roughly-equal": {
+                                    "name": "roughly-equal"
+                                },
+                                "roughly-equal-now3": {
+                                    "name": "roughly-equal-now3"
+                                },
+                                "roughly-equal-now": {
+                                    "name": "roughly-equal-now"
+                                },
+                                "roughly-equal-always3": {
+                                    "name": "roughly-equal-always3"
+                                },
+                                "roughly-equal-always": {
+                                    "name": "roughly-equal-always"
+                                },
+                                "within-abs-now3": {
+                                    "name": "within-abs-now3"
+                                },
+                                "within-rel-now3": {
+                                    "name": "within-rel-now3"
+                                },
+                                "within-abs3": {
+                                    "name": "within-abs3"
+                                },
+                                "within-rel3": {
+                                    "name": "within-rel3"
+                                },
+                                "within-abs-now": {
+                                    "name": "within-abs-now"
+                                },
+                                "within-rel-now": {
+                                    "name": "within-rel-now"
+                                },
+                                "within-abs": {
+                                    "name": "within-abs"
+                                },
+                                "within-rel": {
+                                    "name": "within-rel"
+                                },
+                                "num-within": {
+                                    "name": "num-within"
+                                },
+                                "within-now3": {
+                                    "name": "within-now3"
+                                },
+                                "within3": {
+                                    "name": "within3"
+                                },
+                                "within-now": {
+                                    "name": "within-now"
+                                },
+                                "within": {
+                                    "name": "within"
+                                },
+                                "exn-unwrap": {
+                                    "name": "exn-unwrap"
+                                },
+                                "$type$Number": {
+                                    "name": "Number",
+                                    "flat": true
+                                },
+                                "Number": {
+                                    "name": "Number",
+                                    "flat": true
+                                },
+                                "$type$Exactnum": {
+                                    "name": "Exactnum",
+                                    "flat": true
+                                },
+                                "Exactnum": {
+                                    "name": "Exactnum",
+                                    "flat": true
+                                },
+                                "$type$Roughnum": {
+                                    "name": "Roughnum",
+                                    "flat": true
+                                },
+                                "Roughnum": {
+                                    "name": "Roughnum",
+                                    "flat": true
+                                },
+                                "$type$NumInteger": {
+                                    "name": "NumInteger",
+                                    "flat": true
+                                },
+                                "NumInteger": {
+                                    "name": "NumInteger",
+                                    "flat": true
+                                },
+                                "$type$NumNatural": {
+                                    "name": "NumNatural",
+                                    "flat": true
+                                },
+                                "NumNatural": {
+                                    "name": "NumNatural",
+                                    "flat": true
+                                },
+                                "$type$NumRational": {
+                                    "name": "NumRational",
+                                    "flat": true
+                                },
+                                "NumRational": {
+                                    "name": "NumRational",
+                                    "flat": true
+                                },
+                                "$type$NumPositive": {
+                                    "name": "NumPositive",
+                                    "flat": true
+                                },
+                                "NumPositive": {
+                                    "name": "NumPositive",
+                                    "flat": true
+                                },
+                                "$type$NumNegative": {
+                                    "name": "NumNegative",
+                                    "flat": true
+                                },
+                                "NumNegative": {
+                                    "name": "NumNegative",
+                                    "flat": true
+                                },
+                                "$type$NumNonPositive": {
+                                    "name": "NumNonPositive",
+                                    "flat": true
+                                },
+                                "NumNonPositive": {
+                                    "name": "NumNonPositive",
+                                    "flat": true
+                                },
+                                "$type$NumNonNegative": {
+                                    "name": "NumNonNegative",
+                                    "flat": true
+                                },
+                                "NumNonNegative": {
+                                    "name": "NumNonNegative",
+                                    "flat": true
+                                },
+                                "$type$String": {
+                                    "name": "String",
+                                    "flat": true
+                                },
+                                "String": {
+                                    "name": "String",
+                                    "flat": true
+                                },
+                                "$type$Boolean": {
+                                    "name": "Boolean",
+                                    "flat": true
+                                },
+                                "Boolean": {
+                                    "name": "Boolean",
+                                    "flat": true
+                                },
+                                "$type$RawArray": {
+                                    "name": "RawArray",
+                                    "flat": true
+                                },
+                                "RawArray": {
+                                    "name": "RawArray",
+                                    "flat": true
+                                },
+                                "$type$Function": {
+                                    "name": "Function",
+                                    "flat": true
+                                },
+                                "Function": {
+                                    "name": "Function",
+                                    "flat": true
+                                },
+                                "$type$Method": {
+                                    "name": "Method",
+                                    "flat": true
+                                },
+                                "Method": {
+                                    "name": "Method",
+                                    "flat": true
+                                },
+                                "$type$Nothing": {
+                                    "name": "Nothing",
+                                    "flat": true
+                                },
+                                "Nothing": {
+                                    "name": "Nothing",
+                                    "flat": true
+                                },
+                                "$type$Object": {
+                                    "name": "Object",
+                                    "flat": true
+                                },
+                                "Object": {
+                                    "name": "Object",
+                                    "flat": true
+                                },
+                                "$type$Tuple": {
+                                    "name": "Tuple",
+                                    "flat": true
+                                },
+                                "Tuple": {
+                                    "name": "Tuple",
+                                    "flat": true
+                                },
+                                "$type$Any": {
+                                    "name": "Any",
+                                    "flat": true
+                                },
+                                "Any": {
+                                    "name": "Any",
+                                    "flat": true
+                                }
+                            },
+                            "proto": {}
+                        },
+                        "ffi": {
+                            "contractOk": {
+                                "dict": {
+                                    "render-reason": {
+                                        "name": "render-reason"
+                                    },
+                                    "_match": {
+                                        "name": "ok"
+                                    }
+                                },
+                                "brands": {
+                                    "$brandContractResult115": true,
+                                    "$brandok118": true
+                                },
+                                "$name": "ok",
+                                "$loc": [
+                                    "builtin://contracts",
+                                    15,
+                                    2,
+                                    224,
+                                    16,
+                                    67,
+                                    302
+                                ],
+                                "$mut_fields_mask": [],
+                                "$arity": -1,
+                                "$constructor": {
+                                    "render-reason": {
+                                        "name": "render-reason"
+                                    },
+                                    "_match": {
+                                        "name": "ok"
+                                    }
+                                }
+                            },
+                            "equal": {
+                                "dict": {
+                                    "_match": {
+                                        "name": "Equal"
+                                    }
+                                },
+                                "brands": {
+                                    "$brandEqualityResult98": true,
+                                    "$brandEqual99": true
+                                },
+                                "$name": "Equal",
+                                "$loc": [
+                                    "builtin://equality",
+                                    9,
+                                    2,
+                                    104,
+                                    9,
+                                    9,
+                                    111
+                                ],
+                                "$mut_fields_mask": [],
+                                "$arity": -1,
+                                "$constructor": {
+                                    "_match": {
+                                        "name": "Equal"
+                                    }
+                                }
+                            },
+                            "notEqual": {
+                                "name": "NotEqual",
+                                "$constrFor": "NotEqual"
+                            },
+                            "unknown": {
+                                "name": "Unknown",
+                                "$constrFor": "Unknown"
+                            },
+                            "userBreak": {
+                                "dict": {
+                                    "render-fancy-reason": {
+                                        "name": "render-fancy-reason"
+                                    },
+                                    "render-reason": {
+                                        "name": "render-reason"
+                                    },
+                                    "_match": {
+                                        "name": "user-break"
+                                    }
+                                },
+                                "brands": {
+                                    "$brandRuntimeError35": true,
+                                    "$branduser-break76": true
+                                },
+                                "$name": "user-break",
+                                "$loc": [
+                                    "builtin://error",
+                                    2478,
+                                    2,
+                                    92280,
+                                    2484,
+                                    7,
+                                    92508
+                                ],
+                                "$mut_fields_mask": [],
+                                "$arity": -1,
+                                "$constructor": {
+                                    "render-fancy-reason": {
+                                        "name": "render-fancy-reason"
+                                    },
+                                    "render-reason": {
+                                        "name": "render-reason"
+                                    },
+                                    "_match": {
+                                        "name": "user-break"
+                                    }
+                                }
+                            },
+                            "isOption": {
+                                "name": "is-Option"
+                            },
+                            "isEither": {
+                                "name": "is-Either"
+                            }
+                        },
+                        "RUNGAS": 9994,
+                        "EXN_STACKHEIGHT": 2,
+                        "srcloc": {
+                            "dict": {
+                                "is-builtin": {
+                                    "name": "is-builtin"
+                                },
+                                "builtin": {
+                                    "name": "builtin",
+                                    "$constrFor": "builtin"
+                                },
+                                "srcloc": {
+                                    "name": "srcloc",
+                                    "$constrFor": "srcloc"
+                                },
+                                "is-srcloc": {
+                                    "name": "is-srcloc"
+                                },
+                                "is-Srcloc": {
+                                    "name": "is-Srcloc"
+                                }
+                            },
+                            "brands": {
+                                "brandCount": 0
+                            }
+                        },
+                        "List": {
+                            "name": "List",
+                            "flat": true
+                        },
+                        "Table": {
+                            "name": "Table",
+                            "flat": true
+                        },
+                        "Row": {
+                            "name": "Row",
+                            "flat": true
+                        },
+                        "builtin_sanitizers": {
+                            "option": {
+                                "name": "option-sanitizer"
+                            },
+                            "string": {
+                                "name": "string-sanitizer"
+                            },
+                            "num": {
+                                "name": "num-sanitizer"
+                            },
+                            "bool": {
+                                "name": "bool-sanitizer"
+                            },
+                            "strict_num": {
+                                "name": "strict-num-sanitizer"
+                            },
+                            "strings_only": {
+                                "name": "strings-only"
+                            },
+                            "numbers_only": {
+                                "name": "numbers-only"
+                            },
+                            "booleans_only": {
+                                "name": "booleans-only"
+                            },
+                            "empty_only": {
+                                "name": "empty-only"
+                            }
+                        }
+                    },
+                    "result": {
+                        "exn": {
+                            "exn": {
+                                "dict": {
+                                    "fun-def-loc": {
+                                        "dict": {
+                                            "source": "definitions://",
+                                            "start-line": 17,
+                                            "start-column": 2,
+                                            "start-char": 237,
+                                            "end-line": 17,
+                                            "end-column": 27,
+                                            "end-char": 262
+                                        },
+                                        "brands": {
+                                            "$brandSrcloc14": true,
+                                            "$brandsrcloc16": true
+                                        }
+                                    },
+                                    "constructor-name": "Red",
+                                    "fun-def-arity": 3,
+                                    "fun-app-args": {
+                                        "dict": {
+                                            "first": 6,
+                                            "rest": {
+                                                "dict": {
+                                                    "first": {
+                                                        "dict": {
+                                                            "value": 0
+                                                        },
+                                                        "brands": {
+                                                            "$brandRBNod933": true,
+                                                            "$brandLeaf936": true
+                                                        }
+                                                    },
+                                                    "rest": {
+                                                        "dict": {
+                                                            "_output": {
+                                                                "name": "_output"
+                                                            },
+                                                            "_plus": {
+                                                                "name": "_plus"
+                                                            },
+                                                            "map": {
+                                                                "name": "map"
+                                                            },
+                                                            "filter": {
+                                                                "name": "filter"
+                                                            },
+                                                            "each": {
+                                                                "name": "each"
+                                                            },
+                                                            "reverse": {
+                                                                "name": "reverse"
+                                                            },
+                                                            "push": {
+                                                                "name": "push"
+                                                            },
+                                                            "split-at": {
+                                                                "name": "split-at"
+                                                            },
+                                                            "take": {
+                                                                "name": "take"
+                                                            },
+                                                            "drop": {
+                                                                "name": "drop"
+                                                            },
+                                                            "get": {
+                                                                "name": "get"
+                                                            },
+                                                            "set": {
+                                                                "name": "set"
+                                                            },
+                                                            "remove": {
+                                                                "name": "remove"
+                                                            },
+                                                            "join-str": {
+                                                                "name": "join-str"
+                                                            },
+                                                            "join-str-last": {
+                                                                "name": "join-str-last"
+                                                            },
+                                                            "length": {
+                                                                "name": "length"
+                                                            },
+                                                            "find": {
+                                                                "name": "find"
+                                                            },
+                                                            "partition": {
+                                                                "name": "partition"
+                                                            },
+                                                            "foldr": {
+                                                                "name": "foldr"
+                                                            },
+                                                            "foldl": {
+                                                                "name": "foldl"
+                                                            },
+                                                            "all": {
+                                                                "name": "all"
+                                                            },
+                                                            "any": {
+                                                                "name": "any"
+                                                            },
+                                                            "member": {
+                                                                "name": "member"
+                                                            },
+                                                            "append": {
+                                                                "name": "append"
+                                                            },
+                                                            "last": {
+                                                                "name": "last"
+                                                            },
+                                                            "stable-sort-by": {
+                                                                "name": "stable-sort-by"
+                                                            },
+                                                            "sort-by": {
+                                                                "name": "sort-by"
+                                                            },
+                                                            "sort": {
+                                                                "name": "sort"
+                                                            },
+                                                            "_match": {
+                                                                "name": "empty"
+                                                            }
+                                                        },
+                                                        "brands": {
+                                                            "$brandList102": true,
+                                                            "$brandempty103": true
+                                                        },
+                                                        "$name": "empty",
+                                                        "$loc": [
+                                                            "builtin://lists",
+                                                            12,
+                                                            2,
+                                                            168,
+                                                            85,
+                                                            8,
+                                                            3335
+                                                        ],
+                                                        "$mut_fields_mask": [],
+                                                        "$arity": -1,
+                                                        "$constructor": {
+                                                            "_output": {
+                                                                "name": "_output"
+                                                            },
+                                                            "_plus": {
+                                                                "name": "_plus"
+                                                            },
+                                                            "map": {
+                                                                "name": "map"
+                                                            },
+                                                            "filter": {
+                                                                "name": "filter"
+                                                            },
+                                                            "each": {
+                                                                "name": "each"
+                                                            },
+                                                            "reverse": {
+                                                                "name": "reverse"
+                                                            },
+                                                            "push": {
+                                                                "name": "push"
+                                                            },
+                                                            "split-at": {
+                                                                "name": "split-at"
+                                                            },
+                                                            "take": {
+                                                                "name": "take"
+                                                            },
+                                                            "drop": {
+                                                                "name": "drop"
+                                                            },
+                                                            "get": {
+                                                                "name": "get"
+                                                            },
+                                                            "set": {
+                                                                "name": "set"
+                                                            },
+                                                            "remove": {
+                                                                "name": "remove"
+                                                            },
+                                                            "join-str": {
+                                                                "name": "join-str"
+                                                            },
+                                                            "join-str-last": {
+                                                                "name": "join-str-last"
+                                                            },
+                                                            "length": {
+                                                                "name": "length"
+                                                            },
+                                                            "find": {
+                                                                "name": "find"
+                                                            },
+                                                            "partition": {
+                                                                "name": "partition"
+                                                            },
+                                                            "foldr": {
+                                                                "name": "foldr"
+                                                            },
+                                                            "foldl": {
+                                                                "name": "foldl"
+                                                            },
+                                                            "all": {
+                                                                "name": "all"
+                                                            },
+                                                            "any": {
+                                                                "name": "any"
+                                                            },
+                                                            "member": {
+                                                                "name": "member"
+                                                            },
+                                                            "append": {
+                                                                "name": "append"
+                                                            },
+                                                            "last": {
+                                                                "name": "last"
+                                                            },
+                                                            "stable-sort-by": {
+                                                                "name": "stable-sort-by"
+                                                            },
+                                                            "sort-by": {
+                                                                "name": "sort-by"
+                                                            },
+                                                            "sort": {
+                                                                "name": "sort"
+                                                            },
+                                                            "_match": {
+                                                                "name": "empty"
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "brands": {
+                                                    "$brandList102": true,
+                                                    "$brandlink104": true
+                                                }
+                                            }
+                                        },
+                                        "brands": {
+                                            "$brandList102": true,
+                                            "$brandlink104": true
+                                        }
+                                    }
+                                },
+                                "brands": {
+                                    "$brandRuntimeError35": true,
+                                    "$brandconstructor-arity-mismatch65": true
+                                }
+                            },
+                            "pyretStack": [
+                                [
+                                    "interactions://5",
+                                    1,
+                                    0,
+                                    0,
+                                    1,
+                                    16,
+                                    16
+                                ],
+                                [
+                                    "interactions://5"
+                                ]
+                            ],
+                            "stack": "Error\n    at new PyretFailException (http://localhost:4999/js/cpo-main.jarr:159282:21)\n    at raiseJSJS (http://localhost:4999/js/cpo-main.jarr:159347:19)\n    at Object.throwConstructorArityErrorC (http://localhost:4999/js/cpo-main.jarr:177596:7)\n    at Object.checkConstructorArityC (http://localhost:4999/js/cpo-main.jarr:158803:31)\n    at PFunction.eval [as app] (eval at makeConstructor (http://localhost:4999/js/cpo-main.jarr:163112:33), <anonymous>:6:13)\n    at _5a927eb2b4e766683207b970d716fe8cae4ad40afa72de3cea70a7da8cc7765e__0 (<anonymous>:34:15)\n    at Object.safeCall (http://localhost:4999/js/cpo-main.jarr:160872:18)\n    at _5a927eb2b4e766683207b970d716fe8cae4ad40afa72de3cea70a7da8cc7765e__0 (<anonymous>:90:10)\n    at http://localhost:4999/js/cpo-main.jarr:162960:43\n    at ActivationRecord.fun (http://localhost:4999/js/cpo-main.jarr:160976:18)\n    at iter (http://localhost:4999/js/cpo-main.jarr:161094:28)\n    at Object.run (http://localhost:4999/js/cpo-main.jarr:161193:7)\n    at Object.runThunk (http://localhost:4999/js/cpo-main.jarr:161364:26)\n    at http://localhost:4999/js/cpo-main.jarr:162959:31\n    at http://localhost:4999/js/editor-misc.min.js:1:9282\n    at http://localhost:4999/js/editor-misc.min.js:1:9349\n    at Promise.promise.promiseDispatch (http://localhost:4999/js/editor-misc.min.js:1:7459)\n    at http://localhost:4999/js/editor-misc.min.js:1:5480\n    at runSingle (http://localhost:4999/js/editor-misc.min.js:1:1970)\n    at MessagePort.flush (http://localhost:4999/js/editor-misc.min.js:1:1842)",
+                            "stackAtThrow": "Error\n    at raiseJSJS (http://localhost:4999/js/cpo-main.jarr:159351:26)\n    at Object.throwConstructorArityErrorC (http://localhost:4999/js/cpo-main.jarr:177596:7)\n    at Object.checkConstructorArityC (http://localhost:4999/js/cpo-main.jarr:158803:31)\n    at PFunction.eval [as app] (eval at makeConstructor (http://localhost:4999/js/cpo-main.jarr:163112:33), <anonymous>:6:13)\n    at _5a927eb2b4e766683207b970d716fe8cae4ad40afa72de3cea70a7da8cc7765e__0 (<anonymous>:34:15)\n    at Object.safeCall (http://localhost:4999/js/cpo-main.jarr:160872:18)\n    at _5a927eb2b4e766683207b970d716fe8cae4ad40afa72de3cea70a7da8cc7765e__0 (<anonymous>:90:10)\n    at http://localhost:4999/js/cpo-main.jarr:162960:43\n    at ActivationRecord.fun (http://localhost:4999/js/cpo-main.jarr:160976:18)\n    at iter (http://localhost:4999/js/cpo-main.jarr:161094:28)\n    at Object.run (http://localhost:4999/js/cpo-main.jarr:161193:7)\n    at Object.runThunk (http://localhost:4999/js/cpo-main.jarr:161364:26)\n    at http://localhost:4999/js/cpo-main.jarr:162959:31\n    at http://localhost:4999/js/editor-misc.min.js:1:9282\n    at http://localhost:4999/js/editor-misc.min.js:1:9349\n    at Promise.promise.promiseDispatch (http://localhost:4999/js/editor-misc.min.js:1:7459)\n    at http://localhost:4999/js/editor-misc.min.js:1:5480\n    at runSingle (http://localhost:4999/js/editor-misc.min.js:1:1970)\n    at MessagePort.flush (http://localhost:4999/js/editor-misc.min.js:1:1842)"
+                        }
+                    },
+                    "realm": {
+                        "dict": {
+                            "realm": {
+                                "val": {
+                                    "instantiated": {},
+                                    "static": {
+                                        "interactions://5": {
+                                            "mod": {
+                                                "theMap": "{\"version\":3,\"sources\":[\"interactions://5\"],\"names\":[\"interactions://5\",\",1,8,8,1,15,15\",\",1,0,0,1,16,16\"],\"mappings\":\"AAACA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAOC,uBAAPD;AAAAA;AAAAA;AAADE,gCAACF;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAADE,mCAACF;AAAAA;AAADE,qCAACF;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAADE,mCAACF;AAAAA;AAADE,uBAACF;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA,SAADE,mDAACF;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA\",\"file\":\"interactions://5\"}",
+                                                "theModule": "function _5a927eb2b4e766683207b970d716fe8cae4ad40afa72de3cea70a7da8cc7765e__0(R,NAMESPACE,M) {\nvar G = R.getFieldLoc;\nvar U = function throw_error(loc,name) {\nR.ffi.throwUninitializedIdMkLoc(loc,name);\n};\nvar M = \"interactions://5\";\nvar D = R.undefined;\nvar L = [[\"interactions://5\",1,0,0,1,16,16]];\nvar Red1 = R.getModuleField(\"definitions://\",\"values\",\"Red\");\nvar Leaf2 = R.getModuleField(\"definitions://\",\"values\",\"Leaf\");\nvar $toplevel7 = function _5a927eb2b4e766683207b970d716fe8cae4ad40afa72de3cea70a7da8cc7765e__0($$resumer25) {\nvar $step6 = 0;\nvar $elidedFrames16 = 0;\nvar $ans13 = D;\nvar $al14 = L[0];\nif(R.isAR($$resumer25)) {\n$step6 = $$resumer25.step;\n$al14 = $$resumer25.from;\n$ans13 = $$resumer25.ans;\n$elidedFrames16 = $$resumer25.elidedFrames;\n$resumer25 = $$resumer25.args[0];\nanswer23 = $$resumer25.vars[0];\n}\nif(--R.GAS <= 0 || --R.RUNGAS <= 0) {\nR.EXN_STACKHEIGHT = 0;\n$ans13 = R.mC();\n}\nwhile(!R.isContinuation($ans13)) {\nswitch($step6) {\ncase 0: // caller optimization;\n$ans13 = Leaf2.app((0));\nvar anf_arg14 = $ans13;\n// caller optimization;\n$ans13 = Red1.app((6),anf_arg14);\nvar anf_arg15 = $ans13;\n$step6 = 1;\n$al14 = L[0];\nvar $obj18 = R.builtins;\nvar $field19 = R.gCFL($obj18,\"trace-value\",L[0]);\nif(R.isM($field19)) {\n$ans13 = $field19.full_meth($obj18,L[0],anf_arg15);\n} else {\nif(typeof($field19.app) !== \"function\") {\nR.ffi.throwNonFunApp(L[0],$field19);\n}\n$ans13 = $field19.app(L[0],anf_arg15);\n}\nbreak;\ncase 1: var answer23 = $ans13;\n$step6 = 2;\n$al14 = L[0];\nvar $obj20 = R.builtins;\nvar $field21 = R.gCFL($obj20,\"current-checker\",L[0]);\nif(R.isM($field21)) {\n$ans13 = $field21.full_meth($obj20);\n} else {\nif(typeof($field21.app) !== \"function\") {\nR.ffi.throwNonFunApp(L[0],$field21);\n}\n$ans13 = $field21.app();\n}\nbreak;\ncase 2: var anf_method_obj22 = $ans13;\n$step6 = 3;\n$ans13 = R.maybeMethodCall0(anf_method_obj22,\"results\",L[0]);\nbreak;\ncase 3: var checks24 = $ans13;\n$step6 = 4;\n$ans13 = R.mO({\"answer\":answer23,\n\"namespace\":NAMESPACE,\n\"locations\":L,\n\"defined-modules\":{},\n\"defined-values\":{},\n\"defined-types\":{},\n\"provide-plus-types\":R.mO({\"values\":R.mO({}),\n\"types\":{},\n\"modules\":{}}),\n\"checks\":checks24});\nbreak;\ncase 4: ++R.GAS;\nreturn $ans13;\ndefault: R.ffi.throwSpinnakerError(L[0],$step6);\n}\n}\nif($step6 !== 4) {\n$ans13.stack[R.EXN_STACKHEIGHT++] = R.mAR($al14,$toplevel7,$step6,[],[answer23],$elidedFrames16);\n}\nreturn $ans13;\n};\nreturn R.safeCall($toplevel7,function module_load(moduleVal) {\nR.modules[\"$interactions://51\"] = moduleVal;\nreturn moduleVal;\n},\"Evaluating $toplevel\");\n}",
+                                                "nativeRequires": [],
+                                                "provides": {
+                                                    "modules": {},
+                                                    "values": {},
+                                                    "datatypes": {},
+                                                    "aliases": {}
+                                                },
+                                                "requires": []
+                                            },
+                                            "uriHashed": "5a927eb2b4e766683207b970d716fe8cae4ad40afa72de3cea70a7da8cc7765e"
+                                        }
+                                    }
+                                },
+                                "brands": {
+                                    "brandCount": 0
+                                }
+                            }
+                        },
+                        "brands": {
+                            "$brandrealm428": true,
+                            "brandCount": 1
+                        }
+                    },
+                    "compileResult": {
+                        "dict": {},
+                        "brands": {
+                            "brandCount": 0
+                        }
+                    },
+                    "program": {
+                        "staticModules": {
+                            "interactions://5": {
+                                "theMap": "{\"version\":3,\"sources\":[\"interactions://5\"],\"names\":[\"interactions://5\",\",1,8,8,1,15,15\",\",1,0,0,1,16,16\"],\"mappings\":\"AAACA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAOC,uBAAPD;AAAAA;AAAAA;AAADE,gCAACF;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAADE,mCAACF;AAAAA;AAADE,qCAACF;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAADE,mCAACF;AAAAA;AAADE,uBAACF;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA,SAADE,mDAACF;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA;AAAAA\",\"file\":\"interactions://5\"}",
+                                "theModule": "function _5a927eb2b4e766683207b970d716fe8cae4ad40afa72de3cea70a7da8cc7765e__0(R,NAMESPACE,M) {\nvar G = R.getFieldLoc;\nvar U = function throw_error(loc,name) {\nR.ffi.throwUninitializedIdMkLoc(loc,name);\n};\nvar M = \"interactions://5\";\nvar D = R.undefined;\nvar L = [[\"interactions://5\",1,0,0,1,16,16]];\nvar Red1 = R.getModuleField(\"definitions://\",\"values\",\"Red\");\nvar Leaf2 = R.getModuleField(\"definitions://\",\"values\",\"Leaf\");\nvar $toplevel7 = function _5a927eb2b4e766683207b970d716fe8cae4ad40afa72de3cea70a7da8cc7765e__0($$resumer25) {\nvar $step6 = 0;\nvar $elidedFrames16 = 0;\nvar $ans13 = D;\nvar $al14 = L[0];\nif(R.isAR($$resumer25)) {\n$step6 = $$resumer25.step;\n$al14 = $$resumer25.from;\n$ans13 = $$resumer25.ans;\n$elidedFrames16 = $$resumer25.elidedFrames;\n$resumer25 = $$resumer25.args[0];\nanswer23 = $$resumer25.vars[0];\n}\nif(--R.GAS <= 0 || --R.RUNGAS <= 0) {\nR.EXN_STACKHEIGHT = 0;\n$ans13 = R.mC();\n}\nwhile(!R.isContinuation($ans13)) {\nswitch($step6) {\ncase 0: // caller optimization;\n$ans13 = Leaf2.app((0));\nvar anf_arg14 = $ans13;\n// caller optimization;\n$ans13 = Red1.app((6),anf_arg14);\nvar anf_arg15 = $ans13;\n$step6 = 1;\n$al14 = L[0];\nvar $obj18 = R.builtins;\nvar $field19 = R.gCFL($obj18,\"trace-value\",L[0]);\nif(R.isM($field19)) {\n$ans13 = $field19.full_meth($obj18,L[0],anf_arg15);\n} else {\nif(typeof($field19.app) !== \"function\") {\nR.ffi.throwNonFunApp(L[0],$field19);\n}\n$ans13 = $field19.app(L[0],anf_arg15);\n}\nbreak;\ncase 1: var answer23 = $ans13;\n$step6 = 2;\n$al14 = L[0];\nvar $obj20 = R.builtins;\nvar $field21 = R.gCFL($obj20,\"current-checker\",L[0]);\nif(R.isM($field21)) {\n$ans13 = $field21.full_meth($obj20);\n} else {\nif(typeof($field21.app) !== \"function\") {\nR.ffi.throwNonFunApp(L[0],$field21);\n}\n$ans13 = $field21.app();\n}\nbreak;\ncase 2: var anf_method_obj22 = $ans13;\n$step6 = 3;\n$ans13 = R.maybeMethodCall0(anf_method_obj22,\"results\",L[0]);\nbreak;\ncase 3: var checks24 = $ans13;\n$step6 = 4;\n$ans13 = R.mO({\"answer\":answer23,\n\"namespace\":NAMESPACE,\n\"locations\":L,\n\"defined-modules\":{},\n\"defined-values\":{},\n\"defined-types\":{},\n\"provide-plus-types\":R.mO({\"values\":R.mO({}),\n\"types\":{},\n\"modules\":{}}),\n\"checks\":checks24});\nbreak;\ncase 4: ++R.GAS;\nreturn $ans13;\ndefault: R.ffi.throwSpinnakerError(L[0],$step6);\n}\n}\nif($step6 !== 4) {\n$ans13.stack[R.EXN_STACKHEIGHT++] = R.mAR($al14,$toplevel7,$step6,[],[answer23],$elidedFrames16);\n}\nreturn $ans13;\n};\nreturn R.safeCall($toplevel7,function module_load(moduleVal) {\nR.modules[\"$interactions://51\"] = moduleVal;\nreturn moduleVal;\n},\"Evaluating $toplevel\");\n}",
+                                "nativeRequires": [],
+                                "provides": {
+                                    "modules": {},
+                                    "values": {},
+                                    "datatypes": {},
+                                    "aliases": {}
+                                },
+                                "requires": []
+                            }
+                        },
+                        "depMap": {
+                            "interactions://5": {}
+                        },
+                        "toLoad": [
+                            "interactions://5"
+                        ],
+                        "uris": {
+                            "5a927eb2b4e766683207b970d716fe8cae4ad40afa72de3cea70a7da8cc7765e": "interactions://5"
+                        },
+                        "runtimeOptions": {
+                            "checksFormat": "text",
+                            "checks": "all",
+                            "disableAnnotationChecks": false
+                        }
+                    }
+                },
+                "brands": {
+                    "brandCount": 0
+                }
+            }
+        },
+        "brands": {
+            "$brandEither1": true,
+            "$brandright3": true
+        }
+    },
+    "stats": {
+        "bounces": 2,
+        "tos": 2,
+        "time": 37.89999997615814
+    }
+}

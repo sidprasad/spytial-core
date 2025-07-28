@@ -7,6 +7,7 @@ import {
     ColorAtomSelector, 
     ColorEdgeSelector, 
     HideFieldSelector, 
+    HideAtomSelector, 
     HelperEdgeSelector, 
     ProjectionSelector 
 } from './index';
@@ -36,6 +37,7 @@ const DirectiveCard: React.FC<DirectiveCardProps> = (props: DirectiveCardProps) 
     const directiveToSelectorComponentMap: Record<DirectiveData['type'], React.JSX.Element> = {
         "attribute": <AttributeSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>,
         "hideField": <HideFieldSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>,
+        "hideAtom": <HideAtomSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>,
         "icon": <IconSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>,
         "atomColor": <ColorAtomSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>,
         "edgeColor": <ColorEdgeSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>,
@@ -85,6 +87,7 @@ const DirectiveCard: React.FC<DirectiveCardProps> = (props: DirectiveCardProps) 
             </div>
             <select onChange={ updateFields } value={ props.directiveData.type }>
                 <option value="flag">Visibility Flag</option>
+                <option value="hideAtom">Hide Atom</option>
                 <option value="attribute">Attribute</option>
                 <option value="hideField">Hide Field</option>
                 <option value="icon">Icon</option>

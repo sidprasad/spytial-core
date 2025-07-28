@@ -1,7 +1,11 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: ['./webcola-demo/integrated-demo-components.tsx', './webcola-demo/react-component-integration.tsx'],
+  entry: [
+    './webcola-demo/integrated-demo-components.tsx', 
+    './webcola-demo/react-component-integration.tsx',
+    './webcola-demo/pyret-repl-demo-components.tsx'
+  ],
   format: ['iife'], // Immediately Invoked Function Expression for HTML
   globalName: 'IntegratedDemo',
   outDir: 'dist/components',
@@ -14,6 +18,6 @@ export default defineConfig({
   splitting: false,
   dts: true,
   onSuccess: async () => {
-    console.log('✅ Integrated demo components built successfully for HTML integration');
+    console.log('✅ Demo components built successfully for HTML integration (integrated + pyret-repl)');
   },
 });

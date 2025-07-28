@@ -1,4 +1,4 @@
-import { IAtom, IRelation, IType, IInputDataInstance, ITuple } from './interfaces';
+import { IAtom, IRelation, IType, IInputDataInstance, ITuple, DataInstanceEventType, DataInstanceEventListener, DataInstanceEvent } from './interfaces';
 import { Graph } from 'graphlib';
 /**
  * JSON representation of a data instance for easy serialization/deserialization.
@@ -98,6 +98,9 @@ export class JSONDataInstance implements IInputDataInstance {
   private relations: IRelation[] = [];
   private types: IType[] = [];
   private errors: string[] = [];
+  
+  /** Event listeners for data instance changes */
+  private eventListeners = new Map<DataInstanceEventType, Set<DataInstanceEventListener>>();
 
   /**
    * Create a new JSONDataInstance from JSON data.
@@ -138,6 +141,42 @@ export class JSONDataInstance implements IInputDataInstance {
     } catch (error) {
       // Re-throw with more context
       throw new Error(`Failed to create JSONDataInstance: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Add an event listener for data instance changes
+   */
+  addEventListener(type: DataInstanceEventType, listener: DataInstanceEventListener): void {
+    if (!this.eventListeners.has(type)) {
+      this.eventListeners.set(type, new Set());
+    }
+    this.eventListeners.get(type)!.add(listener);
+  }
+
+  /**
+   * Remove an event listener for data instance changes
+   */
+  removeEventListener(type: DataInstanceEventType, listener: DataInstanceEventListener): void {
+    const listeners = this.eventListeners.get(type);
+    if (listeners) {
+      listeners.delete(listener);
+    }
+  }
+
+  /**
+   * Emit an event to all registered listeners
+   */
+  private emitEvent(event: DataInstanceEvent): void {
+    const listeners = this.eventListeners.get(event.type);
+    if (listeners) {
+      listeners.forEach(listener => {
+        try {
+          listener(event);
+        } catch (error) {
+          console.error('Error in data instance event listener:', error);
+        }
+      });
     }
   }
 
@@ -351,6 +390,12 @@ export class JSONDataInstance implements IInputDataInstance {
     
     // Add atom to type
     type.atoms.push(atom);
+    
+    // Emit event
+    this.emitEvent({
+      type: 'atomAdded',
+      data: { atom }
+    });
   }
 
   /**
@@ -389,6 +434,12 @@ export class JSONDataInstance implements IInputDataInstance {
     }
     
     relation.tuples.push(tuple);
+    
+    // Emit event
+    this.emitEvent({
+      type: 'relationTupleAdded',
+      data: { relationId, tuple }
+    });
   }
 
   /**
@@ -418,6 +469,12 @@ export class JSONDataInstance implements IInputDataInstance {
     for (const relation of this.relations) {
       relation.tuples = relation.tuples.filter(t => !t.atoms.includes(id));
     }
+    
+    // Emit event
+    this.emitEvent({
+      type: 'atomRemoved',
+      data: { atomId: id }
+    });
   }
 
   /**
@@ -441,6 +498,12 @@ export class JSONDataInstance implements IInputDataInstance {
     if (relation.tuples.length === initialLength) {
       throw new Error(`Tuple not found in relation '${relationId}'`);
     }
+    
+    // Emit event
+    this.emitEvent({
+      type: 'relationTupleRemoved',
+      data: { relationId, tuple }
+    });
   }
 
   /**

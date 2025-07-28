@@ -1,6 +1,6 @@
 import { Graph } from 'graphlib';
 import parse from 'graphlib-dot';
-import type { IAtom, IType, IRelation, IInputDataInstance, ITuple } from '../interfaces';
+import type { IAtom, IType, IRelation, IInputDataInstance, ITuple, DataInstanceEventType, DataInstanceEventListener, DataInstanceEvent } from '../interfaces';
 import { Tuple } from '../../evaluators';
 
 
@@ -11,6 +11,8 @@ import { Tuple } from '../../evaluators';
  */
 export class DotDataInstance implements IInputDataInstance {
 
+  /** Event listeners for data instance changes */
+  private eventListeners = new Map<DataInstanceEventType, Set<DataInstanceEventListener>>();
 
   private graph: Graph;
   constructor(dotSpec: string) {
@@ -29,6 +31,42 @@ export class DotDataInstance implements IInputDataInstance {
         this.addEdge(edge.v, edge.w, edgeData.label);
       }
     });
+  }
+
+  /**
+   * Add an event listener for data instance changes
+   */
+  addEventListener(type: DataInstanceEventType, listener: DataInstanceEventListener): void {
+    if (!this.eventListeners.has(type)) {
+      this.eventListeners.set(type, new Set());
+    }
+    this.eventListeners.get(type)!.add(listener);
+  }
+
+  /**
+   * Remove an event listener for data instance changes
+   */
+  removeEventListener(type: DataInstanceEventType, listener: DataInstanceEventListener): void {
+    const listeners = this.eventListeners.get(type);
+    if (listeners) {
+      listeners.delete(listener);
+    }
+  }
+
+  /**
+   * Emit an event to all registered listeners
+   */
+  private emitEvent(event: DataInstanceEvent): void {
+    const listeners = this.eventListeners.get(event.type);
+    if (listeners) {
+      listeners.forEach(listener => {
+        try {
+          listener(event);
+        } catch (error) {
+          console.error('Error in data instance event listener:', error);
+        }
+      });
+    }
   }
 
 
@@ -204,6 +242,12 @@ export class DotDataInstance implements IInputDataInstance {
       throw new Error(`Atom with id ${atom.id} already exists`);
     }
     this.graph.setNode(atom.id, { type: atom.type, label: atom.label });
+    
+    // Emit event
+    this.emitEvent({
+      type: 'atomAdded',
+      data: { atom }
+    });
   }
 
   addRelationTuple(relationId : string, t : ITuple): void {
@@ -216,6 +260,12 @@ export class DotDataInstance implements IInputDataInstance {
       throw new Error(`Relation tuple ${relationId} with atoms ${t.atoms.join(', ')} already exists`);
     }
     this.addEdge(source, target, relationId);
+    
+    // Emit event
+    this.emitEvent({
+      type: 'relationTupleAdded',
+      data: { relationId, tuple: t }
+    });
 
   }
 
@@ -230,6 +280,12 @@ export class DotDataInstance implements IInputDataInstance {
     } else {
       throw new Error(`Relation tuple ${relationId} with atoms ${t.atoms.join(', ')} does not exist`);
     }
+    
+    // Emit event
+    this.emitEvent({
+      type: 'relationTupleRemoved',
+      data: { relationId, tuple: t }
+    });
   }
 
   removeAtom(id: string): void {
@@ -239,6 +295,12 @@ export class DotDataInstance implements IInputDataInstance {
     
     // Remove by its ID (I believe graphlib does the rest.)
     this.graph.removeNode(id);
+    
+    // Emit event
+    this.emitEvent({
+      type: 'atomRemoved',
+      data: { atomId: id }
+    });
   }
 
 
