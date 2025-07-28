@@ -105,7 +105,7 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
   ].filter(Boolean).join(' ');
 
   return (
-    <div className={containerClasses} aria-label={ariaLabel}>
+    <section id="cnd-layout-interface-container" className={containerClasses} aria-label={ariaLabel}>
       <div className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
         <div className="d-flex align-items-center gap-3">
           <span className={toggleLabelCodeClasses}>
@@ -121,6 +121,7 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
               disabled={disabled}
               className="cnd-layout-interface__toggle-input"
               aria-describedby="cnd-layout-toggle-description"
+              role='switch'
             />
             <span className="cnd-layout-interface__toggle-slider"></span>
           </label>
@@ -143,10 +144,10 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
           <NoCodeView yamlValue={yamlValue} constraints={constraints} setConstraints={setConstraints} directives={directives} setDirectives={setDirectives}/>
         ) : (
           // Code View - Bootstrap form styling
-          <CodeView constraints={constraints} directives={directives} yamlValue={yamlValue} handleTextareaChange={handleTextareaChange}/>
+          <CodeView constraints={constraints} directives={directives} yamlValue={yamlValue} handleTextareaChange={handleTextareaChange} disabled={disabled}/>
         )}
       </div>
-    </div>
+    </section>
   );
 };
 

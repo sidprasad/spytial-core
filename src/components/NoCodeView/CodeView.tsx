@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react'
 import { ConstraintData, DirectiveData } from './interfaces';
 import jsyaml from 'js-yaml';
-import { generateXGroupConstraints } from 'webcola';
 
 // TODO: Add unit tests for this function
 

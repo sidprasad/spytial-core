@@ -152,6 +152,8 @@ interface NoCodeViewProps {
     directives: DirectiveData[];
     /** Callback to set directives */
     setDirectives: (updater: (prev: DirectiveData[]) => DirectiveData[]) => void;
+    /** Disabled flag */
+    disabled?: boolean;
 }
 
 const NoCodeView = ({
@@ -160,6 +162,7 @@ const NoCodeView = ({
     setConstraints,
     directives,
     setDirectives,
+    disabled = false,
 }: NoCodeViewProps) => {
 
     const addConstraint = () => {
@@ -275,7 +278,7 @@ const NoCodeView = ({
     return (
         <div id="noCodeViewContainer">
             <div>
-                <h5>Constraints  <button type="button" onClick={ addConstraint } title="Click to add a new constraint">+</button></h5>
+                <h5>Constraints  <button type="button" onClick={ addConstraint } title="Click to add a new constraint" aria-label="Click to add a new constraint" disabled={disabled}>+</button></h5>
                 <div className='cardContainer' id="constraintContainer">
                     {/* Constraints will be added here dynamically */ }
                     { 
@@ -293,7 +296,7 @@ const NoCodeView = ({
             </div>
             <hr />
             <div>
-                <h5>Directives  <button type="button" onClick={ addDirective } title="Click to add a new directive">+</button></h5>
+                <h5>Directives  <button type="button" onClick={ addDirective } title="Click to add a new directive" aria-label="Click to add a new directive" disabled={disabled}>+</button></h5>
                 <div className='cardContainer' id="directiveContainer">
                     { 
                         directives.map((dd1) => (
