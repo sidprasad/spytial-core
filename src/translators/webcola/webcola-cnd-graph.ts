@@ -93,8 +93,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Configuration constants for text sizing and layout
    */
   private static readonly DEFAULT_FONT_SIZE = 10;
-  private static readonly MIN_FONT_SIZE = 8;
-  private static readonly MAX_FONT_SIZE = 12;
+  private static readonly MIN_FONT_SIZE = 6;
+  private static readonly MAX_FONT_SIZE = 16;
   private static readonly TEXT_PADDING = 8; // Padding inside node for text
   private static readonly LINE_HEIGHT_RATIO = 1.2;
 
