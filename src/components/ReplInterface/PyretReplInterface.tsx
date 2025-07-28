@@ -81,7 +81,7 @@ export const PyretReplInterface: React.FC<PyretReplInterfaceProps> = ({
           }
           return true;
         }).sort((a, b) => b.getPriority() - a.getPriority()), // Sort by priority descending
-        placeholder: 'list'
+        placeholder: 'x=[list: 1, 2,3]\n remove x'
       }
     ];
     

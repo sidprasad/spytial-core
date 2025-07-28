@@ -384,6 +384,9 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
     ...style,
   };
 
+  // Detect the platform
+  const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+
   return (
     <div className={className} style={containerStyle}>
       {/* Minimal header with essential controls only */}
@@ -510,7 +513,8 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ fontSize: '9px', color: '#28a745', fontWeight: '400' }}>
-                Click to add edges
+                <strong>{isMac ? 'Cmd' : 'Ctrl'} + Click</strong> between nodes to create edges.
+
               </div>
               <button
                 onClick={() => setReplCollapsed(false)}
@@ -525,7 +529,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
                   fontWeight: '500'
                 }}
               >
-                + Add Data
+                + Add / Remove Nodes or Modify Edges
               </button>
             </div>
           </div>
@@ -545,7 +549,8 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
               {!graphElementRef.current && (
                 <div style={{ color: '#6c757d', textAlign: 'center', fontSize: '13px' }}>
                   <p>Add data using the REPL to see visualization</p>
-                  <small>Use <strong>Cmd/Ctrl + Click</strong> between nodes to create edges</small>
+                  <small>
+                      <strong>{isMac ? 'Cmd' : 'Ctrl'} + Click</strong> between nodes to create edges.                  </small>
                 </div>
               )}
             </div>

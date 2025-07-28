@@ -70,7 +70,7 @@ const DEFAULT_TERMINALS: TerminalConfig[] = [
       new AtomCommandParser(),          // Priority 100 - standard priority
       new InfoCommandParser()           // Priority 50 - fallback utility commands
     ].sort((a, b) => b.getPriority() - a.getPriority()), // Sort by priority descending
-    placeholder: 'list'
+    placeholder: ''
   }
 ];
 
