@@ -90,6 +90,17 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private static readonly NODE_STROKE_WIDTH = 1.5;
 
   /**
+   * Configuration constants for text sizing and layout
+   */
+  private static readonly DEFAULT_FONT_SIZE = 10;
+  private static readonly MIN_FONT_SIZE = 6;
+  private static readonly MAX_FONT_SIZE = 16;
+  private static readonly TEXT_PADDING = 8; // Padding inside node for text
+  private static readonly LINE_HEIGHT_RATIO = 1.2;
+  private static readonly MAX_VISIBLE_LINES = 3;
+  private static readonly TRUNCATE_SUFFIX = "...";
+
+  /**
    * Configuration constants for group visualization
    */
   private static readonly DISCONNECTED_NODE_PREFIX = "_d_";
@@ -147,6 +158,16 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     sourceNode: null,
     temporaryEdge: null
   };
+
+  /**
+   * Node text expansion state management
+   */
+  private expandedNodes: Set<string> = new Set();
+
+  /**
+   * Temporary canvas for text measurement
+   */
+  private textMeasurementCanvas: HTMLCanvasElement | null = null;
 
   constructor() {
     super();
@@ -1294,52 +1315,308 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
-   * Creates main node labels with attributes using tspan elements.
-   * Handles conditional label display and multi-line attribute rendering.
-   * 
-   * @param nodeSelection - D3 selection of node groups
+   * Gets a canvas context for text measurement
    */
-  private setupNodeLabels(nodeSelection: d3.Selection<SVGGElement, any, any, unknown>): void {
+  private getTextMeasurementContext(): CanvasRenderingContext2D {
+    if (!this.textMeasurementCanvas) {
+      this.textMeasurementCanvas = document.createElement('canvas');
+    }
+    return this.textMeasurementCanvas.getContext('2d')!;
+  }
+
+  /**
+   * Measures the width of text at a given font size
+   */
+  private measureTextWidth(text: string, fontSize: number, fontFamily: string = 'system-ui'): number {
+    const context = this.getTextMeasurementContext();
+    context.font = `${fontSize}px ${fontFamily}`;
+    return context.measureText(text).width;
+  }
+
+  /**
+   * Calculates the optimal font size to fit text within given dimensions
+   */
+  private calculateOptimalFontSize(
+    text: string, 
+    maxWidth: number, 
+    maxHeight: number, 
+    fontFamily: string = 'system-ui'
+  ): number {
+    let fontSize = WebColaCnDGraph.DEFAULT_FONT_SIZE;
     
+    // Start with default size and scale down if needed
+    while (fontSize > WebColaCnDGraph.MIN_FONT_SIZE) {
+      const textWidth = this.measureTextWidth(text, fontSize, fontFamily);
+      const lineHeight = fontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO;
+      
+      if (textWidth <= maxWidth && lineHeight <= maxHeight) {
+        break;
+      }
+      
+      fontSize -= 0.5;
+    }
+    
+    // Scale up if there's room
+    while (fontSize < WebColaCnDGraph.MAX_FONT_SIZE) {
+      const testSize = fontSize + 0.5;
+      const textWidth = this.measureTextWidth(text, testSize, fontFamily);
+      const lineHeight = testSize * WebColaCnDGraph.LINE_HEIGHT_RATIO;
+      
+      if (textWidth > maxWidth || lineHeight > maxHeight) {
+        break;
+      }
+      
+      fontSize = testSize;
+    }
+    
+    return Math.max(WebColaCnDGraph.MIN_FONT_SIZE, Math.min(fontSize, WebColaCnDGraph.MAX_FONT_SIZE));
+  }
+
+  /**
+   * Wraps text to fit within given width, returning array of lines
+   */
+  private wrapText(text: string, maxWidth: number, fontSize: number, fontFamily: string = 'system-ui'): string[] {
+    const words = text.split(/\s+/);
+    const lines: string[] = [];
+    let currentLine = '';
+    
+    for (const word of words) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      const lineWidth = this.measureTextWidth(testLine, fontSize, fontFamily);
+      
+      if (lineWidth <= maxWidth) {
+        currentLine = testLine;
+      } else {
+        if (currentLine) {
+          lines.push(currentLine);
+          currentLine = word;
+        } else {
+          // Word is too long for the line, we'll have to break it
+          lines.push(word);
+        }
+      }
+    }
+    
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+    
+    return lines;
+  }
+
+  /**
+   * Checks if a node's text content should be expandable/collapsible
+   */
+  private shouldMakeTextExpandable(nodeData: NodeWithMetadata): boolean {
+    if (!nodeData.showLabels) return false;
+    
+    const mainLabel = nodeData.label || nodeData.name || nodeData.id || "Node";
+    const attributes = nodeData.attributes || {};
+    const totalLines = 1 + Object.keys(attributes).length; // Main label + attribute lines
+    
+    // Make expandable if we have more than max visible lines or if main label is very long
+    return totalLines > WebColaCnDGraph.MAX_VISIBLE_LINES || mainLabel.length > 30;
+  }
+
+  /**
+   * Toggles the expanded state of a node
+   */
+  private toggleNodeExpansion(nodeId: string): void {
+    if (this.expandedNodes.has(nodeId)) {
+      this.expandedNodes.delete(nodeId);
+    } else {
+      this.expandedNodes.add(nodeId);
+    }
+    
+    // Trigger a re-render of node labels
+    this.updateNodeLabelsAfterExpansion();
+  }
+
+  /**
+   * Updates node labels after expansion state change
+   */
+  private updateNodeLabelsAfterExpansion(): void {
+    if (!this.svgNodes) return;
+    
+    // Remove existing labels and recreate them
+    this.svgNodes.selectAll('.label').remove();
+    this.svgNodes.selectAll('.expand-button').remove();
+    
+    // Re-setup labels with current expansion state
+    this.setupNodeLabelsWithDynamicSizing(this.svgNodes);
+  }
+
+  /**
+   * Creates main node labels with attributes using dynamic sizing and expansion
+   */
+  private setupNodeLabelsWithDynamicSizing(nodeSelection: d3.Selection<SVGGElement, any, any, unknown>): void {
     nodeSelection
       .append("text")
       .attr("class", "label")
       .attr("text-anchor", "middle")
       .attr("dominant-baseline", "middle")
       .attr("font-family", "system-ui")
-      .attr("font-size", "10px")
       .attr("fill", "black")
-      .each((d: any, i: number, nodes: any[]) => {
+      .each((d: any, i: number, nodes: SVGTextElement[]) => {
         if (this.isHiddenNode(d)) {
           return;
         }
 
         const shouldShowLabels = d.showLabels;
-        const displayLabel = shouldShowLabels ? (d.label || d.name || d.id || "Node") : "";
+        if (!shouldShowLabels) {
+          return;
+        }
+
         const textElement = d3.select(nodes[i]);
+        const nodeWidth = d.width || 100;
+        const nodeHeight = d.height || 60;
+        const maxTextWidth = nodeWidth - WebColaCnDGraph.TEXT_PADDING * 2;
+        const maxTextHeight = nodeHeight - WebColaCnDGraph.TEXT_PADDING * 2;
+        
+        const displayLabel = d.label || d.name || d.id || "Node";
+        const attributes = d.attributes || {};
+        const isExpandable = this.shouldMakeTextExpandable(d);
+        const isExpanded = this.expandedNodes.has(d.id);
+        
+        // Calculate optimal font size for the main label
+        const mainLabelFontSize = this.calculateOptimalFontSize(
+          displayLabel,
+          maxTextWidth,
+          Math.min(maxTextHeight / 3, WebColaCnDGraph.MAX_FONT_SIZE * WebColaCnDGraph.LINE_HEIGHT_RATIO),
+          'system-ui'
+        );
+        
+        textElement.attr("font-size", `${mainLabelFontSize}px`);
+        
+        // Add main name label with wrapping if needed
+        const mainLabelLines = this.wrapText(displayLabel, maxTextWidth, mainLabelFontSize);
+        const lineHeight = mainLabelFontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO;
+        
+        mainLabelLines.forEach((line, lineIndex) => {
+          textElement
+            .append("tspan")
+            .attr("x", 0)
+            .attr("dy", lineIndex === 0 ? "0em" : `${lineHeight}px`)
+            .style("font-weight", "bold")
+            .style("font-size", `${mainLabelFontSize}px`)
+            .text(line);
+        });
 
-        // Add main name label
-        textElement
-          .append("tspan")
-          .attr("x", 0)
-          .attr("dy", "0em")
-          .style("font-weight", "bold")
-          .text(displayLabel);
-
-        // Add attribute labels if labels should be shown
-        if (shouldShowLabels && d.attributes) {
-          let lineOffset = 1; // Start from next line
-
-          Object.entries(d.attributes).forEach(([key, value]: [string, any]) => {
-            textElement
-              .append("tspan")
-              .attr("x", 0)
-              .attr("dy", `${lineOffset}em`)
-              .text(`${key}: ${value}`);
-            lineOffset += 1;
-          });
+        // Handle attributes
+        const attributeEntries = Object.entries(attributes);
+        if (attributeEntries.length > 0) {
+          const remainingHeight = maxTextHeight - (mainLabelLines.length * lineHeight);
+          const attributeFontSize = Math.min(
+            mainLabelFontSize * 0.8, // Slightly smaller than main label
+            this.calculateOptimalFontSize(
+              "sample: value", // Sample attribute text for sizing
+              maxTextWidth,
+              remainingHeight / Math.max(1, attributeEntries.length),
+              'system-ui'
+            )
+          );
+          
+          let attributeLineIndex = mainLabelLines.length;
+          const maxAttributesToShow = isExpanded ? attributeEntries.length : 
+            Math.min(attributeEntries.length, WebColaCnDGraph.MAX_VISIBLE_LINES - mainLabelLines.length);
+          
+          for (let i = 0; i < maxAttributesToShow; i++) {
+            const [key, value] = attributeEntries[i];
+            const attributeText = `${key}: ${value}`;
+            const attributeLines = this.wrapText(attributeText, maxTextWidth, attributeFontSize);
+            
+            attributeLines.forEach((line, subLineIndex) => {
+              textElement
+                .append("tspan")
+                .attr("x", 0)
+                .attr("dy", `${attributeFontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO}px`)
+                .style("font-size", `${attributeFontSize}px`)
+                .text(line);
+            });
+            
+            attributeLineIndex += attributeLines.length;
+          }
+          
+          // Add expand/collapse indicator if needed
+          if (isExpandable) {
+            const remainingAttributes = attributeEntries.length - maxAttributesToShow;
+            const expandText = isExpanded ? "▲ Collapse" : 
+              `▼ Show ${remainingAttributes} more`;
+            
+            if (!isExpanded && remainingAttributes > 0) {
+              textElement
+                .append("tspan")
+                .attr("x", 0)
+                .attr("dy", `${attributeFontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO}px`)
+                .style("font-size", `${attributeFontSize * 0.9}px`)
+                .style("fill", "#666")
+                .style("font-style", "italic")
+                .text(WebColaCnDGraph.TRUNCATE_SUFFIX);
+            }
+            
+            // Add clickable expand/collapse button
+            this.addExpandCollapseButton(nodeSelection, d, isExpanded);
+          }
         }
       });
+  }
+
+  /**
+   * Adds an expand/collapse button to expandable nodes
+   */
+  private addExpandCollapseButton(
+    nodeSelection: d3.Selection<SVGGElement, any, any, unknown>,
+    nodeData: NodeWithMetadata,
+    isExpanded: boolean
+  ): void {
+    const buttonSize = 12;
+    const buttonMargin = 4;
+    
+    const button = nodeSelection
+      .filter((d: any) => d.id === nodeData.id)
+      .append("g")
+      .attr("class", "expand-button")
+      .style("cursor", "pointer")
+      .on("click", (event: any, d: any) => {
+        event.stopPropagation();
+        this.toggleNodeExpansion(d.id);
+      });
+    
+    // Position button at bottom-right of node (relative to node center)
+    const buttonX = (nodeData.width || 100) / 2 - buttonSize - buttonMargin;
+    const buttonY = (nodeData.height || 60) / 2 - buttonSize - buttonMargin;
+    
+    // Button background circle
+    button
+      .append("circle")
+      .attr("cx", buttonX)
+      .attr("cy", buttonY)
+      .attr("r", buttonSize / 2)
+      .attr("fill", "#f0f0f0")
+      .attr("stroke", "#ccc")
+      .attr("stroke-width", 1);
+    
+    // Button icon
+    button
+      .append("text")
+      .attr("x", buttonX)
+      .attr("y", buttonY)
+      .attr("text-anchor", "middle")
+      .attr("dominant-baseline", "middle")
+      .attr("font-size", "8px")
+      .attr("fill", "#666")
+      .text(isExpanded ? "▲" : "▼");
+  }
+
+  /**
+   * Creates main node labels with attributes using tspan elements.
+   * Handles conditional label display and multi-line attribute rendering.
+   * 
+   * @param nodeSelection - D3 selection of node groups
+   */
+  private setupNodeLabels(nodeSelection: d3.Selection<SVGGElement, any, any, unknown>): void {
+    // Use the new dynamic sizing implementation
+    this.setupNodeLabelsWithDynamicSizing(nodeSelection);
   }
 
   /**
@@ -1472,6 +1749,17 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
             lineOffset += 1;
             return lineOffset === 1 ? '0em' : '1em';
           });
+      })
+      .raise();
+
+    // Update expand/collapse buttons
+    this.svgNodes.selectAll('.expand-button')
+      .attr('transform', (d: NodeWithMetadata) => {
+        const buttonSize = 12;
+        const buttonMargin = 4;
+        const buttonX = d.x + (d.width || 100) / 2 - buttonSize - buttonMargin;
+        const buttonY = d.y + (d.height || 60) / 2 - buttonSize - buttonMargin;
+        return `translate(${buttonX - d.x}, ${buttonY - d.y})`;
       })
       .raise();
 
@@ -2465,6 +2753,24 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       svg.input-mode .link:hover {
         stroke-width: 3px;
         opacity: 0.8;
+      }
+
+      /* Expand/collapse button styles */
+      .expand-button {
+        opacity: 0.8;
+        transition: opacity 0.2s ease;
+      }
+
+      .expand-button:hover {
+        opacity: 1;
+      }
+
+      .expand-button circle {
+        transition: fill 0.2s ease;
+      }
+
+      .expand-button:hover circle {
+        fill: #e0e0e0;
       }
     `;
   }
