@@ -2569,10 +2569,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .linklabel {
         text-anchor: middle;
         dominant-baseline: middle;
-        font-size: 8px;
+        font-size: 10px;
         fill: #555;
         pointer-events: none;
         font-family: system-ui;
+        stroke: white; /* Add white shadow */
+        stroke-width: 0.5px; /* Thickness of the shadow */
       }
       
       .mostSpecificTypeLabel {
