@@ -1578,7 +1578,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr("class", "expand-button")
       .style("cursor", "pointer")
       .on("click", (event: any, d: any) => {
-        event.stopPropagation();
+        if (event && typeof event.stopPropagation === 'function') {
+          event.stopPropagation();
+        }
         this.toggleNodeExpansion(d.id);
       });
     
