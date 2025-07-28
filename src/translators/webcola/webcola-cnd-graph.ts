@@ -90,6 +90,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private static readonly NODE_STROKE_WIDTH = 1.5;
 
   /**
+   * Configuration constants for text sizing and layout
+   */
+  private static readonly DEFAULT_FONT_SIZE = 10;
+  private static readonly MIN_FONT_SIZE = 6;
+  private static readonly MAX_FONT_SIZE = 16;
+  private static readonly TEXT_PADDING = 8; // Padding inside node for text
+  private static readonly LINE_HEIGHT_RATIO = 1.2;
+
+  /**
    * Configuration constants for group visualization
    */
   private static readonly DISCONNECTED_NODE_PREFIX = "_d_";
@@ -147,6 +156,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     sourceNode: null,
     temporaryEdge: null
   };
+
+  /**
+   * Temporary canvas for text measurement
+   */
+  private textMeasurementCanvas: HTMLCanvasElement | null = null;
 
   constructor() {
     super();
@@ -1015,8 +1029,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr("text-anchor", "middle")
       .attr("dominant-baseline", "middle")
       .attr("font-family", "system-ui")
-      .attr("font-size", "8px")
-      .attr("fill", "#555")
+      //.attr("font-size", "8px")
+      //.attr("fill", "#555")
       .attr("pointer-events", "none")
       .text((d: any) => d.label || d.relName || "");
   }
@@ -1294,52 +1308,192 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
-   * Creates main node labels with attributes using tspan elements.
-   * Handles conditional label display and multi-line attribute rendering.
-   * 
-   * @param nodeSelection - D3 selection of node groups
+   * Gets a canvas context for text measurement
    */
-  private setupNodeLabels(nodeSelection: d3.Selection<SVGGElement, any, any, unknown>): void {
+  private getTextMeasurementContext(): CanvasRenderingContext2D {
+    if (!this.textMeasurementCanvas) {
+      this.textMeasurementCanvas = document.createElement('canvas');
+    }
+    return this.textMeasurementCanvas.getContext('2d')!;
+  }
+
+  /**
+   * Measures the width of text at a given font size
+   */
+  private measureTextWidth(text: string, fontSize: number, fontFamily: string = 'system-ui'): number {
+    const context = this.getTextMeasurementContext();
+    context.font = `${fontSize}px ${fontFamily}`;
+    return context.measureText(text).width;
+  }
+
+  /**
+   * Calculates the optimal font size to fit text within given dimensions
+   */
+  private calculateOptimalFontSize(
+    text: string, 
+    maxWidth: number, 
+    maxHeight: number, 
+    fontFamily: string = 'system-ui'
+  ): number {
+    let fontSize = WebColaCnDGraph.DEFAULT_FONT_SIZE;
     
+    // Start with default size and scale down if needed
+    while (fontSize > WebColaCnDGraph.MIN_FONT_SIZE) {
+      const textWidth = this.measureTextWidth(text, fontSize, fontFamily);
+      const lineHeight = fontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO;
+      
+      if (textWidth <= maxWidth && lineHeight <= maxHeight) {
+        break;
+      }
+      
+      fontSize -= 0.5;
+    }
+    
+    // Scale up if there's room
+    while (fontSize < WebColaCnDGraph.MAX_FONT_SIZE) {
+      const testSize = fontSize + 0.5;
+      const textWidth = this.measureTextWidth(text, testSize, fontFamily);
+      const lineHeight = testSize * WebColaCnDGraph.LINE_HEIGHT_RATIO;
+      
+      if (textWidth > maxWidth || lineHeight > maxHeight) {
+        break;
+      }
+      
+      fontSize = testSize;
+    }
+    
+    return Math.max(WebColaCnDGraph.MIN_FONT_SIZE, Math.min(fontSize, WebColaCnDGraph.MAX_FONT_SIZE));
+  }
+
+  /**
+   * Wraps text to fit within given width, returning array of lines
+   */
+  private wrapText(text: string, maxWidth: number, fontSize: number, fontFamily: string = 'system-ui'): string[] {
+    const words = text.split(/\s+/);
+    const lines: string[] = [];
+    let currentLine = '';
+    
+    for (const word of words) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      const lineWidth = this.measureTextWidth(testLine, fontSize, fontFamily);
+      
+      if (lineWidth <= maxWidth) {
+        currentLine = testLine;
+      } else {
+        if (currentLine) {
+          lines.push(currentLine);
+          currentLine = word;
+        } else {
+          // Word is too long for the line, we'll have to break it
+          lines.push(word);
+        }
+      }
+    }
+    
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+    
+    return lines;
+  }
+
+
+
+  /**
+   * Creates main node labels with attributes using dynamic sizing and expansion
+   */
+  private setupNodeLabelsWithDynamicSizing(nodeSelection: d3.Selection<SVGGElement, any, any, unknown>): void {
     nodeSelection
       .append("text")
       .attr("class", "label")
       .attr("text-anchor", "middle")
       .attr("dominant-baseline", "middle")
       .attr("font-family", "system-ui")
-      .attr("font-size", "10px")
       .attr("fill", "black")
-      .each((d: any, i: number, nodes: any[]) => {
+      .each((d: any, i: number, nodes: SVGTextElement[]) => {
         if (this.isHiddenNode(d)) {
           return;
         }
 
         const shouldShowLabels = d.showLabels;
-        const displayLabel = shouldShowLabels ? (d.label || d.name || d.id || "Node") : "";
+        if (!shouldShowLabels) {
+          return;
+        }
+
         const textElement = d3.select(nodes[i]);
+        const nodeWidth = d.width || 100;
+        const nodeHeight = d.height || 60;
+        const maxTextWidth = nodeWidth - WebColaCnDGraph.TEXT_PADDING * 2;
+        const maxTextHeight = nodeHeight - WebColaCnDGraph.TEXT_PADDING * 2;
+        
+        const displayLabel = d.label || d.name || d.id || "Node";
+        const attributes = d.attributes || {};
+        
+        // Calculate optimal font size for the main label
+        const mainLabelFontSize = this.calculateOptimalFontSize(
+          displayLabel,
+          maxTextWidth,
+          Math.min(maxTextHeight / 3, WebColaCnDGraph.MAX_FONT_SIZE * WebColaCnDGraph.LINE_HEIGHT_RATIO),
+          'system-ui'
+        );
+        
+        textElement.attr("font-size", `${mainLabelFontSize}px`);
+        
+        // Add main name label with wrapping if needed
+        const mainLabelLines = this.wrapText(displayLabel, maxTextWidth, mainLabelFontSize);
+        const lineHeight = mainLabelFontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO;
+        
+        mainLabelLines.forEach((line, lineIndex) => {
+          textElement
+            .append("tspan")
+            .attr("x", 0)
+            .attr("dy", lineIndex === 0 ? "0em" : `${lineHeight}px`)
+            .style("font-weight", "bold")
+            .style("font-size", `${mainLabelFontSize}px`)
+            .text(line);
+        });
 
-        // Add main name label
-        textElement
-          .append("tspan")
-          .attr("x", 0)
-          .attr("dy", "0em")
-          .style("font-weight", "bold")
-          .text(displayLabel);
-
-        // Add attribute labels if labels should be shown
-        if (shouldShowLabels && d.attributes) {
-          let lineOffset = 1; // Start from next line
-
-          Object.entries(d.attributes).forEach(([key, value]: [string, any]) => {
-            textElement
-              .append("tspan")
-              .attr("x", 0)
-              .attr("dy", `${lineOffset}em`)
-              .text(`${key}: ${value}`);
-            lineOffset += 1;
-          });
+        // Handle attributes (show all that fit)
+        const attributeEntries = Object.entries(attributes);
+        if (attributeEntries.length > 0) {
+          const remainingHeight = maxTextHeight - (mainLabelLines.length * lineHeight);
+          const attributeFontSize = Math.min(
+            mainLabelFontSize * 0.8, // Slightly smaller than main label
+            this.calculateOptimalFontSize(
+              "sample: value", // Sample attribute text for sizing
+              maxTextWidth,
+              remainingHeight / Math.max(1, attributeEntries.length),
+              'system-ui'
+            )
+          );
+          
+          for (let i = 0; i < attributeEntries.length; i++) {
+            const [key, value] = attributeEntries[i];
+            const attributeText = `${key}: ${value}`;
+            const attributeLines = this.wrapText(attributeText, maxTextWidth, attributeFontSize);
+            
+            attributeLines.forEach((line, subLineIndex) => {
+              textElement
+                .append("tspan")
+                .attr("x", 0)
+                .attr("dy", `${attributeFontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO}px`)
+                .style("font-size", `${attributeFontSize}px`)
+                .text(line);
+            });
+          }
         }
       });
+  }
+
+  /**
+   * Creates main node labels with attributes using tspan elements.
+   * Handles conditional label display and multi-line attribute rendering.
+   * 
+   * @param nodeSelection - D3 selection of node groups
+   */
+  private setupNodeLabels(nodeSelection: d3.Selection<SVGGElement, any, any, unknown>): void {
+    // Use the new dynamic sizing implementation
+    this.setupNodeLabelsWithDynamicSizing(nodeSelection);
   }
 
   /**
@@ -2412,14 +2566,17 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         pointer-events: none;
       }
 
-      .linklabel {
-        text-anchor: middle;
-        dominant-baseline: middle;
-        font-size: 8px;
-        fill: #555;
-        pointer-events: none;
-        font-family: system-ui;
-      }
+.linklabel {
+  text-anchor: middle;
+  dominant-baseline: middle;
+  font-size: 10px;
+  fill: #555;
+  pointer-events: none;
+  font-family: system-ui;
+  stroke: white; /* Add white shadow */
+  stroke-width: 0.2px; /* Reduced thickness of the shadow */
+  stroke-opacity: 0.7; /* Added opacity to make the shadow less intense */
+}
       
       .mostSpecificTypeLabel {
         font-size: 8px;

@@ -36,3 +36,7 @@ This is a TypeScript library designed to be published as an npm package for clie
 - Document all public APIs with JSDoc
 - Include TypeScript examples in documentation
 - Provide migration guides for breaking changes
+
+
+## Demos
+- Demos should go in the `webcola-demo` directory.
