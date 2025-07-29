@@ -103,3 +103,13 @@ export { PyretReplInterface } from './components/ReplInterface/PyretReplInterfac
 export type { PyretReplInterfaceProps } from './components/ReplInterface/PyretReplInterface';
 export { ReplWithVisualization } from './components/ReplInterface/ReplWithVisualization';
 export type { ReplWithVisualizationProps } from './components/ReplInterface/ReplWithVisualization';
+
+// Export Combined Input Component
+export { CombinedInputComponent } from './components/CombinedInput/CombinedInputComponent';
+export type { CombinedInputConfig, CombinedInputProps } from './components/CombinedInput/CombinedInputComponent';
+export { mountCombinedInput, createCombinedInputSetup, setupCombinedInput } from './components/CombinedInput/mounting';
+export type { CombinedInputMountConfig } from './components/CombinedInput/mounting';
+
+// Export REPL parsers
+export { PyretExpressionParser } from './components/ReplInterface/parsers/PyretExpressionParser';
+export type { PyretEvaluator, PyretEvaluationResult } from './components/ReplInterface/parsers/PyretExpressionParser';

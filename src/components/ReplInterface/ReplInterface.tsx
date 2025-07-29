@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { IInputDataInstance } from '../../data-instance/interfaces';
-import { ICommandParser, CommandResult, AtomCommandParser, RelationCommandParser, BatchCommandParser } from './parsers/CoreParsers';
+import { ICommandParser, CommandResult, AtomCommandParser, RelationCommandParser, DotNotationRelationParser, BatchCommandParser, RemoveCommandParser } from './parsers/CoreParsers';
 import { PyretListParser, InfoCommandParser } from './parsers/ExtensibleParsers';
 import './ReplInterface.css';
 
@@ -24,6 +24,8 @@ export interface ReplInterfaceProps {
   instance: IInputDataInstance;
   /** Callback when the instance changes */
   onChange?: (instance: IInputDataInstance) => void;
+  /** Callback when CnD specification is extracted from an expression */
+  onCndSpecExtracted?: (spec: string) => void;
   /** Whether the component is disabled */
   disabled?: boolean;
   /** CSS class name for styling */
@@ -61,13 +63,14 @@ const DEFAULT_TERMINALS: TerminalConfig[] = [
     title: '',
     description: 'Supports atoms, relations, and extensions in one terminal',
     parsers: [
-      new PyretListParser(),     // Priority 120 - most specific pattern
-      new BatchCommandParser(),  // Priority 115 - multi-command patterns  
-      new RelationCommandParser(), // Priority 110 - specific -> pattern
-      new AtomCommandParser(),   // Priority 100 - standard priority
-      new InfoCommandParser()    // Priority 50 - fallback utility commands
+      new RemoveCommandParser(),        // Priority 200 - highest priority for remove commands
+      new PyretListParser(),            // Priority 120 - most specific pattern
+      new BatchCommandParser(),         // Priority 115 - multi-command patterns  
+      new DotNotationRelationParser(),  // Priority 115 - dot notation relations
+      new AtomCommandParser(),          // Priority 100 - standard priority
+      new InfoCommandParser()           // Priority 50 - fallback utility commands
     ].sort((a, b) => b.getPriority() - a.getPriority()), // Sort by priority descending
-    placeholder: 'Examples:\nadd Alice:Person\nadd Alice:Person, Bob:Person, Charlie:Person\nadd Alice:Person; add Bob:Person; add friends(Alice, Bob)\nadd friends(alice, bob)\nadd [list: 1,2,3,4]:numbers\nhelp'
+    placeholder: ''
   }
 ];
 
@@ -75,8 +78,8 @@ const DEFAULT_TERMINALS: TerminalConfig[] = [
  * REPL-like interface for building data instances with command-line style input
  * 
  * Provides a unified terminal that supports:
- * - Atoms: add/remove atoms with Label:Type syntax
- * - Relations: add/remove relations with name:atom->atom syntax  
+ * - Nodes: add/remove atoms with Label:Type syntax
+ * - Edges: add/remove relations with name:atom->atom syntax  
  * - Extensions: Language-specific commands (Pyret lists, etc.)
  * - Utility commands: help, info, list, clear
  * 
@@ -90,6 +93,7 @@ const DEFAULT_TERMINALS: TerminalConfig[] = [
 export const ReplInterface: React.FC<ReplInterfaceProps> = ({
   instance,
   onChange,
+  onCndSpecExtracted,
   disabled = false,
   className = '',
   terminals = DEFAULT_TERMINALS
@@ -100,16 +104,17 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
     terminals.forEach(terminal => {
       initialState[terminal.id] = {
         input: '',
-        output: [{
-          id: 'welcome',
-          type: 'info',
-          message: `Type 'help' for available commands.`,
-          timestamp: new Date()
-        }],
+        output: [], // No welcome message - keep it minimal
         isExecuting: false
       };
     });
     return initialState;
+  });
+
+  // State for collapsible drawers
+  const [drawersOpen, setDrawersOpen] = useState<Record<string, boolean>>({
+    nodes: false,
+    edges: false
   });
 
   // References to terminal output containers for auto-scrolling
@@ -119,13 +124,6 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
   const atoms = instance.getAtoms();
   const relations = instance.getRelations();
   const tupleCount = relations.reduce((sum, rel) => sum + rel.tuples.length, 0);
-
-  // Notify parent when instance changes
-  const notifyChange = useCallback(() => {
-    if (onChange) {
-      onChange(instance);
-    }
-  }, [instance, onChange]);
 
   // Auto-scroll terminal output to bottom
   const scrollToBottom = useCallback((terminalId: string) => {
@@ -156,8 +154,23 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
     setTimeout(() => scrollToBottom(terminalId), 0);
   }, [scrollToBottom]);
 
+  // Notify parent when instance changes
+  const notifyChange = useCallback(() => {
+    if (onChange) {
+      onChange(instance);
+    }
+  }, [instance, onChange]);
+
+  // Toggle drawer function
+  const toggleDrawer = useCallback((drawerName: string) => {
+    setDrawersOpen(prev => ({
+      ...prev,
+      [drawerName]: !prev[drawerName]
+    }));
+  }, []);
+
   // Execute command in terminal
-  const executeCommand = useCallback((terminalId: string, command: string) => {
+  const executeCommand = useCallback(async (terminalId: string, command: string) => {
     const terminal = terminals.find(t => t.id === terminalId);
     if (!terminal) return;
 
@@ -187,7 +200,9 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
       if (parser.canHandle(trimmedCommand)) {
         handlingParser = parser;
         try {
-          result = parser.execute(trimmedCommand, instance);
+          const executeResult = parser.execute(trimmedCommand, instance);
+          // Handle both sync and async results
+          result = await Promise.resolve(executeResult);
           break;
         } catch (error) {
           result = {
@@ -212,11 +227,13 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
       };
     }
 
-    // Add result to output
-    addOutputLine(terminalId, {
-      type: result.success ? (result.action === 'help' ? 'help' : result.action === 'info' ? 'info' : 'success') : 'error',
-      message: result.message
-    });
+    // Add result to output - only add error messages, skip success confirmations
+    if (!result.success || result.action === 'help' || result.action === 'info') {
+      addOutputLine(terminalId, {
+        type: result.success ? (result.action === 'help' ? 'help' : result.action === 'info' ? 'info' : 'success') : 'error',
+        message: result.message
+      });
+    }
 
     // Clear executing state and input
     setTerminalStates(prev => ({
@@ -232,7 +249,12 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
     if (result.success && (result.action === 'add' || result.action === 'remove')) {
       notifyChange();
     }
-  }, [terminals, instance, addOutputLine, notifyChange]);
+
+    // Notify parent if CnD specification was extracted
+    if (result.success && result.extractedCndSpec && onCndSpecExtracted) {
+      onCndSpecExtracted(result.extractedCndSpec);
+    }
+  }, [terminals, instance, addOutputLine, notifyChange, onCndSpecExtracted]);
 
   // Handle input change
   const handleInputChange = useCallback((terminalId: string, value: string) => {
@@ -246,16 +268,16 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
   }, []);
 
   // Handle execute button click
-  const handleExecute = useCallback((terminalId: string) => {
+  const handleExecute = useCallback(async (terminalId: string) => {
     const state = terminalStates[terminalId];
     if (!state || state.isExecuting) return;
 
     const commands = state.input.split('\n').map(cmd => cmd.trim()).filter(cmd => cmd);
     
-    // Execute each command in sequence
-    commands.forEach(command => {
-      executeCommand(terminalId, command);
-    });
+    // Execute each command in sequence (await each one)
+    for (const command of commands) {
+      await executeCommand(terminalId, command);
+    }
   }, [terminalStates, executeCommand]);
 
   // Handle key press in input
@@ -325,11 +347,37 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
   return (
     <div className={`repl-interface ${className}`}>
       <div className="repl-interface__main">
+        {/* Minimal header with simplified stats */}
         <div className="repl-interface__header">
-          <div className="repl-interface__stats">
-            <span>{atoms.length} atoms</span>
-            <span>{relations.length} relations</span>
-            <span>{tupleCount} tuples</span>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={() => toggleDrawer('nodes')}
+              style={{
+                background: drawersOpen.nodes ? '#4ec9b0' : '#2d2d30',
+                color: drawersOpen.nodes ? '#1e1e1e' : '#cccccc',
+                border: '1px solid #3c3c3c',
+                padding: '3px 6px',
+                borderRadius: '3px',
+                cursor: 'pointer',
+                fontSize: '0.75rem'
+              }}
+            >
+              {atoms.length}
+            </button>
+            <button
+              onClick={() => toggleDrawer('edges')}
+              style={{
+                background: drawersOpen.edges ? '#4ec9b0' : '#2d2d30',
+                color: drawersOpen.edges ? '#1e1e1e' : '#cccccc',
+                border: '1px solid #3c3c3c',
+                padding: '3px 6px',
+                borderRadius: '3px',
+                cursor: 'pointer',
+                fontSize: '0.75rem'
+              }}
+            >
+              {relations.length}
+            </button>
           </div>
         </div>
 
@@ -340,16 +388,7 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
 
             return (
               <div key={terminal.id} className="repl-terminal">
-                <div className="repl-terminal__header">
-                  <div 
-                    className="repl-terminal__help"
-                    onClick={() => showHelp(terminal.id)}
-                    title="Show help"
-                  >
-                    ?
-                  </div>
-                </div>
-
+                {/* Remove terminal header - keep it minimal */}
                 <div 
                   className="repl-terminal__output"
                   ref={ref => { outputRefs.current[terminal.id] = ref; }}
@@ -370,17 +409,37 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
                     onKeyDown={(e) => handleKeyPress(e, terminal.id)}
                     placeholder={terminal.placeholder}
                     disabled={disabled || state.isExecuting}
-                    rows={3}
+                    rows={2}
                   />
                   
                   <div className="repl-terminal__controls">
+                    <button
+                      className="repl-interface__action-button danger"
+                      onClick={clearAll}
+                      disabled={disabled}
+                      title="Clear all data"
+                      style={{ marginRight: '4px', fontSize: '10px', padding: '2px 6px' }}
+                    >
+                      Clear
+                    </button>
+                    
+                    <button
+                      className="repl-interface__action-button"
+                      onClick={() => showHelp('unified')}
+                      disabled={disabled}
+                      title="Show help"
+                      style={{ marginRight: '4px', fontSize: '10px', padding: '2px 6px' }}
+                    >
+                      ?
+                    </button>
+                    
                     <button
                       className="repl-terminal__execute"
                       onClick={() => handleExecute(terminal.id)}
                       disabled={disabled || state.isExecuting || !state.input.trim()}
                       title="Execute commands (Ctrl+Enter)"
                     >
-                      {state.isExecuting ? 'Executing...' : 'Execute'}
+                      {state.isExecuting ? '...' : '▶'}
                     </button>
                   </div>
                 </div>
@@ -388,75 +447,85 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
             );
           })}
         </div>
-
-        <div className="repl-interface__actions">
-          <button
-            className="repl-interface__action-button danger"
-            onClick={clearAll}
-            disabled={disabled}
-            title="Clear entire instance"
-          >
-            Clear All Data
-          </button>
-          
-          <button
-            className="repl-interface__action-button"
-            onClick={() => {
-              terminals.forEach(terminal => {
-                addOutputLine(terminal.id, {
-                  type: 'info',
-                  message: `Instance Status: ${atoms.length} atoms, ${relations.length} relations, ${tupleCount} tuples`
-                });
-              });
-            }}
-            disabled={disabled}
-            title="Show status in all terminals"
-          >
-            Show Status
-          </button>
-        </div>
       </div>
 
-      <div className="repl-interface__sidebar">
-        <div className="repl-interface__sidebar-section">
-          <h3>Atoms ({atoms.length})</h3>
-          {atoms.length === 0 ? (
-            <div className="repl-interface__empty">No atoms</div>
-          ) : (
-            atoms.map(atom => (
-              <div key={atom.id} className="repl-interface__item">
-                <div className="repl-interface__item-header">{atom.label}:{atom.type}</div>
-                {atom.id !== atom.label && (
-                  <div className="repl-interface__item-detail">ID: {atom.id}</div>
+      {/* Simplified collapsible drawers - only show when opened */}
+      {(drawersOpen.nodes || drawersOpen.edges) && (
+        <div className="repl-interface__drawers">
+          {/* Nodes Drawer */}
+          {drawersOpen.nodes && (
+            <div className="repl-interface__drawer">
+              <div 
+                className="repl-interface__drawer-header"
+                onClick={() => toggleDrawer('nodes')}
+              >
+                <span>Atoms ({atoms.length})</span>
+                <span className="repl-interface__drawer-toggle">▼</span>
+              </div>
+              <div className="repl-interface__drawer-content">
+                {atoms.length === 0 ? (
+                  <div className="repl-interface__drawer-empty">No atoms</div>
+                ) : (
+                  atoms.map(atom => (
+                    <div key={atom.id} className="repl-interface__drawer-item">
+                      <div className="repl-interface__drawer-item-content">
+                        <div className="repl-interface__drawer-item-header">
+                          {atom.label}:{atom.type}
+                        </div>
+                      </div>
+                    </div>
+                  ))
                 )}
               </div>
-            ))
+            </div>
           )}
-        </div>
 
-        <div className="repl-interface__sidebar-section">
-          <h3>Relations ({relations.length})</h3>
-          {relations.length === 0 ? (
-            <div className="repl-interface__empty">No relations</div>
-          ) : (
-            relations.map(relation => (
-              <div key={relation.name} className="repl-interface__sidebar-section">
-                <div className="repl-interface__item">
-                  <div className="repl-interface__item-header">{relation.name}</div>
-                  <div className="repl-interface__item-detail">{relation.tuples.length} tuples</div>
-                </div>
-                {relation.tuples.map((tuple, index) => (
-                  <div key={index} className="repl-interface__item" style={{marginLeft: '10px', fontSize: '0.75rem'}}>
-                    <div className="repl-interface__item-detail">
-                      {relation.name}({tuple.atoms.join(', ')})
-                    </div>
-                  </div>
-                ))}
+          {/* Edges Drawer */}
+          {drawersOpen.edges && (
+            <div className="repl-interface__drawer">
+              <div 
+                className="repl-interface__drawer-header"
+                onClick={() => toggleDrawer('edges')}
+              >
+                <span>Relations ({relations.length})</span>
+                <span className="repl-interface__drawer-toggle">▼</span>
               </div>
-            ))
+              <div className="repl-interface__drawer-content">
+                {relations.length === 0 ? (
+                  <div className="repl-interface__drawer-empty">No relations</div>
+                ) : (
+                  relations.map(relation => (
+                    <div key={relation.name} style={{ marginBottom: '6px' }}>
+                      <div className="repl-interface__drawer-item">
+                        <div className="repl-interface__drawer-item-content">
+                          <div className="repl-interface__drawer-item-header">
+                            {relation.name} ({relation.tuples.length})
+                          </div>
+                        </div>
+                      </div>
+                      {relation.tuples.slice(0, 3).map((tuple, index) => (
+                        <div key={index} className="repl-interface__drawer-item" 
+                             style={{marginLeft: '8px', fontSize: '0.7rem'}}>
+                          <div className="repl-interface__drawer-item-content">
+                            <div className="repl-interface__drawer-item-detail">
+                              {tuple.atoms.join(' → ')}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      {relation.tuples.length > 3 && (
+                        <div style={{marginLeft: '8px', fontSize: '0.7rem', color: '#6a737d'}}>
+                          ... and {relation.tuples.length - 3} more
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           )}
         </div>
-      </div>
+      )}
     </div>
   );
 };

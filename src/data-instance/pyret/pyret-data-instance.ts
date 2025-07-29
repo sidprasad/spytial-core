@@ -6,6 +6,11 @@ import { IInputDataInstance, IAtom, IRelation, ITuple, IType, DataInstanceEventT
  * What about images, or other Pyret representations?
  */
 
+/** Global constructor cache entry with pattern and instantiation priority */
+interface ConstructorCacheEntry {
+  pattern: string[];
+  instantiation: number;
+}
 
 export function generateEdgeId(
     relation: IRelation,
@@ -54,6 +59,15 @@ export class PyretDataInstance implements IInputDataInstance {
 
   private readonly showFunctions: boolean;
 
+  /** Global map to store constructor patterns and field order for types across all instances */
+  private static globalConstructorCache = new Map<string, ConstructorCacheEntry>();
+  
+  /** Global counter for instantiation priority - higher numbers mean newer/higher priority */
+  private static instantiationCounter = 0;
+
+  /** Optional external Pyret evaluator for enhanced features */
+  private externalEvaluator: any | null = null;
+
   /*
     TODO: List handling
     - Handle Pyret Lists and Tables as special cases. They currently show as (link (link (link (link )))) etc.
@@ -64,9 +78,12 @@ export class PyretDataInstance implements IInputDataInstance {
    * Creates a PyretDataInstance from a Pyret runtime object
    * 
    * @param pyretData - The root Pyret object to parse, or null/undefined for an empty instance
+   * @param showFunctions - Whether to include function/method fields in parsing
+   * @param externalEvaluator - Optional external Pyret evaluator for enhanced features
    */
-  constructor(pyretData?: PyretObject | null, showFunctions = false) {
+  constructor(pyretData?: PyretObject | null, showFunctions = false, externalEvaluator?: any) {
     this.showFunctions = showFunctions;
+    this.externalEvaluator = externalEvaluator || null;
     this.initializeBuiltinTypes();
     if (pyretData) {
       this.parseObjectIteratively(pyretData);
@@ -74,8 +91,161 @@ export class PyretDataInstance implements IInputDataInstance {
   }
 
   /**
-   * Add an event listener for data instance changes
+   * Set an external Pyret evaluator for enhanced features
+   * @param evaluator - External Pyret evaluator (e.g., window.__internalRepl)
    */
+  setExternalEvaluator(evaluator: any): void {
+    this.externalEvaluator = evaluator;
+  }
+
+  /**
+   * Get the current external evaluator
+   */
+  getExternalEvaluator(): any | null {
+    return this.externalEvaluator;
+  }
+
+  /**
+   * Cache constructor field order for a type when we successfully parse an original object
+   * This now uses a global cache with instantiation-based priority where newer patterns
+   * can override older ones for the same constructor name
+   */
+  private cacheConstructorPattern(typeName: string, fieldOrder: string[]): void {
+    if (fieldOrder.length === 0) return;
+    
+    const currentEntry = PyretDataInstance.globalConstructorCache.get(typeName);
+    const newInstantiation = ++PyretDataInstance.instantiationCounter;
+    
+    // Always cache if no entry exists, or if we want to allow newer patterns to override
+    // For now, we always update to give priority to newer constructor patterns
+    if (!currentEntry || newInstantiation > currentEntry.instantiation) {
+      PyretDataInstance.globalConstructorCache.set(typeName, {
+        pattern: [...fieldOrder],
+        instantiation: newInstantiation
+      });
+    }
+  }
+
+  /**
+   * Get cached constructor pattern for a type from the global cache
+   */
+  private getCachedConstructorPattern(typeName: string): string[] | null {
+    const entry = PyretDataInstance.globalConstructorCache.get(typeName);
+    return entry ? entry.pattern : null;
+  }
+
+  /**
+   * Get the global constructor cache (for debugging or advanced use cases)
+   * Returns a map of type names to their patterns
+   */
+  static getGlobalConstructorCache(): Map<string, string[]> {
+    const result = new Map<string, string[]>();
+    for (const [typeName, entry] of PyretDataInstance.globalConstructorCache) {
+      result.set(typeName, [...entry.pattern]);
+    }
+    return result;
+  }
+
+  /**
+   * Get the global constructor cache with instantiation info (for debugging)
+   * Returns the raw cache with instantiation numbers
+   */
+  static getGlobalConstructorCacheWithPriority(): Map<string, ConstructorCacheEntry> {
+    return new Map(PyretDataInstance.globalConstructorCache);
+  }
+
+  /**
+   * Clear the global constructor cache (for testing or reset scenarios)
+   */
+  static clearGlobalConstructorCache(): void {
+    PyretDataInstance.globalConstructorCache.clear();
+  }
+
+  /**
+   * Try to rebuild constructor arguments from relations using cached patterns
+   * Only uses patterns from previously seen constructor instances - no heuristics
+   */
+  private tryReconstructFromRelations(atom: IAtom, visited: Set<string>): string {
+    // Get all relations where this atom is the source
+    const relationMap = new Map<string, string[]>();
+    this.relations.forEach(relation => {
+      relation.tuples.forEach(tuple => {
+        if (tuple.atoms.length >= 2 && tuple.atoms[0] === atom.id) {
+          const relationName = relation.name;
+          if (!relationMap.has(relationName)) {
+            relationMap.set(relationName, []);
+          }
+          // Skip the source atom, collect target atoms
+          relationMap.get(relationName)!.push(...tuple.atoms.slice(1));
+        }
+      });
+    });
+
+    if (relationMap.size === 0) {
+      return atom.type; // No relations, just return the type name
+    }
+
+    // Try to use cached constructor pattern from previously seen instances
+    const cachedPattern = this.getCachedConstructorPattern(atom.type);
+    if (cachedPattern) {
+      const args: string[] = [];
+      for (const fieldName of cachedPattern) {
+        const targetIds = relationMap.get(fieldName) || [];
+        for (const targetId of targetIds) {
+          args.push(this.reifyAtom(targetId, visited));
+        }
+      }
+      if (args.length > 0) {
+        return `${atom.type}(${args.join(', ')})`;
+      }
+    }
+
+    // If no cached pattern, try to infer from other instances of the same type
+    // Look for other atoms of the same type that have original objects
+    const sameTypeAtoms = Array.from(this.atoms.values()).filter(a => a.type === atom.type);
+    for (const sameTypeAtom of sameTypeAtoms) {
+      const originalObj = this.originalObjects.get(sameTypeAtom.id);
+      if (originalObj && originalObj.dict) {
+        const orderedKeys = Object.keys(originalObj.dict);
+        this.cacheConstructorPattern(atom.type, orderedKeys);
+        
+        // Now try again with the cached pattern
+        const args: string[] = [];
+        for (const fieldName of orderedKeys) {
+          const targetIds = relationMap.get(fieldName) || [];
+          for (const targetId of targetIds) {
+            args.push(this.reifyAtom(targetId, visited));
+          }
+        }
+        if (args.length > 0) {
+          return `${atom.type}(${args.join(', ')})`;
+        }
+        break; // Only need to check one instance since constructors are nominal
+      }
+    }
+
+    // Final fallback: use sorted field order but print an error
+    console.error(`[PyretDataInstance] Could not determine constructor pattern for type '${atom.type}'. Falling back to sorted field order.`);
+    
+    const relationNames = Array.from(relationMap.keys()).sort(); // Sort for consistency
+    const args: string[] = [];
+    
+    for (const relationName of relationNames) {
+      const targetIds = relationMap.get(relationName) || [];
+      for (const targetId of targetIds) {
+        args.push(this.reifyAtom(targetId, visited));
+      }
+    }
+    
+    if (args.length > 0) {
+      return `${atom.type}(${args.join(', ')})`;
+    }
+    
+    return atom.type; // Last resort: just the type name
+  }
+  hasExternalEvaluator(): boolean {
+    return this.externalEvaluator !== null;
+  }
   addEventListener(type: DataInstanceEventType, listener: DataInstanceEventListener): void {
     if (!this.eventListeners.has(type)) {
       this.eventListeners.set(type, new Set());
@@ -180,44 +350,47 @@ export class PyretDataInstance implements IInputDataInstance {
   /**
    * Converts the current data instance back to Pyret constructor notation
    * 
-   * 
-   * TODO: this **may** be wrong, but nice to examine.
-   * 
+   * If an external evaluator is available, it may provide enhanced type information
+   * for more accurate reification in the future.
    * 
    * @returns A string representation of the data in Pyret constructor syntax
    * 
    * @example
    * ```typescript
-   * // For a red-black tree: Black(5, Red(3, Leaf(1), Leaf(2)), Leaf(7))
    * const pyretCode = instance.reify();
    * ```
    */
   reify(): string {
-    // Find the root atom (the one that's not referenced by any other atom)
+    let result = '';
+
+
+    // TODO: This is still broken. Need to understand what is going on here!!
+
+    // Find referenced atoms
     const referencedAtoms = new Set<string>();
     this.relations.forEach(relation => {
       relation.tuples.forEach(tuple => {
-        // Skip the first atom (source), mark others as referenced
         for (let i = 1; i < tuple.atoms.length; i++) {
           referencedAtoms.add(tuple.atoms[i]);
         }
       });
     });
 
-    const rootAtoms = Array.from(this.atoms.values())
-      .filter(atom => !referencedAtoms.has(atom.id) && !this.isBuiltinType(atom.type));
+    // Identify root atoms (not referenced by others, including builtins)
+    const rootAtoms = Array.from(this.atoms.values()).filter(atom => !referencedAtoms.has(atom.id));
 
     if (rootAtoms.length === 0) {
-      return "/* No root atoms found */";
+      return result + "/* No root atoms found */";
     }
 
-    // If multiple roots, wrap in a list
+    // If multiple roots, wrap in a Pyret set
     if (rootAtoms.length > 1) {
       const rootExpressions = rootAtoms.map(atom => this.reifyAtom(atom.id, new Set()));
-      return `[list: ${rootExpressions.join(', ')}]`;
+      return result + `[list-set: ${rootExpressions.join(', ')}]`;
     }
 
-    return this.reifyAtom(rootAtoms[0].id, new Set());
+    // If only one root atom, reify it directly
+    return result + this.reifyAtom(rootAtoms[0].id, new Set());
   }
 
   /**
@@ -228,6 +401,10 @@ export class PyretDataInstance implements IInputDataInstance {
    * @returns Pyret constructor notation for this atom
    */
   private reifyAtom(atomId: string, visited: Set<string>): string {
+
+
+    // TODO: I think this is broken -- it doesn't cache things correctly.
+
     if (visited.has(atomId)) {
       return `/* cycle: ${atomId} */`;
     }
@@ -248,14 +425,18 @@ export class PyretDataInstance implements IInputDataInstance {
 
     // Get the original object to preserve key order
     const originalObject = this.originalObjects.get(atomId);
-    
+
     if (!originalObject || !originalObject.dict) {
+      // No original object available - try to reconstruct using cached patterns or heuristics
       visited.delete(atomId);
-      return atom.type;
+      return this.tryReconstructFromRelations(atom, visited);
     }
 
     // Use the original dict key order to maintain constructor argument order
     const orderedKeys = Object.keys(originalObject.dict);
+    
+    // Cache this constructor pattern for future use
+    this.cacheConstructorPattern(atom.type, orderedKeys);
     
     // Check if this looks like a list (all keys are numeric)
     const isListLike = orderedKeys.every(key => /^\d+$/.test(key));
@@ -377,6 +558,13 @@ export class PyretDataInstance implements IInputDataInstance {
       // Store the original object to preserve dict key order
       this.originalObjects.set(atomId, obj);
 
+      // Cache constructor pattern for this type if it has a dict
+      if (obj.dict && typeof obj.dict === 'object') {
+        const type = this.extractType(obj);
+        const fieldOrder = Object.keys(obj.dict);
+        this.cacheConstructorPattern(type, fieldOrder);
+      }
+
       // Add relation from parent if this is not the root object
       if (parentInfo) {
         this.addRelationTuple(
@@ -485,6 +673,7 @@ export class PyretDataInstance implements IInputDataInstance {
   /**
    * Extracts the most specific brand name from a Pyret brands object.
    * Returns the brand with the highest trailing number, with prefix and number removed.
+   * If no brands have trailing numbers, returns the lexicographically last brand.
    *
    * @param brands - The brands object from a Pyret object
    * @returns The most specific brand name (without $brand and trailing number), or undefined if none found
@@ -492,19 +681,33 @@ export class PyretDataInstance implements IInputDataInstance {
   private extractMostSpecificBrand(brands: Record<string, boolean>): string | undefined {
     let maxNum = -1;
     let result: string | undefined = undefined;
+    let fallbackResult: string | undefined = undefined;
 
     for (const brand of Object.keys(brands)) {
-      const match = /^\$brand([a-zA-Z_]+)(\d+)$/.exec(brand);
-      if (match) {
-        const [, name, numStr] = match;
+      // Try pattern with trailing number
+      const matchWithNumber = /^\$brand([a-zA-Z_]+)(\d+)$/.exec(brand);
+      if (matchWithNumber) {
+        const [, name, numStr] = matchWithNumber;
         const num = parseInt(numStr, 10);
         if (num > maxNum) {
           maxNum = num;
           result = name;
         }
+      } else {
+        // Try pattern without trailing number
+        const matchWithoutNumber = /^\$brand_?([a-zA-Z_]+)$/.exec(brand);
+        if (matchWithoutNumber) {
+          const [, name] = matchWithoutNumber;
+          // Use as fallback if no numbered brands found
+          if (!fallbackResult || name > fallbackResult) {
+            fallbackResult = name;
+          }
+        }
       }
     }
-    return result;
+    
+    // Return numbered brand if found, otherwise fallback to non-numbered brand
+    return result || fallbackResult;
   }
 
   /**

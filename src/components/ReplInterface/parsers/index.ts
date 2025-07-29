@@ -1,6 +1,7 @@
 export { 
   AtomCommandParser, 
   RelationCommandParser,
+  DotNotationRelationParser,
   BatchCommandParser,
   type ICommandParser,
   type CommandResult 
@@ -10,3 +11,9 @@ export {
   PyretListParser, 
   InfoCommandParser 
 } from './ExtensibleParsers';
+
+export {
+  PyretExpressionParser,
+  type PyretEvaluator,
+  type PyretEvaluationResult
+} from './PyretExpressionParser';
