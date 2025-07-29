@@ -1,6 +1,6 @@
 import { Graph } from 'graphlib';
 import parse from 'graphlib-dot';
-import type { IAtom, IType, IRelation, IInputDataInstance, ITuple, DataInstanceEventType, DataInstanceEventListener, DataInstanceEvent } from '../interfaces';
+import type { IAtom, IType, IRelation, IInputDataInstance, ITuple, DataInstanceEventType, DataInstanceEventListener, DataInstanceEvent, IDataInstance } from '../interfaces';
 import { Tuple } from '../../evaluators';
 
 
@@ -303,6 +303,9 @@ export class DotDataInstance implements IInputDataInstance {
     });
   }
 
-
+  // TODO: Implement this properly.
+  addFromDataInstance(dataInstance: IDataInstance, unifyBuiltIns: boolean): boolean {
+    throw new Error('Method not implemented. DotDataInstance does not support adding from another data instance.');
+  }
 }
   
