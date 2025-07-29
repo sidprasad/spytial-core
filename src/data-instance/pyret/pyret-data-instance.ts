@@ -377,7 +377,7 @@ export class PyretDataInstance implements IInputDataInstance {
     const rootAtoms = Array.from(this.atoms.values()).filter(atom => !referencedAtoms.has(atom.id));
 
     if (rootAtoms.length === 0) {
-      return result + "/* No root atoms found */";
+      return result + "# No root atoms found";
     }
 
     // If multiple roots, wrap in a Pyret set

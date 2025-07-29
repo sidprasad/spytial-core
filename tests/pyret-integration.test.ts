@@ -161,7 +161,7 @@ describe('Pyret REPL Integration', () => {
     expect(reified.length).toBeGreaterThan(0);
     
     // For an empty instance, it should return the "no root atoms" message
-    expect(reified).toBe('/* No root atoms found */');
+    expect(reified).toBe('# No root atoms found');
     
     // Test that the state manager can handle reification
     const stateManager = integration.PyretReplStateManager.getInstance();
