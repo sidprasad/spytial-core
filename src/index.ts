@@ -11,9 +11,11 @@ export * as Translators from './translators';
 
 // Export new data instance abstraction
 export * from './data-instance/interfaces';
+export { JSONDataInstance, DataInstanceNormalizer } from './data-instance/json-data-instance';
 export { AlloyDataInstance, createEmptyAlloyDataInstance } from './data-instance/alloy-data-instance';
 export { DotDataInstance } from './data-instance/dot/dot-data-instance';
 export { RacketGDataInstance } from './data-instance/racket/racket-g-data-instance';
+export { PyretDataInstance } from './data-instance/pyret/pyret-data-instance';
 
 // Direct exports of key classes for convenience
 export { LayoutInstance } from './layout/layoutinstance';
@@ -30,8 +32,8 @@ if (typeof window !== 'undefined') {
   import('./translators/webcola/webcola-cnd-graph').then(({ WebColaCnDGraph }) => {
     // Make d3 and webcola available globally for WebCola d3adaptor
     Promise.all([
-      import('d3'),
-      import('webcola')
+      import('./vendor/d3.v4.min.js'),
+      import('./vendor/cola.js')
     ]).then(([d3Module, colaModule]) => {
       (window as any).d3 = d3Module;
       (window as any).cola = colaModule;
@@ -95,3 +97,19 @@ export const version = '1.0.0';
 // Export React components
 export { InstanceBuilder } from './components/InstanceBuilder/InstanceBuilder';
 export type { InstanceBuilderProps } from './components/InstanceBuilder/InstanceBuilder';
+export { ReplInterface } from './components/ReplInterface/ReplInterface';
+export type { ReplInterfaceProps } from './components/ReplInterface/ReplInterface';
+export { PyretReplInterface } from './components/ReplInterface/PyretReplInterface';
+export type { PyretReplInterfaceProps } from './components/ReplInterface/PyretReplInterface';
+export { ReplWithVisualization } from './components/ReplInterface/ReplWithVisualization';
+export type { ReplWithVisualizationProps } from './components/ReplInterface/ReplWithVisualization';
+
+// Export Combined Input Component
+export { CombinedInputComponent } from './components/CombinedInput/CombinedInputComponent';
+export type { CombinedInputConfig, CombinedInputProps } from './components/CombinedInput/CombinedInputComponent';
+export { mountCombinedInput, createCombinedInputSetup, setupCombinedInput } from './components/CombinedInput/mounting';
+export type { CombinedInputMountConfig } from './components/CombinedInput/mounting';
+
+// Export REPL parsers
+export { PyretExpressionParser } from './components/ReplInterface/parsers/PyretExpressionParser';
+export type { PyretEvaluator, PyretEvaluationResult } from './components/ReplInterface/parsers/PyretExpressionParser';

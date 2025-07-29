@@ -5,16 +5,7 @@
 
 // Import the custom element class
 import { WebColaCnDGraph } from './translators/webcola/webcola-cnd-graph';
-// Import d3 and webcola to make them globally available
-import * as d3 from 'd3';
-import * as cola from 'webcola';
 
-// Make d3 and webcola available globally for WebCola d3adaptor
-if (typeof window !== 'undefined') {
-  const globalWindow = window as any;
-  globalWindow.d3 = d3;
-  globalWindow.cola = cola;
-}
 
 // Define a function to register the custom element
 function registerWebColaCnDGraph() {
@@ -37,9 +28,18 @@ registerWebColaCnDGraph();
 // Export for programmatic use
 export { WebColaCnDGraph, registerWebColaCnDGraph };
 
+// Export all the main CnD Core functionality
+export * from './index';
+
 // Also expose on global object for script tag usage
 if (typeof window !== 'undefined') {
   const globalWindow = window as any;
   globalWindow.WebColaCnDGraph = WebColaCnDGraph;
   globalWindow.registerWebColaCnDGraph = registerWebColaCnDGraph;
+  
+  // Import and expose CnD Core on the global object
+  import('./index').then((CndCore) => {
+    globalWindow.CndCore = CndCore;
+    console.log('✅ CndCore library loaded globally with JSONDataInstance support');
+  }).catch(console.error);
 }

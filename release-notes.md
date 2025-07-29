@@ -180,4 +180,6 @@ const CustomErrorHandler: React.FC<{ errorManager: ErrorStateManager }> = ({ err
 
 ## Breaking Changes
 
+- Upgraded from Bootstrap v4 to v5.
+
 ## API changes and deprecations

@@ -1,4 +1,4 @@
-import type { IDataInstance, IAtom, IType, IRelation, ITuple, IInputDataInstance } from './interfaces';
+import type { IDataInstance, IAtom, IType, IRelation, ITuple, IInputDataInstance, DataInstanceEventType, DataInstanceEventListener, DataInstanceEvent } from './interfaces';
 import type { AlloyType, AlloyAtom, AlloyRelation, AlloyTuple } from './alloy/alloy-instance';
 import { addInstanceAtom, addInstanceRelationTuple, removeInstanceRelationTuple, AlloyInstance, removeInstanceAtom } from './alloy/alloy-instance';
 import { 
@@ -18,7 +18,46 @@ import { Graph } from 'graphlib';
  * Wraps the existing AlloyInstance to provide the IDataInstance interface
  */
 export class AlloyDataInstance implements IInputDataInstance {
+  /** Event listeners for data instance changes */
+  private eventListeners = new Map<DataInstanceEventType, Set<DataInstanceEventListener>>();
+
   constructor(private alloyInstance: AlloyInstance) {}
+
+  /**
+   * Add an event listener for data instance changes
+   */
+  addEventListener(type: DataInstanceEventType, listener: DataInstanceEventListener): void {
+    if (!this.eventListeners.has(type)) {
+      this.eventListeners.set(type, new Set());
+    }
+    this.eventListeners.get(type)!.add(listener);
+  }
+
+  /**
+   * Remove an event listener for data instance changes
+   */
+  removeEventListener(type: DataInstanceEventType, listener: DataInstanceEventListener): void {
+    const listeners = this.eventListeners.get(type);
+    if (listeners) {
+      listeners.delete(listener);
+    }
+  }
+
+  /**
+   * Emit an event to all registered listeners
+   */
+  private emitEvent(event: DataInstanceEvent): void {
+    const listeners = this.eventListeners.get(event.type);
+    if (listeners) {
+      listeners.forEach(listener => {
+        try {
+          listener(event);
+        } catch (error) {
+          console.error('Error in data instance event listener:', error);
+        }
+      });
+    }
+  }
 
   /**
    * Get type information for a specific atom
@@ -199,7 +238,6 @@ export class AlloyDataInstance implements IInputDataInstance {
   }
 
 
-
   /**
    * Remove an atom by ID
    * 
@@ -209,6 +247,12 @@ export class AlloyDataInstance implements IInputDataInstance {
     
     // We actually have to 
     this.alloyInstance = removeInstanceAtom(this.alloyInstance, id);
+    
+    // Emit event
+    this.emitEvent({
+      type: 'atomRemoved',
+      data: { atomId: id }
+    });
   }
 
   public addAtom(atom: IAtom): void {
@@ -220,6 +264,12 @@ export class AlloyDataInstance implements IInputDataInstance {
       
     };
     this.alloyInstance = addInstanceAtom(this.alloyInstance, alloyAtom);
+    
+    // Emit event
+    this.emitEvent({
+      type: 'atomAdded',
+      data: { atom }
+    });
   }
 
   public addRelationTuple(relationId: string, tuple: ITuple): void {
@@ -230,6 +280,12 @@ export class AlloyDataInstance implements IInputDataInstance {
       types: tuple.types
     };
     this.alloyInstance = addInstanceRelationTuple(this.alloyInstance, relationId, alloyTuple);
+    
+    // Emit event
+    this.emitEvent({
+      type: 'relationTupleAdded',
+      data: { relationId, tuple }
+    });
   }
 
   public removeRelationTuple(relationId: string, t: ITuple): void {
@@ -243,9 +299,102 @@ export class AlloyDataInstance implements IInputDataInstance {
 
 
     this.alloyInstance = removeInstanceRelationTuple(this.alloyInstance, relationId, alloyTuple);
+    
+    // Emit event
+    this.emitEvent({
+      type: 'relationTupleRemoved',
+      data: { relationId, tuple: t }
+    });
   }
 
+  /**
+   * Adds data from another AlloyDataInstance to this instance.
+   * 
+   * @param dataInstance - The data instance to add from.
+   * @param unifyBuiltIns - Whether to unify built-in types (reuse existing ones).
+   * @returns True if the operation is successful, false otherwise.
+   */
+  public addFromDataInstance(dataInstance: IDataInstance, unifyBuiltIns: boolean): boolean {
+    // Ensure the input is an AlloyDataInstance
+    if (!isAlloyDataInstance(dataInstance)) {
+      return false;
+    }
 
+    const alloyInstance = dataInstance.getAlloyInstance();
+    const reIdMap = new Map<string, string>();
+
+    // Add atoms
+    getInstanceAtoms(alloyInstance).forEach(atom => {
+      const isBuiltin = this.getAtomType(atom.id).isBuiltin;
+
+      if (unifyBuiltIns && isBuiltin) {
+        // Check if the built-in atom already exists
+        const existingAtom = this.getAtoms().find(
+          existing => existing.type === atom.type && existing.label === atom.id
+        );
+
+        if (existingAtom) {
+          // Map the original atom ID to the existing atom ID
+          reIdMap.set(atom.id, existingAtom.id);
+          return; // Skip adding this atom
+        }
+      }
+
+      // Generate a new ID for the atom to avoid conflicts
+      const newId = `atom_${this.getAtoms().length + 1}`;
+      reIdMap.set(atom.id, newId);
+
+      // Use the addAtom method to add the atom
+      this.addAtom({
+        id: newId,
+        type: atom.type,
+        label: atom.id, // Use the original ID as the label
+      });
+    });
+
+    // Add relations
+    getInstanceRelations(alloyInstance).forEach(relation => {
+      relation.tuples.forEach(tuple => {
+        const mappedTuple: ITuple = {
+          atoms: tuple.atoms.map(atomId => reIdMap.get(atomId) || atomId),
+          types: tuple.types,
+        };
+
+        // Use the addRelationTuple method to add the tuple
+        this.addRelationTuple(relation.id, mappedTuple);
+      });
+    });
+
+    // Add types
+    getInstanceTypes(alloyInstance).forEach(type => {
+      const existingType = this.getTypes().find(t => t.id === type.id);
+      if (!existingType) {
+        // Add the type if it doesn't exist.
+        // I *think* built-in types already exist in the instance.
+        this.alloyInstance.types[type.id] = {
+          _: 'type',
+          id: type.id,
+          types: type.types,
+          atoms: type.atoms.map(atom => ({
+            _: 'atom',
+            id: reIdMap.get(atom.id) || atom.id,
+            type: atom.type,
+          })),
+          meta: {
+            builtin: false,
+            abstract: false,
+            enum: false,
+            one: false,
+            private: false,
+          },
+        };
+      } else {
+        // If the type already exists, i think we are good.
+      }
+    });
+
+    return true;
+  }
 }
 
 /**

@@ -1,5 +1,5 @@
 import { Graph, Edge } from 'graphlib';
-import {IAtom, IDataInstance, IType} from '../data-instance/interfaces';
+import { IAtom, IDataInstance, IType } from '../data-instance/interfaces';
 import { PositionalConstraintError, GroupOverlapError, isPositionalConstraintError } from './constraint-validator';
 
 
@@ -27,7 +27,7 @@ class LayoutNodePath {
     constructor(
         public Path: LayoutNode[],
         public LoopsTo: LayoutNode | undefined
-    ) {}
+    ) { }
 
     /**
      * Expands the path by unrolling the loop `repeat` times.
@@ -94,13 +94,23 @@ export class LayoutInstance {
     private readonly addAlignmentEdges: boolean;
 
 
+    /**
+     * Constructs a new `LayoutInstance` object.
+     *
+     * @param layoutSpec - The layout specification that defines constraints, directives, and other layout-related configurations.
+     * @param evaluator - An evaluator instance used to evaluate selectors and constraints within the layout specification.
+     * @param instNum - The instance number (default is 0), used to differentiate between multiple instances of the same layout.
+     * @param addAlignmentEdges - A boolean flag indicating whether alignment edges should be added to the graph (default is `true`).
+     *
+     * The `LayoutInstance` class is responsible for generating a layout for a given data instance based on the provided layout specification.
+     * It applies constraints, directives, and projections to produce a structured layout that can be rendered using a graph visualization library.
+     */
     constructor(layoutSpec: LayoutSpec, evaluator: IEvaluator, instNum: number = 0, addAlignmentEdges: boolean = true) {
         this.instanceNum = instNum;
         this.evaluator = evaluator;
         this._layoutSpec = layoutSpec;
         this.addAlignmentEdges = addAlignmentEdges;
     }
-
 
     get projectedSigs(): string[] {
         if (!this._layoutSpec.directives.projections) {
@@ -285,7 +295,7 @@ export class LayoutInstance {
                     let groupName = `${relName}[${labelString}]`; // TODO: THis?
 
                     // Check if the group already exists
-                    let existingGroup: LayoutGroup | undefined= groups.find((group) => group.name === groupName);
+                    let existingGroup: LayoutGroup | undefined = groups.find((group) => group.name === groupName);
 
                     if (existingGroup) {
                         existingGroup.nodeIds.push(toAdd);
@@ -351,13 +361,16 @@ export class LayoutInstance {
                 let source = edge.v;
                 let target = edge.w;
 
+                // Really, we should be pushing the target node's LABEL.
+                let targetLabel = g.node(target)?.label || target; // Use the node's label or the node ID if no label exists.
+
                 let nodeAttributes = attributes[source] || {};
 
                 if (!nodeAttributes[attributeKey]) {
                     nodeAttributes[attributeKey] = [];
                     attributes[source] = nodeAttributes;
                 }
-                nodeAttributes[attributeKey].push(target);
+                nodeAttributes[attributeKey].push(targetLabel);
 
                 // Now remove the edge from the graph
                 g.removeEdge(edge.v, edge.w, edgeId);
@@ -389,7 +402,26 @@ export class LayoutInstance {
                 const isDisconnected = inEdges.length === 0 && outEdges.length === 0;
 
 
-                const hideNode = isDisconnected && ((this.hideDisconnectedBuiltIns && isAtomBuiltin) || this.hideDisconnected);
+                // Legacy hiding logic for backwards compatibility
+                const hideLegacy = isDisconnected && ((this.hideDisconnectedBuiltIns && isAtomBuiltin) || this.hideDisconnected);
+
+                // New selector-based hiding logic
+                let hideBySelector = false;
+                const hiddenAtomDirectives = this._layoutSpec.directives.hiddenAtoms;
+                for (const directive of hiddenAtomDirectives) {
+                    try {
+                        const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
+                        const selectedAtoms = selectorResult.selectedAtoms();
+                        if (selectedAtoms.includes(node)) {
+                            hideBySelector = true;
+                            break;
+                        }
+                    } catch (error) {
+                        console.error(`Failed to evaluate hideAtom selector "${directive.selector}":`, error);
+                    }
+                }
+
+                const hideNode = hideLegacy || hideBySelector;
 
                 if (hideNode) {
                     g.removeNode(node);
@@ -423,10 +455,10 @@ export class LayoutInstance {
 
         try {
 
-        let relName = relNameRaw.split("[")[0];
-        return relName;
+            let relName = relNameRaw.split("[")[0];
+            return relName;
         }
-        catch{
+        catch {
             console.warn(`Failed to parse relation name from edge label: ${relNameRaw}. Defaulting to empty string.`);
             return relNameRaw;
         }
@@ -485,7 +517,7 @@ export class LayoutInstance {
                 return { type: typeId, projectedAtom: atomId, atoms: atoms };
             });
 
-        let projectedInstance = ai.applyProjections( projectedAtomIds);
+        let projectedInstance = ai.applyProjections(projectedAtomIds);
         return { projectedInstance, finalProjectionChoices };
     }
 
@@ -496,19 +528,19 @@ export class LayoutInstance {
      * @returns An object containing the layout and projection data.
      */
     public generateLayout(
-        a: IDataInstance, 
+        a: IDataInstance,
         projections: Record<string, string>
-    ): { 
-        layout: InstanceLayout, 
-        projectionData: { type: string, projectedAtom: string, atoms: string[] }[], 
-        error: ConstraintError | null 
+    ): {
+        layout: InstanceLayout,
+        projectionData: { type: string, projectedAtom: string, atoms: string[] }[],
+        error: ConstraintError | null
     } {
 
         let projectionResult = this.applyLayoutProjections(a, projections);
         let ai = projectionResult.projectedInstance;
         let projectionData = projectionResult.finalProjectionChoices;
-        
-        let g: Graph = ai.generateGraph( this.hideDisconnected, this.hideDisconnectedBuiltIns);
+
+        let g: Graph = ai.generateGraph(this.hideDisconnected, this.hideDisconnectedBuiltIns);
 
         const attributes = this.generateAttributesAndRemoveEdges(g);
 
@@ -543,7 +575,7 @@ export class LayoutInstance {
 
 
             let color = nodeColorMap[nodeId] || "black";
-            
+
 
             let iconDetails = nodeIconMap[nodeId];
             let iconPath = iconDetails.path;
@@ -563,7 +595,7 @@ export class LayoutInstance {
             return {
                 id: nodeId,
                 label: label,
-                name: label, 
+                name: label,
                 color: color,
                 groups: nodeGroups,
                 attributes: nodeAttributes,
@@ -577,7 +609,7 @@ export class LayoutInstance {
         });
 
         ///////////// CONSTRAINTS ////////////
-        let constraints: LayoutConstraint[] = this.applyRelatativeOrientationConstraints(layoutNodes, g);
+        let constraints: LayoutConstraint[] = this.applyRelativeOrientationConstraints(layoutNodes, g);
 
         let layoutEdges: LayoutEdge[] = g.edges().map((edge) => {
 
@@ -629,16 +661,16 @@ export class LayoutInstance {
                     edges: layoutWithoutCyclicConstraints.edges,
                     // FIXME: This is a hacky way to remove the conflicting constraints.
                     // There is some inconsistency between what the graph shows and what the error message shows.
-                    constraints: layoutWithoutCyclicConstraints.constraints.filter(c => 
+                    constraints: layoutWithoutCyclicConstraints.constraints.filter(c =>
                         ![...minimalConflictingSet.values()].flat().includes(c)
                     ),
                     groups: layoutWithoutCyclicConstraints.groups,
                     conflictingConstraints: [...minimalConflictingSet.values()].flat()
                 };
-                return { 
-                    layout: layoutWithErrorMetadata, 
-                    projectionData, 
-                    error: nonCyclicConstraintError 
+                return {
+                    layout: layoutWithErrorMetadata,
+                    projectionData,
+                    error: nonCyclicConstraintError
                 };
             }
 
@@ -706,15 +738,15 @@ export class LayoutInstance {
                 const layoutWithErrorMetadata: InstanceLayout = {
                     nodes: layoutWithoutCyclicConstraints.nodes,
                     edges: layoutWithoutCyclicConstraints.edges,
-                    constraints: layoutWithoutCyclicConstraints.constraints.filter(c => 
+                    constraints: layoutWithoutCyclicConstraints.constraints.filter(c =>
                         ![...minimalConflictingSet.values()].flat().includes(c)
                     ),
                     groups: layoutWithoutCyclicConstraints.groups
                 };
-                return { 
-                    layout: layoutWithErrorMetadata, 
-                    projectionData, 
-                    error: finalLayoutError 
+                return {
+                    layout: layoutWithErrorMetadata,
+                    projectionData,
+                    error: finalLayoutError
                 };
             }
 
@@ -795,14 +827,14 @@ export class LayoutInstance {
 
             relatedNodeIds.forEach((fragment) => {
                 constraintFragments.push({
-                    source : c,
+                    source: c,
                     fragmentList: fragment
                 });
             });
 
         }
-        
-       const backtrackSolveFragments = (  layoutConstraints : LayoutConstraint[], fragmentIdx: number) : LayoutConstraint[] => {
+
+        const backtrackSolveFragments = (layoutConstraints: LayoutConstraint[], fragmentIdx: number): LayoutConstraint[] => {
 
             let currentLayoutError = null;
             if (fragmentIdx >= constraintFragments.length) {
@@ -813,12 +845,12 @@ export class LayoutInstance {
             let fragment = constraintFragments[fragmentIdx].fragmentList;
             let sourceConstraint = constraintFragments[fragmentIdx].source;
             let fragmentLength = fragment.length;
-            for(var perturbation = 0; perturbation < fragmentLength; perturbation++) {
+            for (var perturbation = 0; perturbation < fragmentLength; perturbation++) {
                 // For each fragment, we try a perturbation
                 let fragmentConstraints = this.getCyclicConstraintForFragment(fragment, layoutNodes, perturbation, sourceConstraint);
 
                 let allConstraintsForFragment: LayoutConstraint[] = layoutConstraints.concat(fragmentConstraints);
-            
+
                 let instanceLayout: InstanceLayout = {
                     nodes: layoutWithoutCyclicConstraints.nodes,
                     constraints: allConstraintsForFragment,
@@ -829,16 +861,16 @@ export class LayoutInstance {
                 let validator = new ConstraintValidator(instanceLayout);
                 currentLayoutError = validator.validateConstraints() || null;
 
-                if (!currentLayoutError ) {
+                if (!currentLayoutError) {
                     // If we found a satisfying assignment, we can return the constraints.
                     return backtrackSolveFragments(
-                        allConstraintsForFragment, 
+                        allConstraintsForFragment,
                         fragmentIdx + 1
                     );
                 }
             }
 
-            if(currentLayoutError) {
+            if (currentLayoutError) {
                 throw currentLayoutError;
             }
             throw new Error(`Failed to find a satisfying layout for cyclic constraints.`);
@@ -849,10 +881,10 @@ export class LayoutInstance {
     }
 
 
-    private getCyclicConstraintForFragment(fragment: string[], 
+    private getCyclicConstraintForFragment(fragment: string[],
         layoutNodes: LayoutNode[],
         perturbationIdx: number,
-        c : RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint): LayoutConstraint[] {
+        c: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint): LayoutConstraint[] {
         const minRadius = 100;
 
 
@@ -978,7 +1010,7 @@ export class LayoutInstance {
      * @param layoutNodes - The layout nodes to which the constraints will be applied.
      * @returns An array of layout constraints.
      */
-    applyRelatativeOrientationConstraints(layoutNodes: LayoutNode[], g: Graph): LayoutConstraint[] {
+    applyRelativeOrientationConstraints(layoutNodes: LayoutNode[], g: Graph): LayoutConstraint[] {
 
         let constraints: LayoutConstraint[] = [];
         let relativeOrientationConstraints = this._layoutSpec.constraints.orientation.relative;
@@ -1124,11 +1156,12 @@ export class LayoutInstance {
 
                 if (nodeSizeMap[nodeId]) {
 
-                    let oldSizeStr = JSON.stringify(nodeSizeMap[nodeId]);
-                    let newSizeStr = JSON.stringify({ width: width, height: height });
-
-
-                    throw new Error(`Size Conflict: "${nodeId}" cannot have multiple sizes: ${oldSizeStr}, ${newSizeStr}.`);
+                    const existingSize = nodeSizeMap[nodeId];
+                    if (existingSize.width !== width || existingSize.height !== height) {
+                        throw new Error(
+                            `Size Conflict: "${nodeId}" cannot have multiple sizes: ${JSON.stringify(existingSize)}, ${JSON.stringify({ width, height })}.`
+                        );
+                    }
                 }
 
                 nodeSizeMap[nodeId] = { width: width, height: height };
@@ -1161,7 +1194,12 @@ export class LayoutInstance {
 
             selected.forEach((nodeId) => {
                 if (nodeColorMap[nodeId]) {
-                    throw new Error(`Color Conflict: "${nodeId}" cannot have multiple colors:  ${nodeColorMap[nodeId]}, ${color}.`);
+                    const existingColor = nodeColorMap[nodeId];
+                    if (existingColor !== color) {
+                        throw new Error(
+                            `Color Conflict: "${nodeId}" cannot have multiple colors: ${existingColor}, ${color}.`
+                        );
+                    }
                 }
                 nodeColorMap[nodeId] = color;
             });
@@ -1191,7 +1229,12 @@ export class LayoutInstance {
 
             selected.forEach((nodeId) => {
                 if (nodeIconMap[nodeId]) {
-                    throw new Error(`Icon Conflict: "${nodeId}" cannot have multiple icons:  ${nodeIconMap[nodeId]}, ${iconPath}.`);
+                    const existingIcon = nodeIconMap[nodeId];
+                    if (existingIcon.path !== iconPath || existingIcon.showLabels !== iconDirective.showLabels) {
+                        throw new Error(
+                            `Icon Conflict: "${nodeId}" cannot have multiple icons: ${JSON.stringify(existingIcon)}, ${JSON.stringify({ path: iconPath, showLabels: iconDirective.showLabels })}.`
+                        );
+                    }
                 }
                 nodeIconMap[nodeId] = { path: iconPath, showLabels: iconDirective.showLabels };
             });
@@ -1223,11 +1266,16 @@ export class LayoutInstance {
             let field = colorDirective.field;
 
             if (edgeColorMap[field]) {
-                throw new Error(`Color Conflict: "${field}" cannot have multiple colors:  ${edgeColorMap[field]}, ${color}.`);
+                const existingColor = edgeColorMap[field];
+                if (existingColor !== color) {
+                    throw new Error(
+                        `Color Conflict: "${field}" cannot have multiple colors: ${existingColor}, ${color}.`
+                    );
+                }
             }
             edgeColorMap[field] = color;
         });
-    
+
         return edgeColorMap;
     }
 

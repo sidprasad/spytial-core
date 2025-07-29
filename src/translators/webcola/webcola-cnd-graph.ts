@@ -1,18 +1,37 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator } from './webcolatranslator';
-import { InstanceLayout, isAlignmentConstraint, isLeftConstraint, isTopConstraint, LayoutNode } from '../../layout/interfaces';
-import { GridRouter, Group, Layout, Node, Link } from 'webcola';
+import { InstanceLayout, isAlignmentConstraint, isInstanceLayout, isLeftConstraint, isTopConstraint, LayoutNode } from '../../layout/interfaces';
+import type { GridRouter, Group, Layout, Node, Link } from 'webcola';
+import { IInputDataInstance, ITuple, IAtom } from '../../data-instance/interfaces';
 
-// Use global D3 v4 and WebCola from external scripts (CDN + vendor)
-declare global {
-  interface Window {
-    cola: any;
-    d3: any;
+let d3 = window.d3v4 || window.d3; // Use d3 v4 if available, otherwise fallback to the default window.d3
+let cola = window.cola;
+
+/**
+ * Checks if two SVG elements are overlapping.
+ * 
+ * @param element1 - First element
+ * @param element2 - Second element
+ * @returns True if elements overlap
+ */
+function isOverlapping(element1: SVGElement, element2: SVGElement): boolean {
+  function hasgetBBox(target: any): target is { getBBox: any } {
+    return target && typeof target === 'object' && 'getBBox' in target;
   }
+
+  const bbox1 = hasgetBBox(element1) ? element1.getBBox() : { x: 0, y: 0, width: 0, height: 0 };
+  const bbox2 = hasgetBBox(element2) ? element2.getBBox() : { x: 0, y: 0, width: 0, height: 0 };
+  
+  return !(bbox2.x > bbox1.x + bbox1.width ||
+           bbox2.x + bbox2.width < bbox1.x ||
+           bbox2.y > bbox1.y + bbox1.height ||
+           bbox2.y + bbox2.height < bbox1.y);
 }
 
-// Access global versions loaded by external scripts
-const cola = (typeof window !== 'undefined') ? (window as any).cola : null;
-const d3 = (typeof window !== 'undefined') ? (window as any).d3 : null;
+function hasInnerBounds(target: any): target is { innerBounds: any } {
+  return target && typeof target === 'object' && 'innerBounds' in target;
+}
+
 
 const DEFAULT_SCALE_FACTOR = 5;
 
@@ -21,8 +40,35 @@ const DEFAULT_SCALE_FACTOR = 5;
  * Full implementation using WebCola constraint-based layout with D3 integration
  * @field currentLayout - Holds the current custom WebColaLayout instance
  * @field colaLayout - Holds the current layout instance used by WebCola
+ * 
+ * Features:
+ * - Interactive edge input mode with keyboard shortcuts (Cmd/Ctrl)
+ * - Visual edge creation by clicking and dragging between nodes
+ * - Edge modification by clicking on existing edges in input mode
+ * - Centralized state management for IInputDataInstance
+ * - Automatic layout regeneration when data instance changes
+ * - Self-loop edge support with confirmation
+ * - Zoom/pan disable during input mode
+ * - Comprehensive event system for external integration
+ * 
+ * Events Fired:
+ * - 'input-mode-activated': When Cmd/Ctrl is pressed to activate input mode
+ * - 'input-mode-deactivated': When Cmd/Ctrl is released to deactivate input mode  
+ * - 'edge-creation-requested': When user drags between nodes to create a new edge
+ *   * event.detail: { relationId: string, sourceNodeId: string, targetNodeId: string, tuple: ITuple }
+ * - 'edge-modification-requested': When user clicks on existing edge to modify it
+ *   * event.detail: { oldRelationId: string, newRelationId: string, sourceNodeId: string, targetNodeId: string, tuple: ITuple }
+ * 
+ * External State Management:
+ * React components should subscribe to these events and handle:
+ * 1. Updating the IInputDataInstance with new atoms/relations
+ * 2. Regenerating CnD layout constraints from the updated data
+ * 3. Calling renderLayout() to apply changes and re-render the visualization
+ * 
+ * This ensures React components serve as the single source of truth for state
+ * while the WebCola component focuses purely on visualization and user interaction.
  */
-export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLElement : (class {} as any)) {
+export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'undefined' ? HTMLElement : (class {} as any)) {
   private svg!: any;
   private container!: any;
   private currentLayout!: WebColaLayout;
@@ -42,6 +88,15 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
   private static readonly SMALL_IMG_SCALE_FACTOR = 0.3;
   private static readonly NODE_BORDER_RADIUS = 3;
   private static readonly NODE_STROKE_WIDTH = 1.5;
+
+  /**
+   * Configuration constants for text sizing and layout
+   */
+  private static readonly DEFAULT_FONT_SIZE = 10;
+  private static readonly MIN_FONT_SIZE = 6;
+  private static readonly MAX_FONT_SIZE = 16;
+  private static readonly TEXT_PADDING = 8; // Padding inside node for text
+  private static readonly LINE_HEIGHT_RATIO = 1.2;
 
   /**
    * Configuration constants for group visualization
@@ -80,9 +135,36 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
   private svgLinkGroups : any;
   private svgGroups : any;
   private svgGroupLabels: any;
+  private zoomBehavior: any;
+  private storedTransform: any;
+  /**
+   * Stores the starting coordinates when a node begins dragging so
+   * drag end events can report both the previous and new positions.
+   */
+  private dragStartPositions: Map<string, { x: number; y: number }> = new Map();
+
+  /**
+   * Input mode state management for edge creation and modification
+   */
+  private isInputModeActive: boolean = false;
+  private edgeCreationState: {
+    isCreating: boolean;
+    sourceNode: NodeWithMetadata | null;
+    temporaryEdge: any;
+  } = {
+    isCreating: false,
+    sourceNode: null,
+    temporaryEdge: null
+  };
+
+  /**
+   * Temporary canvas for text measurement
+   */
+  private textMeasurementCanvas: HTMLCanvasElement | null = null;
 
   constructor() {
     super();
+    
     this.attachShadow({ mode: 'open' });
     this.initializeDOM();
     this.initializeD3();
@@ -92,6 +174,9 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       .x((d: any) => d.x)
       .y((d: any) => d.y)
       .curve(d3.curveBasis);
+
+    // Initialize input mode keyboard event handlers
+    this.initializeInputModeHandlers();
   }
 
   /**
@@ -271,31 +356,486 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    * Initialize D3 selections and zoom behavior
    */
   private initializeD3(): void {
+    
+    if (!d3) {
+      d3 = window.d3;
+    }
+
     this.svg = d3.select(this.shadowRoot!.querySelector('#svg'));
     this.container = this.svg.select('.zoomable');
 
+    if(d3.zoom) {
+
     // Set up zoom behavior (D3 v4 API - matches your working pattern)
-    const zoom = d3.zoom()
+    this.zoomBehavior = d3.zoom()
       .scaleExtent([0.5, 5])
       .on('zoom', () => {
         this.container.attr('transform', d3.event.transform);
       });
 
-    this.svg.call(zoom);
+    this.svg.call(this.zoomBehavior);
+    }
+    else {
+      console.warn('D3 zoom behavior not available. Ensure D3 v4+ is loaded.');
+    }
+  }
+
+  /**
+   * Initialize keyboard event handlers for input mode activation
+   */
+  private initializeInputModeHandlers(): void {
+    // Handle keydown for Cmd/Ctrl press
+    document.addEventListener('keydown', (event) => {
+      if ((event.metaKey || event.ctrlKey) && !this.isInputModeActive) {
+        this.activateInputMode();
+      }
+    });
+
+    // Handle keyup for Cmd/Ctrl release
+    document.addEventListener('keyup', (event) => {
+      if (!event.metaKey && !event.ctrlKey && this.isInputModeActive) {
+        this.deactivateInputMode();
+      }
+    });
+
+    // Handle window blur to ensure input mode is deactivated
+    window.addEventListener('blur', () => {
+      if (this.isInputModeActive) {
+        this.deactivateInputMode();
+      }
+    });
+  }
+
+  /**
+   * Activate input mode for edge creation and modification
+   */
+  private activateInputMode(): void {
+    this.isInputModeActive = true;
+    
+    // Add input-mode class to SVG for styling
+    if (this.svg) {
+      this.svg.classed('input-mode', true);
+    }
+
+    // Disable node dragging and zoom/translate
+    this.disableNodeDragging();
+    this.disableZoom();
+
+    // Dispatch event for external listeners
+    this.dispatchEvent(new CustomEvent('input-mode-activated', {
+      detail: { active: true }
+    }));
+  }
+
+  /**
+   * Deactivate input mode and restore normal behavior
+   */
+  private deactivateInputMode(): void {
+    this.isInputModeActive = false;
+    
+    // Remove input-mode class from SVG
+    if (this.svg) {
+      this.svg.classed('input-mode', false);
+    }
+
+    // Clean up any temporary edge creation state
+    this.cleanupEdgeCreation();
+
+    // Re-enable node dragging and zoom/translate
+    this.enableNodeDragging();
+    this.enableZoom();
+
+    // Dispatch event for external listeners
+    this.dispatchEvent(new CustomEvent('input-mode-deactivated', {
+      detail: { active: false }
+    }));
+  }
+
+  /**
+   * Disable node dragging when in input mode
+   */
+  private disableNodeDragging(): void {
+    if (this.svgNodes && this.colaLayout) {
+      this.svgNodes.on('.drag', null);
+    }
+  }
+
+  /**
+   * Re-enable node dragging when exiting input mode
+   */
+  private enableNodeDragging(): void {
+    if (this.svgNodes && this.colaLayout && this.colaLayout.drag) {
+      const nodeDrag = this.colaLayout.drag();
+      this.setupNodeDragHandlers(nodeDrag);
+      this.svgNodes.call(nodeDrag);
+    }
+  }
+
+  /**
+   * Disable zoom/translate functionality when in input mode
+   */
+  private disableZoom(): void {
+    if (this.svg && this.zoomBehavior) {
+      // Store current transform before disabling
+      this.storedTransform = d3.zoomTransform(this.svg.node());
+      // Disable zoom events but preserve the behavior
+      this.svg.on('.zoom', null);
+    }
+  }
+
+  /**
+   * Re-enable zoom/translate functionality when exiting input mode
+   */
+  private enableZoom(): void {
+    if (this.svg && this.zoomBehavior) {
+      // Re-enable zoom behavior
+      this.svg.call(this.zoomBehavior);
+      // Restore the previous transform if we had one
+      if (this.storedTransform) {
+        this.svg.call(this.zoomBehavior.transform, this.storedTransform);
+      }
+    }
+  }
+
+  /**
+   * Clean up temporary edge creation state
+   */
+  private cleanupEdgeCreation(): void {
+    // Remove temporary edge if it exists
+    if (this.edgeCreationState.temporaryEdge) {
+      this.edgeCreationState.temporaryEdge.remove();
+    }
+
+    // Reset edge creation state
+    this.edgeCreationState = {
+      isCreating: false,
+      sourceNode: null,
+      temporaryEdge: null
+    };
+  }
+
+  /**
+   * Setup drag handlers for nodes
+   */
+  private setupNodeDragHandlers(nodeDrag: any): void {
+    nodeDrag
+      .on('start.cnd', (d: any) => {
+        const start = { x: d.x, y: d.y };
+        this.dragStartPositions.set(d.id, start);
+        this.dispatchEvent(
+          new CustomEvent('node-drag-start', {
+            detail: { id: d.id, position: start }
+          })
+        );
+      })
+      .on('end.cnd', (d: any) => {
+        const start = this.dragStartPositions.get(d.id);
+        this.dragStartPositions.delete(d.id);
+        const detail = {
+          id: d.id,
+          previous: start,
+          current: { x: d.x, y: d.y }
+        };
+        this.dispatchEvent(new CustomEvent('node-drag-end', { detail }));
+      });
+  }
+
+  /**
+   * Start edge creation from a source node
+   */
+  private startEdgeCreation(sourceNode: NodeWithMetadata): void {
+    if (!this.isInputModeActive) return;
+
+    // Clean up any existing edge creation
+    this.cleanupEdgeCreation();
+
+    // Set edge creation state
+    this.edgeCreationState.isCreating = true;
+    this.edgeCreationState.sourceNode = sourceNode;
+
+    // Create temporary edge line
+    this.edgeCreationState.temporaryEdge = this.container
+      .append('line')
+      .attr('class', 'temporary-edge')
+      .attr('x1', sourceNode.x)
+      .attr('y1', sourceNode.y)
+      .attr('x2', sourceNode.x)
+      .attr('y2', sourceNode.y)
+      .attr('stroke', '#007bff')
+      .attr('stroke-width', 2)
+      .attr('stroke-dasharray', '5,5')
+      .attr('opacity', 0.7);
+
+    // Add mousemove listener for temporary edge visualization
+    this.svg.on('mousemove.edgecreation', () => {
+      if (this.edgeCreationState.isCreating && this.edgeCreationState.temporaryEdge) {
+        const [mouseX, mouseY] = d3.mouse(this.container.node());
+        this.edgeCreationState.temporaryEdge
+          .attr('x2', mouseX)
+          .attr('y2', mouseY);
+      }
+    });
+  }
+
+  /**
+   * Finish edge creation by connecting to a target node
+   */
+  private async finishEdgeCreation(targetNode: NodeWithMetadata): Promise<void> {
+    if (!this.isInputModeActive || !this.edgeCreationState.isCreating || !this.edgeCreationState.sourceNode) {
+      return;
+    }
+
+    const sourceNode = this.edgeCreationState.sourceNode;
+
+    // Confirm self-loop edges
+    if (sourceNode.id === targetNode.id) {
+      const confirmSelfLoop = confirm(
+        `Are you sure you want to create a self-loop edge on "${sourceNode.label || sourceNode.id}"?`
+      );
+      if (!confirmSelfLoop) {
+        this.cleanupEdgeCreation();
+        return;
+      }
+    }
+
+    // Clean up temporary edge visualization
+    this.svg.on('mousemove.edgecreation', null);
+
+    // Show edge label input dialog
+    await this.showEdgeLabelInput(sourceNode, targetNode);
+  }
+
+  /**
+   * Show edge label input dialog and create the edge
+   */
+  private async showEdgeLabelInput(sourceNode: NodeWithMetadata, targetNode: NodeWithMetadata): Promise<void> {
+    const label = prompt(`Enter label for edge from "${sourceNode.label || sourceNode.id}" to "${targetNode.label || targetNode.id}":`);
+    
+    if (label !== null) { // User didn't cancel
+      await this.createNewEdge(sourceNode, targetNode, label || '');
+    }
+
+    // Clean up edge creation state
+    this.cleanupEdgeCreation();
+  }
+
+  /**
+   * Create a new edge between two nodes
+   */
+  private async createNewEdge(sourceNode: NodeWithMetadata, targetNode: NodeWithMetadata, label: string): Promise<void> {
+    if (!this.currentLayout) return;
+
+    // Find node indices in the current layout
+    const sourceIndex = this.currentLayout.nodes.findIndex(node => node.id === sourceNode.id);
+    const targetIndex = this.currentLayout.nodes.findIndex(node => node.id === targetNode.id);
+
+    if (sourceIndex === -1 || targetIndex === -1) {
+      console.error('Could not find node indices for edge creation');
+      return;
+    }
+
+    // Generate unique edge ID
+    const edgeId = `edge_${sourceNode.id}_${targetNode.id}_${Date.now()}`;
+
+    // Create new edge object
+    const newEdge: EdgeWithMetadata = {
+      id: edgeId,
+      source: sourceIndex,
+      target: targetIndex,
+      label: label,
+      relName: label,
+      color: '#333',
+      isUserCreated: true
+    } as EdgeWithMetadata;
+
+    // Add edge to current layout
+    this.currentLayout.links.push(newEdge);
+
+    // Update external state with the new edge
+    await this.updateExternalStateForNewEdge(sourceNode, targetNode, label);
+
+    // Dispatch event for external listeners
+    this.dispatchEvent(new CustomEvent('edge-created', {
+      detail: { 
+        edge: newEdge,
+        sourceNode: sourceNode,
+        targetNode: targetNode
+      }
+    }));
+
+    // Re-render the graph to show the new edge
+    this.rerenderGraph();
+  }
+
+  /**
+   * Update external state for a new edge through the external state management system
+   * @param sourceNode - Source node of the edge
+   * @param targetNode - Target node of the edge 
+   * @param relationName - Name/label of the relation
+   */
+  private async updateExternalStateForNewEdge(sourceNode: NodeWithMetadata, targetNode: NodeWithMetadata, relationName: string): Promise<void> {
+    if (!relationName.trim()) {
+      return;
+    }
+
+    try {
+      // Create a tuple representing the edge/relation
+      const tuple: ITuple = {
+        atoms: [sourceNode.id, targetNode.id],
+        types: [sourceNode.type || 'untyped', targetNode.type || 'untyped']
+      };
+
+      console.log(`Dispatching edge creation request: ${relationName}(${sourceNode.id}, ${targetNode.id})`);
+      
+      // Dispatch edge creation event for React components to handle
+      const edgeCreationEvent = new CustomEvent('edge-creation-requested', {
+        detail: {
+          relationId: relationName,
+          sourceNodeId: sourceNode.id,
+          targetNodeId: targetNode.id,
+          tuple: tuple
+        },
+        bubbles: true
+      });
+      this.dispatchEvent(edgeCreationEvent);
+    } catch (error) {
+      console.error('Failed to update external state for new edge:', error);
+    }
+  }
+
+  /**
+   * Re-render the graph with current layout data
+   */
+  private rerenderGraph(): void {
+    if (!this.currentLayout || !this.colaLayout) return;
+
+    // Update links in the layout
+    this.colaLayout.links(this.currentLayout.links);
+
+    // Re-render links
+    this.container.selectAll('.link-group').remove();
+    this.renderLinks(this.currentLayout.links, this.colaLayout);
+
+    // Restart the layout
+    this.colaLayout.start();
+  }
+
+  /**
+   * Edit the label of an existing edge
+   */
+  private async editEdgeLabel(edgeData: EdgeWithMetadata): Promise<void> {
+    if (!this.isInputModeActive) return;
+
+    const currentLabel = edgeData.label || edgeData.relName || '';
+    const newLabel = prompt(`Edit edge label:`, currentLabel);
+    
+    if (newLabel !== null && newLabel !== currentLabel) {
+      // Get source and target nodes for data instance update
+      const sourceNode = this.getNodeFromEdge(edgeData, 'source');
+      const targetNode = this.getNodeFromEdge(edgeData, 'target');
+
+      // Update external state if available
+      await this.updateExternalStateForEdgeModification(sourceNode, targetNode, currentLabel, newLabel);
+
+      // Update edge data
+      edgeData.label = newLabel;
+      edgeData.relName = newLabel;
+
+      // Dispatch event for external listeners
+      this.dispatchEvent(new CustomEvent('edge-modified', {
+        detail: { 
+          edge: edgeData,
+          oldLabel: currentLabel,
+          newLabel: newLabel
+        }
+      }));
+
+      // Re-render to show updated label
+      this.rerenderGraph();
+    }
+  }
+
+  /**
+   * Get node from edge data based on source or target
+   * @param edgeData - Edge data
+   * @param position - 'source' or 'target'
+   * @returns Node data or null
+   */
+  private getNodeFromEdge(edgeData: EdgeWithMetadata, position: 'source' | 'target'): NodeWithMetadata | null {
+    if (!this.currentLayout) return null;
+    
+    const nodeIndex = typeof edgeData[position] === 'number' ? edgeData[position] : edgeData[position].index;
+    return this.currentLayout.nodes[nodeIndex] || null;
+  }
+
+  /**
+   * Update external state for an edge modification through the external state management system
+   * @param sourceNode - Source node of the edge
+   * @param targetNode - Target node of the edge 
+   * @param oldRelationName - Old relation name/label
+   * @param newRelationName - New relation name/label
+   */
+  private async updateExternalStateForEdgeModification(
+    sourceNode: NodeWithMetadata | null, 
+    targetNode: NodeWithMetadata | null, 
+    oldRelationName: string, 
+    newRelationName: string
+  ): Promise<void> {
+    if (!sourceNode || !targetNode) {
+      return;
+    }
+
+    try {
+      // Create tuple for the relation
+      const tuple: ITuple = {
+        atoms: [sourceNode.id, targetNode.id],
+        types: [sourceNode.type || 'untyped', targetNode.type || 'untyped']
+      };
+
+      console.log(`Dispatching edge modification request: ${oldRelationName} -> ${newRelationName}`);
+
+      // Dispatch edge modification event for React components to handle
+      const edgeModificationEvent = new CustomEvent('edge-modification-requested', {
+        detail: {
+          oldRelationId: oldRelationName,
+          newRelationId: newRelationName,
+          sourceNodeId: sourceNode.id,
+          targetNodeId: targetNode.id,
+          tuple: tuple
+        },
+        bubbles: true
+      });
+      this.dispatchEvent(edgeModificationEvent);
+    } catch (error) {
+      console.error('Failed to update external state for edge modification:', error);
+    }
   }
 
   /**
    * Render layout using WebCola constraint solver
    * @param instanceLayout - The layout instance to render
+   * @param inputDataInstance - Optional input data instance for edge modifications
    */
   public async renderLayout(instanceLayout: InstanceLayout): Promise<void> {
+
+    if (! isInstanceLayout(instanceLayout)) {
+      throw new Error('Invalid instance layout provided. Expected an InstanceLayout instance.');
+    }
+
+
+
     try {
+      console.log('D3 version:', d3.version);
       // Check if D3 and WebCola are available
       if (!d3) {
-        throw new Error('D3 library not available. Please ensure D3 v3 is loaded from CDN.');
+        throw new Error('D3 library not available. Please ensure D3 v4 is loaded from CDN.');
       }
       if (!cola) {
-        throw new Error('WebCola library not available. Please ensure vendor/cola.js is loaded.');
+        if(!window.cola) {
+
+          throw new Error('WebCola library not available. Please ensure vendor/cola.js is loaded.');
+        }
+        cola = window.cola;
       }
 
       // Ensure D3 and container are properly initialized
@@ -396,6 +936,21 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
   }
 
   /**
+   * Get the current positions of all nodes in the layout.
+   * Useful for reading coordinates after rendering or drag events.
+   */
+  public getNodePositions(): Array<{ id: string; x: number; y: number }> {
+    if (!this.currentLayout?.nodes) {
+      return [];
+    }
+    return this.currentLayout.nodes.map((n: any) => ({
+      id: n.id,
+      x: n.x,
+      y: n.y
+    }));
+  }
+
+  /**
    * Render groups using D3 data binding
    */
   private renderGroups(groups: any[], layout: Layout): void {
@@ -465,6 +1020,18 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       .attr("marker-end", (d: any) => {
         if (this.isAlignmentEdge(d)) return "none";
         return this.isInferredEdge(d) ? "url(#hand-drawn-arrow)" : "url(#end-arrow)";
+      })
+      .on('click.inputmode', (d: any) => {
+        if (this.isInputModeActive && !this.isAlignmentEdge(d)) {
+          d3.event.stopPropagation();
+          // Handle async operation without blocking the event
+          this.editEdgeLabel(d).catch(error => {
+            console.error('Error editing edge label:', error);
+          });
+        }
+      })
+      .style('cursor', () => {
+        return this.isInputModeActive ? 'pointer' : 'default';
       });
   }
 
@@ -484,8 +1051,8 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       .attr("text-anchor", "middle")
       .attr("dominant-baseline", "middle")
       .attr("font-family", "system-ui")
-      .attr("font-size", "8px")
-      .attr("fill", "#555")
+      //.attr("font-size", "8px")
+      //.attr("fill", "#555")
       .attr("pointer-events", "none")
       .text((d: any) => d.label || d.relName || "");
   }
@@ -574,7 +1141,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         return targetNode?.color || "#999999";
       })
       .attr("stroke-width", 1)
-      .call(layout.drag);
+      .call((layout as any).drag);
 
 
     return groupRects;
@@ -617,7 +1184,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         }
         
         return "";
-      }).call(layout.drag);
+      }).call((layout as any).drag);
   }
 
   /**
@@ -637,6 +1204,9 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    */
   private setupNodes(nodes: Array<NodeWithMetadata>, layout: Layout): d3.Selection<SVGGElement, any, any, unknown> {
     // Create node groups with drag behavior
+    const nodeDrag = layout.drag();
+    this.setupNodeDragHandlers(nodeDrag);
+
     const nodeSelection = this.container
       .selectAll(".node")
       .data(nodes)
@@ -645,7 +1215,22 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       .attr("class", (d: any) => {
         return this.isErrorNode(d) ? "error-node" : "node";
       })
-      .call(layout.drag);
+      .call(nodeDrag)
+      .on('mousedown.inputmode', (d: any) => {
+        if (this.isInputModeActive) {
+          d3.event.stopPropagation();
+          this.startEdgeCreation(d);
+        }
+      })
+      .on('mouseup.inputmode', (d: any) => {
+        if (this.isInputModeActive && this.edgeCreationState.isCreating) {
+          d3.event.stopPropagation();
+          // Handle async operation without blocking the event
+          this.finishEdgeCreation(d).catch(error => {
+            console.error('Error finishing edge creation:', error);
+          });
+        }
+      });
 
     // Add rectangle backgrounds for nodes
     this.setupNodeRectangles(nodeSelection);
@@ -681,8 +1266,12 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       .attr("stroke-width", WebColaCnDGraph.NODE_STROKE_WIDTH)
       .attr("fill", (d: any) => {
         const isHidden = this.isHiddenNode(d);
-        const hasIcon = d.icon != null;
-        return isHidden || hasIcon ? "transparent" : "white";
+        const hasIcon = !! d.icon;
+        
+        const fill = isHidden || hasIcon ? "transparent" : "white";
+        //console.log(`Node ${d.id} - isHidden: ${isHidden}, hasIcon: ${hasIcon} ${d.icon}, fill: ${fill}`);
+
+        return fill;
       });
   }
 
@@ -694,6 +1283,8 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    * @param nodeSelection - D3 selection of node groups
    */
   private setupNodeIcons(nodeSelection: d3.Selection<SVGGElement, any, any, unknown>): void {
+    
+    
     nodeSelection
       .filter((d: any) => d.icon) // Only nodes with icons
       .append("image")
@@ -724,7 +1315,8 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
       })
       .append("title")
       .text((d: any) => d.label || d.name || d.id || "Node")
-      .on("error", function(this: SVGImageElement, event: any, d: any) {
+      .on("error", function(this: any, event: any, d: any) {
+
         d3.select(this).attr("xlink:href", "img/default.png");
         console.error(`Failed to load icon for node ${d.id}: ${d.icon}`);
       });
@@ -744,51 +1336,192 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
   }
 
   /**
-   * Creates main node labels with attributes using tspan elements.
-   * Handles conditional label display and multi-line attribute rendering.
-   * 
-   * @param nodeSelection - D3 selection of node groups
+   * Gets a canvas context for text measurement
    */
-  private setupNodeLabels(nodeSelection: d3.Selection<SVGGElement, any, any, unknown>): void {
+  private getTextMeasurementContext(): CanvasRenderingContext2D {
+    if (!this.textMeasurementCanvas) {
+      this.textMeasurementCanvas = document.createElement('canvas');
+    }
+    return this.textMeasurementCanvas.getContext('2d')!;
+  }
+
+  /**
+   * Measures the width of text at a given font size
+   */
+  private measureTextWidth(text: string, fontSize: number, fontFamily: string = 'system-ui'): number {
+    const context = this.getTextMeasurementContext();
+    context.font = `${fontSize}px ${fontFamily}`;
+    return context.measureText(text).width;
+  }
+
+  /**
+   * Calculates the optimal font size to fit text within given dimensions
+   */
+  private calculateOptimalFontSize(
+    text: string, 
+    maxWidth: number, 
+    maxHeight: number, 
+    fontFamily: string = 'system-ui'
+  ): number {
+    let fontSize = WebColaCnDGraph.DEFAULT_FONT_SIZE;
+    
+    // Start with default size and scale down if needed
+    while (fontSize > WebColaCnDGraph.MIN_FONT_SIZE) {
+      const textWidth = this.measureTextWidth(text, fontSize, fontFamily);
+      const lineHeight = fontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO;
+      
+      if (textWidth <= maxWidth && lineHeight <= maxHeight) {
+        break;
+      }
+      
+      fontSize -= 0.5;
+    }
+    
+    // Scale up if there's room
+    while (fontSize < WebColaCnDGraph.MAX_FONT_SIZE) {
+      const testSize = fontSize + 0.5;
+      const textWidth = this.measureTextWidth(text, testSize, fontFamily);
+      const lineHeight = testSize * WebColaCnDGraph.LINE_HEIGHT_RATIO;
+      
+      if (textWidth > maxWidth || lineHeight > maxHeight) {
+        break;
+      }
+      
+      fontSize = testSize;
+    }
+    
+    return Math.max(WebColaCnDGraph.MIN_FONT_SIZE, Math.min(fontSize, WebColaCnDGraph.MAX_FONT_SIZE));
+  }
+
+  /**
+   * Wraps text to fit within given width, returning array of lines
+   */
+  private wrapText(text: string, maxWidth: number, fontSize: number, fontFamily: string = 'system-ui'): string[] {
+    const words = text.split(/\s+/);
+    const lines: string[] = [];
+    let currentLine = '';
+    
+    for (const word of words) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      const lineWidth = this.measureTextWidth(testLine, fontSize, fontFamily);
+      
+      if (lineWidth <= maxWidth) {
+        currentLine = testLine;
+      } else {
+        if (currentLine) {
+          lines.push(currentLine);
+          currentLine = word;
+        } else {
+          // Word is too long for the line, we'll have to break it
+          lines.push(word);
+        }
+      }
+    }
+    
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+    
+    return lines;
+  }
+
+
+
+  /**
+   * Creates main node labels with attributes using dynamic sizing and expansion
+   */
+  private setupNodeLabelsWithDynamicSizing(nodeSelection: d3.Selection<SVGGElement, any, any, unknown>): void {
     nodeSelection
       .append("text")
       .attr("class", "label")
       .attr("text-anchor", "middle")
       .attr("dominant-baseline", "middle")
       .attr("font-family", "system-ui")
-      .attr("font-size", "10px")
       .attr("fill", "black")
-      .each((d: any, i: number, nodes: any[]) => {
+      .each((d: any, i: number, nodes: SVGTextElement[]) => {
         if (this.isHiddenNode(d)) {
           return;
         }
 
         const shouldShowLabels = d.showLabels;
-        const displayLabel = shouldShowLabels ? (d.label || d.name || d.id || "Node") : "";
+        if (!shouldShowLabels) {
+          return;
+        }
+
         const textElement = d3.select(nodes[i]);
+        const nodeWidth = d.width || 100;
+        const nodeHeight = d.height || 60;
+        const maxTextWidth = nodeWidth - WebColaCnDGraph.TEXT_PADDING * 2;
+        const maxTextHeight = nodeHeight - WebColaCnDGraph.TEXT_PADDING * 2;
+        
+        const displayLabel = d.label || d.name || d.id || "Node";
+        const attributes = d.attributes || {};
+        
+        // Calculate optimal font size for the main label
+        const mainLabelFontSize = this.calculateOptimalFontSize(
+          displayLabel,
+          maxTextWidth,
+          Math.min(maxTextHeight / 3, WebColaCnDGraph.MAX_FONT_SIZE * WebColaCnDGraph.LINE_HEIGHT_RATIO),
+          'system-ui'
+        );
+        
+        textElement.attr("font-size", `${mainLabelFontSize}px`);
+        
+        // Add main name label with wrapping if needed
+        const mainLabelLines = this.wrapText(displayLabel, maxTextWidth, mainLabelFontSize);
+        const lineHeight = mainLabelFontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO;
+        
+        mainLabelLines.forEach((line, lineIndex) => {
+          textElement
+            .append("tspan")
+            .attr("x", 0)
+            .attr("dy", lineIndex === 0 ? "0em" : `${lineHeight}px`)
+            .style("font-weight", "bold")
+            .style("font-size", `${mainLabelFontSize}px`)
+            .text(line);
+        });
 
-        // Add main name label
-        textElement
-          .append("tspan")
-          .attr("x", 0)
-          .attr("dy", "0em")
-          .style("font-weight", "bold")
-          .text(displayLabel);
-
-        // Add attribute labels if labels should be shown
-        if (shouldShowLabels && d.attributes) {
-          let lineOffset = 1; // Start from next line
-
-          Object.entries(d.attributes).forEach(([key, value]: [string, any]) => {
-            textElement
-              .append("tspan")
-              .attr("x", 0)
-              .attr("dy", `${lineOffset}em`)
-              .text(`${key}: ${value}`);
-            lineOffset += 1;
-          });
+        // Handle attributes (show all that fit)
+        const attributeEntries = Object.entries(attributes);
+        if (attributeEntries.length > 0) {
+          const remainingHeight = maxTextHeight - (mainLabelLines.length * lineHeight);
+          const attributeFontSize = Math.min(
+            mainLabelFontSize * 0.8, // Slightly smaller than main label
+            this.calculateOptimalFontSize(
+              "sample: value", // Sample attribute text for sizing
+              maxTextWidth,
+              remainingHeight / Math.max(1, attributeEntries.length),
+              'system-ui'
+            )
+          );
+          
+          for (let i = 0; i < attributeEntries.length; i++) {
+            const [key, value] = attributeEntries[i];
+            const attributeText = `${key}: ${value}`;
+            const attributeLines = this.wrapText(attributeText, maxTextWidth, attributeFontSize);
+            
+            attributeLines.forEach((line, subLineIndex) => {
+              textElement
+                .append("tspan")
+                .attr("x", 0)
+                .attr("dy", `${attributeFontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO}px`)
+                .style("font-size", `${attributeFontSize}px`)
+                .text(line);
+            });
+          }
         }
       });
+  }
+
+  /**
+   * Creates main node labels with attributes using tspan elements.
+   * Handles conditional label display and multi-line attribute rendering.
+   * 
+   * @param nodeSelection - D3 selection of node groups
+   */
+  private setupNodeLabels(nodeSelection: d3.Selection<SVGGElement, any, any, unknown>): void {
+    // Use the new dynamic sizing implementation
+    this.setupNodeLabelsWithDynamicSizing(nodeSelection);
   }
 
   /**
@@ -860,6 +1593,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
    */
   private updatePositions(): void {
     console.log('tick - updating positions');
+    
     // Update group positions and sizes first (lower layer)
     this.svgGroups
       .attr('x', (d: any) => d.bounds.x)
@@ -870,19 +1604,19 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
 
     // Update node rectangles using bounds
     this.svgNodes.select('rect')
-      .each((d: NodeWithMetadata) => {
+      .each((d: any) => {
         if (d.bounds) {
           d.innerBounds = d.bounds.inflate(-1);
         }
       })
-      .attr('x', (d: NodeWithMetadata) => d.bounds.x )
-      .attr('y', (d: NodeWithMetadata) => d.bounds.y )
-      .attr('width', (d: NodeWithMetadata) => d.bounds.width() )
-      .attr('height', (d: NodeWithMetadata) => d.bounds.height());
+      .attr('x', (d: any) => d.bounds.x )
+      .attr('y', (d: any) => d.bounds.y )
+      .attr('width', (d: any) => d.bounds.width() )
+      .attr('height', (d: any) => d.bounds.height());
 
     // Update node icons with proper positioning
     this.svgNodes.select('image')
-      .attr('x', (d: NodeWithMetadata) => {
+      .attr('x', (d: any) => {
         if (d.showLabels) {
           // Move to the top-right corner
           return d.x + (d.width) / 2 - ((d.width) * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR);
@@ -891,7 +1625,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
           return d.bounds.x;
         }
       })
-      .attr('y', (d: NodeWithMetadata) => {
+      .attr('y', (d: any) => {
         if (d.showLabels) {
           // Align with the top edge
           return d.y - (d.height) / 2;
@@ -903,8 +1637,8 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
 
     // Update most specific type labels
     this.svgNodes.select('.mostSpecificTypeLabel')
-      .attr('x', (d: NodeWithMetadata) => d.x - (d.width) / 2 + 5)
-      .attr('y', (d: NodeWithMetadata) => d.y - (d.height) / 2 + 10)
+      .attr('x', (d: NodeWithMetadata) => d.x - (d.width || 0) / 2 + 5)
+      .attr('y', (d: NodeWithMetadata) => d.y - (d.height || 0) / 2 + 10)
       .raise();
 
     // Update main node labels with tspan positioning
@@ -944,7 +1678,9 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
               target = targetGroup;
               // NOTE: I think this is a rectangle...
               // Just added this to the NodeWithMetadata interface
-              target.innerBounds = targetGroup.bounds?.inflate(-1 * (targetGroup.padding || 10));
+              if(hasInnerBounds(target)) {
+                target.innerBounds = targetGroup.bounds?.inflate(-1 * (targetGroup.padding || 10));
+              }
             } else {
               console.log('Target group not found', potentialGroups, this.getNodeIndex(target));
             }
@@ -954,7 +1690,10 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
             
             if (sourceGroup) {
               source = sourceGroup;
-              source.innerBounds = sourceGroup.bounds?.inflate(-1 * (sourceGroup.padding || 10));
+              if(hasInnerBounds(source)) {
+                // Inflate inner bounds for source group
+                source.innerBounds = sourceGroup.bounds?.inflate(-1 * (sourceGroup.padding || 10));
+              }
             } else {
               console.log('Source group not found', potentialGroups, this.getNodeIndex(source));
             }
@@ -964,7 +1703,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         }
 
         // Use WebCola's edge routing if available and nodes have innerBounds
-        if (typeof (cola as any).makeEdgeBetween === 'function' && 
+        if (typeof (cola as any).makeEdgeBetween === 'function' && hasInnerBounds(source) && hasInnerBounds(target) &&
             source.innerBounds && target.innerBounds) {
           const route = (cola as any).makeEdgeBetween(source.innerBounds, target.innerBounds, 5);
           return this.lineFunction([route.sourceIntersection, route.arrowStart]);
@@ -1016,6 +1755,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
 
   private gridUpdatePositions() {
     console.log('grid tick - updating positions');
+    
     const node = this.container.selectAll(".node");
     const mostSpecificTypeLabel = this.container.selectAll(".mostSpecificTypeLabel");
     const label = this.container.selectAll(".label");
@@ -1703,8 +2443,9 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
   private handleLabelOverlap(currentLabel: SVGTextElement): void {
     const overlapsWith: SVGTextElement[] = [];
 
+
     this.container.selectAll('.linklabel').each(function(this: SVGTextElement) {
-      if (this !== currentLabel && this.isOverlapping && this.isOverlapping(currentLabel)) {
+      if (this !== currentLabel && isOverlapping(this, currentLabel)) {
         overlapsWith.push(this);
       }
     });
@@ -1714,22 +2455,6 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
     }
   }
 
-  /**
-   * Checks if two SVG elements are overlapping.
-   * 
-   * @param element1 - First element
-   * @param element2 - Second element
-   * @returns True if elements overlap
-   */
-  private isOverlapping(element1: SVGElement, element2: SVGElement): boolean {
-    const bbox1 = element1.getBBox();
-    const bbox2 = element2.getBBox();
-    
-    return !(bbox2.x > bbox1.x + bbox1.width ||
-             bbox2.x + bbox2.width < bbox1.x ||
-             bbox2.y > bbox1.y + bbox1.height ||
-             bbox2.y + bbox2.height < bbox1.y);
-  }
 
   /**
    * Minimizes overlap between labels by repositioning.
@@ -1871,14 +2596,17 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         pointer-events: none;
       }
 
-      .linklabel {
-        text-anchor: middle;
-        dominant-baseline: middle;
-        font-size: 8px;
-        fill: #555;
-        pointer-events: none;
-        font-family: system-ui;
-      }
+.linklabel {
+  text-anchor: middle;
+  dominant-baseline: middle;
+  font-size: 10px;
+  fill: #555;
+  pointer-events: none;
+  font-family: system-ui;
+  stroke: white; /* Add white shadow */
+  stroke-width: 0.2px; /* Reduced thickness of the shadow */
+  stroke-opacity: 0.7; /* Added opacity to make the shadow less intense */
+}
       
       .mostSpecificTypeLabel {
         font-size: 8px;
@@ -1896,6 +2624,34 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         border: 1px solid #ccc;
         border-radius: 4px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      }
+
+      /* Input mode styles */
+      svg.input-mode {
+        cursor: crosshair !important;
+      }
+
+      svg.input-mode .node rect {
+        cursor: crosshair !important;
+      }
+
+      svg.input-mode:active {
+        cursor: crosshair !important;
+      }
+
+      .temporary-edge {
+        pointer-events: none;
+        z-index: 1000;
+      }
+
+      svg.input-mode .link {
+        cursor: pointer;
+        stroke-width: 2px;
+      }
+
+      svg.input-mode .link:hover {
+        stroke-width: 3px;
+        opacity: 0.8;
       }
     `;
   }
@@ -1916,22 +2672,7 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
         return axis === 'x' ? point.x : point.y;
     }
 
-  /**
-   * Create drag behavior for nodes and groups
-   * 
-   * @param layout - WebCola layout instance
-   * @returns D3 drag behavior for interactive node manipulation
-   * 
-   * @example
-   * ```typescript
-   * const dragBehavior = layout.drag;
-   * nodeSelection.call(dragBehavior);
-   * ```
-   */
-  private createDragBehavior(layout: any): any {
-    // Use WebCola's own drag behavior instead of D3's - this handles D3 version compatibility
-    return layout.drag;
-  }
+  
 
   /**
    * Show loading indicator
@@ -1961,10 +2702,14 @@ export class WebColaCnDGraph extends (typeof HTMLElement !== 'undefined' ? HTMLE
     error.style.display = 'block';
     error.textContent = message;
   }
+
+  // =========================================
+  // EVENT-BASED STATE INTEGRATION API
+  // =========================================
+
 }
 
 // Register the custom element only in browser environments
 if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined') {
-  // eslint-disable-next-line no-undef
   customElements.define('webcola-cnd-graph', WebColaCnDGraph);
 }

@@ -2,12 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { InstanceBuilder, InstanceBuilderProps } from '../src/components/InstanceBuilder/InstanceBuilder';
 import { CndLayoutInterface } from '../src/components/CndLayoutInterface';
-import { DotDataInstance } from '../src/data-instance/dot/dot-data-instance';
+import { AlloyDataInstance, createEmptyAlloyDataInstance } from '../src/data-instance/alloy-data-instance';
 import { IInputDataInstance } from '../src/data-instance/interfaces';
 
 /**
  * Integrated demo that combines InstanceBuilder with CndLayoutInterface
  * and connects to the webcola-integrated-demo.html page
+ * Uses AlloyDataInstance following the Alloy/Forge pattern
  */
 
 interface IntegratedDemoState {
@@ -21,7 +22,7 @@ interface IntegratedDemoState {
  */
 const ConnectedInstanceBuilder: React.FC = () => {
   const [instance, setInstance] = useState<IInputDataInstance>(
-    () => new DotDataInstance('digraph G {}')
+    () => createEmptyAlloyDataInstance()
   );
 
   // Connect to global state
@@ -44,8 +45,11 @@ const ConnectedInstanceBuilder: React.FC = () => {
       (window as any).updateBuilderInstance = (newInstance: IInputDataInstance) => {
         setInstance(newInstance);
       };
+      
+      // Expose a getter for the React instance
+      (window as any).getCurrentInstanceFromReact = () => instance;
     }
-  }, []);
+  }, [instance]);
 
   const handleInstanceChange = (newInstance: IInputDataInstance) => {
     setInstance(newInstance);
@@ -76,34 +80,19 @@ const ConnectedLayoutInterface: React.FC = () => {
   const [constraints, setConstraints] = useState<any[]>([]);
   const [directives, setDirectives] = useState<any[]>([]);
 
-  // Connect to global CND textarea
+  // Expose CND spec getter to global scope
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      // Sync with the CND textarea in the HTML demo
-      const cndTextarea = document.getElementById('webcola-cnd') as HTMLTextAreaElement;
-      if (cndTextarea) {
-        setCndSpec(cndTextarea.value);
-        
-        // Listen for changes
-        const handleTextareaChange = () => {
-          setCndSpec(cndTextarea.value);
-        };
-        
-        cndTextarea.addEventListener('input', handleTextareaChange);
-        return () => cndTextarea.removeEventListener('input', handleTextareaChange);
-      }
+      (window as any).getCurrentCNDSpecFromReact = () => cndSpec;
     }
-  }, []);
+  }, [cndSpec]);
 
   const handleCndSpecChange = (newSpec: string) => {
     setCndSpec(newSpec);
     
-    // Update the textarea in the HTML demo
-    if (typeof window !== 'undefined') {
-      const cndTextarea = document.getElementById('webcola-cnd') as HTMLTextAreaElement;
-      if (cndTextarea) {
-        cndTextarea.value = newSpec;
-      }
+    // Trigger update in the HTML demo when CND spec changes
+    if (typeof window !== 'undefined' && (window as any).updateFromCnDSpec) {
+      (window as any).updateFromCnDSpec();
     }
   };
 
@@ -149,7 +138,7 @@ export function mountIntegratedDemo() {
  */
 export const FullIntegratedDemo: React.FC = () => {
   const [instance, setInstance] = useState<IInputDataInstance>(
-    () => new DotDataInstance('digraph G {}')
+    () => createEmptyAlloyDataInstance()
   );
   const [cndSpec, setCndSpec] = useState('');
   const [currentTab, setCurrentTab] = useState<'builder' | 'layout' | 'visualization'>('builder');

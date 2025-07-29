@@ -1,6 +1,6 @@
 {
   "name": "cnd-core",
-  "version": "1.0.4",
+  "version": "1.1.9-beta.1",
   "description": "A fully client-side application for CnD.",
   "main": "./dist/browser/cnd-core-complete.global.js",
   "types": "./dist/browser/cnd-core-complete.global.d.ts",
@@ -13,9 +13,9 @@
       "import": "./dist/browser/cnd-core-complete.global.js",
       "require": "./dist/browser/cnd-core-complete.global.js"
     },
-    "./components/demo-integration": {
-      "import": "./dist/components/demo-integration.global.js",
-      "require": "./dist/components/demo-integration.global.js"
+    "./components/*": {
+      "import": "./dist/components/*.global.js",
+      "require": "./dist/components/*.global.js"
     }
   },
   "scripts": {
@@ -32,7 +32,7 @@
     "format": "prettier --write src/**/*.{ts,tsx,json,md}",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
-    "prepublishOnly": "npm run clean && npm run build:browser",
+    "prepublishOnly": "npm run clean && npm run build:all",
     "serve": "python3 -m http.server 8080"
   },
   "keywords": [
@@ -55,6 +55,8 @@
   },
   "homepage": "https://github.com/sidprasad/cnd-core#readme",
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
     "@types/chroma-js": "^3.1.1",
     "@types/dagre": "^0.7.52",
     "@types/ejs": "^3.1.5",
@@ -84,6 +86,7 @@
     "@types/react-dom": "^19.1.6",
     "@xmldom/xmldom": "^0.9.8",
     "chroma-js": "^3.1.2",
+    "cnd-core": "^1.1.4",
     "d3": "^7.9.0",
     "dagre": "^0.8.5",
     "forge-expr-evaluator": "^1.1.0",
@@ -94,7 +97,7 @@
     "lodash": "^4.17.21",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "simple-graph-query": "^1.1.1",
+    "simple-graph-query": "^1.2.4",
     "webcola": "^3.4.0"
   }
 }
