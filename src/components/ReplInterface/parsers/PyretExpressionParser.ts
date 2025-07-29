@@ -387,6 +387,8 @@ export class PyretExpressionParser implements ICommandParser {
       }
       
       // For complex objects, convert to PyretDataInstance and merge all atoms/relations
+      // NOTE: This functionality is now available as PyretDataInstance.fromExpression() static method
+      // and could be used as: const tempInstance = await PyretDataInstance.fromExpression(originalExpression, false, this.evaluator);
       const tempInstance = new PyretDataInstance(pyretResult);
 
       // Get the new atoms and relations from the temp instance
