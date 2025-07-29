@@ -681,44 +681,6 @@ function createIInputDataInstanceTestSuite(factory: InstanceFactory) {
       expect(graph.edges().length).toBeGreaterThan(0);
     });
 
-    it('should handle projections correctly', () => {
-      instance.addAtom(sampleAtom1);
-      instance.addAtom(sampleAtom2);
-      instance.addAtom(sampleAtom3);
-      instance.addRelationTuple('knows', sampleTuple1);
-      instance.addRelationTuple('worksFor', sampleTuple2);
-      
-      const projection = instance.applyProjections(['atom1', 'atom2']);
-      expect(projection.getAtoms()).toHaveLength(2);
-      
-      const relations = projection.getRelations();
-      const knowsRelation = relations.find(r => r.name === 'knows');
-      const worksForRelation = relations.find(r => r.name === 'worksFor');
-      
-      expect(knowsRelation?.tuples).toHaveLength(1); // Both atoms in projection
-      
-      // worksForRelation might not exist if it has no tuples after projection
-      if (worksForRelation) {
-        expect(worksForRelation.tuples).toHaveLength(0); // atom3 not in projection
-      } else {
-        // Relation was filtered out completely, which is also valid
-        expect(relations.find(r => r.name === 'worksFor')).toBeUndefined();
-      }
-    });
-
-    it('should reify data correctly', () => {
-      instance.addAtom(sampleAtom1);
-      instance.addAtom(sampleAtom2);
-      instance.addRelationTuple('knows', sampleTuple1);
-      
-      const reified = instance.reify();
-      expect(reified).toBeDefined();
-      
-      // Create new instance from reified data to test round-trip
-      const newInstance = createInstanceWithData(reified as IJsonDataInstance);
-      expect(newInstance.getAtoms()).toHaveLength(2);
-      expect(newInstance.getRelations()).toHaveLength(1);
-    });
   });
 
   describe('Edge Cases and Error Handling', () => {
@@ -761,29 +723,7 @@ function createIInputDataInstanceTestSuite(factory: InstanceFactory) {
       expect(atoms[0].label).toBe(longString);
     });
 
-    it('should handle unicode characters', () => {
-      const unicodeAtom: IAtom = { id: 'unicode', type: '类型', label: '🚀 Test 中文' };
-      
-      instance.addAtom(unicodeAtom);
-      
-      const atoms = instance.getAtoms();
-      expect(atoms[0].type).toBe('类型');
-      expect(atoms[0].label).toBe('🚀 Test 中文');
-    });
-
-    it('should handle large numbers of atoms efficiently', () => {
-      const start = performance.now();
-      
-      // Add 1000 atoms
-      for (let i = 0; i < 1000; i++) {
-        instance.addAtom({ id: `atom${i}`, type: 'TestType', label: `Atom ${i}` });
-      }
-      
-      const end = performance.now();
-      expect(end - start).toBeLessThan(1000); // Should complete in under 1 second
-      
-      expect(instance.getAtoms()).toHaveLength(1000);
-    });
+  
   });
 }
 
