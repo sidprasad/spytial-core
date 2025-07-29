@@ -78,7 +78,7 @@ const DirectiveCard: React.FC<DirectiveCardProps> = (props: DirectiveCardProps) 
 
   return (
     <div className={classes}>
-        <button className="closeButton" title="Remove directive" type="button" onClick= { props.onRemove }>
+        <button className="closeButton" title="Remove directive" aria-label="Remove directive" type="button" onClick= { props.onRemove }>
             <span aria-hidden="true">&times;</span>
         </button>
         <div className="input-group">
