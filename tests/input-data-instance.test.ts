@@ -10,6 +10,22 @@ import {
   DataInstanceEvent 
 } from '../src/data-instance/interfaces';
 import { JSONDataInstance, IJsonDataInstance } from '../src/data-instance/json-data-instance';
+import { PyretDataInstance } from '../src/data-instance/pyret/pyret-data-instance';
+import { AlloyDataInstance, createEmptyAlloyDataInstance } from '../src/data-instance/alloy-data-instance';
+
+/**
+ * Factory interface for creating test instances of different IInputDataInstance implementations
+ */
+interface InstanceFactory {
+  /** Create an empty instance */
+  createEmpty(): IInputDataInstance;
+  /** Create an instance with predefined test data */
+  createWithTestData(): IInputDataInstance;
+  /** Create an instance with specific data (only works for JSON implementation) */
+  createWithData?(data: any): IInputDataInstance;
+  /** Implementation name for test descriptions */
+  name: string;
+}
 
 /**
  * Comprehensive test suite for IInputDataInstance interface.
@@ -23,21 +39,38 @@ import { JSONDataInstance, IJsonDataInstance } from '../src/data-instance/json-d
  * - Error handling and edge cases
  * 
  * Tests are designed to be implementation-agnostic and can be run against
- * any class that implements IInputDataInstance (JSONDataInstance, PyretDataInstance, etc.)
+ * any class that implements IInputDataInstance (JSONDataInstance, PyretDataInstance, AlloyDataInstance)
  */
-
-describe('IInputDataInstance Comprehensive Tests', () => {
+function createIInputDataInstanceTestSuite(factory: InstanceFactory) {
   
   /**
-   * Factory function to create test instances.
-   * This allows the test suite to be easily adapted for different implementations.
+   * Factory functions to create test instances using the provided factory.
    */
   function createEmptyInstance(): IInputDataInstance {
-    return new JSONDataInstance({ atoms: [], relations: [] });
+    return factory.createEmpty();
   }
 
-  function createInstanceWithData(data: IJsonDataInstance): IInputDataInstance {
-    return new JSONDataInstance(data);
+  function createInstanceWithTestData(): IInputDataInstance {
+    return factory.createWithTestData();
+  }
+
+  function createInstanceWithData(data: any): IInputDataInstance {
+    if (factory.createWithData) {
+      return factory.createWithData(data);
+    }
+    // Fallback for implementations that don't support arbitrary data
+    const instance = factory.createEmpty();
+    if (data.atoms) {
+      data.atoms.forEach((atom: IAtom) => instance.addAtom(atom));
+    }
+    if (data.relations) {
+      data.relations.forEach((relation: IRelation) => {
+        relation.tuples.forEach((tuple: ITuple) => {
+          instance.addRelationTuple(relation.name, tuple);
+        });
+      });
+    }
+    return instance;
   }
 
   // Sample test data
@@ -751,5 +784,86 @@ describe('IInputDataInstance Comprehensive Tests', () => {
       
       expect(instance.getAtoms()).toHaveLength(1000);
     });
+  });
+}
+
+// Factory implementations for each IInputDataInstance type
+
+/**
+ * JSON Data Instance Factory
+ */
+const jsonFactory: InstanceFactory = {
+  name: 'JSONDataInstance',
+  createEmpty: () => new JSONDataInstance({ atoms: [], relations: [] }),
+  createWithTestData: () => new JSONDataInstance({
+    atoms: [
+      { id: 'testAtom1', type: 'TestType', label: 'Test 1' },
+      { id: 'testAtom2', type: 'TestType', label: 'Test 2' }
+    ],
+    relations: [
+      {
+        id: 'testRelation',
+        name: 'testRel',
+        types: ['TestType', 'TestType'],
+        tuples: [{ atoms: ['testAtom1', 'testAtom2'], types: ['TestType', 'TestType'] }]
+      }
+    ]
+  }),
+  createWithData: (data: IJsonDataInstance) => new JSONDataInstance(data)
+};
+
+/**
+ * Pyret Data Instance Factory
+ */
+const pyretFactory: InstanceFactory = {
+  name: 'PyretDataInstance',
+  createEmpty: () => new PyretDataInstance(null, false),
+  createWithTestData: () => {
+    // Create a simple Pyret object with test data
+    const pyretData = {
+      dict: {
+        value: 'testValue',
+        relation: {
+          dict: { value: 'relatedValue' },
+          brands: { '$testtype': true }
+        }
+      },
+      brands: { '$testtype': true }
+    };
+    return new PyretDataInstance(pyretData, false);
+  }
+};
+
+/**
+ * Alloy Data Instance Factory
+ */
+const alloyFactory: InstanceFactory = {
+  name: 'AlloyDataInstance',
+  createEmpty: () => createEmptyAlloyDataInstance(),
+  createWithTestData: () => {
+    const instance = createEmptyAlloyDataInstance();
+    // Add some test data
+    instance.addAtom({ id: 'testAtom1', type: 'TestType', label: 'Test 1' });
+    instance.addAtom({ id: 'testAtom2', type: 'TestType', label: 'Test 2' });
+    instance.addRelationTuple('testRel', { 
+      atoms: ['testAtom1', 'testAtom2'], 
+      types: ['TestType', 'TestType'] 
+    });
+    return instance;
+  }
+};
+
+// Run the comprehensive test suite against all implementations
+describe('IInputDataInstance Comprehensive Tests', () => {
+  describe('JSONDataInstance Implementation', () => {
+    createIInputDataInstanceTestSuite(jsonFactory);
+  });
+
+  describe('PyretDataInstance Implementation', () => {
+    createIInputDataInstanceTestSuite(pyretFactory);
+  });
+
+  describe('AlloyDataInstance Implementation', () => {
+    createIInputDataInstanceTestSuite(alloyFactory);
   });
 });
