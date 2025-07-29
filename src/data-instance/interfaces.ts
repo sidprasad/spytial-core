@@ -84,4 +84,14 @@ export interface IInputDataInstance  extends IDataInstance {
   // to something in the source language / format.
   // E.g. in Forge this would return a Forge instance.
   reify(): unknown;
+
+
+  // Add atoms / relations / types from another data instance.
+  /**
+   * Adds atoms and relations from another data instance to this one.
+   * @param dataInstance The data instance to add atoms and relations from.
+   * @param unifyBuiltIns If true, values of built-in types will be unified with existing ones.
+   * @returns true if the data instance was added successfully, false if there were conflicts.
+   */
+  addFromDataInstance(dataInstance: IDataInstance, unifyBuiltIns : boolean): boolean; 
 }
