@@ -1,7 +1,17 @@
 import { Graph } from 'graphlib';
 import { IDataInstance, IInputDataInstance, IAtom, IRelation, ITuple, IType, DataInstanceEventType, DataInstanceEventListener, DataInstanceEvent } from '../interfaces';
 
-
+/**
+ * Result of evaluating a Pyret expression
+ */
+interface PyretEvaluationResult {
+  /** The raw Pyret JS value (if successful) */
+  result?: unknown;
+  /** Exception information (if failed) */
+  exn?: unknown;
+  /** Whether the evaluation was successful */
+  success?: boolean;
+}
 
 /** Global constructor cache entry with pattern and instantiation priority */
 interface ConstructorCacheEntry {
@@ -156,6 +166,164 @@ export class PyretDataInstance implements IInputDataInstance {
    */
   static clearGlobalConstructorCache(): void {
     PyretDataInstance.globalConstructorCache.clear();
+  }
+
+  /**
+   * Creates a PyretDataInstance from a Pyret expression.
+   * 
+   * @param expr - The Pyret expression to evaluate.
+   * @param showFunctions - Whether to include function/method fields in parsing.
+   * @param externalEvaluator - External Pyret evaluator with a `run` method for enhanced features.
+   * @returns A new PyretDataInstance created from the evaluated expression.
+   * @throws {Error} If the expression cannot be evaluated or parsed.
+   */
+  static async fromExpression(
+    expr: string, 
+    showFunctions = false, 
+    externalEvaluator: { run: (code: string) => Promise<unknown> }
+  ): Promise<PyretDataInstance> {
+    // Evaluate the expression using the external evaluator
+    const evaluationResult = await PyretDataInstance.evaluateExpression(expr, externalEvaluator);
+
+    if (!evaluationResult.success) {
+      throw new Error(`Failed to evaluate Pyret expression: ${PyretDataInstance.formatError(evaluationResult.exn)}`);
+    }
+
+    // Check if the result is a primitive value
+    if (PyretDataInstance.isPrimitive(evaluationResult.result)) {
+      // Create a new instance and add the primitive as an atom
+      const instance = new PyretDataInstance(null, showFunctions, externalEvaluator);
+      
+      const atomType = typeof evaluationResult.result === 'string' ? 'String' :
+                       typeof evaluationResult.result === 'number' ? 'Number' : 'Boolean';
+      
+      const primitiveAtom = {
+        id: `result_${evaluationResult.result}`,
+        label: String(evaluationResult.result),
+        type: atomType
+      };
+      
+      instance.addAtom(primitiveAtom);
+      return instance;
+    }
+
+    // For complex objects, create a PyretDataInstance directly from the result
+    return new PyretDataInstance(evaluationResult.result as PyretObject, showFunctions, externalEvaluator);
+  }
+
+  /**
+   * Evaluates a Pyret expression using an external evaluator
+   * 
+   * @param expr - The Pyret expression to evaluate
+   * @param externalEvaluator - External Pyret evaluator with a `run` method
+   * @returns Promise resolving to evaluation result
+   */
+  private static async evaluateExpression(
+    expr: string,
+    externalEvaluator: { run: (code: string) => Promise<unknown> }
+  ): Promise<PyretEvaluationResult> {
+    try {
+      const result = await externalEvaluator.run(expr);
+
+      // Step 1: Look for "exn" key at any level - if found, it's a failure
+      const exnValue = PyretDataInstance.findKeyAtAnyLevel(result, 'exn');
+      if (exnValue !== undefined) {
+        return {
+          success: false,
+          exn: exnValue,
+        };
+      }
+      
+      // Step 2: Look for "answer" key at any level - if found, process it
+      const answerValue = PyretDataInstance.findKeyAtAnyLevel(result, 'answer');
+      if (answerValue !== undefined) {
+        return {
+          success: true,
+          result: answerValue,
+        };
+      }
+
+      // Step 3: Check if the result is a primitive value directly
+      if (PyretDataInstance.isPrimitive(result)) {
+        return {
+          success: true,
+          result: result,
+        };
+      }
+
+      // If we can't find an answer or exn, return failure
+      return {
+        success: false,
+        exn: 'Unable to find answer or exn in evaluation result',
+      };
+      
+    } catch (error) {
+      return {
+        success: false,
+        exn: error instanceof Error ? error.message : 'Unknown evaluation error',
+      };
+    }
+  }
+
+  /**
+   * Recursively searches for a key at any level in an object
+   */
+  private static findKeyAtAnyLevel(obj: unknown, keyName: string): unknown {
+    if (!obj || typeof obj !== 'object') {
+      return undefined;
+    }
+    
+    // Check if this object has the key directly
+    if (keyName in (obj as Record<string, unknown>)) {
+      return (obj as Record<string, unknown>)[keyName];
+    }
+    
+    // Recursively search in nested objects and arrays
+    for (const value of Object.values(obj as Record<string, unknown>)) {
+      if (value && typeof value === 'object') {
+        const found = PyretDataInstance.findKeyAtAnyLevel(value, keyName);
+        if (found !== undefined) {
+          return found;
+        }
+      }
+    }
+    
+    return undefined;
+  }
+
+  /**
+   * Checks if a value is a primitive type (string, number, boolean)
+   */
+  private static isPrimitive(value: unknown): value is string | number | boolean {
+    return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
+  }
+
+  /**
+   * Format Pyret evaluation errors for display
+   */
+  private static formatError(error: any): string {
+    if (!error) {
+      return 'Unknown error';
+    }
+
+    if (typeof error === 'string') {
+      return error;
+    }
+
+    if (typeof error === 'object' && error !== null) {
+      // Try to extract useful error information from Pyret error objects
+      const errorObj = error;
+
+      if (errorObj.message) {
+        return errorObj.message;
+      }
+
+      if (errorObj.toString && typeof errorObj.toString === 'function') {
+        return errorObj.toString();
+      }
+    }
+
+    return String(error);
   }
 
   /**
