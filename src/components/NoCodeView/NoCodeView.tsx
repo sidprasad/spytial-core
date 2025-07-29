@@ -266,6 +266,7 @@ const NoCodeView = ({
     // Load initial state from YAML when component mounts
     useEffect(() => {
         // If switching to No Code View and have YAML, load it
+        console.log(yamlValue);
         if (yamlValue) {
             try {
                 loadStateFromYaml(yamlValue);
@@ -276,10 +277,10 @@ const NoCodeView = ({
     }, [])
 
     return (
-        <div id="noCodeViewContainer">
+        <section id="noCodeViewContainer" aria-label="No Code View Container">
             <div>
                 <h5>Constraints  <button type="button" onClick={ addConstraint } title="Click to add a new constraint" aria-label="Click to add a new constraint" disabled={disabled}>+</button></h5>
-                <div className='cardContainer' id="constraintContainer">
+                <section className='cardContainer' id="constraintContainer" aria-label="Constraints List">
                     {/* Constraints will be added here dynamically */ }
                     { 
                         constraints.map((cd1) => (
@@ -292,12 +293,12 @@ const NoCodeView = ({
                                 }} />
                         ))
                     }
-                </div>
+                </section>
             </div>
             <hr />
             <div>
                 <h5>Directives  <button type="button" onClick={ addDirective } title="Click to add a new directive" aria-label="Click to add a new directive" disabled={disabled}>+</button></h5>
-                <div className='cardContainer' id="directiveContainer">
+                <section className='cardContainer' id="directiveContainer" aria-label="Directives List">
                     { 
                         directives.map((dd1) => (
                             <DirectiveCard 
@@ -309,9 +310,9 @@ const NoCodeView = ({
                                 }} />
                         ))
                     }
-                </div>
+                </section>
             </div>
-        </div>
+        </section>
     )
 }
 

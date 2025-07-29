@@ -13,7 +13,19 @@ describe('CodeView Component Tests', () => {
   }
 
   describe('Rendering', () => {
-    
+    it('should render a textarea for YAML input', () => {
+      render(<CodeView {...defaultProps} />)
+      const textarea = screen.getByRole('textbox')
+      expect(textarea).toBeInTheDocument()
+      expect(textarea).toHaveValue('')
+    })
+
+    it('should render with initial YAML value', () => {
+      const initialYaml = 'constraints:\n  - orientation: {}'
+      render(<CodeView {...defaultProps} yamlValue={initialYaml} />)
+      const textarea = screen.getByRole('textbox')
+      expect(textarea).toHaveValue(initialYaml)
+    })
   })
 
   describe('Interactions', () => {

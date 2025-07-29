@@ -7,79 +7,23 @@ import type { ConstraintData, DirectiveData } from '../../src/components/NoCodeV
 import { useState } from 'react'
 
 // Mock heavy dependencies
-vi.mock('../../src/components/NoCodeView/CodeView', () => ({
-  generateLayoutSpecYaml: vi.fn(() => 'generated: yaml'),
-  CodeView: vi.fn((props) => (
-    <div data-testid="mock-code-view">
-      <textarea 
-        value={props.yamlValue} 
-        onChange={props.handleTextareaChange}
-        disabled={props.disabled}
-        role="textbox"
-        aria-label="CND Layout Specification YAML"
-      />
-    </div>
-  ))
-}))
-
-vi.mock('../../src/components/NoCodeView/NoCodeView', () => ({
-  // Mock for NoCodeView component
-  NoCodeView: vi.fn((props) => (
-    <div 
-      data-testid="mock-no-code-view" 
-      role="region" 
-      aria-label="No Code Layout Editor"
-    >
-      <div role="region" aria-label="Constraints Section">
-        <h2>Constraints</h2>
-        {props.constraints.length === 0 ? (
-          <div data-testid="empty-constraints">No constraints added</div>
-        ) : (
-          <ul aria-label="Constraint List">
-            {props.constraints.map((c) => (
-              <li key={c.id} data-testid={`constraint-${c.id}`} data-type={c.type}>
-                {c.type} {c.params && JSON.stringify(c.params)}
-              </li>
-            ))}
-          </ul>
-        )}
-        <button 
-          onClick={() => props.setConstraints((prev) => [
-            ...prev, 
-            { id: 'new-constraint', type: 'orientation', params: {} }
-          ])}
-          aria-label="Add constraint"
-        >
-          Add a new constraint
-        </button>
+vi.mock(import('../../src/components/NoCodeView/CodeView'), async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    CodeView: vi.fn((props) => (
+      <div data-testid="mock-code-view">
+        <textarea 
+          value={props.yamlValue} 
+          onChange={props.handleTextareaChange}
+          disabled={props.disabled}
+          role="textbox"
+          aria-label="CND Layout Specification YAML"
+        />
       </div>
-      
-      <div role="region" aria-label="Directives Section">
-        <h2>Directives</h2>
-        {props.directives.length === 0 ? (
-          <div data-testid="empty-directives">No directives added</div>
-        ) : (
-          <ul aria-label="Directive List">
-            {props.directives.map((d) => (
-              <li key={d.id} data-testid={`directive-${d.id}`} data-type={d.type}>
-                {d.type} {d.params && JSON.stringify(d.params)}
-              </li>
-            ))}
-          </ul>
-        )}
-        <button 
-          onClick={() => props.setDirectives((prev) => [
-            ...prev, 
-            { id: 'new-directive', type: 'flag', params: {} }
-          ])}
-          aria-label="Add directive"
-        >
-          Add a new directive
-        </button>
-      </div>
-    </div>
-  ))
-}))
+    ))
+  }
+})
 
 describe('CndLayoutInterface Component', () => {
   const defaultProps = {
@@ -304,6 +248,7 @@ describe('CndLayoutInterface Component', () => {
       render(<TestWrapper />)
 
       // Type some YAML in Code View
+      expect(screen.queryByTestId('mock-code-view')).toBeInTheDocument()
       const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
       await waitFor(async () => {
         fireEvent.change(textarea, { target: { value: testYaml } })
@@ -313,8 +258,8 @@ describe('CndLayoutInterface Component', () => {
       // Switch to No Code view
       const toggle = screen.getByRole('switch')
       await user.click(toggle)
-      expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
-      expect(screen.getByTestId('mock-no-code-view')).toBeInTheDocument()
+      expect(screen.queryByTestId('mock-code-view')).not.toBeInTheDocument()
+      expect(screen.getByRole('region', {name: 'No Code View Container'})).toBeInTheDocument()
       expect(screen.getByText(/orientation/i)).toBeInTheDocument()
       
       // Switch back to Code view
@@ -334,7 +279,7 @@ describe('CndLayoutInterface Component', () => {
       render(<TestWrapper initialDirectives={directives} initialIsNoCodeView={true} />)
 
       // Confirm No Code View is active
-      expect(screen.getByTestId('mock-no-code-view')).toBeInTheDocument()
+      expect(screen.getByRole('region', {name: 'No Code View Container'})).toBeInTheDocument()
       expect(screen.getByText(/attribute/i)).toBeInTheDocument()
 
       // Switch to Code View
@@ -350,20 +295,24 @@ describe('CndLayoutInterface Component', () => {
 
       // Switch to No Code View
       await user.click(toggle)
-      expect(screen.getByTestId('mock-no-code-view')).toBeInTheDocument()
-      expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+      expect(screen.getByRole('region', {name: 'No Code View Container'})).toBeInTheDocument()
+      expect(screen.queryByTestId('mock-code-view')).not.toBeInTheDocument()
 
       // Remove the directive
       const removeButtons = screen.getAllByRole('button', { name: /Remove directive/i })
       expect(removeButtons.length).toBe(1)
       await user.click(removeButtons[0])
-      expect(screen.getByTestId('empty-directives')).toBeInTheDocument()
+
+      // Check that the directives list has no children
+      const directivesList = screen.getByRole('region', {name: 'Directives List'})
+      expect(directivesList).toBeEmptyDOMElement()
+
 
       // Switch back to Code View
       await user.click(toggle)
 
       // Check if textarea is empty after removing directive
-      expect(screen.getByRole('textbox')).toBeInTheDocument()
+      expect(screen.getByTestId('mock-code-view')).toBeInTheDocument()
       const newTextarea = screen.getByRole('textbox') as HTMLTextAreaElement
       expect(newTextarea.value).toBe('') // Assuming removing directive clears the textarea
     })

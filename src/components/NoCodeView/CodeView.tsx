@@ -103,16 +103,16 @@ interface CodeViewProps {
 
 const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
     // Populate the textarea on initial render if constraints/directives exist
-    useEffect(() => {
-        if (props.constraints.length > 0 || props.directives.length > 0) {
-            const generatedYaml = generateLayoutSpecYaml(props.constraints, props.directives);
-            if (generatedYaml !== props.yamlValue) {
-                props.handleTextareaChange({
-                    target: { value: generatedYaml }
-                } as React.ChangeEvent<HTMLTextAreaElement>);
-            }
-        }
-    }, []);
+    // useEffect(() => {
+    //     if (props.constraints.length > 0 || props.directives.length > 0) {
+    //         const generatedYaml = generateLayoutSpecYaml(props.constraints, props.directives);
+    //         if (generatedYaml !== props.yamlValue) {
+    //             props.handleTextareaChange({
+    //                 target: { value: generatedYaml }
+    //             } as React.ChangeEvent<HTMLTextAreaElement>);
+    //         }
+    //     }
+    // }, []);
 
   return (
     <div className="cnd-layout-interface__code-view" role="region" aria-label="YAML Code Editor">
