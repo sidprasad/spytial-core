@@ -45,8 +45,6 @@ const DEFAULT_SCALE_FACTOR = 5;
  * - Interactive edge input mode with keyboard shortcuts (Cmd/Ctrl)
  * - Visual edge creation by clicking and dragging between nodes
  * - Edge modification by clicking on existing edges in input mode
- * - Edge removal by right-clicking on existing edges in input mode
- * - Node removal by right-clicking on nodes in input mode
  * - Centralized state management for IInputDataInstance
  * - Automatic layout regeneration when data instance changes
  * - Self-loop edge support with confirmation
@@ -60,10 +58,6 @@ const DEFAULT_SCALE_FACTOR = 5;
  *   * event.detail: { relationId: string, sourceNodeId: string, targetNodeId: string, tuple: ITuple }
  * - 'edge-modification-requested': When user clicks on existing edge to modify it
  *   * event.detail: { oldRelationId: string, newRelationId: string, sourceNodeId: string, targetNodeId: string, tuple: ITuple }
- * - 'edge-removal-requested': When user right-clicks on existing edge to remove it
- *   * event.detail: { relationId: string, sourceNodeId: string, targetNodeId: string, tuple: ITuple }
- * - 'node-removal-requested': When user right-clicks on node to remove it
- *   * event.detail: { nodeId: string, node: NodeWithMetadata, connectedEdges: EdgeWithMetadata[] }
  * 
  * External State Management:
  * React components should subscribe to these events and handle:
@@ -206,7 +200,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * ```
    */
   private isAlignmentEdge(edge: { id?: string }): boolean {
-    return edge.id ? edge.id.startsWith("_alignment_") : false;
+    return edge.id?.startsWith("_alignment_") || false;
   }
 
   /**
@@ -753,7 +747,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
-   * Remove an existing edge
+   * Remove an existing edge using targeted DOM updates
    */
   private async removeEdge(edgeData: EdgeWithMetadata): Promise<void> {
     if (!this.isInputModeActive) return;
@@ -775,15 +769,42 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       return;
     }
 
-    // Update external state for edge removal
-    await this.updateExternalStateForEdgeRemoval(sourceNode, targetNode, edgeLabel);
+    // Dispatch removal request event
+    this.dispatchEvent(new CustomEvent('edge-removal-requested', {
+      detail: {
+        relationId: edgeData.relName || edgeData.label,
+        sourceNodeId: sourceNode.id,
+        targetNodeId: targetNode.id,
+        tuple: [sourceNode.id, targetNode.id]
+      }
+    }));
 
     // Remove edge from current layout
     if (this.currentLayout?.links) {
-      const edgeIndex = this.currentLayout.links.findIndex((edge: EdgeWithMetadata) => edge.id === edgeData.id);
+      const edgeIndex = this.currentLayout.links.findIndex((edge: EdgeWithMetadata) => 
+        edge === edgeData || (edge.id && edge.id === edgeData.id)
+      );
       if (edgeIndex !== -1) {
         this.currentLayout.links.splice(edgeIndex, 1);
       }
+    }
+
+    // Remove edge DOM elements - use targeted removal instead of full re-render
+    if (edgeData.id) {
+      // Remove the link group containing both path and label
+      this.container.selectAll('.link-group')
+        .filter((d: any) => d.id === edgeData.id)
+        .remove();
+    } else {
+      // Fallback: remove by data reference
+      this.container.selectAll('.link-group')
+        .filter((d: any) => d === edgeData)
+        .remove();
+    }
+
+    // Update cola layout links
+    if (this.colaLayout && this.currentLayout) {
+      this.colaLayout.links(this.currentLayout.links);
     }
 
     // Dispatch event for external listeners
@@ -794,54 +815,74 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         targetNode: targetNode
       }
     }));
-
-    // Re-render the graph to reflect the removal
-    this.rerenderGraph();
   }
 
   /**
-   * Remove a node (and its connected edges)
+   * Remove a node and all connected edges
    */
   private async removeNode(nodeData: NodeWithMetadata): Promise<void> {
-    if (!this.isInputModeActive) return;
+    if (!this.isInputModeActive || !this.currentLayout) return;
 
-    // Check if this is a hidden/system node that shouldn't be removed
-    if (this.isHiddenNode(nodeData)) {
-      alert('System nodes cannot be removed.');
-      return;
-    }
+    // Find all edges connected to this node
+    const connectedEdges = this.currentLayout.links.filter((edge: EdgeWithMetadata) => {
+      const sourceNode = this.getNodeFromEdge(edge, 'source');
+      const targetNode = this.getNodeFromEdge(edge, 'target');
+      return sourceNode?.id === nodeData.id || targetNode?.id === nodeData.id;
+    });
 
-    const nodeLabel = nodeData.label || nodeData.name || nodeData.id;
     const confirmRemoval = confirm(
-      `Are you sure you want to remove the node "${nodeLabel}" and all its connected edges?`
+      `Are you sure you want to remove node "${nodeData.label || nodeData.id}"? This will also remove ${connectedEdges.length} connected edge(s).`
     );
 
     if (!confirmRemoval) {
       return;
     }
 
-    // Find all edges connected to this node
-    const connectedEdges = this.getConnectedEdges(nodeData.id);
-
-    // Update external state for node removal
-    await this.updateExternalStateForNodeRemoval(nodeData, connectedEdges);
-
-    // Remove the node and its edges from current layout
-    if (this.currentLayout) {
-      // Remove connected edges
-      if (this.currentLayout.links) {
-        this.currentLayout.links = this.currentLayout.links.filter((edge: EdgeWithMetadata) => 
-          edge.source.id !== nodeData.id && edge.target.id !== nodeData.id
-        );
+    // Dispatch removal request event
+    this.dispatchEvent(new CustomEvent('node-removal-requested', {
+      detail: {
+        nodeId: nodeData.id,
+        node: nodeData,
+        connectedEdges: connectedEdges
       }
+    }));
 
-      // Remove the node
-      if (this.currentLayout.nodes) {
-        const nodeIndex = this.currentLayout.nodes.findIndex((node: NodeWithMetadata) => node.id === nodeData.id);
-        if (nodeIndex !== -1) {
-          this.currentLayout.nodes.splice(nodeIndex, 1);
-        }
+    // Remove connected edges from layout
+    connectedEdges.forEach(edge => {
+      const edgeIndex = this.currentLayout!.links.indexOf(edge);
+      if (edgeIndex !== -1) {
+        this.currentLayout!.links.splice(edgeIndex, 1);
       }
+    });
+
+    // Remove node from layout
+    const nodeIndex = this.currentLayout.nodes.indexOf(nodeData);
+    if (nodeIndex !== -1) {
+      this.currentLayout.nodes.splice(nodeIndex, 1);
+    }
+
+    // Remove edge DOM elements
+    connectedEdges.forEach(edge => {
+      if (edge.id) {
+        this.container.selectAll('.link-group')
+          .filter((d: any) => d.id === edge.id)
+          .remove();
+      } else {
+        this.container.selectAll('.link-group')
+          .filter((d: any) => d === edge)
+          .remove();
+      }
+    });
+
+    // Remove node DOM element
+    this.container.selectAll('.node, .error-node')
+      .filter((d: any) => d.id === nodeData.id)
+      .remove();
+
+    // Update cola layout
+    if (this.colaLayout) {
+      this.colaLayout.nodes(this.currentLayout.nodes);
+      this.colaLayout.links(this.currentLayout.links);
     }
 
     // Dispatch event for external listeners
@@ -851,30 +892,25 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         connectedEdges: connectedEdges
       }
     }));
-
-    // Re-render the graph to reflect the removal
-    this.rerenderGraph();
   }
 
   /**
-   * Get all edges connected to a specific node
+   * Update external state for an edge modification through the external state management system
+   * @param sourceNode - Source node of the edge
+   * @param targetNode - Target node of the edge 
+   * @param oldRelationName - Old relation name/label
+   * @param newRelationName - New relation name/label
    */
-  private getConnectedEdges(nodeId: string): EdgeWithMetadata[] {
-    if (!this.currentLayout?.links) return [];
-    
-    return this.currentLayout.links.filter((edge: EdgeWithMetadata) => 
-      edge.source.id === nodeId || edge.target.id === nodeId
-    );
-  }
-
-  /**
-   * Update external state for edge removal through the external state management system
-   */
-  private async updateExternalStateForEdgeRemoval(
-    sourceNode: NodeWithMetadata, 
-    targetNode: NodeWithMetadata, 
-    relationName: string
+  private async updateExternalStateForEdgeModification(
+    sourceNode: NodeWithMetadata | null, 
+    targetNode: NodeWithMetadata | null, 
+    oldRelationName: string, 
+    newRelationName: string
   ): Promise<void> {
+    if (!sourceNode || !targetNode) {
+      return;
+    }
+
     try {
       // Create tuple for the relation
       const tuple: ITuple = {
@@ -882,46 +918,22 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         types: [sourceNode.type || 'untyped', targetNode.type || 'untyped']
       };
 
-      console.log(`Dispatching edge removal request: ${relationName}(${sourceNode.id}, ${targetNode.id})`);
+      console.log(`Dispatching edge modification request: ${oldRelationName} -> ${newRelationName}`);
 
-      // Dispatch edge removal event for React components to handle
-      const edgeRemovalEvent = new CustomEvent('edge-removal-requested', {
+      // Dispatch edge modification event for React components to handle
+      const edgeModificationEvent = new CustomEvent('edge-modification-requested', {
         detail: {
-          relationId: relationName,
+          oldRelationId: oldRelationName,
+          newRelationId: newRelationName,
           sourceNodeId: sourceNode.id,
           targetNodeId: targetNode.id,
           tuple: tuple
         },
         bubbles: true
       });
-      this.dispatchEvent(edgeRemovalEvent);
+      this.dispatchEvent(edgeModificationEvent);
     } catch (error) {
-      console.error('Failed to update external state for edge removal:', error);
-    }
-  }
-
-  /**
-   * Update external state for node removal through the external state management system
-   */
-  private async updateExternalStateForNodeRemoval(
-    nodeData: NodeWithMetadata,
-    connectedEdges: EdgeWithMetadata[]
-  ): Promise<void> {
-    try {
-      console.log(`Dispatching node removal request: ${nodeData.id}`);
-
-      // Dispatch node removal event for React components to handle
-      const nodeRemovalEvent = new CustomEvent('node-removal-requested', {
-        detail: {
-          nodeId: nodeData.id,
-          node: nodeData,
-          connectedEdges: connectedEdges
-        },
-        bubbles: true
-      });
-      this.dispatchEvent(nodeRemovalEvent);
-    } catch (error) {
-      console.error('Failed to update external state for node removal:', error);
+      console.error('Failed to update external state for edge modification:', error);
     }
   }
 
@@ -2398,8 +2410,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * @param edgeId - Current edge ID
    * @returns Curvature value for the edge
    */
-  private calculateCurvature(allEdges: any[], sourceId: string, targetId: string, edgeId?: string): number {
-    if (!edgeId || edgeId.startsWith('_alignment_')) {
+  private calculateCurvature(allEdges: any[], sourceId: string, targetId: string, edgeId: string): number {
+    if (edgeId.startsWith('_alignment_')) {
       return 0;
     }
 
