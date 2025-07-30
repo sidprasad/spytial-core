@@ -244,7 +244,7 @@ export class PyretListParser implements ICommandParser {
 export class InfoCommandParser implements ICommandParser {
   canHandle(command: string): boolean {
     const trimmed = command.trim().toLowerCase();
-    const utilityCommands = ['help', 'info', 'status', 'list', 'clear', 'reify'];
+    const utilityCommands = ['help', 'info', 'status', 'list', 'clear', 'reify', 'list-ids', 'list-edges'];
     return utilityCommands.includes(trimmed);
   }
   
@@ -258,6 +258,8 @@ export class InfoCommandParser implements ICommandParser {
       'info', 
       'status',
       'list',
+      'list-ids',
+      'list-edges',
       'clear',
       'reify'
     ];
@@ -281,6 +283,12 @@ export class InfoCommandParser implements ICommandParser {
       case 'list':
         return this.listContents(instance);
         
+      case 'list-ids':
+        return this.listAtomIds(instance);
+        
+      case 'list-edges':
+        return this.listEdgeIds(instance);
+        
       case 'clear':
         return this.clearInstance(instance);
         
@@ -293,6 +301,82 @@ export class InfoCommandParser implements ICommandParser {
           message: 'Unknown info command'
         };
     }
+  }
+
+  private listAtomIds(instance: IInputDataInstance): CommandResult {
+    const atoms = instance.getAtoms();
+    
+    if (atoms.length === 0) {
+      return {
+        success: true,
+        message: 'No atoms found in instance.',
+        action: 'info'
+      };
+    }
+    
+    let message = 'Internal Atom IDs:\n\n';
+    
+    // Group atoms by type for better organization
+    const atomsByType = atoms.reduce((acc, atom) => {
+      if (!acc[atom.type]) {
+        acc[atom.type] = [];
+      }
+      acc[atom.type].push(atom);
+      return acc;
+    }, {} as Record<string, typeof atoms>);
+    
+    Object.entries(atomsByType).forEach(([type, typeAtoms]) => {
+      message += `${type}:\n`;
+      typeAtoms.forEach(atom => {
+        message += `  ID: ${atom.id}  Label: ${atom.label}\n`;
+      });
+      message += '\n';
+    });
+    
+    message += `Total: ${atoms.length} atoms`;
+    
+    return {
+      success: true,
+      message,
+      action: 'info'
+    };
+  }
+
+  private listEdgeIds(instance: IInputDataInstance): CommandResult {
+    const relations = instance.getRelations();
+    
+    if (relations.length === 0) {
+      return {
+        success: true,
+        message: 'No relations/edges found in instance.',
+        action: 'info'
+      };
+    }
+    
+    let message = 'Internal Edge IDs:\n\n';
+    let totalEdges = 0;
+    
+    relations.forEach(relation => {
+      if (relation.tuples.length > 0) {
+        message += `Relation: ${relation.name}\n`;
+        relation.tuples.forEach((tuple, index) => {
+          // Generate edge ID using the same format as PyretDataInstance
+          const edgeId = `${relation.name}:${tuple.atoms.join('->')}`;
+          message += `  Edge ID: ${edgeId}\n`;
+          message += `  Tuple: (${tuple.atoms.join(', ')})\n`;
+          totalEdges++;
+        });
+        message += '\n';
+      }
+    });
+    
+    message += `Total: ${totalEdges} edges across ${relations.length} relations`;
+    
+    return {
+      success: true,
+      message,
+      action: 'info'
+    };
   }
 
   private getStatus(instance: IInputDataInstance): CommandResult {
@@ -445,12 +529,14 @@ export class InfoCommandParser implements ICommandParser {
     return `REPL Interface Help:
 
 Available commands across all terminals:
-  help     - Show this help
-  info     - Show instance status  
-  status   - Same as info
-  list     - List all atoms and relations
-  clear    - Clear entire instance
-  reify    - Generate Pyret constructor notation (or generic representation)
+  help       - Show this help
+  info       - Show instance status  
+  status     - Same as info
+  list       - List all atoms and relations
+  list-ids   - List internal atom IDs grouped by type
+  list-edges - List internal edge IDs for all relations
+  clear      - Clear entire instance
+  reify      - Generate Pyret constructor notation (or generic representation)
 
 Terminal-specific commands vary by terminal type.
 Click the "?" button in each terminal header for specific help.`;
@@ -459,12 +545,14 @@ Click the "?" button in each terminal header for specific help.`;
   getHelp(): string[] {
     return [
       'Utility Commands:',
-      '  help     - Show general help',
-      '  info     - Show instance status',
-      '  status   - Same as info',
-      '  list     - List all contents',
-      '  clear    - Clear entire instance',
-      '  reify    - Generate Pyret constructor notation'
+      '  help       - Show general help',
+      '  info       - Show instance status',
+      '  status     - Same as info',
+      '  list       - List all contents',
+      '  list-ids   - List internal atom IDs',
+      '  list-edges - List internal edge IDs', 
+      '  clear      - Clear entire instance',
+      '  reify      - Generate Pyret constructor notation'
     ];
   }
 }

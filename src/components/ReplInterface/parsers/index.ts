@@ -17,3 +17,7 @@ export {
   type PyretEvaluator,
   type PyretEvaluationResult
 } from './PyretExpressionParser';
+
+export {
+  PyretIdAllocationParser
+} from './PyretIdAllocationParser';
