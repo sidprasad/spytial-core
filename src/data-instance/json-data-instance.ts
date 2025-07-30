@@ -1,4 +1,4 @@
-import { IAtom, IRelation, IType, IInputDataInstance, ITuple, DataInstanceEventType, DataInstanceEventListener, DataInstanceEvent } from './interfaces';
+import { IAtom, IRelation, IType, IInputDataInstance, ITuple, DataInstanceEventType, DataInstanceEventListener, DataInstanceEvent, IDataInstance } from './interfaces';
 import { Graph } from 'graphlib';
 /**
  * JSON representation of a data instance for easy serialization/deserialization.
@@ -518,6 +518,103 @@ export class JSONDataInstance implements IInputDataInstance {
       relations: this.relations.map(r => ({ ...r, tuples: [...r.tuples] })),
       types: this.types.map(t => ({ ...t, atoms: [...t.atoms] }))
     };
+  }
+
+
+  /**
+   * Adds data from another IDataInstance to this instance.
+   * 
+   * @param dataInstance - The data instance to add from.
+   * @param unifyBuiltIns - Whether to unify built-in types (reuse existing ones).
+   * @returns True if the operation is successful, false otherwise.
+   */
+  addFromDataInstance(dataInstance: IDataInstance, unifyBuiltIns: boolean): boolean {
+    // Validate that the input is an IDataInstance
+    if (!dataInstance) {
+      return false;
+    }
+
+    const reIdMap = new Map<string, string>();
+
+    // Add atoms
+    dataInstance.getAtoms().forEach(atom => {
+      const isBuiltin = this.isAtomBuiltin(atom);
+
+      if (unifyBuiltIns && isBuiltin) {
+        // Check if the built-in atom already exists
+        const existingAtom = this.atoms.find(
+          existing => existing.type === atom.type && existing.label === atom.label
+        );
+
+        if (existingAtom) {
+          // Map the original atom ID to the existing atom ID
+          reIdMap.set(atom.id, existingAtom.id);
+          return; // Skip adding this atom
+        }
+      }
+
+      // Generate a new ID for the atom to avoid conflicts
+      const newId = `atom_${this.atoms.length + 1}`;
+      reIdMap.set(atom.id, newId);
+
+      // Add the atom with the new ID
+      const newAtom: IAtom = { ...atom, id: newId };
+      this.addAtom(newAtom);
+    });
+
+    // Add relations
+    dataInstance.getRelations().forEach(relation => {
+      const newTuples: ITuple[] = relation.tuples.map(tuple => ({
+        atoms: tuple.atoms.map(atomId => reIdMap.get(atomId) || atomId),
+        types: tuple.types,
+      }));
+
+      const existingRelation = this.relations.find(r => r.id === relation.id || r.name === relation.name);
+      if (existingRelation) {
+        // Merge tuples into the existing relation
+        const existingTupleKeys = new Set(existingRelation.tuples.map(t => JSON.stringify(t)));
+        newTuples.forEach(tuple => {
+          const tupleKey = JSON.stringify(tuple);
+          if (!existingTupleKeys.has(tupleKey)) {
+            existingRelation.tuples.push(tuple);
+            existingTupleKeys.add(tupleKey);
+          }
+        });
+      } else {
+        // Add a new relation
+        this.relations.push({
+          ...relation,
+          tuples: newTuples,
+        });
+      }
+    });
+
+    // Add types
+    dataInstance.getTypes().forEach(type => {
+      const existingType = this.types.find(t => t.id === type.id);
+      if (!existingType) {
+        // Add the type if it doesn't exist
+        this.types.push({
+          ...type,
+          atoms: type.atoms.map(atom => ({
+            ...atom,
+            id: reIdMap.get(atom.id) || atom.id,
+          })),
+        });
+      } else {
+        // Merge atoms into the existing type
+        const existingAtomIds = new Set(existingType.atoms.map(a => a.id));
+        type.atoms.forEach(atom => {
+          const newId = reIdMap.get(atom.id) || atom.id;
+          if (!existingAtomIds.has(newId)) {
+            existingType.atoms.push({ ...atom, id: newId });
+            existingAtomIds.add(newId);
+          }
+        });
+      }
+    });
+
+    return true;
   }
 
   // === Additional Utility Methods ===

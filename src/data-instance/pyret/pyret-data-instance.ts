@@ -1,10 +1,17 @@
 import { Graph } from 'graphlib';
-import { IInputDataInstance, IAtom, IRelation, ITuple, IType, DataInstanceEventType, DataInstanceEventListener, DataInstanceEvent } from '../interfaces';
+import { IDataInstance, IInputDataInstance, IAtom, IRelation, ITuple, IType, DataInstanceEventType, DataInstanceEventListener, DataInstanceEvent } from '../interfaces';
 
 /**
- * Pyret Lists and Tables are going to be really tricky here.
- * What about images, or other Pyret representations?
+ * Result of evaluating a Pyret expression
  */
+interface PyretEvaluationResult {
+  /** The raw Pyret JS value (if successful) */
+  result?: unknown;
+  /** Exception information (if failed) */
+  exn?: unknown;
+  /** Whether the evaluation was successful */
+  success?: boolean;
+}
 
 /** Global constructor cache entry with pattern and instantiation priority */
 interface ConstructorCacheEntry {
@@ -13,13 +20,13 @@ interface ConstructorCacheEntry {
 }
 
 export function generateEdgeId(
-    relation: IRelation,
-    tuple: ITuple
+  relation: IRelation,
+  tuple: ITuple
 ): string {
 
-    const relationId = relation.id;
-    const atoms = tuple.atoms;
-    return `${relationId}:${atoms.join('->')}`;
+  const relationId = relation.id;
+  const atoms = tuple.atoms;
+  return `${relationId}:${atoms.join('->')}`;
 }
 
 /**
@@ -61,7 +68,7 @@ export class PyretDataInstance implements IInputDataInstance {
 
   /** Global map to store constructor patterns and field order for types across all instances */
   private static globalConstructorCache = new Map<string, ConstructorCacheEntry>();
-  
+
   /** Global counter for instantiation priority - higher numbers mean newer/higher priority */
   private static instantiationCounter = 0;
 
@@ -112,10 +119,10 @@ export class PyretDataInstance implements IInputDataInstance {
    */
   private cacheConstructorPattern(typeName: string, fieldOrder: string[]): void {
     if (fieldOrder.length === 0) return;
-    
+
     const currentEntry = PyretDataInstance.globalConstructorCache.get(typeName);
     const newInstantiation = ++PyretDataInstance.instantiationCounter;
-    
+
     // Always cache if no entry exists, or if we want to allow newer patterns to override
     // For now, we always update to give priority to newer constructor patterns
     if (!currentEntry || newInstantiation > currentEntry.instantiation) {
@@ -159,6 +166,164 @@ export class PyretDataInstance implements IInputDataInstance {
    */
   static clearGlobalConstructorCache(): void {
     PyretDataInstance.globalConstructorCache.clear();
+  }
+
+  /**
+   * Creates a PyretDataInstance from a Pyret expression.
+   * 
+   * @param expr - The Pyret expression to evaluate.
+   * @param showFunctions - Whether to include function/method fields in parsing.
+   * @param externalEvaluator - External Pyret evaluator with a `run` method for enhanced features.
+   * @returns A new PyretDataInstance created from the evaluated expression.
+   * @throws {Error} If the expression cannot be evaluated or parsed.
+   */
+  static async fromExpression(
+    expr: string, 
+    showFunctions = false, 
+    externalEvaluator: { run: (code: string) => Promise<unknown> }
+  ): Promise<PyretDataInstance> {
+    // Evaluate the expression using the external evaluator
+    const evaluationResult = await PyretDataInstance.evaluateExpression(expr, externalEvaluator);
+
+    if (!evaluationResult.success) {
+      throw new Error(`Failed to evaluate Pyret expression: ${PyretDataInstance.formatError(evaluationResult.exn)}`);
+    }
+
+    // Check if the result is a primitive value
+    if (PyretDataInstance.isPrimitive(evaluationResult.result)) {
+      // Create a new instance and add the primitive as an atom
+      const instance = new PyretDataInstance(null, showFunctions, externalEvaluator);
+      
+      const atomType = typeof evaluationResult.result === 'string' ? 'String' :
+                       typeof evaluationResult.result === 'number' ? 'Number' : 'Boolean';
+      
+      const primitiveAtom = {
+        id: `result_${evaluationResult.result}`,
+        label: String(evaluationResult.result),
+        type: atomType
+      };
+      
+      instance.addAtom(primitiveAtom);
+      return instance;
+    }
+
+    // For complex objects, create a PyretDataInstance directly from the result
+    return new PyretDataInstance(evaluationResult.result as PyretObject, showFunctions, externalEvaluator);
+  }
+
+  /**
+   * Evaluates a Pyret expression using an external evaluator
+   * 
+   * @param expr - The Pyret expression to evaluate
+   * @param externalEvaluator - External Pyret evaluator with a `run` method
+   * @returns Promise resolving to evaluation result
+   */
+  private static async evaluateExpression(
+    expr: string,
+    externalEvaluator: { run: (code: string) => Promise<unknown> }
+  ): Promise<PyretEvaluationResult> {
+    try {
+      const result = await externalEvaluator.run(expr);
+
+      // Step 1: Look for "exn" key at any level - if found, it's a failure
+      const exnValue = PyretDataInstance.findKeyAtAnyLevel(result, 'exn');
+      if (exnValue !== undefined) {
+        return {
+          success: false,
+          exn: exnValue,
+        };
+      }
+      
+      // Step 2: Look for "answer" key at any level - if found, process it
+      const answerValue = PyretDataInstance.findKeyAtAnyLevel(result, 'answer');
+      if (answerValue !== undefined) {
+        return {
+          success: true,
+          result: answerValue,
+        };
+      }
+
+      // Step 3: Check if the result is a primitive value directly
+      if (PyretDataInstance.isPrimitive(result)) {
+        return {
+          success: true,
+          result: result,
+        };
+      }
+
+      // If we can't find an answer or exn, return failure
+      return {
+        success: false,
+        exn: 'Unable to find answer or exn in evaluation result',
+      };
+      
+    } catch (error) {
+      return {
+        success: false,
+        exn: error instanceof Error ? error.message : 'Unknown evaluation error',
+      };
+    }
+  }
+
+  /**
+   * Recursively searches for a key at any level in an object
+   */
+  private static findKeyAtAnyLevel(obj: unknown, keyName: string): unknown {
+    if (!obj || typeof obj !== 'object') {
+      return undefined;
+    }
+    
+    // Check if this object has the key directly
+    if (keyName in (obj as Record<string, unknown>)) {
+      return (obj as Record<string, unknown>)[keyName];
+    }
+    
+    // Recursively search in nested objects and arrays
+    for (const value of Object.values(obj as Record<string, unknown>)) {
+      if (value && typeof value === 'object') {
+        const found = PyretDataInstance.findKeyAtAnyLevel(value, keyName);
+        if (found !== undefined) {
+          return found;
+        }
+      }
+    }
+    
+    return undefined;
+  }
+
+  /**
+   * Checks if a value is a primitive type (string, number, boolean)
+   */
+  private static isPrimitive(value: unknown): value is string | number | boolean {
+    return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
+  }
+
+  /**
+   * Format Pyret evaluation errors for display
+   */
+  private static formatError(error: any): string {
+    if (!error) {
+      return 'Unknown error';
+    }
+
+    if (typeof error === 'string') {
+      return error;
+    }
+
+    if (typeof error === 'object' && error !== null) {
+      // Try to extract useful error information from Pyret error objects
+      const errorObj = error;
+
+      if (errorObj.message) {
+        return errorObj.message;
+      }
+
+      if (errorObj.toString && typeof errorObj.toString === 'function') {
+        return errorObj.toString();
+      }
+    }
+
+    return String(error);
   }
 
   /**
@@ -208,7 +373,7 @@ export class PyretDataInstance implements IInputDataInstance {
       if (originalObj && originalObj.dict) {
         const orderedKeys = Object.keys(originalObj.dict);
         this.cacheConstructorPattern(atom.type, orderedKeys);
-        
+
         // Now try again with the cached pattern
         const args: string[] = [];
         for (const fieldName of orderedKeys) {
@@ -226,21 +391,21 @@ export class PyretDataInstance implements IInputDataInstance {
 
     // Final fallback: use sorted field order but print an error
     console.error(`[PyretDataInstance] Could not determine constructor pattern for type '${atom.type}'. Falling back to sorted field order.`);
-    
+
     const relationNames = Array.from(relationMap.keys()).sort(); // Sort for consistency
     const args: string[] = [];
-    
+
     for (const relationName of relationNames) {
       const targetIds = relationMap.get(relationName) || [];
       for (const targetId of targetIds) {
         args.push(this.reifyAtom(targetId, visited));
       }
     }
-    
+
     if (args.length > 0) {
       return `${atom.type}(${args.join(', ')})`;
     }
-    
+
     return atom.type; // Last resort: just the type name
   }
   hasExternalEvaluator(): boolean {
@@ -291,7 +456,7 @@ export class PyretDataInstance implements IInputDataInstance {
     if (type && !type.atoms.some(a => a.id === atom.id)) {
       type.atoms.push(atom);
     }
-    
+
     // Emit event
     this.emitEvent({
       type: 'atomAdded',
@@ -316,7 +481,7 @@ export class PyretDataInstance implements IInputDataInstance {
     this.relations.forEach(relation => {
       relation.tuples = relation.tuples.filter(tuple => !tuple.atoms.includes(id));
     });
-    
+
     // Emit event if atom was found
     if (removedAtom) {
       this.emitEvent({
@@ -328,7 +493,7 @@ export class PyretDataInstance implements IInputDataInstance {
 
 
   removeRelationTuple(relationId: string, t: ITuple): void {
-    
+
     // How would we do this?
     const relation = this.relations.get(relationId);
     if (relation) {
@@ -336,7 +501,7 @@ export class PyretDataInstance implements IInputDataInstance {
       relation.tuples = relation.tuples.filter(tuple =>
         !tuple.atoms.every((atomId, index) => atomId === t.atoms[index])
       );
-      
+
       // Emit event if tuple was actually removed
       if (relation.tuples.length < oldLength) {
         this.emitEvent({
@@ -380,7 +545,7 @@ export class PyretDataInstance implements IInputDataInstance {
     const rootAtoms = Array.from(this.atoms.values()).filter(atom => !referencedAtoms.has(atom.id));
 
     if (rootAtoms.length === 0) {
-      return result + "/* No root atoms found */";
+      return result + "# No root atoms found";
     }
 
     // If multiple roots, wrap in a Pyret set
@@ -434,13 +599,13 @@ export class PyretDataInstance implements IInputDataInstance {
 
     // Use the original dict key order to maintain constructor argument order
     const orderedKeys = Object.keys(originalObject.dict);
-    
+
     // Cache this constructor pattern for future use
     this.cacheConstructorPattern(atom.type, orderedKeys);
-    
+
     // Check if this looks like a list (all keys are numeric)
     const isListLike = orderedKeys.every(key => /^\d+$/.test(key));
-    
+
     if (isListLike && orderedKeys.length > 0) {
       // Sort numeric keys and extract list items
       const sortedKeys = orderedKeys.sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
@@ -448,14 +613,14 @@ export class PyretDataInstance implements IInputDataInstance {
         const targetAtomIds = this.getRelationTargets(atomId, key);
         return targetAtomIds.map(targetId => this.reifyAtom(targetId, visited));
       }).flat();
-      
+
       visited.delete(atomId);
       return `[list: ${listItems.join(', ')}]`;
     }
 
     // Regular constructor notation with preserved argument order
     const args: string[] = [];
-    
+
     for (const relationName of orderedKeys) {
       const targetAtomIds = this.getRelationTargets(atomId, relationName);
       for (const targetId of targetAtomIds) {
@@ -486,39 +651,6 @@ export class PyretDataInstance implements IInputDataInstance {
       default:
         return atom.label;
     }
-  }
-
-  /**
-   * Determines if an atom's relations look like a list structure
-   * (has numeric indices like "0", "1", "2", etc.)
-   */
-  private isListLike(relations: Map<string, string[]>): boolean {
-    const relationNames = Array.from(relations.keys());
-    
-    // Check if all relation names are numeric strings
-    const numericNames = relationNames.filter(name => /^\d+$/.test(name));
-    
-    // Must have at least one numeric relation and all relations should be numeric
-    return numericNames.length > 0 && numericNames.length === relationNames.length;
-  }
-
-  /**
-   * Extracts list items in the correct order for Pyret list notation
-   */
-  private extractListItems(relations: Map<string, string[]>, visited: Set<string>): string[] {
-    const items: string[] = [];
-    const sortedIndices = Array.from(relations.keys())
-      .filter(key => /^\d+$/.test(key))
-      .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
-
-    for (const index of sortedIndices) {
-      const targetIds = relations.get(index) || [];
-      for (const targetId of targetIds) {
-        items.push(this.reifyAtom(targetId, visited));
-      }
-    }
-
-    return items;
   }
 
   /**
@@ -576,8 +708,8 @@ export class PyretDataInstance implements IInputDataInstance {
       // Process all dict entries as relations, but skip obvious function/method fields
       if (obj.dict && typeof obj.dict === 'object') {
         Object.entries(obj.dict).forEach(([relationName, fieldValue]) => {
-          
-          
+
+
           // Heuristic: skip fields that look like Pyret methods (object with only a 'name' property)
           if (
             !this.showFunctions &&
@@ -615,7 +747,7 @@ export class PyretDataInstance implements IInputDataInstance {
   private createAtomFromObject(obj: PyretObject): string {
     const type = this.extractType(obj);
     const atomId = this.generateAtomId(type);
-    
+
     const atom: IAtom = {
       id: atomId,
       type,
@@ -635,11 +767,11 @@ export class PyretDataInstance implements IInputDataInstance {
   private createAtomFromPrimitive(value: string | number | boolean): string {
     const type = this.mapPrimitiveType(value);
     const label = String(value);
-    
+
     // Check if we already have an atom for this value
     const existingAtom = Array.from(this.atoms.values())
       .find(atom => atom.label === label && atom.type === type);
-    
+
     if (existingAtom) {
       return existingAtom.id;
     }
@@ -705,7 +837,7 @@ export class PyretDataInstance implements IInputDataInstance {
         }
       }
     }
-    
+
     // Return numbered brand if found, otherwise fallback to non-numbered brand
     return result || fallbackResult;
   }
@@ -786,7 +918,7 @@ export class PyretDataInstance implements IInputDataInstance {
 
     if (!isDuplicate) {
       relation.tuples.push(tuple);
-      
+
       // Emit event
       this.emitEvent({
         type: 'relationTupleAdded',
@@ -815,11 +947,11 @@ export class PyretDataInstance implements IInputDataInstance {
    */
   private initializeBuiltinTypes(): void {
     const builtinTypes = ['Number', 'String', 'Boolean', 'PyretObject'];
-    
+
     builtinTypes.forEach(typeName => {
       const type: IType = {
         id: typeName,
-        types: typeName === 'PyretObject' ?  ['PyretObject'] : [typeName, 'PyretObject'], // All types inherit from PyretObject
+        types: typeName === 'PyretObject' ? ['PyretObject'] : [typeName, 'PyretObject'], // All types inherit from PyretObject
         atoms: [],
         isBuiltin: true
       };
@@ -838,18 +970,18 @@ export class PyretDataInstance implements IInputDataInstance {
    * Type guard for atomic values
    */
   private isAtomicValue(value: unknown): value is string | number | boolean {
-    return typeof value === 'string' || 
-           typeof value === 'number' || 
-           typeof value === 'boolean';
+    return typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean';
   }
 
   /**
    * Type guard for Pyret objects
    */
   private isPyretObject(obj: unknown): obj is PyretObject {
-    return typeof obj === 'object' && 
-           obj !== null && 
-           ('dict' in obj || 'brands' in obj || '$name' in obj);
+    return typeof obj === 'object' &&
+      obj !== null &&
+      ('dict' in obj || 'brands' in obj || '$name' in obj);
   }
 
   /**
@@ -867,10 +999,10 @@ export class PyretDataInstance implements IInputDataInstance {
   }
 
   getRelations(): readonly IRelation[] {
-    
+
     const values = this.relations.values();
     return Array.from(values);
-    
+
     //return Array.from(this.relations.values());
 
   }
@@ -880,7 +1012,7 @@ export class PyretDataInstance implements IInputDataInstance {
     this.types.forEach(type => {
       type.atoms = this.getAtoms().filter(atom => atom.type === type.id);
     });
-    
+
     return Array.from(this.types.values());
   }
 
@@ -889,73 +1021,73 @@ export class PyretDataInstance implements IInputDataInstance {
     if (!atom) {
       throw new Error(`Atom with id '${atomId}' not found`);
     }
-    
+
     const type = this.types.get(atom.type);
     if (!type) {
       // Create the type on demand if it doesn't exist
       this.ensureTypeExists(atom.type);
       return this.types.get(atom.type)!;
     }
-    
+
     return type;
   }
 
   generateGraph(hideDisconnected = false, hideDisconnectedBuiltIns = false): Graph {
     const graph = new Graph({ directed: true, multigraph: true });
-    
+
     // Add all atoms as nodes
     this.getAtoms().forEach(atom => {
       graph.setNode(atom.id, {
         label: atom.label
       });
     });
-    
+
     // Add all relation tuples as edges
     this.getRelations().forEach(relation => {
       relation.tuples.forEach(tuple => {
         if (tuple.atoms.length >= 2) {
           const sourceId = tuple.atoms[0];
           const targetId = tuple.atoms[tuple.atoms.length - 1];
-          
+
           // Include middle atoms in edge label if present
           const middleAtoms = tuple.atoms.slice(1, -1);
           const edgeLabel = middleAtoms.length > 0
             ? `${relation.name}[${middleAtoms.join(', ')}]`
             : relation.name;
 
-            // Generate a unique edge ID
-            const edgeId = generateEdgeId(relation, tuple);
+          // Generate a unique edge ID
+          const edgeId = generateEdgeId(relation, tuple);
 
-          graph.setEdge(sourceId, targetId,  edgeLabel, edgeId );
+          graph.setEdge(sourceId, targetId, edgeLabel, edgeId);
         }
       });
     });
-    
+
     // Handle disconnected node filtering
     if (hideDisconnected || hideDisconnectedBuiltIns) {
       const nodesToRemove: string[] = [];
-      
+
       graph.nodes().forEach(nodeId => {
         const inEdges = graph.inEdges(nodeId) || [];
         const outEdges = graph.outEdges(nodeId) || [];
         const isDisconnected = inEdges.length === 0 && outEdges.length === 0;
-        
+
         if (isDisconnected) {
           const atom = this.atoms.get(nodeId);
           if (atom) {
             const atomType = this.getAtomType(nodeId);
             const isBuiltin = atomType.isBuiltin;
-            
+
             if (hideDisconnected || (isBuiltin && hideDisconnectedBuiltIns)) {
               nodesToRemove.push(nodeId);
             }
           }
         }
       });
-      
+
       nodesToRemove.forEach(nodeId => graph.removeNode(nodeId));
     }
-    
+
     return graph;
   }
 
@@ -1010,7 +1142,7 @@ export class PyretDataInstance implements IInputDataInstance {
    */
   private getRelationTargets(sourceAtomId: string, relationName: string): string[] {
     const targets: string[] = [];
-    
+
     this.relations.forEach(relation => {
       if (relation.name === relationName) {
         relation.tuples.forEach(tuple => {
@@ -1020,8 +1152,102 @@ export class PyretDataInstance implements IInputDataInstance {
         });
       }
     });
-    
+
     return targets;
+  }
+
+
+  /**
+   * Adds a PyretDataInstance to this instance, optionally unifying built-in types
+   * 
+   * @param dataInstance - The PyretDataInstance to add
+   * @param unifyBuiltIns - Whether to unify built-in atoms
+   * @returns True if the instance was added successfully, false otherwise
+   */
+  addFromDataInstance(dataInstance: IDataInstance, unifyBuiltIns: boolean): boolean {
+    // Must be a PyretDataInstance
+    if (!(dataInstance instanceof PyretDataInstance)) {
+      return false;
+    }
+
+    const pyretInstance = dataInstance as PyretDataInstance;
+    const reIdMap = new Map<string, string>();
+
+    // Add atoms
+    pyretInstance.getAtoms().forEach(atom => {
+      const isBuiltin = this.isBuiltinType(atom.type);
+
+      if (unifyBuiltIns && isBuiltin) {
+        // Check if the built-in atom already exists
+        const existingAtom = Array.from(this.atoms.values()).find(
+          existing => existing.type === atom.type && existing.label === atom.label
+        );
+
+        if (existingAtom) {
+          // Map the original atom ID to the existing atom ID
+          reIdMap.set(atom.id, existingAtom.id);
+          return; // Skip adding this atom
+        }
+      }
+
+      // Generate a new ID for the atom to avoid conflicts
+      const newId = this.generateAtomId(atom.type);
+      reIdMap.set(atom.id, newId);
+
+      // Add the atom with the new ID
+      const newAtom: IAtom = { ...atom, id: newId };
+      this.addAtom(newAtom);
+
+      // Preserve the original object mapping
+      const originalObject = pyretInstance.originalObjects.get(atom.id);
+      if (originalObject) {
+        this.originalObjects.set(newId, originalObject);
+      }
+    });
+
+    // Add types
+    pyretInstance.getTypes().forEach(type => {
+      if (!this.types.has(type.id)) {
+        // Add the type if it doesn't exist
+        this.types.set(type.id, {
+          ...type,
+          atoms: type.atoms.map(atom => ({
+            ...atom,
+            id: reIdMap.get(atom.id) || atom.id,
+          })),
+        });
+      } else {
+        // Merge atoms into the existing type
+        const existingType = this.types.get(type.id)!;
+        const newAtoms = type.atoms.map(atom => ({
+          ...atom,
+          id: reIdMap.get(atom.id) || atom.id,
+        }));
+        existingType.atoms.push(...newAtoms);
+      }
+    });
+
+    // Add relations
+    pyretInstance.getRelations().forEach(relation => {
+      const newTuples: ITuple[] = relation.tuples.map(tuple => ({
+        atoms: tuple.atoms.map(atomId => reIdMap.get(atomId) || atomId),
+        types: tuple.types,
+      }));
+
+      const existingRelation = this.relations.get(relation.id);
+      if (existingRelation) {
+        // Merge tuples into the existing relation
+        existingRelation.tuples.push(...newTuples);
+      } else {
+        // Add a new relation
+        this.relations.set(relation.id, {
+          ...relation,
+          tuples: newTuples,
+        });
+      }
+    });
+
+    return true;
   }
 }
 

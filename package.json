@@ -1,6 +1,6 @@
 {
   "name": "cnd-core",
-  "version": "1.1.8",
+  "version": "1.1.9-beta.3",
   "description": "A fully client-side application for CnD.",
   "main": "./dist/browser/cnd-core-complete.global.js",
   "types": "./dist/browser/cnd-core-complete.global.d.ts",
@@ -98,7 +98,7 @@
     "lodash": "^4.17.21",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "simple-graph-query": "^1.2.0",
+    "simple-graph-query": "^1.2.4",
     "webcola": "^3.4.0"
   }
 }

@@ -609,7 +609,7 @@ export class LayoutInstance {
         });
 
         ///////////// CONSTRAINTS ////////////
-        let constraints: LayoutConstraint[] = this.applyRelatativeOrientationConstraints(layoutNodes, g);
+        let constraints: LayoutConstraint[] = this.applyRelativeOrientationConstraints(layoutNodes, g);
 
         let layoutEdges: LayoutEdge[] = g.edges().map((edge) => {
 
@@ -1009,7 +1009,7 @@ export class LayoutInstance {
      * @param layoutNodes - The layout nodes to which the constraints will be applied.
      * @returns An array of layout constraints.
      */
-    applyRelatativeOrientationConstraints(layoutNodes: LayoutNode[], g: Graph): LayoutConstraint[] {
+    applyRelativeOrientationConstraints(layoutNodes: LayoutNode[], g: Graph): LayoutConstraint[] {
 
         let constraints: LayoutConstraint[] = [];
         let relativeOrientationConstraints = this._layoutSpec.constraints.orientation.relative;
@@ -1155,11 +1155,12 @@ export class LayoutInstance {
 
                 if (nodeSizeMap[nodeId]) {
 
-                    let oldSizeStr = JSON.stringify(nodeSizeMap[nodeId]);
-                    let newSizeStr = JSON.stringify({ width: width, height: height });
-
-
-                    throw new Error(`Size Conflict: "${nodeId}" cannot have multiple sizes: ${oldSizeStr}, ${newSizeStr}.`);
+                    const existingSize = nodeSizeMap[nodeId];
+                    if (existingSize.width !== width || existingSize.height !== height) {
+                        throw new Error(
+                            `Size Conflict: "${nodeId}" cannot have multiple sizes: ${JSON.stringify(existingSize)}, ${JSON.stringify({ width, height })}.`
+                        );
+                    }
                 }
 
                 nodeSizeMap[nodeId] = { width: width, height: height };
@@ -1192,7 +1193,12 @@ export class LayoutInstance {
 
             selected.forEach((nodeId) => {
                 if (nodeColorMap[nodeId]) {
-                    throw new Error(`Color Conflict: "${nodeId}" cannot have multiple colors:  ${nodeColorMap[nodeId]}, ${color}.`);
+                    const existingColor = nodeColorMap[nodeId];
+                    if (existingColor !== color) {
+                        throw new Error(
+                            `Color Conflict: "${nodeId}" cannot have multiple colors: ${existingColor}, ${color}.`
+                        );
+                    }
                 }
                 nodeColorMap[nodeId] = color;
             });
@@ -1222,7 +1228,12 @@ export class LayoutInstance {
 
             selected.forEach((nodeId) => {
                 if (nodeIconMap[nodeId]) {
-                    throw new Error(`Icon Conflict: "${nodeId}" cannot have multiple icons:  ${nodeIconMap[nodeId]}, ${iconPath}.`);
+                    const existingIcon = nodeIconMap[nodeId];
+                    if (existingIcon.path !== iconPath || existingIcon.showLabels !== iconDirective.showLabels) {
+                        throw new Error(
+                            `Icon Conflict: "${nodeId}" cannot have multiple icons: ${JSON.stringify(existingIcon)}, ${JSON.stringify({ path: iconPath, showLabels: iconDirective.showLabels })}.`
+                        );
+                    }
                 }
                 nodeIconMap[nodeId] = { path: iconPath, showLabels: iconDirective.showLabels };
             });
@@ -1254,7 +1265,12 @@ export class LayoutInstance {
             let field = colorDirective.field;
 
             if (edgeColorMap[field]) {
-                throw new Error(`Color Conflict: "${field}" cannot have multiple colors:  ${edgeColorMap[field]}, ${color}.`);
+                const existingColor = edgeColorMap[field];
+                if (existingColor !== color) {
+                    throw new Error(
+                        `Color Conflict: "${field}" cannot have multiple colors: ${existingColor}, ${color}.`
+                    );
+                }
             }
             edgeColorMap[field] = color;
         });

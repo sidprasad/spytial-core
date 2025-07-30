@@ -352,48 +352,20 @@ export class PyretExpressionParser implements ICommandParser {
       // First, attempt to extract CnD specification if available
       const extractedCndSpec = await this.extractCndSpec(pyretResult, originalExpression);
       
-      // Check if the result is a primitive value
-      if (this.isPrimitive(pyretResult)) {
-        // Add primitive value directly to the current InputDataInstance with appropriate type
-        const atomType = typeof pyretResult === 'string' ? 'String' :
-                         typeof pyretResult === 'number' ? 'Number' : 'Boolean';
-        
-        // Generate a unique atom ID
-        const existingIds = new Set(instance.getAtoms().map(a => a.id));
-        let atomId = `result_${pyretResult}`;
-        let counter = 1;
-        while (existingIds.has(atomId)) {
-          atomId = `result_${pyretResult}_${counter}`;
-          counter++;
-        }
-        
-        const primitiveAtom = {
-          id: atomId,
-          label: String(pyretResult),
-          type: atomType
-        };
-        
-        instance.addAtom(primitiveAtom);
-        
-        const message = `Evaluated Pyret expression: ${originalExpression}\nResult: ${pyretResult} (${atomType})\nAdded 1 atom` +
-                       (extractedCndSpec ? '\nExtracted CnD specification from result' : '');
-        
-        return {
-          success: true,
-          message,
-          action: 'add',
-          extractedCndSpec
-        };
+      // Use PyretDataInstance.fromExpression for cleaner, more robust handling
+      if (!this.evaluator) {
+        throw new Error('No external Pyret evaluator available');
       }
-      
-      // For complex objects, convert to PyretDataInstance and merge all atoms/relations
-      const tempInstance = new PyretDataInstance(pyretResult);
 
-      // Get the new atoms and relations from the temp instance
-      const newAtoms = tempInstance.getAtoms();
-      const newRelations = tempInstance.getRelations();
+      // Create a temporary instance from the expression using the improved static method
+      const tempInstance = await PyretDataInstance.fromExpression(
+        originalExpression, 
+        false, // showFunctions
+        this.evaluator
+      );
 
-      if (newAtoms.length === 0) {
+      // Check if we have any data to add
+      if (tempInstance.getAtoms().length === 0) {
         return {
           success: false,
           message: 'Pyret expression did not produce any data structures',
@@ -401,47 +373,18 @@ export class PyretExpressionParser implements ICommandParser {
         };
       }
 
-      // Add all atoms to the main instance
-      let atomsAdded = 0;
-      let relationsAdded = 0;
-
-      for (const atom of newAtoms) {
-        try {
-          // Generate unique ID if there's a conflict
-          let uniqueId = atom.id;
-          const existingIds = new Set(instance.getAtoms().map(a => a.id));
-          let counter = 1;
-
-          while (existingIds.has(uniqueId)) {
-            uniqueId = `${atom.id}_${counter}`;
-            counter++;
-          }
-
-          const atomToAdd = { ...atom, id: uniqueId };
-          instance.addAtom(atomToAdd);
-          atomsAdded++;
-        } catch (error) {
-          // Atom might already exist, continue
-        }
+      // Use the built-in addFromDataInstance method for proper merging
+      const success = (instance as any).addFromDataInstance?.(tempInstance, true);
+      
+      if (!success) {
+        // Fallback for non-PyretDataInstance targets or if method doesn't exist
+        return this.fallbackAddToInstance(tempInstance, instance, originalExpression, extractedCndSpec);
       }
 
-      // Add all relation tuples to the main instance
-      for (const relation of newRelations) {
-        for (const tuple of relation.tuples) {
-          try {
-            // Update tuple atom IDs if they were renamed
-            const updatedTuple = { ...tuple };
-            // Note: This is a simplified approach. In a full implementation,
-            // we'd need to track ID mappings more carefully.
-            instance.addRelationTuple(relation.name, updatedTuple);
-            relationsAdded++;
-          } catch (error) {
-            // Tuple might already exist, continue
-          }
-        }
-      }
+      const atomCount = tempInstance.getAtoms().length;
+      const relationCount = tempInstance.getRelations().reduce((sum, rel) => sum + rel.tuples.length, 0);
 
-      const message = `Evaluated Pyret expression: ${originalExpression}\nAdded ${atomsAdded} atoms and ${relationsAdded} relation tuples` +
+      const message = `Evaluated Pyret expression: ${originalExpression}\nAdded ${atomCount} atoms and ${relationCount} relation tuples` +
                      (extractedCndSpec ? '\nExtracted CnD specification from result' : '');
 
       return {
@@ -457,6 +400,62 @@ export class PyretExpressionParser implements ICommandParser {
         message: `Failed to convert Pyret result to data instance: ${this.formatError(error)}`
       };
     }
+  }
+
+  /**
+   * Fallback method for adding data when addFromDataInstance is not available
+   */
+  private fallbackAddToInstance(
+    tempInstance: PyretDataInstance, 
+    instance: IInputDataInstance, 
+    originalExpression: string, 
+    extractedCndSpec?: string
+  ): CommandResult {
+    let atomsAdded = 0;
+    let relationsAdded = 0;
+
+    // Add all atoms to the main instance
+    for (const atom of tempInstance.getAtoms()) {
+      try {
+        // Generate unique ID if there's a conflict
+        let uniqueId = atom.id;
+        const existingIds = new Set(instance.getAtoms().map(a => a.id));
+        let counter = 1;
+
+        while (existingIds.has(uniqueId)) {
+          uniqueId = `${atom.id}_${counter}`;
+          counter++;
+        }
+
+        const atomToAdd = { ...atom, id: uniqueId };
+        instance.addAtom(atomToAdd);
+        atomsAdded++;
+      } catch (error) {
+        console.warn('Failed to add atom:', error);
+      }
+    }
+
+    // Add all relation tuples to the main instance
+    for (const relation of tempInstance.getRelations()) {
+      for (const tuple of relation.tuples) {
+        try {
+          instance.addRelationTuple(relation.name, tuple);
+          relationsAdded++;
+        } catch (error) {
+          console.warn('Failed to add relation tuple:', error);
+        }
+      }
+    }
+
+    const message = `Evaluated Pyret expression: ${originalExpression}\nAdded ${atomsAdded} atoms and ${relationsAdded} relation tuples` +
+                   (extractedCndSpec ? '\nExtracted CnD specification from result' : '');
+
+    return {
+      success: true,
+      message,
+      action: 'add',
+      extractedCndSpec
+    };
   }
 
   /**

@@ -144,15 +144,6 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
     return composeCndSpecs(cndSpec, extractedSpecs);
   }, [cndSpec, extractedSpecs]);
 
-  // Update current spec when complete spec changes
-  useEffect(() => {
-    if (completeSpec !== currentSpec) {
-      setCurrentSpec(completeSpec);
-      setLayoutStale(true);
-      onSpecChange?.(completeSpec);
-    }
-  }, [completeSpec, currentSpec, onSpecChange]);
-
   // Apply layout using the CnD pipeline
   const applyLayout = useCallback(async (instance: PyretDataInstance, spec: string) => {
     try {
@@ -193,6 +184,20 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
     }
   }, [projections, onLayoutApplied]);
 
+  // Update current spec when complete spec changes and auto-apply layout
+  useEffect(() => {
+    if (completeSpec !== currentSpec) {
+      setCurrentSpec(completeSpec);
+      setLayoutStale(true);
+      onSpecChange?.(completeSpec);
+      
+      // Auto-apply layout if enabled and we have data
+      if (autoApplyLayout && currentInstance.getAtoms().length > 0) {
+        setTimeout(() => applyLayout(currentInstance, completeSpec), 100);
+      }
+    }
+  }, [completeSpec, currentSpec, onSpecChange, autoApplyLayout, currentInstance, applyLayout]);
+
   // Handle instance changes from REPL
   const handleInstanceChange = useCallback((newInstance: PyretDataInstance) => {
     setCurrentInstance(newInstance);
@@ -230,11 +235,21 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
     setExtractedSpecs(prev => {
       if (!prev.includes(extractedSpec)) {
         console.log('Adding new extracted spec:', extractedSpec, 'to list:', prev);
-        return [...prev, extractedSpec];
+        const newSpecs = [...prev, extractedSpec];
+        
+        // Immediately apply layout if auto-apply is enabled and we have data
+        if (autoApplyLayout && currentInstance.getAtoms().length > 0) {
+          setTimeout(() => {
+            const finalSpec = composeCndSpecs(cndSpec, newSpecs);
+            applyLayout(currentInstance, finalSpec);
+          }, 100);
+        }
+        
+        return newSpecs;
       }
       return prev;
     });
-  }, []);
+  }, [autoApplyLayout, currentInstance, cndSpec, composeCndSpecs, applyLayout]);
 
   // Manual layout application
   const handleApplyLayout = useCallback(() => {
@@ -362,14 +377,14 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
     }
   }, []); // Only run once when component mounts
 
-  // Handle data and layout updates - remove the continuous update issue
+  // Handle data and layout updates with proper dependency tracking
   useEffect(() => {
     if (graphElementRef.current && currentInstance.getAtoms().length > 0 && autoApplyLayout) {
-      // Only apply layout when instance genuinely changes, not when spec changes
+      // Apply layout when either instance or spec changes
       const finalSpec = composeCndSpecs(cndSpec, extractedSpecs);
       setTimeout(() => applyLayout(currentInstance, finalSpec), 150);
     }
-  }, [currentInstance.getAtoms().length]); // Only depend on the count of atoms, not the full instance
+  }, [currentInstance.getAtoms().length, extractedSpecs.length]); // React to both atom count and spec changes
 
   const containerStyle: React.CSSProperties = {
     width,
