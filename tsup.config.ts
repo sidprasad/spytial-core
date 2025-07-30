@@ -2,13 +2,8 @@ import { defineConfig } from 'tsup'
 
 export default defineConfig({
   entry: {
-    // Main entry point
+    // Main entry point - includes all sub-modules via re-exports
     index: 'src/index.ts',
-    // Sub-module entry points
-    'alloy-graph': 'src/data-instance/alloy/alloy-graph/index.ts',
-    'alloy-instance': 'src/data-instance/alloy/alloy-instance/index.ts',
-    'layout': 'src/layout/index.ts',
-    'translators': 'src/translators/index.ts',
   },
   format: ['cjs', 'esm'],
   dts: true,
