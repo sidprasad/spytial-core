@@ -807,6 +807,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       this.colaLayout.links(this.currentLayout.links);
     }
 
+    // Trigger a layout update to reposition remaining edge labels
+    if (this.colaLayout) {
+      this.colaLayout.start(10, 15, 20); // Short layout update to reposition labels
+    }
+
     // Dispatch event for external listeners
     this.dispatchEvent(new CustomEvent('edge-removed', {
       detail: { 
@@ -2790,6 +2795,17 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       svg.input-mode .link:hover {
         stroke-width: 3px;
         opacity: 0.8;
+      }
+
+      /* Eraser mode cursor styles for right-click removal */
+      svg.input-mode .node:hover {
+        cursor: not-allowed;
+        filter: drop-shadow(0 0 3px rgba(255, 0, 0, 0.5));
+      }
+
+      svg.input-mode .link:hover {
+        cursor: not-allowed;
+        filter: drop-shadow(0 0 2px rgba(255, 0, 0, 0.5));
       }
     `;
   }
