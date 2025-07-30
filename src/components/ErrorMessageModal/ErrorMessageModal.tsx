@@ -138,14 +138,16 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = (
                   (value, index1) => (
                     <React.Fragment key={index1}>
                       {value.map((constraint: string, index2) => (
-                        <code
-                          key={`${index1} ${index2}`}
-                          onMouseEnter={addHighlightOnMouseEnter}
-                          onMouseLeave={removeHighlightOnMouseLeave}
-                          className={`error-message-${index1}`}
-                        >
-                          {constraint}
-                        </code>
+                        <React.Fragment key={`${index1} ${index2}`}>
+                          <code
+                            onMouseEnter={addHighlightOnMouseEnter}
+                            onMouseLeave={removeHighlightOnMouseLeave}
+                            className={`error-message-${index1}`}
+                          >
+                            {constraint}
+                          </code>
+                          <br />
+                        </React.Fragment>
                       ))}
                     </React.Fragment>
                   )
