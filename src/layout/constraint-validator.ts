@@ -128,6 +128,15 @@ class ConstraintValidator {
             }
         }
 
+        // Add group boundary constraints to prevent non-member nodes from being positioned within group boundaries
+        const groupBoundaryConstraints = this.generateGroupBoundaryConstraints();
+        for (const constraint of groupBoundaryConstraints) {
+            let error = this.addConstraintToSolver(constraint);
+            if (error) {
+                return error;
+            }
+        }
+
         this.solver.updateVariables();
 
         //// TODO: Does adding these play badly when we have circular layouts?
@@ -135,8 +144,8 @@ class ConstraintValidator {
         // Now that the solver has solved, we can get an ALIGNMENT ORDER for the nodes.
         let and_more_constraints = this.getAlignmentOrders();
 
-        // Now add THESE constraints to the layout constraints
-        this.layout.constraints = this.layout.constraints.concat(and_more_constraints);
+        // Now add THESE constraints to the layout constraints (including group boundary constraints)
+        this.layout.constraints = this.layout.constraints.concat(and_more_constraints).concat(groupBoundaryConstraints);
 
         return null;
     }
@@ -350,6 +359,56 @@ class ConstraintValidator {
         }
         return null;
     }
+
+    /**
+     * Generates group boundary constraints to prevent non-member nodes from being positioned within group boundaries.
+     * This fixes the issue where nodes can appear visually inside a group without being semantic members.
+     * 
+     * The approach uses soft constraints to encourage non-member nodes to maintain distance from group boundaries
+     * without creating hard conflicts with existing layout constraints.
+     */
+    private generateGroupBoundaryConstraints(): LayoutConstraint[] {
+        const groupBoundaryConstraints: LayoutConstraint[] = [];
+
+        // For each group, ensure non-member nodes are encouraged to stay outside group boundaries
+        for (const group of this.groups) {
+            const groupMemberIds = new Set([group.keyNodeId, ...group.nodeIds]);
+            
+            // Find all nodes that are NOT members of this group
+            const nonMemberNodes = this.nodes.filter(node => !groupMemberIds.has(node.id));
+            
+            // For each non-member node, add soft constraints to encourage separation from the key node
+            // This helps prevent visual overlap without creating hard conflicts
+            for (const nonMemberNode of nonMemberNodes) {
+                const keyNode = this.nodes.find(n => n.id === group.keyNodeId);
+                if (!keyNode) continue;
+
+                // Create implicit constraint to encourage group boundary separation
+                const implicitRoc = new RelativeOrientationConstraint(
+                    ['left'], // Encourage horizontal separation
+                    `${nonMemberNode.id}<->${group.keyNodeId}`
+                );
+                const groupBoundaryConstraint = new ImplicitConstraint(
+                    implicitRoc, 
+                    `Group Boundary: ${nonMemberNode.id} outside ${group.name}`
+                );
+
+                // Add a soft separation constraint with increased distance
+                // This encourages the non-member to stay away from the group key node
+                const separationConstraint: LeftConstraint = {
+                    left: keyNode,
+                    right: nonMemberNode,
+                    minDistance: this.minPadding * 3, // Extra padding to encourage group boundary respect
+                    sourceConstraint: groupBoundaryConstraint
+                };
+
+                groupBoundaryConstraints.push(separationConstraint);
+            }
+        }
+
+        return groupBoundaryConstraints;
+    }
+
 
     private getAlignmentOrders(): LayoutConstraint[] {
         // Make sure the solver has solved
