@@ -65,7 +65,7 @@ const ConstraintCard = (props: ConstraintCardProps) => {
 
     return (
         <div className={classes}>
-            <button className="closeButton" title="Remove constraint" type="button" onClick= { props.onRemove }>
+            <button className="closeButton" title="Remove constraint" aria-label="Remove constraint" type="button" onClick= { props.onRemove }>
                 <span aria-hidden="true">&times;</span>
             </button>
             <div className="input-group"> 
