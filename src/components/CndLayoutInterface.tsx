@@ -2,7 +2,7 @@ import React, { useCallback } from 'react';
 import './CndLayoutInterface.css';
 import { NoCodeView } from './NoCodeView/NoCodeView';
 import { ConstraintData, DirectiveData } from './NoCodeView/interfaces';
-import { CodeView } from './NoCodeView/CodeView';
+import { CodeView, generateLayoutSpecYaml } from './NoCodeView/CodeView';
 
 /**
  * Configuration options for the CND Layout Interface component
@@ -70,8 +70,15 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
    */
   const handleToggleChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     if (disabled) return;
-    onViewChange?.(event.target.checked);
-  }, [disabled, onViewChange]);
+
+    if (!event.target.checked) {
+      // If switching to Code View, generate YAML from current constraints/directives
+      const generatedYaml = generateLayoutSpecYaml(constraints, directives);
+      onChange(generatedYaml);
+    }
+
+    onViewChange(event.target.checked);
+  }, [disabled, onViewChange, onChange, constraints, directives]);
 
   /**
    * Handle textarea value change with proper event handling
@@ -105,7 +112,7 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
   ].filter(Boolean).join(' ');
 
   return (
-    <div className={containerClasses} aria-label={ariaLabel}>
+    <section id="cnd-layout-interface-container" className={containerClasses} aria-label={ariaLabel}>
       <div className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
         <div className="d-flex align-items-center gap-3">
           <span className={toggleLabelCodeClasses}>
@@ -121,6 +128,7 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
               disabled={disabled}
               className="cnd-layout-interface__toggle-input"
               aria-describedby="cnd-layout-toggle-description"
+              role='switch'
             />
             <span className="cnd-layout-interface__toggle-slider"></span>
           </label>
@@ -143,10 +151,10 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
           <NoCodeView yamlValue={yamlValue} constraints={constraints} setConstraints={setConstraints} directives={directives} setDirectives={setDirectives}/>
         ) : (
           // Code View - Bootstrap form styling
-          <CodeView constraints={constraints} directives={directives} yamlValue={yamlValue} handleTextareaChange={handleTextareaChange}/>
+          <CodeView constraints={constraints} directives={directives} yamlValue={yamlValue} handleTextareaChange={handleTextareaChange} disabled={disabled}/>
         )}
       </div>
-    </div>
+    </section>
   );
 };
 

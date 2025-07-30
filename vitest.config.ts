@@ -7,7 +7,11 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./tests/setup.ts'],
-    include: ['src/**/*.{test,spec}.{js,ts,tsx}', 'tests/**/*.{test,spec}.{js,ts,tsx}'],
+    include: [
+      'src/**/*.{test,spec}.{js,ts,tsx,tsx}', 
+      'tests/**/*.{test,spec}.{js,ts,tsx,tsx}'
+    ],
+    css: true,  // Enable CSS support for tests
     coverage: {
       reporter: ['text', 'json', 'html'],
       exclude: [
@@ -15,6 +19,9 @@ export default defineConfig({
         'dist/',
         '**/*.d.ts',
         '**/*.config.*',
+        'tests/setup.ts',
+        '**/*.test.*',
+        '**/*.spec.*',
       ],
     },
   },
