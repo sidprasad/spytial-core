@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Input Mode Removal Demo</title>
     
-    <!-- Bootstrap CSS for component styling -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Custom CSS -->
     <style>
         body {
@@ -128,7 +126,7 @@
     </div>
 
     <!-- D3 v4 and WebCola - the working combination -->
-    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="../vendor/d3.v4.min.js"></script>
     <script src="../vendor/cola.js"></script>
     
     <!-- Complete CND-Core browser bundle -->
@@ -174,7 +172,7 @@
          * Create a sample graph for testing
          */
         function createSampleGraph() {
-            // Create a simple layout with nodes and edges for testing
+            // Create a proper InstanceLayout for testing
             const sampleLayout = {
                 nodes: [
                     {
@@ -214,29 +212,24 @@
                         attributes: { name: ['Carol'] }
                     }
                 ],
-                links: [
+                edges: [
                     {
-                        id: 'edge_A_B',
-                        source: 0,
-                        target: 1,
+                        source: { id: 'A', label: 'Node A' },
+                        target: { id: 'B', label: 'Node B' },
                         label: 'knows',
                         relName: 'knows',
                         color: '#333'
                     },
                     {
-                        id: 'edge_B_C',
-                        source: 1,
-                        target: 2,
+                        source: { id: 'B', label: 'Node B' },
+                        target: { id: 'C', label: 'Node C' },
                         label: 'works_with',
                         relName: 'works_with',
                         color: '#333'
                     }
                 ],
-                groups: [],
                 constraints: [],
-                FIG_WIDTH: 800,
-                FIG_HEIGHT: 600,
-                conflictingNodes: []
+                groups: []
             };
 
             return sampleLayout;
@@ -255,7 +248,7 @@
                 await graphElement.renderLayout(currentInstanceLayout);
                 
                 updateStatus('Sample graph loaded! Hold Cmd/Ctrl to enter input mode.', 'success');
-                logEvent('GRAPH_LOADED', { nodeCount: currentInstanceLayout.nodes.length, edgeCount: currentInstanceLayout.links.length });
+                logEvent('GRAPH_LOADED', { nodeCount: currentInstanceLayout.nodes.length, edgeCount: currentInstanceLayout.edges.length });
                 
             } catch (error) {
                 console.error('Error loading sample graph:', error);

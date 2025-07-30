@@ -205,8 +205,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * const isAlign = this.isAlignmentEdge(alignEdge); // returns true
    * ```
    */
-  private isAlignmentEdge(edge: { id: string }): boolean {
-    return edge.id.startsWith("_alignment_");
+  private isAlignmentEdge(edge: { id?: string }): boolean {
+    return edge.id ? edge.id.startsWith("_alignment_") : false;
   }
 
   /**
@@ -2398,8 +2398,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * @param edgeId - Current edge ID
    * @returns Curvature value for the edge
    */
-  private calculateCurvature(allEdges: any[], sourceId: string, targetId: string, edgeId: string): number {
-    if (edgeId.startsWith('_alignment_')) {
+  private calculateCurvature(allEdges: any[], sourceId: string, targetId: string, edgeId?: string): number {
+    if (!edgeId || edgeId.startsWith('_alignment_')) {
       return 0;
     }
 
