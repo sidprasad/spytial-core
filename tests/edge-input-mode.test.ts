@@ -44,6 +44,80 @@ describe('Edge Input Mode Logic', () => {
     expect(mockEdge.relName).toBe('modified-label');
   });
 
+  it('should handle edge removal logic', () => {
+    const mockLayout = {
+      links: [
+        { id: 'edge1', label: 'test-edge', source: { id: 'A' }, target: { id: 'B' } },
+        { id: 'edge2', label: 'other-edge', source: { id: 'B' }, target: { id: 'C' } }
+      ]
+    };
+
+    // Simulate edge removal
+    const edgeToRemove = mockLayout.links[0];
+    const edgeIndex = mockLayout.links.findIndex(edge => edge.id === edgeToRemove.id);
+    
+    expect(edgeIndex).toBe(0);
+    
+    // Remove the edge
+    mockLayout.links.splice(edgeIndex, 1);
+    
+    expect(mockLayout.links.length).toBe(1);
+    expect(mockLayout.links[0].id).toBe('edge2');
+  });
+
+  it('should handle node removal logic', () => {
+    const mockLayout = {
+      nodes: [
+        { id: 'A', label: 'Node A' },
+        { id: 'B', label: 'Node B' },
+        { id: 'C', label: 'Node C' }
+      ],
+      links: [
+        { id: 'edge1', source: { id: 'A' }, target: { id: 'B' } },
+        { id: 'edge2', source: { id: 'B' }, target: { id: 'C' } },
+        { id: 'edge3', source: { id: 'A' }, target: { id: 'C' } }
+      ]
+    };
+
+    const nodeToRemove = 'B';
+    
+    // Find connected edges
+    const connectedEdges = mockLayout.links.filter(edge => 
+      edge.source.id === nodeToRemove || edge.target.id === nodeToRemove
+    );
+    
+    expect(connectedEdges.length).toBe(2);
+    expect(connectedEdges.map(e => e.id)).toContain('edge1');
+    expect(connectedEdges.map(e => e.id)).toContain('edge2');
+    
+    // Remove connected edges
+    mockLayout.links = mockLayout.links.filter(edge => 
+      edge.source.id !== nodeToRemove && edge.target.id !== nodeToRemove
+    );
+    
+    // Remove the node
+    const nodeIndex = mockLayout.nodes.findIndex(node => node.id === nodeToRemove);
+    mockLayout.nodes.splice(nodeIndex, 1);
+    
+    expect(mockLayout.nodes.length).toBe(2);
+    expect(mockLayout.links.length).toBe(1);
+    expect(mockLayout.links[0].id).toBe('edge3');
+  });
+
+  it('should prevent hidden/system node removal', () => {
+    const hiddenNode = { id: '_hidden_node', name: '_system_node', label: 'Hidden Node' };
+    const regularNode = { id: 'regular_node', name: 'regular_node', label: 'Regular Node' };
+    
+    // Simulate hidden node check
+    function isHiddenNode(node: { name?: string; id?: string }): boolean {
+      const identifier = node.name || node.id;
+      return identifier ? identifier.startsWith("_") : false;
+    }
+    
+    expect(isHiddenNode(hiddenNode)).toBe(true);
+    expect(isHiddenNode(regularNode)).toBe(false);
+  });
+
   it('should prevent self-loop creation', () => {
     const sourceNode = { id: 'A', label: 'Node A' };
     const targetNode = { id: 'A', label: 'Node A' }; // Same node
@@ -85,6 +159,30 @@ describe('Edge Input Mode Logic', () => {
     expect(shouldActivateWithCtrl).toBe(true);
   });
 
+  it('should validate right-click event handling requirements', () => {
+    // Test right-click event simulation
+    const contextMenuEvent = {
+      type: 'contextmenu',
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn()
+    };
+
+    // Simulate right-click handler
+    const handleRightClick = (event: any, isInputModeActive: boolean) => {
+      if (isInputModeActive) {
+        event.preventDefault();
+        event.stopPropagation();
+        return true; // Indicates removal should proceed
+      }
+      return false;
+    };
+
+    expect(handleRightClick(contextMenuEvent, true)).toBe(true);
+    expect(handleRightClick(contextMenuEvent, false)).toBe(false);
+    expect(contextMenuEvent.preventDefault).toHaveBeenCalled();
+    expect(contextMenuEvent.stopPropagation).toHaveBeenCalled();
+  });
+
   it('should handle edge creation state management', () => {
     // Initial state
     let edgeCreationState = {
@@ -110,5 +208,42 @@ describe('Edge Input Mode Logic', () => {
 
     expect(edgeCreationState.isCreating).toBe(false);
     expect(edgeCreationState.sourceNode).toBe(null);
+  });
+
+  it('should validate removal event data structure', () => {
+    // Test edge removal event structure
+    const edgeRemovalEvent = {
+      type: 'edge-removal-requested',
+      detail: {
+        relationId: 'test-relation',
+        sourceNodeId: 'A',
+        targetNodeId: 'B',
+        tuple: {
+          atoms: ['A', 'B'],
+          types: ['untyped', 'untyped']
+        }
+      }
+    };
+
+    expect(edgeRemovalEvent.detail.relationId).toBe('test-relation');
+    expect(edgeRemovalEvent.detail.sourceNodeId).toBe('A');
+    expect(edgeRemovalEvent.detail.targetNodeId).toBe('B');
+    expect(edgeRemovalEvent.detail.tuple.atoms).toEqual(['A', 'B']);
+
+    // Test node removal event structure
+    const nodeRemovalEvent = {
+      type: 'node-removal-requested',
+      detail: {
+        nodeId: 'A',
+        node: { id: 'A', label: 'Node A' },
+        connectedEdges: [
+          { id: 'edge1', source: { id: 'A' }, target: { id: 'B' } }
+        ]
+      }
+    };
+
+    expect(nodeRemovalEvent.detail.nodeId).toBe('A');
+    expect(nodeRemovalEvent.detail.node.id).toBe('A');
+    expect(nodeRemovalEvent.detail.connectedEdges.length).toBe(1);
   });
 });

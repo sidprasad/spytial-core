@@ -45,6 +45,8 @@ const DEFAULT_SCALE_FACTOR = 5;
  * - Interactive edge input mode with keyboard shortcuts (Cmd/Ctrl)
  * - Visual edge creation by clicking and dragging between nodes
  * - Edge modification by clicking on existing edges in input mode
+ * - Edge removal by right-clicking on existing edges in input mode
+ * - Node removal by right-clicking on nodes in input mode
  * - Centralized state management for IInputDataInstance
  * - Automatic layout regeneration when data instance changes
  * - Self-loop edge support with confirmation
@@ -58,6 +60,10 @@ const DEFAULT_SCALE_FACTOR = 5;
  *   * event.detail: { relationId: string, sourceNodeId: string, targetNodeId: string, tuple: ITuple }
  * - 'edge-modification-requested': When user clicks on existing edge to modify it
  *   * event.detail: { oldRelationId: string, newRelationId: string, sourceNodeId: string, targetNodeId: string, tuple: ITuple }
+ * - 'edge-removal-requested': When user right-clicks on existing edge to remove it
+ *   * event.detail: { relationId: string, sourceNodeId: string, targetNodeId: string, tuple: ITuple }
+ * - 'node-removal-requested': When user right-clicks on node to remove it
+ *   * event.detail: { nodeId: string, node: NodeWithMetadata, connectedEdges: EdgeWithMetadata[] }
  * 
  * External State Management:
  * React components should subscribe to these events and handle:
@@ -747,22 +753,128 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
-   * Update external state for an edge modification through the external state management system
-   * @param sourceNode - Source node of the edge
-   * @param targetNode - Target node of the edge 
-   * @param oldRelationName - Old relation name/label
-   * @param newRelationName - New relation name/label
+   * Remove an existing edge
    */
-  private async updateExternalStateForEdgeModification(
-    sourceNode: NodeWithMetadata | null, 
-    targetNode: NodeWithMetadata | null, 
-    oldRelationName: string, 
-    newRelationName: string
-  ): Promise<void> {
+  private async removeEdge(edgeData: EdgeWithMetadata): Promise<void> {
+    if (!this.isInputModeActive) return;
+
+    const sourceNode = this.getNodeFromEdge(edgeData, 'source');
+    const targetNode = this.getNodeFromEdge(edgeData, 'target');
+
     if (!sourceNode || !targetNode) {
+      console.error('Could not find source or target node for edge removal');
       return;
     }
 
+    const edgeLabel = edgeData.label || edgeData.relName || 'unlabeled edge';
+    const confirmRemoval = confirm(
+      `Are you sure you want to remove the edge "${edgeLabel}" from "${sourceNode.label || sourceNode.id}" to "${targetNode.label || targetNode.id}"?`
+    );
+
+    if (!confirmRemoval) {
+      return;
+    }
+
+    // Update external state for edge removal
+    await this.updateExternalStateForEdgeRemoval(sourceNode, targetNode, edgeLabel);
+
+    // Remove edge from current layout
+    if (this.currentLayout?.links) {
+      const edgeIndex = this.currentLayout.links.findIndex((edge: EdgeWithMetadata) => edge.id === edgeData.id);
+      if (edgeIndex !== -1) {
+        this.currentLayout.links.splice(edgeIndex, 1);
+      }
+    }
+
+    // Dispatch event for external listeners
+    this.dispatchEvent(new CustomEvent('edge-removed', {
+      detail: { 
+        edge: edgeData,
+        sourceNode: sourceNode,
+        targetNode: targetNode
+      }
+    }));
+
+    // Re-render the graph to reflect the removal
+    this.rerenderGraph();
+  }
+
+  /**
+   * Remove a node (and its connected edges)
+   */
+  private async removeNode(nodeData: NodeWithMetadata): Promise<void> {
+    if (!this.isInputModeActive) return;
+
+    // Check if this is a hidden/system node that shouldn't be removed
+    if (this.isHiddenNode(nodeData)) {
+      alert('System nodes cannot be removed.');
+      return;
+    }
+
+    const nodeLabel = nodeData.label || nodeData.name || nodeData.id;
+    const confirmRemoval = confirm(
+      `Are you sure you want to remove the node "${nodeLabel}" and all its connected edges?`
+    );
+
+    if (!confirmRemoval) {
+      return;
+    }
+
+    // Find all edges connected to this node
+    const connectedEdges = this.getConnectedEdges(nodeData.id);
+
+    // Update external state for node removal
+    await this.updateExternalStateForNodeRemoval(nodeData, connectedEdges);
+
+    // Remove the node and its edges from current layout
+    if (this.currentLayout) {
+      // Remove connected edges
+      if (this.currentLayout.links) {
+        this.currentLayout.links = this.currentLayout.links.filter((edge: EdgeWithMetadata) => 
+          edge.source.id !== nodeData.id && edge.target.id !== nodeData.id
+        );
+      }
+
+      // Remove the node
+      if (this.currentLayout.nodes) {
+        const nodeIndex = this.currentLayout.nodes.findIndex((node: NodeWithMetadata) => node.id === nodeData.id);
+        if (nodeIndex !== -1) {
+          this.currentLayout.nodes.splice(nodeIndex, 1);
+        }
+      }
+    }
+
+    // Dispatch event for external listeners
+    this.dispatchEvent(new CustomEvent('node-removed', {
+      detail: { 
+        node: nodeData,
+        connectedEdges: connectedEdges
+      }
+    }));
+
+    // Re-render the graph to reflect the removal
+    this.rerenderGraph();
+  }
+
+  /**
+   * Get all edges connected to a specific node
+   */
+  private getConnectedEdges(nodeId: string): EdgeWithMetadata[] {
+    if (!this.currentLayout?.links) return [];
+    
+    return this.currentLayout.links.filter((edge: EdgeWithMetadata) => 
+      edge.source.id === nodeId || edge.target.id === nodeId
+    );
+  }
+
+  /**
+   * Update external state for edge removal through the external state management system
+   */
+  private async updateExternalStateForEdgeRemoval(
+    sourceNode: NodeWithMetadata, 
+    targetNode: NodeWithMetadata, 
+    relationName: string
+  ): Promise<void> {
     try {
       // Create tuple for the relation
       const tuple: ITuple = {
@@ -770,22 +882,46 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         types: [sourceNode.type || 'untyped', targetNode.type || 'untyped']
       };
 
-      console.log(`Dispatching edge modification request: ${oldRelationName} -> ${newRelationName}`);
+      console.log(`Dispatching edge removal request: ${relationName}(${sourceNode.id}, ${targetNode.id})`);
 
-      // Dispatch edge modification event for React components to handle
-      const edgeModificationEvent = new CustomEvent('edge-modification-requested', {
+      // Dispatch edge removal event for React components to handle
+      const edgeRemovalEvent = new CustomEvent('edge-removal-requested', {
         detail: {
-          oldRelationId: oldRelationName,
-          newRelationId: newRelationName,
+          relationId: relationName,
           sourceNodeId: sourceNode.id,
           targetNodeId: targetNode.id,
           tuple: tuple
         },
         bubbles: true
       });
-      this.dispatchEvent(edgeModificationEvent);
+      this.dispatchEvent(edgeRemovalEvent);
     } catch (error) {
-      console.error('Failed to update external state for edge modification:', error);
+      console.error('Failed to update external state for edge removal:', error);
+    }
+  }
+
+  /**
+   * Update external state for node removal through the external state management system
+   */
+  private async updateExternalStateForNodeRemoval(
+    nodeData: NodeWithMetadata,
+    connectedEdges: EdgeWithMetadata[]
+  ): Promise<void> {
+    try {
+      console.log(`Dispatching node removal request: ${nodeData.id}`);
+
+      // Dispatch node removal event for React components to handle
+      const nodeRemovalEvent = new CustomEvent('node-removal-requested', {
+        detail: {
+          nodeId: nodeData.id,
+          node: nodeData,
+          connectedEdges: connectedEdges
+        },
+        bubbles: true
+      });
+      this.dispatchEvent(nodeRemovalEvent);
+    } catch (error) {
+      console.error('Failed to update external state for node removal:', error);
     }
   }
 
@@ -1008,6 +1144,16 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           });
         }
       })
+      .on('contextmenu.inputmode', (d: any) => {
+        if (this.isInputModeActive && !this.isAlignmentEdge(d)) {
+          d3.event.preventDefault();
+          d3.event.stopPropagation();
+          // Handle async operation without blocking the event
+          this.removeEdge(d).catch(error => {
+            console.error('Error removing edge:', error);
+          });
+        }
+      })
       .style('cursor', () => {
         return this.isInputModeActive ? 'pointer' : 'default';
       });
@@ -1200,6 +1346,16 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           // Handle async operation without blocking the event
           this.finishEdgeCreation(d).catch(error => {
             console.error('Error finishing edge creation:', error);
+          });
+        }
+      })
+      .on('contextmenu.inputmode', (d: any) => {
+        if (this.isInputModeActive) {
+          d3.event.preventDefault();
+          d3.event.stopPropagation();
+          // Handle async operation without blocking the event
+          this.removeNode(d).catch(error => {
+            console.error('Error removing node:', error);
           });
         }
       });
