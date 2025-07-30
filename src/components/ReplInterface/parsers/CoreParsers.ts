@@ -67,7 +67,9 @@ export class RemoveCommandParser implements ICommandParser {
       'remove ID',
       'remove Label:Type',
       'remove source.relation=target',
-      'remove relation'
+      'remove relation',
+      'remove Atom.REL',
+      'remove edge_id'
     ];
   }
 
@@ -81,12 +83,22 @@ export class RemoveCommandParser implements ICommandParser {
         return this.handleRemoveRelationTuple(args, instance);
       }
       
-      // Pattern 2: remove Label:Type (atom by label and type)
+      // Pattern 2: remove Atom.REL (all relations of type REL from Atom)
+      if (args.includes('.') && !args.includes('=')) {
+        return this.handleRemoveAtomRelation(args, instance);
+      }
+      
+      // Pattern 3: remove Label:Type (atom by label and type)
       if (args.includes(':') && !args.includes('->')) {
         return this.handleRemoveAtomByLabelType(args, instance);
       }
       
-      // Pattern 3: remove ID (atom by ID) or relation (entire relation by name)
+      // Pattern 4: remove edge_id (remove specific edge by ID)
+      if (this.looksLikeEdgeId(args, instance)) {
+        return this.handleRemoveEdgeById(args, instance);
+      }
+      
+      // Pattern 5: remove ID (atom by ID) or relation (entire relation by name)
       // Try atom first, then fallback to relation
       if (/^[^\s:->().]+$/.test(args)) {
         // Try to find atom first
@@ -229,18 +241,127 @@ export class RemoveCommandParser implements ICommandParser {
     };
   }
 
+  private handleRemoveAtomRelation(args: string, instance: IInputDataInstance): CommandResult {
+    // Pattern: Atom.REL - remove all relations of type REL from Atom
+    const match = args.match(/^([^.]+)\.([^.]+)$/);
+    if (!match) {
+      return {
+        success: false,
+        message: `Invalid atom.relation syntax: ${args}`
+      };
+    }
+    
+    const [, atomId, relationName] = match;
+    
+    // Find the atom
+    const atom = instance.getAtoms().find(a => a.id === atomId);
+    if (!atom) {
+      return {
+        success: false,
+        message: `Atom '${atomId}' not found`
+      };
+    }
+    
+    // Find the relation
+    const relation = instance.getRelations().find(r => r.name === relationName);
+    if (!relation) {
+      return {
+        success: false,
+        message: `Relation '${relationName}' not found`
+      };
+    }
+    
+    // Remove all tuples where the atom appears as the first element (source)
+    const originalTupleCount = relation.tuples.length;
+    const tuplesToRemove = relation.tuples.filter(tuple => tuple.atoms[0] === atomId);
+    
+    if (tuplesToRemove.length === 0) {
+      return {
+        success: false,
+        message: `No ${relationName} relations found for atom '${atomId}'`
+      };
+    }
+    
+    // Remove the tuples
+    tuplesToRemove.forEach(tuple => {
+      instance.removeRelationTuple(relationName, tuple);
+    });
+    
+    return {
+      success: true,
+      message: `[${atomId}.${relationName}] Removed ${tuplesToRemove.length} ${relationName} relations from '${atomId}'`,
+      action: 'remove'
+    };
+  }
+
+  private looksLikeEdgeId(args: string, instance: IInputDataInstance): boolean {
+    // Check if args looks like an edge ID by examining existing relations
+    // Edge IDs typically have format like: relationName:atom1->atom2
+    return args.includes(':') && args.includes('->');
+  }
+
+  private handleRemoveEdgeById(edgeId: string, instance: IInputDataInstance): CommandResult {
+    // Parse edge ID format: relationName:atom1->atom2->...
+    const colonIndex = edgeId.indexOf(':');
+    if (colonIndex === -1) {
+      return {
+        success: false,
+        message: `Invalid edge ID format: ${edgeId}. Expected format: relationName:atom1->atom2`
+      };
+    }
+    
+    const relationName = edgeId.substring(0, colonIndex);
+    const atomChain = edgeId.substring(colonIndex + 1);
+    const atoms = atomChain.split('->');
+    
+    // Find the relation
+    const relation = instance.getRelations().find(r => r.name === relationName);
+    if (!relation) {
+      return {
+        success: false,
+        message: `Relation '${relationName}' not found`
+      };
+    }
+    
+    // Find the specific tuple with matching atoms
+    const targetTuple = relation.tuples.find(tuple => 
+      tuple.atoms.length === atoms.length &&
+      tuple.atoms.every((atomId, index) => atomId === atoms[index])
+    );
+    
+    if (!targetTuple) {
+      return {
+        success: false,
+        message: `Edge '${edgeId}' not found`
+      };
+    }
+    
+    // Remove the tuple
+    instance.removeRelationTuple(relationName, targetTuple);
+    
+    return {
+      success: true,
+      message: `[${edgeId}] Removed edge: ${relationName}(${atoms.join(', ')})`,
+      action: 'remove'
+    };
+  }
+
   getHelp(): string[] {
     return [
       'Remove Commands (sugar syntax):',
       '  remove ID                           - Remove atom by ID',
       '  remove Label:Type                   - Remove atom by label and type',
       '  remove source.relation=target       - Remove specific relation tuple',
+      '  remove Atom.REL                     - Remove all REL relations from Atom',
+      '  remove edge_id                      - Remove specific edge by ID',
       '  remove relation                     - Remove entire relation',
       '',
       'Examples:',
       '  remove alice                        - Remove atom with ID "alice"',
       '  remove Alice:Person                 - Remove Alice:Person atom',
       '  remove alice.friend=bob             - Remove friend(alice, bob) tuple',
+      '  remove alice.friend                 - Remove all friend relations from alice',
+      '  remove friend:alice->bob            - Remove edge by ID',
       '  remove friend                       - Remove entire friend relation'
     ];
   }

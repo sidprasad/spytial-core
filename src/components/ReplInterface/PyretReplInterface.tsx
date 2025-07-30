@@ -20,6 +20,7 @@ import { IInputDataInstance } from '../../data-instance/interfaces';
 import { PyretEvaluator, PyretExpressionParser } from './parsers/PyretExpressionParser';
 import { RemoveCommandParser, AtomCommandParser, DotNotationRelationParser } from './parsers/CoreParsers';
 import { InfoCommandParser } from './parsers/ExtensibleParsers';
+import { PyretIdAllocationParser } from './parsers/PyretIdAllocationParser';
 
 export interface PyretReplInterfaceProps extends Omit<ReplInterfaceProps, 'instance'> {
   /** Initial Pyret data instance. If not provided, an empty instance will be created. */
@@ -60,19 +61,21 @@ export const PyretReplInterface: React.FC<PyretReplInterfaceProps> = ({
   // Create terminal configuration with PyretExpressionParser if evaluator is available
   const terminals = useMemo(() => {
     const pyretExpressionParser = new PyretExpressionParser(externalEvaluator);
+    const pyretIdAllocationParser = new PyretIdAllocationParser(externalEvaluator);
     
     const baseTerminals: TerminalConfig[] = [
       {
         id: 'unified',
-        title: externalEvaluator ? 'Full Pyret REPL' : 'Limited REPL',
+        title: externalEvaluator ? 'Full Pyret REPL' : 'Enhanced REPL',
         description: externalEvaluator 
-          ? 'Supports atoms, relations, extensions, and Pyret expressions via external evaluator'
-          : 'Supports atoms, relations, and extensions',
+          ? 'Supports ID allocation (x=1), expression evaluation, and enhanced remove commands'
+          : 'Supports ID allocation (x=1), enhanced remove commands, and basic operations',
         parsers: [
           new RemoveCommandParser(),        // Priority 200 - highest priority for remove commands
           new DotNotationRelationParser(),  // Priority 115 - dot notation relations
+          pyretIdAllocationParser,          // Priority 110 - ID allocation syntax (x=1)
+          new AtomCommandParser(),          // Priority 100 - standard atom commands (Label:Type)
           pyretExpressionParser,            // Priority 90 - Pyret expressions (only if evaluator available)
-          new AtomCommandParser(),          // Priority 100 - standard priority
           new InfoCommandParser()           // Priority 50 - fallback utility commands
         ].filter(parser => {
           // Remove PyretExpressionParser if no external evaluator
@@ -81,7 +84,7 @@ export const PyretReplInterface: React.FC<PyretReplInterfaceProps> = ({
           }
           return true;
         }).sort((a, b) => b.getPriority() - a.getPriority()), // Sort by priority descending
-        placeholder: 'x=[list: 1, 2,3]\n remove x'
+        placeholder: 'x = 1\nalice = "Alice"\nremove alice.friend\nlist-ids'
       }
     ];
     
