@@ -229,16 +229,16 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     const overlappingNodes = this.currentLayout.overlappingNodes;
 
     if (conflictingNodes.length > 0 && overlappingNodes.length > 0) {
-      throw new Error("Layout cannot have both conflictingConstraints and overlappingNodes");
+      const conflictingNodeIds = conflictingNodes.map(n => n.id);
+      const overlappingNodeIds = overlappingNodes.map(n => n.id);
+      throw new Error(`Layout cannot have both conflictingConstraints (${conflictingNodeIds}) and overlappingNodes ${overlappingNodeIds}`);
     }
 
     const errorNodes = [...conflictingNodes, ...overlappingNodes];
 
     console.log("ErrorNodes", errorNodes);
 
-    return errorNodes.some((errorNode: LayoutNode) => 
-      errorNode.id === node.id || (errorNode as any).name === node.name  // NOTE: Is `name` check necessary?
-    );
+    return errorNodes.some((errorNode: LayoutNode) => errorNode.id === node.id); // NOTE: `id` should be unique
   }
 
   private isErrorGroup(group: {name: string}): boolean {

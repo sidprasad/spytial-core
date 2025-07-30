@@ -1,6 +1,6 @@
 import { Graph, Edge } from 'graphlib';
 import { IAtom, IDataInstance, IType } from '../data-instance/interfaces';
-import { PositionalConstraintError, GroupOverlapError, isPositionalConstraintError } from './constraint-validator';
+import { PositionalConstraintError, GroupOverlapError, isPositionalConstraintError, isGroupOverlapError } from './constraint-validator';
 
 
 import {
@@ -525,7 +525,8 @@ export class LayoutInstance {
      * Generates the layout for the given data instance and projections.
      * @param a - The data instance to generate the layout for.
      * @param projections - ...
-     * @returns An object containing the layout and projection data.
+     * @returns An object containing the layout, projection data, and (optionally) an error to be surfaced to the user.
+     * @throws {ConstraintError} If the layout cannot be generated due to unsatisfiable constraints and error isn't caught to be surfaced to the user.
      */
     public generateLayout(
         a: IDataInstance,
@@ -654,41 +655,19 @@ export class LayoutInstance {
 
         if (nonCyclicConstraintError) {
             if ((nonCyclicConstraintError as PositionalConstraintError).minimalConflictingSet) {
-                const minimalConflictingSet = (nonCyclicConstraintError as PositionalConstraintError).minimalConflictingSet;
-                // If the error is a positional constraint error, we can try to return the last known good layout by removing all conflicting constraints.
-                const layoutWithErrorMetadata: InstanceLayout = {
-                    nodes: layoutWithoutCyclicConstraints.nodes,
-                    edges: layoutWithoutCyclicConstraints.edges,
-                    // FIXME: This is a hacky way to remove the conflicting constraints.
-                    // There is some inconsistency between what the graph shows and what the error message shows.
-                    constraints: layoutWithoutCyclicConstraints.constraints.filter(c =>
-                        ![...minimalConflictingSet.values()].flat().includes(c)
-                    ),
-                    groups: layoutWithoutCyclicConstraints.groups,
-                    conflictingConstraints: [...minimalConflictingSet.values()].flat()
-                };
-                return {
-                    layout: layoutWithErrorMetadata,
-                    projectionData,
-                    error: nonCyclicConstraintError
-                };
+                return this.handlePositionalConstraintError(
+                    nonCyclicConstraintError as PositionalConstraintError,
+                    layoutWithoutCyclicConstraints,
+                    projectionData
+                );
             }
 
             if ((nonCyclicConstraintError as GroupOverlapError).overlappingNodes) {
-                // If the error is a group overlap error, we can return the error as is.
-                const layoutWithErrorMetadata: InstanceLayout = {
-                    nodes: layoutWithoutCyclicConstraints.nodes,
-                    edges: layoutWithoutCyclicConstraints.edges,
-                    constraints: layoutWithoutCyclicConstraints.constraints,
-                    groups: layoutWithoutCyclicConstraints.groups,
-                    // TODO: Add conflicting groups metadata
-                    overlappingNodes: (nonCyclicConstraintError as GroupOverlapError).overlappingNodes,
-                }
-                return { 
-                    layout: layoutWithErrorMetadata, 
-                    projectionData, 
-                    error: nonCyclicConstraintError 
-                };
+                return this.handleGroupOverlapError(
+                    nonCyclicConstraintError as GroupOverlapError,
+                    layoutWithoutCyclicConstraints,
+                    projectionData
+                );
             }
 
             // console.log("Layout is unsatisfiable even without cyclic constraints.")
@@ -706,14 +685,30 @@ export class LayoutInstance {
 
         // This function applies permutations of the cyclic constraints
         // until it finds a satisfying layout, or it runs out of permutations.
-        let closureConstraints = this.applyCyclicConstraints(layoutNodes, layoutWithoutCyclicConstraints);
-        // Append the closure constraints to the constraints
-        constraints = constraints.concat(closureConstraints);
+        try {
+            let closureConstraints = this.applyCyclicConstraints(layoutNodes, layoutWithoutCyclicConstraints);
+            // Append the closure constraints to the constraints
+            constraints = constraints.concat(closureConstraints);
+        } catch (error) {
+            if (isPositionalConstraintError(error)) {
+                return this.handlePositionalConstraintError(
+                    error as PositionalConstraintError,
+                    layoutWithoutCyclicConstraints,
+                    projectionData
+                );
+            }
+            if (isGroupOverlapError(error)) {
+                return this.handleGroupOverlapError(
+                    error as GroupOverlapError,
+                    layoutWithoutCyclicConstraints,
+                    projectionData
+                );
+            }
+
+            throw error;
+        }   
 
         /////// END HACK //////////
-
-
-
 
         // Filter out all edges that are hidden
         layoutEdges = layoutEdges.filter((edge) => !edge.id.startsWith(this.hideThisEdge));
@@ -733,24 +728,20 @@ export class LayoutInstance {
         let finalLayoutError = finalConstraintValidator.validateConstraints();
         if (finalLayoutError) {
             if ((finalLayoutError as PositionalConstraintError).minimalConflictingSet) {
-                const minimalConflictingSet = (finalLayoutError as PositionalConstraintError).minimalConflictingSet;
-                // If the error is a positional constraint error, we can try to return the last known good layout by removing all conflicting constraints.
-                const layoutWithErrorMetadata: InstanceLayout = {
-                    nodes: layoutWithoutCyclicConstraints.nodes,
-                    edges: layoutWithoutCyclicConstraints.edges,
-                    constraints: layoutWithoutCyclicConstraints.constraints.filter(c =>
-                        ![...minimalConflictingSet.values()].flat().includes(c)
-                    ),
-                    groups: layoutWithoutCyclicConstraints.groups
-                };
-                return {
-                    layout: layoutWithErrorMetadata,
-                    projectionData,
-                    error: finalLayoutError
-                };
+                return this.handlePositionalConstraintError(
+                    finalLayoutError as PositionalConstraintError,
+                    layoutWithoutCyclicConstraints,
+                    projectionData
+                );
             }
 
-            // TODO: Add group overlap handling here
+            if ((finalLayoutError as GroupOverlapError).overlappingNodes) {
+                return this.handleGroupOverlapError(
+                    finalLayoutError as GroupOverlapError,
+                    layoutWithoutCyclicConstraints,
+                    projectionData
+                );
+            }
 
             throw finalLayoutError;
         }
@@ -759,8 +750,70 @@ export class LayoutInstance {
     }
 
     /**
+     * Helper function to handle positional constraint errors by creating a layout with conflicting constraints removed
+     * @returns An object containing the layout with error metadata, projection data, and the error itself.
+     */
+    private handlePositionalConstraintError(
+        error: PositionalConstraintError,
+        layoutWithoutCyclicConstraints: InstanceLayout,
+        projectionData: { type: string, projectedAtom: string, atoms: string[] }[]
+    ): {
+        layout: InstanceLayout,
+        projectionData: { type: string, projectedAtom: string, atoms: string[] }[],
+        error: ConstraintError
+    } {
+        const minimalConflictingSet = error.minimalConflictingSet;
+        // If the error is a positional constraint error, we can try to return the last known good layout by removing all conflicting constraints.
+        const layoutWithErrorMetadata: InstanceLayout = {
+            nodes: layoutWithoutCyclicConstraints.nodes,
+            edges: layoutWithoutCyclicConstraints.edges,
+            // FIXME: This is a hacky way to remove the conflicting constraints.
+            // There is some inconsistency between what the graph shows and what the error message shows.
+            constraints: layoutWithoutCyclicConstraints.constraints.filter(c =>
+                ![...minimalConflictingSet.values()].flat().includes(c)
+            ),
+            groups: layoutWithoutCyclicConstraints.groups,
+            conflictingConstraints: [...minimalConflictingSet.values()].flat()
+        };
+        return {
+            layout: layoutWithErrorMetadata,
+            projectionData,
+            error: error
+        };
+    }
+
+    /**
+     * Helper function to handle group overlap errors by creating a layout with overlapping nodes metadata
+     * @returns An object containing the layout with error metadata, projection data, and the error itself.
+     */
+    private handleGroupOverlapError(
+        error: GroupOverlapError,
+        layoutWithoutCyclicConstraints: InstanceLayout,
+        projectionData: { type: string, projectedAtom: string, atoms: string[] }[]
+    ): {
+        layout: InstanceLayout,
+        projectionData: { type: string, projectedAtom: string, atoms: string[] }[],
+        error: ConstraintError
+    } {
+        // If the error is a group overlap error, we can return the error as is.
+        const layoutWithErrorMetadata: InstanceLayout = {
+            nodes: layoutWithoutCyclicConstraints.nodes,
+            edges: layoutWithoutCyclicConstraints.edges,
+            constraints: layoutWithoutCyclicConstraints.constraints,
+            groups: layoutWithoutCyclicConstraints.groups,
+            overlappingNodes: error.overlappingNodes,
+        }
+        return { 
+            layout: layoutWithErrorMetadata, 
+            projectionData, 
+            error: error 
+        };
+    }
+
+    /**
      * Applies the cyclic orientation constraints to the layout nodes.
      * @param layoutNodes - The layout nodes to which the constraints will be applied.
+     * @throws {ConstraintError} If the layout cannot be satisfied with the cyclic constraints.
      * @returns An array of layout constraints.
      */
     applyCyclicConstraints(layoutNodes: LayoutNode[], layoutWithoutCyclicConstraints: InstanceLayout): LayoutConstraint[] {
