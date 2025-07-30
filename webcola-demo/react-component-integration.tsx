@@ -213,13 +213,14 @@ export class CndLayoutStateManager {
    * @returns Current CND specification string
    */
   public getCurrentCndSpec(): string {
-    // If user has manually entered YAML, use that
-    if (this.yamlValue.trim()) {
-      return this.yamlValue;
+    // If currently in Code View, return the YAML value directly
+    if (!this.isNoCodeView) {
+      return this.yamlValue.trim();
+    } else {
+      // If in No Code View, generate the spec from constraints and directives
+      const generatedSpec = this.generateCurrentYamlSpec();
+      return generatedSpec.trim();
     }
-    
-    // Otherwise generate from constraints/directives
-    return this.generateCurrentYamlSpec();
   }
 }
 
@@ -866,6 +867,8 @@ export function getCurrentInstanceFromReact(): IInputDataInstance | undefined {
  * }
  * ```
  */
+
+// FIXME: Can this be deleted? It seems to be unused.
 export function getCurrentCNDSpecFromReact(): string | undefined {
   try {
     const stateManager = CndLayoutStateManager.getInstance();
