@@ -680,6 +680,7 @@ export class LayoutInstance {
         // ANOTHER POTENTIAL BUG, I THINK. WHAT IF CIRCULAR PERTURBATIONS CHANGE 
         // DIRECTLY RIGHT/LEFT?
         constraints = layoutWithoutCyclicConstraints.constraints;
+        const layoutWithCyclicConstraints: InstanceLayout = { nodes: layoutWithoutCyclicConstraints.nodes, edges: layoutWithoutCyclicConstraints.edges, constraints: constraints, groups: layoutWithoutCyclicConstraints.groups };
 
 
 
@@ -689,18 +690,19 @@ export class LayoutInstance {
             let closureConstraints = this.applyCyclicConstraints(layoutNodes, layoutWithoutCyclicConstraints);
             // Append the closure constraints to the constraints
             constraints = constraints.concat(closureConstraints);
+            layoutWithCyclicConstraints.constraints = constraints;
         } catch (error) {
             if (isPositionalConstraintError(error)) {
                 return this.handlePositionalConstraintError(
                     error as PositionalConstraintError,
-                    layoutWithoutCyclicConstraints,
+                    layoutWithCyclicConstraints,
                     projectionData
                 );
             }
             if (isGroupOverlapError(error)) {
                 return this.handleGroupOverlapError(
                     error as GroupOverlapError,
-                    layoutWithoutCyclicConstraints,
+                    layoutWithCyclicConstraints,
                     projectionData
                 );
             }
@@ -730,7 +732,7 @@ export class LayoutInstance {
             if ((finalLayoutError as PositionalConstraintError).minimalConflictingSet) {
                 return this.handlePositionalConstraintError(
                     finalLayoutError as PositionalConstraintError,
-                    layoutWithoutCyclicConstraints,
+                    layout,
                     projectionData
                 );
             }
@@ -738,7 +740,7 @@ export class LayoutInstance {
             if ((finalLayoutError as GroupOverlapError).overlappingNodes) {
                 return this.handleGroupOverlapError(
                     finalLayoutError as GroupOverlapError,
-                    layoutWithoutCyclicConstraints,
+                    layout,
                     projectionData
                 );
             }
@@ -755,7 +757,7 @@ export class LayoutInstance {
      */
     private handlePositionalConstraintError(
         error: PositionalConstraintError,
-        layoutWithoutCyclicConstraints: InstanceLayout,
+        layout: InstanceLayout,
         projectionData: { type: string, projectedAtom: string, atoms: string[] }[]
     ): {
         layout: InstanceLayout,
@@ -765,14 +767,14 @@ export class LayoutInstance {
         const minimalConflictingSet = error.minimalConflictingSet;
         // If the error is a positional constraint error, we can try to return the last known good layout by removing all conflicting constraints.
         const layoutWithErrorMetadata: InstanceLayout = {
-            nodes: layoutWithoutCyclicConstraints.nodes,
-            edges: layoutWithoutCyclicConstraints.edges,
+            nodes: layout.nodes,
+            edges: layout.edges,
             // FIXME: This is a hacky way to remove the conflicting constraints.
             // There is some inconsistency between what the graph shows and what the error message shows.
-            constraints: layoutWithoutCyclicConstraints.constraints.filter(c =>
+            constraints: layout.constraints.filter(c =>
                 ![...minimalConflictingSet.values()].flat().includes(c)
             ),
-            groups: layoutWithoutCyclicConstraints.groups,
+            groups: layout.groups,
             conflictingConstraints: [...minimalConflictingSet.values()].flat()
         };
         return {
@@ -788,7 +790,7 @@ export class LayoutInstance {
      */
     private handleGroupOverlapError(
         error: GroupOverlapError,
-        layoutWithoutCyclicConstraints: InstanceLayout,
+        layout: InstanceLayout,
         projectionData: { type: string, projectedAtom: string, atoms: string[] }[]
     ): {
         layout: InstanceLayout,
@@ -796,11 +798,34 @@ export class LayoutInstance {
         error: ConstraintError
     } {
         // If the error is a group overlap error, we can return the error as is.
+        // const layoutWithErrorMetadata: InstanceLayout = {
+        //     nodes: layout.nodes,
+        //     edges: layout.edges,
+        //     constraints: layout.constraints,
+        //     groups: layout.groups,
+        //     overlappingNodes: error.overlappingNodes,
+        // }
+
+        // Get overlapping groups
+        const overlappingGroupNames = error.overlappingNodes.map(node => node.groups).flat();
+        const overlappingGroups = layout.groups.filter(group =>
+            overlappingGroupNames.includes(group.name)
+        );
+
+        // Get relevant nodes, which are nodes in the overlapping groups
+        const relevantNodeIds = overlappingGroups.flatMap(group => group.nodeIds)
+        const relevantNodes = layout.nodes.filter(node => relevantNodeIds.includes(node.id));
+
+        // Only edges containing overlapping nodes
+        const edgesWithRelevantNodes = layout.edges.filter(edge =>
+            relevantNodes.some(node => edge.source.id === node.id) && relevantNodes.some(node => edge.target.id === node.id)
+        );
+        
         const layoutWithErrorMetadata: InstanceLayout = {
-            nodes: layoutWithoutCyclicConstraints.nodes,
-            edges: layoutWithoutCyclicConstraints.edges,
-            constraints: layoutWithoutCyclicConstraints.constraints,
-            groups: layoutWithoutCyclicConstraints.groups,
+            nodes: relevantNodes,
+            edges: edgesWithRelevantNodes,
+            constraints: layout.constraints,
+            groups: overlappingGroups,
             overlappingNodes: error.overlappingNodes,
         }
         return { 
@@ -817,6 +842,8 @@ export class LayoutInstance {
      * @returns An array of layout constraints.
      */
     applyCyclicConstraints(layoutNodes: LayoutNode[], layoutWithoutCyclicConstraints: InstanceLayout): LayoutConstraint[] {
+
+        // FIXME: The issue here is that we are throwing from this function, and so cyclic constraints are not correctly applied to the error graph.
 
         // TODO: There is a bug here. There are equivalent cyclic constraints
         // that are NOT being applied.

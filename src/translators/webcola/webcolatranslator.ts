@@ -482,8 +482,6 @@ export class WebColaLayout {
       }
     });
 
-    console.log("Overlapping groups", uniqueGroups);
-
     return Array.from(uniqueGroups);
   }
 }

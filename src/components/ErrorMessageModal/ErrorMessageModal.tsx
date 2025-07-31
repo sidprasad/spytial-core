@@ -74,7 +74,7 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = (
   return (
     <div id="error-message-modal" className="mt-3 d-flex flex-column overflow-x-auto p-3 rounded border border-danger border-2">
       <h4 style={{color: 'var(--bs-danger)'}}>Could not produce a diagram</h4>
-      <p>The instance being visualized is inconsistent with the Cope and Drag spec.</p>
+      <p>Your instance cannot be visualized with the current CnD spec.</p>
       {/* Parse/Generic/Group Error Card */}
       {isSystemError && (
         <>
@@ -94,11 +94,11 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = (
       {/* (Positional) Constraint Error Cards */}
       { messages && (
         <>
-          <p><i>The graph below visualizes the localized area of the error on a valid instance with the conflicting set of constraints removed.</i></p>
-          <div className="d-flex flex-row gap-3">
+          <p>Hover over the conflicting source constraints to see the corresponding diagram elements that cannot be visualized. </p>
+          <div className="d-flex flex-row gap-3 mb-3">
             <div className="card error-card">
               <div className="card-header bg-light">
-                <strong>In terms of CnD</strong>
+                <strong>In terms of CnD constraints (source constraints)</strong>
               </div>
               <div className="card-body">
                 Constraint: <br />

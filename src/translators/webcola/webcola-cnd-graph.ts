@@ -236,14 +236,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
     const errorNodes = [...conflictingNodes, ...overlappingNodes];
 
-    console.log("ErrorNodes", errorNodes);
-
     return errorNodes.some((errorNode: LayoutNode) => errorNode.id === node.id); // NOTE: `id` should be unique
   }
 
   private isErrorGroup(group: {name: string}): boolean {
     const overlappingGroups = this.currentLayout.overlappingGroups;
-    console.log("Overlapping groups", overlappingGroups);
     if (!overlappingGroups) {
       console.error("Overlapping groups data not available in current layout");
       throw new Error("Overlapping groups data not available in current layout");
