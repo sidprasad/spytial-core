@@ -2546,7 +2546,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       }
 
       .error-node rect, .error-group {
-        stroke: red;
         stroke-width: 2px;
         stroke-dasharray: 5 5;
         animation: dash 1s linear infinite;
@@ -2593,17 +2592,17 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         pointer-events: none;
       }
 
-.linklabel {
-  text-anchor: middle;
-  dominant-baseline: middle;
-  font-size: 10px;
-  fill: #555;
-  pointer-events: none;
-  font-family: system-ui;
-  stroke: white; /* Add white shadow */
-  stroke-width: 0.2px; /* Reduced thickness of the shadow */
-  stroke-opacity: 0.7; /* Added opacity to make the shadow less intense */
-}
+      .linklabel {
+        text-anchor: middle;
+        dominant-baseline: middle;
+        font-size: 10px;
+        fill: #555;
+        pointer-events: none;
+        font-family: system-ui;
+        stroke: white; /* Add white shadow */
+        stroke-width: 0.2px; /* Reduced thickness of the shadow */
+        stroke-opacity: 0.7; /* Added opacity to make the shadow less intense */
+      }
       
       .mostSpecificTypeLabel {
         font-size: 8px;
