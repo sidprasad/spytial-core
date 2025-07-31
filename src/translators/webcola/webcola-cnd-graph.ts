@@ -187,6 +187,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
+   * Access whether this graph is a graph visualizing an unsat core.
+   */
+  private get isUnsatCore(): boolean {
+    return this.hasAttribute('unsat');
+  }
+
+  /**
    * Determines if an edge is used for alignment purposes.
    * Alignment edges are identified by IDs starting with "_alignment_".
    * 
@@ -332,6 +339,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       ${this.getCSS()}
       </style>
       <div id="svg-container">
+      <span id="error-icon" title="This graph is depicting an error state">⚠️</span>
       <svg id="svg" width="${width}" height="${height}">
         <defs>
         <marker id="end-arrow" markerWidth="15" markerHeight="10" refX="12" refY="5" orient="auto">
@@ -904,6 +912,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           } else {
             console.warn(`Unknown layout format: ${this.layoutFormat}. Skipping edge routing.`);
           }
+
+          // Check if it's an unsat core layout
+          if (this.isUnsatCore) {
+            this.showErrorIcon();
+          }
+
           this.hideLoading();
         });
 
@@ -2649,6 +2663,21 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         stroke-width: 3px;
         opacity: 0.8;
       }
+
+      /* Error icon positioning */
+      #error-icon {
+        display: none;
+        margin: 5px;
+        padding: 5px;
+        font-size: 28px;
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 1000;
+        cursor: help;
+        background-color: rgba(255, 0, 0, 0.5);
+        border-radius: 4px;
+      }
     `;
   }
 
@@ -2697,6 +2726,22 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     loading.style.display = 'none';
     error.style.display = 'block';
     error.textContent = message;
+  }
+
+  /**
+   * Show error icon
+   */
+  private showErrorIcon(): void {
+    const errorIcon = this.shadowRoot!.querySelector('#error-icon') as HTMLElement;
+    errorIcon.style.display = 'block';
+  }
+
+  /**
+   * Hide error icon
+   */
+  private hideErrorIcon(): void {
+    const errorIcon = this.shadowRoot!.querySelector('#error-icon') as HTMLElement;
+    errorIcon.style.display = 'none';
   }
 
   // =========================================

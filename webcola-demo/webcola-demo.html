@@ -354,7 +354,10 @@
                                 updateStatus(`Layout generation error: ${layoutResult.error.message}`, 'error');
                             }
                         }
-                        
+
+                        // Set the webcola-cnd-graph element to indicate unsat state
+                        const webcolaGraphElement = document.getElementById('graph-container');
+                        webcolaGraphElement.setAttribute('unsat', "");
 
                         return;
                     }
@@ -367,10 +370,8 @@
                     return;
                 }
 
-                // Clear any previous conflicting constraints
-                const conflictingContainer = document.getElementById('graph-conflicting-constraints');
-                conflictingContainer.innerHTML = ''; // Clear previous conflicting constraints
-                conflictingContainer.style.display = 'none';
+                const webcolaGraphElement = document.getElementById('graph-container');
+                webcolaGraphElement.removeAttribute('unsat'); // Clear unsat state
 
                 // Clear errors on successful layout generation
                 if (window.clearAllErrors) {
