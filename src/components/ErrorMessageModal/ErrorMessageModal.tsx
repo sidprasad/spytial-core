@@ -22,6 +22,10 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = (
   { messages, systemError }: ErrorMessageModalProps
 ) => {
 
+  /**
+   * Add a highlight class to elements on mouse enter
+   * @param e React.MouseEvent<HTMLElement> 
+   */
   const addHighlightOnMouseEnter = (e: React.MouseEvent<HTMLElement>) => {
     if (e.currentTarget.className.startsWith('error-message-')) {
       const constraintId = e.currentTarget.className.replace('error-message-', '');
@@ -33,6 +37,10 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = (
     }
   };
 
+  /**
+   * Remove the highlight class from elements on mouse leave
+   * @param e React.MouseEvent<HTMLElement>
+   */
   const removeHighlightOnMouseLeave = (
     e: React.MouseEvent<HTMLElement>
   ) => {
@@ -71,6 +79,25 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = (
     }
   }
 
+  const getConflictingConstraintsMap = (): Map<string, string[]> => {
+    if (!messages) return new Map();
+
+    // Copy the minimalConflictingConstraints to a new Map
+    const conflictingConstraintsMap = new Map<string, string[]>();
+    messages.minimalConflictingConstraints.forEach((value, key) => {
+      conflictingConstraintsMap.set(key, [...value]);
+    });
+
+    // Add the conflicting source constraint and diagram constraints to map
+    const conflictingElements = conflictingConstraintsMap.get(messages.conflictingConstraint) || [];
+    conflictingElements.push(messages.conflictingConstraint);
+    conflictingConstraintsMap.set(messages.conflictingSourceConstraint, conflictingElements);
+
+    return conflictingConstraintsMap;
+  }
+
+  const conflictingConstraintsMap = getConflictingConstraintsMap();
+
   return (
     <div id="error-message-modal" className="mt-3 d-flex flex-column overflow-x-auto p-3 rounded border border-danger border-2">
       <h4 style={{color: 'var(--bs-danger)'}}>Could not produce a diagram</h4>
@@ -94,48 +121,35 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = (
       {/* (Positional) Constraint Error Cards */}
       { messages && (
         <>
-          <p>Hover over the conflicting source constraints to see the corresponding diagram elements that cannot be visualized. </p>
+          <p>Hover over the conflicting constraints to see the corresponding diagram elements that cannot be visualized. </p>
           <div className="d-flex flex-row gap-3 mb-3">
             <div className="card error-card">
               <div className="card-header bg-light">
-                <strong>In terms of CnD constraints (source constraints)</strong>
+                <strong>Set of conflicting CnD constraints</strong>
               </div>
               <div className="card-body">
-                Constraint: <br />
-                <code dangerouslySetInnerHTML={{__html: messages.conflictingSourceConstraint}}></code> <br />
-                conflicts with one (or some) the following source constraints: <br />
-                {[...messages.minimalConflictingConstraints.keys()].map(
-                  (key: string, index) => {
-                    console.log(
-                      `Key: ${key}, Value: ${messages.minimalConflictingConstraints.get(key)}`
-                    );
-                    return (
-                      <React.Fragment key={index}>
-                        <code
-                          onMouseEnter={addHighlightOnMouseEnter}
-                          onMouseLeave={removeHighlightOnMouseLeave}
-                          className={`error-message-${index}`}
-                          dangerouslySetInnerHTML={{__html: key }}
-                        >
-                        </code>
-                        <br />
-                      </React.Fragment>
-                    );
-                  }
-                )}
+                {[...conflictingConstraintsMap.keys()].map((sourceConstraint, index) => (
+                    <React.Fragment key={index}>
+                      <code
+                        onMouseEnter={addHighlightOnMouseEnter}
+                        onMouseLeave={removeHighlightOnMouseLeave}
+                        className={`error-message-${index}`}
+                      >
+                        {sourceConstraint}
+                      </code>
+                      <br />
+                    </React.Fragment>
+                  ))
+                }
               </div>
             </div>
 
             <div className="card error-card">
               <div className="card-header bg-light">
-                <strong>In terms of diagram elements</strong>
+                <strong>Set of conflicting diagram elements</strong>
               </div>
               <div className="card-body">
-                Constraint: <br />{' '}
-                <code> {messages.conflictingConstraint} </code>
-                <br /> conflicts with the following constraints: <br />
-                {[...messages.minimalConflictingConstraints.values()].map(
-                  (value, index1) => (
+                {[...conflictingConstraintsMap.values()].map((value, index1) => (
                     <React.Fragment key={index1}>
                       {value.map((constraint: string, index2) => (
                         <React.Fragment key={`${index1} ${index2}`}>
@@ -149,9 +163,10 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = (
                           <br />
                         </React.Fragment>
                       ))}
+                      <br />
                     </React.Fragment>
-                  )
-                )}
+                  ))
+                }
               </div>
             </div>
           </div>

@@ -53,11 +53,11 @@ export { type PositionalConstraintError, type GroupOverlapError }
 export function orientationConstraintToString(constraint: LayoutConstraint) {
     if (isTopConstraint(constraint)) {
         let tc = constraint as TopConstraint;
-        return `ENSURE: ${tc.top.id} is above ${tc.bottom.id}`;
+        return `${tc.top.id} is above ${tc.bottom.id}`;
     }
     else if (isLeftConstraint(constraint)) {
         let lc = constraint as LeftConstraint;
-        return `ENSURE: ${lc.left.id} is to the left of ${lc.right.id}`;
+        return `${lc.left.id} is to the left of ${lc.right.id}`;
     }
     else if (isAlignmentConstraint(constraint)) {
         let ac = constraint as AlignmentConstraint;
@@ -66,15 +66,15 @@ export function orientationConstraintToString(constraint: LayoutConstraint) {
         let node2 = ac.node2;
 
         if (axis === 'x') {
-            return `ENSURE: ${node1.id} is vertically aligned with ${node2.id}`;
+            return `${node1.id} is vertically aligned with ${node2.id}`;
         }
         else if (axis === 'y') {
-            return `ENSURE: ${node1.id} is horizontally aligned with ${node2.id}`;
+            return `${node1.id} is horizontally aligned with ${node2.id}`;
         }
 
-        return `ENSURE: ${node1.id} is aligned with ${node2.id} along the ${axis} axis`;
+        return `${node1.id} is aligned with ${node2.id} along the ${axis} axis`;
     }
-    return `ENSURE: Unknown constraint type: ${constraint}`;
+    return `Unknown constraint type: ${constraint}`;
 }
 
 
