@@ -143,11 +143,6 @@
             </div>
             <div id="status" class="status info">Ready to load Alloy graph...</div>
             <div id="error-messages"></div>
-            <div id="graph-constraints-container" class="border rounded p-2 my-3">
-                <p><b>Only</b> the following CnD constraints are applied in the graph below:</p>
-                <div id="graph-constraints"></div>
-                <div id="graph-conflicting-constraints"></div>
-            </div>
             <div id="graph-container-wrapper">
                 <div id="graph-controls">
                     <select title="Choose the Layout Format" class="form-select form-select-sm" id="layoutFormat" name="layoutFormat" onchange="changeLayoutFormat()" aria-label="Layout format selection">
@@ -343,7 +338,6 @@
                         if (layoutResult.error.errorMessages) {
                             if (window.showPositionalError) {
                                 window.showPositionalError(layoutResult.error.errorMessages);
-                                listConflictingConstraints(layoutResult.error, 'graph-conflicting-constraints');
                             } else {
                                 updateStatus(`Positional constraint conflict: ${layoutResult.error.message}`, 'error');
                             }
@@ -414,75 +408,11 @@
                 // Use the real InstanceLayout data with WebCola custom element
                 await graphElement.renderLayout(currentInstanceLayout);
 
-                console.log('Conflicting constraints:', currentInstanceLayout.conflictingConstraints);
-                listGraphConstraints(currentInstanceLayout, 'graph-constraints');
-                
                 updateStatus('Alloy graph rendered successfully!', 'success');
             } catch (error) {
                 console.error('Error rendering Alloy graph:', error);
                 updateStatus(`Alloy render error: ${error.message}`, 'error');
             }
-        }
-
-        function listGraphConstraints(currentInstanceLayout, containerId) {
-            const constraints = currentInstanceLayout?.constraints || [];
-            const container = document.getElementById(containerId);
-            if (!container) return;
-
-            // Clear previous constraints
-            container.innerHTML = '';
-            if (!constraints || constraints.length === 0) {
-                container.textContent = 'No constraints defined.';
-                return;
-            }
-
-            // Get unique source constraints
-            const uniqueConstraints = new Set();
-            constraints.forEach(constraint => {
-                if (constraint.sourceConstraint) {
-                    uniqueConstraints.add(constraint.sourceConstraint);
-                }
-            });
-
-            const ul = document.createElement('ul');
-            uniqueConstraints.forEach(sourceConstraint => {
-                const li = document.createElement('li');
-                console.log('Constraint:', sourceConstraint);
-                li.innerHTML = `<code>${sourceConstraint.toHTML()}</code>`
-                ul.appendChild(li);
-            });
-            container.appendChild(ul);
-        }
-
-        function listConflictingConstraints(error, containerId) {
-            console.log("Conflicting error:", error);
-
-            const container = document.getElementById(containerId);
-            if (!container) return;
-
-            // Clear previous conflicting constraints
-            container.style.display = 'block';
-            container.innerHTML = '';
-            if (!error.errorMessages || !error.message) {
-                container.textContent = 'No conflicting constraints found.';
-                return;
-            }
-
-            // Create a paragraph element
-            const conflictingPara = document.createElement('p');
-            conflictingPara.innerHTML = '<b>Only</b> the following conflicting diagram constraints are preserved to render the graph below:';
-            container.appendChild(conflictingPara);
-
-            // Create a list of conflicting constraints
-            const conflictingList = document.createElement('ul');
-            if (error.errorMessages.conflictingConstraint) {
-                [error.errorMessages.conflictingConstraint].flat().forEach(constraint => {
-                    const li = document.createElement('li');
-                    li.innerHTML = `<code>${constraint}</code>`;
-                    conflictingList.appendChild(li);
-                });
-            }
-            container.append(conflictingList);
         }
 
         /**
