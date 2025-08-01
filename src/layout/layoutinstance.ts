@@ -129,14 +129,110 @@ export class LayoutInstance {
 
 
 
-    isAttributeField(fieldId: string): boolean {
-        const isAttributeRel = this._layoutSpec.directives.attributes.find((ad) => ad.field === fieldId);
-        return isAttributeRel ? true : false;
+    /**
+     * Gets GroupByField constraints that apply to a specific field and atoms.
+     * @param fieldName - The field name to match.
+     * @param sourceAtom - The source atom ID.
+     * @param targetAtom - The target atom ID.
+     * @returns Array of matching GroupByField constraints.
+     */
+    private getConstraintsRelatedToField(fieldName: string, sourceAtom: string, targetAtom: string): GroupByField[] {
+        const groupByFieldConstraints = this._layoutSpec.constraints.grouping.byfield;
+        
+        let fieldConstraints = groupByFieldConstraints.filter((d) => {
+            if (d.field !== fieldName) {
+                return false;
+            }
+            
+            if (!d.selector) {
+                // Legacy constraint without selector applies to all edges with this field
+                return true;
+            }
+            
+            try {
+                const selectorResult = this.evaluator.evaluate(d.selector, { instanceIndex: this.instanceNum });
+                const selectedAtoms = selectorResult.selectedAtoms();
+                
+                // Check if either source or target atom is selected by the selector
+                return selectedAtoms.includes(sourceAtom) || selectedAtoms.includes(targetAtom);
+            } catch (error) {
+                console.warn(`Failed to evaluate group by field selector "${d.selector}":`, error);
+                return false;
+            }
+        });
+        return fieldConstraints;
     }
 
-    isHiddenField(fieldId: string): boolean {
-        const isHiddenRel = this._layoutSpec.directives.hiddenFields.find((hd) => hd.field === fieldId);
-        return isHiddenRel ? true : false;
+    isAttributeField(fieldId: string, sourceAtom?: string, targetAtom?: string): boolean {
+        const matchingDirectives = this._layoutSpec.directives.attributes.filter((ad) => ad.field === fieldId);
+        
+        if (matchingDirectives.length === 0) {
+            return false;
+        }
+        
+        // If no atoms provided or no selector-based directives, use legacy behavior
+        if (!sourceAtom || !targetAtom) {
+            return matchingDirectives.some(ad => !ad.selector);
+        }
+        
+        // Check selector-based directives
+        for (const directive of matchingDirectives) {
+            if (!directive.selector) {
+                // Legacy directive without selector matches any atoms
+                return true;
+            }
+            
+            try {
+                const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
+                const selectedAtoms = selectorResult.selectedAtoms();
+                
+                // Check if either source or target atom is selected by the selector
+                if (selectedAtoms.includes(sourceAtom) || selectedAtoms.includes(targetAtom)) {
+                    return true;
+                }
+            } catch (error) {
+                console.warn(`Failed to evaluate attribute selector "${directive.selector}":`, error);
+                // Continue to next directive on error
+            }
+        }
+        
+        return false;
+    }
+
+    isHiddenField(fieldId: string, sourceAtom?: string, targetAtom?: string): boolean {
+        const matchingDirectives = this._layoutSpec.directives.hiddenFields.filter((hd) => hd.field === fieldId);
+        
+        if (matchingDirectives.length === 0) {
+            return false;
+        }
+        
+        // If no atoms provided or no selector-based directives, use legacy behavior
+        if (!sourceAtom || !targetAtom) {
+            return matchingDirectives.some(hd => !hd.selector);
+        }
+        
+        // Check selector-based directives
+        for (const directive of matchingDirectives) {
+            if (!directive.selector) {
+                // Legacy directive without selector matches any atoms
+                return true;
+            }
+            
+            try {
+                const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
+                const selectedAtoms = selectorResult.selectedAtoms();
+                
+                // Check if either source or target atom is selected by the selector
+                if (selectedAtoms.includes(sourceAtom) || selectedAtoms.includes(targetAtom)) {
+                    return true;
+                }
+            } catch (error) {
+                console.warn(`Failed to evaluate hidden field selector "${directive.selector}":`, error);
+                // Continue to next directive on error
+            }
+        }
+        
+        return false;
     }
 
 
@@ -237,20 +333,12 @@ export class LayoutInstance {
         let graphEdges = [...g.edges()];
 
 
-        function getConstraintsRelatedToField(fieldName: string) {
-            let fieldConstraints = groupByFieldConstraints.filter((d) => {
-                let match = d.field === fieldName
-                return match;
-            });
-            return fieldConstraints;
-        }
-
         graphEdges.forEach((edge) => {
             const edgeId = edge.name;
             const relName = this.getRelationName(g, edge);
 
 
-            let relatedConstraints = getConstraintsRelatedToField(relName);
+            let relatedConstraints = this.getConstraintsRelatedToField(relName, edge.v, edge.w);
 
             if (relatedConstraints.length === 0) {
                 return;
@@ -339,8 +427,10 @@ export class LayoutInstance {
         graphEdges.forEach((edge) => {
             const edgeId = edge.name;
             const relName = this.getRelationName(g, edge);
-            const isAttributeRel = this.isAttributeField(relName);
-            const isHiddenRel = this.isHiddenField(relName);
+            const sourceAtom = edge.v;
+            const targetAtom = edge.w;
+            const isAttributeRel = this.isAttributeField(relName, sourceAtom, targetAtom);
+            const isHiddenRel = this.isHiddenField(relName, sourceAtom, targetAtom);
 
             if (isHiddenRel && isAttributeRel) {
                 throw new Error(`${relName} cannot be both an attribute and a hidden field.`);
@@ -618,7 +708,7 @@ export class LayoutInstance {
             let source = layoutNodes.find((node) => node.id === edge.v);
             let target = layoutNodes.find((node) => node.id === edge.w);
             let relName = this.getRelationName(g, edge);
-            let color = edgeColorMap[relName] || "black";
+            let color = this.getEdgeColor(relName, edge.v, edge.w);
 
             // Skip edges with missing source or target nodes
             if (!source || !target || !edgeId) {
@@ -1251,7 +1341,45 @@ export class LayoutInstance {
     }
 
     /**
+     * Gets the color for a specific edge based on directives.
+     * @param relName - The relation name of the edge.
+     * @param sourceAtom - The source atom ID.
+     * @param targetAtom - The target atom ID.
+     * @returns The color for the edge, or "black" as default.
+     */
+    private getEdgeColor(relName: string, sourceAtom: string, targetAtom: string): string {
+        const colorDirectives = this._layoutSpec.directives.edgeColors;
+        
+        for (const directive of colorDirectives) {
+            if (directive.field !== relName) {
+                continue;
+            }
+            
+            if (!directive.selector) {
+                // Legacy directive without selector applies to all edges with this field
+                return directive.color;
+            }
+            
+            try {
+                const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
+                const selectedAtoms = selectorResult.selectedAtoms();
+                
+                // Check if either source or target atom is selected by the selector
+                if (selectedAtoms.includes(sourceAtom) || selectedAtoms.includes(targetAtom)) {
+                    return directive.color;
+                }
+            } catch (error) {
+                console.warn(`Failed to evaluate edge color selector "${directive.selector}":`, error);
+                // Continue to next directive on error
+            }
+        }
+        
+        return "black"; // Default color
+    }
+
+    /**
      * Maps edge fields to their colors based on the directives in the layout specification.
+     * This method is deprecated in favor of getEdgeColor for selector support.
      * @param g - The graph to get the edge color map from.
      * @param a - The Alloy instance to get the edge colors for.
      * @returns A Record mapping edge fields to their colors.
@@ -1261,6 +1389,11 @@ export class LayoutInstance {
 
         let colorDirectives = this._layoutSpec.directives.edgeColors;
         colorDirectives.forEach((colorDirective) => {
+            // Only include directives without selectors for legacy compatibility
+            if (colorDirective.selector) {
+                return;
+            }
+            
             let color = colorDirective.color;
             let field = colorDirective.field;
 

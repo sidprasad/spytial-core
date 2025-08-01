@@ -130,15 +130,19 @@ export class GroupByField  {
     // And applies to selects the thing to group ON
     field : string;
 
+    // Optional selector to specify which atoms this grouping applies to
+    selector? : string;
+
     // And this is the element upon WHICH to group (ie. the key)
     groupOn : number;
 
     // And this is what gets grouped
     addToGroup : number;
-    constructor(field: string, groupOn: number, addToGroup: number) {
+    constructor(field: string, groupOn: number, addToGroup: number, selector?: string) {
         this.field = field;
         this.groupOn = groupOn;
         this.addToGroup = addToGroup;
+        this.selector = selector;
     }
 }
 
@@ -197,9 +201,9 @@ export interface AtomHidingDirective extends VisualManipulation {
 }
 
 
-// Right now, we don't support applies To on these.
 export interface FieldDirective extends Operation {
     field: string;
+    selector?: string; // Optional selector to specify which atoms this directive applies to
 }
 
 
@@ -442,7 +446,8 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
             return new GroupByField(
                 c.group.field,
                 c.group.groupOn,
-                c.group.addToGroup
+                c.group.addToGroup,
+                c.group.selector
             );
 
             // return {
@@ -453,7 +458,7 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
         });
 
     let byselector: GroupBySelector[] = typedConstraints.filter(c => c.group)
-        .filter(c => c.group.selector)
+        .filter(c => c.group.selector && c.group.name && !c.group.field)
         .map(c => {
             if(!c.group.selector) {
                 throw new Error("Grouping constraint must have a selector.");
@@ -520,18 +525,21 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
                     return {
                         color: d.edgeColor.value,
                         field: d.edgeColor.field,
+                        selector: d.edgeColor.selector
                     }
                 });
 
     let attributes : AttributeDirective[]  = typedDirectives.filter(d => d.attribute).map(d => {
         return {
-            field: d.attribute.field
+            field: d.attribute.field,
+            selector: d.attribute.selector
         }
     });
 
     let hiddenFields : FieldHidingDirective[] = typedDirectives.filter(d => d.hideField).map(d => {
         return {
-            field: d.hideField.field
+            field: d.hideField.field,
+            selector: d.hideField.selector
         }
     });
 
