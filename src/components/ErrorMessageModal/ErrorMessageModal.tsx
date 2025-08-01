@@ -7,9 +7,7 @@ import { ErrorMessages, SystemError } from './index';
  * @public
  */
 export interface ErrorMessageModalProps {
-  /** Error messages for constraint conflicts */
-  messages?: ErrorMessages;
-  /** System error for parse/general errors */
+  /** Error object containing  */
   systemError?: SystemError;
 }
 
@@ -31,7 +29,7 @@ type HighlightState = {
  * Supports both constraint conflicts and parse errors
  * @public
  */
-export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ messages, systemError }: ErrorMessageModalProps) => {
+export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemError }: ErrorMessageModalProps) => {
   const [highlightState, setHighlightState] = useState<HighlightState>({ ids: [], source: null });
 
   /** Handle mouse enter for constraint highlighting */
@@ -53,16 +51,17 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ messages, 
   };
 
   // Validate systemError type
-  const isSystemError = systemError && 
+  const isOtherError = systemError && 
     (systemError.type === 'parse-error' 
       || systemError.type === 'general-error' 
       || systemError.type === 'group-overlap-error'
     );
+  const isPositionalError = systemError && systemError.type === 'positional-error' && systemError.messages;
   
-  // If neither messages nor positional error is provided, log error and return null
-  if (!isSystemError && !messages) {
-    console.error('SystemError is of invalid type:', systemError);
-    return null; // Nothing to display
+  // If not a valid error, log error and return null
+  if (!isOtherError && !isPositionalError) {
+    console.error('Cannot display the following error:', systemError);
+    return null;
   }
 
   /** Helper function to generate error header */
@@ -80,7 +79,7 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ messages, 
   /** 
    * Build conflicting constraints map from error messages 
   */
-  const buildConstraintsMap = (): Map<string, string[]> => {
+  const buildConstraintsMap = (messages: ErrorMessages | undefined): Map<string, string[]> => {
     if (!messages) return new Map();
     
     const map = new Map<string, string[]>();
@@ -97,10 +96,10 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ messages, 
   /** 
    * Transform constraints map into structured data with bidirectional relationships 
   */
-  const prepareConstraintData = (): { sourceConstraints: ConstraintNode[]; diagramConstraints: ConstraintNode[] } => {
+  const prepareConstraintData = (messages: ErrorMessages | undefined): { sourceConstraints: ConstraintNode[]; diagramConstraints: ConstraintNode[] } => {
     if (!messages) return { sourceConstraints: [], diagramConstraints: [] };
     
-    const constraintsMap = buildConstraintsMap();
+    const constraintsMap = buildConstraintsMap(messages);
     const sourceConstraints: ConstraintNode[] = [];
     const diagramConstraints: ConstraintNode[] = [];
     const diagramMap = new Map<string, string>();
@@ -131,14 +130,14 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ messages, 
     return { sourceConstraints, diagramConstraints };
   };
 
-  const { sourceConstraints, diagramConstraints } = prepareConstraintData();
+  const { sourceConstraints, diagramConstraints } = prepareConstraintData(isPositionalError ? systemError.messages : undefined);
 
   return (
     <div id="error-message-modal" className="mt-3 d-flex flex-column overflow-x-auto p-3 rounded border border-danger border-2">
       <h4 style={{color: 'var(--bs-danger)'}}>Could not produce a diagram</h4>
       <p>Your instance cannot be visualized with the current CnD spec.</p>
       {/* Parse/Generic/Group Error Card */}
-      {isSystemError && (
+      {isOtherError && (
         <>
           <div className="card error-card">
             <div className="card-header bg-light">
@@ -154,7 +153,7 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ messages, 
       )}
 
       {/* (Positional) Constraint Error Cards */}
-      { messages && (
+      { isPositionalError && (
         <>
           <p>Hover over the conflicting constraints to see the corresponding diagram elements that cannot be visualized. </p>
           <div className="constraint-relationship-table">
