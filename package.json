@@ -22,7 +22,7 @@
     "build": "tsup",
     "build:browser": "tsup --config tsup.browser.config.ts",
     "build:components": "tsup --config tsup.components.config.ts",
-    "build:all": "npm run build:browser && npm run build:components",
+    "build:all": "npm run build:browser",
     "dev": "tsup --watch",
     "test": "vitest",
     "test:ui": "vitest --ui",

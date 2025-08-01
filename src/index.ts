@@ -104,6 +104,17 @@ export type { PyretReplInterfaceProps } from './components/ReplInterface/PyretRe
 export { ReplWithVisualization } from './components/ReplInterface/ReplWithVisualization';
 export type { ReplWithVisualizationProps } from './components/ReplInterface/ReplWithVisualization';
 
+// Export CndLayoutInterface (needed by demo components)
+export { CndLayoutInterface } from './components/CndLayoutInterface';
+
+// Export NoCodeView components
+export { generateLayoutSpecYaml } from './components/NoCodeView/CodeView';
+export type { ConstraintData, DirectiveData } from './components/NoCodeView/interfaces';
+
+// Export Error Message components
+export { ErrorMessageContainer, ErrorStateManager } from './components/ErrorMessageModal/index';
+export type { ErrorMessages } from './layout/constraint-validator';
+
 // Export Combined Input Component
 export { CombinedInputComponent } from './components/CombinedInput/CombinedInputComponent';
 export type { CombinedInputConfig, CombinedInputProps } from './components/CombinedInput/CombinedInputComponent';
