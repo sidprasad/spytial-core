@@ -32,11 +32,11 @@ describe('ErrorMessageModal Component', () => {
 
     it('should render positional-error with constraint table', () => {
       const errorMessages: ErrorMessages = {
-        conflictingConstraint: 'left(A) = left(B)',
-        conflictingSourceConstraint: 'A left-of B',
+        conflictingConstraint: 'Node2 is above Node1',
+        conflictingSourceConstraint: 'OrientationConstraint with directions [below] and selector Node2-&gt;Node1',
         minimalConflictingConstraints: new Map([
-          ['A left-of B', ['left(A) = left(B)', 'top(A) = top(B)']],
-          ['B right-of C', ['left(B) + width(B) = left(C)']]
+          ['OrientationConstraint with directions [below] and selector Node2-&gt;Node1', ['Node2 is above Node1']],
+          ['OrientationConstraint with directions [directlyRight] and selector ~v', ['Node1 is horizontally aligned with Variable3', 'Node2 is horizontally aligned with Variable3']]
         ])
       }
 
@@ -62,13 +62,13 @@ describe('ErrorMessageModal Component', () => {
       expect(screen.getByText('Diagram Elements')).toBeInTheDocument()
 
       // Check source constraints are rendered
-      expect(screen.getByText('A left-of B')).toBeInTheDocument()
-      expect(screen.getByText('B right-of C')).toBeInTheDocument()
+      expect(screen.getByText('OrientationConstraint with directions [below] and selector Node2->Node1')).toBeInTheDocument()
+      expect(screen.getByText('OrientationConstraint with directions [directlyRight] and selector ~v')).toBeInTheDocument()
 
       // Check diagram constraints are rendered
-      expect(screen.getByText('left(A) = left(B)')).toBeInTheDocument()
-      expect(screen.getByText('top(A) = top(B)')).toBeInTheDocument()
-      expect(screen.getByText('left(B) + width(B) = left(C)')).toBeInTheDocument()
+      expect(screen.getByText('Node2 is above Node1')).toBeInTheDocument()
+      expect(screen.getByText('Node1 is horizontally aligned with Variable3')).toBeInTheDocument()
+      expect(screen.getByText('Node2 is horizontally aligned with Variable3')).toBeInTheDocument()
     })
 
     it('should render group-overlap-error with correct HTML elements and error message', () => {
@@ -136,11 +136,11 @@ describe('ErrorMessageModal Component', () => {
 
   describe('Highlighting when rendering a SystemError of type positional-error', () => {
     const errorMessages: ErrorMessages = {
-      conflictingConstraint: 'left(A) = left(B)',
-      conflictingSourceConstraint: 'A left-of B',
+      conflictingConstraint: 'Node2 is above Node1',
+      conflictingSourceConstraint: 'OrientationConstraint with directions [below] and selector Node2-&gt;Node1',
       minimalConflictingConstraints: new Map([
-        ['A left-of B', ['left(A) = left(B)', 'top(A) = top(B)']],
-        ['B right-of C', ['left(B) + width(B) = left(C)']]
+        ['OrientationConstraint with directions [below] and selector Node2-&gt;Node1', ['Node2 is above Node1']],
+        ['OrientationConstraint with directions [directlyRight] and selector ~v', ['Node1 is horizontally aligned with Variable3', 'Node2 is horizontally aligned with Variable3']]
       ])
     }
 
@@ -154,7 +154,7 @@ describe('ErrorMessageModal Component', () => {
       render(<ErrorMessageModal systemError={positionalError} />)
 
       // Find the source constraint element
-      const sourceConstraint = screen.getByText('A left-of B').parentElement!
+      const sourceConstraint = screen.getByText('OrientationConstraint with directions [below] and selector Node2->Node1').parentElement!
 
       // Hover over the source constraint
       await user.hover(sourceConstraint)
@@ -163,13 +163,13 @@ describe('ErrorMessageModal Component', () => {
       expect(sourceConstraint).toHaveClass('highlight-source')
 
       // Check that related diagram constraints get highlighted
-      const diagramConstraint1 = screen.getByText('left(A) = left(B)').parentElement!
-      const diagramConstraint2 = screen.getByText('top(A) = top(B)').parentElement!
-      const unrelatedDiagramConstraint = screen.getByText('left(B) + width(B) = left(C)').parentElement!
+      const diagramConstraint1 = screen.getByText('Node2 is above Node1').parentElement!
+      const unrelatedDiagramConstraint1 = screen.getByText('Node1 is horizontally aligned with Variable3').parentElement!
+      const unrelatedDiagramConstraint2 = screen.getByText('Node2 is horizontally aligned with Variable3').parentElement!
 
       expect(diagramConstraint1).toHaveClass('highlight-source')
-      expect(diagramConstraint2).toHaveClass('highlight-source')
-      expect(unrelatedDiagramConstraint).not.toHaveClass('highlight-source')
+      expect(unrelatedDiagramConstraint1).not.toHaveClass('highlight-source')
+      expect(unrelatedDiagramConstraint2).not.toHaveClass('highlight-source')
 
       // Stop hovering
       await user.unhover(sourceConstraint)
@@ -177,7 +177,6 @@ describe('ErrorMessageModal Component', () => {
       // Check that highlighting is removed
       expect(sourceConstraint).not.toHaveClass('highlight-source')
       expect(diagramConstraint1).not.toHaveClass('highlight-source')
-      expect(diagramConstraint2).not.toHaveClass('highlight-source')
     })
 
     it('should highlight related source constraints when hovering over a diagram constraint', async () => {
@@ -185,7 +184,7 @@ describe('ErrorMessageModal Component', () => {
       render(<ErrorMessageModal systemError={positionalError} />)
 
       // Find the diagram constraint element
-      const diagramConstraint = screen.getByText('left(A) = left(B)').parentElement!
+      const diagramConstraint = screen.getByText('Node2 is above Node1').parentElement!
 
       // Hover over the diagram constraint
       await user.hover(diagramConstraint)
@@ -194,8 +193,8 @@ describe('ErrorMessageModal Component', () => {
       expect(diagramConstraint).toHaveClass('highlight-diagram')
 
       // Check that related source constraint gets highlighted
-      const sourceConstraint = screen.getByText('A left-of B').parentElement!
-      const unrelatedSourceConstraint = screen.getByText('B right-of C').parentElement!
+      const sourceConstraint = screen.getByText('OrientationConstraint with directions [below] and selector Node2->Node1').parentElement!
+      const unrelatedSourceConstraint = screen.getByText('OrientationConstraint with directions [directlyRight] and selector ~v').parentElement!
 
       expect(sourceConstraint).toHaveClass('highlight-diagram')
       expect(unrelatedSourceConstraint).not.toHaveClass('highlight-diagram')
@@ -212,23 +211,23 @@ describe('ErrorMessageModal Component', () => {
       render(<ErrorMessageModal systemError={positionalError} />)
 
       // Check source constraint data attributes
-      const sourceConstraints = screen.getAllByText(/left-of|right-of/)
+      const sourceConstraints = screen.getAllByText(/OrientationConstraint/)
       expect(sourceConstraints[0].parentElement).toHaveAttribute('data-constraint-id', 'source-0')
       expect(sourceConstraints[1].parentElement).toHaveAttribute('data-constraint-id', 'source-1')
 
       // Check diagram constraint data attributes
-      const diagramConstraints = screen.getAllByText(/left\(|top\(/)
+      const diagramConstraints = screen.getAllByText(/Node2 is above Node1|Node1 is horizontally|Node2 is horizontally/)
       expect(diagramConstraints[0].parentElement).toHaveAttribute('data-constraint-id', 'diagram-0-0')
-      expect(diagramConstraints[1].parentElement).toHaveAttribute('data-constraint-id', 'diagram-0-1')
-      expect(diagramConstraints[2].parentElement).toHaveAttribute('data-constraint-id', 'diagram-1-0')
+      expect(diagramConstraints[1].parentElement).toHaveAttribute('data-constraint-id', 'diagram-1-0')
+      expect(diagramConstraints[2].parentElement).toHaveAttribute('data-constraint-id', 'diagram-1-1')
     })
 
     it('should handle mouse events correctly', async () => {
       const user = userEvent.setup()
       render(<ErrorMessageModal systemError={positionalError} />)
 
-      const sourceConstraint = screen.getByText('A left-of B').parentElement!
-      const diagramConstraint = screen.getByText('left(A) = left(B)').parentElement!
+      const sourceConstraint = screen.getByText('OrientationConstraint with directions [below] and selector Node2->Node1').parentElement!
+      const diagramConstraint = screen.getByText('Node2 is above Node1').parentElement!
 
       // Test multiple hover/unhover cycles
       await user.hover(sourceConstraint)
