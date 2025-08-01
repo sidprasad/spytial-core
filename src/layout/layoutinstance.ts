@@ -843,7 +843,11 @@ export class LayoutInstance {
      */
     applyCyclicConstraints(layoutNodes: LayoutNode[], layoutWithoutCyclicConstraints: InstanceLayout): LayoutConstraint[] {
 
-        // FIXME: The issue here is that we are throwing from this function, and so cyclic constraints are not correctly applied to the error graph.
+        // FIXME: Throwing from this function causes cyclic constraints to not be correctly applied to the error graph.
+        // Impact: When an error is thrown here, the error graph does not include the cyclic constraints, which can lead to incomplete or misleading error diagnostics.
+        // Expected behavior: The error graph should reflect all relevant cyclic constraints, even in the presence of errors, to aid debugging and visualization.
+        // Potential solution: Instead of throwing immediately, consider collecting all cyclic constraints and applying them to the error graph before propagating the error.
+        // Alternatively, implement backtracking or restructure error handling so that cyclic constraints are always included in the error graph output.
 
         // TODO: There is a bug here. There are equivalent cyclic constraints
         // that are NOT being applied.

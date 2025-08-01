@@ -387,7 +387,9 @@ export class WebColaLayout {
       const disconnectedNodePadding = 30;
       const disconnectedNodeMarker = LayoutInstance.DISCONNECTED_PREFIX;
 
-      // FIXME: At some point, leaves don't become node indices, but objects...
+      // FIXME: The 'leaves' array is expected to contain node indices for WebCola, but in some cases it contains node objects instead.
+      // This issue occurs when the mapping from node IDs to indices is not consistent, possibly due to changes in the node data structure or the getNodeIndex method.
+      // To resolve this, ensure that 'leaves' always contains node indices before passing to WebCola. Refactor the code to handle cases where node objects are present, or update the mapping logic to guarantee indices.
       let leaves = value.map((nodeId) => this.getNodeIndex(nodeId));  
       let name = key;
 
