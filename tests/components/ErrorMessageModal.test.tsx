@@ -6,7 +6,7 @@ import { ErrorMessageModal } from '../../src/components/ErrorMessageModal/ErrorM
 import type { SystemError, ErrorMessages } from '../../src/components/ErrorMessageModal'
 
 describe('ErrorMessageModal Component', () => {
-  describe('Rendering (ErrorMessageModal)', () => {
+  describe('Rendering', () => {
     it('should render parse-error with correct HTML elements and error message', () => {
       const parseError: SystemError = {
         type: 'parse-error',
@@ -120,7 +120,7 @@ describe('ErrorMessageModal Component', () => {
       // Mock console.error to capture the log
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-      const invalidError = null
+      const invalidError = undefined
 
       const { container } = render(<ErrorMessageModal systemError={invalidError} />)
 
@@ -128,7 +128,7 @@ describe('ErrorMessageModal Component', () => {
       expect(container.firstChild).toBeNull()
 
       // Should log error
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Cannot display the following error:', null)
+      expect(consoleErrorSpy).toHaveBeenCalledWith('Cannot display the following error:', invalidError)
 
       consoleErrorSpy.mockRestore()
     })
