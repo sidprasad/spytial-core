@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import './ErrorMessageModal.css';
 import { ErrorMessages, SystemError } from './index';
 
@@ -7,56 +7,61 @@ import { ErrorMessages, SystemError } from './index';
  * @public
  */
 export interface ErrorMessageModalProps {
-  /** Error messages for constraint conflicts */
-  messages?: ErrorMessages;
-  /** System error for parse/general errors */
+  /** Error object containing  */
   systemError?: SystemError;
 }
+
+/** Constraint node with bidirectional relationships */
+type ConstraintNode = {
+  id: string;
+  content: string;
+  relatedIds: string[];
+};
+
+/** Highlight state tracking */
+type HighlightState = {
+  ids: string[];
+  source: 'source' | 'diagram' | null;
+};
 
 /**
  * Modal component for displaying error messages in a structured format
  * Supports both constraint conflicts and parse errors
  * @public
  */
-export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = (
-  { messages, systemError }: ErrorMessageModalProps
-) => {
+export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemError }: ErrorMessageModalProps) => {
+  const [highlightState, setHighlightState] = useState<HighlightState>({ ids: [], source: null });
 
-  const addHighlightOnMouseEnter = (e: React.MouseEvent<HTMLElement>) => {
-    if (e.currentTarget.className.startsWith('error-message-')) {
-      const constraintId = e.currentTarget.className.replace('error-message-', '');
-      const correspondingElements = document.querySelectorAll(
-        `[class^="error-message-${constraintId}"]`);
-      correspondingElements.forEach((element) => {
-        element.classList.add('highlight');
-      });
-    }
+  /** Handle mouse enter for constraint highlighting */
+  const handleMouseEnter = (node: ConstraintNode, source: 'source' | 'diagram') => {
+    setHighlightState({ ids: [node.id, ...node.relatedIds], source });
   };
 
-  const removeHighlightOnMouseLeave = (
-    e: React.MouseEvent<HTMLElement>
-  ) => {
-    if (e.currentTarget.className.startsWith('error-message-')) {
-      const constraintId = e.currentTarget.className.replace('error-message-', '');
-      const correspondingElements = document.querySelectorAll(
-        `[class^="error-message-${constraintId}"]`);
-      correspondingElements.forEach((element) => {
-        element.classList.remove('highlight');
-      });
-    }
+  /** 
+   * Clear highlighting on mouse leave 
+  */
+  const handleMouseLeave = () => setHighlightState({ ids: [], source: null });
+
+  /** 
+   * Get CSS class for constraint highlighting 
+  */
+  const getHighlightClass = (nodeId: string): string => {
+    if (!highlightState.ids.includes(nodeId)) return '';
+    return highlightState.source === 'source' ? 'highlight-source' : 'highlight-diagram';
   };
 
   // Validate systemError type
-  const isSystemError = systemError && 
+  const isOtherError = systemError && 
     (systemError.type === 'parse-error' 
       || systemError.type === 'general-error' 
       || systemError.type === 'group-overlap-error'
     );
+  const isPositionalError = systemError && systemError.type === 'positional-error' && systemError.messages;
   
-  // If neither messages nor positional error is provided, log error and return null
-  if (!isSystemError && !messages) {
-    console.error('SystemError is of invalid type:', systemError);
-    return null; // Nothing to display
+  // If not a valid error, log error and return null
+  if (!isOtherError && !isPositionalError) {
+    console.error('Cannot display the following error:', systemError);
+    return null;
   }
 
   /** Helper function to generate error header */
@@ -71,12 +76,68 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = (
     }
   }
 
+  /** 
+   * Build conflicting constraints map from error messages 
+  */
+  const buildConstraintsMap = (messages: ErrorMessages | undefined): Map<string, string[]> => {
+    if (!messages) return new Map();
+    
+    const map = new Map<string, string[]>();
+    messages.minimalConflictingConstraints.forEach((value, key) => map.set(key, [...value]));
+    
+    // Add source constraint to its related diagram elements
+    const relatedElements = map.get(messages.conflictingConstraint) || [];
+    relatedElements.push(messages.conflictingConstraint);
+    map.set(messages.conflictingSourceConstraint, relatedElements);
+    
+    return map;
+  };
+
+  /** 
+   * Transform constraints map into structured data with bidirectional relationships 
+  */
+  const prepareConstraintData = (messages: ErrorMessages | undefined): { sourceConstraints: ConstraintNode[]; diagramConstraints: ConstraintNode[] } => {
+    if (!messages) return { sourceConstraints: [], diagramConstraints: [] };
+    
+    const constraintsMap = buildConstraintsMap(messages);
+    const sourceConstraints: ConstraintNode[] = [];
+    const diagramConstraints: ConstraintNode[] = [];
+    const diagramMap = new Map<string, string>();
+    
+    // First pass to create diagram constraints with IDs
+    [...constraintsMap.values()].forEach((constraints, groupIdx) => {
+      constraints.forEach((content, idx) => {
+        const id = `diagram-${groupIdx}-${idx}`;
+        diagramMap.set(content, id);
+        diagramConstraints.push({ id, content, relatedIds: [] });
+      });
+    });
+    
+    // Second pass to create source constraints with relationships
+    [...constraintsMap.entries()].forEach(([sourceContent, relatedContents], idx) => {
+      const id = `source-${idx}`;
+      const relatedIds = relatedContents.map(content => diagramMap.get(content)!);
+      
+      sourceConstraints.push({ id, content: sourceContent, relatedIds });
+      
+      // Add back-references to diagram constraints
+      relatedIds.forEach(relatedId => {
+        const diagNode = diagramConstraints.find(d => d.id === relatedId);
+        if (diagNode) diagNode.relatedIds.push(id);
+      });
+    });
+    
+    return { sourceConstraints, diagramConstraints };
+  };
+
+  const { sourceConstraints, diagramConstraints } = prepareConstraintData(isPositionalError ? systemError.messages : undefined);
+
   return (
     <div id="error-message-modal" className="mt-3 d-flex flex-column overflow-x-auto p-3 rounded border border-danger border-2">
       <h4 style={{color: 'var(--bs-danger)'}}>Could not produce a diagram</h4>
-      <p>The instance being visualized is inconsistent with the Cope and Drag spec.</p>
+      <p>Your instance cannot be visualized with the current CnD spec.</p>
       {/* Parse/Generic/Group Error Card */}
-      {isSystemError && (
+      {isOtherError && (
         <>
           <div className="card error-card">
             <div className="card-header bg-light">
@@ -92,66 +153,50 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = (
       )}
 
       {/* (Positional) Constraint Error Cards */}
-      { messages && (
+      { isPositionalError && (
         <>
-          <p><i>The graph below visualizes the localized area of the error on a valid instance with the conflicting set of constraints removed.</i></p>
-          <div className="d-flex flex-row gap-3">
-            <div className="card error-card">
-              <div className="card-header bg-light">
-                <strong>In terms of CnD</strong>
-              </div>
-              <div className="card-body">
-                Constraint: <br />
-                <code dangerouslySetInnerHTML={{__html: messages.conflictingSourceConstraint}}></code> <br />
-                conflicts with one (or some) the following source constraints: <br />
-                {[...messages.minimalConflictingConstraints.keys()].map(
-                  (key: string, index) => {
-                    console.log(
-                      `Key: ${key}, Value: ${messages.minimalConflictingConstraints.get(key)}`
-                    );
-                    return (
-                      <React.Fragment key={index}>
-                        <code
-                          onMouseEnter={addHighlightOnMouseEnter}
-                          onMouseLeave={removeHighlightOnMouseLeave}
-                          className={`error-message-${index}`}
-                          dangerouslySetInnerHTML={{__html: key }}
+          <p>Hover over the conflicting constraints to see the corresponding diagram elements that cannot be visualized. </p>
+          <div className="constraint-relationship-table">
+            <table className="table table-bordered">
+              <thead>
+                <tr>
+                  <th>Source Constraints</th>
+                  <th>Diagram Elements</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="source-constraints-cell p-0">
+                    {sourceConstraints.map(node => (
+                      <div 
+                        key={node.id}
+                        data-constraint-id={node.id}
+                        className={`constraint-item ${getHighlightClass(node.id)}`}
+                        onMouseEnter={() => handleMouseEnter(node, 'source')}
+                        onMouseLeave={handleMouseLeave}
+                      >
+                        <code dangerouslySetInnerHTML={{ __html: node.content }}></code>
+                      </div>
+                    ))}
+                  </td>
+                  <td className="diagram-constraints-cell p-0">
+                    <div className="d-flex flex-column h-100">
+                      {diagramConstraints.map(node => (
+                        <div 
+                          key={node.id}
+                          data-constraint-id={node.id}
+                          className={`constraint-item ${getHighlightClass(node.id)}`}
+                          onMouseEnter={() => handleMouseEnter(node, 'diagram')}
+                          onMouseLeave={handleMouseLeave}
                         >
-                        </code>
-                        <br />
-                      </React.Fragment>
-                    );
-                  }
-                )}
-              </div>
-            </div>
-
-            <div className="card error-card">
-              <div className="card-header bg-light">
-                <strong>In terms of diagram elements</strong>
-              </div>
-              <div className="card-body">
-                Constraint: <br />{' '}
-                <code> {messages.conflictingConstraint} </code>
-                <br /> conflicts with the following constraints: <br />
-                {[...messages.minimalConflictingConstraints.values()].map(
-                  (value, index1) => (
-                    <React.Fragment key={index1}>
-                      {value.map((constraint: string, index2) => (
-                        <code
-                          key={`${index1} ${index2}`}
-                          onMouseEnter={addHighlightOnMouseEnter}
-                          onMouseLeave={removeHighlightOnMouseLeave}
-                          className={`error-message-${index1}`}
-                        >
-                          {constraint}
-                        </code>
+                          <code dangerouslySetInnerHTML={{ __html: node.content }}></code>
+                        </div>
                       ))}
-                    </React.Fragment>
-                  )
-                )}
-              </div>
-            </div>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </>
       )}

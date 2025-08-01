@@ -187,6 +187,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
+   * Access whether this graph is a graph visualizing an unsat core.
+   */
+  private get isUnsatCore(): boolean {
+    return this.hasAttribute('unsat');
+  }
+
+  /**
    * Determines if an edge is used for alignment purposes.
    * Alignment edges are identified by IDs starting with "_alignment_".
    * 
@@ -224,9 +231,28 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private isErrorNode(node: {name: string, id: string}): boolean {
     // Check if this node appears in any constraint that's in conflictingConstraints
     const conflictingNodes = this.currentLayout.conflictingNodes;
-    return conflictingNodes.some((conflictingNode: LayoutNode) => 
-      conflictingNode.id === node.id || (conflictingNode as any).name === node.name  // NOTE: Is `name` check necessary?
-    );
+
+    // Check if this node appear in overlapping nodes
+    const overlappingNodes = this.currentLayout.overlappingNodes;
+
+    if (conflictingNodes.length > 0 && overlappingNodes.length > 0) {
+      const conflictingNodeIds = conflictingNodes.map(n => n.id);
+      const overlappingNodeIds = overlappingNodes.map(n => n.id);
+      throw new Error(`Layout cannot have both conflictingConstraints (${conflictingNodeIds}) and overlappingNodes ${overlappingNodeIds}`);
+    }
+
+    const errorNodes = [...conflictingNodes, ...overlappingNodes];
+
+    return errorNodes.some((errorNode: LayoutNode) => errorNode.id === node.id); // NOTE: `id` should be unique
+  }
+
+  private isErrorGroup(group: {name: string}): boolean {
+    const overlappingGroups = this.currentLayout.overlappingGroups;
+    if (!overlappingGroups) {
+      console.error("Overlapping groups data not available in current layout");
+      throw new Error("Overlapping groups data not available in current layout");
+    }
+    return overlappingGroups.some((g: any) => g.name === group.name);
   }
 
   /**
@@ -313,6 +339,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       ${this.getCSS()}
       </style>
       <div id="svg-container">
+      <span id="error-icon" title="This graph is depicting an error state">⚠️</span>
       <svg id="svg" width="${width}" height="${height}">
         <defs>
         <marker id="end-arrow" markerWidth="15" markerHeight="10" refX="12" refY="5" orient="auto">
@@ -885,6 +912,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           } else {
             console.warn(`Unknown layout format: ${this.layoutFormat}. Skipping edge routing.`);
           }
+
+          // Check if it's an unsat core layout
+          if (this.isUnsatCore) {
+            this.showErrorIcon();
+          }
+
           this.hideLoading();
         });
 
@@ -1090,7 +1123,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .enter()
       .append("rect")
       .attr("class", (d: any) => {
-        return this.isDisconnectedGroup(d) ? "disconnectedNode" : "group";
+        if (this.isDisconnectedGroup(d))
+          return "disconnectedNode"
+        else if (this.isErrorGroup(d)) {
+          return "error-group";
+        } else {
+          return "group";
+        }
       })
       .attr("rx", WebColaCnDGraph.GROUP_BORDER_RADIUS)
       .attr("ry", WebColaCnDGraph.GROUP_BORDER_RADIUS)
@@ -1721,6 +1760,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // Ensure proper layering - raise important elements
     this.svgLinkGroups.selectAll('marker').raise();
     this.svgLinkGroups.selectAll('.linklabel').raise();
+    this.svgGroups.selectAll('.error-group').raise();
+    this.svgNodes.selectAll('.error-node').raise();
   }
 
   private gridUpdatePositions() {
@@ -2518,8 +2559,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         cursor: move;
       }
 
-      .error-node rect {
-        stroke: red;
+      .error-node rect, .error-group {
         stroke-width: 2px;
         stroke-dasharray: 5 5;
         animation: dash 1s linear infinite;
@@ -2566,17 +2606,17 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         pointer-events: none;
       }
 
-.linklabel {
-  text-anchor: middle;
-  dominant-baseline: middle;
-  font-size: 10px;
-  fill: #555;
-  pointer-events: none;
-  font-family: system-ui;
-  stroke: white; /* Add white shadow */
-  stroke-width: 0.2px; /* Reduced thickness of the shadow */
-  stroke-opacity: 0.7; /* Added opacity to make the shadow less intense */
-}
+      .linklabel {
+        text-anchor: middle;
+        dominant-baseline: middle;
+        font-size: 10px;
+        fill: #555;
+        pointer-events: none;
+        font-family: system-ui;
+        stroke: white; /* Add white shadow */
+        stroke-width: 0.2px; /* Reduced thickness of the shadow */
+        stroke-opacity: 0.7; /* Added opacity to make the shadow less intense */
+      }
       
       .mostSpecificTypeLabel {
         font-size: 8px;
@@ -2622,6 +2662,21 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       svg.input-mode .link:hover {
         stroke-width: 3px;
         opacity: 0.8;
+      }
+
+      /* Error icon positioning */
+      #error-icon {
+        display: none;
+        margin: 5px;
+        padding: 5px;
+        font-size: 28px;
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 1000;
+        cursor: help;
+        background-color: rgba(255, 0, 0, 0.5);
+        border-radius: 4px;
       }
     `;
   }
@@ -2671,6 +2726,22 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     loading.style.display = 'none';
     error.style.display = 'block';
     error.textContent = message;
+  }
+
+  /**
+   * Show error icon
+   */
+  private showErrorIcon(): void {
+    const errorIcon = this.shadowRoot!.querySelector('#error-icon') as HTMLElement;
+    errorIcon.style.display = 'block';
+  }
+
+  /**
+   * Hide error icon
+   */
+  private hideErrorIcon(): void {
+    const errorIcon = this.shadowRoot!.querySelector('#error-icon') as HTMLElement;
+    errorIcon.style.display = 'none';
   }
 
   // =========================================

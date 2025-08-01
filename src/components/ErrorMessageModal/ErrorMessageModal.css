@@ -8,13 +8,30 @@
     border: 2px var(--bs-danger) solid;
 }
 
-#error-message-modal .highlight {
-    background-color: #ffeb3b; /* Highlight color */
+/* Source constraint highlight - lighter yellow */
+.constraint-item.highlight-source {
+    background-color: rgba(255, 193, 7, 0.35);
     border-radius: 4px;
+}
 
-    /** Undo previous styling */
-    border: none;
-    animation: none;
+/* Diagram element highlight - darker yellow */
+.constraint-item.highlight-diagram {
+    background-color: rgba(255, 193, 7, 0.7);
+    border-radius: 4px;
+}
+
+.constraint-relationship-table {
+    width: 100%;
+    margin-bottom: 1rem;
+}
+
+.constraint-relationship-table .constraint-item {
+    padding: 0.5rem;
+    border-bottom: 1px solid #eee;
+}
+
+.constraint-relationship-table .constraint-item:last-child {
+    border-bottom: none;
 }
 
 code > code, code > pre {
