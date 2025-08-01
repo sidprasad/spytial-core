@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import './ErrorMessageModal.css';
 import { ErrorMessages, SystemError } from './index';
 
@@ -65,7 +65,7 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
   }
 
   /** Helper function to generate error header */
-  const generateErrorHeader = (systemError: SystemError): string => {
+  const errorHeader = useMemo((): string => {
     const errorType = systemError.type;
     if (errorType === 'parse-error') {
       return `Parse Error ${systemError.source ? `(${systemError.source})` : ''}`;
@@ -74,32 +74,16 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
     } else {
       return 'Error';
     }
-  }
-
-  /** 
-   * Build conflicting constraints map from error messages 
-  */
-  const buildConstraintsMap = (messages: ErrorMessages | undefined): Map<string, string[]> => {
-    if (!messages) return new Map();
-    
-    const map = new Map<string, string[]>();
-    messages.minimalConflictingConstraints.forEach((value, key) => map.set(key, [...value]));
-    
-    // Add source constraint to its related diagram elements
-    const relatedElements = map.get(messages.conflictingConstraint) || [];
-    relatedElements.push(messages.conflictingConstraint);
-    map.set(messages.conflictingSourceConstraint, relatedElements);
-    
-    return map;
-  };
+  }, [systemError]);
 
   /** 
    * Transform constraints map into structured data with bidirectional relationships 
   */
-  const prepareConstraintData = (messages: ErrorMessages | undefined): { sourceConstraints: ConstraintNode[]; diagramConstraints: ConstraintNode[] } => {
+  const constraintData = useMemo((): { sourceConstraints: ConstraintNode[]; diagramConstraints: ConstraintNode[] } => {
+    const messages = isPositionalError ? systemError.messages : undefined;
     if (!messages) return { sourceConstraints: [], diagramConstraints: [] };
     
-    const constraintsMap = buildConstraintsMap(messages);
+    const constraintsMap = messages.minimalConflictingConstraints;
     const sourceConstraints: ConstraintNode[] = [];
     const diagramConstraints: ConstraintNode[] = [];
     const diagramMap = new Map<string, string>();
@@ -128,9 +112,9 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
     });
     
     return { sourceConstraints, diagramConstraints };
-  };
+  }, [systemError]);
 
-  const { sourceConstraints, diagramConstraints } = prepareConstraintData(isPositionalError ? systemError.messages : undefined);
+  const { sourceConstraints, diagramConstraints } = constraintData;
 
   return (
     <div id="error-message-modal" className="mt-3 d-flex flex-column overflow-x-auto p-3 rounded border border-danger border-2">
@@ -142,7 +126,7 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
           <div className="card error-card">
             <div className="card-header bg-light">
               <strong>
-                { generateErrorHeader(systemError) }
+                { errorHeader }
               </strong>
             </div>
             <div className="card-body">
