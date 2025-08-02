@@ -76,21 +76,41 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
     }
   }, [systemError]);
 
+  
   /** 
    * Transform constraints map into structured data with bidirectional relationships 
   */
   const constraintData = useMemo((): { sourceConstraints: ConstraintNode[]; diagramConstraints: ConstraintNode[] } => {
     const messages = isPositionalError ? systemError.messages : undefined;
     if (!messages) return { sourceConstraints: [], diagramConstraints: [] };
+
+    function buildConstraintsMap(messages: ErrorMessages): Map<string, Set<string>> {
+      const copy = new Map<string, Set<string>>();
+      messages.minimalConflictingConstraints.forEach((value, key) => {
+        if (!copy.has(key)) {
+          copy.set(key, new Set());
+        }
+        value.forEach(val => copy.get(key)!.add(val));
+      });
+
+      // Add the source constraint itself
+      if (!copy.has(messages.conflictingSourceConstraint)) {
+        copy.set(messages.conflictingSourceConstraint, new Set(messages.conflictingConstraint));
+      } else {
+        copy.get(messages.conflictingSourceConstraint)!.add(messages.conflictingConstraint);
+      }
+
+      return copy;
+    }
     
-    const constraintsMap = messages.minimalConflictingConstraints;
+    const constraintsMap = buildConstraintsMap(messages);
     const sourceConstraints: ConstraintNode[] = [];
     const diagramConstraints: ConstraintNode[] = [];
     const diagramMap = new Map<string, string>();
     
     // First pass to create diagram constraints with IDs
     [...constraintsMap.values()].forEach((constraints, groupIdx) => {
-      constraints.forEach((content, idx) => {
+      [...constraints.values()].map((content, idx) => {
         const id = `diagram-${groupIdx}-${idx}`;
         diagramMap.set(content, id);
         diagramConstraints.push({ id, content, relatedIds: [] });
@@ -100,7 +120,7 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
     // Second pass to create source constraints with relationships
     [...constraintsMap.entries()].forEach(([sourceContent, relatedContents], idx) => {
       const id = `source-${idx}`;
-      const relatedIds = relatedContents.map(content => diagramMap.get(content)!);
+      const relatedIds = [...relatedContents.values()].map(content => diagramMap.get(content)!);
       
       sourceConstraints.push({ id, content: sourceContent, relatedIds });
       
