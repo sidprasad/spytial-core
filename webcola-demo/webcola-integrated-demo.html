@@ -183,9 +183,12 @@
     <!-- Complete CND-Core browser bundle -->
     <script src="../dist/browser/cnd-core-complete.global.js"></script>
     
-    <!-- Integrated demo components bundle -->
+    <!-- No need for components bundle since all components are included in the browser bundle -->
+    <!-- Components are available via global CndCore object -->
+    <!-- 
     <script src="../dist/components/integrated-demo-components.global.js"></script>
     <link rel="stylesheet" href="../dist/components/integrated-demo-components.css">
+    -->
     
     <script>
         // Variables to store data
@@ -596,6 +599,64 @@
         window.clearGraph = clearGraph;
         window.updateFromBuilder = updateFromBuilder;
         window.updateFromCnDSpec = updateFromCnDSpec;
+
+        // Mount React components using CndCore (since we're not loading components bundle)
+        function mountComponents() {
+            if (!window.React || !window.ReactDOM || !window.CndCore) {
+                console.error('Required dependencies not loaded:', {
+                    React: !!window.React,
+                    ReactDOM: !!window.ReactDOM,
+                    CndCore: !!window.CndCore
+                });
+                return;
+            }
+
+            try {
+                // Mount InstanceBuilder
+                const instanceBuilderContainer = document.getElementById('instance-builder-container');
+                if (instanceBuilderContainer) {
+                    const instanceBuilderRoot = ReactDOM.createRoot(instanceBuilderContainer);
+                    instanceBuilderRoot.render(
+                        React.createElement(CndCore.InstanceBuilder, {
+                            instance: CndCore.createEmptyAlloyDataInstance(),
+                            onInstanceChange: (newInstance) => {
+                                window.currentInstance = newInstance;
+                                updateFromBuilder();
+                            }
+                        })
+                    );
+                }
+
+                // Mount CndLayoutInterface
+                const layoutInterfaceContainer = document.getElementById('layout-interface-container');
+                if (layoutInterfaceContainer) {
+                    const layoutInterfaceRoot = ReactDOM.createRoot(layoutInterfaceContainer);
+                    layoutInterfaceRoot.render(
+                        React.createElement(CndCore.CndLayoutInterface, {
+                            onChange: (newSpec) => {
+                                window.getCurrentCNDSpecFromReact = () => newSpec;
+                                updateFromCnDSpec();
+                            }
+                        })
+                    );
+                }
+
+                console.log('✅ Components mounted successfully using CndCore');
+                updateStatus('Components loaded - ready to build!', 'success');
+            } catch (error) {
+                console.error('Failed to mount components:', error);
+                updateStatus(`Component mounting failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Initialize components after everything is loaded
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                setTimeout(mountComponents, 100); // Small delay to ensure all scripts are loaded
+            });
+        } else {
+            setTimeout(mountComponents, 100);
+        }
     </script>
 </body>
 </html>
