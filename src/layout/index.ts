@@ -9,6 +9,15 @@ export * from './layoutinstance';
 export * from './colorpicker';
 export * from './constraint-validator';
 
+// Formal semantics specification for cyclic constraints
+export { 
+    translateCyclicConstraint, 
+    cyclicConstraintSemantics,
+    demonstrateSemantics,
+    type CyclicConstraint as FormalCyclicConstraint,
+    type PositionalConstraint as FormalPositionalConstraint
+} from './cyclic-semantics';
+
 // Utility functions
 import { LayoutInstance } from './layoutinstance';
 import { LayoutSpec, parseLayoutSpec } from './layoutspec';
