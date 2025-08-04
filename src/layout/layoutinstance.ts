@@ -153,8 +153,8 @@ export class LayoutInstance {
                 const selectorResult = this.evaluator.evaluate(d.selector, { instanceIndex: this.instanceNum });
                 const selectedAtoms = selectorResult.selectedAtoms();
                 
-                // Check if either source or target atom is selected by the selector
-                return selectedAtoms.includes(sourceAtom) || selectedAtoms.includes(targetAtom);
+                // Check if source atom is selected by the selector
+                return selectedAtoms.includes(sourceAtom);
             } catch (error) {
                 console.warn(`Failed to evaluate group by field selector "${d.selector}":`, error);
                 return false;
@@ -186,8 +186,8 @@ export class LayoutInstance {
                 const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
                 const selectedAtoms = selectorResult.selectedAtoms();
                 
-                // Check if either source or target atom is selected by the selector
-                if (selectedAtoms.includes(sourceAtom) || selectedAtoms.includes(targetAtom)) {
+                // Check if source atom is selected by the selector
+                if (selectedAtoms.includes(sourceAtom)) {
                     return true;
                 }
             } catch (error) {
@@ -222,8 +222,8 @@ export class LayoutInstance {
                 const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
                 const selectedAtoms = selectorResult.selectedAtoms();
                 
-                // Check if either source or target atom is selected by the selector
-                if (selectedAtoms.includes(sourceAtom) || selectedAtoms.includes(targetAtom)) {
+                // Check if source atom is selected by the selector
+                if (selectedAtoms.includes(sourceAtom)) {
                     return true;
                 }
             } catch (error) {
@@ -1448,8 +1448,8 @@ export class LayoutInstance {
                 const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
                 const selectedAtoms = selectorResult.selectedAtoms();
                 
-                // Check if either source or target atom is selected by the selector
-                if (selectedAtoms.includes(sourceAtom) || selectedAtoms.includes(targetAtom)) {
+                // Check if source atom is selected by the selector
+                if (selectedAtoms.includes(sourceAtom)) {
                     return directive.color;
                 }
             } catch (error) {

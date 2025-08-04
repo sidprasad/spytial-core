@@ -85,18 +85,18 @@ directives:
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
     const { layout } = layoutInstance.generateLayout(instance, {});
 
-    // Find edges by relation name
+    // Find edges by relation name and source type (source-only selector logic)
     const personNameEdges = layout.edges.filter(e => 
       e.relationName === 'name' && 
-      (e.source.types.includes('Person') || e.target.types.includes('Person'))
+      e.source.types.includes('Person')
     );
     const carNameEdges = layout.edges.filter(e => 
       e.relationName === 'name' && 
-      (e.source.types.includes('Car') || e.target.types.includes('Car'))
+      e.source.types.includes('Car')
     );
     const companyNameEdges = layout.edges.filter(e => 
       e.relationName === 'name' && 
-      (e.source.types.includes('Company') || e.target.types.includes('Company'))
+      e.source.types.includes('Company')
     );
 
     // Person name edges should be red
@@ -160,10 +160,10 @@ directives:
     // Car and Company name edges should still exist as edges (not converted to attributes)
     const remainingNameEdges = layout.edges.filter(e => e.relationName === 'name');
     const carNameEdges = remainingNameEdges.filter(e => 
-      e.source.types.includes('Car') || e.target.types.includes('Car')
+      e.source.types.includes('Car')
     );
     const companyNameEdges = remainingNameEdges.filter(e => 
-      e.source.types.includes('Company') || e.target.types.includes('Company')
+      e.source.types.includes('Company')
     );
 
     expect(carNameEdges.length).toBeGreaterThan(0);
@@ -188,18 +188,18 @@ directives:
     // Car name edges should be hidden (not present in layout)
     const carNameEdges = layout.edges.filter(e => 
       e.relationName === 'name' && 
-      (e.source.types.includes('Car') || e.target.types.includes('Car'))
+      e.source.types.includes('Car')
     );
     expect(carNameEdges.length).toBe(0);
 
     // Person and Company name edges should still be present
     const personNameEdges = layout.edges.filter(e => 
       e.relationName === 'name' && 
-      (e.source.types.includes('Person') || e.target.types.includes('Person'))
+      e.source.types.includes('Person')
     );
     const companyNameEdges = layout.edges.filter(e => 
       e.relationName === 'name' && 
-      (e.source.types.includes('Company') || e.target.types.includes('Company'))
+      e.source.types.includes('Company')
     );
 
     expect(personNameEdges.length).toBeGreaterThan(0);
