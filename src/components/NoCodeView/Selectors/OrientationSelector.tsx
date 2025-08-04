@@ -14,7 +14,7 @@ interface OrientationSelectorProps {
  * Includes selector input and multi-select direction dropdown.
  */
 export const OrientationSelector: React.FC<OrientationSelectorProps> = (props: OrientationSelectorProps) => {
-  const handleInputChange = useCallback((event) => {
+  const handleInputChange = (event) => {
     const { name, value } = event.target;
     props.onUpdate({
       params: {
@@ -22,9 +22,9 @@ export const OrientationSelector: React.FC<OrientationSelectorProps> = (props: O
         [name]: value
       }
     });
-  }, [props.onUpdate]);
+  };
 
-  const handleSelectChange = useCallback((event) => {
+  const handleSelectChange = (event) => {
     const { name } = event.target;
     const selectedValues = Array.from(event.target.selectedOptions, (option) => option.value);
     props.onUpdate({
@@ -33,7 +33,7 @@ export const OrientationSelector: React.FC<OrientationSelectorProps> = (props: O
         [name]: selectedValues
       }
     });
-  }, [props.onUpdate, props.constraintData.params]);
+  };
 
   return (
     <>

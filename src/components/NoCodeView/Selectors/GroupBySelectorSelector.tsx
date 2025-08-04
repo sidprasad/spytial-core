@@ -14,7 +14,7 @@ interface GroupBySelectorSelectorProps {
  * Groups elements based on a Forge selector expression.
  */
 export const GroupBySelectorSelector: React.FC<GroupBySelectorSelectorProps> = (props: GroupBySelectorSelectorProps) => {
-  const handleInputChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
     props.onUpdate({
       params: {
@@ -22,7 +22,7 @@ export const GroupBySelectorSelector: React.FC<GroupBySelectorSelectorProps> = (
         [name]: value,
       },
     });
-  }, [props.onUpdate, props.constraintData]);
+  };
 
   return (
     <>

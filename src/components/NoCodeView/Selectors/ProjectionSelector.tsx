@@ -13,7 +13,7 @@ interface ProjectionSelectorProps {
  * Specifies a signature to project.
  */
 export const ProjectionSelector: React.FC<ProjectionSelectorProps> = (props: ProjectionSelectorProps) => {
-  const handleInputChange = useCallback((event) => {
+  const handleInputChange = (event) => {
     const { name, value } = event.target;
     props.onUpdate({
       params: {
@@ -21,7 +21,7 @@ export const ProjectionSelector: React.FC<ProjectionSelectorProps> = (props: Pro
         [name]: value
       }
     });
-  }, [props.onUpdate, props.directiveData.params]);
+  };
 
   return (
     <div className="input-group">
