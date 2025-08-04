@@ -26,13 +26,13 @@ const CyclicSelector: React.FC<CyclicSelectorProps> = (props: CyclicSelectorProp
         <div className="input-group-prepend">
             <span className="input-group-text infolabel" title={TUPLE_SELECTOR_TEXT}>Selector</span>
         </div>
-        <input type="text" name="selector" className="form-control" required onChange={ handleParamsChange }/>
+        <input type="text" name="selector" className="form-control" required onChange={ handleParamsChange } value={props.constraintData.params.selector as string || ''}/>
     </div>
     <div className="input-group">
         <div className="input-group-prepend">
             <span className="input-group-text">Direction</span>
         </div>
-        <select name="direction" onChange={ handleParamsChange }>
+        <select name="direction" onChange={ handleParamsChange } value={props.constraintData.params.direction as string || 'clockwise'}>
             <option value="clockwise">Clockwise</option>
             <option value="counterclockwise">Counterclockwise</option>
         </select>

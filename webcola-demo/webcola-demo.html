@@ -132,7 +132,7 @@
     </style>
 </head>
 <body>
-    <div class="container border">
+    <div class="container border" id="main-panel">
         <h1>🎯 WebCola Alloy Visualization Demo</h1>
         <p>This demonstrates the complete Alloy XML → AlloyDataInstance → ForgeEvaluator → Layout → WebCola pipeline.</p>
         <div>
@@ -326,34 +326,52 @@
                 // Step 5: Generate layout using Alloy data instance
                 updateStatus('Generating layout with Alloy data...', 'info');
                 const projections = {};
-                const layoutResult = layoutInstance.generateLayout(alloyDataInstance, projections);
-                currentInstanceLayout = layoutResult.layout;
 
-                if (layoutResult.error) {
-                    console.error('Layout generation error:', layoutResult.error);
+                try {
+                    const layoutResult = layoutInstance.generateLayout(alloyDataInstance, projections);
+                    currentInstanceLayout = layoutResult.layout;
+    
+                    if (layoutResult.error) {
+                        console.error('Layout generation error:', layoutResult.error);
+    
+                        // Check if this is a constraint conflict error
+                        if (layoutResult.error.errorMessages) {
+                            if (window.showPositionalError) {
+                                window.showPositionalError(layoutResult.error.errorMessages);
+                            } else {
+                                updateStatus(`Positional constraint conflict: ${layoutResult.error.message}`, 'error');
+                            }
+                        } else if (layoutResult.error.overlappingNodes) {
+                            if (window.showGroupOverlapError) {
+                                window.showGroupOverlapError(layoutResult.error.message);
+                            } else {
+                                updateStatus(`Group overlap error: ${layoutResult.error.message}`, 'error');
+                            }
+                        } else {
+                            if (window.showGeneralError) {
+                                window.showGeneralError(`Layout generation error: ${layoutResult.error.message}`);
+                            } else {
+                                updateStatus(`Layout generation error: ${layoutResult.error.message}`, 'error');
+                            }
+                        }
 
-                    // Check if this is a constraint conflict error
-                    if (layoutResult.error.errorMessages) {
-                        if (window.showPositionalError) {
-                            window.showPositionalError(layoutResult.error.errorMessages);
-                        } else {
-                            updateStatus(`Positional constraint conflict: ${layoutResult.error.message}`, 'error');
-                        }
-                    } else if (layoutResult.error.overlappingNodes) {
-                        if (window.showGroupOverlapError) {
-                            window.showGroupOverlapError(layoutResult.error.message);
-                        } else {
-                            updateStatus(`Group overlap error: ${layoutResult.error.message}`, 'error');
-                        }
+                        // Set the webcola-cnd-graph element to indicate unsat state
+                        const webcolaGraphElement = document.getElementById('graph-container');
+                        webcolaGraphElement.setAttribute('unsat', "");
+
+                        return;
+                    }
+                } catch (error) {
+                    if (window.showGeneralError) {
+                        window.showGeneralError(`Layout generation failed: ${error.message}`);
                     } else {
-                        if (window.showGeneralError) {
-                            window.showGeneralError(`Layout generation error: ${layoutResult.error.message}`);
-                        } else {
-                            updateStatus(`Layout generation error: ${layoutResult.error.message}`, 'error');
-                        }
+                        updateStatus(`Layout generation failed: ${error.message}`, 'error');
                     }
                     return;
                 }
+
+                const webcolaGraphElement = document.getElementById('graph-container');
+                webcolaGraphElement.removeAttribute('unsat'); // Clear unsat state
 
                 // Clear errors on successful layout generation
                 if (window.clearAllErrors) {
@@ -390,7 +408,7 @@
                 
                 // Use the real InstanceLayout data with WebCola custom element
                 await graphElement.renderLayout(currentInstanceLayout);
-                
+
                 updateStatus('Alloy graph rendered successfully!', 'success');
             } catch (error) {
                 console.error('Error rendering Alloy graph:', error);

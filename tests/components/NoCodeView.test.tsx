@@ -107,4 +107,59 @@ describe('NoCodeView Component Tests', () => {
       expect(newRemoveButtons.length).toBe(0)
     })
   })
+
+  describe('Cyclic Constraints Display Values', () => {
+    it('should display current values for cyclic constraints (fixes issue #97)', () => {
+      const constraints: ConstraintData[] = [
+        { 
+          id: '1', 
+          type: 'cyclic', 
+          params: { 
+            selector: 'right', 
+            direction: 'clockwise' 
+          } 
+        },
+        { 
+          id: '2', 
+          type: 'cyclic', 
+          params: { 
+            selector: 'left', 
+            direction: 'clockwise' 
+          } 
+        }
+      ]
+      
+      render(<NoCodeView {...defaultProps} constraints={constraints} />)
+      
+      // Check that both selector values are displayed
+      expect(screen.getByDisplayValue('right')).toBeInTheDocument()
+      expect(screen.getByDisplayValue('left')).toBeInTheDocument()
+      
+      // Check that both direction values are displayed as "Clockwise"
+      const directionSelects = screen.getAllByDisplayValue('Clockwise')
+      expect(directionSelects).toHaveLength(2)
+    })
+
+    it('should handle empty cyclic constraint params gracefully', () => {
+      const constraints: ConstraintData[] = [
+        { 
+          id: '1', 
+          type: 'cyclic', 
+          params: {} 
+        }
+      ]
+      
+      render(<NoCodeView {...defaultProps} constraints={constraints} />)
+      
+      // Should have a textbox (selector input) that's empty
+      const selectorInputs = screen.getAllByRole('textbox')
+      const selectorInput = selectorInputs.find(input => 
+        input.getAttribute('name') === 'selector'
+      )
+      expect(selectorInput).toHaveValue('')
+      
+      // Should default to clockwise direction
+      expect(screen.getByDisplayValue('Clockwise')).toBeInTheDocument()
+    })
+  })
 })
