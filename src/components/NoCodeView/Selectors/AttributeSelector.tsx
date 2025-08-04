@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React from 'react';
 import { DirectiveData } from '../interfaces';
 
 interface AttributeSelectorProps {
@@ -13,7 +13,7 @@ interface AttributeSelectorProps {
  * Simple field input for attribute directives.
  */
 export const AttributeSelector: React.FC<AttributeSelectorProps> = (props: AttributeSelectorProps) => {
-  const handleInputChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
     props.onUpdate({
       params: {
@@ -21,7 +21,7 @@ export const AttributeSelector: React.FC<AttributeSelectorProps> = (props: Attri
         [name]: value || undefined
       }
     });
-  }, [props.onUpdate, props.directiveData.params]);
+  };
 
   return (
     <>
