@@ -18,6 +18,7 @@ export const ColorEdgeSelector: React.FC<ColorEdgeSelectorProps> = ({
 }) => {
   const field = (directiveData.params.field as string) || '';
   const value = (directiveData.params.value as string) || '#000000';
+  const selector = (directiveData.params.selector as string) || '';
 
   return (
     <>
@@ -32,6 +33,19 @@ export const ColorEdgeSelector: React.FC<ColorEdgeSelectorProps> = ({
           defaultValue={field}
           onChange={(e) => onUpdate({ params: { ...directiveData.params, field: e.target.value } })}
           required
+        />
+      </div>
+      <div className="input-group">
+        <div className="input-group-prepend">
+          <span className="input-group-text">Selector</span>
+        </div>
+        <input
+          type="text"
+          name="selector"
+          className="form-control"
+          defaultValue={selector}
+          placeholder="Optional: target specific atoms (e.g., Person)"
+          onChange={(e) => onUpdate({ params: { ...directiveData.params, selector: e.target.value || undefined } })}
         />
       </div>
       <div className="input-group">

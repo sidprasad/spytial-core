@@ -39,6 +39,19 @@ export const GroupByFieldSelector: React.FC<GroupByFieldSelectorProps> = (props:
       </div>
       <div className="input-group">
         <div className="input-group-prepend">
+          <span className="input-group-text">Selector</span>
+        </div>
+        <input
+          type="text"
+          name="selector"
+          className="form-control"
+          defaultValue={props.constraintData.params.selector as string || ''}
+          placeholder="Optional: target specific atoms (e.g., Person)"
+          onChange={handleInputChange}
+        />
+      </div>
+      <div className="input-group">
+        <div className="input-group-prepend">
           <span className="input-group-text infolabel" title="Which 0-indexed element of the field to use as the group key.">
             Group On
           </span>

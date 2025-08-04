@@ -18,23 +18,39 @@ export const HideFieldSelector: React.FC<HideFieldSelectorProps> = (props: HideF
     props.onUpdate({
       params: {
         ...props.directiveData.params,
-        [name]: value
+        [name]: value || undefined
       }
     });
   }, [props.onUpdate, props.directiveData.params]);
 
   return (
-    <div className="input-group">
-      <div className="input-group-prepend">
-        <span className="input-group-text">Field</span>
+    <>
+      <div className="input-group">
+        <div className="input-group-prepend">
+          <span className="input-group-text">Field</span>
+        </div>
+        <input
+          type="text"
+          name="field"
+          className="form-control"
+          defaultValue={props.directiveData.params.field as string || ''}
+          onChange={handleInputChange}
+          required
+        />
       </div>
-      <input
-        type="text"
-        name="field"
-        className="form-control"
-        onChange={handleInputChange}
-        required
-      />
-    </div>
+      <div className="input-group">
+        <div className="input-group-prepend">
+          <span className="input-group-text">Selector</span>
+        </div>
+        <input
+          type="text"
+          name="selector"
+          className="form-control"
+          defaultValue={props.directiveData.params.selector as string || ''}
+          placeholder="Optional: target specific atoms (e.g., Person)"
+          onChange={handleInputChange}
+        />
+      </div>
+    </>
   );
 };

@@ -639,7 +639,6 @@ export class LayoutInstance {
         let nodeIconMap = this.getNodeIconMap(g);
         let nodeColorMap = this.getNodeColorMap(g, ai);
         let nodeSizeMap = this.getNodeSizeMap(g);
-        let edgeColorMap = this.getEdgeColorMap(g, ai);
 
 
         // This is where we add the inferred edges to the graph.
@@ -1460,40 +1459,6 @@ export class LayoutInstance {
         }
         
         return "black"; // Default color
-    }
-
-    /**
-     * Maps edge fields to their colors based on the directives in the layout specification.
-     * This method is deprecated in favor of getEdgeColor for selector support.
-     * @param g - The graph to get the edge color map from.
-     * @param a - The Alloy instance to get the edge colors for.
-     * @returns A Record mapping edge fields to their colors.
-     */
-    private getEdgeColorMap(g: Graph, a: IDataInstance): Record<string, string> {
-        let edgeColorMap: Record<string, string> = {};
-
-        let colorDirectives = this._layoutSpec.directives.edgeColors;
-        colorDirectives.forEach((colorDirective) => {
-            // Only include directives without selectors for legacy compatibility
-            if (colorDirective.selector) {
-                return;
-            }
-            
-            let color = colorDirective.color;
-            let field = colorDirective.field;
-
-            if (edgeColorMap[field]) {
-                const existingColor = edgeColorMap[field];
-                if (existingColor !== color) {
-                    throw new Error(
-                        `Color Conflict: "${field}" cannot have multiple colors: ${existingColor}, ${color}.`
-                    );
-                }
-            }
-            edgeColorMap[field] = color;
-        });
-
-        return edgeColorMap;
     }
 
     /**
