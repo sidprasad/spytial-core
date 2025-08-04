@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { DirectiveData } from '../interfaces';
 
 interface AttributeSelectorProps {

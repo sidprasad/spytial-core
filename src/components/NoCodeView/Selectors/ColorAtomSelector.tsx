@@ -14,7 +14,7 @@ interface ColorAtomSelectorProps {
  * Includes selector input and color picker.
  */
 export const ColorAtomSelector: React.FC<ColorAtomSelectorProps> = (props: ColorAtomSelectorProps) => {
-  const handleInputChange = useCallback((event) => {
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
     props.onUpdate({
       params: {
@@ -22,7 +22,7 @@ export const ColorAtomSelector: React.FC<ColorAtomSelectorProps> = (props: Color
         [name]: value
       }
     });
-  }, [props.onUpdate, props.directiveData.params]);
+  };
 
   return (
     <>

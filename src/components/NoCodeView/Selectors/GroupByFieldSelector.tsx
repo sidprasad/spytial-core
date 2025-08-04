@@ -13,7 +13,7 @@ interface GroupByFieldSelectorProps {
  * Groups elements based on a field with configurable indices.
  */
 export const GroupByFieldSelector: React.FC<GroupByFieldSelectorProps> = (props: GroupByFieldSelectorProps) => {
-  const handleInputChange = useCallback((event) => {
+  const handleInputChange = (event) => {
     const { name, value } = event.target;
     props.onUpdate({
       params: {
@@ -21,7 +21,7 @@ export const GroupByFieldSelector: React.FC<GroupByFieldSelectorProps> = (props:
         [name]: event.target.type === 'number' ? Number(value) : value
       }
     });
-  }, [props.onUpdate, props.constraintData.params]);
+  };
 
   return (
     <>

@@ -13,7 +13,7 @@ interface HideFieldSelectorProps {
  * Simple field input to specify which field to hide.
  */
 export const HideFieldSelector: React.FC<HideFieldSelectorProps> = (props: HideFieldSelectorProps) => {
-  const handleInputChange = useCallback((event) => {
+  const handleInputChange = (event) => {
     const { name, value } = event.target;
     props.onUpdate({
       params: {
@@ -21,7 +21,7 @@ export const HideFieldSelector: React.FC<HideFieldSelectorProps> = (props: HideF
         [name]: value || undefined
       }
     });
-  }, [props.onUpdate, props.directiveData.params]);
+  };
 
   return (
     <>
