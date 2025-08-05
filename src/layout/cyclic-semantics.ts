@@ -1,20 +1,42 @@
 /**
- * Cyclic Constraint Translation - Lean Function Specification
+ * Cyclic Constraint Translation to Layout Constraints
  * 
- * This module provides a formal, functional specification of how cyclic 
- * orientation constraints are translated into elementary positional constraints.
+ * This module provides a clean mathematical specification of how cyclic 
+ * orientation constraints are translated into concrete LayoutConstraint types:
+ * - LeftConstraint: left/right relationships
+ * - TopConstraint: above/below relationships  
+ * - AlignmentConstraint: horizontal/vertical alignment
  */
 
 export type NodeId = string;
 export type Position = { x: number; y: number };
 export type Fragment = NodeId[];
 
-export interface PositionalConstraint {
-  type: 'left' | 'top' | 'align-x' | 'align-y';
+/**
+ * Layout constraint types - these match the actual interfaces in interfaces.ts
+ */
+export interface LeftConstraint {
+  type: 'left';
+  left: NodeId;
+  right: NodeId;
+  minDistance: number;
+}
+
+export interface TopConstraint {
+  type: 'top';
+  top: NodeId;
+  bottom: NodeId;
+  minDistance: number;
+}
+
+export interface AlignmentConstraint {
+  type: 'alignment';
+  axis: 'x' | 'y';
   node1: NodeId;
   node2: NodeId;
-  minDistance?: number;
 }
+
+export type LayoutConstraint = LeftConstraint | TopConstraint | AlignmentConstraint;
 
 export interface CyclicConstraint {
   direction: 'clockwise' | 'counterclockwise';
@@ -22,41 +44,41 @@ export interface CyclicConstraint {
 }
 
 /**
- * Core translation function: translates a cyclic constraint into a disjunction
- * of positional constraint sets, one for each possible perturbation.
+ * Core translation function that mirrors the actual implementation in layoutinstance.ts
+ * 
+ * Translates a cyclic constraint into disjunctive sets of layout constraints.
+ * Each constraint set represents one possible circular arrangement (perturbation).
  * 
  * @param constraint - The cyclic constraint to translate
  * @param minRadius - Minimum radius for circular positioning (default: 100)
- * @param minSeparation - Minimum separation distance (default: 15)
- * @returns Array of constraint sets, representing the disjunction
+ * @param minSepWidth - Minimum horizontal separation (default: 15)
+ * @param minSepHeight - Minimum vertical separation (default: 15)
+ * @returns Array of constraint sets representing the disjunction
  */
 export function translateCyclicConstraint(
   constraint: CyclicConstraint,
   minRadius: number = 100,
-  minSeparation: number = 15
-): PositionalConstraint[][] {
+  minSepWidth: number = 15,
+  minSepHeight: number = 15
+): LayoutConstraint[][] {
   
   return constraint.fragments.flatMap(fragment => 
-    generatePerturbations(fragment, constraint.direction, minRadius, minSeparation)
+    translateFragment(fragment, constraint.direction, minRadius, minSepWidth, minSepHeight)
   );
 }
 
 /**
- * Generates all possible perturbations (rotational offsets) for a fragment.
- * Each perturbation represents a different circular arrangement.
+ * Translates a single fragment into multiple constraint sets (one per perturbation).
  * 
- * @param fragment - Array of node IDs forming a cycle/path
- * @param direction - Rotation direction
- * @param minRadius - Radius for circular positioning  
- * @param minSeparation - Minimum node separation
- * @returns Array of constraint sets, one per perturbation
+ * This function mirrors getCyclicConstraintForFragment() in layoutinstance.ts
  */
-function generatePerturbations(
+function translateFragment(
   fragment: Fragment,
   direction: 'clockwise' | 'counterclockwise',
   minRadius: number,
-  minSeparation: number
-): PositionalConstraint[][] {
+  minSepWidth: number,
+  minSepHeight: number
+): LayoutConstraint[][] {
   
   // Handle direction by reversing fragment for counterclockwise
   const orderedFragment = direction === 'counterclockwise' 
@@ -65,44 +87,103 @@ function generatePerturbations(
     
   // Generate one constraint set per perturbation (rotational offset)
   return Array.from({ length: orderedFragment.length }, (_, perturbation) => 
-    generateConstraintsForPerturbation(orderedFragment, perturbation, minRadius, minSeparation)
+    generateConstraintsForPerturbation(orderedFragment, perturbation, minRadius, minSepWidth, minSepHeight)
   );
 }
 
 /**
- * Generates positional constraints for a specific perturbation of a fragment.
+ * Generates layout constraints for a specific perturbation of a fragment.
  * 
- * @param fragment - Ordered array of node IDs
- * @param perturbation - Rotational offset (0 to fragment.length - 1)
- * @param minRadius - Radius for circular positioning
- * @param minSeparation - Minimum node separation
- * @returns Set of positional constraints for this arrangement
+ * This exactly mirrors the logic in getCyclicConstraintForFragment():
+ * - Calculate circular positions with perturbation offset
+ * - Generate pairwise constraints between all nodes
+ * - Apply positioning rules to create LeftConstraint, TopConstraint, AlignmentConstraint
  */
 function generateConstraintsForPerturbation(
   fragment: Fragment,
-  perturbation: number,
+  perturbationIdx: number,
   minRadius: number,
-  minSeparation: number
-): PositionalConstraint[] {
+  minSepWidth: number,
+  minSepHeight: number
+): LayoutConstraint[] {
   
-  // Calculate circular positions with perturbation offset
-  const positions = calculateCircularPositions(fragment, perturbation, minRadius);
+  if (fragment.length <= 2) {
+    return []; // No constraints needed for two-node fragments
+  }
   
-  // Generate pairwise constraints between all nodes
-  const constraints: PositionalConstraint[] = [];
+  // Calculate circular positions (mirrors layoutinstance.ts logic)
+  const angleStep = (2 * Math.PI) / fragment.length;
+  const positions: Record<NodeId, Position> = {};
   
   for (let i = 0; i < fragment.length; i++) {
-    for (let j = i + 1; j < fragment.length; j++) {
-      const node1 = fragment[i];
-      const node2 = fragment[j];
-      const pos1 = positions[node1];
-      const pos2 = positions[node2];
-      
-      // Generate horizontal constraints
-      constraints.push(...generateHorizontalConstraints(node1, node2, pos1, pos2, minSeparation));
-      
-      // Generate vertical constraints  
-      constraints.push(...generateVerticalConstraints(node1, node2, pos1, pos2, minSeparation));
+    const theta = (i + perturbationIdx) * angleStep;
+    positions[fragment[i]] = {
+      x: minRadius * Math.cos(theta),
+      y: minRadius * Math.sin(theta)
+    };
+  }
+  
+  // Generate pairwise constraints (mirrors the nested loops in layoutinstance.ts)
+  const constraints: LayoutConstraint[] = [];
+  
+  for (let k = 0; k < fragment.length; k++) {
+    for (let j = 0; j < fragment.length; j++) {
+      if (k !== j) {
+        const node1 = fragment[k];
+        const node2 = fragment[j];
+        const node1_pos = positions[node1];
+        const node2_pos = positions[node2];
+        
+        // Horizontal constraints (exact logic from layoutinstance.ts)
+        if (node1_pos.x > node2_pos.x) {
+          constraints.push({
+            type: 'left',
+            left: node2,
+            right: node1,
+            minDistance: minSepWidth
+          });
+        } else if (node1_pos.x < node2_pos.x) {
+          constraints.push({
+            type: 'left',
+            left: node1,
+            right: node2,
+            minDistance: minSepWidth
+          });
+        } else {
+          // Same x-axis: ensure same X constraint (alignment)
+          constraints.push({
+            type: 'alignment',
+            axis: 'x',
+            node1,
+            node2
+          });
+        }
+        
+        // Vertical constraints (exact logic from layoutinstance.ts)
+        if (node1_pos.y > node2_pos.y) {
+          constraints.push({
+            type: 'top',
+            top: node2,
+            bottom: node1,
+            minDistance: minSepHeight
+          });
+        } else if (node1_pos.y < node2_pos.y) {
+          constraints.push({
+            type: 'top',
+            top: node1,
+            bottom: node2,
+            minDistance: minSepHeight
+          });
+        } else {
+          // Same y-axis: ensure same Y constraint (alignment)
+          constraints.push({
+            type: 'alignment',
+            axis: 'y',
+            node1,
+            node2
+          });
+        }
+      }
     }
   }
   
@@ -110,143 +191,45 @@ function generateConstraintsForPerturbation(
 }
 
 /**
- * Calculates circular positions for nodes with given perturbation offset.
+ * Lean-style function specification showing the formal mapping:
  * 
- * @param fragment - Array of node IDs
- * @param perturbation - Rotational offset
- * @param radius - Circle radius
- * @returns Map from node ID to position
- */
-function calculateCircularPositions(
-  fragment: Fragment,
-  perturbation: number,
-  radius: number
-): Record<NodeId, Position> {
-  
-  const angleStep = (2 * Math.PI) / fragment.length;
-  const positions: Record<NodeId, Position> = {};
-  
-  fragment.forEach((nodeId, index) => {
-    const angle = (index + perturbation) * angleStep;
-    positions[nodeId] = {
-      x: radius * Math.cos(angle),
-      y: radius * Math.sin(angle)
-    };
-  });
-  
-  return positions;
-}
-
-/**
- * Generates horizontal constraints (left-of or x-alignment) between two nodes.
- */
-function generateHorizontalConstraints(
-  node1: NodeId,
-  node2: NodeId,
-  pos1: Position,
-  pos2: Position,
-  minSeparation: number
-): PositionalConstraint[] {
-  
-  const tolerance = 1e-6;
-  const deltaX = pos1.x - pos2.x;
-  
-  if (Math.abs(deltaX) <= tolerance) {
-    // Nodes are vertically aligned
-    return [{
-      type: 'align-x',
-      node1,
-      node2
-    }];
-  } else if (deltaX > tolerance) {
-    // node1 is to the right of node2
-    return [{
-      type: 'left',
-      node1: node2,
-      node2: node1,
-      minDistance: minSeparation
-    }];
-  } else {
-    // node1 is to the left of node2
-    return [{
-      type: 'left',
-      node1: node1,
-      node2: node2,
-      minDistance: minSeparation
-    }];
-  }
-}
-
-/**
- * Generates vertical constraints (above or y-alignment) between two nodes.
- */
-function generateVerticalConstraints(
-  node1: NodeId,
-  node2: NodeId,
-  pos1: Position,
-  pos2: Position,
-  minSeparation: number
-): PositionalConstraint[] {
-  
-  const tolerance = 1e-6;
-  const deltaY = pos1.y - pos2.y;
-  
-  if (Math.abs(deltaY) <= tolerance) {
-    // Nodes are horizontally aligned
-    return [{
-      type: 'align-y',
-      node1,
-      node2
-    }];
-  } else if (deltaY > tolerance) {
-    // node1 is above node2
-    return [{
-      type: 'top',
-      node1: node2,
-      node2: node1,
-      minDistance: minSeparation
-    }];
-  } else {
-    // node1 is below node2
-    return [{
-      type: 'top',
-      node1: node1,
-      node2: node2,
-      minDistance: minSeparation
-    }];
-  }
-}
-
-/**
- * Semantic interpretation: A cyclic constraint is satisfied if ANY of its
- * generated constraint sets is satisfiable by the constraint solver.
+ * | CyclicConstraint.clockwise fragments    => translateFragments(fragments, identity)
+ * | CyclicConstraint.counterclockwise fragments => translateFragments(fragments, reverse)
  * 
- * Formally: satisfies(cyclicConstraint) ≡ ∃cs ∈ translateCyclicConstraint(cyclicConstraint) : satisfiable(cs)
- * 
- * This creates a disjunction over all possible perturbations and fragments.
+ * where translateFragments produces:
+ * | Constraint.left a b                 => LeftConstraint(a, b, minDistance)
+ * | Constraint.above a b                => TopConstraint(a, b, minDistance)
+ * | Constraint.horizontally_aligned a b => AlignmentConstraint(a, b, axis: "x")
+ * | Constraint.vertically_aligned a b   => AlignmentConstraint(a, b, axis: "y")
  */
-export function cyclicConstraintSemantics(constraint: CyclicConstraint): string {
+export function leanStyleTranslation(constraint: CyclicConstraint): string {
   return `
-Semantic Interpretation:
+Lean-style Translation:
+
+CyclicConstraint → LayoutConstraint[][]
+
+| CyclicConstraint.clockwise fragments    ⟹ translateFragments(fragments, identity)
+| CyclicConstraint.counterclockwise fragments ⟹ translateFragments(fragments, reverse)
+
+where for each fragment perturbation:
+| Constraint.left a b                 ⟹ LeftConstraint(left: a, right: b, minDistance: ${15})
+| Constraint.above a b                ⟹ TopConstraint(top: a, bottom: b, minDistance: ${15})  
+| Constraint.horizontally_aligned a b ⟹ AlignmentConstraint(node1: a, node2: b, axis: "x")
+| Constraint.vertically_aligned a b   ⟹ AlignmentConstraint(node1: a, node2: b, axis: "y")
+
+Disjunctive Semantics:
+  satisfies(CyclicConstraint) ≡ ∃cs ∈ translateCyclicConstraint(constraint) : satisfiable(cs)
   
-A cyclic constraint C is satisfied iff there exists at least one satisfiable 
-constraint set in its translation:
+This creates a disjunction over all possible circular arrangements.
 
-  satisfies(C) ≡ ∃cs ∈ translateCyclicConstraint(C) : satisfiable(cs)
-
-This creates a disjunction:
-  
-  C ≡ ⋁(cs ∈ translateCyclicConstraint(C)) satisfiable(cs)
-
-Where each constraint set cs represents a specific geometric arrangement 
-(perturbation) of the cyclic relationship.
+Generated ${constraint.fragments.reduce((sum, frag) => sum + frag.length, 0)} constraint sets total.
 `;
 }
 
 /**
- * Example usage and demonstration of the disjunctive semantics:
+ * Example demonstrating the complete translation for a triangle cycle
  */
-export function demonstrateSemantics(): void {
+export function demonstrateTriangleTranslation(): void {
   const cyclicConstraint: CyclicConstraint = {
     direction: 'clockwise',
     fragments: [['A', 'B', 'C']]  // A → B → C → A (cycle)
@@ -254,14 +237,23 @@ export function demonstrateSemantics(): void {
   
   const constraintSets = translateCyclicConstraint(cyclicConstraint);
   
-  console.log(`Generated ${constraintSets.length} constraint sets (disjuncts):`);
+  console.log(`Triangle Cycle Translation:`);
+  console.log(`Input: ${JSON.stringify(cyclicConstraint)}`);
+  console.log(`Generated ${constraintSets.length} perturbations:\n`);
   
   constraintSets.forEach((cs, index) => {
-    console.log(`\nPerturbation ${index}:`);
-    cs.forEach(constraint => {
-      console.log(`  ${constraint.type}: ${constraint.node1} → ${constraint.node2}`);
-    });
+    console.log(`Perturbation ${index}:`);
+    
+    const leftConstraints = cs.filter(c => c.type === 'left') as LeftConstraint[];
+    const topConstraints = cs.filter(c => c.type === 'top') as TopConstraint[];
+    const alignConstraints = cs.filter(c => c.type === 'alignment') as AlignmentConstraint[];
+    
+    leftConstraints.forEach(c => console.log(`  LeftConstraint(${c.left}, ${c.right})`));
+    topConstraints.forEach(c => console.log(`  TopConstraint(${c.top}, ${c.bottom})`));
+    alignConstraints.forEach(c => console.log(`  AlignmentConstraint(${c.node1}, ${c.node2}, ${c.axis})`));
+    
+    console.log('');
   });
   
-  console.log(cyclicConstraintSemantics(cyclicConstraint));
+  console.log(leanStyleTranslation(cyclicConstraint));
 }

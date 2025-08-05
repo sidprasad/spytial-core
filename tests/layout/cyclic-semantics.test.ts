@@ -8,10 +8,10 @@
 import { describe, it, expect } from 'vitest';
 import { 
   translateCyclicConstraint, 
-  cyclicConstraintSemantics,
-  demonstrateSemantics,
+  leanStyleTranslation,
+  demonstrateTriangleTranslation,
   type CyclicConstraint,
-  type PositionalConstraint 
+  type LayoutConstraint 
 } from '../../src/layout/cyclic-semantics';
 
 describe('Cyclic Constraint Semantics', () => {
@@ -59,11 +59,11 @@ describe('Cyclic Constraint Semantics', () => {
       
       const result = translateCyclicConstraint(constraint);
       
-      // For 3 nodes, we expect constraints between all pairs (3 choose 2 = 3 pairs)
+      // For 3 nodes, we expect constraints between all ordered pairs (3×2 = 6 ordered pairs)
       // Each pair generates 2 constraints (horizontal + vertical)
-      // So we expect 6 constraints per perturbation
+      // So we expect 12 constraints per perturbation
       result.forEach(constraintSet => {
-        expect(constraintSet.length).toBe(6);
+        expect(constraintSet.length).toBe(12);
       });
     });
     
@@ -92,7 +92,7 @@ describe('Cyclic Constraint Semantics', () => {
       };
       
       const result = translateCyclicConstraint(constraint);
-      const validTypes = ['left', 'top', 'align-x', 'align-y'];
+      const validTypes = ['left', 'top', 'alignment'];
       
       result.forEach(constraintSet => {
         constraintSet.forEach(c => {
@@ -115,6 +115,61 @@ describe('Cyclic Constraint Semantics', () => {
             expect(c.minDistance).toBeDefined();
             expect(c.minDistance).toBeGreaterThan(0);
           }
+        });
+      });
+    });
+    
+    it('should generate proper LeftConstraint structure', () => {
+      const constraint: CyclicConstraint = {
+        direction: 'clockwise',
+        fragments: [['A', 'B', 'C']]
+      };
+      
+      const result = translateCyclicConstraint(constraint);
+      
+      result.forEach(constraintSet => {
+        const leftConstraints = constraintSet.filter(c => c.type === 'left');
+        leftConstraints.forEach(c => {
+          expect(c).toHaveProperty('left');
+          expect(c).toHaveProperty('right');
+          expect(c).toHaveProperty('minDistance');
+        });
+      });
+    });
+    
+    it('should generate proper TopConstraint structure', () => {
+      const constraint: CyclicConstraint = {
+        direction: 'clockwise',
+        fragments: [['A', 'B', 'C']]
+      };
+      
+      const result = translateCyclicConstraint(constraint);
+      
+      result.forEach(constraintSet => {
+        const topConstraints = constraintSet.filter(c => c.type === 'top');
+        topConstraints.forEach(c => {
+          expect(c).toHaveProperty('top');
+          expect(c).toHaveProperty('bottom');
+          expect(c).toHaveProperty('minDistance');
+        });
+      });
+    });
+    
+    it('should generate proper AlignmentConstraint structure', () => {
+      const constraint: CyclicConstraint = {
+        direction: 'clockwise',
+        fragments: [['A', 'B', 'C']]
+      };
+      
+      const result = translateCyclicConstraint(constraint);
+      
+      result.forEach(constraintSet => {
+        const alignConstraints = constraintSet.filter(c => c.type === 'alignment');
+        alignConstraints.forEach(c => {
+          expect(c).toHaveProperty('axis');
+          expect(c).toHaveProperty('node1');
+          expect(c).toHaveProperty('node2');
+          expect(['x', 'y']).toContain(c.axis);
         });
       });
     });
@@ -165,12 +220,12 @@ describe('Cyclic Constraint Semantics', () => {
       
       const result = translateCyclicConstraint(constraint);
       
-      // Two nodes should generate 2 perturbations
+      // Two nodes should generate 2 perturbations, but no constraints (per implementation)
       expect(result).toHaveLength(2);
       
-      // Each perturbation should have 2 constraints (horizontal + vertical)
+      // Each perturbation should have 0 constraints (two-node fragments return empty)
       result.forEach(constraintSet => {
-        expect(constraintSet).toHaveLength(2);
+        expect(constraintSet).toHaveLength(0);
       });
     });
     
@@ -188,25 +243,27 @@ describe('Cyclic Constraint Semantics', () => {
     
   });
   
-  describe('Disjunctive Semantics', () => {
+  describe('Lean-Style Translation', () => {
     
-    it('should provide semantic interpretation', () => {
+    it('should provide lean-style translation description', () => {
       const constraint: CyclicConstraint = {
         direction: 'clockwise',
         fragments: [['A', 'B', 'C']]
       };
       
-      const semantics = cyclicConstraintSemantics(constraint);
+      const translation = leanStyleTranslation(constraint);
       
-      expect(semantics).toContain('disjunction');
-      expect(semantics).toContain('satisfies');
-      expect(semantics).toContain('perturbation');
+      expect(translation).toContain('LeftConstraint');
+      expect(translation).toContain('TopConstraint');
+      expect(translation).toContain('AlignmentConstraint');
+      expect(translation).toContain('satisfies');
+      expect(translation).toContain('disjunction');
     });
     
-    it('should demonstrate semantics without errors', () => {
+    it('should demonstrate triangle translation without errors', () => {
       // This should run without throwing errors
       expect(() => {
-        demonstrateSemantics();
+        demonstrateTriangleTranslation();
       }).not.toThrow();
     });
     
@@ -228,8 +285,16 @@ describe('Cyclic Constraint Semantics', () => {
       result.forEach(constraintSet => {
         const involvedNodes = new Set();
         constraintSet.forEach(c => {
-          involvedNodes.add(c.node1);
-          involvedNodes.add(c.node2);
+          if (c.type === 'left') {
+            involvedNodes.add(c.left);
+            involvedNodes.add(c.right);
+          } else if (c.type === 'top') {
+            involvedNodes.add(c.top);
+            involvedNodes.add(c.bottom);
+          } else if (c.type === 'alignment') {
+            involvedNodes.add(c.node1);
+            involvedNodes.add(c.node2);
+          }
         });
         expect(involvedNodes).toEqual(expectedNodes);
       });
