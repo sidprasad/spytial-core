@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Python Input REPL Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .demo-section {
+            margin-bottom: 30px;
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        .demo-title {
+            font-size: 24px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .demo-description {
+            color: #666;
+            margin-bottom: 15px;
+            line-height: 1.6;
+        }
+        .container {
+            height: 400px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+        }
+        .status {
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 4px;
+            background-color: #e3f2fd;
+            border: 1px solid #2196f3;
+        }
+        .code-example {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 4px;
+            border-left: 4px solid #4CAF50;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            white-space: pre-line;
+        }
+    </style>
+</head>
+<body>
+    <h1>🐍 Python Input REPL Demo for CnD-Core</h1>
+    
+    <p>This page demonstrates the new Python input functionality added to cnd-core. The Python REPL provides familiar Python syntax for creating and manipulating data instances.</p>
+    
+    <div class="demo-section">
+        <div class="demo-title">1. Basic Python REPL (No External Evaluator)</div>
+        <div class="demo-description">
+            A basic Python REPL that can handle simple assignments and primitive values without requiring an external Python runtime.
+        </div>
+        <div id="basic-python-repl" class="container">
+            Basic Python REPL will be mounted here
+        </div>
+        <div class="status">
+            Status: ⚡ Ready - Try commands like: <code>x = 1</code>, <code>alice = "Alice"</code>, <code>alice:Person</code>
+        </div>
+    </div>
+
+    <div class="demo-section">
+        <div class="demo-title">2. Enhanced Python REPL (With Pyodide)</div>
+        <div class="demo-description">
+            An enhanced Python REPL powered by Pyodide that supports full Python language features including complex expressions, data structures, and object creation.
+        </div>
+        <div id="enhanced-python-repl" class="container">
+            Enhanced Python REPL will be mounted here
+        </div>
+        <div class="status" id="pyodide-status">
+            Status: 🔄 Loading Pyodide... (this may take a moment)
+        </div>
+    </div>
+
+    <div class="demo-section">
+        <div class="demo-title">3. Python Commands Overview</div>
+        <div class="demo-description">
+            Here are some example commands you can try in the Python REPL:
+        </div>
+        <div class="code-example">
+<strong>Basic assignments:</strong>
+x = 1
+alice = "Alice"
+my_list = [1, 2, 3]
+is_active = True
+
+<strong>Object creation (with Pyodide):</strong>
+class Person:
+    def __init__(self, name, age):
+        self.name = name
+        self.age = age
+
+alice = Person("Alice", 25)
+bob = Person("Bob", 30)
+
+<strong>Data structures:</strong>
+numbers = list(range(10))
+data = {"users": ["Alice", "Bob"], "count": 2}
+
+<strong>Utility commands:</strong>
+info        # Show current instance status
+reify       # Generate Python constructor notation
+clear       # Clear the instance
+help        # Show available commands
+        </div>
+    </div>
+
+    <!-- Load CnD-Core library (in a real setup, this would be the built library) -->
+    <script>
+        // Mock CnD-Core library for demonstration
+        // In a real implementation, you would load the actual cnd-core library
+        console.log('This is a demonstration of Python REPL functionality.');
+        console.log('In a real setup, you would:');
+        console.log('1. Load the cnd-core library with Python support');
+        console.log('2. Optionally load Pyodide for enhanced Python support');
+        console.log('3. Mount the Python REPL components');
+        
+        // Simulate mounting the basic Python REPL
+        document.getElementById('basic-python-repl').innerHTML = `
+            <div style="text-align: center; color: #666;">
+                <p>📝 Basic Python REPL Component</p>
+                <p><small>In a real implementation, this would be the PythonReplInterface component</small></p>
+                <div style="background: #fff; padding: 10px; border-radius: 4px; margin: 10px; text-align: left; font-family: monospace; border: 1px solid #ddd;">
+                    > x = 1<br>
+                    ✅ Assigned x = 1 (type: int)<br>
+                    > alice = "Alice"<br>
+                    ✅ Assigned alice = "Alice" (type: str)<br>
+                    > _
+                </div>
+            </div>
+        `;
+        
+        // Simulate Pyodide loading
+        let loadingDots = 0;
+        const updatePyodideStatus = () => {
+            loadingDots = (loadingDots + 1) % 4;
+            const dots = '.'.repeat(loadingDots);
+            document.getElementById('pyodide-status').innerHTML = 
+                `Status: 🔄 Loading Pyodide${dots} (this may take a moment)`;
+        };
+        
+        const pyodideInterval = setInterval(updatePyodideStatus, 500);
+        
+        // Simulate successful Pyodide load after 3 seconds
+        setTimeout(() => {
+            clearInterval(pyodideInterval);
+            document.getElementById('pyodide-status').innerHTML = 
+                'Status: ✅ Pyodide loaded - Try advanced commands like: <code>class TreeNode: pass</code>, <code>[1, 2, 3]</code>';
+            
+            document.getElementById('enhanced-python-repl').innerHTML = `
+                <div style="text-align: center; color: #666;">
+                    <p>🐍 Enhanced Python REPL Component</p>
+                    <p><small>In a real implementation, this would use Pyodide for full Python support</small></p>
+                    <div style="background: #fff; padding: 10px; border-radius: 4px; margin: 10px; text-align: left; font-family: monospace; border: 1px solid #ddd;">
+                        > class Person:<br>
+                        ...     def __init__(self, name):<br>
+                        ...         self.name = name<br>
+                        ✅ Python expression evaluated successfully<br>
+                        > alice = Person("Alice")<br>
+                        ✅ Assigned alice = Person(name="Alice")<br>
+                        > _
+                    </div>
+                </div>
+            `;
+        }, 3000);
+    </script>
+
+    <div style="margin-top: 40px; padding: 20px; background-color: #f5f5f5; border-radius: 8px;">
+        <h3>🔧 Implementation Notes</h3>
+        <p>This demo page shows the <strong>concept</strong> of the Python REPL functionality. The actual implementation includes:</p>
+        <ul>
+            <li><strong>PythonDataInstance</strong>: Complete data instance implementation for Python objects</li>
+            <li><strong>PythonReplInterface</strong>: React component with Python-specific parsers</li>
+            <li><strong>External Evaluator Support</strong>: Integration with Pyodide, Brython, or other web Python runtimes</li>
+            <li><strong>Reification</strong>: Convert data instances back to Python constructor notation</li>
+            <li><strong>Event System</strong>: Real-time synchronization with visualization components</li>
+        </ul>
+        <p>To use this in a real project, you would:</p>
+        <ol>
+            <li>Install and build the cnd-core library with Python support</li>
+            <li>Include Pyodide or another web Python runtime (optional but recommended)</li>
+            <li>Use <code>CnDCore.mountPythonRepl()</code> to mount the Python REPL component</li>
+            <li>Set up event listeners for instance changes and visualization updates</li>
+        </ol>
+    </div>
+</body>
+</html>
