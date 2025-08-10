@@ -167,6 +167,8 @@ directives:
   /** Setup and Teardown */
 
   beforeEach(() => {
+    // Clear document body to avoid multiple elements with same ID
+    document.body.innerHTML = '';
     vi.clearAllMocks();
     mountComponent();
   })
@@ -264,6 +266,52 @@ directives:
       // Call the function to get the current CND spec in No Code View
       const currentSpec = await import('../webcola-demo/react-component-integration').then(m => m.DataAPI.getCurrentCndSpec());
       expect(currentSpec).not.toBe(testYaml);
+    })
+
+  })
+
+  describe('Default hideDisconnectedBuiltIns directive', () => {
+
+    it('should mount with hideDisconnectedBuiltIns directive enabled by default when no config is provided', async () => {
+      // The component was mounted in beforeEach without config
+      // Check that the default YAML includes the hideDisconnectedBuiltIns directive
+      const testContainer = screen.getByTestId('test-cnd-layout-interface') as HTMLElement;
+      const textarea = within(testContainer).getByRole('textbox') as HTMLTextAreaElement;
+      
+      // Default YAML should contain the hideDisconnectedBuiltIns directive
+      expect(textarea.value).toContain('directives:');
+      expect(textarea.value).toContain('- flag: hideDisconnectedBuiltIns');
+    })
+
+    it('should allow user config to override the default hideDisconnectedBuiltIns directive', async () => {
+      // Clear the existing component
+      document.body.innerHTML = '';
+      
+      // Create a new container with custom config
+      const container = document.createElement('div');
+      container.setAttribute('id', 'test-custom-config');
+      container.setAttribute('data-testid', 'test-custom-config');
+      document.body.appendChild(container);
+
+      const customYaml = `constraints:
+- orientation:
+    selector: custom
+    directions:
+      - right`;
+
+      act(() => {
+        mountCndLayoutInterface('test-custom-config', {
+          initialYamlValue: customYaml,
+          initialIsNoCodeView: false  // Explicitly set to Code View to see textarea
+        })
+      })
+
+      // Verify the custom YAML is used instead of default
+      const customContainer = screen.getByTestId('test-custom-config') as HTMLElement;
+      const customTextarea = within(customContainer).getByRole('textbox') as HTMLTextAreaElement;
+      
+      expect(customTextarea.value).toBe(customYaml);
+      expect(customTextarea.value).not.toContain('hideDisconnectedBuiltIns');
     })
 
   })

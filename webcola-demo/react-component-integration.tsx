@@ -743,15 +743,21 @@ const ReplWithVisualizationWrapper: React.FC<{ config?: ReplWithVisualizationMou
  * Mount CndLayoutInterface component into specified container
  * 
  * @param containerId - DOM element ID to mount into (default: 'webcola-cnd-container')
+ * @param config - Configuration options (default includes hideDisconnectedBuiltIns directive)
  * @returns Boolean indicating success
  * 
  * @example
  * ```javascript
- * // Mount into default container
+ * // Mount into default container with hideDisconnectedBuiltIns enabled by default
  * CnDCore.mountLayoutInterface();
  * 
  * // Mount into custom container
  * CnDCore.mountLayoutInterface('my-custom-container');
+ * 
+ * // Mount with custom initial YAML
+ * CnDCore.mountLayoutInterface('container', { 
+ *   initialYamlValue: 'constraints:\n  - orientation: ...' 
+ * });
  * ```
  * 
  * @public
@@ -767,29 +773,42 @@ export function mountCndLayoutInterface(
     return false;
   }
 
+  // Default YAML with hideDisconnectedBuiltIns directive enabled
+  const defaultYaml = `directives:
+  - flag: hideDisconnectedBuiltIns`;
+
+  // Create default config with hideDisconnectedBuiltIns enabled
+  const defaultConfig: CndLayoutMountConfig = {
+    initialYamlValue: defaultYaml,
+    ...config  // User-provided config overrides defaults
+  };
+
+  // Use user config if provided, otherwise use default
+  const finalConfig = config || defaultConfig;
+
   // TODO: Write an actual YAML validator
   function validateYamlValue(yaml: string): boolean {
     return true;
   }
 
-  if (config?.initialYamlValue && !validateYamlValue(config.initialYamlValue)) {
+  if (finalConfig?.initialYamlValue && !validateYamlValue(finalConfig.initialYamlValue)) {
     console.error('Invalid YAML value provided in configuration');
     return false;
   }
 
   try {
     const root = createRoot(container);
-    root.render(<CndLayoutInterfaceWrapper config={config} />);
+    root.render(<CndLayoutInterfaceWrapper config={finalConfig} />);
 
     if (config) {
       console.log(`✅ CnD Layout Interface mounted to #${containerId} with initial config:`, {
-        yamlValue: config.initialYamlValue ? `${config.initialYamlValue.length} characters` : 'none',
-        isNoCodeView: config.initialIsNoCodeView ?? 'default',
-        constraints: config.initialConstraints?.length ?? 0,
-        directives: config.initialDirectives?.length ?? 0
+        yamlValue: finalConfig.initialYamlValue ? `${finalConfig.initialYamlValue.length} characters` : 'none',
+        isNoCodeView: finalConfig.initialIsNoCodeView ?? 'default',
+        constraints: finalConfig.initialConstraints?.length ?? 0,
+        directives: finalConfig.initialDirectives?.length ?? 0
       });
     } else {
-      console.log(`✅ CnD Layout Interface mounted to #${containerId}`);
+      console.log(`✅ CnD Layout Interface mounted to #${containerId} with default hideDisconnectedBuiltIns directive`);
     }
     return true;
   } catch (error) {
