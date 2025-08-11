@@ -50,14 +50,21 @@ interface GroupOverlapError extends ConstraintError {
 
 export { type PositionalConstraintError, type GroupOverlapError }
 
+
+// TODO: 
 export function orientationConstraintToString(constraint: LayoutConstraint) {
+    const nodeLabel = (node: LayoutNode) =>
+        node.label && node.label !== node.id
+            ? `${node.label} (${node.id})`
+            : node.id;
+
     if (isTopConstraint(constraint)) {
         let tc = constraint as TopConstraint;
-        return `${tc.top.id} is above ${tc.bottom.id}`;
+        return `${nodeLabel(tc.top)} is above ${nodeLabel(tc.bottom)}`;
     }
     else if (isLeftConstraint(constraint)) {
         let lc = constraint as LeftConstraint;
-        return `${lc.left.id} is to the left of ${lc.right.id}`;
+        return `${nodeLabel(lc.left)} is to the left of ${nodeLabel(lc.right)}`;
     }
     else if (isAlignmentConstraint(constraint)) {
         let ac = constraint as AlignmentConstraint;
@@ -66,13 +73,13 @@ export function orientationConstraintToString(constraint: LayoutConstraint) {
         let node2 = ac.node2;
 
         if (axis === 'x') {
-            return `${node1.id} is vertically aligned with ${node2.id}`;
+            return `${nodeLabel(node1)} is vertically aligned with ${nodeLabel(node2)}`;
         }
         else if (axis === 'y') {
-            return `${node1.id} is horizontally aligned with ${node2.id}`;
+            return `${nodeLabel(node1)} is horizontally aligned with ${nodeLabel(node2)}`;
         }
 
-        return `${node1.id} is aligned with ${node2.id} along the ${axis} axis`;
+        return `${nodeLabel(node1)} is aligned with ${nodeLabel(node2)} along the ${axis} axis`;
     }
     return `Unknown constraint type: ${constraint}`;
 }
@@ -164,17 +171,24 @@ class ConstraintValidator {
                     const overlappingNodes: LayoutNode[] = intersection
                         .map(nodeId => this.nodes.find(n => n.id === nodeId))
                         .filter((node): node is LayoutNode => node !== undefined);
-                    
+
+                    // Format intersection with labels if they differ from IDs
+                    const intersectionDisplay = overlappingNodes.map(node =>
+                        node.label && node.label !== node.id
+                            ? `${node.label} (${node.id})`
+                            : node.id
+                    );
+
                     const groupOverlapError: GroupOverlapError = {
                         name: 'GroupOverlapError',
                         type: 'group-overlap',
-                        message: `Groups <b>"${group.name}"</b> and <b>"${otherGroup.name}"</b> overlap with nodes: ${intersection.join(', ')}`,
+                        message: `Groups <b>"${group.name}"</b> and <b>"${otherGroup.name}"</b> overlap with nodes: ${intersectionDisplay.join(', ')}`,
                         group1: group,
                         group2: otherGroup,
                         overlappingNodes: overlappingNodes
                     };
                     
-                    return groupOverlapError; // ✅ Properly returns from the method
+                    return groupOverlapError; 
                 }
             }
         }
