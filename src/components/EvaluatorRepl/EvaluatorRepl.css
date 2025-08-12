@@ -5,7 +5,7 @@
 #repl-output {
   font-family: monospace; 
   white-space: pre-wrap; 
-  max-height: 60vh; 
+  max-height: 80vh; 
   overflow-y: auto;
 }
 
