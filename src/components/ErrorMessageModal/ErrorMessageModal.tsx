@@ -95,7 +95,7 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
 
       // Add the source constraint itself
       if (!copy.has(messages.conflictingSourceConstraint)) {
-        copy.set(messages.conflictingSourceConstraint, new Set(messages.conflictingConstraint));
+        copy.set(messages.conflictingSourceConstraint, new Set([messages.conflictingConstraint]));
       } else {
         copy.get(messages.conflictingSourceConstraint)!.add(messages.conflictingConstraint);
       }
