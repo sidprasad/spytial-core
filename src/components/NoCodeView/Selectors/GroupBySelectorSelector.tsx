@@ -35,7 +35,7 @@ export const GroupBySelectorSelector: React.FC<GroupBySelectorSelectorProps> = (
         <input
           type="text"
           name="selector"
-          className="form-control"
+          className="form-control code-input"
           defaultValue={props.constraintData.params.selector as string || ''}
           onChange={handleInputChange}
           required

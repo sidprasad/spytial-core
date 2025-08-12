@@ -46,7 +46,7 @@ export const OrientationSelector: React.FC<OrientationSelectorProps> = (props: O
         <input
           type="text"
           name="selector"
-          className="form-control"
+          className="form-control code-input"
           defaultValue={props.constraintData.params.selector as string || ''}
           onChange={handleInputChange}
           required

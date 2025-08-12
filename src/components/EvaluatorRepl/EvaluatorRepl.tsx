@@ -9,17 +9,18 @@ interface EvaluatorReplProps {
   instanceNumber: number
 }
 
-export const EvaluatorRepl: React.FC<EvaluatorReplProps> = ({ evaluator, instanceNumber }) => {
+type EvaluatorExecution = [string, string]
 
+export const EvaluatorRepl: React.FC<EvaluatorReplProps> = ({ evaluator, instanceNumber }) => {
   const [textInput, setTextInput] = React.useState('');
-  const [evaluatorOutput, setEvaluatorOutput] = React.useState<string[]>([]);
+  const [evaluatorOutput, setEvaluatorOutput] = React.useState<EvaluatorExecution[]>([]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       // Evaluate the input expression
       const output = evaluator.evaluate(textInput, { instanceIndex: instanceNumber });
-      setEvaluatorOutput(prev => [output.prettyPrint(), ...prev]);
+      setEvaluatorOutput(prev => [[textInput, output.prettyPrint()], ...prev]);
       setTextInput(''); // Clear input after evaluation
     }
   }
@@ -27,6 +28,7 @@ export const EvaluatorRepl: React.FC<EvaluatorReplProps> = ({ evaluator, instanc
   return (
     <div id="evaluator-repl-container">
       <input 
+        className="code-input"
         id="evaluator-input" 
         type="text" 
         placeholder="Enter expression to evaluate..." 
@@ -35,8 +37,11 @@ export const EvaluatorRepl: React.FC<EvaluatorReplProps> = ({ evaluator, instanc
         onKeyDown={handleKeyDown}
       />
       <div id="repl-output">
-        {evaluatorOutput.map((line, index) => (
-          <p key={index} className="repl-output-line">{line}</p>
+        {evaluatorOutput.map(([textInput, output], index) => (
+          <React.Fragment key={index}>
+            <p className="repl-output-line">{`> ${textInput}`}</p>
+            <p className="repl-output-line">{output}</p>
+          </React.Fragment>
         ))}
       </div>
     </div>
