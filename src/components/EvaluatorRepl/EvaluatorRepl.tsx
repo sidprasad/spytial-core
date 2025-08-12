@@ -15,6 +15,12 @@ export const EvaluatorRepl: React.FC<EvaluatorReplProps> = ({ evaluator, instanc
   const [textInput, setTextInput] = React.useState('');
   const [evaluatorOutput, setEvaluatorOutput] = React.useState<EvaluatorExecution[]>([]);
 
+  React.useEffect(() => {
+    // Clear input and output when evaluator or instance number changes
+    setTextInput('');
+    setEvaluatorOutput([]);
+  }, [evaluator, instanceNumber]);
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
