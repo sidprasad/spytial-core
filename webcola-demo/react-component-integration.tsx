@@ -21,6 +21,8 @@ import { PyretDataInstance } from '../src/data-instance/pyret/pyret-data-instanc
 import { PyretEvaluator } from '../src/components/ReplInterface/parsers/PyretExpressionParser';
 import { CombinedInputComponent, CombinedInputConfig } from '../src/components/CombinedInput/CombinedInputComponent';
 import { mountCombinedInput, CombinedInputMountConfig } from '../src/components/CombinedInput/mounting';
+import { EvaluatorRepl } from '../src/components/EvaluatorRepl/EvaluatorRepl';
+import { IEvaluator } from '../src/evaluators';
 
 /**
  * Configuration options for mounting CndLayoutInterface
@@ -1054,6 +1056,29 @@ export function mountErrorMessageModal(containerId: string = 'error-messages'): 
 }
 
 /**
+ * Mount the EvaluatorRepl component into specified container
+ * @param containerId - DOM element ID to mount into
+ */
+export function mountEvaluatorRepl(containerId: string, evaluator: IEvaluator, instanceNumber: number): boolean {
+  const container = document.getElementById(containerId);
+  
+  if (!container) {
+    console.error(`Evaluator REPL: Container '${containerId}' not found`);
+    return false;
+  }
+
+  try {
+    const root = createRoot(container);
+    root.render(<EvaluatorRepl evaluator={evaluator} instanceNumber={instanceNumber}/>);
+    console.log(`✅ Evaluator REPL mounted to #${containerId}`);
+    return true;
+  } catch (error) {
+    console.error('Failed to mount Evaluator REPL:', error);
+    return false;
+  }
+}
+
+/**
  * Mount all CnD components into their default containers
  * Convenience function for quick setup
  * 
@@ -1394,6 +1419,7 @@ export const CnDCore = {
   mountInstanceBuilder, 
   mountErrorMessageModal,
   mountAllComponents,
+  mountEvaluatorRepl,
   // Pyret REPL mounting functions
   mountPyretRepl,
   mountReplWithVisualization,
@@ -1424,6 +1450,7 @@ if (typeof window !== 'undefined') {
   (window as any).mountInstanceBuilder = mountInstanceBuilder;
   (window as any).mountErrorMessageModal = mountErrorMessageModal;
   (window as any).mountIntegratedComponents = mountAllComponents;
+  (window as any).mountEvaluatorRepl = mountEvaluatorRepl;
   
   // Pyret REPL functions for legacy compatibility
   (window as any).mountPyretRepl = mountPyretRepl;

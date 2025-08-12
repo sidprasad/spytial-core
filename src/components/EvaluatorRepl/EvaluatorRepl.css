@@ -1,0 +1,6 @@
+#repl-output {
+  font-family: monospace; 
+  white-space: pre-wrap; 
+  max-height: 60vh; 
+  overflow-y: auto;
+}
