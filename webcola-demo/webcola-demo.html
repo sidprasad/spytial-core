@@ -141,6 +141,7 @@
                 <label for="webcola-alloy">Alloy XML Instance:</label>
                 <textarea id="webcola-alloy" placeholder="Paste your Alloy XML instance here..."></textarea>
             </div>
+            <div id="evaluator-repl-mount"></div>
             <div id="status" class="status info">Ready to load Alloy graph...</div>
             <div id="error-messages"></div>
             <div id="graph-container-wrapper">
@@ -254,9 +255,6 @@
 
                 // Get CND specification from input field
                 const cndSpec = getCurrentCNDSpec() || "";
-                // if (!cndSpec) {
-                //     throw new Error('Please enter a CND layout specification');
-                // }
 
                 console.log('Using Alloy XML:', alloyXml.substring(0, 200) + '...');
                 console.log('Using CND Spec:', cndSpec.substring(0, 200) + '...');
@@ -289,6 +287,13 @@
                 forgeEvaluator.initialize(evaluationContext);
 
                 console.log('Created ForgeEvaluator:', forgeEvaluator);
+
+                // NOTE: Mount Evaluator REPL
+                if (window.mountEvaluatorRepl) {
+                    window.mountEvaluatorRepl('evaluator-repl-mount', forgeEvaluator, 0);
+                } else {
+                    console.warn('Evaluator REPL mount function not available. Skipping REPL mount.');
+                }
 
                 // Step 3: Parse layout specification
                 updateStatus('Parsing layout specification...', 'info');
