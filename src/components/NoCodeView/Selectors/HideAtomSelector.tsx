@@ -34,7 +34,7 @@ export const HideAtomSelector: React.FC<HideAtomSelectorProps> = (props: HideAto
       <input
         type="text"
         name="selector"
-        className="form-control"
+        className="form-control code-input"
         defaultValue={props.directiveData.params.selector as string || ''}
         onChange={handleInputChange}
         required

@@ -1067,6 +1067,11 @@ export function mountEvaluatorRepl(containerId: string, evaluator: IEvaluator, i
     return false;
   }
 
+  if (!evaluator) {
+    console.error('Evaluator REPL: No evaluator provided');
+    return false;
+  }
+
   try {
     const root = createRoot(container);
     root.render(<EvaluatorRepl evaluator={evaluator} instanceNumber={instanceNumber}/>);

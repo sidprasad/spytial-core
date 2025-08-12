@@ -42,7 +42,7 @@ export const ColorEdgeSelector: React.FC<ColorEdgeSelectorProps> = ({
         <input
           type="text"
           name="selector"
-          className="form-control"
+          className="form-control code-input"
           defaultValue={selector}
           placeholder="Optional: target specific atoms (e.g., Person)"
           onChange={(e) => onUpdate({ params: { ...directiveData.params, selector: e.target.value || undefined } })}

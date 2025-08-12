@@ -44,7 +44,7 @@ export const GroupByFieldSelector: React.FC<GroupByFieldSelectorProps> = (props:
         <input
           type="text"
           name="selector"
-          className="form-control"
+          className="form-control code-input"
           defaultValue={props.constraintData.params.selector as string || ''}
           placeholder="Optional: target specific atoms (e.g., Person)"
           onChange={handleInputChange}
