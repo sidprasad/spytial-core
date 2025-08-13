@@ -23,6 +23,7 @@ import { CombinedInputComponent, CombinedInputConfig } from '../src/components/C
 import { mountCombinedInput, CombinedInputMountConfig } from '../src/components/CombinedInput/mounting';
 import { EvaluatorRepl } from '../src/components/EvaluatorRepl/EvaluatorRepl';
 import { IEvaluator } from '../src/evaluators';
+import { RelationHighlighter } from '../src/components/RelationHighlighter/RelationHighlighter';
 
 /**
  * Configuration options for mounting CndLayoutInterface
@@ -1084,6 +1085,30 @@ export function mountEvaluatorRepl(containerId: string, evaluator: IEvaluator, i
 }
 
 /**
+ * Mount the RelationHighlighter component into specified container.
+ * @param containerId - DOM element ID to mount into
+ * @returns Boolean indicating success
+ */
+export function mountRelationHighlighter(containerId: string, graphElementId: string): boolean {
+  const container = document.getElementById(containerId);
+  
+  if (!container) {
+    console.error(`Relation Highlighter: Container '${containerId}' not found`);
+    return false;
+  }
+
+  try {
+    const root = createRoot(container);
+    root.render(<RelationHighlighter graphElementId={graphElementId}/>);
+    console.log(`✅ Relation Highlighter mounted to #${containerId}`);
+    return true;
+  } catch (error) {
+    console.error('Failed to mount Relation Highlighter:', error);
+    return false;
+  }
+}
+
+/**
  * Mount all CnD components into their default containers
  * Convenience function for quick setup
  * 
@@ -1425,6 +1450,7 @@ export const CnDCore = {
   mountErrorMessageModal,
   mountAllComponents,
   mountEvaluatorRepl,
+  mountRelationHighlighter,
   // Pyret REPL mounting functions
   mountPyretRepl,
   mountReplWithVisualization,
@@ -1456,6 +1482,7 @@ if (typeof window !== 'undefined') {
   (window as any).mountErrorMessageModal = mountErrorMessageModal;
   (window as any).mountIntegratedComponents = mountAllComponents;
   (window as any).mountEvaluatorRepl = mountEvaluatorRepl;
+  (window as any).mountRelationHighlighter = mountRelationHighlighter;
   
   // Pyret REPL functions for legacy compatibility
   (window as any).mountPyretRepl = mountPyretRepl;

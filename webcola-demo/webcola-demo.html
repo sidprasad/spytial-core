@@ -152,6 +152,7 @@
                     </select>
                     <button id="clearGraphButton" onclick="clearGraph()" title="Clear the current graph visualization" aria-label="Clear graph">Clear</button>
                 </div>
+                <div id="relation-highlighter-mount"></div>
                 <!-- Use the webcola-cnd-graph custom element -->
                 <webcola-cnd-graph 
                     id="graph-container"
@@ -479,6 +480,14 @@
                 updateStatus(`Render error: ${error.message}`, 'error');
             }
         }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Mouont the window.mountRelationHighlighter
+            const graphElement = document.getElementById('graph-container');
+            if (graphElement && window.mountRelationHighlighter) {
+                window.mountRelationHighlighter('relation-highlighter-mount', 'graph-container');
+            }
+        });
 
         // Auto-initialize when page loads
         window.addEventListener('load', () => {

@@ -918,6 +918,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
             this.showErrorIcon();
           }
 
+          // Dispatch relations-available event after layout is complete
+          this.dispatchRelationsAvailableEvent();
+
           this.hideLoading();
         });
 
@@ -1862,10 +1865,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
       // Auto-fit viewport to content
       this.fitViewportToContent();
-
-      // Setup relation highlighting (if needed for your use case)
-      this.setupRelationHighlighting();
-
     } catch (error) {
       console.error('Error in edge routing:', error);
       this.showError(`Edge routing failed: ${(error as Error).message}`);
@@ -1988,7 +1987,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       this.gridUpdateLinkLabels(routes, edges);
 
       this.fitViewportToContent();
-      this.setupRelationHighlighting();
+
+      // Dispatch event that relations are available
+      this.dispatchEvent(new Event('relationsAvailable', ));
+
     } catch (e) {
       console.log("Error routing edges in GridRouter");
       console.error(e);
@@ -2500,10 +2502,44 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
-   * Sets up relation highlighting functionality.
+   * Dispatches a custom event when relations become available after layout rendering.
+   * Includes all available relations in the event detail for external listeners.
+   * 
+   * @private
    */
-  private setupRelationHighlighting(): void {
-    if (!this.currentLayout?.links) return;
+  private dispatchRelationsAvailableEvent(): void {
+    // Get all available relations
+    const relations = this.getAllRelations();
+    
+    // Create custom event with comprehensive details
+    const event = new CustomEvent('relations-available', {
+      detail: {
+        relations: relations,           // Yes, include all relations
+        count: relations.length,        // Convenient count property
+        timestamp: Date.now(),          // When the event was created
+        graphId: this.id || 'unknown'   // Which graph instance
+      },
+      bubbles: true,    // Allow event to bubble up the DOM tree
+      cancelable: true  // Allow event to be cancelled by listeners
+    });
+
+    // Dispatch the event from this element
+    this.dispatchEvent(event);
+    
+    console.log('🎯 Dispatched relations-available event:', {
+      relations,
+      count: relations.length
+    });
+  }
+
+  /** Public API for relation highlighting */
+
+  /**
+   * Gets all unique relation names from the current layout.
+   * @returns An array of the set of relation names in the current layout.
+   */
+  public getAllRelations(): string[] {
+    if (!this.currentLayout?.links) return [];
 
     const relNames = new Set(
       this.currentLayout.links
@@ -2512,8 +2548,39 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         .filter(Boolean)
     );
 
-    // This would integrate with your relation list UI if needed
-    console.log('Available relations:', Array.from(relNames));
+    return Array.from(relNames);
+  }
+
+  /**
+   * Highlights all the links or inferred links by its relation name.
+   * @param relName - The name of the relation to highlight
+   * @returns True if the relation was successfully highlighted, false otherwise
+   */
+  public highlightRelation(relName: string): boolean {
+    if (!this.currentLayout?.links) return false;
+
+    (this.svgLinkGroups as d3.Selection<SVGGElement, any, any, unknown>)
+      .filter((d) => d.relName === relName && !this.isAlignmentEdge(d))
+      .selectAll('path')
+      .classed('highlighted', true);
+    
+    return true;
+  }
+
+  /**
+   * Clears highlighting of the given relation name.
+   * @param relName - The name of the relation to clear highlighting for
+   * @returns True if the relation highlighting was successfully cleared, false otherwise
+   */
+  public clearHighlightRelation(relName: string): boolean {
+    if (!this.currentLayout?.links) return false;
+
+    (this.svgLinkGroups as d3.Selection<SVGGElement, any, any, unknown>)
+      .filter((d) => d.relName === relName && !this.isAlignmentEdge(d))
+      .selectAll('path')
+      .classed('highlighted', false);
+    
+    return true;
   }
 
   /**
@@ -2591,6 +2658,16 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         stroke-dasharray: 2,2;
         fill: none;
         opacity: 0.6;
+      }
+
+      .link.highlighted {
+        stroke: black; /* Change this to your desired highlight color */
+        stroke-width: 3px; /* Change this to your desired highlight width */
+      }
+
+      .inferredLink.highlighted {
+        stroke:#666666; /* Change this to your desired highlight color */
+        stroke-width: 3px; /* Change this to your desired highlight width */
       }
       
       .group {
