@@ -74,11 +74,11 @@ export interface ReplWithVisualizationMountConfig {
   style?: React.CSSProperties;
 }
 
-/****
- * 
- * STATE MANAGERS
- * 
- */
+/*******************************************************
+ *                                                     *
+ *                   STATE MANAGERS                    *
+ *                                                     *
+ *******************************************************/
 
 
 /**
@@ -408,9 +408,20 @@ export class PyretReplStateManager {
  */
 export const globalErrorManager = new ErrorStateManager();
 
-/****
- * REACT COMPONENT WRAPPERS
- */
+
+
+
+
+/*******************************************************
+ *                                                     *
+ *             REACT COMPONENT WRAPPERS                *
+ *                                                     *
+ *******************************************************/
+
+
+
+
+
 
 /**
  * React wrapper component for CndLayoutInterface
@@ -736,11 +747,19 @@ const ReplWithVisualizationWrapper: React.FC<{ config?: ReplWithVisualizationMou
   );
 };
 
-/****
- * 
- * PUBLIC MOUNTING FUNCTIONS
- * 
- */
+
+
+
+
+/*******************************************************
+ *                                                     *
+ *             PUBLIC MOUNTING FUNCTIONS               *
+ *                                                     *
+ *******************************************************/
+
+
+
+
 
 /**
  * Mount CndLayoutInterface component into specified container
@@ -1231,9 +1250,21 @@ export function mountAllComponentsWithPyret(): {
   return results;
 }
 
-/****
- * ERROR MANAGEMENT API
- */
+
+
+
+
+
+
+/*******************************************************
+ *                                                     *
+ *                    ERROR API                        *
+ *                                                     *
+ *******************************************************/
+
+
+
+
 
 /**
  * Error management functions for CDN users
@@ -1306,9 +1337,16 @@ export const ErrorAPI = {
   }
 };
 
-/****
- * DATA ACCESS API  
- */
+
+
+
+/*******************************************************
+ *                                                     *
+ *                    DATA API                         *
+ *                                                     *
+ *******************************************************/
+
+
 
 /**
  * Data access functions for CDN users
@@ -1433,9 +1471,17 @@ export const DataAPI = {
   }
 };
 
-/****
- * GLOBAL EXPOSURE FOR CDN
- */
+
+
+
+
+/*******************************************************
+ *                                                     *
+ *               GLOBAL CnDCore OBJECT                 *
+ *                                                     *
+ *******************************************************/
+
+
 
 /**
  * Global CnDCore object for CDN usage
@@ -1471,6 +1517,18 @@ export const CnDCore = {
   // Direct Pyret utilities for convenience
   PyretDataInstance,
 };
+
+
+
+
+/*******************************************************
+ *                                                     *
+ *                  LEGACY EXPORTS                     *
+ *                                                     *
+ *******************************************************/
+
+
+
 
 // Expose to global scope for legacy usage
 if (typeof window !== 'undefined') {
