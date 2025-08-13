@@ -1241,6 +1241,17 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
             console.error('Error finishing edge creation:', error);
           });
         }
+      })
+    // Show tooltip with node ID only when not in input mode
+      .on('mouseover', function(d: any) {
+          d3.select(this)
+            .append('title')
+            .attr('class', 'node-tooltip')
+            .text(`ID: ${d.id}`);
+        
+      })
+      .on('mouseout', function() {
+        d3.select(this).select('title.node-tooltip').remove();
       });
 
     // Add rectangle backgrounds for nodes
