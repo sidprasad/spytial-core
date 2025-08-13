@@ -98,6 +98,8 @@
   padding: 0;
   max-height: 320px;
   overflow-y: auto;
+  /* Explicitly allow horizontal scroll when content overflows */
+  overflow-x: auto;
 }
 
 /* Individual relation items */
@@ -112,6 +114,10 @@
   user-select: none;
   position: relative;
   background: #ffffff;
+  overflow: hidden;
+  white-space: nowrap;
+  /* Minimum width to prevent excessive shrinking */
+  min-width: 100px;
 }
 
 .relation-item:last-child {
@@ -122,24 +128,14 @@
   background: linear-gradient(90deg, #e3f2fd 0%, #f3e5f5 100%);
   color: #1565c0;
   font-weight: 600;
-  padding-left: 22px;
-  transform: translateX(2px);
-}
-
-.relation-item:hover::before {
-  content: '→';
-  position: absolute;
-  left: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #1976d2;
-  font-weight: bold;
-  font-size: 12px;
+  /* Use left padding increase instead of transform to prevent horizontal scrolling */
+  padding-left: 28px;
+  /* Reduce right padding to maintain consistent width */
+  padding-right: 18px;
 }
 
 .relation-item:active {
   background: linear-gradient(90deg, #bbdefb 0%, #e1bee7 100%);
-  transform: translateX(0px);
 }
 
 /* Scrollbar styling for webkit browsers */
@@ -192,10 +188,12 @@
   .relation-item {
     padding: 14px 18px;
     font-size: 15px; /* Larger touch targets */
+    padding-right: 32px; /* More space for arrow on mobile */
   }
   
   .relation-item:hover {
-    padding-left: 24px;
+    padding-left: 32px;
+    padding-right: 18px;
   }
 }
 
