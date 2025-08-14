@@ -139,7 +139,7 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
   return (
     <div id="error-message-modal" className="mt-3 d-flex flex-column overflow-x-auto p-3 rounded border border-danger border-2">
       <h4 style={{color: 'var(--bs-danger)'}}>Could not produce a diagram</h4>
-      <p>Your instance cannot be visualized with the current CnD spec.</p>
+      <p>Your data cannot be visualized due to the following conflicting constraints.</p>
       {/* Parse/Generic/Group Error Card */}
       {isOtherError && (
         <>

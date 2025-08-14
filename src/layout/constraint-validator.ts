@@ -60,11 +60,11 @@ export function orientationConstraintToString(constraint: LayoutConstraint) {
 
     if (isTopConstraint(constraint)) {
         let tc = constraint as TopConstraint;
-        return `${nodeLabel(tc.top)} is above ${nodeLabel(tc.bottom)}`;
+        return `${nodeLabel(tc.top)} must be above ${nodeLabel(tc.bottom)}`;
     }
     else if (isLeftConstraint(constraint)) {
         let lc = constraint as LeftConstraint;
-        return `${nodeLabel(lc.left)} is to the left of ${nodeLabel(lc.right)}`;
+        return `${nodeLabel(lc.left)} must be to the left of ${nodeLabel(lc.right)}`;
     }
     else if (isAlignmentConstraint(constraint)) {
         let ac = constraint as AlignmentConstraint;
@@ -73,13 +73,13 @@ export function orientationConstraintToString(constraint: LayoutConstraint) {
         let node2 = ac.node2;
 
         if (axis === 'x') {
-            return `${nodeLabel(node1)} is vertically aligned with ${nodeLabel(node2)}`;
+            return `${nodeLabel(node1)} must be vertically aligned with ${nodeLabel(node2)}`;
         }
         else if (axis === 'y') {
-            return `${nodeLabel(node1)} is horizontally aligned with ${nodeLabel(node2)}`;
+            return `${nodeLabel(node1)} must be horizontally aligned with ${nodeLabel(node2)}`;
         }
 
-        return `${nodeLabel(node1)} is aligned with ${nodeLabel(node2)} along the ${axis} axis`;
+        return `${nodeLabel(node1)} must be aligned with ${nodeLabel(node2)} along the ${axis} axis`;
     }
     return `Unknown constraint type: ${constraint}`;
 }
