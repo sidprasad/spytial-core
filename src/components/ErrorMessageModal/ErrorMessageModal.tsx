@@ -159,7 +159,7 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
       {/* (Positional) Constraint Error Cards */}
       { isPositionalError && (
         <>
-          <p>Hover over the conflicting constraints to see the corresponding diagram elements that cannot be visualized. </p>
+          <p id="hover-instructions">Hover over the conflicting constraints to see the corresponding diagram elements that cannot be visualized. </p>
           <div className="constraint-relationship-table">
             <table className="table table-bordered">
               <thead>
