@@ -144,6 +144,7 @@
             <div id="evaluator-repl-mount"></div>
             <div id="status" class="status info">Ready to load Alloy graph...</div>
             <div id="error-messages"></div>
+            <div id="relation-highlighter-mount"></div>
             <div id="graph-container-wrapper">
                 <div id="graph-controls">
                     <select title="Choose the Layout Format" class="form-select form-select-sm" id="layoutFormat" name="layoutFormat" onchange="changeLayoutFormat()" aria-label="Layout format selection">
@@ -152,7 +153,6 @@
                     </select>
                     <button id="clearGraphButton" onclick="clearGraph()" title="Clear the current graph visualization" aria-label="Clear graph">Clear</button>
                 </div>
-                <div id="relation-highlighter-mount"></div>
                 <!-- Use the webcola-cnd-graph custom element -->
                 <webcola-cnd-graph 
                     id="graph-container"

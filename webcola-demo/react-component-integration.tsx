@@ -494,11 +494,6 @@ const CndLayoutInterfaceWrapper: React.FC<{ config?: CndLayoutMountConfig }> = (
   const handleYamlChange = useCallback((newValue: string) => {
     setYamlValue(newValue);
     
-    // ENFORCE CnD constraints on every spec change
-    if ((window as any).updateFromCnDSpec) {
-      (window as any).updateFromCnDSpec();
-    }
-    
     // Dispatch custom event for other listeners
     window.dispatchEvent(new CustomEvent('cnd-spec-changed', { detail: newValue }));
   }, []);
@@ -516,11 +511,6 @@ const CndLayoutInterfaceWrapper: React.FC<{ config?: CndLayoutMountConfig }> = (
    */
   const handleSetConstraints = useCallback((updater: (prev: ConstraintData[]) => ConstraintData[]) => {
     setConstraints(updater);
-    
-    // ENFORCE CnD constraints when constraints change in No-Code view
-    if ((window as any).updateFromCnDSpec) {
-      setTimeout(() => (window as any).updateFromCnDSpec(), 100);
-    }
   }, []);
 
   /**
@@ -528,11 +518,6 @@ const CndLayoutInterfaceWrapper: React.FC<{ config?: CndLayoutMountConfig }> = (
    */
   const handleSetDirectives = useCallback((updater: (prev: DirectiveData[]) => DirectiveData[]) => {
     setDirectives(updater);
-    
-    // ENFORCE CnD constraints when directives change in No-Code view
-    if ((window as any).updateFromCnDSpec) {
-      setTimeout(() => (window as any).updateFromCnDSpec(), 100);
-    }
   }, []);
 
   return (

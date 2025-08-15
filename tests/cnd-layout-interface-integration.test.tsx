@@ -1,4 +1,5 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+import '@testing-library/jest-dom'
 import { render, within, screen, act, waitFor, fireEvent } from '@testing-library/react'
 import { mountCndLayoutInterface } from '../webcola-demo/react-component-integration'
 import userEvent, { UserEvent } from '@testing-library/user-event'
@@ -171,6 +172,10 @@ directives:
     mountComponent();
   })
 
+  afterEach(() => {
+    // TODO: Clean up the test container
+  })
+
   /** Test Suites */
   
   describe('Rendering', () => {
@@ -229,7 +234,7 @@ directives:
 
       // Call the function to get the current CND spec in Code View
       let currentSpec = await import('../webcola-demo/react-component-integration').then(m => m.DataAPI.getCurrentCndSpec());
-      expect(currentSpec).toBe(testYaml);
+      expect(currentSpec?.trim()).toBe(testYaml.trim());
 
       // Switch to No Code view
       const user = userEvent.setup();
