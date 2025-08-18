@@ -2833,7 +2833,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
       /* Error icon positioning - bottom area to avoid header overlap */
       #error-icon {
-        display: none;
         margin: 5px;
         padding: 8px 12px;
         font-size: 16px;
@@ -2851,6 +2850,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         display: flex;
         align-items: center;
         gap: 6px;
+        visibility: hidden; /* Use visibility instead of display */
+      }
+      
+      #error-icon.visible {
+        visibility: visible;
       }
 
       #error-icon::before {
@@ -2864,7 +2868,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         top: 10px;
         right: 10px;
         z-index: 1000;
-        display: flex;
+        display: flex !important; /* Ensure it's always visible */
         flex-direction: column;
         gap: 4px;
         background: rgba(255, 255, 255, 0.95);
@@ -2873,6 +2877,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
         backdrop-filter: blur(4px);
         border: 1px solid rgba(0, 0, 0, 0.1);
+        visibility: visible !important; /* Ensure it's always visible */
       }
 
       #zoom-controls button {
@@ -2971,7 +2976,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private showErrorIcon(): void {
     const errorIcon = this.shadowRoot!.querySelector('#error-icon') as HTMLElement;
-    errorIcon.style.display = 'block';
+    errorIcon.classList.add('visible');
   }
 
   /**
@@ -2979,7 +2984,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private hideErrorIcon(): void {
     const errorIcon = this.shadowRoot!.querySelector('#error-icon') as HTMLElement;
-    errorIcon.style.display = 'none';
+    errorIcon.classList.remove('visible');
   }
 
   // =========================================
