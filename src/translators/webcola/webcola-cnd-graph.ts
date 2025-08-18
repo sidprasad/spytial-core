@@ -340,6 +340,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       </style>
       <div id="svg-container">
       <span id="error-icon" title="This graph is depicting an error state">⚠️</span>
+      <div id="zoom-controls">
+        <button id="zoom-in" title="Zoom In" aria-label="Zoom in">+</button>
+        <button id="zoom-out" title="Zoom Out" aria-label="Zoom out">−</button>
+      </div>
       <svg id="svg" width="${width}" height="${height}">
         <defs>
         <marker id="end-arrow" markerWidth="15" markerHeight="10" refX="12" refY="5" orient="auto">
@@ -376,13 +380,41 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .scaleExtent([0.5, 5])
       .on('zoom', () => {
         this.container.attr('transform', d3.event.transform);
+        // Update zoom control states when zoom changes
+        this.updateZoomControlStates();
       });
 
     this.svg.call(this.zoomBehavior);
+    
+    // Set up zoom control event listeners
+    this.initializeZoomControls();
     }
     else {
       console.warn('D3 zoom behavior not available. Ensure D3 v4+ is loaded.');
     }
+  }
+
+  /**
+   * Initialize zoom control event listeners
+   */
+  private initializeZoomControls(): void {
+    const zoomInButton = this.shadowRoot!.querySelector('#zoom-in') as HTMLButtonElement;
+    const zoomOutButton = this.shadowRoot!.querySelector('#zoom-out') as HTMLButtonElement;
+
+    if (zoomInButton) {
+      zoomInButton.addEventListener('click', () => {
+        this.zoomIn();
+      });
+    }
+
+    if (zoomOutButton) {
+      zoomOutButton.addEventListener('click', () => {
+        this.zoomOut();
+      });
+    }
+
+    // Initial state update
+    this.updateZoomControlStates();
   }
 
   /**
@@ -499,6 +531,50 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       if (this.storedTransform) {
         this.svg.call(this.zoomBehavior.transform, this.storedTransform);
       }
+    }
+  }
+
+  /**
+   * Zoom in by a fixed scale factor
+   */
+  private zoomIn(): void {
+    if (this.svg && this.zoomBehavior) {
+      this.svg.transition().duration(200).call(
+        this.zoomBehavior.scaleBy, 1.5
+      );
+    }
+  }
+
+  /**
+   * Zoom out by a fixed scale factor
+   */
+  private zoomOut(): void {
+    if (this.svg && this.zoomBehavior) {
+      this.svg.transition().duration(200).call(
+        this.zoomBehavior.scaleBy, 1 / 1.5
+      );
+    }
+  }
+
+  /**
+   * Update zoom control button states based on current zoom level
+   */
+  private updateZoomControlStates(): void {
+    if (!this.svg || !this.zoomBehavior) return;
+
+    const currentTransform = d3.zoomTransform(this.svg.node());
+    const currentScale = currentTransform.k;
+    const [minScale, maxScale] = this.zoomBehavior.scaleExtent();
+
+    const zoomInButton = this.shadowRoot!.querySelector('#zoom-in') as HTMLButtonElement;
+    const zoomOutButton = this.shadowRoot!.querySelector('#zoom-out') as HTMLButtonElement;
+
+    if (zoomInButton) {
+      zoomInButton.disabled = currentScale >= maxScale;
+    }
+    
+    if (zoomOutButton) {
+      zoomOutButton.disabled = currentScale <= minScale;
     }
   }
 
@@ -2623,9 +2699,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         overflow: hidden;
       }
       
+      /* Respect SVG width/height attributes but cap to container size */
       svg {
-        width: 100%;
-        height: 100%;
+        width: auto;          /* Use the element's width attribute */
+        height: auto;         /* Use the element's height attribute */
+        max-width: 100%;      /* But don't overflow the container */
+        max-height: 100%;     /* But don't overflow the container */
         cursor: grab;
       }
       
@@ -2752,19 +2831,95 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         opacity: 0.8;
       }
 
-      /* Error icon positioning */
+      /* Error icon positioning - bottom area to avoid header overlap */
       #error-icon {
-        display: none;
         margin: 5px;
-        padding: 5px;
-        font-size: 28px;
+        padding: 8px 12px;
+        font-size: 16px;
         position: absolute;
-        top: 10px;
+        bottom: 10px; /* Position at bottom instead of top */
         left: 10px;
         z-index: 1000;
         cursor: help;
-        background-color: rgba(255, 0, 0, 0.5);
+        background-color: rgba(220, 53, 69, 0.95);
+        color: white;
+        border-radius: 6px;
+        border: none;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        visibility: hidden; /* Use visibility instead of display */
+      }
+      
+      #error-icon.visible {
+        visibility: visible;
+      }
+
+      #error-icon::before {
+        content: "⚠️";
+        font-size: 18px;
+      }
+
+      /* Zoom controls positioning */
+      #zoom-controls {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 1000;
+        display: flex !important; /* Ensure it's always visible */
+        flex-direction: column;
+        gap: 4px;
+        background: rgba(255, 255, 255, 0.95);
+        padding: 4px;
+        border-radius: 6px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        backdrop-filter: blur(4px);
+        border: 1px solid rgba(0, 0, 0, 0.1);
+        visibility: visible !important; /* Ensure it's always visible */
+      }
+
+      #zoom-controls button {
+        width: 32px;
+        height: 32px;
+        border: none;
+        background: #007acc;
+        color: white;
         border-radius: 4px;
+        cursor: pointer;
+        font-size: 18px;
+        font-weight: bold;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+        user-select: none;
+        line-height: 1;
+      }
+
+      #zoom-controls button:hover {
+        background: #005a9e;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      }
+
+      #zoom-controls button:active {
+        transform: translateY(0);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+      }
+
+      #zoom-controls button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+      }
+
+      #zoom-controls button:disabled:hover {
+        background: #ccc;
+        transform: none;
+        box-shadow: none;
       }
     `;
   }
@@ -2821,7 +2976,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private showErrorIcon(): void {
     const errorIcon = this.shadowRoot!.querySelector('#error-icon') as HTMLElement;
-    errorIcon.style.display = 'block';
+    errorIcon.classList.add('visible');
   }
 
   /**
@@ -2829,7 +2984,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private hideErrorIcon(): void {
     const errorIcon = this.shadowRoot!.querySelector('#error-icon') as HTMLElement;
-    errorIcon.style.display = 'none';
+    errorIcon.classList.remove('visible');
   }
 
   // =========================================
