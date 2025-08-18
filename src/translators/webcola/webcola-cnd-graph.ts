@@ -331,9 +331,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Initialize the Shadow DOM structure
    */
   private initializeDOM(): void {
-    const width = this.getAttribute('width') || WebColaCnDGraph.DEFAULT_SVG_WIDTH.toString();
-    const height = this.getAttribute('height') || WebColaCnDGraph.DEFAULT_SVG_HEIGHT.toString();
-
+    // Get actual container dimensions for responsive sizing
+    const containerRect = this.getBoundingClientRect();
+    const containerWidth = containerRect.width || 800;
+    const containerHeight = containerRect.height || 600;
+    
     this.shadowRoot!.innerHTML = `
       <style>
       ${this.getCSS()}
@@ -344,7 +346,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         <button id="zoom-in" title="Zoom In" aria-label="Zoom in">+</button>
         <button id="zoom-out" title="Zoom Out" aria-label="Zoom out">−</button>
       </div>
-      <svg id="svg" width="${width}" height="${height}">
+      <svg id="svg" viewBox="0 0 ${containerWidth} ${containerHeight}" preserveAspectRatio="xMidYMid meet">
         <defs>
         <marker id="end-arrow" markerWidth="15" markerHeight="10" refX="12" refY="5" orient="auto">
           <polygon points="0 0, 15 5, 0 10" />
@@ -932,9 +934,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
       this.showLoading();
 
-      // Translate to WebCola format
+      // Get actual container dimensions for responsive layout
+      const svgContainer = this.shadowRoot!.querySelector('#svg-container') as HTMLElement;
+      const containerRect = svgContainer.getBoundingClientRect();
+      const containerWidth = containerRect.width || 800; // fallback to default
+      const containerHeight = containerRect.height || 600; // fallback to default
+
+      // Translate to WebCola format with actual container dimensions
       const translator = new WebColaTranslator();
-      const webcolaLayout = await translator.translate(instanceLayout);
+      const webcolaLayout = await translator.translate(instanceLayout, containerWidth, containerHeight);
 
       console.log('🔄 Starting WebCola layout with cola.d3adaptor');
       console.log('Layout data:', webcolaLayout);
@@ -2693,18 +2701,18 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       }
       
       #svg-container {
+        position: relative; /* Make this the positioning context for zoom controls */
         width: 100%;
         height: 100%;
         border: 1px solid #ccc;
         overflow: hidden;
       }
       
-      /* Respect SVG width/height attributes but cap to container size */
+      /* Make SVG fill the container completely */
       svg {
-        width: auto;          /* Use the element's width attribute */
-        height: auto;         /* Use the element's height attribute */
-        max-width: 100%;      /* But don't overflow the container */
-        max-height: 100%;     /* But don't overflow the container */
+        width: 100%;          /* Fill container width */
+        height: 100%;         /* Fill container height */
+        display: block;       /* Remove inline spacing */
         cursor: grab;
       }
       
