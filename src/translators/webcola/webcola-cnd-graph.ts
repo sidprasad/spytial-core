@@ -2699,9 +2699,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         overflow: hidden;
       }
       
+      /* Respect SVG width/height attributes but cap to container size */
       svg {
-        width: 100%;
-        height: 100%;
+        width: auto;          /* Use the element's width attribute */
+        height: auto;         /* Use the element's height attribute */
+        max-width: 100%;      /* But don't overflow the container */
+        max-height: 100%;     /* But don't overflow the container */
         cursor: grab;
       }
       
@@ -2828,19 +2831,31 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         opacity: 0.8;
       }
 
-      /* Error icon positioning */
+      /* Error icon positioning - bottom area to avoid header overlap */
       #error-icon {
         display: none;
         margin: 5px;
-        padding: 5px;
-        font-size: 28px;
+        padding: 8px 12px;
+        font-size: 16px;
         position: absolute;
-        top: 10px;
+        bottom: 10px; /* Position at bottom instead of top */
         left: 10px;
         z-index: 1000;
         cursor: help;
-        background-color: rgba(255, 0, 0, 0.5);
-        border-radius: 4px;
+        background-color: rgba(220, 53, 69, 0.95);
+        color: white;
+        border-radius: 6px;
+        border: none;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      #error-icon::before {
+        content: "⚠️";
+        font-size: 18px;
       }
 
       /* Zoom controls positioning */
