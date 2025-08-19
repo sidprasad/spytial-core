@@ -33,8 +33,8 @@
 </head>
 <body>
     <div class="container">
-        <h1>🐍 Python REPL Demo with CnD-Core</h1>
-        <p>This demo shows the Python REPL Interface with data visualization capabilities.</p>
+        <h1>🐍 Python REPL Demo with CnD Graph</h1>
+        <p>This demo shows the Python REPL Interface with CnD graph visualization capabilities.</p>
         
         <div style="background-color: #fff3cd; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #ffc107;">
             <h3 style="margin-top: 0;">Python Data Instance Features</h3>
@@ -55,9 +55,9 @@
         <button onclick="setupEnhancedPythonDemo()">Start Enhanced Python REPL (with Pyodide)</button>
         <button onclick="clearPythonDemo()">Clear Demo</button>
         
-        <div id="python-repl-demo-container" style="height: 600px; border: 1px solid #ddd; border-radius: 8px; margin: 15px 0;">
+        <div id="python-repl-demo-container" style="height: 800px; border: 1px solid #ddd; border-radius: 8px; margin: 15px 0;">
             <div style="padding: 40px; text-align: center; color: #666;">
-                <h3>Python REPL Interface</h3>
+                <h3>Python REPL Interface with CnD Graph</h3>
                 <p>Click "Start Basic Python REPL" or "Start Enhanced Python REPL" to begin</p>
             </div>
         </div>
@@ -99,40 +99,19 @@ help        # Show available commands
          * Set up basic Python REPL demo (no external evaluator)
          */
         function setupBasicPythonDemo() {
-            console.log('🚀 Setting up basic Python REPL demo...');
+            console.log('🚀 Setting up basic Python REPL demo with CnD graph...');
             
             // Clear existing content
             clearPythonDemo();
             
-            if (!window.CndCore || !window.CndCore.mountPythonRepl) {
-                console.error('❌ CnD-Core not loaded or mountPythonRepl not available');
-                showError('CnD-Core library not loaded or mountPythonRepl not available. Please ensure the built library files are available.');
+            if (!window.CndCore) {
+                console.error('❌ CnD-Core not loaded');
+                showError('CnD-Core library not loaded. Please ensure the built library files are available.');
                 return;
             }
 
             try {
-                // Mount the Python REPL using the mounting function
-                const success = window.CndCore.mountPythonRepl({
-                    containerId: 'python-repl-demo-container',
-                    height: '600px',
-                    width: '100%',
-                    externalEvaluator: null, // No external evaluator for basic demo
-                    onChange: (instance) => {
-                        console.log('🔄 Python data updated:', {
-                            atoms: instance.getAtoms().length,
-                            relations: instance.getRelations().length
-                        });
-                    },
-                    onCndSpecExtracted: (spec) => {
-                        console.log('📐 CnD spec extracted:', spec);
-                    }
-                });
-                
-                if (success) {
-                    console.log('✅ Basic Python REPL demo ready!');
-                } else {
-                    showError('Failed to mount basic Python REPL');
-                }
+                setupCombinedPythonDemo(null);
                 
             } catch (error) {
                 console.error('❌ Failed to setup basic Python REPL:', error);
@@ -144,14 +123,14 @@ help        # Show available commands
          * Set up enhanced Python REPL demo (with Pyodide)
          */
         async function setupEnhancedPythonDemo() {
-            console.log('🚀 Setting up enhanced Python REPL demo with Pyodide...');
+            console.log('🚀 Setting up enhanced Python REPL demo with Pyodide and CnD graph...');
             
             // Clear existing content
             clearPythonDemo();
             
-            if (!window.CndCore || !window.CndCore.mountPythonRepl) {
-                console.error('❌ CnD-Core not loaded or mountPythonRepl not available');
-                showError('CnD-Core library not loaded or mountPythonRepl not available. Please ensure the built library files are available.');
+            if (!window.CndCore) {
+                console.error('❌ CnD-Core not loaded');
+                showError('CnD-Core library not loaded. Please ensure the built library files are available.');
                 return;
             }
 
@@ -169,32 +148,226 @@ help        # Show available commands
                 // Load Pyodide
                 const pyodideEvaluator = await loadPyodideEvaluator();
                 
-                // Mount the Python REPL with Pyodide
-                const success = window.CndCore.mountPythonRepl({
-                    containerId: 'python-repl-demo-container',
-                    height: '600px',
-                    width: '100%',
-                    externalEvaluator: pyodideEvaluator,
-                    onChange: (instance) => {
-                        console.log('🔄 Python data updated:', {
-                            atoms: instance.getAtoms().length,
-                            relations: instance.getRelations().length
-                        });
-                    },
-                    onCndSpecExtracted: (spec) => {
-                        console.log('📐 CnD spec extracted:', spec);
-                    }
-                });
-                
-                if (success) {
-                    console.log('✅ Enhanced Python REPL demo ready!');
-                } else {
-                    showError('Failed to mount enhanced Python REPL');
-                }
+                setupCombinedPythonDemo(pyodideEvaluator);
                 
             } catch (error) {
                 console.error('❌ Failed to setup enhanced Python REPL:', error);
                 showError(`Failed to setup enhanced Python REPL: ${error.message}`);
+            }
+        }
+
+        /**
+         * Set up combined Python REPL with CnD graph visualization
+         */
+        function setupCombinedPythonDemo(externalEvaluator) {
+            const container = document.getElementById('python-repl-demo-container');
+            
+            // Create a simpler layout similar to the Pyret demo but for Python
+            container.innerHTML = `
+                <div style="display: flex; flex-direction: column; height: 100%; background: white;">
+                    <!-- Top section with REPL -->
+                    <div style="border-bottom: 1px solid #ddd; flex-shrink: 0;">
+                        <div style="padding: 10px; display: flex; align-items: center; gap: 10px; cursor: pointer;" onclick="toggleSection('python-repl-section')">
+                            <span style="font-size: 12px;">▼</span>
+                            <span style="font-weight: bold;">Python REPL</span>
+                            <span style="color: #666; font-size: 12px;" id="python-atom-count">• •</span>
+                        </div>
+                        <div id="python-repl-section" style="padding: 10px;">
+                            <div id="python-repl-container" style="height: 120px;"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Middle section with Graph -->
+                    <div style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
+                        <div style="padding: 10px; display: flex; align-items: center; gap: 10px; cursor: pointer;" onclick="toggleSection('python-graph-section')">
+                            <span style="font-size: 12px;">▼</span>
+                            <span style="font-weight: bold;">CnD Graph</span>
+                            <span style="color: #666; font-size: 12px;" id="python-graph-status">Ready</span>
+                        </div>
+                        <div id="python-graph-section" style="flex: 1; min-height: 0; position: relative; padding: 10px;">
+                            <!-- Simple graph placeholder that shows atoms and relations -->
+                            <div id="simple-graph-container" style="width: 100%; height: 100%; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; display: flex; align-items: center; justify-content: center; flex-direction: column;">
+                                <div style="text-align: center; color: #666;">
+                                    <h4 style="margin: 10px 0;">📊 Data Visualization</h4>
+                                    <div id="graph-content">
+                                        <p>No data to visualize yet</p>
+                                        <p>Add some data using the Python REPL above</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Create Python data instance
+            const pythonInstance = new window.CndCore.PythonDataInstance();
+            
+            // Mount the Python REPL in the inner container
+            const replSuccess = window.CndCore.mountPythonRepl({
+                containerId: 'python-repl-container',
+                height: '120px',
+                width: '100%',
+                externalEvaluator: externalEvaluator,
+                initialInstance: pythonInstance,
+                onChange: (instance) => {
+                    console.log('🔄 Python data updated:', {
+                        atoms: instance.getAtoms().length,
+                        relations: instance.getRelations().length
+                    });
+                    
+                    console.log('🔍 Calling updateAtomCount...');
+                    // Update atom/relation count display
+                    updateAtomCount(instance);
+                    
+                    console.log('🔍 Calling updateSimpleGraph...');
+                    // Update the simple graph display
+                    updateSimpleGraph(instance);
+                    
+                    console.log('✅ Update callbacks completed');
+                },
+                onCndSpecExtracted: (spec) => {
+                    console.log('📐 CnD spec extracted:', spec);
+                }
+            });
+            
+            if (replSuccess) {
+                console.log('✅ Python REPL mounted successfully');
+                
+                // Initialize the displays
+                updateAtomCount(pythonInstance);
+                updateSimpleGraph(pythonInstance);
+                
+                // Update status
+                document.getElementById('python-graph-status').textContent = 'Initialized';
+                
+                console.log('✅ Combined Python demo ready!');
+                
+                // Add a test button to manually check the data instance
+                const debugButton = document.createElement('button');
+                debugButton.textContent = 'Debug: Check Data';
+                debugButton.style.margin = '5px';
+                debugButton.onclick = () => {
+                    console.log('🔍 Manual debug check...');
+                    console.log('Current instance:', pythonInstance);
+                    console.log('Atoms:', pythonInstance.getAtoms());
+                    console.log('Relations:', pythonInstance.getRelations());
+                    
+                    // Manually call update functions
+                    updateAtomCount(pythonInstance);
+                    updateSimpleGraph(pythonInstance);
+                };
+                
+                document.getElementById('python-graph-section').appendChild(debugButton);
+                
+            } else {
+                showError('Failed to mount Python REPL component');
+            }
+        }
+
+        /**
+         * Update the atom/relation count display
+         */
+        function updateAtomCount(instance) {
+            console.log('📊 updateAtomCount called', instance);
+            const countElement = document.getElementById('python-atom-count');
+            if (countElement && instance) {
+                const atomCount = instance.getAtoms().length;
+                const relationCount = instance.getRelations().length;
+                countElement.textContent = `${atomCount} • ${relationCount}`;
+                console.log('📊 Atom count updated:', countElement.textContent);
+            } else {
+                console.log('❌ Count element or instance not found');
+            }
+        }
+        
+        /**
+         * Update the simple graph display with Python data
+         */
+        function updateSimpleGraph(instance) {
+            console.log('🎯 updateSimpleGraph called', instance);
+            const graphContent = document.getElementById('graph-content');
+            if (!graphContent || !instance) {
+                console.log('❌ Graph content element or instance not found');
+                return;
+            }
+            
+            try {
+                const atoms = instance.getAtoms();
+                const relations = instance.getRelations();
+                
+                console.log('🔍 Data found:', { atomCount: atoms.length, relationCount: relations.length });
+                
+                if (atoms.length === 0) {
+                    graphContent.innerHTML = `
+                        <p>No data to visualize yet</p>
+                        <p>Add some data using the Python REPL above</p>
+                    `;
+                    return;
+                }
+                
+                // Create a simple visualization of the data
+                let html = '<div style="text-align: left; font-family: monospace; font-size: 12px;">';
+                
+                // Show atoms
+                html += '<div style="margin-bottom: 15px;"><strong>📦 Atoms:</strong><br>';
+                atoms.forEach(atom => {
+                    html += `<div style="margin: 2px 0; padding: 2px 8px; background: #e3f2fd; border-radius: 3px; display: inline-block; margin-right: 5px;">
+                        ${atom.id} : ${atom.type.name}
+                    </div>`;
+                });
+                html += '</div>';
+                
+                // Show relations
+                if (relations.length > 0) {
+                    html += '<div><strong>🔗 Relations:</strong><br>';
+                    relations.forEach(relation => {
+                        html += `<div style="margin: 2px 0; padding: 2px 8px; background: #f3e5f5; border-radius: 3px; display: inline-block; margin-right: 5px;">
+                            ${relation.source} → ${relation.target} (${relation.predicate})
+                        </div>`;
+                    });
+                    html += '</div>';
+                } else {
+                    html += '<div><strong>🔗 Relations:</strong> None</div>';
+                }
+                
+                html += '</div>';
+                
+                // Add a note about the full graph visualization
+                html += `
+                    <div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-radius: 4px; font-size: 11px;">
+                        <strong>💡 Note:</strong> This shows a simplified view of your Python data.<br>
+                        The data is compatible with CnD's graph visualization system.
+                    </div>
+                `;
+                
+                graphContent.innerHTML = html;
+                
+                console.log('🎯 Simple graph display updated successfully');
+                
+            } catch (error) {
+                console.error('Failed to update simple graph:', error);
+                graphContent.innerHTML = `
+                    <p style="color: #dc3545;">Error updating graph display</p>
+                    <p style="font-size: 12px;">${error.message}</p>
+                `;
+            }
+        }
+        
+        /**
+         * Toggle collapsible sections
+         */
+        function toggleSection(sectionId) {
+            const section = document.getElementById(sectionId);
+            if (!section) return;
+            
+            const isHidden = section.style.display === 'none';
+            section.style.display = isHidden ? 'block' : 'none';
+            
+            // Update arrow direction
+            const arrow = section.previousElementSibling?.querySelector('span');
+            if (arrow) {
+                arrow.textContent = isHidden ? '▼' : '▶';
             }
         }
 
@@ -206,7 +379,7 @@ help        # Show available commands
             if (container) {
                 container.innerHTML = `
                     <div style="padding: 40px; text-align: center; color: #666;">
-                        <h3>Python REPL Interface</h3>
+                        <h3>Python REPL Interface with CnD Graph</h3>
                         <p>Click "Start Basic Python REPL" or "Start Enhanced Python REPL" to begin</p>
                     </div>
                 `;
