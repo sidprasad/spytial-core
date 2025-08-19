@@ -21,6 +21,9 @@ import { PyretDataInstance } from '../src/data-instance/pyret/pyret-data-instanc
 import { PyretEvaluator } from '../src/components/ReplInterface/parsers/PyretExpressionParser';
 import { CombinedInputComponent, CombinedInputConfig } from '../src/components/CombinedInput/CombinedInputComponent';
 import { mountCombinedInput, CombinedInputMountConfig } from '../src/components/CombinedInput/mounting';
+import { EvaluatorRepl } from '../src/components/EvaluatorRepl/EvaluatorRepl';
+import { IEvaluator } from '../src/evaluators';
+import { RelationHighlighter } from '../src/components/RelationHighlighter/RelationHighlighter';
 
 /**
  * Configuration options for mounting CndLayoutInterface
@@ -71,11 +74,11 @@ export interface ReplWithVisualizationMountConfig {
   style?: React.CSSProperties;
 }
 
-/****
- * 
- * STATE MANAGERS
- * 
- */
+/*******************************************************
+ *                                                     *
+ *                   STATE MANAGERS                    *
+ *                                                     *
+ *******************************************************/
 
 
 /**
@@ -405,9 +408,20 @@ export class PyretReplStateManager {
  */
 export const globalErrorManager = new ErrorStateManager();
 
-/****
- * REACT COMPONENT WRAPPERS
- */
+
+
+
+
+/*******************************************************
+ *                                                     *
+ *             REACT COMPONENT WRAPPERS                *
+ *                                                     *
+ *******************************************************/
+
+
+
+
+
 
 /**
  * React wrapper component for CndLayoutInterface
@@ -480,11 +494,6 @@ const CndLayoutInterfaceWrapper: React.FC<{ config?: CndLayoutMountConfig }> = (
   const handleYamlChange = useCallback((newValue: string) => {
     setYamlValue(newValue);
     
-    // ENFORCE CnD constraints on every spec change
-    if ((window as any).updateFromCnDSpec) {
-      (window as any).updateFromCnDSpec();
-    }
-    
     // Dispatch custom event for other listeners
     window.dispatchEvent(new CustomEvent('cnd-spec-changed', { detail: newValue }));
   }, []);
@@ -502,11 +511,6 @@ const CndLayoutInterfaceWrapper: React.FC<{ config?: CndLayoutMountConfig }> = (
    */
   const handleSetConstraints = useCallback((updater: (prev: ConstraintData[]) => ConstraintData[]) => {
     setConstraints(updater);
-    
-    // ENFORCE CnD constraints when constraints change in No-Code view
-    if ((window as any).updateFromCnDSpec) {
-      setTimeout(() => (window as any).updateFromCnDSpec(), 100);
-    }
   }, []);
 
   /**
@@ -514,11 +518,6 @@ const CndLayoutInterfaceWrapper: React.FC<{ config?: CndLayoutMountConfig }> = (
    */
   const handleSetDirectives = useCallback((updater: (prev: DirectiveData[]) => DirectiveData[]) => {
     setDirectives(updater);
-    
-    // ENFORCE CnD constraints when directives change in No-Code view
-    if ((window as any).updateFromCnDSpec) {
-      setTimeout(() => (window as any).updateFromCnDSpec(), 100);
-    }
   }, []);
 
   return (
@@ -733,11 +732,19 @@ const ReplWithVisualizationWrapper: React.FC<{ config?: ReplWithVisualizationMou
   );
 };
 
-/****
- * 
- * PUBLIC MOUNTING FUNCTIONS
- * 
- */
+
+
+
+
+/*******************************************************
+ *                                                     *
+ *             PUBLIC MOUNTING FUNCTIONS               *
+ *                                                     *
+ *******************************************************/
+
+
+
+
 
 /**
  * Mount CndLayoutInterface component into specified container
@@ -1054,6 +1061,58 @@ export function mountErrorMessageModal(containerId: string = 'error-messages'): 
 }
 
 /**
+ * Mount the EvaluatorRepl component into specified container
+ * @param containerId - DOM element ID to mount into
+ */
+export function mountEvaluatorRepl(containerId: string, evaluator: IEvaluator, instanceNumber: number): boolean {
+  const container = document.getElementById(containerId);
+  
+  if (!container) {
+    console.error(`Evaluator REPL: Container '${containerId}' not found`);
+    return false;
+  }
+
+  if (!evaluator) {
+    console.error('Evaluator REPL: No evaluator provided');
+    return false;
+  }
+
+  try {
+    const root = createRoot(container);
+    root.render(<EvaluatorRepl evaluator={evaluator} instanceNumber={instanceNumber}/>);
+    console.log(`✅ Evaluator REPL mounted to #${containerId}`);
+    return true;
+  } catch (error) {
+    console.error('Failed to mount Evaluator REPL:', error);
+    return false;
+  }
+}
+
+/**
+ * Mount the RelationHighlighter component into specified container.
+ * @param containerId - DOM element ID to mount into
+ * @returns Boolean indicating success
+ */
+export function mountRelationHighlighter(containerId: string, graphElementId: string): boolean {
+  const container = document.getElementById(containerId);
+  
+  if (!container) {
+    console.error(`Relation Highlighter: Container '${containerId}' not found`);
+    return false;
+  }
+
+  try {
+    const root = createRoot(container);
+    root.render(<RelationHighlighter graphElementId={graphElementId}/>);
+    console.log(`✅ Relation Highlighter mounted to #${containerId}`);
+    return true;
+  } catch (error) {
+    console.error('Failed to mount Relation Highlighter:', error);
+    return false;
+  }
+}
+
+/**
  * Mount all CnD components into their default containers
  * Convenience function for quick setup
  * 
@@ -1176,9 +1235,21 @@ export function mountAllComponentsWithPyret(): {
   return results;
 }
 
-/****
- * ERROR MANAGEMENT API
- */
+
+
+
+
+
+
+/*******************************************************
+ *                                                     *
+ *                    ERROR API                        *
+ *                                                     *
+ *******************************************************/
+
+
+
+
 
 /**
  * Error management functions for CDN users
@@ -1251,9 +1322,16 @@ export const ErrorAPI = {
   }
 };
 
-/****
- * DATA ACCESS API  
- */
+
+
+
+/*******************************************************
+ *                                                     *
+ *                    DATA API                         *
+ *                                                     *
+ *******************************************************/
+
+
 
 /**
  * Data access functions for CDN users
@@ -1378,9 +1456,17 @@ export const DataAPI = {
   }
 };
 
-/****
- * GLOBAL EXPOSURE FOR CDN
- */
+
+
+
+
+/*******************************************************
+ *                                                     *
+ *               GLOBAL CnDCore OBJECT                 *
+ *                                                     *
+ *******************************************************/
+
+
 
 /**
  * Global CnDCore object for CDN usage
@@ -1394,6 +1480,8 @@ export const CnDCore = {
   mountInstanceBuilder, 
   mountErrorMessageModal,
   mountAllComponents,
+  mountEvaluatorRepl,
+  mountRelationHighlighter,
   // Pyret REPL mounting functions
   mountPyretRepl,
   mountReplWithVisualization,
@@ -1415,6 +1503,18 @@ export const CnDCore = {
   PyretDataInstance,
 };
 
+
+
+
+/*******************************************************
+ *                                                     *
+ *                  LEGACY EXPORTS                     *
+ *                                                     *
+ *******************************************************/
+
+
+
+
 // Expose to global scope for legacy usage
 if (typeof window !== 'undefined') {
   (window as any).CnDCore = CnDCore;
@@ -1424,6 +1524,8 @@ if (typeof window !== 'undefined') {
   (window as any).mountInstanceBuilder = mountInstanceBuilder;
   (window as any).mountErrorMessageModal = mountErrorMessageModal;
   (window as any).mountIntegratedComponents = mountAllComponents;
+  (window as any).mountEvaluatorRepl = mountEvaluatorRepl;
+  (window as any).mountRelationHighlighter = mountRelationHighlighter;
   
   // Pyret REPL functions for legacy compatibility
   (window as any).mountPyretRepl = mountPyretRepl;

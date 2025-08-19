@@ -331,16 +331,22 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Initialize the Shadow DOM structure
    */
   private initializeDOM(): void {
-    const width = this.getAttribute('width') || WebColaCnDGraph.DEFAULT_SVG_WIDTH.toString();
-    const height = this.getAttribute('height') || WebColaCnDGraph.DEFAULT_SVG_HEIGHT.toString();
-
+    // Get actual container dimensions for responsive sizing
+    const containerRect = this.getBoundingClientRect();
+    const containerWidth = containerRect.width || 800;
+    const containerHeight = containerRect.height || 600;
+    
     this.shadowRoot!.innerHTML = `
       <style>
       ${this.getCSS()}
       </style>
       <div id="svg-container">
       <span id="error-icon" title="This graph is depicting an error state">⚠️</span>
-      <svg id="svg" width="${width}" height="${height}">
+      <div id="zoom-controls">
+        <button id="zoom-in" title="Zoom In" aria-label="Zoom in">+</button>
+        <button id="zoom-out" title="Zoom Out" aria-label="Zoom out">−</button>
+      </div>
+      <svg id="svg" viewBox="0 0 ${containerWidth} ${containerHeight}" preserveAspectRatio="xMidYMid meet">
         <defs>
         <marker id="end-arrow" markerWidth="15" markerHeight="10" refX="12" refY="5" orient="auto">
           <polygon points="0 0, 15 5, 0 10" />
@@ -376,13 +382,41 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .scaleExtent([0.5, 5])
       .on('zoom', () => {
         this.container.attr('transform', d3.event.transform);
+        // Update zoom control states when zoom changes
+        this.updateZoomControlStates();
       });
 
     this.svg.call(this.zoomBehavior);
+    
+    // Set up zoom control event listeners
+    this.initializeZoomControls();
     }
     else {
       console.warn('D3 zoom behavior not available. Ensure D3 v4+ is loaded.');
     }
+  }
+
+  /**
+   * Initialize zoom control event listeners
+   */
+  private initializeZoomControls(): void {
+    const zoomInButton = this.shadowRoot!.querySelector('#zoom-in') as HTMLButtonElement;
+    const zoomOutButton = this.shadowRoot!.querySelector('#zoom-out') as HTMLButtonElement;
+
+    if (zoomInButton) {
+      zoomInButton.addEventListener('click', () => {
+        this.zoomIn();
+      });
+    }
+
+    if (zoomOutButton) {
+      zoomOutButton.addEventListener('click', () => {
+        this.zoomOut();
+      });
+    }
+
+    // Initial state update
+    this.updateZoomControlStates();
   }
 
   /**
@@ -499,6 +533,50 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       if (this.storedTransform) {
         this.svg.call(this.zoomBehavior.transform, this.storedTransform);
       }
+    }
+  }
+
+  /**
+   * Zoom in by a fixed scale factor
+   */
+  private zoomIn(): void {
+    if (this.svg && this.zoomBehavior) {
+      this.svg.transition().duration(200).call(
+        this.zoomBehavior.scaleBy, 1.5
+      );
+    }
+  }
+
+  /**
+   * Zoom out by a fixed scale factor
+   */
+  private zoomOut(): void {
+    if (this.svg && this.zoomBehavior) {
+      this.svg.transition().duration(200).call(
+        this.zoomBehavior.scaleBy, 1 / 1.5
+      );
+    }
+  }
+
+  /**
+   * Update zoom control button states based on current zoom level
+   */
+  private updateZoomControlStates(): void {
+    if (!this.svg || !this.zoomBehavior) return;
+
+    const currentTransform = d3.zoomTransform(this.svg.node());
+    const currentScale = currentTransform.k;
+    const [minScale, maxScale] = this.zoomBehavior.scaleExtent();
+
+    const zoomInButton = this.shadowRoot!.querySelector('#zoom-in') as HTMLButtonElement;
+    const zoomOutButton = this.shadowRoot!.querySelector('#zoom-out') as HTMLButtonElement;
+
+    if (zoomInButton) {
+      zoomInButton.disabled = currentScale >= maxScale;
+    }
+    
+    if (zoomOutButton) {
+      zoomOutButton.disabled = currentScale <= minScale;
     }
   }
 
@@ -856,9 +934,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
       this.showLoading();
 
-      // Translate to WebCola format
+      // Get actual container dimensions for responsive layout
+      const svgContainer = this.shadowRoot!.querySelector('#svg-container') as HTMLElement;
+      const containerRect = svgContainer.getBoundingClientRect();
+      const containerWidth = containerRect.width || 800; // fallback to default
+      const containerHeight = containerRect.height || 600; // fallback to default
+
+      // Translate to WebCola format with actual container dimensions
       const translator = new WebColaTranslator();
-      const webcolaLayout = await translator.translate(instanceLayout);
+      const webcolaLayout = await translator.translate(instanceLayout, containerWidth, containerHeight);
 
       console.log('🔄 Starting WebCola layout with cola.d3adaptor');
       console.log('Layout data:', webcolaLayout);
@@ -917,6 +1001,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           if (this.isUnsatCore) {
             this.showErrorIcon();
           }
+
+          // Dispatch relations-available event after layout is complete
+          this.dispatchRelationsAvailableEvent();
 
           this.hideLoading();
         });
@@ -1241,6 +1328,17 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
             console.error('Error finishing edge creation:', error);
           });
         }
+      })
+    // Show tooltip with node ID only when not in input mode
+      .on('mouseover', function(d: any) {
+          d3.select(this)
+            .append('title')
+            .attr('class', 'node-tooltip')
+            .text(`ID: ${d.id}`);
+        
+      })
+      .on('mouseout', function() {
+        d3.select(this).select('title.node-tooltip').remove();
       });
 
     // Add rectangle backgrounds for nodes
@@ -1862,10 +1960,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
       // Auto-fit viewport to content
       this.fitViewportToContent();
-
-      // Setup relation highlighting (if needed for your use case)
-      this.setupRelationHighlighting();
-
     } catch (error) {
       console.error('Error in edge routing:', error);
       this.showError(`Edge routing failed: ${(error as Error).message}`);
@@ -1988,7 +2082,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       this.gridUpdateLinkLabels(routes, edges);
 
       this.fitViewportToContent();
-      this.setupRelationHighlighting();
+
+      // Dispatch event that relations are available
+      this.dispatchEvent(new Event('relationsAvailable', ));
+
     } catch (e) {
       console.log("Error routing edges in GridRouter");
       console.error(e);
@@ -2500,10 +2597,44 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
-   * Sets up relation highlighting functionality.
+   * Dispatches a custom event when relations become available after layout rendering.
+   * Includes all available relations in the event detail for external listeners.
+   * 
+   * @private
    */
-  private setupRelationHighlighting(): void {
-    if (!this.currentLayout?.links) return;
+  private dispatchRelationsAvailableEvent(): void {
+    // Get all available relations
+    const relations = this.getAllRelations();
+    
+    // Create custom event with comprehensive details
+    const event = new CustomEvent('relations-available', {
+      detail: {
+        relations: relations,           // Yes, include all relations
+        count: relations.length,        // Convenient count property
+        timestamp: Date.now(),          // When the event was created
+        graphId: this.id || 'unknown'   // Which graph instance
+      },
+      bubbles: true,    // Allow event to bubble up the DOM tree
+      cancelable: true  // Allow event to be cancelled by listeners
+    });
+
+    // Dispatch the event from this element
+    this.dispatchEvent(event);
+    
+    console.log('🎯 Dispatched relations-available event:', {
+      relations,
+      count: relations.length
+    });
+  }
+
+  /** Public API for relation highlighting */
+
+  /**
+   * Gets all unique relation names from the current layout.
+   * @returns An array of the set of relation names in the current layout.
+   */
+  public getAllRelations(): string[] {
+    if (!this.currentLayout?.links) return [];
 
     const relNames = new Set(
       this.currentLayout.links
@@ -2512,8 +2643,39 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         .filter(Boolean)
     );
 
-    // This would integrate with your relation list UI if needed
-    console.log('Available relations:', Array.from(relNames));
+    return Array.from(relNames);
+  }
+
+  /**
+   * Highlights all the links or inferred links by its relation name.
+   * @param relName - The name of the relation to highlight
+   * @returns True if the relation was successfully highlighted, false otherwise
+   */
+  public highlightRelation(relName: string): boolean {
+    if (!this.currentLayout?.links) return false;
+
+    (this.svgLinkGroups as d3.Selection<SVGGElement, any, any, unknown>)
+      .filter((d) => d.relName === relName && !this.isAlignmentEdge(d))
+      .selectAll('path')
+      .classed('highlighted', true);
+    
+    return true;
+  }
+
+  /**
+   * Clears highlighting of the given relation name.
+   * @param relName - The name of the relation to clear highlighting for
+   * @returns True if the relation highlighting was successfully cleared, false otherwise
+   */
+  public clearHighlightRelation(relName: string): boolean {
+    if (!this.currentLayout?.links) return false;
+
+    (this.svgLinkGroups as d3.Selection<SVGGElement, any, any, unknown>)
+      .filter((d) => d.relName === relName && !this.isAlignmentEdge(d))
+      .selectAll('path')
+      .classed('highlighted', false);
+    
+    return true;
   }
 
   /**
@@ -2539,15 +2701,18 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       }
       
       #svg-container {
+        position: relative; /* Make this the positioning context for zoom controls */
         width: 100%;
         height: 100%;
         border: 1px solid #ccc;
         overflow: hidden;
       }
       
+      /* Make SVG fill the container completely */
       svg {
-        width: 100%;
-        height: 100%;
+        width: 100%;          /* Fill container width */
+        height: 100%;         /* Fill container height */
+        display: block;       /* Remove inline spacing */
         cursor: grab;
       }
       
@@ -2591,6 +2756,16 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         stroke-dasharray: 2,2;
         fill: none;
         opacity: 0.6;
+      }
+
+      .link.highlighted {
+        stroke: black; /* Change this to your desired highlight color */
+        stroke-width: 3px; /* Change this to your desired highlight width */
+      }
+
+      .inferredLink.highlighted {
+        stroke:#666666; /* Change this to your desired highlight color */
+        stroke-width: 3px; /* Change this to your desired highlight width */
       }
       
       .group {
@@ -2664,19 +2839,95 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         opacity: 0.8;
       }
 
-      /* Error icon positioning */
+      /* Error icon positioning - bottom area to avoid header overlap */
       #error-icon {
-        display: none;
         margin: 5px;
-        padding: 5px;
-        font-size: 28px;
+        padding: 8px 12px;
+        font-size: 16px;
         position: absolute;
-        top: 10px;
+        bottom: 10px; /* Position at bottom instead of top */
         left: 10px;
         z-index: 1000;
         cursor: help;
-        background-color: rgba(255, 0, 0, 0.5);
+        background-color: rgba(220, 53, 69, 0.95);
+        color: white;
+        border-radius: 6px;
+        border: none;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        visibility: hidden; /* Use visibility instead of display */
+      }
+      
+      #error-icon.visible {
+        visibility: visible;
+      }
+
+      #error-icon::before {
+        content: "⚠️";
+        font-size: 18px;
+      }
+
+      /* Zoom controls positioning */
+      #zoom-controls {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 1000;
+        display: flex !important; /* Ensure it's always visible */
+        flex-direction: column;
+        gap: 4px;
+        background: rgba(255, 255, 255, 0.95);
+        padding: 4px;
+        border-radius: 6px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        backdrop-filter: blur(4px);
+        border: 1px solid rgba(0, 0, 0, 0.1);
+        visibility: visible !important; /* Ensure it's always visible */
+      }
+
+      #zoom-controls button {
+        width: 32px;
+        height: 32px;
+        border: none;
+        background: #007acc;
+        color: white;
         border-radius: 4px;
+        cursor: pointer;
+        font-size: 18px;
+        font-weight: bold;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+        user-select: none;
+        line-height: 1;
+      }
+
+      #zoom-controls button:hover {
+        background: #005a9e;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      }
+
+      #zoom-controls button:active {
+        transform: translateY(0);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+      }
+
+      #zoom-controls button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+      }
+
+      #zoom-controls button:disabled:hover {
+        background: #ccc;
+        transform: none;
+        box-shadow: none;
       }
     `;
   }
@@ -2733,7 +2984,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private showErrorIcon(): void {
     const errorIcon = this.shadowRoot!.querySelector('#error-icon') as HTMLElement;
-    errorIcon.style.display = 'block';
+    errorIcon.classList.add('visible');
   }
 
   /**
@@ -2741,7 +2992,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private hideErrorIcon(): void {
     const errorIcon = this.shadowRoot!.querySelector('#error-icon') as HTMLElement;
-    errorIcon.style.display = 'none';
+    errorIcon.classList.remove('visible');
   }
 
   // =========================================

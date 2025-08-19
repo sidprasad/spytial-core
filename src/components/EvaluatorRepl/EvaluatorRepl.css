@@ -1,0 +1,14 @@
+.code-input {
+  font-family: monospace;
+}
+
+#repl-output {
+  font-family: monospace; 
+  white-space: pre-wrap; 
+  max-height: 80vh; 
+  overflow-y: auto;
+}
+
+#evaluator-input {
+  margin: 10px 0;
+}

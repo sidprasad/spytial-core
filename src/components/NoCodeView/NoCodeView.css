@@ -29,6 +29,10 @@
     background-color: transparent;
 }
 
+.code-input {
+    font-family: monospace;
+}
+
 /** Styles for informational labels */
 .infolabel {
     cursor: help; /* Changes the cursor to a question mark */

@@ -95,7 +95,7 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
 
       // Add the source constraint itself
       if (!copy.has(messages.conflictingSourceConstraint)) {
-        copy.set(messages.conflictingSourceConstraint, new Set(messages.conflictingConstraint));
+        copy.set(messages.conflictingSourceConstraint, new Set([messages.conflictingConstraint]));
       } else {
         copy.get(messages.conflictingSourceConstraint)!.add(messages.conflictingConstraint);
       }
@@ -139,7 +139,7 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
   return (
     <div id="error-message-modal" className="mt-3 d-flex flex-column overflow-x-auto p-3 rounded border border-danger border-2">
       <h4 style={{color: 'var(--bs-danger)'}}>Could not produce a diagram</h4>
-      <p>Your instance cannot be visualized with the current CnD spec.</p>
+      <p>Your data cannot be visualized due to the following conflicting constraints.</p>
       {/* Parse/Generic/Group Error Card */}
       {isOtherError && (
         <>
@@ -159,7 +159,7 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
       {/* (Positional) Constraint Error Cards */}
       { isPositionalError && (
         <>
-          <p>Hover over the conflicting constraints to see the corresponding diagram elements that cannot be visualized. </p>
+          <p id="hover-instructions">Hover over the conflicting constraints to see the corresponding diagram elements that cannot be visualized. </p>
           <div className="constraint-relationship-table">
             <table className="table table-bordered">
               <thead>

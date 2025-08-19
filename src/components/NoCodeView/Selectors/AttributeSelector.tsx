@@ -45,7 +45,7 @@ export const AttributeSelector: React.FC<AttributeSelectorProps> = (props: Attri
         <input
           type="text"
           name="selector"
-          className="form-control"
+          className="form-control code-input"
           defaultValue={props.directiveData.params.selector as string || ''}
           placeholder="Optional: target specific atoms (e.g., Person)"
           onChange={handleInputChange}

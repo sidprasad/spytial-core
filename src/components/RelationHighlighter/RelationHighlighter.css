@@ -1,0 +1,216 @@
+/* RelationHighlighter Component Styles - Accordion Style */
+
+.relation-highlighter {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #ffffff;
+  font-family: system-ui, -apple-system, sans-serif;
+  max-width: 320px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+/* Accordion-style header */
+.relation-highlighter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-bottom: 1px solid #dee2e6;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s ease;
+  position: relative;
+}
+
+.relation-highlighter-header:hover {
+  background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+}
+
+.relation-highlighter-header:active {
+  background: linear-gradient(135deg, #dee2e6 0%, #ced4da 100%);
+}
+
+.relation-highlighter-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #495057;
+  letter-spacing: 0.025em;
+}
+
+/* Accordion toggle button */
+.collapse-toggle {
+  background: none;
+  border: none;
+  font-size: 16px;
+  color: #6c757d;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 4px;
+  transition: all 0.25s ease;
+  line-height: 1;
+  min-width: 28px;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.collapse-toggle:hover {
+  background: rgba(108, 117, 125, 0.1);
+  color: #495057;
+}
+
+.collapse-toggle.collapsed {
+  transform: rotate(-90deg);
+  color: #868e96;
+}
+
+/* Accordion-style collapsible content */
+.relation-highlighter-content {
+  max-height: 350px;
+  overflow: hidden;
+  transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  background: #ffffff;
+}
+
+.relation-highlighter-content.collapsed {
+  max-height: 0;
+  border-top: none;
+}
+
+/* No relations message */
+.no-relations {
+  padding: 20px 18px;
+  text-align: center;
+  color: #6c757d;
+  font-style: italic;
+  margin: 0;
+  font-size: 14px;
+}
+
+/* Relation list */
+.relation-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  /* Explicitly allow horizontal scroll when content overflows */
+  overflow-x: auto;
+}
+
+/* Individual relation items */
+.relation-item {
+  padding: 12px 18px;
+  cursor: pointer;
+  border-bottom: 1px solid #f1f3f4;
+  color: #495057;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  user-select: none;
+  position: relative;
+  background: #ffffff;
+  overflow: hidden;
+  white-space: nowrap;
+  /* Minimum width to prevent excessive shrinking */
+  min-width: 100px;
+}
+
+.relation-item:last-child {
+  border-bottom: none;
+}
+
+.relation-item:hover {
+  background: linear-gradient(90deg, #e3f2fd 0%, #f3e5f5 100%);
+  color: #1565c0;
+  font-weight: 600;
+  /* Use left padding increase instead of transform to prevent horizontal scrolling */
+  padding-left: 28px;
+  /* Reduce right padding to maintain consistent width */
+  padding-right: 18px;
+}
+
+.relation-item:active {
+  background: linear-gradient(90deg, #bbdefb 0%, #e1bee7 100%);
+}
+
+/* Scrollbar styling for webkit browsers */
+.relation-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.relation-list::-webkit-scrollbar-track {
+  background: #f8f9fa;
+  border-radius: 4px;
+}
+
+.relation-list::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #ced4da 0%, #adb5bd 100%);
+  border-radius: 4px;
+  border: 1px solid #dee2e6;
+}
+
+.relation-list::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #adb5bd 0%, #868e96 100%);
+}
+
+/* Accordion animation enhancement */
+@keyframes accordionExpand {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.relation-highlighter-content:not(.collapsed) .relation-list {
+  animation: accordionExpand 0.3s ease-out;
+}
+
+/* Responsive design for smaller screens */
+@media (max-width: 480px) {
+  .relation-highlighter {
+    max-width: 100%;
+    border-radius: 4px;
+  }
+  
+  .relation-highlighter-title {
+    font-size: 14px;
+  }
+  
+  .relation-item {
+    padding: 14px 18px;
+    font-size: 15px; /* Larger touch targets */
+    padding-right: 32px; /* More space for arrow on mobile */
+  }
+  
+  .relation-item:hover {
+    padding-left: 32px;
+    padding-right: 18px;
+  }
+}
+
+/* Focus states for accessibility */
+.relation-highlighter-header:focus {
+  outline: 2px solid #0d6efd;
+  outline-offset: -2px;
+}
+
+.collapse-toggle:focus {
+  outline: 2px solid #0d6efd;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.relation-item:focus {
+  outline: 2px solid #0d6efd;
+  outline-offset: -2px;
+  background: #e3f2fd;
+}

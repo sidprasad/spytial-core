@@ -26,7 +26,7 @@ const CyclicSelector: React.FC<CyclicSelectorProps> = (props: CyclicSelectorProp
         <div className="input-group-prepend">
             <span className="input-group-text infolabel" title={TUPLE_SELECTOR_TEXT}>Selector</span>
         </div>
-        <input type="text" name="selector" className="form-control" required onChange={ handleParamsChange } value={props.constraintData.params.selector as string || ''}/>
+        <input type="text" name="selector" className="form-control code-input" required onChange={ handleParamsChange } value={props.constraintData.params.selector as string || ''}/>
     </div>
     <div className="input-group">
         <div className="input-group-prepend">

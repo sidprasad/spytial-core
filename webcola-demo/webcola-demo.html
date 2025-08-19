@@ -141,8 +141,10 @@
                 <label for="webcola-alloy">Alloy XML Instance:</label>
                 <textarea id="webcola-alloy" placeholder="Paste your Alloy XML instance here..."></textarea>
             </div>
+            <div id="evaluator-repl-mount"></div>
             <div id="status" class="status info">Ready to load Alloy graph...</div>
             <div id="error-messages"></div>
+            <div id="relation-highlighter-mount"></div>
             <div id="graph-container-wrapper">
                 <div id="graph-controls">
                     <select title="Choose the Layout Format" class="form-select form-select-sm" id="layoutFormat" name="layoutFormat" onchange="changeLayoutFormat()" aria-label="Layout format selection">
@@ -254,9 +256,6 @@
 
                 // Get CND specification from input field
                 const cndSpec = getCurrentCNDSpec() || "";
-                // if (!cndSpec) {
-                //     throw new Error('Please enter a CND layout specification');
-                // }
 
                 console.log('Using Alloy XML:', alloyXml.substring(0, 200) + '...');
                 console.log('Using CND Spec:', cndSpec.substring(0, 200) + '...');
@@ -289,6 +288,13 @@
                 forgeEvaluator.initialize(evaluationContext);
 
                 console.log('Created ForgeEvaluator:', forgeEvaluator);
+
+                // NOTE: Mount Evaluator REPL
+                if (window.mountEvaluatorRepl) {
+                    window.mountEvaluatorRepl('evaluator-repl-mount', forgeEvaluator, 0);
+                } else {
+                    console.warn('Evaluator REPL mount function not available. Skipping REPL mount.');
+                }
 
                 // Step 3: Parse layout specification
                 updateStatus('Parsing layout specification...', 'info');
@@ -474,6 +480,14 @@
                 updateStatus(`Render error: ${error.message}`, 'error');
             }
         }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Mouont the window.mountRelationHighlighter
+            const graphElement = document.getElementById('graph-container');
+            if (graphElement && window.mountRelationHighlighter) {
+                window.mountRelationHighlighter('relation-highlighter-mount', 'graph-container');
+            }
+        });
 
         // Auto-initialize when page loads
         window.addEventListener('load', () => {

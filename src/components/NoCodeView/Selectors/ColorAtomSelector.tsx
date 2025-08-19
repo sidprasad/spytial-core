@@ -35,7 +35,7 @@ export const ColorAtomSelector: React.FC<ColorAtomSelectorProps> = (props: Color
         <input
           type="text"
           name="selector"
-          className="form-control"
+          className="form-control code-input"
           onChange={handleInputChange}
           required
         />
