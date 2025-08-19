@@ -102,6 +102,10 @@ export { ReplInterface } from './components/ReplInterface/ReplInterface';
 export type { ReplInterfaceProps } from './components/ReplInterface/ReplInterface';
 export { PyretReplInterface } from './components/ReplInterface/PyretReplInterface';
 export type { PyretReplInterfaceProps } from './components/ReplInterface/PyretReplInterface';
+export { PythonReplInterface } from './components/ReplInterface/PythonReplInterface';
+export type { PythonReplInterfaceProps } from './components/ReplInterface/PythonReplInterface';
+export { mountPythonRepl, createEmptyPythonDataInstance } from './components/ReplInterface/PythonReplMounting';
+export type { PythonReplMountConfig } from './components/ReplInterface/PythonReplMounting';
 export { ReplWithVisualization } from './components/ReplInterface/ReplWithVisualization';
 export type { ReplWithVisualizationProps } from './components/ReplInterface/ReplWithVisualization';
 
@@ -114,3 +118,6 @@ export type { CombinedInputMountConfig } from './components/CombinedInput/mounti
 // Export REPL parsers
 export { PyretExpressionParser } from './components/ReplInterface/parsers/PyretExpressionParser';
 export type { PyretEvaluator, PyretEvaluationResult } from './components/ReplInterface/parsers/PyretExpressionParser';
+export { PythonExpressionParser } from './components/ReplInterface/parsers/PythonExpressionParser';
+export type { PythonEvaluator, PythonEvaluationResult } from './components/ReplInterface/parsers/PythonExpressionParser';
+export { PythonIdAllocationParser } from './components/ReplInterface/parsers/PythonIdAllocationParser';
