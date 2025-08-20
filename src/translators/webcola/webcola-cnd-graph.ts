@@ -2750,13 +2750,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         marker-end: url(#hand-drawn-arrow);
       }
 
-      .alignmentLink {
-        stroke: #999;
-        stroke-width: 0.5px;
-        stroke-dasharray: 2,2;
-        fill: none;
-        opacity: 0.6;
-      }
+
+    .alignmentLink {
+            stroke: transparent !important;    /* make the stroke invisible */
+            stroke-width: 0 !important;        /* ensure no visible thickness */
+            stroke-opacity: 0 !important;      /* defensive */
+            fill: none !important;
+            pointer-events: none !important;   /* don't block mouse events */
+          }
+
 
       .link.highlighted {
         stroke: black; /* Change this to your desired highlight color */
