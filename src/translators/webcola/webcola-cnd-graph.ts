@@ -2786,7 +2786,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .linklabel {
         text-anchor: middle;
         dominant-baseline: middle;
-        font-size: 10px;
+        font-size: 12px;
         fill: #555;
         pointer-events: none;
         font-family: system-ui;
