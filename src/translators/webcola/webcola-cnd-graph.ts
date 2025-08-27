@@ -2787,7 +2787,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         text-anchor: middle;
         dominant-baseline: middle;
         font-size: 12px;
-        fill: #555;
+        fill: #161616ff;
         pointer-events: none;
         font-family: system-ui;
         stroke: white; /* Add white shadow */
