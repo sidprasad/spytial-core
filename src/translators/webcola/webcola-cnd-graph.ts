@@ -379,7 +379,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
     // Set up zoom behavior (D3 v4 API - matches your working pattern)
     this.zoomBehavior = d3.zoom()
-      .scaleExtent([0.5, 5])
+      .scaleExtent([0.1, 10])
       .on('zoom', () => {
         this.container.attr('transform', d3.event.transform);
         // Update zoom control states when zoom changes
