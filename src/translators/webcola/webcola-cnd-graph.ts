@@ -340,12 +340,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       <style>
       ${this.getCSS()}
       </style>
+      <div id="graph-toolbar">
+        <div id="zoom-controls">
+          <button id="zoom-in" title="Zoom In" aria-label="Zoom in">+</button>
+          <button id="zoom-out" title="Zoom Out" aria-label="Zoom out">−</button>
+        </div>
+      </div>
       <div id="svg-container">
       <span id="error-icon" title="This graph is depicting an error state">⚠️</span>
-      <div id="zoom-controls">
-        <button id="zoom-in" title="Zoom In" aria-label="Zoom in">+</button>
-        <button id="zoom-out" title="Zoom Out" aria-label="Zoom out">−</button>
-      </div>
       <svg id="svg" viewBox="0 0 ${containerWidth} ${containerHeight}" preserveAspectRatio="xMidYMid meet">
         <defs>
         <marker id="end-arrow" markerWidth="15" markerHeight="10" refX="12" refY="5" orient="auto">
@@ -1046,6 +1048,25 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       x: n.x,
       y: n.y
     }));
+  }
+
+  /**
+   * Add a control element to the graph toolbar
+   * @param element - The HTML element to add to the toolbar
+   */
+  public addToolbarControl(element: any): void {
+    const toolbar = this.shadowRoot?.querySelector('#graph-toolbar');
+    if (toolbar) {
+      toolbar.appendChild(element);
+    }
+  }
+
+  /**
+   * Get the graph toolbar element for more advanced control manipulation
+   * @returns The toolbar element or null if not found
+   */
+  public getToolbar(): any {
+    return this.shadowRoot?.querySelector('#graph-toolbar') || null;
   }
 
   /**
@@ -2872,64 +2893,70 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         font-size: 18px;
       }
 
-      /* Zoom controls positioning */
-      #zoom-controls {
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        z-index: 1000;
-        display: flex !important; /* Ensure it's always visible */
-        flex-direction: column;
-        gap: 4px;
+      /* Graph toolbar styling */
+      #graph-toolbar {
+        display: flex;
+        justify-content: flex-start;
+        align-items: center;
+        padding: 8px 12px;
         background: rgba(255, 255, 255, 0.95);
-        padding: 4px;
+        border: 1px solid rgba(0, 0, 0, 0.1);
         border-radius: 6px;
+        margin-bottom: 8px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
         backdrop-filter: blur(4px);
-        border: 1px solid rgba(0, 0, 0, 0.1);
-        visibility: visible !important; /* Ensure it's always visible */
+      }
+
+      /* Zoom controls styling */
+      #zoom-controls {
+        display: flex;
+        flex-direction: row;
+        gap: 4px;
+        align-items: center;
       }
 
       #zoom-controls button {
-        width: 32px;
-        height: 32px;
-        border: none;
-        background: #007acc;
-        color: white;
+        width: 24px;
+        height: 24px;
+        border: 1px solid #d1d5db;
+        background: #f9fafb;
+        color: #374151;
         border-radius: 4px;
         cursor: pointer;
-        font-size: 18px;
-        font-weight: bold;
+        font-size: 14px;
+        font-weight: 500;
         display: flex;
         align-items: center;
         justify-content: center;
-        transition: all 0.2s ease;
+        transition: all 0.15s ease;
         user-select: none;
         line-height: 1;
       }
 
       #zoom-controls button:hover {
-        background: #005a9e;
-        transform: translateY(-1px);
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        background: #f3f4f6;
+        border-color: #9ca3af;
+        color: #111827;
       }
 
       #zoom-controls button:active {
-        transform: translateY(0);
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        background: #e5e7eb;
+        border-color: #6b7280;
+        transform: translateY(0.5px);
       }
 
       #zoom-controls button:disabled {
-        background: #ccc;
+        background: #f9fafb;
+        border-color: #e5e7eb;
+        color: #9ca3af;
         cursor: not-allowed;
-        transform: none;
-        box-shadow: none;
       }
 
       #zoom-controls button:disabled:hover {
-        background: #ccc;
+        background: #f9fafb;
+        border-color: #e5e7eb;
+        color: #9ca3af;
         transform: none;
-        box-shadow: none;
       }
     `;
   }
