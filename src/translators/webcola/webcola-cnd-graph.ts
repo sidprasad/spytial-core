@@ -3,6 +3,7 @@ import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator } 
 import { InstanceLayout, isAlignmentConstraint, isInstanceLayout, isLeftConstraint, isTopConstraint, LayoutNode } from '../../layout/interfaces';
 import type { GridRouter, Group, Layout, Node, Link } from 'webcola';
 import { IInputDataInstance, ITuple, IAtom } from '../../data-instance/interfaces';
+import { track, createGraphRenderEvent, createGraphRenderEventFromInstanceLayout, createInteractionEvent, PerformanceTracker } from '../../telemetry';
 
 let d3 = window.d3v4 || window.d3; // Use d3 v4 if available, otherwise fallback to the default window.d3
 let cola = window.cola;
@@ -772,6 +773,16 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
       console.log(`Dispatching edge creation request: ${relationName}(${sourceNode.id}, ${targetNode.id})`);
       
+      // Track edge creation interaction telemetry
+      track(createInteractionEvent('edge.create', {
+        targetId: `${sourceNode.id}->${targetNode.id}`,
+        data: {
+          relationId: relationName,
+          sourceNodeId: sourceNode.id,
+          targetNodeId: targetNode.id
+        }
+      }));
+      
       // Dispatch edge creation event for React components to handle
       const edgeCreationEvent = new CustomEvent('edge-creation-requested', {
         detail: {
@@ -902,12 +913,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * @param inputDataInstance - Optional input data instance for edge modifications
    */
   public async renderLayout(instanceLayout: InstanceLayout): Promise<void> {
+    // Start performance tracking for telemetry
+    const perfTracker = new PerformanceTracker('graph.render');
 
     if (! isInstanceLayout(instanceLayout)) {
       throw new Error('Invalid instance layout provided. Expected an InstanceLayout instance.');
     }
-
-
 
     try {
       console.log('D3 version:', d3.version);
@@ -1008,6 +1019,18 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           this.dispatchRelationsAvailableEvent();
 
           this.hideLoading();
+          
+          // Track successful graph render telemetry
+          const renderDuration = perfTracker.finish();
+          track(createGraphRenderEvent(webcolaLayout, {
+            layoutType: this.layoutFormat || 'default',
+            isErrorState: this.isUnsatCore,
+            renderDurationMs: renderDuration,
+            dimensions: {
+              width: webcolaLayout.FIG_WIDTH,
+              height: webcolaLayout.FIG_HEIGHT
+            }
+          }));
         });
 
       // Start the layout with error handling for D3/WebCola compatibility issues
@@ -1032,6 +1055,17 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     } catch (error) {
       console.error('Error rendering layout:', error);
       this.showError(`Layout rendering failed: ${(error as Error).message}`);
+      
+      // Track failed graph render telemetry
+      const renderDuration = perfTracker.finish();
+      track(createGraphRenderEventFromInstanceLayout(instanceLayout, {
+        layoutType: this.layoutFormat || 'default',
+        isErrorState: true,
+        renderDurationMs: renderDuration,
+        metadata: {
+          error: (error as Error).message
+        }
+      }));
     }
   }
 

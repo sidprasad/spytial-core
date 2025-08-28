@@ -113,3 +113,6 @@ export type { CombinedInputMountConfig } from './components/CombinedInput/mounti
 // Export REPL parsers
 export { PyretExpressionParser } from './components/ReplInterface/parsers/PyretExpressionParser';
 export type { PyretEvaluator, PyretEvaluationResult } from './components/ReplInterface/parsers/PyretExpressionParser';
+
+// Export Telemetry module
+export * from './telemetry';

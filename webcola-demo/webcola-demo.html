@@ -105,6 +105,28 @@
         .status.success { background: #e8f5e8; color: #2e7d32; }
         .status.error { background: #ffebee; color: #c62828; }
 
+        /* Telemetry display styles */
+        .telemetry-display {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+        }
+        .telemetry-event {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid #007acc;
+            background: white;
+        }
+        .telemetry-event.graph-render { border-left-color: #28a745; }
+        .telemetry-event.layout-process { border-left-color: #ffc107; }
+        .telemetry-event.user-interaction { border-left-color: #dc3545; }
+
         /** TODO: Add support for smaller screen sizes */
         /**
          * Responsive design for smaller screens
@@ -144,6 +166,16 @@
             <div id="evaluator-repl-mount"></div>
             <div id="status" class="status info">Ready to load Alloy graph...</div>
             <div id="error-messages"></div>
+            
+            <!-- Telemetry Display Section -->
+            <div>
+                <h5>📊 Telemetry Events <small>(Real-time tracking)</small></h5>
+                <button class="btn btn-sm btn-outline-secondary" onclick="clearTelemetryLog()">Clear Log</button>
+                <div id="telemetry-display" class="telemetry-display">
+                    <em>Telemetry events will appear here...</em>
+                </div>
+            </div>
+            
             <div id="relation-highlighter-mount"></div>
             <div id="graph-container-wrapper">
                 <div id="graph-controls">
@@ -224,6 +256,20 @@
             try {
                 console.log('Complete CND-Core browser bundle loaded successfully');
                 console.log('Available on global CndCore:', Object.keys(CndCore));
+                
+                // Initialize telemetry system
+                CndCore.initializeTelemetry({
+                    enabled: true,
+                    debug: true,
+                    context: 'webcola-demo'
+                });
+                console.log('✅ Telemetry initialized');
+
+                // Set up telemetry event handler for demo display
+                const telemetryCollector = CndCore.getTelemetryCollector();
+                telemetryCollector.addHandler((event) => {
+                    displayTelemetryEvent(event);
+                });
                 
                 // Check for Alloy-specific components
                 console.log('parseAlloyXML available:', !!CndCore.AlloyInstance.parseAlloyXML);
@@ -503,11 +549,89 @@
             }
         });
 
+        /**
+         * Display a telemetry event in the demo UI
+         * @param {Object} event - Telemetry event to display
+         */
+        function displayTelemetryEvent(event) {
+            const displayElement = document.getElementById('telemetry-display');
+            if (!displayElement) return;
+
+            // Create event element
+            const eventElement = document.createElement('div');
+            eventElement.className = `telemetry-event ${event.type.replace('.', '-')}`;
+            
+            // Format timestamp
+            const timestamp = new Date(event.timestamp).toLocaleTimeString();
+            
+            // Create event summary based on type
+            let summary = '';
+            switch (event.type) {
+                case 'graph.render':
+                    summary = `Rendered graph: ${event.nodeCount} nodes, ${event.edgeCount} edges`;
+                    if (event.renderDurationMs) {
+                        summary += ` (${Math.round(event.renderDurationMs)}ms)`;
+                    }
+                    if (event.isErrorState) {
+                        summary += ' [ERROR STATE]';
+                    }
+                    break;
+                case 'layout.process':
+                    summary = `Processed ${event.sourceType} layout: ${event.constraintCount} constraints`;
+                    if (event.processingDurationMs) {
+                        summary += ` (${Math.round(event.processingDurationMs)}ms)`;
+                    }
+                    summary += event.success ? ' [SUCCESS]' : ' [FAILED]';
+                    if (event.errorMessage) {
+                        summary += ` - ${event.errorMessage}`;
+                    }
+                    break;
+                case 'user.interaction':
+                    summary = `User action: ${event.action}`;
+                    if (event.targetId) {
+                        summary += ` on ${event.targetId}`;
+                    }
+                    break;
+                default:
+                    summary = `${event.type}: ${JSON.stringify(event)}`;
+            }
+            
+            eventElement.innerHTML = `
+                <strong>[${timestamp}]</strong> ${summary}
+            `;
+            
+            // Add to display (newest first)
+            if (displayElement.firstChild && displayElement.firstChild.tagName === 'EM') {
+                // Remove the "events will appear here" message
+                displayElement.removeChild(displayElement.firstChild);
+            }
+            displayElement.insertBefore(eventElement, displayElement.firstChild);
+            
+            // Scroll to show newest event
+            eventElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+            // Limit to 50 events to prevent memory issues
+            while (displayElement.children.length > 50) {
+                displayElement.removeChild(displayElement.lastChild);
+            }
+        }
+
+        /**
+         * Clear the telemetry event log
+         */
+        function clearTelemetryLog() {
+            const displayElement = document.getElementById('telemetry-display');
+            if (displayElement) {
+                displayElement.innerHTML = '<em>Telemetry events will appear here...</em>';
+            }
+        }
+
         // Expose functions globally for buttons
         window.loadGraph = loadGraph;
         window.loadAlloyData = loadAlloyData;
         window.renderGraph = renderGraph;
         window.clearGraph = clearGraph;
+        window.clearTelemetryLog = clearTelemetryLog;
     </script>
 </body>
 </html>
