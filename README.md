@@ -27,6 +27,7 @@ This replaces the complex setup shown in the Pyret REPL demo with a single, easy
 - **Custom Elements** for easy embedding in web apps
 - **Combined Input Component**: Simplified API for complete data visualization setups
 - **Real-time Synchronization**: Automatic sync between REPL, layout, and visualization
+- **Telemetry System**: Track graph rendering events, performance metrics, and user interactions
 
 ---
 
@@ -217,6 +218,45 @@ CndCore.setupCombinedInput(
 - **Graph Visualization**: Real-time webcola-cnd-graph rendering
 - **Automatic Synchronization**: All components stay in sync without manual event handling
 - **Layout Management**: Automatic layout application with staleness indicators
+
+---
+
+## 📊 Telemetry System
+
+CnD Core includes a comprehensive telemetry system for tracking graph rendering events, performance metrics, and user interactions.
+
+### Quick Setup
+
+```javascript
+// Initialize telemetry
+CndCore.initializeTelemetry({
+  enabled: true,
+  debug: true, // Enable console logging during development
+  context: 'my-app',
+  userId: 'user-123'
+});
+```
+
+### Features
+
+- **Graph Rendering Tracking**: Monitors every graph render with node/edge counts, performance metrics, and error states
+- **Layout Processing Analytics**: Tracks layout generation duration, constraint counts, and success/failure rates
+- **User Interaction Events**: Captures edge creation, modifications, and other user actions
+- **Custom Endpoints**: Send telemetry data to your analytics service
+- **Real-time Demo**: Visual event display in demo applications
+
+### Custom Analytics Endpoint
+
+```javascript
+CndCore.initializeTelemetry({
+  enabled: true,
+  endpoint: 'https://analytics.example.com/events',
+  headers: { 'Authorization': 'Bearer your-api-key' },
+  context: 'production-app'
+});
+```
+
+For complete documentation, see [docs/telemetry.md](docs/telemetry.md).
 
 ---
 
