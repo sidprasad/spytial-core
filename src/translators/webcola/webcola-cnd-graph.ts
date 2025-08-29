@@ -3,7 +3,6 @@ import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator } 
 import { InstanceLayout, isAlignmentConstraint, isInstanceLayout, isLeftConstraint, isTopConstraint, LayoutNode } from '../../layout/interfaces';
 import type { GridRouter, Group, Layout, Node, Link } from 'webcola';
 import { IInputDataInstance, ITuple, IAtom } from '../../data-instance/interfaces';
-import { track, createGraphRenderEvent, createGraphRenderEventFromInstanceLayout, createInteractionEvent, PerformanceTracker } from '../../telemetry';
 
 let d3 = window.d3v4 || window.d3; // Use d3 v4 if available, otherwise fallback to the default window.d3
 let cola = window.cola;
@@ -159,6 +158,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   };
 
   /**
+   * Track graph interaction state for event emission
+   */
+  private lastTransform: { x: number; y: number; k: number } | null = null;
+  private isGraphDragging: boolean = false;
+  private isInViewport: boolean = false;
+  private intersectionObserver: IntersectionObserver | null = null;
+
+  /**
    * Temporary canvas for text measurement
    */
   private textMeasurementCanvas: HTMLCanvasElement | null = null;
@@ -169,6 +176,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     this.attachShadow({ mode: 'open' });
     this.initializeDOM();
     this.initializeD3();
+    this.initializeViewportDetection();
 
     // TODO: I'd like to make this better.
     this.lineFunction = d3.line()
@@ -383,10 +391,51 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // Set up zoom behavior (D3 v4 API - matches your working pattern)
     this.zoomBehavior = d3.zoom()
       .scaleExtent([0.1, 10])
+      .on('start', () => {
+        this.isGraphDragging = true;
+        this.lastTransform = this.lastTransform || { x: 0, y: 0, k: 1 };
+      })
       .on('zoom', () => {
-        this.container.attr('transform', d3.event.transform);
+        const transform = d3.event.transform;
+        this.container.attr('transform', transform);
+        
+        // Emit graph interaction events
+        if (this.lastTransform) {
+          const deltaX = transform.x - this.lastTransform.x;
+          const deltaY = transform.y - this.lastTransform.y;
+          const deltaK = transform.k - this.lastTransform.k;
+          
+          // If position changed but scale didn't, it's a pan
+          if ((deltaX !== 0 || deltaY !== 0) && deltaK === 0) {
+            this.dispatchEvent(new CustomEvent('graph-pan', {
+              detail: {
+                deltaX,
+                deltaY,
+                transform: { x: transform.x, y: transform.y, scale: transform.k }
+              }
+            }));
+          }
+          
+          // If it's a combination of movement and scaling, it's a drag operation
+          if ((deltaX !== 0 || deltaY !== 0) && deltaK !== 0) {
+            this.dispatchEvent(new CustomEvent('graph-drag', {
+              detail: {
+                deltaX,
+                deltaY,
+                deltaScale: deltaK,
+                transform: { x: transform.x, y: transform.y, scale: transform.k }
+              }
+            }));
+          }
+        }
+        
+        this.lastTransform = { x: transform.x, y: transform.y, k: transform.k };
+        
         // Update zoom control states when zoom changes
         this.updateZoomControlStates();
+      })
+      .on('end', () => {
+        this.isGraphDragging = false;
       });
 
     this.svg.call(this.zoomBehavior);
@@ -420,6 +469,45 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
     // Initial state update
     this.updateZoomControlStates();
+  }
+
+  /**
+   * Initialize viewport detection using Intersection Observer
+   */
+  private initializeViewportDetection(): void {
+    if (typeof IntersectionObserver !== 'undefined') {
+      this.intersectionObserver = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            const wasInViewport = this.isInViewport;
+            this.isInViewport = entry.isIntersecting;
+            
+            if (!wasInViewport && this.isInViewport) {
+              this.dispatchEvent(new CustomEvent('graph-entered-viewport', {
+                detail: {
+                  timestamp: Date.now(),
+                  intersectionRatio: entry.intersectionRatio
+                }
+              }));
+            } else if (wasInViewport && !this.isInViewport) {
+              this.dispatchEvent(new CustomEvent('graph-exited-viewport', {
+                detail: {
+                  timestamp: Date.now(),
+                  intersectionRatio: entry.intersectionRatio
+                }
+              }));
+            }
+          });
+        },
+        {
+          root: null, // Use the viewport as root
+          rootMargin: '0px',
+          threshold: [0, 0.1] // Trigger when any part enters/exits and when 10% is visible
+        }
+      );
+      
+      this.intersectionObserver.observe(this);
+    }
   }
 
   /**
@@ -773,16 +861,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
       console.log(`Dispatching edge creation request: ${relationName}(${sourceNode.id}, ${targetNode.id})`);
       
-      // Track edge creation interaction telemetry
-      track(createInteractionEvent('edge.create', {
-        targetId: `${sourceNode.id}->${targetNode.id}`,
-        data: {
-          relationId: relationName,
-          sourceNodeId: sourceNode.id,
-          targetNodeId: targetNode.id
-        }
-      }));
-      
       // Dispatch edge creation event for React components to handle
       const edgeCreationEvent = new CustomEvent('edge-creation-requested', {
         detail: {
@@ -913,8 +991,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * @param inputDataInstance - Optional input data instance for edge modifications
    */
   public async renderLayout(instanceLayout: InstanceLayout): Promise<void> {
-    // Start performance tracking for telemetry
-    const perfTracker = new PerformanceTracker('graph.render');
+    // Track start time for graph-loaded event
+    const startTime = performance.now();
 
     if (! isInstanceLayout(instanceLayout)) {
       throw new Error('Invalid instance layout provided. Expected an InstanceLayout instance.');
@@ -1020,15 +1098,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
           this.hideLoading();
           
-          // Track successful graph render telemetry
-          const renderDuration = perfTracker.finish();
-          track(createGraphRenderEvent(webcolaLayout, {
-            layoutType: this.layoutFormat || 'default',
-            isErrorState: this.isUnsatCore,
-            renderDurationMs: renderDuration,
-            dimensions: {
-              width: webcolaLayout.FIG_WIDTH,
-              height: webcolaLayout.FIG_HEIGHT
+          // Emit graph-loaded event with timing
+          const loadDuration = performance.now() - startTime;
+          this.dispatchEvent(new CustomEvent('graph-loaded', {
+            detail: {
+              duration: loadDuration,
+              nodeCount: webcolaLayout.nodes.length,
+              edgeCount: webcolaLayout.links.length,
+              layoutType: this.layoutFormat || 'default'
             }
           }));
         });
@@ -1056,14 +1133,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       console.error('Error rendering layout:', error);
       this.showError(`Layout rendering failed: ${(error as Error).message}`);
       
-      // Track failed graph render telemetry
-      const renderDuration = perfTracker.finish();
-      track(createGraphRenderEventFromInstanceLayout(instanceLayout, {
-        layoutType: this.layoutFormat || 'default',
-        isErrorState: true,
-        renderDurationMs: renderDuration,
-        metadata: {
-          error: (error as Error).message
+      // Still emit graph-loaded event even on error, but with error flag
+      const loadDuration = performance.now() - startTime;
+      this.dispatchEvent(new CustomEvent('graph-loaded', {
+        detail: {
+          duration: loadDuration,
+          error: (error as Error).message,
+          layoutType: this.layoutFormat || 'default'
         }
       }));
     }
@@ -3056,6 +3132,20 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private hideErrorIcon(): void {
     const errorIcon = this.shadowRoot!.querySelector('#error-icon') as HTMLElement;
     errorIcon.classList.remove('visible');
+  }
+
+  // =========================================
+  // LIFECYCLE METHODS
+  // =========================================
+
+  /**
+   * Cleanup when element is removed from DOM
+   */
+  disconnectedCallback(): void {
+    if (this.intersectionObserver) {
+      this.intersectionObserver.disconnect();
+      this.intersectionObserver = null;
+    }
   }
 
   // =========================================

@@ -105,8 +105,8 @@
         .status.success { background: #e8f5e8; color: #2e7d32; }
         .status.error { background: #ffebee; color: #c62828; }
 
-        /* Telemetry display styles */
-        .telemetry-display {
+        /* Event display styles */
+        .event-display {
             background: #f8f9fa;
             border: 1px solid #dee2e6;
             border-radius: 4px;
@@ -117,15 +117,17 @@
             font-family: 'Courier New', monospace;
             font-size: 11px;
         }
-        .telemetry-event {
+        .graph-event {
             margin: 5px 0;
             padding: 5px;
             border-left: 3px solid #007acc;
             background: white;
         }
-        .telemetry-event.graph-render { border-left-color: #28a745; }
-        .telemetry-event.layout-process { border-left-color: #ffc107; }
-        .telemetry-event.user-interaction { border-left-color: #dc3545; }
+        .graph-event.graph-loaded { border-left-color: #28a745; }
+        .graph-event.graph-pan { border-left-color: #ffc107; }
+        .graph-event.graph-drag { border-left-color: #dc3545; }
+        .graph-event.graph-entered-viewport { border-left-color: #17a2b8; }
+        .graph-event.graph-exited-viewport { border-left-color: #6c757d; }
 
         /** TODO: Add support for smaller screen sizes */
         /**
@@ -167,12 +169,12 @@
             <div id="status" class="status info">Ready to load Alloy graph...</div>
             <div id="error-messages"></div>
             
-            <!-- Telemetry Display Section -->
+            <!-- Graph Events Display Section -->
             <div>
-                <h5>📊 Telemetry Events <small>(Real-time tracking)</small></h5>
-                <button class="btn btn-sm btn-outline-secondary" onclick="clearTelemetryLog()">Clear Log</button>
-                <div id="telemetry-display" class="telemetry-display">
-                    <em>Telemetry events will appear here...</em>
+                <h5>📊 Graph Events <small>(Real-time tracking)</small></h5>
+                <button class="btn btn-sm btn-outline-secondary" onclick="clearEventLog()">Clear Log</button>
+                <div id="event-display" class="event-display">
+                    <em>Graph events will appear here...</em>
                 </div>
             </div>
             
@@ -257,19 +259,17 @@
                 console.log('Complete CND-Core browser bundle loaded successfully');
                 console.log('Available on global CndCore:', Object.keys(CndCore));
                 
-                // Initialize telemetry system
-                CndCore.initializeTelemetry({
-                    enabled: true,
-                    debug: true,
-                    context: 'webcola-demo'
+                // Initialize graph event listeners
+                const graphContainer = document.getElementById('graph-container');
+                
+                // Listen to all the new graph events
+                ['graph-loaded', 'graph-pan', 'graph-drag', 'graph-entered-viewport', 'graph-exited-viewport'].forEach(eventType => {
+                    graphContainer.addEventListener(eventType, (event) => {
+                        displayGraphEvent(eventType, event.detail);
+                    });
                 });
-                console.log('✅ Telemetry initialized');
-
-                // Set up telemetry event handler for demo display
-                const telemetryCollector = CndCore.getTelemetryCollector();
-                telemetryCollector.addHandler((event) => {
-                    displayTelemetryEvent(event);
-                });
+                
+                console.log('✅ Graph event listeners initialized');
                 
                 // Check for Alloy-specific components
                 console.log('parseAlloyXML available:', !!CndCore.AlloyInstance.parseAlloyXML);
@@ -550,50 +550,47 @@
         });
 
         /**
-         * Display a telemetry event in the demo UI
-         * @param {Object} event - Telemetry event to display
+         * Display a graph event in the demo UI
+         * @param {string} eventType - Type of graph event
+         * @param {Object} eventDetail - Event detail data
          */
-        function displayTelemetryEvent(event) {
-            const displayElement = document.getElementById('telemetry-display');
+        function displayGraphEvent(eventType, eventDetail) {
+            const displayElement = document.getElementById('event-display');
             if (!displayElement) return;
 
             // Create event element
             const eventElement = document.createElement('div');
-            eventElement.className = `telemetry-event ${event.type.replace('.', '-')}`;
+            eventElement.className = `graph-event ${eventType.replace('-', '-')}`;
             
             // Format timestamp
-            const timestamp = new Date(event.timestamp).toLocaleTimeString();
+            const timestamp = new Date().toLocaleTimeString();
             
             // Create event summary based on type
             let summary = '';
-            switch (event.type) {
-                case 'graph.render':
-                    summary = `Rendered graph: ${event.nodeCount} nodes, ${event.edgeCount} edges`;
-                    if (event.renderDurationMs) {
-                        summary += ` (${Math.round(event.renderDurationMs)}ms)`;
+            switch (eventType) {
+                case 'graph-loaded':
+                    summary = `Graph loaded: ${eventDetail.nodeCount || 0} nodes, ${eventDetail.edgeCount || 0} edges`;
+                    if (eventDetail.duration) {
+                        summary += ` (${Math.round(eventDetail.duration)}ms)`;
                     }
-                    if (event.isErrorState) {
-                        summary += ' [ERROR STATE]';
-                    }
-                    break;
-                case 'layout.process':
-                    summary = `Processed ${event.sourceType} layout: ${event.constraintCount} constraints`;
-                    if (event.processingDurationMs) {
-                        summary += ` (${Math.round(event.processingDurationMs)}ms)`;
-                    }
-                    summary += event.success ? ' [SUCCESS]' : ' [FAILED]';
-                    if (event.errorMessage) {
-                        summary += ` - ${event.errorMessage}`;
+                    if (eventDetail.error) {
+                        summary += ` [ERROR: ${eventDetail.error}]`;
                     }
                     break;
-                case 'user.interaction':
-                    summary = `User action: ${event.action}`;
-                    if (event.targetId) {
-                        summary += ` on ${event.targetId}`;
-                    }
+                case 'graph-pan':
+                    summary = `Graph panned: dx=${Math.round(eventDetail.deltaX)}, dy=${Math.round(eventDetail.deltaY)}`;
+                    break;
+                case 'graph-drag':
+                    summary = `Graph dragged: dx=${Math.round(eventDetail.deltaX)}, dy=${Math.round(eventDetail.deltaY)}, scale=${Math.round(eventDetail.deltaScale * 100)/100}`;
+                    break;
+                case 'graph-entered-viewport':
+                    summary = `Graph entered viewport (${Math.round(eventDetail.intersectionRatio * 100)}% visible)`;
+                    break;
+                case 'graph-exited-viewport':
+                    summary = `Graph exited viewport`;
                     break;
                 default:
-                    summary = `${event.type}: ${JSON.stringify(event)}`;
+                    summary = `${eventType}: ${JSON.stringify(eventDetail)}`;
             }
             
             eventElement.innerHTML = `
@@ -617,12 +614,12 @@
         }
 
         /**
-         * Clear the telemetry event log
+         * Clear the graph event log
          */
-        function clearTelemetryLog() {
-            const displayElement = document.getElementById('telemetry-display');
+        function clearEventLog() {
+            const displayElement = document.getElementById('event-display');
             if (displayElement) {
-                displayElement.innerHTML = '<em>Telemetry events will appear here...</em>';
+                displayElement.innerHTML = '<em>Graph events will appear here...</em>';
             }
         }
 
@@ -631,7 +628,7 @@
         window.loadAlloyData = loadAlloyData;
         window.renderGraph = renderGraph;
         window.clearGraph = clearGraph;
-        window.clearTelemetryLog = clearTelemetryLog;
+        window.clearEventLog = clearEventLog;
     </script>
 </body>
 </html>

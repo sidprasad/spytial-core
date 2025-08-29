@@ -17,7 +17,6 @@ import { SGraphQueryEvaluator } from '../../evaluators/sgq-evaluator';
 import { LayoutInstance } from '../../layout/layoutinstance';
 import { parseLayoutSpec } from '../../layout/layoutspec';
 import { ConstraintData, DirectiveData } from '../NoCodeView/interfaces';
-import { track, createLayoutProcessEvent, inferSourceType, PerformanceTracker } from '../../telemetry';
 
 export interface CombinedInputConfig {
   /** Initial CnD specification */
@@ -146,10 +145,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
   }, [cndSpec, extractedSpecs]);
 
   // Apply layout using the CnD pipeline
-  const applyLayout = useCallback(async (instance: PyretDataInstance, spec: string) => {
-    // Start performance tracking for telemetry
-    const perfTracker = new PerformanceTracker('layout.process');
-    
+  const applyLayout = useCallback(async (instance: PyretDataInstance, spec: string) => {    
     try {
       console.log('Applying layout with SGraphQueryEvaluator...');
       
@@ -176,14 +172,6 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
       setLayoutStale(false);
       onLayoutApplied?.(newLayout);
 
-      // Track successful layout processing telemetry
-      const processingDuration = perfTracker.finish();
-      track(createLayoutProcessEvent(inferSourceType(instance), {
-        constraintCount: Object.keys(layoutSpec.constraints || {}).length,
-        processingDurationMs: processingDuration,
-        success: true
-      }));
-
       // Step 6: Update the graph visualization if available
       if (graphElementRef.current && typeof (graphElementRef.current as any).renderLayout === 'function') {
         await (graphElementRef.current as any).renderLayout(newLayout);
@@ -193,15 +181,6 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
     } catch (error) {
       console.error('Failed to apply layout:', error);
       setLayoutStale(true);
-      
-      // Track failed layout processing telemetry
-      const processingDuration = perfTracker.finish();
-      track(createLayoutProcessEvent(inferSourceType(instance), {
-        constraintCount: 0,
-        processingDurationMs: processingDuration,
-        success: false,
-        errorMessage: (error as Error).message
-      }));
     }
   }, [projections, onLayoutApplied]);
 
