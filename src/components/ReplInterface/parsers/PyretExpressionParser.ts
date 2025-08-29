@@ -360,7 +360,11 @@ export class PyretExpressionParser implements ICommandParser {
       // Create a temporary instance from the expression using the improved static method
       const tempInstance = await PyretDataInstance.fromExpression(
         originalExpression, 
-        false, // showFunctions
+        {
+
+
+          
+        }, // showFunctions
         this.evaluator
       );
 
