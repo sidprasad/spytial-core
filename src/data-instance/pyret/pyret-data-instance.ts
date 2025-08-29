@@ -2,6 +2,20 @@ import { Graph } from 'graphlib';
 import { IDataInstance, IInputDataInstance, IAtom, IRelation, ITuple, IType, DataInstanceEventType, DataInstanceEventListener, DataInstanceEvent } from '../interfaces';
 
 /**
+ * Configuration options for primitive value idempotency in PyretDataInstance
+ */
+export interface PyretInstanceOptions {
+  /** Whether to make string values idempotent (reuse atoms for same string values) */
+  stringsIdempotent?: boolean;
+  /** Whether to make number values idempotent (reuse atoms for same number values) */
+  numbersIdempotent?: boolean;
+  /** Whether to make boolean values idempotent (reuse atoms for same boolean values) */
+  booleansIdempotent?: boolean;
+  /** Whether to include function/method fields in parsing */
+  showFunctions?: boolean;
+}
+
+/**
  * Result of evaluating a Pyret expression
  */
 interface PyretEvaluationResult {
@@ -37,6 +51,7 @@ export function generateEdgeId(
  * - Objects have a `brands` property indicating their type
  * - All dict entries are treated as relations
  * - Cycles are handled gracefully without infinite recursion
+ * - Primitive idempotency is configurable via constructor options
  * 
  * @example
  * ```typescript
@@ -44,7 +59,16 @@ export function generateEdgeId(
  *   dict: { value: 11, left: {...}, right: {...} },
  *   brands: { "$brandtnode989": true }
  * };
- * const instance = new PyretDataInstance(pyretData);
+ * 
+ * // Create with default options (all primitives idempotent)
+ * const instance1 = new PyretDataInstance(pyretData);
+ * 
+ * // Create with custom idempotency settings
+ * const instance2 = new PyretDataInstance(pyretData, {
+ *   stringsIdempotent: false,  // Different string instances won't be unified
+ *   numbersIdempotent: true,   // Same numbers will be unified
+ *   booleansIdempotent: true   // Same booleans will be unified
+ * });
  * ```
  */
 export class PyretDataInstance implements IInputDataInstance {
@@ -64,7 +88,8 @@ export class PyretDataInstance implements IInputDataInstance {
   /** Event listeners for data instance changes */
   private eventListeners = new Map<DataInstanceEventType, Set<DataInstanceEventListener>>();
 
-  private readonly showFunctions: boolean;
+  /** Configuration options for primitive handling */
+  private readonly options: Required<PyretInstanceOptions>;
 
   /** Global map to store constructor patterns and field order for types across all instances */
   private static globalConstructorCache = new Map<string, ConstructorCacheEntry>();
@@ -85,11 +110,18 @@ export class PyretDataInstance implements IInputDataInstance {
    * Creates a PyretDataInstance from a Pyret runtime object
    * 
    * @param pyretData - The root Pyret object to parse, or null/undefined for an empty instance
-   * @param showFunctions - Whether to include function/method fields in parsing
+   * @param options - Configuration options for primitive handling and other behaviors
    * @param externalEvaluator - Optional external Pyret evaluator for enhanced features
    */
-  constructor(pyretData?: PyretObject | null, showFunctions = false, externalEvaluator?: any) {
-    this.showFunctions = showFunctions;
+  constructor(pyretData?: PyretObject | null, options: PyretInstanceOptions = {}, externalEvaluator?: any) {
+    // Set default options with primitives idempotent by default
+    this.options = {
+      stringsIdempotent: options.stringsIdempotent ?? true,
+      numbersIdempotent: options.numbersIdempotent ?? true,
+      booleansIdempotent: options.booleansIdempotent ?? true,
+      showFunctions: options.showFunctions ?? false,
+    };
+    
     this.externalEvaluator = externalEvaluator || null;
     this.initializeBuiltinTypes();
     if (pyretData) {
@@ -110,6 +142,13 @@ export class PyretDataInstance implements IInputDataInstance {
    */
   getExternalEvaluator(): any | null {
     return this.externalEvaluator;
+  }
+
+  /**
+   * Get the current primitive idempotency configuration
+   */
+  getOptions(): Required<PyretInstanceOptions> {
+    return { ...this.options };
   }
 
   /**
@@ -172,14 +211,14 @@ export class PyretDataInstance implements IInputDataInstance {
    * Creates a PyretDataInstance from a Pyret expression.
    * 
    * @param expr - The Pyret expression to evaluate.
-   * @param showFunctions - Whether to include function/method fields in parsing.
+   * @param options - Configuration options for primitive handling and other behaviors
    * @param externalEvaluator - External Pyret evaluator with a `run` method for enhanced features.
    * @returns A new PyretDataInstance created from the evaluated expression.
    * @throws {Error} If the expression cannot be evaluated or parsed.
    */
   static async fromExpression(
     expr: string, 
-    showFunctions = false, 
+    options: PyretInstanceOptions = {},
     externalEvaluator: { run: (code: string) => Promise<unknown> }
   ): Promise<PyretDataInstance> {
     // Evaluate the expression using the external evaluator
@@ -192,7 +231,7 @@ export class PyretDataInstance implements IInputDataInstance {
     // Check if the result is a primitive value
     if (PyretDataInstance.isPrimitive(evaluationResult.result)) {
       // Create a new instance and add the primitive as an atom
-      const instance = new PyretDataInstance(null, showFunctions, externalEvaluator);
+      const instance = new PyretDataInstance(null, options, externalEvaluator);
       
       const atomType = typeof evaluationResult.result === 'string' ? 'String' :
                        typeof evaluationResult.result === 'number' ? 'Number' : 'Boolean';
@@ -208,7 +247,7 @@ export class PyretDataInstance implements IInputDataInstance {
     }
 
     // For complex objects, create a PyretDataInstance directly from the result
-    return new PyretDataInstance(evaluationResult.result as PyretObject, showFunctions, externalEvaluator);
+    return new PyretDataInstance(evaluationResult.result as PyretObject, options, externalEvaluator);
   }
 
   /**
@@ -712,7 +751,7 @@ export class PyretDataInstance implements IInputDataInstance {
 
           // Heuristic: skip fields that look like Pyret methods (object with only a 'name' property)
           if (
-            !this.showFunctions &&
+            !this.options.showFunctions &&
             fieldValue &&
             typeof fieldValue === 'object' &&
             'meth' in fieldValue &&
@@ -762,24 +801,28 @@ export class PyretDataInstance implements IInputDataInstance {
   }
 
   /**
-   * Creates an atom from a primitive value, reusing existing atoms for the same value
+   * Creates an atom from a primitive value, optionally reusing existing atoms based on configuration
    */
   private createAtomFromPrimitive(value: string | number | boolean): string {
     const type = this.mapPrimitiveType(value);
     const label = String(value);
 
-    // Check if we already have an atom for this value
+    // Check idempotency settings for this type
+    const shouldReuse = (type === 'String' && this.options.stringsIdempotent) ||
+                       (type === 'Number' && this.options.numbersIdempotent) ||
+                       (type === 'Boolean' && this.options.booleansIdempotent);
 
-    // WE SHOULDNT DO THIS FOR STRINGS, AS THEY COULD
-    // BE DIFFERENT STRINGS WITH THE SAME VALUE (at least for Pyret?)
+    if (shouldReuse) {
+      // Check if we already have an atom for this value
+      const existingAtom = Array.from(this.atoms.values())
+        .find(atom => atom.label === label && atom.type === type);
 
-    const existingAtom = Array.from(this.atoms.values())
-      .find(atom => atom.label === label && atom.type === type);
-
-    if (existingAtom && type !== 'String') {
-      return existingAtom.id;
+      if (existingAtom) {
+        return existingAtom.id;
+      }
     }
 
+    // Create a new atom
     const atomId = this.generateAtomId(type);
     const atom: IAtom = {
       id: atomId,
@@ -1182,15 +1225,22 @@ export class PyretDataInstance implements IInputDataInstance {
       const isBuiltin = this.isBuiltinType(atom.type);
 
       if (unifyBuiltIns && isBuiltin) {
-        // Check if the built-in atom already exists
-        const existingAtom = Array.from(this.atoms.values()).find(
-          existing => existing.type === atom.type && existing.label === atom.label
-        );
+        // Use this instance's idempotency settings to decide whether to unify
+        const shouldUnify = (atom.type === 'String' && this.options.stringsIdempotent) ||
+                           (atom.type === 'Number' && this.options.numbersIdempotent) ||
+                           (atom.type === 'Boolean' && this.options.booleansIdempotent);
 
-        if (existingAtom) {
-          // Map the original atom ID to the existing atom ID
-          reIdMap.set(atom.id, existingAtom.id);
-          return; // Skip adding this atom
+        if (shouldUnify) {
+          // Check if the built-in atom already exists
+          const existingAtom = Array.from(this.atoms.values()).find(
+            existing => existing.type === atom.type && existing.label === atom.label
+          );
+
+          if (existingAtom) {
+            // Map the original atom ID to the existing atom ID
+            reIdMap.set(atom.id, existingAtom.id);
+            return; // Skip adding this atom
+          }
         }
       }
 
@@ -1273,18 +1323,22 @@ export interface PyretObject {
  * Factory function to create PyretDataInstance from JSON string
  * 
  * @param jsonString - JSON representation of a Pyret object
+ * @param options - Configuration options for primitive handling and other behaviors
  * @returns New PyretDataInstance
  * 
  * @example
  * ```typescript
  * const jsonData = '{"dict": {"value": 42}, "brands": {"$brandleaf": true}}';
- * const instance = createPyretDataInstance(jsonData);
+ * const instance = createPyretDataInstance(jsonData, { stringsIdempotent: false });
  * ```
  */
-export const createPyretDataInstance = (jsonString: string): PyretDataInstance => {
+export const createPyretDataInstance = (
+  jsonString: string, 
+  options: PyretInstanceOptions = {}
+): PyretDataInstance => {
   try {
     const pyretData = JSON.parse(jsonString) as PyretObject;
-    return new PyretDataInstance(pyretData);
+    return new PyretDataInstance(pyretData, options);
   } catch (error) {
     throw new Error(`Failed to parse Pyret JSON: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
