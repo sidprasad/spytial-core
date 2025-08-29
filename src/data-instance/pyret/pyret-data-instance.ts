@@ -769,10 +769,14 @@ export class PyretDataInstance implements IInputDataInstance {
     const label = String(value);
 
     // Check if we already have an atom for this value
+
+    // WE SHOULDNT DO THIS FOR STRINGS, AS THEY COULD
+    // BE DIFFERENT STRINGS WITH THE SAME VALUE (at least for Pyret?)
+
     const existingAtom = Array.from(this.atoms.values())
       .find(atom => atom.label === label && atom.type === type);
 
-    if (existingAtom) {
+    if (existingAtom && type !== 'String') {
       return existingAtom.id;
     }
 

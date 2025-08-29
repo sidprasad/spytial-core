@@ -1517,7 +1517,6 @@ export class LayoutInstance {
         inferredEdges.forEach((he) => {
 
 
-
             let res = this.evaluator.evaluate(he.selector, { instanceIndex: this.instanceNum });
 
             let selectedTuples: string[][] = res.selectedTuplesAll();
@@ -1530,11 +1529,16 @@ export class LayoutInstance {
                 let sourceNodeId = tuple[0];
                 let targetNodeId = tuple[n - 1];
 
-                let edgeLabel = he.name;
+               let edgeLabel = he.name;
+
+                // Use node labels for middle nodes instead of IDs
                 if (n > 2) {
-                    // Middle nodes
-                    let middleNodeIds = tuple.slice(1, n - 1).join(",");
-                    edgeLabel = `${edgeLabel}[${middleNodeIds}]`;
+                    // Get labels for middle nodes
+                    let middleNodeLabels = tuple.slice(1, n - 1).map(nodeId => {
+                        const nodeMetadata = g.node(nodeId);
+                        return nodeMetadata?.label || nodeId; // Use label if available, fallback to ID
+                    }).join(",");
+                    edgeLabel = `${edgeLabel}[${middleNodeLabels}]`;
                 }
                 // The edge 
 
