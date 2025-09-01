@@ -1586,6 +1586,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         
         const displayLabel = d.label || d.name || d.id || "Node";
         const attributes = d.attributes || {};
+        const prominentAttributes = d.prominentAttributes || new Set();
         
         // Calculate optimal font size for the main label
         const mainLabelFontSize = this.calculateOptimalFontSize(
@@ -1614,8 +1615,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         // Handle attributes (show all that fit)
         const attributeEntries = Object.entries(attributes);
         if (attributeEntries.length > 0) {
+          // Separate prominent and regular attributes
+          const prominentAttributeEntries = attributeEntries.filter(([key]) => prominentAttributes.has(key));
+          const regularAttributeEntries = attributeEntries.filter(([key]) => !prominentAttributes.has(key));
+          
           const remainingHeight = maxTextHeight - (mainLabelLines.length * lineHeight);
-          const attributeFontSize = Math.min(
+          
+          // Calculate font sizes for different attribute types
+          const regularAttributeFontSize = Math.min(
             mainLabelFontSize * 0.8, // Slightly smaller than main label
             this.calculateOptimalFontSize(
               "sample: value", // Sample attribute text for sizing
@@ -1625,17 +1632,46 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
             )
           );
           
-          for (let i = 0; i < attributeEntries.length; i++) {
-            const [key, value] = attributeEntries[i];
+          // Prominent attributes get larger font size than main label
+          const prominentAttributeFontSize = Math.min(
+            mainLabelFontSize * 1.3, // Larger than main label
+            this.calculateOptimalFontSize(
+              "prominent: value", // Sample prominent attribute text for sizing
+              maxTextWidth,
+              remainingHeight / Math.max(1, attributeEntries.length),
+              'system-ui'
+            )
+          );
+          
+          // Render prominent attributes first
+          for (let i = 0; i < prominentAttributeEntries.length; i++) {
+            const [key, value] = prominentAttributeEntries[i];
             const attributeText = `${key}: ${value}`;
-            const attributeLines = this.wrapText(attributeText, maxTextWidth, attributeFontSize);
+            const attributeLines = this.wrapText(attributeText, maxTextWidth, prominentAttributeFontSize);
             
             attributeLines.forEach((line, subLineIndex) => {
               textElement
                 .append("tspan")
                 .attr("x", 0)
-                .attr("dy", `${attributeFontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO}px`)
-                .style("font-size", `${attributeFontSize}px`)
+                .attr("dy", `${prominentAttributeFontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO}px`)
+                .style("font-size", `${prominentAttributeFontSize}px`)
+                .style("font-weight", "bold") // Make prominent attributes bold
+                .text(line);
+            });
+          }
+          
+          // Render regular attributes after prominent ones
+          for (let i = 0; i < regularAttributeEntries.length; i++) {
+            const [key, value] = regularAttributeEntries[i];
+            const attributeText = `${key}: ${value}`;
+            const attributeLines = this.wrapText(attributeText, maxTextWidth, regularAttributeFontSize);
+            
+            attributeLines.forEach((line, subLineIndex) => {
+              textElement
+                .append("tspan")
+                .attr("x", 0)
+                .attr("dy", `${regularAttributeFontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO}px`)
+                .style("font-size", `${regularAttributeFontSize}px`)
                 .text(line);
             });
           }

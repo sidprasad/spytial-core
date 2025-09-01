@@ -199,6 +199,47 @@ export class LayoutInstance {
         return false;
     }
 
+    /**
+     * Checks if a field should be rendered as a prominent attribute for specific atoms
+     */
+    isProminentAttributeField(fieldId: string, sourceAtom?: string, targetAtom?: string): boolean {
+        const matchingDirectives = this._layoutSpec.directives.attributes.filter((ad) => 
+            ad.field === fieldId && ad.prominent === true
+        );
+        
+        if (matchingDirectives.length === 0) {
+            return false;
+        }
+        
+        // If no atoms provided or no selector-based directives, use legacy behavior
+        if (!sourceAtom || !targetAtom) {
+            return matchingDirectives.some(ad => !ad.selector);
+        }
+        
+        // Check selector-based directives
+        for (const directive of matchingDirectives) {
+            if (!directive.selector) {
+                // Legacy directive without selector matches any atoms
+                return true;
+            }
+            
+            try {
+                const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
+                const selectedAtoms = selectorResult.selectedAtoms();
+                
+                // Check if source atom is selected by the selector
+                if (selectedAtoms.includes(sourceAtom)) {
+                    return true;
+                }
+            } catch (error) {
+                console.warn(`Failed to evaluate prominent attribute selector "${directive.selector}":`, error);
+                // Continue to next directive on error
+            }
+        }
+        
+        return false;
+    }
+
     isHiddenField(fieldId: string, sourceAtom?: string, targetAtom?: string): boolean {
         const matchingDirectives = this._layoutSpec.directives.hiddenFields.filter((hd) => hd.field === fieldId);
         
@@ -471,6 +512,37 @@ export class LayoutInstance {
     }
 
     /**
+     * Generates a map of prominent attributes based on the attribute directives with prominent=true
+     * @param g - The graph containing edge information
+     * @returns A record mapping node IDs to sets of prominent attribute keys
+     */
+    private generateProminentAttributesMap(g: Graph): Record<string, Set<string>> {
+        let prominentAttributes: Record<string, Set<string>> = {};
+
+        let graphEdges = [...g.edges()];
+        
+        graphEdges.forEach((edge) => {
+            const relName = this.getRelationName(g, edge);
+            const sourceAtom = edge.v;
+            const targetAtom = edge.w;
+            const isAttributeRel = this.isAttributeField(relName, sourceAtom, targetAtom);
+            const isProminentRel = this.isProminentAttributeField(relName, sourceAtom, targetAtom);
+
+            if (isAttributeRel && isProminentRel) {
+                const attributeKey = this.getEdgeLabel(g, edge);
+                let source = edge.v;
+
+                if (!prominentAttributes[source]) {
+                    prominentAttributes[source] = new Set<string>();
+                }
+                prominentAttributes[source].add(attributeKey);
+            }
+        });
+
+        return prominentAttributes;
+    }
+
+    /**
     * Modifies the graph to remove extraneous nodes (ex. those to be hidden)
     * @param g - The graph, which will be modified to remove extraneous nodes.
     */
@@ -633,6 +705,7 @@ export class LayoutInstance {
 
         let g: Graph = ai.generateGraph(this.hideDisconnected, this.hideDisconnectedBuiltIns);
 
+        const prominentAttributesMap = this.generateProminentAttributesMap(g);
         const attributes = this.generateAttributesAndRemoveEdges(g);
 
 
@@ -680,6 +753,7 @@ export class LayoutInstance {
                 .filter((group) => group.nodeIds.includes(nodeId))
                 .map((group) => group.name);
             let nodeAttributes = attributes[nodeId] || {};
+            let nodeProminentAttributes = prominentAttributesMap[nodeId] || new Set<string>();
 
 
             return {
@@ -689,6 +763,7 @@ export class LayoutInstance {
                 color: color,
                 groups: nodeGroups,
                 attributes: nodeAttributes,
+                prominentAttributes: nodeProminentAttributes,
                 icon: iconPath,
                 height: height,
                 width: width,

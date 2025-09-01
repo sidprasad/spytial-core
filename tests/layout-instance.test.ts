@@ -47,5 +47,64 @@ describe('LayoutInstance', () => {
     expect(layout.edges).toHaveLength(1);
     expect(layout.constraints.length).toBeGreaterThan(0);
   });
+
+  it('handles prominent attributes correctly', () => {
+    const dataWithAttributes: IJsonDataInstance = {
+      atoms: [
+        { id: 'Person1', type: 'Person', label: 'John' },
+        { id: 'Name1', type: 'String', label: 'John Doe' },
+        { id: 'Age1', type: 'Number', label: '30' }
+      ],
+      relations: [
+        {
+          id: 'name_rel',
+          name: 'name',
+          types: ['Person', 'String'],
+          tuples: [{ atoms: ['Person1', 'Name1'], types: ['Person', 'String'] }]
+        },
+        {
+          id: 'age_rel',
+          name: 'age',
+          types: ['Person', 'Number'],
+          tuples: [{ atoms: ['Person1', 'Age1'], types: ['Person', 'Number'] }]
+        }
+      ]
+    };
+
+    const layoutSpecWithProminentAttributes = `
+constraints:
+  - orientation:
+      selector: name
+      directions:
+        - right
+directives:
+  - attribute:
+      field: 'name'
+      prominent: true
+  - attribute:
+      field: 'age'
+`;
+
+    const spec = parseLayoutSpec(layoutSpecWithProminentAttributes);
+    const instance = new JSONDataInstance(dataWithAttributes);
+    const evaluator = createEvaluator(instance);
+
+    const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
+    const { layout } = layoutInstance.generateLayout(instance, {});
+
+    // Find the Person1 node
+    const personNode = layout.nodes.find(node => node.id === 'Person1');
+    expect(personNode).toBeDefined();
+
+    // Check that attributes are present
+    expect(personNode?.attributes).toBeDefined();
+    expect(personNode?.attributes?.name).toContain('John Doe');
+    expect(personNode?.attributes?.age).toContain('30');
+
+    // Check that prominent attributes are tracked
+    expect(personNode?.prominentAttributes).toBeDefined();
+    expect(personNode?.prominentAttributes?.has('name')).toBe(true);
+    expect(personNode?.prominentAttributes?.has('age')).toBe(false);
+  });
 });
 

@@ -20,6 +20,7 @@ export interface LayoutNode {
     color : string;
     groups?: string[];
     attributes?: Record<string, string[]>;
+    prominentAttributes?: Set<string>; // Set of attribute keys that should be rendered prominently
     icon? : string;
     width : number;
     height : number;

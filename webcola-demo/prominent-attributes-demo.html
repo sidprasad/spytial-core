@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prominent Attributes Demo</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .demo-section {
+            margin-bottom: 40px;
+        }
+        .demo-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #34495e;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 5px;
+        }
+        .code-block {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+        }
+        .visualization {
+            border: 2px solid #bdc3c7;
+            min-height: 300px;
+            background: white;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .explanation {
+            background-color: #e8f6f3;
+            border-left: 4px solid #1abc9c;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .feature-highlight {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 Prominent Attributes Feature Demo</h1>
+        
+        <div class="feature-highlight">
+            <strong>New Feature:</strong> Make specific attributes more prominent than node labels!
+            <br>Use the <code>prominent: true</code> option in attribute directives to make attributes stand out.
+        </div>
+
+        <div class="demo-section">
+            <div class="demo-title">Example Data Structure</div>
+            <div class="explanation">
+                Consider a Person-Name-Age relationship where we want the person's name to be more prominent than their type label.
+            </div>
+            <div class="code-block">
+{
+  "atoms": [
+    { "id": "John", "type": "Person", "label": "Person" },
+    { "id": "JohnDoe", "type": "String", "label": "John Doe" },
+    { "id": "30", "type": "Number", "label": "30" }
+  ],
+  "relations": [
+    {
+      "id": "name_rel",
+      "name": "name", 
+      "types": ["Person", "String"],
+      "tuples": [{ "atoms": ["John", "JohnDoe"], "types": ["Person", "String"] }]
+    },
+    {
+      "id": "age_rel",
+      "name": "age",
+      "types": ["Person", "Number"], 
+      "tuples": [{ "atoms": ["John", "30"], "types": ["Person", "Number"] }]
+    }
+  ]
+}
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <div class="demo-title">Layout Specification - Before (Traditional)</div>
+            <div class="code-block">
+directives:
+  - attribute:
+      field: 'name'
+  - attribute:
+      field: 'age'
+            </div>
+            <div class="explanation">
+                <strong>Result:</strong> Both name and age attributes appear smaller than the main "Person" label.
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <div class="demo-title">Layout Specification - After (With Prominent Attributes)</div>
+            <div class="code-block">
+directives:
+  - attribute:
+      field: 'name'
+      <span style="background-color: #fff3cd; padding: 2px 4px; border-radius: 3px;">prominent: true</span>
+  - attribute:
+      field: 'age'
+            </div>
+            <div class="explanation">
+                <strong>Result:</strong> The name attribute ("John Doe") now appears larger and bolder than the "Person" label, while age remains normal size.
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <div class="demo-title">Visual Comparison</div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div>
+                    <h4 style="text-align: center; color: #e74c3c;">Traditional Attributes</h4>
+                    <div style="border: 2px solid #e74c3c; padding: 20px; text-align: center; border-radius: 8px;">
+                        <div style="font-weight: bold; font-size: 16px; margin-bottom: 8px;">Person</div>
+                        <div style="font-size: 12px; color: #666;">name: John Doe</div>
+                        <div style="font-size: 12px; color: #666;">age: 30</div>
+                    </div>
+                </div>
+                
+                <div>
+                    <h4 style="text-align: center; color: #27ae60;">With Prominent Attributes</h4>
+                    <div style="border: 2px solid #27ae60; padding: 20px; text-align: center; border-radius: 8px;">
+                        <div style="font-weight: bold; font-size: 20px; margin-bottom: 8px; color: #2c3e50;">John Doe</div>
+                        <div style="font-size: 14px; color: #7f8c8d;">Person</div>
+                        <div style="font-size: 12px; color: #666;">age: 30</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <div class="demo-title">Advanced Usage with Selectors</div>
+            <div class="explanation">
+                You can also combine prominent attributes with selectors for fine-grained control:
+            </div>
+            <div class="code-block">
+directives:
+  # Make name prominent only for Person atoms
+  - attribute:
+      field: 'name'
+      selector: 'Person'
+      prominent: true
+      
+  # Make title prominent only for Company atoms  
+  - attribute:
+      field: 'title'
+      selector: 'Company'
+      prominent: true
+      
+  # Regular attribute for all
+  - attribute:
+      field: 'id'
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <div class="demo-title">Implementation Details</div>
+            <div class="explanation">
+                <strong>How it works:</strong>
+                <ul>
+                    <li>Prominent attributes are rendered with 1.3x the font size of the main label</li>
+                    <li>Prominent attributes use bold font weight</li>
+                    <li>Prominent attributes are rendered before regular attributes</li>
+                    <li>Regular attributes remain 0.8x the size of the main label</li>
+                    <li>Fully backward compatible - existing configurations work unchanged</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="feature-highlight">
+            <strong>Use Cases:</strong>
+            <ul style="margin: 10px 0;">
+                <li>📛 Display person names more prominently than their role/type</li>
+                <li>🏢 Highlight company names in business diagrams</li>
+                <li>📋 Emphasize key identifiers or titles</li>
+                <li>🎯 Draw attention to the most important attribute of an entity</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
