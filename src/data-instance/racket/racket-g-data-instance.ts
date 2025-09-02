@@ -192,6 +192,10 @@ export class RacketGDataInstance implements IDataInstance {
 
     /**
      * Generate a graphlib Graph from the data instance.
+     * 
+     * 
+     * TODO: This one is super behind the others for now.
+     * 
      */
     generateGraph(hideDisconnected: boolean, hideDisconnectedBuiltIns: boolean): Graph {
 

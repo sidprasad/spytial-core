@@ -1079,6 +1079,26 @@ export class PyretDataInstance implements IInputDataInstance {
     return type;
   }
 
+  /**
+   * Generates a graphlib Graph representation of this data instance.
+   * 
+   * This method creates a directed multigraph where:
+   * - Each atom becomes a node with its label and type as metadata
+   * - Each relation tuple becomes an edge between atoms
+   * - Multi-atom tuples (arity > 2) are handled by connecting first to last atom
+   * - Disconnected nodes can be optionally filtered out
+   * 
+   * @param hideDisconnected - Whether to hide atoms with no relations
+   * @param hideDisconnectedBuiltIns - Whether to hide disconnected built-in types
+   * @returns A graphlib Graph object ready for layout algorithms
+   * 
+   * @example
+   * ```typescript
+   * const graph = instance.generateGraph(true, true);
+   * // Use with WebCola or other layout algorithms
+   * const layout = new cola.Layout().nodes(graph.nodes()).edges(graph.edges());
+   * ```
+   */
   generateGraph(hideDisconnected = false, hideDisconnectedBuiltIns = false): Graph {
     const graph = new Graph({ directed: true, multigraph: true });
 
@@ -1095,16 +1115,23 @@ export class PyretDataInstance implements IInputDataInstance {
         if (tuple.atoms.length >= 2) {
           const sourceId = tuple.atoms[0];
           const targetId = tuple.atoms[tuple.atoms.length - 1];
-
-          // Include middle atoms in edge label if present
+          
+          // Create edge label that includes middle atom labels for higher-arity relations
           const middleAtoms = tuple.atoms.slice(1, -1);
-          const edgeLabel = middleAtoms.length > 0
-            ? `${relation.name}[${middleAtoms.join(', ')}]`
-            : relation.name;
+          let edgeLabel = relation.name;
+          
+          if (middleAtoms.length > 0) {
+            // Get labels for middle atoms instead of using IDs
+            const middleLabels = middleAtoms.map(atomId => {
+              const atom = this.atoms.get(atomId);
+              return atom ? atom.label : atomId; // Fallback to ID if atom not found
+            });
+            edgeLabel = `${relation.name}[${middleLabels.join(', ')}]`;
+          }
 
           // Generate a unique edge ID
           const edgeId = generateEdgeId(relation, tuple);
-
+          
           graph.setEdge(sourceId, targetId, edgeLabel, edgeId);
         }
       });
