@@ -37,6 +37,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   private layoutInstance: LayoutInstance | null = null;
   private cndSpecString: string = '';
   private controlsContainer: HTMLDivElement | null = null;
+  private customTypes: Set<string> = new Set();
 
   constructor(dataInstance?: IInputDataInstance) {
     super();
@@ -135,6 +136,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
               <select class="atom-type-select" aria-label="Select atom type">
                 <option value="">Select type...</option>
               </select>
+              <textarea class="custom-type-input" placeholder="Enter custom type name..." style="display: none;"></textarea>
               <input type="text" class="atom-label-input" placeholder="Enter label..." aria-label="Atom label">
               <button class="add-atom-btn" disabled>Add Atom</button>
             </div>
@@ -274,11 +276,17 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         gap: 8px;
       }
 
-      .atom-type-select, .atom-label-input, .relation-type-input, .atom-delete-select, .relation-delete-select {
+      .atom-type-select, .atom-label-input, .relation-type-input, .atom-delete-select, .relation-delete-select, .custom-type-input {
         padding: 6px 8px;
         border: 1px solid #ddd;
         border-radius: 4px;
         font-size: 12px;
+      }
+
+      .custom-type-input {
+        resize: vertical;
+        min-height: 60px;
+        font-family: inherit;
       }
 
       .add-atom-btn, .add-relation-btn, .delete-atom-btn, .delete-relation-btn, .clear-all-btn, .export-json-btn {
@@ -432,18 +440,61 @@ export class StructuredInputGraph extends WebColaCnDGraph {
 
     // Atom creation
     const typeSelect = this.controlsContainer.querySelector('.atom-type-select') as HTMLSelectElement;
+    const customTypeInput = this.controlsContainer.querySelector('.custom-type-input') as HTMLTextAreaElement;
     const labelInput = this.controlsContainer.querySelector('.atom-label-input') as HTMLInputElement;
     const addBtn = this.controlsContainer.querySelector('.add-atom-btn') as HTMLButtonElement;
 
     const updateAddButtonState = () => {
-      addBtn.disabled = !typeSelect.value || !labelInput.value.trim();
+      const selectedType = typeSelect.value;
+      const customType = customTypeInput.value.trim();
+      const effectiveType = selectedType === 'Other...' ? customType : selectedType;
+      addBtn.disabled = !effectiveType || !labelInput.value.trim();
     };
 
-    typeSelect?.addEventListener('change', updateAddButtonState);
+    typeSelect?.addEventListener('change', () => {
+      const selectedValue = typeSelect.value;
+      if (selectedValue === 'Other...') {
+        customTypeInput.style.display = 'block';
+        customTypeInput.focus();
+      } else {
+        customTypeInput.style.display = 'none';
+        customTypeInput.value = '';
+      }
+      updateAddButtonState();
+    });
+
+    customTypeInput?.addEventListener('input', () => {
+      updateAddButtonState();
+    });
+
     labelInput?.addEventListener('input', updateAddButtonState);
 
     addBtn?.addEventListener('click', async () => {
-      await this.addAtomFromForm(typeSelect.value, labelInput.value.trim());
+      let selectedType = typeSelect.value;
+      
+      if (selectedType === 'Other...') {
+        const customType = customTypeInput.value.trim();
+        if (customType) {
+          // Add to custom types set
+          this.customTypes.add(customType);
+          selectedType = customType;
+          
+          // Add to dropdown for future use
+          const option = document.createElement('option');
+          option.value = customType;
+          option.textContent = customType;
+          typeSelect.appendChild(option);
+          
+          // Reset to new custom type
+          typeSelect.value = customType;
+          customTypeInput.style.display = 'none';
+          customTypeInput.value = '';
+        } else {
+          return; // Don't proceed if no custom type entered
+        }
+      }
+      
+      await this.addAtomFromForm(selectedType, labelInput.value.trim());
       labelInput.value = '';
       updateAddButtonState();
       this.updateDeletionSelects(); // Update deletion dropdowns
@@ -738,6 +789,24 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       option.textContent = type;
       typeSelect.appendChild(option);
     });
+
+    // Add custom types that have been created
+    this.customTypes.forEach(type => {
+      // Only add if not already in the list
+      const existingOption = Array.from(typeSelect.options).find(opt => opt.value === type);
+      if (!existingOption) {
+        const option = document.createElement('option');
+        option.value = type;
+        option.textContent = type;
+        typeSelect.appendChild(option);
+      }
+    });
+
+    // Add "Other..." option at the end
+    const otherOption = document.createElement('option');
+    otherOption.value = 'Other...';
+    otherOption.textContent = 'Other...';
+    typeSelect.appendChild(otherOption);
   }
 
   /**
