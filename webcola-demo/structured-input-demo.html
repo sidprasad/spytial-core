@@ -142,9 +142,6 @@ directives:
     value: false"></textarea>
                 <div style="margin-top: 10px;">
                     <button onclick="loadCustomSpec()">Load Spec</button>
-                    <button onclick="loadSimpleSpec()">Example: Simple</button>
-                    <button onclick="loadAdvancedSpec()">Example: Advanced</button>
-                    <button onclick="loadPersonRelationshipSpec()">Example: Person-Relationship</button>
                     <button onclick="clearGraph()">Clear Graph</button>
                     <button onclick="showExportedData()">Show Exported Data</button>
                 </div>
@@ -193,7 +190,7 @@ directives:
             }
 
             // Set up a simple data instance
-            const dataInstance = new window.CndCore.JSONDataInstance({
+            const dataInstance = new CndCore.JSONDataInstance({
                 atoms: [],
                 relations: [],
                 types: []
@@ -277,81 +274,6 @@ directives:
             }
         }
 
-        function loadSimpleSpec() {
-            if (!isComponentReady) {
-                showStatus('❌ Component not ready yet', 'error');
-                return;
-            }
-
-            const simpleSpec = `nodes:
-  - { id: "Person", type: "Person", color: "#FF6B35", size: 20 }
-  - { id: "Entity", type: "Entity", color: "#4CAF50", size: 15 }
-edges:
-  - { id: "friend", type: "friend", color: "#E91E63", width: 3 }
-  - { id: "relation", type: "relation", color: "#2196F3", width: 2 }
-constraints: []
-directives:
-  - type: "hideDisconnected"
-    value: false`;
-
-            currentGraph.setCnDSpec(simpleSpec);
-            updateSpecDisplay(simpleSpec);
-            showStatus('✅ Simple spec loaded', 'success');
-        }
-
-        function loadAdvancedSpec() {
-            if (!isComponentReady) {
-                showStatus('❌ Component not ready yet', 'error');
-                return;
-            }
-
-            const advancedSpec = `nodes:
-  - { id: "Student", type: "Student", color: "#FF6B35", size: 20 }
-  - { id: "Teacher", type: "Teacher", color: "#4CAF50", size: 20 }
-  - { id: "Course", type: "Course", color: "#2196F3", size: 15 }
-  - { id: "Building", type: "Building", color: "#9C27B0", size: 15 }
-edges:
-  - { id: "enrolledIn", type: "enrolledIn", color: "#E91E63", width: 3 }
-  - { id: "teaches", type: "teaches", color: "#FF9800", width: 3 }
-  - { id: "locatedIn", type: "locatedIn", color: "#607D8B", width: 2 }
-constraints:
-  - type: "align"
-    nodes: ["Student", "Teacher"]
-    axis: "x"
-directives:
-  - type: "hideDisconnected"
-    value: false`;
-
-            currentGraph.setCnDSpec(advancedSpec);
-            updateSpecDisplay(advancedSpec);
-            showStatus('✅ Advanced spec loaded', 'success');
-        }
-
-        function loadPersonRelationshipSpec() {
-            if (!isComponentReady) {
-                showStatus('❌ Component not ready yet', 'error');
-                return;
-            }
-
-            const personSpec = `nodes:
-  - { id: "Person", type: "Person", color: "#FF6B35", size: 25 }
-  - { id: "Family", type: "Family", color: "#4CAF50", size: 20 }
-  - { id: "Organization", type: "Organization", color: "#2196F3", size: 20 }
-edges:
-  - { id: "friend", type: "friend", color: "#E91E63", width: 3 }
-  - { id: "sibling", type: "sibling", color: "#FF9800", width: 3 }
-  - { id: "worksFor", type: "worksFor", color: "#607D8B", width: 2 }
-  - { id: "memberOf", type: "memberOf", color: "#9C27B0", width: 2 }
-constraints: []
-directives:
-  - type: "hideDisconnected"
-    value: false`;
-
-            currentGraph.setCnDSpec(personSpec);
-            updateSpecDisplay(personSpec);
-            showStatus('✅ Person-Relationship spec loaded', 'success');
-        }
-
         function clearGraph() {
             if (!isComponentReady) {
                 showStatus('❌ Component not ready yet', 'error');
@@ -359,7 +281,7 @@ directives:
             }
 
             // Create a new empty data instance
-            const emptyDataInstance = new window.CndCore.JSONDataInstance({
+            const emptyDataInstance = new CndCore.JSONDataInstance({
                 atoms: [],
                 relations: [],
                 types: []
