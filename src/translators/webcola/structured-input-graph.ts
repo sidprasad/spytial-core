@@ -1,17 +1,19 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { WebColaCnDGraph } from './webcola-cnd-graph';
 import { IInputDataInstance, IAtom, ITuple } from '../../data-instance/interfaces';
+import { JSONDataInstance } from '../../data-instance/json-data-instance';
+import { SGraphQueryEvaluator } from '../../evaluators/sgq-evaluator';
+import { LayoutInstance } from '../../layout/layoutinstance';
+import { parseLayoutSpec } from '../../layout/layoutspec';
 
 /**
  * A parsed CnD specification that extracts type information
  */
 export interface ParsedCnDSpec {
-  /** Available atom types extracted from the spec */
+  /** Available atom types (extracted from data instance, not spec) */
   atomTypes: string[];
-  /** Available relation types extracted from the spec */
+  /** Available relation types (extracted from data instance, not spec) */
   relationTypes: string[];
-  /** Type hierarchies if available */
-  typeHierarchies?: Record<string, string[]>;
 }
 
 /**
@@ -23,7 +25,8 @@ export interface ParsedCnDSpec {
  * - CnDSpec-driven atom type selection
  * - Block-based structured input interface
  * - Auto-generated unique atom IDs with user-provided labels
- * - Type hierarchy auto-construction
+ * - Full CnD pipeline integration (data instance, evaluator, layout instance)
+ * - Constraint enforcement on data changes
  * - IDataInstance JSON export
  * 
  * Attributes:
@@ -42,6 +45,9 @@ export interface ParsedCnDSpec {
 export class StructuredInputGraph extends WebColaCnDGraph {
   private parsedSpec: ParsedCnDSpec | null = null;
   private dataInstance: IInputDataInstance | null = null;
+  private evaluator: SGraphQueryEvaluator | null = null;
+  private layoutInstance: LayoutInstance | null = null;
+  private cndSpecString: string = '';
   private controlsContainer: HTMLDivElement | null = null;
 
   constructor() {
@@ -437,22 +443,38 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   /**
    * Parse CnD specification to extract type information
    */
+  /**
+   * Parse CnD specification and initialize the full CnD pipeline
+   */
   private async parseCnDSpec(specString: string): Promise<void> {
     try {
-      // Simple parsing for now - in a real implementation this would use a proper YAML/CnD parser
-      const spec: ParsedCnDSpec = this.extractTypesFromSpec(specString);
+      console.log('🔄 Parsing CnD spec and initializing pipeline...');
+      this.cndSpecString = specString;
+      
+      // Initialize data instance if not already done
+      if (!this.dataInstance) {
+        this.initializeDataInstance();
+      }
+      
+      // Initialize the full CnD pipeline
+      await this.initializeCnDPipeline(specString);
+      
+      // Extract type information from data instance (not spec)
+      const spec: ParsedCnDSpec = this.extractTypesFromDataInstance();
       this.parsedSpec = spec;
       
       this.updateTypeSelector();
       this.updateSpecInfo();
       
-      // Force reload the graph with new spec
-      await this.reloadGraphWithSpec(specString);
+      // Trigger constraint enforcement and layout regeneration
+      await this.enforceConstraintsAndRegenerate();
       
       // Dispatch event
       this.dispatchEvent(new CustomEvent('spec-parsed', {
         detail: { spec }
       }));
+      
+      console.log('✅ CnD spec parsed and pipeline initialized');
     } catch (error) {
       console.error('Failed to parse CnD spec:', error);
       this.updateSpecInfo('error', error instanceof Error ? error.message : 'Parse error');
@@ -460,104 +482,112 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   }
 
   /**
-   * Reload graph with new specification
+   * Initialize or create a new data instance
    */
-  private async reloadGraphWithSpec(specString: string): Promise<void> {
-    try {
-      console.log('🔄 Reloading graph with new spec...');
-      
-      // If we have a data instance, regenerate the layout with the new spec
-      if (this.dataInstance && specString.trim()) {
-        await this.regenerateLayoutWithCurrentData();
-      }
-      
-      console.log('✅ Graph reloaded with new spec');
-    } catch (error) {
-      console.error('Failed to reload graph with new spec:', error);
+  private initializeDataInstance(): void {
+    if (!this.dataInstance) {
+      // Create empty data instance
+      this.dataInstance = new JSONDataInstance({
+        atoms: [],
+        relations: []
+      });
+      console.log('📦 Initialized new empty data instance');
     }
   }
 
   /**
-   * Regenerate layout with current data and spec
+   * Initialize the complete CnD pipeline with evaluator and layout instance
    */
-  private async regenerateLayoutWithCurrentData(): Promise<void> {
+  private async initializeCnDPipeline(specString: string): Promise<void> {
+    if (!specString.trim()) {
+      console.log('Empty spec - clearing pipeline');
+      this.evaluator = null;
+      this.layoutInstance = null;
+      return;
+    }
+
     try {
-      if (!this.dataInstance) {
-        console.log('No data instance available for layout generation');
-        return;
-      }
-
-      const cndSpec = this.getAttribute('cnd-spec') || '';
-      if (!cndSpec.trim()) {
-        console.log('No CnD spec available for layout generation');
-        return;
-      }
-
-      console.log('🔄 Regenerating layout with current data...');
-
       // Parse the CnD spec to create a layout spec
-      const layoutSpec = (window as any).CndCore.parseLayoutSpec(cndSpec);
+      const layoutSpec = parseLayoutSpec(specString);
       
-      // Create evaluation context
-      const evaluationContext = {
-        sourceData: this.dataInstance
-      };
-
       // Create and initialize SGraphQueryEvaluator
-      const sgqEvaluator = new (window as any).CndCore.SGraphQueryEvaluator();
-      sgqEvaluator.initialize(evaluationContext);
+      this.evaluator = new SGraphQueryEvaluator();
+      this.evaluator.initialize({
+        sourceData: this.dataInstance!
+      });
 
-      // Create LayoutInstance
-      const ENABLE_ALIGNMENT_EDGES = true;
-      const instanceNumber = 0;
-      
-      const layoutInstance = new (window as any).CndCore.LayoutInstance(
+      // Create LayoutInstance with the evaluator
+      this.layoutInstance = new LayoutInstance(
         layoutSpec, 
-        sgqEvaluator, 
-        instanceNumber, 
-        ENABLE_ALIGNMENT_EDGES
+        this.evaluator, 
+        0, // instance number
+        true // enable alignment edges
       );
 
-      // Generate layout
+      console.log('✅ CnD pipeline initialized (evaluator + layout instance)');
+    } catch (error) {
+      console.error('Failed to initialize CnD pipeline:', error);
+      this.evaluator = null;
+      this.layoutInstance = null;
+      throw error;
+    }
+  }
+
+  /**
+   * Enforce constraints and regenerate layout
+   */
+  private async enforceConstraintsAndRegenerate(): Promise<void> {
+    try {
+      if (!this.dataInstance || !this.layoutInstance) {
+        console.log('Cannot enforce constraints - missing data instance or layout instance');
+        return;
+      }
+
+      console.log('🔄 Enforcing constraints and regenerating layout...');
+
+      // Generate layout with constraint enforcement
       const projections = {};
-      const layoutResult = layoutInstance.generateLayout(this.dataInstance, projections);
+      const layoutResult = this.layoutInstance.generateLayout(this.dataInstance, projections);
+      
+      if (layoutResult.error) {
+        console.warn('Constraint validation error:', layoutResult.error);
+      }
       
       // Render the layout
       await this.renderLayout(layoutResult.layout);
       
-      console.log('✅ Layout regenerated and rendered');
+      console.log('✅ Constraints enforced and layout regenerated');
     } catch (error) {
-      console.error('Failed to regenerate layout:', error);
+      console.error('Failed to enforce constraints and regenerate layout:', error);
     }
   }
 
   /**
-   * Extract type information from CnD spec string
-   * This is a simplified parser - in practice you'd use a proper CnD spec parser
+   * Update the parsed spec types from current data instance
    */
-  private extractTypesFromSpec(specString: string): ParsedCnDSpec {
+  private refreshTypesFromDataInstance(): void {
+    this.parsedSpec = this.extractTypesFromDataInstance();
+    this.updateTypeSelector();
+  }
+  private extractTypesFromDataInstance(): ParsedCnDSpec {
     const atomTypes = new Set<string>();
     const relationTypes = new Set<string>();
 
-    // Extract from nodes section
-    const nodeMatches = specString.match(/nodes:\s*\n([\s\S]*?)(?=\n\w|$)/);
-    if (nodeMatches) {
-      const nodesSection = nodeMatches[1];
-      const nodeLines = nodesSection.match(/- \{ id: "([^"]+)", type: "([^"]+)"/g);
-      nodeLines?.forEach(line => {
-        const match = line.match(/type: "([^"]+)"/);
-        if (match) atomTypes.add(match[1]);
+    if (this.dataInstance) {
+      // Extract atom types from data instance
+      const atoms = this.dataInstance.getAtoms();
+      atoms.forEach(atom => {
+        if (atom.type) {
+          atomTypes.add(atom.type);
+        }
       });
-    }
 
-    // Extract from edges section
-    const edgeMatches = specString.match(/edges:\s*\n([\s\S]*?)(?=\n\w|$)/);
-    if (edgeMatches) {
-      const edgesSection = edgeMatches[1];
-      const edgeLines = edgesSection.match(/- \{ id: "([^"]+)", type: "([^"]+)"/g);
-      edgeLines?.forEach(line => {
-        const match = line.match(/type: "([^"]+)"/);
-        if (match) relationTypes.add(match[1]);
+      // Extract relation types from data instance
+      const relations = this.dataInstance.getRelations();
+      relations.forEach(relation => {
+        if (relation.type) {
+          relationTypes.add(relation.type);
+        }
       });
     }
 
@@ -574,8 +604,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
 
     return {
       atomTypes: Array.from(atomTypes),
-      relationTypes: Array.from(relationTypes),
-      typeHierarchies: {} // Could implement hierarchy extraction here
+      relationTypes: Array.from(relationTypes)
     };
   }
 
@@ -685,8 +714,18 @@ export class StructuredInputGraph extends WebColaCnDGraph {
 
       this.dataInstance.addAtom(atom);
 
-      // Trigger graph update
-      await this.regenerateLayoutWithCurrentData();
+      // Refresh types from updated data instance
+      this.refreshTypesFromDataInstance();
+
+      // Re-initialize evaluator with updated data instance
+      if (this.evaluator && this.cndSpecString) {
+        this.evaluator.initialize({
+          sourceData: this.dataInstance
+        });
+      }
+
+      // Trigger constraint enforcement and layout regeneration
+      await this.enforceConstraintsAndRegenerate();
 
       // Dispatch event
       this.dispatchEvent(new CustomEvent('atom-added', {
@@ -740,16 +779,26 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   setDataInstance(instance: IInputDataInstance): void {
     this.dataInstance = instance;
     
+    // Refresh types from the new data instance
+    this.refreshTypesFromDataInstance();
+    
+    // Re-initialize evaluator with the new data instance
+    if (this.evaluator && this.cndSpecString) {
+      this.evaluator.initialize({
+        sourceData: this.dataInstance
+      });
+    }
+    
     // Listen for data instance changes to update the visualization
     instance.addEventListener('atomAdded', () => {
-      // In a real implementation, this would trigger a layout update
       console.log('Atom added to instance');
+      this.refreshTypesFromDataInstance();
       this.updateDeletionSelects();
     });
 
     instance.addEventListener('relationTupleAdded', () => {
-      // In a real implementation, this would trigger a layout update
       console.log('Relation added to instance');
+      this.refreshTypesFromDataInstance();
       this.updateDeletionSelects();
     });
 
@@ -830,14 +879,22 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         !rel.tuple.includes(atomId)
       );
 
-      const newInstance = new (window as any).CndCore.JSONDataInstance({
+      const newInstance = new JSONDataInstance({
         atoms: remainingAtoms,
         relations: relations,
         types: []
       });
 
       this.setDataInstance(newInstance);
-      await this.regenerateLayoutWithCurrentData();
+      
+      // Re-initialize evaluator with updated data instance
+      if (this.evaluator && this.cndSpecString) {
+        this.evaluator.initialize({
+          sourceData: this.dataInstance
+        });
+      }
+      
+      await this.enforceConstraintsAndRegenerate();
 
       console.log(`✅ Deleted atom: ${atomToDelete.label} (${atomToDelete.id})`);
       
@@ -868,14 +925,22 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       const relationToDelete = relations[index];
       const remainingRelations = relations.filter((_, i) => i !== index);
 
-      const newInstance = new (window as any).CndCore.JSONDataInstance({
+      const newInstance = new JSONDataInstance({
         atoms: this.dataInstance.getAtoms(),
         relations: remainingRelations,
         types: []
       });
 
       this.setDataInstance(newInstance);
-      await this.regenerateLayoutWithCurrentData();
+      
+      // Re-initialize evaluator with updated data instance
+      if (this.evaluator && this.cndSpecString) {
+        this.evaluator.initialize({
+          sourceData: this.dataInstance
+        });
+      }
+      
+      await this.enforceConstraintsAndRegenerate();
 
       console.log(`✅ Deleted relation: ${relationToDelete.type}: ${relationToDelete.tuple.join(' → ')}`);
       
@@ -895,14 +960,22 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     if (!this.dataInstance) return;
 
     try {
-      const newInstance = new (window as any).CndCore.JSONDataInstance({
+      const newInstance = new JSONDataInstance({
         atoms: [],
         relations: [],
         types: []
       });
 
       this.setDataInstance(newInstance);
-      await this.regenerateLayoutWithCurrentData();
+      
+      // Re-initialize evaluator with updated data instance
+      if (this.evaluator && this.cndSpecString) {
+        this.evaluator.initialize({
+          sourceData: this.dataInstance
+        });
+      }
+      
+      await this.enforceConstraintsAndRegenerate();
 
       console.log('✅ Cleared all atoms and relations');
       
