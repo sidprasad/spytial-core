@@ -383,8 +383,8 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     typeSelect?.addEventListener('change', updateAddButtonState);
     labelInput?.addEventListener('input', updateAddButtonState);
 
-    addBtn?.addEventListener('click', () => {
-      this.addAtomFromForm(typeSelect.value, labelInput.value.trim());
+    addBtn?.addEventListener('click', async () => {
+      await this.addAtomFromForm(typeSelect.value, labelInput.value.trim());
       labelInput.value = '';
       updateAddButtonState();
       this.updateDeletionSelects(); // Update deletion dropdowns
@@ -406,20 +406,20 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     atomDeleteSelect?.addEventListener('change', updateDeleteButtonStates);
     relationDeleteSelect?.addEventListener('change', updateDeleteButtonStates);
 
-    deleteAtomBtn?.addEventListener('click', () => {
-      this.deleteAtom(atomDeleteSelect.value);
+    deleteAtomBtn?.addEventListener('click', async () => {
+      await this.deleteAtom(atomDeleteSelect.value);
       this.updateDeletionSelects();
       updateDeleteButtonStates();
     });
 
-    deleteRelationBtn?.addEventListener('click', () => {
-      this.deleteRelation(relationDeleteSelect.value);
+    deleteRelationBtn?.addEventListener('click', async () => {
+      await this.deleteRelation(relationDeleteSelect.value);
       this.updateDeletionSelects();
       updateDeleteButtonStates();
     });
 
-    clearAllBtn?.addEventListener('click', () => {
-      this.clearAllItems();
+    clearAllBtn?.addEventListener('click', async () => {
+      await this.clearAllItems();
       this.updateDeletionSelects();
       updateDeleteButtonStates();
     });
@@ -437,7 +437,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   /**
    * Parse CnD specification to extract type information
    */
-  private parseCnDSpec(specString: string): void {
+  private async parseCnDSpec(specString: string): Promise<void> {
     try {
       // Simple parsing for now - in a real implementation this would use a proper YAML/CnD parser
       const spec: ParsedCnDSpec = this.extractTypesFromSpec(specString);
@@ -447,7 +447,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       this.updateSpecInfo();
       
       // Force reload the graph with new spec
-      this.reloadGraphWithSpec(specString);
+      await this.reloadGraphWithSpec(specString);
       
       // Dispatch event
       this.dispatchEvent(new CustomEvent('spec-parsed', {
@@ -462,35 +462,72 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   /**
    * Reload graph with new specification
    */
-  private reloadGraphWithSpec(specString: string): void {
+  private async reloadGraphWithSpec(specString: string): Promise<void> {
     try {
-      // Set the cnd-spec attribute on the parent WebColaCnDGraph
-      this.setAttribute('cnd-spec', specString);
+      console.log('🔄 Reloading graph with new spec...');
       
-      // If we have access to rerenderGraph method from parent, call it
-      if (typeof (this as any).rerenderGraph === 'function') {
-        (this as any).rerenderGraph();
-      }
-      
-      // Force a layout update if current data exists
-      if (this.dataInstance) {
-        // Clear and re-add atoms to trigger relayout
-        const atoms = this.dataInstance.getAtoms();
-        const relations = this.dataInstance.getRelations();
-        
-        // Create fresh data instance
-        const freshInstance = new (window as any).CndCore.JSONDataInstance({
-          atoms: atoms,
-          relations: relations,
-          types: []
-        });
-        
-        this.setDataInstance(freshInstance);
+      // If we have a data instance, regenerate the layout with the new spec
+      if (this.dataInstance && specString.trim()) {
+        await this.regenerateLayoutWithCurrentData();
       }
       
       console.log('✅ Graph reloaded with new spec');
     } catch (error) {
       console.error('Failed to reload graph with new spec:', error);
+    }
+  }
+
+  /**
+   * Regenerate layout with current data and spec
+   */
+  private async regenerateLayoutWithCurrentData(): Promise<void> {
+    try {
+      if (!this.dataInstance) {
+        console.log('No data instance available for layout generation');
+        return;
+      }
+
+      const cndSpec = this.getAttribute('cnd-spec') || '';
+      if (!cndSpec.trim()) {
+        console.log('No CnD spec available for layout generation');
+        return;
+      }
+
+      console.log('🔄 Regenerating layout with current data...');
+
+      // Parse the CnD spec to create a layout spec
+      const layoutSpec = (window as any).CndCore.parseLayoutSpec(cndSpec);
+      
+      // Create evaluation context
+      const evaluationContext = {
+        sourceData: this.dataInstance
+      };
+
+      // Create and initialize SGraphQueryEvaluator
+      const sgqEvaluator = new (window as any).CndCore.SGraphQueryEvaluator();
+      sgqEvaluator.initialize(evaluationContext);
+
+      // Create LayoutInstance
+      const ENABLE_ALIGNMENT_EDGES = true;
+      const instanceNumber = 0;
+      
+      const layoutInstance = new (window as any).CndCore.LayoutInstance(
+        layoutSpec, 
+        sgqEvaluator, 
+        instanceNumber, 
+        ENABLE_ALIGNMENT_EDGES
+      );
+
+      // Generate layout
+      const projections = {};
+      const layoutResult = layoutInstance.generateLayout(this.dataInstance, projections);
+      
+      // Render the layout
+      await this.renderLayout(layoutResult.layout);
+      
+      console.log('✅ Layout regenerated and rendered');
+    } catch (error) {
+      console.error('Failed to regenerate layout:', error);
     }
   }
 
@@ -635,7 +672,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   /**
    * Add an atom from the form inputs
    */
-  private addAtomFromForm(type: string, label: string): void {
+  private async addAtomFromForm(type: string, label: string): Promise<void> {
     if (!type || !label || !this.dataInstance) return;
 
     try {
@@ -647,6 +684,9 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       };
 
       this.dataInstance.addAtom(atom);
+
+      // Trigger graph update
+      await this.regenerateLayoutWithCurrentData();
 
       // Dispatch event
       this.dispatchEvent(new CustomEvent('atom-added', {
@@ -732,12 +772,13 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         atomDeleteSelect.removeChild(atomDeleteSelect.lastChild!);
       }
 
-      // Add current atoms
+      // Add current atoms with user-friendly labels
       const atoms = this.dataInstance.getAtoms();
       atoms.forEach(atom => {
         const option = document.createElement('option');
         option.value = atom.id;
-        option.textContent = `${atom.label} (${atom.id}:${atom.type})`;
+        // Show label first, then type and ID for context
+        option.textContent = `${atom.label} (${atom.type})`;
         atomDeleteSelect.appendChild(option);
       });
     }
@@ -748,12 +789,19 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         relationDeleteSelect.removeChild(relationDeleteSelect.lastChild!);
       }
 
-      // Add current relations
+      // Add current relations with user-friendly labels
       const relations = this.dataInstance.getRelations();
       relations.forEach((relation, index) => {
         const option = document.createElement('option');
         option.value = index.toString();
-        option.textContent = `${relation.type}: ${relation.tuple.join(' → ')}`;
+        
+        // Convert atom IDs to labels for better UX
+        const atomLabels = relation.tuple.map(atomId => {
+          const atom = this.dataInstance!.getAtoms().find(a => a.id === atomId);
+          return atom ? atom.label : atomId;
+        });
+        
+        option.textContent = `${relation.type}: ${atomLabels.join(' → ')}`;
         relationDeleteSelect.appendChild(option);
       });
     }
@@ -762,7 +810,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   /**
    * Delete an atom by ID
    */
-  private deleteAtom(atomId: string): void {
+  private async deleteAtom(atomId: string): Promise<void> {
     if (!this.dataInstance || !atomId) return;
 
     try {
@@ -789,7 +837,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       });
 
       this.setDataInstance(newInstance);
-      this.reloadGraphWithCurrentData();
+      await this.regenerateLayoutWithCurrentData();
 
       console.log(`✅ Deleted atom: ${atomToDelete.label} (${atomToDelete.id})`);
       
@@ -805,7 +853,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   /**
    * Delete a relation by index
    */
-  private deleteRelation(relationIndex: string): void {
+  private async deleteRelation(relationIndex: string): Promise<void> {
     if (!this.dataInstance || !relationIndex) return;
 
     try {
@@ -827,7 +875,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       });
 
       this.setDataInstance(newInstance);
-      this.reloadGraphWithCurrentData();
+      await this.regenerateLayoutWithCurrentData();
 
       console.log(`✅ Deleted relation: ${relationToDelete.type}: ${relationToDelete.tuple.join(' → ')}`);
       
@@ -843,7 +891,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   /**
    * Clear all atoms and relations
    */
-  private clearAllItems(): void {
+  private async clearAllItems(): Promise<void> {
     if (!this.dataInstance) return;
 
     try {
@@ -854,7 +902,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       });
 
       this.setDataInstance(newInstance);
-      this.reloadGraphWithCurrentData();
+      await this.regenerateLayoutWithCurrentData();
 
       console.log('✅ Cleared all atoms and relations');
       
@@ -867,21 +915,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     }
   }
 
-  /**
-   * Reload graph with current data (for deletion updates)
-   */
-  private reloadGraphWithCurrentData(): void {
-    try {
-      // If we have access to rerenderGraph method from parent, call it
-      if (typeof (this as any).rerenderGraph === 'function') {
-        (this as any).rerenderGraph();
-      }
-      
-      console.log('✅ Graph reloaded with current data');
-    } catch (error) {
-      console.error('Failed to reload graph with current data:', error);
-    }
-  }
+
 
   /**
    * Get the current data instance
@@ -893,8 +927,9 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   /**
    * Set the CnD specification
    */
-  setCnDSpec(spec: string): void {
+  async setCnDSpec(spec: string): Promise<void> {
     this.setAttribute('cnd-spec', spec);
+    await this.parseCnDSpec(spec);
   }
 
   /**
