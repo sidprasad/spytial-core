@@ -7,22 +7,11 @@ import { LayoutInstance } from '../../layout/layoutinstance';
 import { parseLayoutSpec } from '../../layout/layoutspec';
 
 /**
- * A parsed CnD specification that extracts type information
- */
-export interface ParsedCnDSpec {
-  /** Available atom types (extracted from data instance, not spec) */
-  atomTypes: string[];
-  /** Available relation types (extracted from data instance, not spec) */
-  relationTypes: string[];
-}
-
-/**
  * Structured Input Graph Custom Element
  * Extends WebColaCnDGraph to provide structured input capabilities
  * 
  * Features:
  * - All WebColaCnDGraph functionality (edge creation, visualization, etc.)
- * - CnDSpec-driven atom type selection
  * - Block-based structured input interface
  * - Auto-generated unique atom IDs with user-provided labels
  * - Full CnD pipeline integration (data instance, evaluator, layout instance)
@@ -39,11 +28,10 @@ export interface ParsedCnDSpec {
  *   * event.detail: { atom: IAtom }
  * - 'data-exported': When data is exported
  *   * event.detail: { data: string, format: 'json' }
- * - 'spec-parsed': When CnD spec is successfully parsed
- *   * event.detail: { spec: ParsedCnDSpec }
+ * - 'spec-loaded': When CnD spec is successfully loaded
+ *   * event.detail: { spec: string }
  */
 export class StructuredInputGraph extends WebColaCnDGraph {
-  private parsedSpec: ParsedCnDSpec | null = null;
   private dataInstance: IInputDataInstance | null = null;
   private evaluator: SGraphQueryEvaluator | null = null;
   private layoutInstance: LayoutInstance | null = null;
@@ -459,9 +447,9 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       // Initialize the full CnD pipeline
       await this.initializeCnDPipeline(specString);
       
-      // Extract type information from data instance (not spec)
-      const spec: ParsedCnDSpec = this.extractTypesFromDataInstance();
-      this.parsedSpec = spec;
+      // Initialize data instance and pipeline
+      this.initializeDataInstance();
+      await this.initializeCnDPipeline(this.cndSpecString);
       
       this.updateTypeSelector();
       this.updateSpecInfo();
@@ -470,8 +458,8 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       await this.enforceConstraintsAndRegenerate();
       
       // Dispatch event
-      this.dispatchEvent(new CustomEvent('spec-parsed', {
-        detail: { spec }
+      this.dispatchEvent(new CustomEvent('spec-loaded', {
+        detail: { spec: this.cndSpecString }
       }));
       
       console.log('✅ CnD spec parsed and pipeline initialized');
@@ -563,30 +551,23 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   }
 
   /**
-   * Update the parsed spec types from current data instance
+   * Update the type selector based on current data instance
    */
   private refreshTypesFromDataInstance(): void {
-    this.parsedSpec = this.extractTypesFromDataInstance();
     this.updateTypeSelector();
   }
-  private extractTypesFromDataInstance(): ParsedCnDSpec {
+
+  /**
+   * Get available atom types from the current data instance
+   */
+  private getAvailableAtomTypes(): string[] {
     const atomTypes = new Set<string>();
-    const relationTypes = new Set<string>();
 
     if (this.dataInstance) {
-      // Extract atom types from data instance
       const atoms = this.dataInstance.getAtoms();
       atoms.forEach(atom => {
         if (atom.type) {
           atomTypes.add(atom.type);
-        }
-      });
-
-      // Extract relation types from data instance
-      const relations = this.dataInstance.getRelations();
-      relations.forEach(relation => {
-        if (relation.type) {
-          relationTypes.add(relation.type);
         }
       });
     }
@@ -597,15 +578,8 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       atomTypes.add('Person');
       atomTypes.add('Object');
     }
-    if (relationTypes.size === 0) {
-      relationTypes.add('relation');
-      relationTypes.add('connects');
-    }
 
-    return {
-      atomTypes: Array.from(atomTypes),
-      relationTypes: Array.from(relationTypes)
-    };
+    return Array.from(atomTypes);
   }
 
   /**
@@ -636,15 +610,16 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    */
   private updateTypeSelector(): void {
     const typeSelect = this.controlsContainer?.querySelector('.atom-type-select') as HTMLSelectElement;
-    if (!typeSelect || !this.parsedSpec) return;
+    if (!typeSelect) return;
 
     // Clear existing options (except the first one)
     while (typeSelect.children.length > 1) {
       typeSelect.removeChild(typeSelect.lastChild!);
     }
 
-    // Add atom types
-    this.parsedSpec.atomTypes.forEach(type => {
+    // Add atom types from data instance
+    const atomTypes = this.getAvailableAtomTypes();
+    atomTypes.forEach(type => {
       const option = document.createElement('option');
       option.value = type;
       option.textContent = type;
@@ -669,13 +644,12 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       return;
     }
 
-    if (this.parsedSpec) {
-      specStatus.textContent = `Loaded: ${this.parsedSpec.atomTypes.length} atom types, ${this.parsedSpec.relationTypes.length} relation types`;
-      
-      typeList.innerHTML = this.parsedSpec.atomTypes.map(type => 
-        `<span class="type-item">${type}</span>`
-      ).join('');
-    }
+    const atomTypes = this.getAvailableAtomTypes();
+    specStatus.textContent = `Loaded: ${atomTypes.length} atom types available`;
+    
+    typeList.innerHTML = atomTypes.map(type => 
+      `<span class="type-item">${type}</span>`
+    ).join('');
   }
 
   /**
@@ -845,12 +819,16 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         option.value = index.toString();
         
         // Convert atom IDs to labels for better UX
-        const atomLabels = relation.tuple.map(atomId => {
+        const firstTuple = relation.tuples[0];
+        if (!firstTuple) return; // Skip if no tuples
+        
+        const atomLabels = firstTuple.atoms.map((atomId: string) => {
           const atom = this.dataInstance!.getAtoms().find(a => a.id === atomId);
           return atom ? atom.label : atomId;
         });
         
-        option.textContent = `${relation.type}: ${atomLabels.join(' → ')}`;
+        const relationType = relation.types[0] || 'relation';
+        option.textContent = `${relationType}: ${atomLabels.join(' → ')}`;
         relationDeleteSelect.appendChild(option);
       });
     }
@@ -876,7 +854,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       // For now, we'll create a new instance without this atom
       const remainingAtoms = atoms.filter(atom => atom.id !== atomId);
       const relations = this.dataInstance.getRelations().filter(rel => 
-        !rel.tuple.includes(atomId)
+        !rel.tuples.some(tuple => tuple.atoms.includes(atomId))
       );
 
       const newInstance = new JSONDataInstance({
@@ -926,7 +904,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       const remainingRelations = relations.filter((_, i) => i !== index);
 
       const newInstance = new JSONDataInstance({
-        atoms: this.dataInstance.getAtoms(),
+        atoms: [...this.dataInstance.getAtoms()],
         relations: remainingRelations,
         types: []
       });
@@ -942,7 +920,10 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       
       await this.enforceConstraintsAndRegenerate();
 
-      console.log(`✅ Deleted relation: ${relationToDelete.type}: ${relationToDelete.tuple.join(' → ')}`);
+      const relationType = relationToDelete.types[0] || 'relation';
+      const firstTuple = relationToDelete.tuples[0];
+      const tupleString = firstTuple ? firstTuple.atoms.join(' → ') : '';
+      console.log(`✅ Deleted relation: ${relationType}: ${tupleString}`);
       
       // Dispatch event
       this.dispatchEvent(new CustomEvent('relation-deleted', {
@@ -1006,9 +987,9 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   }
 
   /**
-   * Get the parsed specification
+   * Get available atom types from the current data instance
    */
-  getParsedSpec(): ParsedCnDSpec | null {
-    return this.parsedSpec;
+  getAvailableTypes(): string[] {
+    return this.getAvailableAtomTypes();
   }
 }

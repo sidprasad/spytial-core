@@ -5,11 +5,9 @@ The `StructuredInputGraph` is a web component that inherits from `WebColaCnDGrap
 ## Features
 
 - **Inherits from WebColaCnDGraph**: All existing functionality for graph visualization and edge creation
-- **CnD Spec-driven Input**: Parses CnD specifications to extract available atom types
 - **Structured Atom Creation**: Block-based interface for adding atoms with type selection
 - **Auto-generated IDs**: Automatically generates unique atom IDs (e.g., "Person-1", "Person-2")
 - **User-provided Labels**: Users enter descriptive labels for atoms
-- **Type Hierarchy Support**: Automatically constructs type hierarchies from CnD specs
 - **JSON Export**: Export complete data instances as IDataInstance JSON
 - **Event System**: Comprehensive events for integration with other components
 
@@ -76,8 +74,8 @@ graph.addEventListener('data-exported', (event) => {
   - `event.detail: { atom: IAtom }`
 - `data-exported`: Fired when data is exported
   - `event.detail: { data: string, format: 'json' }`
-- `spec-parsed`: Fired when CnD spec is successfully parsed
-  - `event.detail: { spec: ParsedCnDSpec }`
+- `spec-loaded`: Fired when CnD spec is successfully loaded
+  - `event.detail: { spec: string }`
 - `edge-creation-requested`: Inherited from WebColaCnDGraph
 - `edge-modification-requested`: Inherited from WebColaCnDGraph
 
@@ -92,8 +90,8 @@ Set the data instance for the graph. The component will listen for changes and u
 ### getDataInstance(): IInputDataInstance | null
 Get the current data instance.
 
-### getParsedSpec(): ParsedCnDSpec | null
-Get the parsed CnD specification with extracted type information.
+### getAvailableTypes(): string[]
+Get the list of available atom types from the current data instance.
 
 ## Demo
 
@@ -118,12 +116,12 @@ directives:
     value: false
 ```
 
-## Type Extraction
+## Type Management
 
-The component automatically extracts:
-- **Atom types** from the `nodes` section `type` field
-- **Relation types** from the `edges` section `type` field
-- **Type hierarchies** (future enhancement)
+The component manages types through:
+- **Atom types** extracted from the current data instance
+- **Relation types** extracted from the current data instance
+- **Default types** provided when no data is available
 
 ## Integration
 
