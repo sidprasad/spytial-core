@@ -24,6 +24,8 @@ export { setupLayout } from './layout';
 export { type default as IEvaluator } from './evaluators/interfaces';
 export { ForgeEvaluator, WrappedForgeEvaluator } from './evaluators/forge-evaluator';
 export { WebColaTranslator } from './translators';
+export { StructuredInputGraph } from './translators';
+export type { ParsedCnDSpec } from './translators';
 export { SGraphQueryEvaluator } from "./evaluators/sgq-evaluator";
 
 // Browser-specific exports and initialization
@@ -43,6 +45,14 @@ if (typeof window !== 'undefined') {
         customElements.define('webcola-cnd-graph', WebColaCnDGraph as any);
         console.log('✅ WebCola CnD Graph custom element registered');
       }
+
+      // Register structured input graph
+      import('./translators/webcola/structured-input-graph').then(({ StructuredInputGraph }) => {
+        if (typeof customElements !== 'undefined' && !customElements.get('structured-input-graph')) {
+          customElements.define('structured-input-graph', StructuredInputGraph as any);
+          console.log('✅ Structured Input Graph custom element registered');
+        }
+      }).catch(console.error);
     }).catch(console.error);
   }).catch(console.error);
 }
