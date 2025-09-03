@@ -32,7 +32,7 @@ import { parseLayoutSpec } from '../../layout/layoutspec';
  *   * event.detail: { spec: string }
  */
 export class StructuredInputGraph extends WebColaCnDGraph {
-  private dataInstance: IInputDataInstance;
+  private dataInstance!: IInputDataInstance;
   private evaluator: SGraphQueryEvaluator | null = null;
   private layoutInstance: LayoutInstance | null = null;
   private cndSpecString: string = '';
@@ -42,12 +42,15 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     super();
     
     // Require data instance - if not provided, create empty one
-    this.dataInstance = dataInstance || new JSONDataInstance({
+    const instance = dataInstance || new JSONDataInstance({
       atoms: [],
       relations: []
     });
     
-    console.log('🔧 StructuredInputGraph initialized with data instance:', this.dataInstance);
+    console.log('🔧 StructuredInputGraph initialized with data instance:', instance);
+    
+    // Use setDataInstance to properly set up event listeners
+    this.setDataInstance(instance);
     
     // Add structured input specific initialization
     this.initializeStructuredInput();
@@ -529,7 +532,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     
     try {
       // Add relation to data instance
-      this.dataInstance.addRelation(relationId, tuple);
+      this.dataInstance.addRelationTuple(relationId, tuple);
       console.log(`✅ Added relation to data instance: ${relationId}(${sourceNodeId}, ${targetNodeId})`);
       
       // Trigger constraint enforcement and layout regeneration
@@ -901,7 +904,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         types: atomTypes
       };
 
-      this.dataInstance.addRelation(relationType, tuple);
+      this.dataInstance.addRelationTuple(relationType, tuple);
       console.log(`✅ Relation added to data instance: ${relationType}(${selectedAtomIds.join(', ')})`);
 
       // Trigger constraint enforcement and layout regeneration
