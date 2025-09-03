@@ -32,17 +32,28 @@ import { parseLayoutSpec } from '../../layout/layoutspec';
  *   * event.detail: { spec: string }
  */
 export class StructuredInputGraph extends WebColaCnDGraph {
-  private dataInstance: IInputDataInstance | null = null;
+  private dataInstance: IInputDataInstance;
   private evaluator: SGraphQueryEvaluator | null = null;
   private layoutInstance: LayoutInstance | null = null;
   private cndSpecString: string = '';
   private controlsContainer: HTMLDivElement | null = null;
 
-  constructor() {
+  constructor(dataInstance?: IInputDataInstance) {
     super();
+    
+    // Require data instance - if not provided, create empty one
+    this.dataInstance = dataInstance || new JSONDataInstance({
+      atoms: [],
+      relations: []
+    });
+    
+    console.log('🔧 StructuredInputGraph initialized with data instance:', this.dataInstance);
     
     // Add structured input specific initialization
     this.initializeStructuredInput();
+    
+    // Listen for edge creation events from the parent WebColaCnDGraph
+    this.addEventListener('edge-creation-requested', this.handleEdgeCreationRequest.bind(this));
   }
 
   /**
@@ -126,6 +137,18 @@ export class StructuredInputGraph extends WebColaCnDGraph {
             </div>
             <div class="type-info">
               <small>ID will be auto-generated</small>
+            </div>
+          </div>
+          
+          <div class="relation-creation-section">
+            <h4>Create Relations</h4>
+            <div class="relation-form">
+              <input type="text" class="relation-type-input" placeholder="Relation type (e.g., friend, knows, parent)" />
+              <div class="atom-selector">
+                <label>Select atoms for this relation:</label>
+                <div class="atom-checkboxes"></div>
+              </div>
+              <button class="add-relation-btn" disabled>Add Relation</button>
             </div>
           </div>
           
@@ -224,7 +247,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         display: none;
       }
 
-      .atom-creation-section, .deletion-section, .export-section, .spec-info-section {
+      .atom-creation-section, .relation-creation-section, .deletion-section, .export-section, .spec-info-section {
         margin-bottom: 16px;
         padding-bottom: 12px;
         border-bottom: 1px solid #eee;
@@ -248,14 +271,14 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         gap: 8px;
       }
 
-      .atom-type-select, .atom-label-input, .atom-delete-select, .relation-delete-select {
+      .atom-type-select, .atom-label-input, .relation-type-input, .atom-delete-select, .relation-delete-select {
         padding: 6px 8px;
         border: 1px solid #ddd;
         border-radius: 4px;
         font-size: 12px;
       }
 
-      .add-atom-btn, .delete-atom-btn, .delete-relation-btn, .clear-all-btn, .export-json-btn {
+      .add-atom-btn, .add-relation-btn, .delete-atom-btn, .delete-relation-btn, .clear-all-btn, .export-json-btn {
         padding: 6px 12px;
         background: #007acc;
         color: white;
@@ -274,13 +297,52 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         background: #c82333;
       }
 
-      .add-atom-btn:disabled, .delete-atom-btn:disabled, .delete-relation-btn:disabled {
+      .add-atom-btn:disabled, .add-relation-btn:disabled, .delete-atom-btn:disabled, .delete-relation-btn:disabled {
         background: #ccc;
         cursor: not-allowed;
       }
 
-      .add-atom-btn:hover:not(:disabled), .export-json-btn:hover {
+      .add-atom-btn:hover:not(:disabled), .add-relation-btn:hover:not(:disabled), .export-json-btn:hover {
         background: #005fa3;
+      }
+
+      .relation-form {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .atom-selector {
+        margin-top: 8px;
+      }
+
+      .atom-selector label {
+        display: block;
+        font-size: 11px;
+        font-weight: 500;
+        margin-bottom: 4px;
+        color: #555;
+      }
+
+      .atom-checkboxes {
+        max-height: 100px;
+        overflow-y: auto;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 6px;
+        background: #fafafa;
+      }
+
+      .atom-checkbox-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 2px 0;
+        font-size: 11px;
+      }
+
+      .atom-checkbox-item input[type="checkbox"] {
+        margin: 0;
       }
 
       .deletion-controls {
@@ -382,6 +444,33 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       labelInput.value = '';
       updateAddButtonState();
       this.updateDeletionSelects(); // Update deletion dropdowns
+      this.updateAtomCheckboxes(); // Update relation creation checkboxes
+    });
+
+    // Relation creation
+    const relationTypeInput = this.controlsContainer.querySelector('.relation-type-input') as HTMLInputElement;
+    const addRelationBtn = this.controlsContainer.querySelector('.add-relation-btn') as HTMLButtonElement;
+
+    const updateAddRelationButtonState = () => {
+      const checkboxes = this.controlsContainer?.querySelectorAll('.atom-checkboxes input[type="checkbox"]:checked');
+      const hasChecked = checkboxes && checkboxes.length >= 2;
+      const hasType = relationTypeInput.value.trim();
+      addRelationBtn.disabled = !hasChecked || !hasType;
+    };
+
+    relationTypeInput?.addEventListener('input', updateAddRelationButtonState);
+
+    // Add event listeners to checkboxes when they're created
+    this.updateAtomCheckboxes();
+
+    addRelationBtn?.addEventListener('click', async () => {
+      await this.addRelationFromForm();
+      relationTypeInput.value = '';
+      // Uncheck all checkboxes
+      const checkboxes = this.controlsContainer?.querySelectorAll('.atom-checkboxes input[type="checkbox"]') as NodeListOf<HTMLInputElement>;
+      checkboxes?.forEach(checkbox => checkbox.checked = false);
+      updateAddRelationButtonState();
+      this.updateDeletionSelects();
     });
 
     // Deletion controls
@@ -403,6 +492,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     deleteAtomBtn?.addEventListener('click', async () => {
       await this.deleteAtom(atomDeleteSelect.value);
       this.updateDeletionSelects();
+      this.updateAtomCheckboxes();
       updateDeleteButtonStates();
     });
 
@@ -415,6 +505,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     clearAllBtn?.addEventListener('click', async () => {
       await this.clearAllItems();
       this.updateDeletionSelects();
+      this.updateAtomCheckboxes();
       updateDeleteButtonStates();
     });
 
@@ -429,8 +520,26 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   }
 
   /**
-   * Parse CnD specification to extract type information
+   * Handle edge creation requests from input mode
    */
+  private async handleEdgeCreationRequest(event: CustomEvent): Promise<void> {
+    console.log('🔗 Handling edge creation request:', event.detail);
+    
+    const { relationId, sourceNodeId, targetNodeId, tuple } = event.detail;
+    
+    try {
+      // Add relation to data instance
+      this.dataInstance.addRelation(relationId, tuple);
+      console.log(`✅ Added relation to data instance: ${relationId}(${sourceNodeId}, ${targetNodeId})`);
+      
+      // Trigger constraint enforcement and layout regeneration
+      await this.enforceConstraintsAndRegenerate();
+      
+    } catch (error) {
+      console.error('❌ Failed to handle edge creation request:', error);
+    }
+  }
+
   /**
    * Parse CnD specification and initialize the full CnD pipeline
    */
@@ -439,17 +548,8 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       console.log('🔄 Parsing CnD spec and initializing pipeline...');
       this.cndSpecString = specString;
       
-      // Initialize data instance if not already done
-      if (!this.dataInstance) {
-        this.initializeDataInstance();
-      }
-      
       // Initialize the full CnD pipeline
       await this.initializeCnDPipeline(specString);
-      
-      // Initialize data instance and pipeline
-      this.initializeDataInstance();
-      await this.initializeCnDPipeline(this.cndSpecString);
       
       this.updateTypeSelector();
       this.updateSpecInfo();
@@ -464,22 +564,8 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       
       console.log('✅ CnD spec parsed and pipeline initialized');
     } catch (error) {
-      console.error('Failed to parse CnD spec:', error);
+      console.error('❌ Failed to parse CnD spec:', error);
       this.updateSpecInfo('error', error instanceof Error ? error.message : 'Parse error');
-    }
-  }
-
-  /**
-   * Initialize or create a new data instance
-   */
-  private initializeDataInstance(): void {
-    if (!this.dataInstance) {
-      // Create empty data instance
-      this.dataInstance = new JSONDataInstance({
-        atoms: [],
-        relations: []
-      });
-      console.log('📦 Initialized new empty data instance');
     }
   }
 
@@ -488,21 +574,25 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    */
   private async initializeCnDPipeline(specString: string): Promise<void> {
     if (!specString.trim()) {
-      console.log('Empty spec - clearing pipeline');
+      console.log('📝 Empty spec - clearing pipeline');
       this.evaluator = null;
       this.layoutInstance = null;
       return;
     }
 
     try {
+      console.log('🔧 Initializing CnD pipeline with spec...');
+      
       // Parse the CnD spec to create a layout spec
       const layoutSpec = parseLayoutSpec(specString);
+      console.log('📋 Layout spec parsed successfully');
       
-      // Create and initialize SGraphQueryEvaluator
+      // Create and initialize SGraphQueryEvaluator with current data instance
       this.evaluator = new SGraphQueryEvaluator();
       this.evaluator.initialize({
-        sourceData: this.dataInstance!
+        sourceData: this.dataInstance
       });
+      console.log('🔍 SGraphQueryEvaluator initialized with data instance');
 
       // Create LayoutInstance with the evaluator
       this.layoutInstance = new LayoutInstance(
@@ -511,10 +601,11 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         0, // instance number
         true // enable alignment edges
       );
+      console.log('📐 LayoutInstance created');
 
-      console.log('✅ CnD pipeline initialized (evaluator + layout instance)');
+      console.log('✅ CnD pipeline initialized successfully (evaluator + layout instance)');
     } catch (error) {
-      console.error('Failed to initialize CnD pipeline:', error);
+      console.error('❌ Failed to initialize CnD pipeline:', error);
       this.evaluator = null;
       this.layoutInstance = null;
       throw error;
@@ -525,28 +616,47 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * Enforce constraints and regenerate layout
    */
   private async enforceConstraintsAndRegenerate(): Promise<void> {
+    console.log('🔄 enforceConstraintsAndRegenerate() called');
+    
     try {
-      if (!this.dataInstance || !this.layoutInstance) {
-        console.log('Cannot enforce constraints - missing data instance or layout instance');
+      if (!this.layoutInstance) {
+        console.log('⚠️ Cannot enforce constraints - no layout instance available');
         return;
       }
 
-      console.log('🔄 Enforcing constraints and regenerating layout...');
+      console.log('📊 Current data instance state:', {
+        atoms: this.dataInstance.getAtoms().length,
+        relations: this.dataInstance.getRelations().length
+      });
+
+      // Re-initialize evaluator with current data to ensure consistency
+      if (this.evaluator) {
+        console.log('🔄 Re-initializing evaluator with updated data instance...');
+        this.evaluator.initialize({
+          sourceData: this.dataInstance
+        });
+        console.log('✅ Evaluator re-initialized');
+      }
+
+      console.log('🔧 Generating layout with constraint enforcement...');
 
       // Generate layout with constraint enforcement
       const projections = {};
       const layoutResult = this.layoutInstance.generateLayout(this.dataInstance, projections);
       
       if (layoutResult.error) {
-        console.warn('Constraint validation error:', layoutResult.error);
+        console.warn('⚠️ Constraint validation error:', layoutResult.error);
+      } else {
+        console.log('✅ Layout generated successfully');
       }
       
       // Render the layout
+      console.log('🎨 Rendering layout...');
       await this.renderLayout(layoutResult.layout);
       
-      console.log('✅ Constraints enforced and layout regenerated');
+      console.log('✅ Constraints enforced and layout regenerated successfully');
     } catch (error) {
-      console.error('Failed to enforce constraints and regenerate layout:', error);
+      console.error('❌ Failed to enforce constraints and regenerate layout:', error);
     }
   }
 
@@ -676,9 +786,11 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * Add an atom from the form inputs
    */
   private async addAtomFromForm(type: string, label: string): Promise<void> {
-    if (!type || !label || !this.dataInstance) return;
+    if (!type || !label) return;
 
     try {
+      console.log(`🔵 Adding atom: ${label} (${type})`);
+      
       const atomId = this.generateAtomId(type);
       const atom: IAtom = {
         id: atomId,
@@ -687,16 +799,10 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       };
 
       this.dataInstance.addAtom(atom);
+      console.log(`✅ Atom added to data instance: ${atom.label} (${atom.id}:${atom.type})`);
 
       // Refresh types from updated data instance
       this.refreshTypesFromDataInstance();
-
-      // Re-initialize evaluator with updated data instance
-      if (this.evaluator && this.cndSpecString) {
-        this.evaluator.initialize({
-          sourceData: this.dataInstance
-        });
-      }
 
       // Trigger constraint enforcement and layout regeneration
       await this.enforceConstraintsAndRegenerate();
@@ -706,9 +812,109 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         detail: { atom }
       }));
 
-      console.log(`✅ Added atom: ${atom.label} (${atom.id}:${atom.type})`);
+      console.log(`🎉 Atom addition completed: ${atom.label} (${atom.id}:${atom.type})`);
     } catch (error) {
-      console.error('Failed to add atom:', error);
+      console.error('❌ Failed to add atom:', error);
+    }
+  }
+
+  /**
+   * Update atom checkboxes for relation creation
+   */
+  private updateAtomCheckboxes(): void {
+    if (!this.controlsContainer) return;
+
+    const checkboxContainer = this.controlsContainer.querySelector('.atom-checkboxes') as HTMLDivElement;
+    if (!checkboxContainer) return;
+
+    // Clear existing checkboxes
+    checkboxContainer.innerHTML = '';
+
+    const atoms = this.dataInstance.getAtoms();
+    if (atoms.length === 0) {
+      checkboxContainer.innerHTML = '<div style="color: #666; font-size: 11px;">No atoms available</div>';
+      return;
+    }
+
+    atoms.forEach(atom => {
+      const checkboxItem = document.createElement('div');
+      checkboxItem.className = 'atom-checkbox-item';
+      
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = atom.id;
+      checkbox.id = `atom-checkbox-${atom.id}`;
+      
+      const label = document.createElement('label');
+      label.htmlFor = checkbox.id;
+      label.textContent = `${atom.label} (${atom.type})`;
+      
+      checkboxItem.appendChild(checkbox);
+      checkboxItem.appendChild(label);
+      checkboxContainer.appendChild(checkboxItem);
+
+      // Add event listener to update button state
+      checkbox.addEventListener('change', () => {
+        const relationTypeInput = this.controlsContainer?.querySelector('.relation-type-input') as HTMLInputElement;
+        const addRelationBtn = this.controlsContainer?.querySelector('.add-relation-btn') as HTMLButtonElement;
+        const checkboxes = this.controlsContainer?.querySelectorAll('.atom-checkboxes input[type="checkbox"]:checked');
+        const hasChecked = checkboxes && checkboxes.length >= 2;
+        const hasType = relationTypeInput?.value.trim();
+        if (addRelationBtn) {
+          addRelationBtn.disabled = !hasChecked || !hasType;
+        }
+      });
+    });
+  }
+
+  /**
+   * Add a relation from the form inputs
+   */
+  private async addRelationFromForm(): Promise<void> {
+    if (!this.controlsContainer) return;
+
+    try {
+      const relationTypeInput = this.controlsContainer.querySelector('.relation-type-input') as HTMLInputElement;
+      const relationType = relationTypeInput.value.trim();
+
+      if (!relationType) return;
+
+      const checkboxes = this.controlsContainer.querySelectorAll('.atom-checkboxes input[type="checkbox"]:checked') as NodeListOf<HTMLInputElement>;
+      const selectedAtomIds = Array.from(checkboxes).map(cb => cb.value);
+
+      if (selectedAtomIds.length < 2) {
+        console.warn('Need at least 2 atoms for a relation');
+        return;
+      }
+
+      console.log(`🔗 Adding relation: ${relationType}(${selectedAtomIds.join(', ')})`);
+
+      // Get atom types for the tuple
+      const atoms = this.dataInstance.getAtoms();
+      const atomTypes = selectedAtomIds.map(id => {
+        const atom = atoms.find(a => a.id === id);
+        return atom?.type || 'untyped';
+      });
+
+      const tuple: ITuple = {
+        atoms: selectedAtomIds,
+        types: atomTypes
+      };
+
+      this.dataInstance.addRelation(relationType, tuple);
+      console.log(`✅ Relation added to data instance: ${relationType}(${selectedAtomIds.join(', ')})`);
+
+      // Trigger constraint enforcement and layout regeneration
+      await this.enforceConstraintsAndRegenerate();
+
+      // Dispatch event
+      this.dispatchEvent(new CustomEvent('relation-added', {
+        detail: { relationType, tuple }
+      }));
+
+      console.log(`🎉 Relation addition completed: ${relationType}(${selectedAtomIds.join(', ')})`);
+    } catch (error) {
+      console.error('❌ Failed to add relation:', error);
     }
   }
 
@@ -716,12 +922,9 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * Export current data as JSON
    */
   private exportDataAsJSON(): void {
-    if (!this.dataInstance) {
-      console.warn('No data instance available for export');
-      return;
-    }
-
     try {
+      console.log('📤 Exporting data instance as JSON...');
+      
       const data = {
         atoms: this.dataInstance.getAtoms(),
         relations: this.dataInstance.getRelations(),
@@ -743,7 +946,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
 
       console.log('✅ Data exported as JSON');
     } catch (error) {
-      console.error('Failed to export data:', error);
+      console.error('❌ Failed to export data:', error);
     }
   }
 
@@ -751,40 +954,38 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * Set the data instance for this graph
    */
   setDataInstance(instance: IInputDataInstance): void {
+    console.log('🔄 Setting new data instance');
     this.dataInstance = instance;
     
     // Refresh types from the new data instance
     this.refreshTypesFromDataInstance();
     
-    // Re-initialize evaluator with the new data instance
-    if (this.evaluator && this.cndSpecString) {
-      this.evaluator.initialize({
-        sourceData: this.dataInstance
-      });
-    }
-    
     // Listen for data instance changes to update the visualization
     instance.addEventListener('atomAdded', () => {
-      console.log('Atom added to instance');
+      console.log('📍 Atom added to instance - updating UI');
       this.refreshTypesFromDataInstance();
       this.updateDeletionSelects();
+      this.updateAtomCheckboxes();
     });
 
     instance.addEventListener('relationTupleAdded', () => {
-      console.log('Relation added to instance');
+      console.log('🔗 Relation added to instance - updating UI');
       this.refreshTypesFromDataInstance();
       this.updateDeletionSelects();
     });
 
-    // Initial update of deletion selects
+    // Initial update of deletion selects and atom checkboxes
     this.updateDeletionSelects();
+    this.updateAtomCheckboxes();
+    
+    console.log('✅ Data instance set successfully');
   }
 
   /**
    * Update the deletion dropdown selects with current atoms and relations
    */
   private updateDeletionSelects(): void {
-    if (!this.dataInstance || !this.controlsContainer) return;
+    if (!this.controlsContainer) return;
 
     const atomDeleteSelect = this.controlsContainer.querySelector('.atom-delete-select') as HTMLSelectElement;
     const relationDeleteSelect = this.controlsContainer.querySelector('.relation-delete-select') as HTMLSelectElement;
@@ -838,15 +1039,17 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * Delete an atom by ID
    */
   private async deleteAtom(atomId: string): Promise<void> {
-    if (!this.dataInstance || !atomId) return;
+    if (!atomId) return;
 
     try {
+      console.log(`🗑️ Deleting atom: ${atomId}`);
+      
       // Find the atom
       const atoms = this.dataInstance.getAtoms();
       const atomToDelete = atoms.find(atom => atom.id === atomId);
       
       if (!atomToDelete) {
-        console.warn(`Atom ${atomId} not found`);
+        console.warn(`⚠️ Atom ${atomId} not found`);
         return;
       }
 
@@ -865,23 +1068,19 @@ export class StructuredInputGraph extends WebColaCnDGraph {
 
       this.setDataInstance(newInstance);
       
-      // Re-initialize evaluator with updated data instance
-      if (this.evaluator && this.cndSpecString) {
-        this.evaluator.initialize({
-          sourceData: this.dataInstance
-        });
-      }
+      console.log(`✅ Atom removed from data instance: ${atomToDelete.label} (${atomToDelete.id})`);
       
+      // Trigger constraint enforcement and layout regeneration
       await this.enforceConstraintsAndRegenerate();
 
-      console.log(`✅ Deleted atom: ${atomToDelete.label} (${atomToDelete.id})`);
+      console.log(`🎉 Atom deletion completed: ${atomToDelete.label} (${atomToDelete.id})`);
       
       // Dispatch event
       this.dispatchEvent(new CustomEvent('atom-deleted', {
         detail: { atom: atomToDelete }
       }));
     } catch (error) {
-      console.error('Failed to delete atom:', error);
+      console.error('❌ Failed to delete atom:', error);
     }
   }
 
@@ -889,14 +1088,16 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * Delete a relation by index
    */
   private async deleteRelation(relationIndex: string): Promise<void> {
-    if (!this.dataInstance || !relationIndex) return;
+    if (!relationIndex) return;
 
     try {
+      console.log(`🗑️ Deleting relation at index: ${relationIndex}`);
+      
       const relations = this.dataInstance.getRelations();
       const index = parseInt(relationIndex, 10);
       
       if (index < 0 || index >= relations.length) {
-        console.warn(`Relation index ${index} out of range`);
+        console.warn(`⚠️ Relation index ${index} out of range`);
         return;
       }
 
@@ -911,26 +1112,22 @@ export class StructuredInputGraph extends WebColaCnDGraph {
 
       this.setDataInstance(newInstance);
       
-      // Re-initialize evaluator with updated data instance
-      if (this.evaluator && this.cndSpecString) {
-        this.evaluator.initialize({
-          sourceData: this.dataInstance
-        });
-      }
-      
-      await this.enforceConstraintsAndRegenerate();
-
       const relationType = relationToDelete.types[0] || 'relation';
       const firstTuple = relationToDelete.tuples[0];
       const tupleString = firstTuple ? firstTuple.atoms.join(' → ') : '';
-      console.log(`✅ Deleted relation: ${relationType}: ${tupleString}`);
+      console.log(`✅ Relation removed from data instance: ${relationType}: ${tupleString}`);
+      
+      // Trigger constraint enforcement and layout regeneration
+      await this.enforceConstraintsAndRegenerate();
+
+      console.log(`🎉 Relation deletion completed: ${relationType}: ${tupleString}`);
       
       // Dispatch event
       this.dispatchEvent(new CustomEvent('relation-deleted', {
         detail: { relation: relationToDelete }
       }));
     } catch (error) {
-      console.error('Failed to delete relation:', error);
+      console.error('❌ Failed to delete relation:', error);
     }
   }
 
@@ -938,9 +1135,9 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * Clear all atoms and relations
    */
   private async clearAllItems(): Promise<void> {
-    if (!this.dataInstance) return;
-
     try {
+      console.log('🧹 Clearing all atoms and relations...');
+      
       const newInstance = new JSONDataInstance({
         atoms: [],
         relations: [],
@@ -949,23 +1146,19 @@ export class StructuredInputGraph extends WebColaCnDGraph {
 
       this.setDataInstance(newInstance);
       
-      // Re-initialize evaluator with updated data instance
-      if (this.evaluator && this.cndSpecString) {
-        this.evaluator.initialize({
-          sourceData: this.dataInstance
-        });
-      }
+      console.log('✅ All items cleared from data instance');
       
+      // Trigger constraint enforcement and layout regeneration
       await this.enforceConstraintsAndRegenerate();
 
-      console.log('✅ Cleared all atoms and relations');
+      console.log('🎉 Clear all completed');
       
       // Dispatch event
       this.dispatchEvent(new CustomEvent('all-items-cleared', {
         detail: {}
       }));
     } catch (error) {
-      console.error('Failed to clear all items:', error);
+      console.error('❌ Failed to clear all items:', error);
     }
   }
 
