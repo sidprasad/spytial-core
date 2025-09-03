@@ -93,6 +93,17 @@
             max-height: 200px;
             overflow-y: auto;
         }
+        .spec-input {
+            width: 100%;
+            height: 150px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            resize: vertical;
+            background: #fafafa;
+        }
     </style>
 </head>
 <body>
@@ -116,11 +127,27 @@
             <h3>Demo Controls</h3>
             
             <div>
-                <button onclick="loadSimpleSpec()">Load Simple Spec</button>
-                <button onclick="loadAdvancedSpec()">Load Advanced Spec</button>
-                <button onclick="loadPersonRelationshipSpec()">Load Person-Relationship Spec</button>
-                <button onclick="clearGraph()">Clear Graph</button>
-                <button onclick="showExportedData()">Show Exported Data</button>
+                <h4>Load CnD Specification:</h4>
+                <textarea id="spec-input" class="spec-input" placeholder="Enter your CnD specification here (YAML format)...
+Example:
+nodes:
+  - { id: &quot;Person&quot;, type: &quot;Person&quot;, color: &quot;#FF6B35&quot;, size: 20 }
+  - { id: &quot;Entity&quot;, type: &quot;Entity&quot;, color: &quot;#4CAF50&quot;, size: 15 }
+edges:
+  - { id: &quot;friend&quot;, type: &quot;friend&quot;, color: &quot;#E91E63&quot;, width: 3 }
+  - { id: &quot;relation&quot;, type: &quot;relation&quot;, color: &quot;#2196F3&quot;, width: 2 }
+constraints: []
+directives:
+  - type: &quot;hideDisconnected&quot;
+    value: false"></textarea>
+                <div style="margin-top: 10px;">
+                    <button onclick="loadCustomSpec()">Load Spec</button>
+                    <button onclick="loadSimpleSpec()">Example: Simple</button>
+                    <button onclick="loadAdvancedSpec()">Example: Advanced</button>
+                    <button onclick="loadPersonRelationshipSpec()">Example: Person-Relationship</button>
+                    <button onclick="clearGraph()">Clear Graph</button>
+                    <button onclick="showExportedData()">Show Exported Data</button>
+                </div>
             </div>
 
             <div id="status" class="status" style="display: none;"></div>
@@ -222,7 +249,32 @@
 
         function updateSpecDisplay(spec) {
             const specDisplay = document.getElementById('spec-display');
+            const specInput = document.getElementById('spec-input');
             specDisplay.textContent = spec;
+            specInput.value = spec;
+        }
+
+        function loadCustomSpec() {
+            if (!isComponentReady) {
+                showStatus('❌ Component not ready yet', 'error');
+                return;
+            }
+
+            const specInput = document.getElementById('spec-input');
+            const customSpec = specInput.value.trim();
+            
+            if (!customSpec) {
+                showStatus('❌ Please enter a CnD specification', 'error');
+                return;
+            }
+
+            try {
+                currentGraph.setCnDSpec(customSpec);
+                updateSpecDisplay(customSpec);
+                showStatus('✅ Custom spec loaded', 'success');
+            } catch (error) {
+                showStatus(`❌ Error loading spec: ${error.message}`, 'error');
+            }
         }
 
         function loadSimpleSpec() {

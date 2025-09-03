@@ -135,6 +135,25 @@ export class StructuredInputGraph extends WebColaCnDGraph {
             </div>
           </div>
           
+          <div class="deletion-section">
+            <h4>Delete Items</h4>
+            <div class="deletion-controls">
+              <select class="atom-delete-select" aria-label="Select atom to delete">
+                <option value="">Select atom to delete...</option>
+              </select>
+              <button class="delete-atom-btn" disabled>Delete Atom</button>
+            </div>
+            <div class="deletion-controls">
+              <select class="relation-delete-select" aria-label="Select relation to delete">
+                <option value="">Select relation to delete...</option>
+              </select>
+              <button class="delete-relation-btn" disabled>Delete Relation</button>
+            </div>
+            <div class="bulk-delete">
+              <button class="clear-all-btn">Clear All Items</button>
+            </div>
+          </div>
+          
           <div class="export-section">
             <h4>Export Data</h4>
             <button class="export-json-btn">Export as JSON</button>
@@ -211,13 +230,13 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         display: none;
       }
 
-      .atom-creation-section, .export-section, .spec-info-section {
+      .atom-creation-section, .deletion-section, .export-section, .spec-info-section {
         margin-bottom: 16px;
         padding-bottom: 12px;
         border-bottom: 1px solid #eee;
       }
 
-      .atom-creation-section:last-child, .export-section:last-child, .spec-info-section:last-child {
+      .atom-creation-section:last-child, .deletion-section:last-child, .export-section:last-child, .spec-info-section:last-child {
         border-bottom: none;
         margin-bottom: 0;
       }
@@ -235,14 +254,14 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         gap: 8px;
       }
 
-      .atom-type-select, .atom-label-input {
+      .atom-type-select, .atom-label-input, .atom-delete-select, .relation-delete-select {
         padding: 6px 8px;
         border: 1px solid #ddd;
         border-radius: 4px;
         font-size: 12px;
       }
 
-      .add-atom-btn, .export-json-btn {
+      .add-atom-btn, .delete-atom-btn, .delete-relation-btn, .clear-all-btn, .export-json-btn {
         padding: 6px 12px;
         background: #007acc;
         color: white;
@@ -253,13 +272,33 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         font-weight: 500;
       }
 
-      .add-atom-btn:disabled {
+      .delete-atom-btn, .delete-relation-btn, .clear-all-btn {
+        background: #dc3545;
+      }
+
+      .delete-atom-btn:hover, .delete-relation-btn:hover, .clear-all-btn:hover {
+        background: #c82333;
+      }
+
+      .add-atom-btn:disabled, .delete-atom-btn:disabled, .delete-relation-btn:disabled {
         background: #ccc;
         cursor: not-allowed;
       }
 
       .add-atom-btn:hover:not(:disabled), .export-json-btn:hover {
         background: #005fa3;
+      }
+
+      .deletion-controls {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .bulk-delete {
+        border-top: 1px solid #eee;
+        padding-top: 8px;
       }
 
       .type-info {
@@ -348,6 +387,41 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       this.addAtomFromForm(typeSelect.value, labelInput.value.trim());
       labelInput.value = '';
       updateAddButtonState();
+      this.updateDeletionSelects(); // Update deletion dropdowns
+    });
+
+    // Deletion controls
+    const atomDeleteSelect = this.controlsContainer.querySelector('.atom-delete-select') as HTMLSelectElement;
+    const relationDeleteSelect = this.controlsContainer.querySelector('.relation-delete-select') as HTMLSelectElement;
+    const deleteAtomBtn = this.controlsContainer.querySelector('.delete-atom-btn') as HTMLButtonElement;
+    const deleteRelationBtn = this.controlsContainer.querySelector('.delete-relation-btn') as HTMLButtonElement;
+    const clearAllBtn = this.controlsContainer.querySelector('.clear-all-btn') as HTMLButtonElement;
+
+    // Update deletion button states
+    const updateDeleteButtonStates = () => {
+      deleteAtomBtn.disabled = !atomDeleteSelect.value;
+      deleteRelationBtn.disabled = !relationDeleteSelect.value;
+    };
+
+    atomDeleteSelect?.addEventListener('change', updateDeleteButtonStates);
+    relationDeleteSelect?.addEventListener('change', updateDeleteButtonStates);
+
+    deleteAtomBtn?.addEventListener('click', () => {
+      this.deleteAtom(atomDeleteSelect.value);
+      this.updateDeletionSelects();
+      updateDeleteButtonStates();
+    });
+
+    deleteRelationBtn?.addEventListener('click', () => {
+      this.deleteRelation(relationDeleteSelect.value);
+      this.updateDeletionSelects();
+      updateDeleteButtonStates();
+    });
+
+    clearAllBtn?.addEventListener('click', () => {
+      this.clearAllItems();
+      this.updateDeletionSelects();
+      updateDeleteButtonStates();
     });
 
     // Export
@@ -355,6 +429,9 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     exportBtn?.addEventListener('click', () => {
       this.exportDataAsJSON();
     });
+
+    // Initial update of deletion selects
+    this.updateDeletionSelects();
   }
 
   /**
@@ -369,6 +446,9 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       this.updateTypeSelector();
       this.updateSpecInfo();
       
+      // Force reload the graph with new spec
+      this.reloadGraphWithSpec(specString);
+      
       // Dispatch event
       this.dispatchEvent(new CustomEvent('spec-parsed', {
         detail: { spec }
@@ -376,6 +456,41 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     } catch (error) {
       console.error('Failed to parse CnD spec:', error);
       this.updateSpecInfo('error', error instanceof Error ? error.message : 'Parse error');
+    }
+  }
+
+  /**
+   * Reload graph with new specification
+   */
+  private reloadGraphWithSpec(specString: string): void {
+    try {
+      // Set the cnd-spec attribute on the parent WebColaCnDGraph
+      this.setAttribute('cnd-spec', specString);
+      
+      // If we have access to rerenderGraph method from parent, call it
+      if (typeof (this as any).rerenderGraph === 'function') {
+        (this as any).rerenderGraph();
+      }
+      
+      // Force a layout update if current data exists
+      if (this.dataInstance) {
+        // Clear and re-add atoms to trigger relayout
+        const atoms = this.dataInstance.getAtoms();
+        const relations = this.dataInstance.getRelations();
+        
+        // Create fresh data instance
+        const freshInstance = new (window as any).CndCore.JSONDataInstance({
+          atoms: atoms,
+          relations: relations,
+          types: []
+        });
+        
+        this.setDataInstance(freshInstance);
+      }
+      
+      console.log('✅ Graph reloaded with new spec');
+    } catch (error) {
+      console.error('Failed to reload graph with new spec:', error);
     }
   }
 
@@ -589,12 +704,183 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     instance.addEventListener('atomAdded', () => {
       // In a real implementation, this would trigger a layout update
       console.log('Atom added to instance');
+      this.updateDeletionSelects();
     });
 
     instance.addEventListener('relationTupleAdded', () => {
       // In a real implementation, this would trigger a layout update
       console.log('Relation added to instance');
+      this.updateDeletionSelects();
     });
+
+    // Initial update of deletion selects
+    this.updateDeletionSelects();
+  }
+
+  /**
+   * Update the deletion dropdown selects with current atoms and relations
+   */
+  private updateDeletionSelects(): void {
+    if (!this.dataInstance || !this.controlsContainer) return;
+
+    const atomDeleteSelect = this.controlsContainer.querySelector('.atom-delete-select') as HTMLSelectElement;
+    const relationDeleteSelect = this.controlsContainer.querySelector('.relation-delete-select') as HTMLSelectElement;
+
+    if (atomDeleteSelect) {
+      // Clear existing options (except first)
+      while (atomDeleteSelect.children.length > 1) {
+        atomDeleteSelect.removeChild(atomDeleteSelect.lastChild!);
+      }
+
+      // Add current atoms
+      const atoms = this.dataInstance.getAtoms();
+      atoms.forEach(atom => {
+        const option = document.createElement('option');
+        option.value = atom.id;
+        option.textContent = `${atom.label} (${atom.id}:${atom.type})`;
+        atomDeleteSelect.appendChild(option);
+      });
+    }
+
+    if (relationDeleteSelect) {
+      // Clear existing options (except first)
+      while (relationDeleteSelect.children.length > 1) {
+        relationDeleteSelect.removeChild(relationDeleteSelect.lastChild!);
+      }
+
+      // Add current relations
+      const relations = this.dataInstance.getRelations();
+      relations.forEach((relation, index) => {
+        const option = document.createElement('option');
+        option.value = index.toString();
+        option.textContent = `${relation.type}: ${relation.tuple.join(' → ')}`;
+        relationDeleteSelect.appendChild(option);
+      });
+    }
+  }
+
+  /**
+   * Delete an atom by ID
+   */
+  private deleteAtom(atomId: string): void {
+    if (!this.dataInstance || !atomId) return;
+
+    try {
+      // Find the atom
+      const atoms = this.dataInstance.getAtoms();
+      const atomToDelete = atoms.find(atom => atom.id === atomId);
+      
+      if (!atomToDelete) {
+        console.warn(`Atom ${atomId} not found`);
+        return;
+      }
+
+      // Remove the atom (this would need proper implementation in the data instance)
+      // For now, we'll create a new instance without this atom
+      const remainingAtoms = atoms.filter(atom => atom.id !== atomId);
+      const relations = this.dataInstance.getRelations().filter(rel => 
+        !rel.tuple.includes(atomId)
+      );
+
+      const newInstance = new (window as any).CndCore.JSONDataInstance({
+        atoms: remainingAtoms,
+        relations: relations,
+        types: []
+      });
+
+      this.setDataInstance(newInstance);
+      this.reloadGraphWithCurrentData();
+
+      console.log(`✅ Deleted atom: ${atomToDelete.label} (${atomToDelete.id})`);
+      
+      // Dispatch event
+      this.dispatchEvent(new CustomEvent('atom-deleted', {
+        detail: { atom: atomToDelete }
+      }));
+    } catch (error) {
+      console.error('Failed to delete atom:', error);
+    }
+  }
+
+  /**
+   * Delete a relation by index
+   */
+  private deleteRelation(relationIndex: string): void {
+    if (!this.dataInstance || !relationIndex) return;
+
+    try {
+      const relations = this.dataInstance.getRelations();
+      const index = parseInt(relationIndex, 10);
+      
+      if (index < 0 || index >= relations.length) {
+        console.warn(`Relation index ${index} out of range`);
+        return;
+      }
+
+      const relationToDelete = relations[index];
+      const remainingRelations = relations.filter((_, i) => i !== index);
+
+      const newInstance = new (window as any).CndCore.JSONDataInstance({
+        atoms: this.dataInstance.getAtoms(),
+        relations: remainingRelations,
+        types: []
+      });
+
+      this.setDataInstance(newInstance);
+      this.reloadGraphWithCurrentData();
+
+      console.log(`✅ Deleted relation: ${relationToDelete.type}: ${relationToDelete.tuple.join(' → ')}`);
+      
+      // Dispatch event
+      this.dispatchEvent(new CustomEvent('relation-deleted', {
+        detail: { relation: relationToDelete }
+      }));
+    } catch (error) {
+      console.error('Failed to delete relation:', error);
+    }
+  }
+
+  /**
+   * Clear all atoms and relations
+   */
+  private clearAllItems(): void {
+    if (!this.dataInstance) return;
+
+    try {
+      const newInstance = new (window as any).CndCore.JSONDataInstance({
+        atoms: [],
+        relations: [],
+        types: []
+      });
+
+      this.setDataInstance(newInstance);
+      this.reloadGraphWithCurrentData();
+
+      console.log('✅ Cleared all atoms and relations');
+      
+      // Dispatch event
+      this.dispatchEvent(new CustomEvent('all-items-cleared', {
+        detail: {}
+      }));
+    } catch (error) {
+      console.error('Failed to clear all items:', error);
+    }
+  }
+
+  /**
+   * Reload graph with current data (for deletion updates)
+   */
+  private reloadGraphWithCurrentData(): void {
+    try {
+      // If we have access to rerenderGraph method from parent, call it
+      if (typeof (this as any).rerenderGraph === 'function') {
+        (this as any).rerenderGraph();
+      }
+      
+      console.log('✅ Graph reloaded with current data');
+    } catch (error) {
+      console.error('Failed to reload graph with current data:', error);
+    }
   }
 
   /**
