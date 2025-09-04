@@ -42,18 +42,22 @@ const DEFAULT_SCALE_FACTOR = 5;
  * @field colaLayout - Holds the current layout instance used by WebCola
  * 
  * Features:
- * - Interactive edge input mode with keyboard shortcuts (Cmd/Ctrl)
+ * - Interactive edge input mode with keyboard shortcuts (Cmd/Ctrl for edge creation)
+ * - Edge moving mode with Shift key for dragging and modifying existing edges
  * - Visual edge creation by clicking and dragging between nodes
  * - Edge modification by clicking on existing edges in input mode
+ * - Edge repositioning and deletion by dragging edges in edge moving mode
  * - Centralized state management for IInputDataInstance
  * - Automatic layout regeneration when data instance changes
  * - Self-loop edge support with confirmation
- * - Zoom/pan disable during input mode
+ * - Zoom/pan disable during input and edge moving modes
  * - Comprehensive event system for external integration
  * 
  * Events Fired:
  * - 'input-mode-activated': When Cmd/Ctrl is pressed to activate input mode
- * - 'input-mode-deactivated': When Cmd/Ctrl is released to deactivate input mode  
+ * - 'input-mode-deactivated': When Cmd/Ctrl is released to deactivate input mode
+ * - 'edge-moving-mode-activated': When Shift is pressed to activate edge moving mode
+ * - 'edge-moving-mode-deactivated': When Shift is released to deactivate edge moving mode
  * - 'edge-creation-requested': When user drags between nodes to create a new edge
  *   * event.detail: { relationId: string, sourceNodeId: string, targetNodeId: string, tuple: ITuple }
  * - 'edge-modification-requested': When user clicks on existing edge to modify it
@@ -147,6 +151,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Input mode state management for edge creation and modification
    */
   private isInputModeActive: boolean = false;
+  
+  /**
+   * Edge moving mode state - activated with Shift key for edge dragging
+   */
+  private isEdgeMovingModeActive: boolean = false;
   private edgeCreationState: {
     isCreating: boolean;
     sourceNode: NodeWithMetadata | null;
@@ -445,27 +454,38 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
-   * Initialize keyboard event handlers for input mode activation
+   * Initialize keyboard event handlers for input mode and edge moving mode activation
    */
   private initializeInputModeHandlers(): void {
-    // Handle keydown for Cmd/Ctrl press
+    // Handle keydown for Cmd/Ctrl press (input mode)
     document.addEventListener('keydown', (event) => {
       if ((event.metaKey || event.ctrlKey) && !this.isInputModeActive) {
         this.activateInputMode();
       }
+      // Handle Shift key for edge moving mode
+      if (event.shiftKey && !this.isEdgeMovingModeActive) {
+        this.activateEdgeMovingMode();
+      }
     });
 
-    // Handle keyup for Cmd/Ctrl release
+    // Handle keyup for Cmd/Ctrl release (input mode)
     document.addEventListener('keyup', (event) => {
       if (!event.metaKey && !event.ctrlKey && this.isInputModeActive) {
         this.deactivateInputMode();
       }
+      // Handle Shift key release for edge moving mode
+      if (!event.shiftKey && this.isEdgeMovingModeActive) {
+        this.deactivateEdgeMovingMode();
+      }
     });
 
-    // Handle window blur to ensure input mode is deactivated
+    // Handle window blur to ensure modes are deactivated
     window.addEventListener('blur', () => {
       if (this.isInputModeActive) {
         this.deactivateInputMode();
+      }
+      if (this.isEdgeMovingModeActive) {
+        this.deactivateEdgeMovingMode();
       }
     });
   }
@@ -505,7 +525,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // Clean up any temporary edge creation state
     this.cleanupEdgeCreation();
     
-    // Clean up any edge drag state
+    // Clean up any edge drag state (this shouldn't happen with new logic, but safety)
     this.cleanupEdgeDrag();
 
     // Re-enable node dragging and zoom/translate
@@ -514,6 +534,49 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
     // Dispatch event for external listeners
     this.dispatchEvent(new CustomEvent('input-mode-deactivated', {
+      detail: { active: false }
+    }));
+  }
+
+  /**
+   * Activate edge moving mode for edge dragging and modification
+   */
+  private activateEdgeMovingMode(): void {
+    this.isEdgeMovingModeActive = true;
+    
+    // Add edge-moving-mode class to SVG for styling
+    if (this.svg) {
+      this.svg.classed('edge-moving-mode', true);
+    }
+
+    // Disable zoom during edge moving mode to prevent conflicts
+    this.disableZoom();
+
+    // Dispatch event for external listeners
+    this.dispatchEvent(new CustomEvent('edge-moving-mode-activated', {
+      detail: { active: true }
+    }));
+  }
+
+  /**
+   * Deactivate edge moving mode and restore normal behavior
+   */
+  private deactivateEdgeMovingMode(): void {
+    this.isEdgeMovingModeActive = false;
+    
+    // Remove edge-moving-mode class from SVG
+    if (this.svg) {
+      this.svg.classed('edge-moving-mode', false);
+    }
+
+    // Clean up any edge drag state
+    this.cleanupEdgeDrag();
+
+    // Re-enable zoom/translate
+    this.enableZoom();
+
+    // Dispatch event for external listeners
+    this.dispatchEvent(new CustomEvent('edge-moving-mode-deactivated', {
       detail: { active: false }
     }));
   }
@@ -605,7 +668,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
                style="width: 100%; padding: 8px 12px; border: 2px solid #ddd; border-radius: 4px; font-size: 14px; margin-bottom: 16px; box-sizing: border-box; outline: none;" 
                placeholder="Enter relation name">
         <div style="display: flex; gap: 8px; justify-content: flex-end;">
-          <button id="cancel-btn" style="padding: 8px 16px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer; font-size: 14px;">Cancel</button>
+          <button id="cancel-btn" style="padding: 8px 12px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; color: #666; min-width: 36px; display: flex; align-items: center; justify-content: center;">×</button>
           <button id="ok-btn" style="padding: 8px 16px; border: none; background: #007bff; color: white; border-radius: 4px; cursor: pointer; font-size: 14px;">OK</button>
         </div>
       `;
@@ -1424,19 +1487,19 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       })
       .call(d3.drag()
         .on('start', (d: any) => {
-          if (this.isInputModeActive && !this.isAlignmentEdge(d)) {
+          if (this.isEdgeMovingModeActive && !this.isAlignmentEdge(d)) {
             d3.event.sourceEvent.stopPropagation();
             this.startEdgeDrag(d);
           }
         })
         .on('drag', (d: any) => {
-          if (this.isInputModeActive && this.edgeDragState.isDragging) {
+          if (this.isEdgeMovingModeActive && this.edgeDragState.isDragging) {
             d3.event.sourceEvent.stopPropagation();
             this.updateEdgeDrag(d3.event.x, d3.event.y);
           }
         })
         .on('end', (d: any) => {
-          if (this.isInputModeActive && this.edgeDragState.isDragging) {
+          if (this.isEdgeMovingModeActive && this.edgeDragState.isDragging) {
             d3.event.sourceEvent.stopPropagation();
             this.finishEdgeDrag().catch(error => {
               console.error('Error finishing edge drag:', error);
@@ -1445,7 +1508,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         })
       )
       .style('cursor', () => {
-        return this.isInputModeActive ? 'grab' : 'default';
+        return this.isEdgeMovingModeActive ? 'move' : (this.isInputModeActive ? 'pointer' : 'default');
       });
   }
 
@@ -3156,6 +3219,33 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       svg.input-mode .link:hover {
         stroke-width: 3px;
         opacity: 0.8;
+      }
+
+      /* Edge moving mode styles */
+      svg.edge-moving-mode {
+        cursor: default !important;
+      }
+
+      svg.edge-moving-mode .link {
+        cursor: move !important;
+        stroke-width: 2px;
+        filter: drop-shadow(0 0 3px rgba(255, 107, 107, 0.5));
+      }
+
+      svg.edge-moving-mode .link:hover {
+        stroke-width: 3px;
+        opacity: 0.9;
+        filter: drop-shadow(0 0 5px rgba(255, 107, 107, 0.8));
+      }
+
+      svg.edge-moving-mode .node rect {
+        cursor: default !important;
+        filter: drop-shadow(0 0 2px rgba(0, 123, 255, 0.3));
+      }
+
+      .edge-drag-line {
+        pointer-events: none;
+        z-index: 1001;
       }
 
       /* Error icon positioning - bottom area to avoid header overlap */
