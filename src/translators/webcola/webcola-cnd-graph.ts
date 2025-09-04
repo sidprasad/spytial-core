@@ -158,6 +158,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   };
 
   /**
+   * Custom input modal for relation name input
+   */
+  private inputModal: HTMLDivElement | null = null;
+  private modalResolve: ((value: string | null) => void) | null = null;
+
+  /**
    * Temporary canvas for text measurement
    */
   private textMeasurementCanvas: HTMLCanvasElement | null = null;
@@ -539,6 +545,101 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
+   * Create and show custom input modal for relation names
+   */
+  private async showCustomInputModal(title: string, defaultValue: string = ''): Promise<string | null> {
+    return new Promise((resolve) => {
+      this.modalResolve = resolve;
+      
+      // Create modal backdrop
+      const backdrop = document.createElement('div');
+      backdrop.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      `;
+      
+      // Create modal dialog
+      this.inputModal = document.createElement('div');
+      this.inputModal.style.cssText = `
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        padding: 24px;
+        min-width: 400px;
+        max-width: 500px;
+      `;
+      
+      // Create modal content
+      this.inputModal.innerHTML = `
+        <h3 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 600; color: #333;">${title}</h3>
+        <input type="text" id="relation-input" value="${defaultValue}" 
+               style="width: 100%; padding: 8px 12px; border: 2px solid #ddd; border-radius: 4px; font-size: 14px; margin-bottom: 16px; box-sizing: border-box; outline: none;" 
+               placeholder="Enter relation name">
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+          <button id="cancel-btn" style="padding: 8px 16px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer; font-size: 14px;">Cancel</button>
+          <button id="ok-btn" style="padding: 8px 16px; border: none; background: #007bff; color: white; border-radius: 4px; cursor: pointer; font-size: 14px;">OK</button>
+        </div>
+      `;
+      
+      backdrop.appendChild(this.inputModal);
+      document.body.appendChild(backdrop);
+      
+      // Focus the input
+      const input = this.inputModal.querySelector('#relation-input') as HTMLInputElement;
+      input.focus();
+      input.select();
+      
+      // Handle button clicks
+      const okBtn = this.inputModal.querySelector('#ok-btn') as HTMLButtonElement;
+      const cancelBtn = this.inputModal.querySelector('#cancel-btn') as HTMLButtonElement;
+      
+      const cleanup = () => {
+        document.body.removeChild(backdrop);
+        this.inputModal = null;
+        this.modalResolve = null;
+      };
+      
+      okBtn.addEventListener('click', () => {
+        const value = input.value.trim();
+        cleanup();
+        resolve(value || null);
+      });
+      
+      cancelBtn.addEventListener('click', () => {
+        cleanup();
+        resolve(null);
+      });
+      
+      // Handle enter key
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          okBtn.click();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          cancelBtn.click();
+        }
+      });
+      
+      // Handle backdrop click
+      backdrop.addEventListener('click', (e) => {
+        if (e.target === backdrop) {
+          cancelBtn.click();
+        }
+      });
+    });
+  }
+
+  /**
    * Zoom in by a fixed scale factor
    */
   private zoomIn(): void {
@@ -694,7 +795,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Show edge label input dialog and create the edge
    */
   private async showEdgeLabelInput(sourceNode: NodeWithMetadata, targetNode: NodeWithMetadata): Promise<void> {
-    const label = prompt(`Enter label for edge from "${sourceNode.label || sourceNode.id}" to "${targetNode.label || targetNode.id}":`);
+    const title = `Enter label for edge from "${sourceNode.label || sourceNode.id}" to "${targetNode.label || targetNode.id}":`;
+    const label = await this.showCustomInputModal(title);
     
     if (label !== null) { // User didn't cancel
       await this.createNewEdge(sourceNode, targetNode, label || '');
@@ -812,7 +914,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     if (!this.isInputModeActive) return;
 
     const currentLabel = edgeData.label || edgeData.relName || '';
-    const newLabel = prompt(`Edit edge label:`, currentLabel);
+    const title = 'Edit edge label:';
+    const newLabel = await this.showCustomInputModal(title, currentLabel);
     
     if (newLabel !== null && newLabel !== currentLabel) {
       // Get source and target nodes for data instance update
