@@ -542,6 +542,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Activate edge moving mode for edge dragging and modification
    */
   private activateEdgeMovingMode(): void {
+    console.log('🔧 Edge moving mode activated');
     this.isEdgeMovingModeActive = true;
     
     // Add edge-moving-mode class to SVG for styling
@@ -1535,6 +1536,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       })
       .call(d3.drag()
         .on('start', (d: any) => {
+          console.log('🎯 Drag start event fired, edge moving mode active:', this.isEdgeMovingModeActive, 'edge:', d.id);
           if (this.isEdgeMovingModeActive && !this.isAlignmentEdge(d)) {
             d3.event.sourceEvent.stopPropagation();
             this.startEdgeDrag(d);
@@ -1543,7 +1545,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         .on('drag', (d: any) => {
           if (this.isEdgeMovingModeActive && this.edgeDragState.isDragging) {
             d3.event.sourceEvent.stopPropagation();
-            this.updateEdgeDrag(d3.event.x, d3.event.y);
+            // Get actual mouse coordinates relative to the container
+            const [mouseX, mouseY] = d3.mouse(this.container.node());
+            this.updateEdgeDrag(mouseX, mouseY);
           }
         })
         .on('end', (d: any) => {
