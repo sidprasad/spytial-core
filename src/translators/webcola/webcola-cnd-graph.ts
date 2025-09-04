@@ -733,24 +733,43 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     this.edgeDragState.originalSource = edgeData.source as NodeWithMetadata;
     this.edgeDragState.originalTarget = edgeData.target as NodeWithMetadata;
     
-    // Create temporary drag line
+    // Create temporary drag line with better visual feedback
     const sourceNode = edgeData.source as NodeWithMetadata;
-    this.edgeDragState.temporaryLine = this.svg
+    
+    // Create a group for the drag visualization
+    const dragGroup = this.svg.append('g').attr('class', 'edge-drag-group');
+    
+    // Create main drag line (more prominent)
+    this.edgeDragState.temporaryLine = dragGroup
       .append('line')
       .attr('class', 'edge-drag-line')
       .attr('x1', sourceNode.x)
       .attr('y1', sourceNode.y)
       .attr('x2', sourceNode.x)
       .attr('y2', sourceNode.y)
-      .attr('stroke', '#ff6b6b')
-      .attr('stroke-width', 3)
-      .attr('stroke-dasharray', '5,5')
+      .attr('stroke', '#007bff')
+      .attr('stroke-width', 4)
+      .attr('stroke-dasharray', '8,4')
+      .attr('opacity', 0.9)
+      .style('pointer-events', 'none');
+    
+    // Add an arrow marker at the end for direction
+    const arrowMarker = dragGroup
+      .append('circle')
+      .attr('class', 'edge-drag-arrow')
+      .attr('cx', sourceNode.x)
+      .attr('cy', sourceNode.y)
+      .attr('r', 6)
+      .attr('fill', '#007bff')
       .attr('opacity', 0.8)
       .style('pointer-events', 'none');
+    
+    // Store both elements for cleanup
+    this.edgeDragState.temporaryLine = dragGroup;
       
-    // Hide the original edge during drag
+    // Make the original edge almost transparent during drag
     this.svg.selectAll(`path[data-link-id="${edgeData.id}"]`)
-      .style('opacity', 0.3);
+      .style('opacity', 0.1);
   }
 
   /**
@@ -759,10 +778,36 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private updateEdgeDrag(mouseX: number, mouseY: number): void {
     if (!this.edgeDragState.isDragging || !this.edgeDragState.temporaryLine) return;
     
-    // Update temporary line end position
-    this.edgeDragState.temporaryLine
+    // Update the main drag line
+    this.edgeDragState.temporaryLine.select('.edge-drag-line')
       .attr('x2', mouseX)
       .attr('y2', mouseY);
+    
+    // Update the arrow position
+    this.edgeDragState.temporaryLine.select('.edge-drag-arrow')
+      .attr('cx', mouseX)
+      .attr('cy', mouseY);
+    
+    // Highlight potential target nodes
+    this.highlightPotentialTargets(mouseX, mouseY);
+  }
+
+  /**
+   * Highlight nodes that could be potential targets for edge dragging
+   */
+  private highlightPotentialTargets(mouseX: number, mouseY: number): void {
+    if (!this.currentLayout?.nodes) return;
+    
+    // Clear previous highlights
+    this.svg.selectAll('.node rect').classed('potential-target', false);
+    
+    // Find node under mouse and highlight it
+    const targetNode = this.findNodeUnderMouse(mouseX, mouseY);
+    if (targetNode && targetNode !== this.edgeDragState.originalSource) {
+      // Highlight the potential target node
+      this.svg.selectAll(`.node[data-node-id="${targetNode.id}"] rect`)
+        .classed('potential-target', true);
+    }
   }
 
   /**
@@ -850,11 +895,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Clean up edge drag state and temporary elements
    */
   private cleanupEdgeDrag(): void {
-    // Remove temporary line
+    // Remove temporary drag group (contains both line and arrow)
     if (this.edgeDragState.temporaryLine) {
       this.edgeDragState.temporaryLine.remove();
       this.edgeDragState.temporaryLine = null;
     }
+    
+    // Clear any potential target highlights
+    this.svg.selectAll('.node rect').classed('potential-target', false);
     
     // Restore original edge opacity
     if (this.edgeDragState.draggedEdge) {
@@ -3246,6 +3294,23 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .edge-drag-line {
         pointer-events: none;
         z-index: 1001;
+      }
+
+      .edge-drag-group {
+        pointer-events: none;
+        z-index: 1001;
+      }
+
+      .edge-drag-arrow {
+        pointer-events: none;
+        z-index: 1002;
+      }
+
+      /* Potential target highlighting during edge drag */
+      .node rect.potential-target {
+        filter: drop-shadow(0 0 8px rgba(0, 123, 255, 0.8)) !important;
+        stroke: #007bff !important;
+        stroke-width: 2px !important;
       }
 
       /* Error icon positioning - bottom area to avoid header overlap */
