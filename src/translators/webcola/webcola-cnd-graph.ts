@@ -158,6 +158,23 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   };
 
   /**
+   * Edge dragging state for input mode
+   */
+  private edgeDragState: {
+    isDragging: boolean;
+    draggedEdge: EdgeWithMetadata | null;
+    originalSource: NodeWithMetadata | null;
+    originalTarget: NodeWithMetadata | null;
+    temporaryLine: any;
+  } = {
+    isDragging: false,
+    draggedEdge: null,
+    originalSource: null,
+    originalTarget: null,
+    temporaryLine: null
+  };
+
+  /**
    * Custom input modal for relation name input
    */
   private inputModal: HTMLDivElement | null = null;
@@ -487,6 +504,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
     // Clean up any temporary edge creation state
     this.cleanupEdgeCreation();
+    
+    // Clean up any edge drag state
+    this.cleanupEdgeDrag();
 
     // Re-enable node dragging and zoom/translate
     this.enableNodeDragging();
@@ -637,6 +657,156 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         }
       });
     });
+  }
+
+  /**
+   * Start edge dragging operation
+   */
+  private startEdgeDrag(edgeData: EdgeWithMetadata): void {
+    console.log('🎯 Starting edge drag:', edgeData.id);
+    
+    this.edgeDragState.isDragging = true;
+    this.edgeDragState.draggedEdge = edgeData;
+    this.edgeDragState.originalSource = edgeData.source as NodeWithMetadata;
+    this.edgeDragState.originalTarget = edgeData.target as NodeWithMetadata;
+    
+    // Create temporary drag line
+    const sourceNode = edgeData.source as NodeWithMetadata;
+    this.edgeDragState.temporaryLine = this.svg
+      .append('line')
+      .attr('class', 'edge-drag-line')
+      .attr('x1', sourceNode.x)
+      .attr('y1', sourceNode.y)
+      .attr('x2', sourceNode.x)
+      .attr('y2', sourceNode.y)
+      .attr('stroke', '#ff6b6b')
+      .attr('stroke-width', 3)
+      .attr('stroke-dasharray', '5,5')
+      .attr('opacity', 0.8)
+      .style('pointer-events', 'none');
+      
+    // Hide the original edge during drag
+    this.svg.selectAll(`path[data-link-id="${edgeData.id}"]`)
+      .style('opacity', 0.3);
+  }
+
+  /**
+   * Update edge drag visualization
+   */
+  private updateEdgeDrag(mouseX: number, mouseY: number): void {
+    if (!this.edgeDragState.isDragging || !this.edgeDragState.temporaryLine) return;
+    
+    // Update temporary line end position
+    this.edgeDragState.temporaryLine
+      .attr('x2', mouseX)
+      .attr('y2', mouseY);
+  }
+
+  /**
+   * Finish edge drag operation
+   */
+  private async finishEdgeDrag(): Promise<void> {
+    if (!this.edgeDragState.isDragging || !this.edgeDragState.draggedEdge) return;
+    
+    const [mouseX, mouseY] = d3.mouse(this.container.node());
+    
+    // Find target node under mouse
+    const targetNode = this.findNodeUnderMouse(mouseX, mouseY);
+    const draggedEdge = this.edgeDragState.draggedEdge;
+    const originalSource = this.edgeDragState.originalSource;
+    const originalTarget = this.edgeDragState.originalTarget;
+    
+    // Clean up temporary visualization
+    this.cleanupEdgeDrag();
+    
+    if (targetNode && targetNode !== originalSource) {
+      // Dragged to a different node - modify the edge
+      console.log(`🔄 Modifying edge: ${draggedEdge.relName} to ${targetNode.id}`);
+      
+      // Update external state for edge modification
+      const oldRelationName = draggedEdge.relName || draggedEdge.label || '';
+      await this.updateExternalStateForEdgeModification(
+        originalSource, 
+        targetNode, 
+        oldRelationName, 
+        oldRelationName
+      );
+      
+    } else if (!targetNode) {
+      // Dragged to empty space - delete the edge
+      console.log(`🗑️ Deleting edge: ${draggedEdge.relName}`);
+      
+      // Remove the edge by dispatching deletion event
+      this.dispatchEvent(new CustomEvent('edge-deletion-requested', {
+        detail: {
+          edgeId: draggedEdge.id,
+          relationId: draggedEdge.relName || draggedEdge.label || '',
+          sourceNodeId: originalSource?.id,
+          targetNodeId: originalTarget?.id,
+          tuple: {
+            atoms: [originalSource?.id, originalTarget?.id],
+            types: [originalSource?.type || 'untyped', originalTarget?.type || 'untyped']
+          }
+        }
+      }));
+    } else {
+      // Dragged back to original source or no valid target - no action
+      console.log('⏭️ No valid target for edge drag, cancelling');
+    }
+  }
+
+  /**
+   * Find node under mouse coordinates
+   */
+  private findNodeUnderMouse(mouseX: number, mouseY: number): NodeWithMetadata | null {
+    if (!this.currentLayout?.nodes) return null;
+    
+    // Check each node to see if mouse is within its bounds
+    for (const node of this.currentLayout.nodes) {
+      const nodeElement = this.svg.select(`.node[data-node-id="${node.id}"]`);
+      if (nodeElement.empty()) continue;
+      
+      try {
+        const bbox = (nodeElement.node() as any)?.getBBox();
+        if (bbox && 
+            mouseX >= node.x + bbox.x && 
+            mouseX <= node.x + bbox.x + bbox.width &&
+            mouseY >= node.y + bbox.y && 
+            mouseY <= node.y + bbox.y + bbox.height) {
+          return node;
+        }
+      } catch (error) {
+        // Ignore getBBox errors
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * Clean up edge drag state and temporary elements
+   */
+  private cleanupEdgeDrag(): void {
+    // Remove temporary line
+    if (this.edgeDragState.temporaryLine) {
+      this.edgeDragState.temporaryLine.remove();
+      this.edgeDragState.temporaryLine = null;
+    }
+    
+    // Restore original edge opacity
+    if (this.edgeDragState.draggedEdge) {
+      this.svg.selectAll(`path[data-link-id="${this.edgeDragState.draggedEdge.id}"]`)
+        .style('opacity', 1);
+    }
+    
+    // Reset drag state
+    this.edgeDragState = {
+      isDragging: false,
+      draggedEdge: null,
+      originalSource: null,
+      originalTarget: null,
+      temporaryLine: null
+    };
   }
 
   /**
@@ -1252,8 +1422,30 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           });
         }
       })
+      .call(d3.drag()
+        .on('start', (d: any) => {
+          if (this.isInputModeActive && !this.isAlignmentEdge(d)) {
+            d3.event.sourceEvent.stopPropagation();
+            this.startEdgeDrag(d);
+          }
+        })
+        .on('drag', (d: any) => {
+          if (this.isInputModeActive && this.edgeDragState.isDragging) {
+            d3.event.sourceEvent.stopPropagation();
+            this.updateEdgeDrag(d3.event.x, d3.event.y);
+          }
+        })
+        .on('end', (d: any) => {
+          if (this.isInputModeActive && this.edgeDragState.isDragging) {
+            d3.event.sourceEvent.stopPropagation();
+            this.finishEdgeDrag().catch(error => {
+              console.error('Error finishing edge drag:', error);
+            });
+          }
+        })
+      )
       .style('cursor', () => {
-        return this.isInputModeActive ? 'pointer' : 'default';
+        return this.isInputModeActive ? 'grab' : 'default';
       });
   }
 
@@ -1437,6 +1629,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr("class", (d: any) => {
         return this.isErrorNode(d) ? "error-node" : "node";
       })
+      .attr("data-node-id", (d: any) => d.id)
       .call(nodeDrag)
       .on('mousedown.inputmode', (d: any) => {
         if (this.isInputModeActive) {

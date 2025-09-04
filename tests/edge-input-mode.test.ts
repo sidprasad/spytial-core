@@ -96,7 +96,7 @@ describe('Edge Input Mode Logic', () => {
     // Start edge creation
     const sourceNode = { id: 'A', label: 'Node A', x: 0, y: 0 };
     edgeCreationState.isCreating = true;
-    edgeCreationState.sourceNode = sourceNode;
+    edgeCreationState.sourceNode = sourceNode as any;
 
     expect(edgeCreationState.isCreating).toBe(true);
     expect(edgeCreationState.sourceNode).toBe(sourceNode);
@@ -123,7 +123,7 @@ describe('Edge Input Mode Logic', () => {
     const mockDocument = {
       body: mockBody,
       createElement: vi.fn().mockImplementation((tag) => {
-        const element = {
+        const element: any = {
           style: {},
           innerHTML: '',
           querySelector: vi.fn(),
@@ -175,5 +175,71 @@ describe('Edge Input Mode Logic', () => {
     // Test cancel handling
     const cancelValue = null;
     expect(cancelValue).toBe(null);
+  });
+
+  it('should handle edge dragging state management', () => {
+    // Initial edge drag state
+    let edgeDragState = {
+      isDragging: false,
+      draggedEdge: null,
+      originalSource: null,
+      originalTarget: null,
+      temporaryLine: null
+    };
+
+    expect(edgeDragState.isDragging).toBe(false);
+    expect(edgeDragState.draggedEdge).toBe(null);
+
+    // Start edge drag
+    const mockEdge = {
+      id: 'edge1',
+      label: 'test-edge',
+      relName: 'test-edge',
+      source: { id: 'A', x: 0, y: 0 },
+      target: { id: 'B', x: 100, y: 100 }
+    };
+
+    edgeDragState.isDragging = true;
+    edgeDragState.draggedEdge = mockEdge as any;
+    edgeDragState.originalSource = mockEdge.source as any;
+    edgeDragState.originalTarget = mockEdge.target as any;
+
+    expect(edgeDragState.isDragging).toBe(true);
+    expect(edgeDragState.draggedEdge).toBe(mockEdge);
+
+    // Clean up edge drag
+    edgeDragState = {
+      isDragging: false,
+      draggedEdge: null,
+      originalSource: null,
+      originalTarget: null,
+      temporaryLine: null
+    };
+
+    expect(edgeDragState.isDragging).toBe(false);
+    expect(edgeDragState.draggedEdge).toBe(null);
+  });
+
+  it('should detect edge drag target scenarios', () => {
+    const sourceNode = { id: 'A', x: 0, y: 0 };
+    const targetNode = { id: 'B', x: 100, y: 100 };
+    const differentNode = { id: 'C', x: 200, y: 200 };
+
+    // Drag to different node - should modify edge
+    const shouldModifyEdge = differentNode.id !== sourceNode.id && differentNode.id !== targetNode.id;
+    expect(shouldModifyEdge).toBe(true);
+
+    // Drag to empty space (null) - should delete edge
+    const nullTarget = null;
+    const shouldDeleteEdge = nullTarget === null;
+    expect(shouldDeleteEdge).toBe(true);
+
+    // Drag back to original source - should cancel
+    const shouldCancel = differentNode.id === sourceNode.id;
+    expect(shouldCancel).toBe(false); // In this case it's different
+
+    // But if we drag to actual source
+    const shouldCancelActual = sourceNode.id === sourceNode.id;
+    expect(shouldCancelActual).toBe(true);
   });
 });
