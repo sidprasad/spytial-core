@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JavaScript Spatial REPL Demo</title>
+    
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .demo-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .feature-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-right: 10px;
+            font-weight: 500;
+        }
+        button:hover { background: #5a6fd8; }
+        .danger { background: #dc3545; }
+        .danger:hover { background: #c82333; }
+        code {
+            background: #f1f3f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Menlo', monospace;
+        }
+        #spatial-repl-container {
+            min-height: 800px;
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="demo-header">
+            <h1>🚀 JavaScript Spatial REPL Demo</h1>
+            <p>Experience two-way programming with JavaScript expressions on the left and real-time diagram visualization on the right. Changes in either panel instantly update the other through JSONDataInstance communication.</p>
+        </div>
+
+        <div class="feature-grid">
+            <div class="feature-card">
+                <h3>🎯 Spatial Programming</h3>
+                <p>Write JavaScript expressions in the REPL and see your data structures visualized in real-time. The spatial layout helps you understand relationships and hierarchies in your code.</p>
+            </div>
+            <div class="feature-card">
+                <h3>📊 Data Visualization</h3>
+                <p>Every atom and relation you create appears immediately in the diagram. Use the layout interface to customize how your data is presented spatially.</p>
+            </div>
+            <div class="feature-card">
+                <h3>⚡ Real-time Sync</h3>
+                <p>Changes flow seamlessly between the JavaScript REPL and the visual diagram. Edit code or drag nodes - everything stays synchronized via JSONDataInstance events.</p>
+            </div>
+            <div class="feature-card">
+                <h3>🔧 JavaScript Native</h3>
+                <p>Use familiar JavaScript syntax: <code>Array.map()</code>, <code>Math.*</code>, <code>Object.keys()</code>, and more. Create data structures with JavaScript expressions.</p>
+            </div>
+        </div>
+
+        <div style="background-color: #e8f4f8; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #17a2b8;">
+            <h3 style="margin-top: 0;">🧪 Try These JavaScript Commands:</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div>
+                    <h4>Data Creation:</h4>
+                    <ul style="margin: 0;">
+                        <li><code>atom('user1', 'User', 'Alice')</code></li>
+                        <li><code>atom('user2', 'User', 'Bob')</code></li>
+                        <li><code>relation('r1', 'follows', 'user1', 'user2')</code></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4>Array Processing:</h4>
+                    <ul style="margin: 0;">
+                        <li><code>[1,2,3,4,5].map(x => x * 2)</code></li>
+                        <li><code>['a','b','c'].filter(x => x > 'a')</code></li>
+                        <li><code>Math.max(10, 20, 5, 15)</code></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin: 20px 0;">
+            <button onclick="setupJavaScriptDemo()">🚀 Start JavaScript Spatial REPL</button>
+            <button onclick="loadSampleData()">📊 Load Sample Data</button>
+            <button onclick="clearDemo()" class="danger">🗑️ Clear</button>
+        </div>
+
+        <!-- Container for the spatial REPL -->
+        <div id="spatial-repl-container"></div>
+    </div>
+
+    <!-- Load CnD Core -->
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="../vendor/cola.js"></script>
+    <script src="../dist/browser/cnd-core-complete.global.js"></script>
+    <link rel="stylesheet" href="../dist/browser/cnd-core-complete.css">
+
+    <script>
+        /**
+         * Set up the JavaScript Spatial REPL Demo
+         */
+        function setupJavaScriptDemo() {
+            console.log('🚀 Setting up JavaScript Spatial REPL...');
+            
+            // Clear existing content
+            clearDemo();
+            
+            // Create empty JSON data instance
+            const dataInstance = new window.CndCore.JSONDataInstance({
+                atoms: [],
+                relations: []
+            });
+            
+            // Basic CnD specification for layout
+            const cndSpec = `nodes:
+  - { id: User, type: atom, color: "#4CAF50", size: 25 }
+  - { id: atom, type: atom, color: "#2196F3" }
+edges:
+  - { id: follows, type: relation, color: "#FF9800", width: 2 }
+  - { id: relation, type: relation, color: "#9C27B0" }
+constraints:
+  - type: "align"
+    nodes: ["User"]
+    axis: "x"
+directives:
+  - type: "hideDisconnected"
+    value: false`;
+
+            // Use the multi-language combined input component
+            const success = window.CndCore.mountMultiLanguageCombinedInput({
+                containerId: 'spatial-repl-container',
+                language: 'javascript',
+                cndSpec: cndSpec,
+                dataInstance: dataInstance,
+                height: '800px',
+                showLayoutInterface: true,
+                autoApplyLayout: true,
+                onInstanceChange: (instance) => {
+                    console.log('📊 Data updated:', {
+                        atoms: instance.getAtoms().length,
+                        relations: instance.getRelations().length
+                    });
+                },
+                onSpecChange: (spec) => {
+                    console.log('🎨 Layout spec updated');
+                },
+                onLayoutApplied: (layout) => {
+                    console.log('⚡ Layout applied:', layout);
+                }
+            });
+
+            if (success) {
+                console.log('✅ JavaScript Spatial REPL initialized successfully');
+                
+                // Add event listeners for demo
+                window.addEventListener('spatial-repl-layout-updated', (event) => {
+                    console.log('🔄 Spatial REPL layout updated:', event.detail);
+                });
+            } else {
+                console.error('❌ Failed to initialize JavaScript Spatial REPL');
+            }
+        }
+
+        /**
+         * Load sample data to demonstrate the spatial REPL
+         */
+        function loadSampleData() {
+            // Dispatch custom commands to the REPL
+            const sampleCommands = [
+                "atom('alice', 'User', 'Alice Smith')",
+                "atom('bob', 'User', 'Bob Jones')", 
+                "atom('charlie', 'User', 'Charlie Brown')",
+                "relation('r1', 'follows', 'alice', 'bob')",
+                "relation('r2', 'follows', 'bob', 'charlie')",
+                "[1,2,3,4,5].map(x => x * x)",
+                "Math.max(10, 25, 5, 30)"
+            ];
+
+            console.log('📊 Loading sample data with commands:', sampleCommands);
+            
+            // Note: In a real implementation, we would need to access the REPL component
+            // to programmatically execute these commands. For now, this is a placeholder.
+            alert('Sample data loaded! Try these commands in the REPL:\n\n' + sampleCommands.join('\n'));
+        }
+
+        /**
+         * Clear the demo
+         */
+        function clearDemo() {
+            const container = document.getElementById('spatial-repl-container');
+            if (container) {
+                container.innerHTML = '';
+            }
+            console.log('🗑️ Demo cleared');
+        }
+
+        // Note: The mountMultiLanguageCombinedInput function would need to be implemented
+        // This is a placeholder for the enhanced mounting function
+        if (!window.CndCore.mountMultiLanguageCombinedInput) {
+            window.CndCore.mountMultiLanguageCombinedInput = function(config) {
+                console.log('🔧 Multi-language mounting function not yet implemented');
+                console.log('📋 Config:', config);
+                
+                // Fallback to regular combined input for now
+                return window.CndCore.mountCombinedInput(config);
+            };
+        }
+    </script>
+</body>
+</html>

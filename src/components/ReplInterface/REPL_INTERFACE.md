@@ -2,6 +2,58 @@
 
 A terminal-style interface for building data instances with command-line syntax.
 
+## Multi-Language Spatial REPL
+
+The enhanced spatial REPL now supports multiple programming languages with seamless integration between code and visualization:
+
+- **JavaScript**: Native JavaScript expressions with full ES6+ support
+- **Python**: Python-like syntax with list comprehensions, built-ins, and familiar patterns  
+- **Pyret**: Original Pyret language support with external evaluator integration
+
+### Spatial Programming Features
+
+- **Language Selection**: Switch between JavaScript, Python, and Pyret in real-time
+- **Two-way Communication**: REPL on the left, diagram on the right, changes sync instantly
+- **Layout Interface**: Visual constraint specification alongside code
+- **Real-time Synchronization**: Automatic layout updates as you code
+- **Event-driven Architecture**: Components communicate via JSONDataInstance events
+
+### JavaScript Spatial REPL
+
+```javascript
+// Data creation
+atom('user1', 'User', 'Alice')
+atom('user2', 'User', 'Bob')  
+relation('r1', 'follows', 'user1', 'user2')
+
+// Array processing
+[1, 2, 3, 4, 5].map(x => x * 2)
+['a', 'b', 'c'].filter(x => x > 'a')
+
+// Math operations
+Math.max(10, 20, 5, 15)
+Object.keys({a: 1, b: 2, c: 3})
+```
+
+### Python Spatial REPL
+
+```python
+# Data creation
+atom('user1', 'User', 'Alice')
+relation('r1', 'follows', 'user1', 'user2')
+
+# Python built-ins
+len([1, 2, 3, 4, 5])
+sum(range(1, 11))
+
+# List comprehensions
+[x*2 for x in range(5)]
+[x for x in range(10) if x % 2 == 0]
+
+# Python data types and print
+print('Hello, Spatial REPL!')
+```
+
 ## Why REPL Makes Sense
 
 The REPL (Read-Eval-Print Loop) interface provides significant benefits for data exploration and construction:

@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Python Spatial REPL Demo</title>
+    
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .demo-header {
+            background: linear-gradient(135deg, #3776ab 0%, #ffd43b 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .feature-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #3776ab;
+        }
+        button {
+            background: #3776ab;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-right: 10px;
+            font-weight: 500;
+        }
+        button:hover { background: #2d5d8b; }
+        .danger { background: #dc3545; }
+        .danger:hover { background: #c82333; }
+        code {
+            background: #f1f3f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Menlo', monospace;
+        }
+        #spatial-repl-container {
+            min-height: 800px;
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="demo-header">
+            <h1>🐍 Python Spatial REPL Demo</h1>
+            <p>Experience two-way programming with Python-like syntax on the left and real-time diagram visualization on the right. Leverage familiar Python constructs while building spatial data representations.</p>
+        </div>
+
+        <div class="feature-grid">
+            <div class="feature-card">
+                <h3>🐍 Python Syntax</h3>
+                <p>Write familiar Python expressions: list comprehensions, built-in functions like <code>len()</code>, <code>range()</code>, and <code>print()</code>. Feel at home with Python semantics.</p>
+            </div>
+            <div class="feature-card">
+                <h3>📊 Visual Data Structures</h3>
+                <p>See your Python data structures come to life visually. Lists, dictionaries, and custom objects are rendered as spatial diagrams with customizable layouts.</p>
+            </div>
+            <div class="feature-card">
+                <h3>⚡ Live Synchronization</h3>
+                <p>Changes flow instantly between Python expressions and visual diagrams. Modify code or drag nodes - everything synchronizes through event-driven architecture.</p>
+            </div>
+            <div class="feature-card">
+                <h3>🔧 Built-in Functions</h3>
+                <p>Access Python favorites: <code>len()</code>, <code>sum()</code>, <code>range()</code>, <code>list()</code>, <code>dict()</code>, <code>set()</code>, and more. Build data with familiar patterns.</p>
+            </div>
+        </div>
+
+        <div style="background-color: #e8f5e8; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #28a745;">
+            <h3 style="margin-top: 0;">🧪 Try These Python Commands:</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div>
+                    <h4>Data Creation:</h4>
+                    <ul style="margin: 0;">
+                        <li><code>atom('user1', 'User', 'Alice')</code></li>
+                        <li><code>atom('user2', 'User', 'Bob')</code></li>
+                        <li><code>relation('r1', 'follows', 'user1', 'user2')</code></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4>Python Expressions:</h4>
+                    <ul style="margin: 0;">
+                        <li><code>[x*2 for x in range(5)]</code></li>
+                        <li><code>sum([1, 2, 3, 4, 5])</code></li>
+                        <li><code>len(['a', 'b', 'c', 'd'])</code></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div style="background-color: #fff3cd; padding: 15px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #ffc107;">
+            <h4 style="margin-top: 0;">🔍 Python Features Supported:</h4>
+            <ul style="margin-bottom: 0;">
+                <li><strong>List Comprehensions:</strong> <code>[x for x in range(10) if x % 2 == 0]</code></li>
+                <li><strong>Built-in Functions:</strong> <code>len()</code>, <code>sum()</code>, <code>max()</code>, <code>min()</code>, <code>abs()</code></li>
+                <li><strong>Data Types:</strong> <code>list()</code>, <code>dict()</code>, <code>set()</code>, <code>tuple()</code></li>
+                <li><strong>Constants:</strong> <code>True</code>, <code>False</code>, <code>None</code></li>
+                <li><strong>Print Function:</strong> <code>print('Hello, Spatial REPL!')</code></li>
+            </ul>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin: 20px 0;">
+            <button onclick="setupPythonDemo()">🐍 Start Python Spatial REPL</button>
+            <button onclick="loadPythonSampleData()">📊 Load Sample Data</button>
+            <button onclick="clearDemo()" class="danger">🗑️ Clear</button>
+        </div>
+
+        <!-- Container for the spatial REPL -->
+        <div id="spatial-repl-container"></div>
+    </div>
+
+    <!-- Load CnD Core -->
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="../vendor/cola.js"></script>
+    <script src="../dist/browser/cnd-core-complete.global.js"></script>
+    <link rel="stylesheet" href="../dist/browser/cnd-core-complete.css">
+
+    <script>
+        /**
+         * Set up the Python Spatial REPL Demo
+         */
+        function setupPythonDemo() {
+            console.log('🐍 Setting up Python Spatial REPL...');
+            
+            // Clear existing content
+            clearDemo();
+            
+            // Create empty JSON data instance
+            const dataInstance = new window.CndCore.JSONDataInstance({
+                atoms: [],
+                relations: []
+            });
+            
+            // Python-focused CnD specification for layout
+            const cndSpec = `nodes:
+  - { id: User, type: atom, color: "#3776ab", size: 25 }
+  - { id: Dataset, type: atom, color: "#ffd43b", size: 20 }
+  - { id: atom, type: atom, color: "#6c757d" }
+edges:
+  - { id: follows, type: relation, color: "#28a745", width: 2 }
+  - { id: contains, type: relation, color: "#17a2b8", width: 2 }
+  - { id: relation, type: relation, color: "#6f42c1" }
+constraints:
+  - type: "align"
+    nodes: ["User"]
+    axis: "x"
+  - type: "orientation"
+    selector: "Dataset"
+    directions: ["below"]
+directives:
+  - type: "hideDisconnected"
+    value: false`;
+
+            // Use the multi-language combined input component
+            const success = window.CndCore.mountMultiLanguageCombinedInput({
+                containerId: 'spatial-repl-container',
+                language: 'python',
+                cndSpec: cndSpec,
+                dataInstance: dataInstance,
+                height: '800px',
+                showLayoutInterface: true,
+                autoApplyLayout: true,
+                onInstanceChange: (instance) => {
+                    console.log('🐍 Python data updated:', {
+                        atoms: instance.getAtoms().length,
+                        relations: instance.getRelations().length
+                    });
+                },
+                onSpecChange: (spec) => {
+                    console.log('🎨 Python layout spec updated');
+                },
+                onLayoutApplied: (layout) => {
+                    console.log('⚡ Python layout applied:', layout);
+                }
+            });
+
+            if (success) {
+                console.log('✅ Python Spatial REPL initialized successfully');
+                
+                // Add event listeners for demo
+                window.addEventListener('spatial-repl-layout-updated', (event) => {
+                    console.log('🔄 Python Spatial REPL layout updated:', event.detail);
+                });
+            } else {
+                console.error('❌ Failed to initialize Python Spatial REPL');
+            }
+        }
+
+        /**
+         * Load Python-specific sample data
+         */
+        function loadPythonSampleData() {
+            const pythonCommands = [
+                "atom('alice', 'User', 'Alice')",
+                "atom('bob', 'User', 'Bob')", 
+                "atom('data1', 'Dataset', 'User Data')",
+                "relation('r1', 'follows', 'alice', 'bob')",
+                "relation('r2', 'contains', 'data1', 'alice')",
+                "[x**2 for x in range(5)]",
+                "sum(range(1, 11))",
+                "len(['python', 'is', 'awesome'])",
+                "print('Hello from Python REPL!')"
+            ];
+
+            console.log('🐍 Loading Python sample data with commands:', pythonCommands);
+            
+            alert('Python sample data ready! Try these commands:\n\n' + pythonCommands.join('\n'));
+        }
+
+        /**
+         * Clear the demo
+         */
+        function clearDemo() {
+            const container = document.getElementById('spatial-repl-container');
+            if (container) {
+                container.innerHTML = '';
+            }
+            console.log('🗑️ Demo cleared');
+        }
+
+        // Note: The mountMultiLanguageCombinedInput function would need to be implemented
+        // This is a placeholder for the enhanced mounting function
+        if (!window.CndCore.mountMultiLanguageCombinedInput) {
+            window.CndCore.mountMultiLanguageCombinedInput = function(config) {
+                console.log('🔧 Multi-language mounting function not yet implemented');
+                console.log('📋 Config:', config);
+                
+                // Fallback to regular combined input for now
+                return window.CndCore.mountCombinedInput(config);
+            };
+        }
+    </script>
+</body>
+</html>

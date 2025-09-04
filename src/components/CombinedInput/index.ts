@@ -10,6 +10,14 @@ export type {
   CombinedInputProps 
 } from './CombinedInputComponent';
 
+// Export multi-language component
+export { MultiLanguageCombinedInputComponent } from './MultiLanguageCombinedInputComponent';
+export type { 
+  MultiLanguageCombinedInputConfig, 
+  MultiLanguageCombinedInputProps, 
+  SupportedLanguage 
+} from './MultiLanguageCombinedInputComponent';
+
 // Export mounting function for easy integration
 export { mountCombinedInput } from './mounting';
 export type { CombinedInputMountConfig } from './mounting';

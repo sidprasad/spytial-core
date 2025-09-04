@@ -1,4 +1,10 @@
 export { ReplInterface } from './ReplInterface';
 export type { ReplInterfaceProps } from './ReplInterface';
+export { PyretReplInterface } from './PyretReplInterface';
+export type { PyretReplInterfaceProps } from './PyretReplInterface';
+export { JavaScriptReplInterface } from './JavaScriptReplInterface';
+export type { JavaScriptReplInterfaceProps } from './JavaScriptReplInterface';
+export { PythonReplInterface } from './PythonReplInterface';
+export type { PythonReplInterfaceProps } from './PythonReplInterface';
 export { ReplWithVisualization } from './ReplWithVisualization';
 export type { ReplWithVisualizationProps } from './ReplWithVisualization';
