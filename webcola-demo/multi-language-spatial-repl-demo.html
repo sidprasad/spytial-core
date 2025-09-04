@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Language Spatial REPL Demo</title>
+    
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .demo-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .language-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e9ecef;
+            padding-bottom: 10px;
+        }
+        .language-tab {
+            padding: 10px 20px;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px 6px 0 0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+        .language-tab.active {
+            background: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+        .language-tab:hover:not(.active) {
+            background: #e9ecef;
+        }
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .feature-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #007bff;
+        }
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .language-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+        .language-card.javascript {
+            border-color: #f7df1e;
+            background: #fffdf0;
+        }
+        .language-card.python {
+            border-color: #3776ab;
+            background: #f0f7ff;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+            font-weight: 500;
+            transition: background 0.3s ease;
+        }
+        button:hover { background: #0056b3; }
+        button.javascript { background: #f7df1e; color: #333; }
+        button.javascript:hover { background: #e6cc00; }
+        button.python { background: #3776ab; }
+        button.python:hover { background: #2d5d8b; }
+        .danger { background: #dc3545; }
+        .danger:hover { background: #c82333; }
+        code {
+            background: #f1f3f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Menlo', monospace;
+        }
+        .demo-container {
+            min-height: 800px;
+            margin-top: 20px;
+            border: 2px solid #007bff;
+            border-radius: 8px;
+            overflow: hidden;
+            background: white;
+        }
+        .current-language {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            font-weight: bold;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-header">
+        <h1>🌟 Multi-Language Spatial REPL</h1>
+        <p>Experience the power of spatial programming with JavaScript, Python, and Pyret. Write code on the left, see diagrams on the right, with real-time synchronization between both panels.</p>
+    </div>
+
+    <div class="container">
+        <div class="feature-grid">
+            <div class="feature-card">
+                <h3>🚀 Three Languages, One Interface</h3>
+                <p>Switch seamlessly between JavaScript, Python, and Pyret. Each language brings its own strengths to spatial data programming.</p>
+            </div>
+            <div class="feature-card">
+                <h3>🔄 Real-time Synchronization</h3>
+                <p>Changes in code instantly update the diagram, and visual modifications reflect back in your data structures through event-driven architecture.</p>
+            </div>
+            <div class="feature-card">
+                <h3>🎨 Visual Layout Control</h3>
+                <p>Use the layout interface to specify spatial constraints and customize how your data structures are visually represented.</p>
+            </div>
+            <div class="feature-card">
+                <h3>⚡ Live Programming</h3>
+                <p>See your algorithms come to life visually. Perfect for education, debugging, and understanding complex data relationships.</p>
+            </div>
+        </div>
+
+        <div class="comparison-grid">
+            <div class="language-card javascript">
+                <h3>🟨 JavaScript</h3>
+                <h4>Native JavaScript Power</h4>
+                <ul>
+                    <li>ES6+ features and syntax</li>
+                    <li>Array methods: map, filter, reduce</li>
+                    <li>Math and Object utilities</li>
+                    <li>Console debugging</li>
+                </ul>
+                <p><strong>Example:</strong></p>
+                <code>[1,2,3,4].map(x => x*x)</code>
+            </div>
+            <div class="language-card python">
+                <h3>🐍 Python</h3>
+                <h4>Familiar Python Constructs</h4>
+                <ul>
+                    <li>List comprehensions</li>
+                    <li>Built-in functions: len, sum, range</li>
+                    <li>Python data types and constants</li>
+                    <li>Print function with Python formatting</li>
+                </ul>
+                <p><strong>Example:</strong></p>
+                <code>[x**2 for x in range(5)]</code>
+            </div>
+        </div>
+
+        <div style="background-color: #e8f4fd; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #007bff;">
+            <h3 style="margin-top: 0;">🧪 Try These Commands:</h3>
+            <div class="comparison-grid">
+                <div>
+                    <h4>JavaScript Examples:</h4>
+                    <ul style="font-family: monospace; font-size: 14px;">
+                        <li>atom('alice', 'User', 'Alice')</li>
+                        <li>[1,2,3,4,5].filter(x => x % 2 === 0)</li>
+                        <li>Math.max(10, 20, 30)</li>
+                        <li>Object.keys({a: 1, b: 2})</li>
+                    </ul>
+                </div>
+                <div>
+                    <h4>Python Examples:</h4>
+                    <ul style="font-family: monospace; font-size: 14px;">
+                        <li>atom('bob', 'User', 'Bob')</li>
+                        <li>[x*2 for x in range(5)]</li>
+                        <li>sum([1, 2, 3, 4, 5])</li>
+                        <li>print('Hello, Spatial REPL!')</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="language-tabs">
+            <div class="language-tab active" data-language="javascript">
+                🟨 JavaScript Spatial REPL
+            </div>
+            <div class="language-tab" data-language="python">
+                🐍 Python Spatial REPL
+            </div>
+            <div class="language-tab" data-language="pyret">
+                🎯 Pyret Spatial REPL
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin: 20px 0; flex-wrap: wrap;">
+            <button onclick="setupLanguageDemo('javascript')" class="javascript">
+                🚀 Start JavaScript REPL
+            </button>
+            <button onclick="setupLanguageDemo('python')" class="python">
+                🐍 Start Python REPL
+            </button>
+            <button onclick="setupLanguageDemo('pyret')">
+                🎯 Start Pyret REPL
+            </button>
+            <button onclick="loadSampleData()">
+                📊 Load Sample Data
+            </button>
+            <button onclick="clearDemo()" class="danger">
+                🗑️ Clear
+            </button>
+        </div>
+    </div>
+
+    <!-- Demo Container -->
+    <div class="demo-container">
+        <div class="current-language" id="current-language-indicator">
+            Select a language to start the Spatial REPL
+        </div>
+        <div id="spatial-repl-container" style="flex: 1; min-height: 750px;"></div>
+    </div>
+
+    <!-- Load CnD Core -->
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="../vendor/cola.js"></script>
+    <script src="../dist/browser/cnd-core-complete.global.js"></script>
+    <link rel="stylesheet" href="../dist/browser/cnd-core-complete.css">
+
+    <script>
+        let currentLanguage = 'javascript';
+        
+        // Language tab functionality
+        document.querySelectorAll('.language-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const language = tab.dataset.language;
+                
+                // Update active tab
+                document.querySelectorAll('.language-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                
+                // Setup demo for selected language
+                setupLanguageDemo(language);
+            });
+        });
+
+        /**
+         * Set up the Multi-Language Spatial REPL Demo
+         */
+        function setupLanguageDemo(language = 'javascript') {
+            console.log(`🚀 Setting up ${language} Spatial REPL...`);
+            
+            currentLanguage = language;
+            
+            // Update indicator
+            const indicator = document.getElementById('current-language-indicator');
+            const languageNames = {
+                javascript: '🟨 JavaScript Spatial REPL Active',
+                python: '🐍 Python Spatial REPL Active', 
+                pyret: '🎯 Pyret Spatial REPL Active'
+            };
+            indicator.textContent = languageNames[language];
+            
+            // Clear existing content
+            clearDemo();
+            
+            // Create appropriate data instance
+            const dataInstance = language === 'pyret' 
+                ? new window.CndCore.PyretDataInstance({ dict: {}, brands: {} })
+                : new window.CndCore.JSONDataInstance({ atoms: [], relations: [] });
+            
+            // Language-specific CnD specifications
+            const cndSpecs = {
+                javascript: `nodes:
+  - { id: User, type: atom, color: "#f7df1e", size: 25 }
+  - { id: Function, type: atom, color: "#ff6b35", size: 20 }
+  - { id: atom, type: atom, color: "#6c757d" }
+edges:
+  - { id: calls, type: relation, color: "#28a745", width: 2 }
+  - { id: relation, type: relation, color: "#6f42c1" }
+constraints:
+  - type: "align"
+    nodes: ["User"]
+    axis: "x"`,
+                python: `nodes:
+  - { id: User, type: atom, color: "#3776ab", size: 25 }
+  - { id: Dataset, type: atom, color: "#ffd43b", size: 20 }
+  - { id: atom, type: atom, color: "#6c757d" }
+edges:
+  - { id: contains, type: relation, color: "#17a2b8", width: 2 }
+  - { id: relation, type: relation, color: "#6f42c1" }
+constraints:
+  - type: "orientation"
+    selector: "Dataset"
+    directions: ["below"]`,
+                pyret: `nodes:
+  - { id: Person, type: atom, color: "#FF6B35", size: 20 }
+  - { id: atom, type: atom, color: "#4CAF50" }
+edges:
+  - { id: friend, type: relation, color: "#E91E63", width: 3 }
+  - { id: relation, type: relation, color: "#2196F3" }
+constraints:
+  - type: "align"
+    nodes: ["Person"]
+    axis: "x"`
+            };
+
+            // Use multi-language combined input or fallback
+            const mountFunction = window.CndCore.mountMultiLanguageCombinedInput || window.CndCore.mountCombinedInput;
+            
+            const success = mountFunction({
+                containerId: 'spatial-repl-container',
+                language: language,
+                cndSpec: cndSpecs[language],
+                dataInstance: dataInstance,
+                height: '750px',
+                showLayoutInterface: true,
+                autoApplyLayout: true,
+                onInstanceChange: (instance) => {
+                    console.log(`📊 ${language} data updated:`, {
+                        atoms: instance.getAtoms().length,
+                        relations: instance.getRelations().length
+                    });
+                },
+                onSpecChange: (spec) => {
+                    console.log(`🎨 ${language} layout spec updated`);
+                },
+                onLayoutApplied: (layout) => {
+                    console.log(`⚡ ${language} layout applied:`, layout);
+                },
+                onLanguageChange: (newLang) => {
+                    console.log(`🔄 Language changed to: ${newLang}`);
+                    currentLanguage = newLang;
+                }
+            });
+
+            if (success) {
+                console.log(`✅ ${language} Spatial REPL initialized successfully`);
+            } else {
+                console.error(`❌ Failed to initialize ${language} Spatial REPL`);
+            }
+        }
+
+        /**
+         * Load sample data for the current language
+         */
+        function loadSampleData() {
+            const sampleCommands = {
+                javascript: [
+                    "atom('alice', 'User', 'Alice')",
+                    "atom('bob', 'User', 'Bob')",
+                    "atom('calc', 'Function', 'Calculator')",
+                    "relation('r1', 'calls', 'alice', 'calc')",
+                    "[1, 2, 3, 4, 5].map(x => x * x)",
+                    "Math.max(10, 20, 30, 5)",
+                    "console.log('JavaScript Spatial REPL!')"
+                ],
+                python: [
+                    "atom('alice', 'User', 'Alice')",
+                    "atom('bob', 'User', 'Bob')",
+                    "atom('data1', 'Dataset', 'User Data')",
+                    "relation('r1', 'contains', 'data1', 'alice')",
+                    "[x**2 for x in range(5)]",
+                    "sum(range(1, 11))",
+                    "print('Python Spatial REPL!')"
+                ],
+                pyret: [
+                    "Alice:Person",
+                    "Bob:Person",
+                    "alice.friend = bob",
+                    "tree(node(1, empty, empty), node(2, empty, empty))"
+                ]
+            };
+
+            const commands = sampleCommands[currentLanguage] || sampleCommands.javascript;
+            
+            console.log(`📊 Loading ${currentLanguage} sample data:`, commands);
+            alert(`${currentLanguage.toUpperCase()} Sample Commands Ready!\n\nTry these in the REPL:\n\n${commands.join('\n')}`);
+        }
+
+        /**
+         * Clear the demo
+         */
+        function clearDemo() {
+            const container = document.getElementById('spatial-repl-container');
+            if (container) {
+                container.innerHTML = '';
+            }
+            console.log('🗑️ Demo cleared');
+        }
+
+        // Multi-language mounting function placeholder
+        if (!window.CndCore.mountMultiLanguageCombinedInput) {
+            window.CndCore.mountMultiLanguageCombinedInput = function(config) {
+                console.log('🔧 Multi-language mounting function not yet fully implemented');
+                console.log('📋 Config:', config);
+                
+                // For now, show language-specific message and use regular mounting
+                const languageEmojis = { javascript: '🟨', python: '🐍', pyret: '🎯' };
+                const emoji = languageEmojis[config.language] || '🔧';
+                
+                const container = document.getElementById(config.containerId);
+                if (container) {
+                    container.innerHTML = `
+                        <div style="padding: 40px; text-align: center; background: #f8f9fa; height: 100%; display: flex; flex-direction: column; justify-content: center;">
+                            <h2>${emoji} ${config.language.toUpperCase()} Spatial REPL</h2>
+                            <p>Multi-language spatial REPL component is being implemented...</p>
+                            <p style="color: #666; font-size: 14px;">This will support real-time ${config.language} evaluation with spatial visualization.</p>
+                            <div style="margin-top: 20px; padding: 20px; background: white; border-radius: 8px; border-left: 4px solid #007bff;">
+                                <h4>Planned Features:</h4>
+                                <ul style="text-align: left; max-width: 500px; margin: 0 auto;">
+                                    <li>${config.language.toUpperCase()} expression evaluation</li>
+                                    <li>Real-time diagram synchronization</li>
+                                    <li>Layout interface integration</li>
+                                    <li>Event-driven data updates</li>
+                                </ul>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                return true;
+            };
+        }
+
+        // Initialize with JavaScript by default
+        setupLanguageDemo('javascript');
+    </script>
+</body>
+</html>
