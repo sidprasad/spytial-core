@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edge Drag Test</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .instructions {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #1976d2;
+        }
+        .graph-container {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .debug-log {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-top: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            white-space: pre-line;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Edge Dragging Test</h1>
+        
+        <div class="instructions">
+            <h3>Instructions:</h3>
+            <ol>
+                <li><strong>Hold Shift key</strong> to activate edge moving mode</li>
+                <li><strong>Click and drag an edge</strong> to move it to a different node</li>
+                <li><strong>Drag edge to empty space</strong> to delete it</li>
+                <li>Check the debug log below for console output</li>
+            </ol>
+            <p><strong>Expected:</strong> Edges should become thicker (3px) when holding Shift, blue dashed guideline should appear when dragging edges, with a blue circle following your mouse cursor.</p>
+        </div>
+
+        <div class="graph-container">
+            <webcola-cnd-graph id="testGraph" style="width: 100%; height: 400px;"></webcola-cnd-graph>
+        </div>
+
+        <div class="debug-log" id="debugLog">Debug messages will appear here...</div>
+    </div>
+
+    <!-- Load D3 and WebCola -->
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="../vendor/cola.js"></script>
+    
+    <!-- Load the built CND-Core bundle -->
+    <script src="../dist/browser/cnd-core-complete.global.js"></script>
+    <link rel="stylesheet" href="../dist/browser/cnd-core-complete.css">
+
+    <script>
+        // Set up debug logging
+        const debugLog = document.getElementById('debugLog');
+        const originalConsoleLog = console.log;
+        console.log = function(...args) {
+            originalConsoleLog.apply(console, args);
+            debugLog.textContent += args.join(' ') + '\n';
+            debugLog.scrollTop = debugLog.scrollHeight;
+        };
+
+        // Wait for the page to load
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Page loaded, setting up test data...');
+            
+            const graph = document.getElementById('testGraph');
+            
+            // Create simple test data with a few nodes and edges
+            const testData = {
+                layout: {
+                    nodes: [
+                        { id: "Alice", label: "Alice", x: 100, y: 100 },
+                        { id: "Bob", label: "Bob", x: 300, y: 100 },
+                        { id: "Carol", label: "Carol", x: 200, y: 250 }
+                    ],
+                    edges: [
+                        { 
+                            id: "edge1", 
+                            source: { id: "Alice", label: "Alice", x: 100, y: 100 },
+                            target: { id: "Bob", label: "Bob", x: 300, y: 100 },
+                            label: "knows", 
+                            relName: "knows",
+                            color: "#333"
+                        },
+                        { 
+                            id: "edge2", 
+                            source: { id: "Bob", label: "Bob", x: 300, y: 100 },
+                            target: { id: "Carol", label: "Carol", x: 200, y: 250 },
+                            label: "likes", 
+                            relName: "likes",
+                            color: "#333"
+                        }
+                    ]
+                }
+            };
+
+            // Set the layout data
+            graph.renderLayout(testData);
+            
+            console.log('Test graph rendered with 3 nodes and 2 edges');
+            console.log('Hold Shift and try dragging an edge!');
+            
+            // Listen for edge moving mode events
+            graph.addEventListener('edge-moving-mode-activated', function() {
+                console.log('✅ Edge moving mode activated - you can now drag edges!');
+            });
+            
+            graph.addEventListener('edge-moving-mode-deactivated', function() {
+                console.log('❌ Edge moving mode deactivated');
+            });
+        });
+    </script>
+</body>
+</html>
