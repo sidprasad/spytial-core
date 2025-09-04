@@ -550,6 +550,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       this.svg.classed('edge-moving-mode', true);
     }
 
+    // Make edges thicker for easier interaction
+    this.updateEdgeInteractivity();
+
     // Disable zoom during edge moving mode to prevent conflicts
     this.disableZoom();
 
@@ -573,6 +576,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // Clean up any edge drag state
     this.cleanupEdgeDrag();
 
+    // Restore normal edge thickness
+    this.updateEdgeInteractivity();
+
     // Re-enable zoom/translate
     this.enableZoom();
 
@@ -580,6 +586,23 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     this.dispatchEvent(new CustomEvent('edge-moving-mode-deactivated', {
       detail: { active: false }
     }));
+  }
+
+  /**
+   * Update edge stroke width and cursor for better interaction in edge moving mode
+   */
+  private updateEdgeInteractivity(): void {
+    if (!this.svg) return;
+    
+    // Update stroke width for all non-alignment edges
+    this.svg.selectAll('path.link:not(.alignmentLink)')
+      .attr('stroke-width', this.isEdgeMovingModeActive ? 3 : 1);
+    
+    // Update cursor styling
+    this.svg.selectAll('path.link')
+      .style('cursor', () => {
+        return this.isEdgeMovingModeActive ? 'move' : (this.isInputModeActive ? 'pointer' : 'default');
+      });
   }
 
   /**
@@ -1498,6 +1521,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // Add labels to non-alignment links
     this.setupLinkLabels(linkGroups);
 
+    // Update edge interactivity styling
+    this.updateEdgeInteractivity();
+
     return linkGroups;
   }
 
@@ -1558,10 +1584,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
             });
           }
         })
-      )
-      .style('cursor', () => {
-        return this.isEdgeMovingModeActive ? 'move' : (this.isInputModeActive ? 'pointer' : 'default');
-      });
+      );
   }
 
   /**
