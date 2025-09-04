@@ -38,6 +38,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   private cndSpecString: string = '';
   private controlsContainer: HTMLDivElement | null = null;
   private customTypes: Set<string> = new Set();
+  private relationAtomPositions: string[] = ['', '']; // Default to 2 positions
 
   constructor(dataInstance?: IInputDataInstance) {
     super();
@@ -57,7 +58,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     this.initializeStructuredInput();
     
     // Listen for edge creation events from the parent WebColaCnDGraph
-    this.addEventListener('edge-creation-requested', this.handleEdgeCreationRequest.bind(this));
+    this.addEventListener('edge-creation-requested', this.handleEdgeCreationRequest.bind(this) as unknown as EventListener);
   }
 
   /**
@@ -149,9 +150,15 @@ export class StructuredInputGraph extends WebColaCnDGraph {
             <h4>Create Relations</h4>
             <div class="relation-form">
               <input type="text" class="relation-type-input" placeholder="Relation type (e.g., friend, knows, parent)" />
-              <div class="atom-selector">
-                <label>Select atoms for this relation:</label>
-                <div class="atom-checkboxes"></div>
+              <div class="relation-atoms">
+                <div style="font-size: 0.9em; color: #666; margin-bottom: 8px;">
+                  Atoms (arity: <span class="arity-display">2</span>):
+                </div>
+                <div class="atom-positions"></div>
+                <div class="arity-controls">
+                  <button type="button" class="add-position-btn">+ Add Position</button>
+                  <button type="button" class="remove-position-btn">- Remove Position</button>
+                </div>
               </div>
               <button class="add-relation-btn" disabled>Add Relation</button>
             </div>
@@ -356,6 +363,61 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         margin: 0;
       }
 
+      .relation-atoms {
+        margin-top: 8px;
+      }
+
+      .atom-positions {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+
+      .atom-position {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .atom-position label {
+        font-size: 11px;
+        font-weight: 500;
+        color: #555;
+      }
+
+      .atom-position select {
+        padding: 4px 6px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 11px;
+      }
+
+      .arity-controls {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+
+      .add-position-btn, .remove-position-btn {
+        padding: 4px 8px;
+        font-size: 10px;
+        border: 1px solid #ddd;
+        border-radius: 3px;
+        background: #f8f9fa;
+        cursor: pointer;
+      }
+
+      .add-position-btn:hover, .remove-position-btn:hover {
+        background: #e9ecef;
+      }
+
+      .remove-position-btn:disabled {
+        background: #f8f9fa;
+        color: #6c757d;
+        cursor: not-allowed;
+      }
+
       .deletion-controls {
         display: flex;
         flex-direction: column;
@@ -498,31 +560,47 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       labelInput.value = '';
       updateAddButtonState();
       this.updateDeletionSelects(); // Update deletion dropdowns
-      this.updateAtomCheckboxes(); // Update relation creation checkboxes
+      this.updateAtomPositions(); // Update relation creation positions
     });
 
     // Relation creation
     const relationTypeInput = this.controlsContainer.querySelector('.relation-type-input') as HTMLInputElement;
     const addRelationBtn = this.controlsContainer.querySelector('.add-relation-btn') as HTMLButtonElement;
+    const addPositionBtn = this.controlsContainer.querySelector('.add-position-btn') as HTMLButtonElement;
+    const removePositionBtn = this.controlsContainer.querySelector('.remove-position-btn') as HTMLButtonElement;
 
     const updateAddRelationButtonState = () => {
-      const checkboxes = this.controlsContainer?.querySelectorAll('.atom-checkboxes input[type="checkbox"]:checked');
-      const hasChecked = checkboxes && checkboxes.length >= 2;
+      const filledPositions = this.relationAtomPositions.filter(pos => pos.trim() !== '').length;
+      const hasEnoughPositions = filledPositions >= 2;
       const hasType = relationTypeInput.value.trim();
-      addRelationBtn.disabled = !hasChecked || !hasType;
+      addRelationBtn.disabled = !hasEnoughPositions || !hasType;
     };
 
     relationTypeInput?.addEventListener('input', updateAddRelationButtonState);
 
-    // Add event listeners to checkboxes when they're created
-    this.updateAtomCheckboxes();
+    // Initialize atom position selectors
+    this.updateAtomPositions();
+
+    addPositionBtn?.addEventListener('click', () => {
+      this.relationAtomPositions.push('');
+      this.updateAtomPositions();
+      updateAddRelationButtonState();
+    });
+
+    removePositionBtn?.addEventListener('click', () => {
+      if (this.relationAtomPositions.length > 2) {
+        this.relationAtomPositions.pop();
+        this.updateAtomPositions();
+        updateAddRelationButtonState();
+      }
+    });
 
     addRelationBtn?.addEventListener('click', async () => {
       await this.addRelationFromForm();
       relationTypeInput.value = '';
-      // Uncheck all checkboxes
-      const checkboxes = this.controlsContainer?.querySelectorAll('.atom-checkboxes input[type="checkbox"]') as NodeListOf<HTMLInputElement>;
-      checkboxes?.forEach(checkbox => checkbox.checked = false);
+      // Reset positions to default (2 empty positions)
+      this.relationAtomPositions = ['', ''];
+      this.updateAtomPositions();
       updateAddRelationButtonState();
       this.updateDeletionSelects();
     });
@@ -546,7 +624,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     deleteAtomBtn?.addEventListener('click', async () => {
       await this.deleteAtom(atomDeleteSelect.value);
       this.updateDeletionSelects();
-      this.updateAtomCheckboxes();
+      this.updateAtomPositions();
       updateDeleteButtonStates();
     });
 
@@ -559,7 +637,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     clearAllBtn?.addEventListener('click', async () => {
       await this.clearAllItems();
       this.updateDeletionSelects();
-      this.updateAtomCheckboxes();
+      this.updateAtomPositions();
       updateDeleteButtonStates();
     });
 
@@ -891,52 +969,92 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   }
 
   /**
-   * Update atom checkboxes for relation creation
+   * Update atom position selectors for relation creation
    */
-  private updateAtomCheckboxes(): void {
+  private updateAtomPositions(): void {
     if (!this.controlsContainer) return;
 
-    const checkboxContainer = this.controlsContainer.querySelector('.atom-checkboxes') as HTMLDivElement;
-    if (!checkboxContainer) return;
+    const positionsContainer = this.controlsContainer.querySelector('.atom-positions') as HTMLDivElement;
+    const arityDisplay = this.controlsContainer.querySelector('.arity-display') as HTMLSpanElement;
+    const removePositionBtn = this.controlsContainer.querySelector('.remove-position-btn') as HTMLButtonElement;
+    
+    if (!positionsContainer) return;
 
-    // Clear existing checkboxes
-    checkboxContainer.innerHTML = '';
+    // Update arity display
+    if (arityDisplay) {
+      arityDisplay.textContent = this.relationAtomPositions.length.toString();
+    }
+
+    // Update remove button state
+    if (removePositionBtn) {
+      removePositionBtn.disabled = this.relationAtomPositions.length <= 2;
+    }
+
+    // Clear existing positions
+    positionsContainer.innerHTML = '';
 
     const atoms = this.dataInstance.getAtoms();
     if (atoms.length === 0) {
-      checkboxContainer.innerHTML = '<div style="color: #666; font-size: 11px;">No atoms available</div>';
+      positionsContainer.innerHTML = '<div style="color: #666; font-size: 11px;">No atoms available</div>';
       return;
     }
 
-    atoms.forEach(atom => {
-      const checkboxItem = document.createElement('div');
-      checkboxItem.className = 'atom-checkbox-item';
-      
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.value = atom.id;
-      checkbox.id = `atom-checkbox-${atom.id}`;
+    // Create position selectors
+    this.relationAtomPositions.forEach((selectedAtomId, index) => {
+      const positionDiv = document.createElement('div');
+      positionDiv.className = 'atom-position';
       
       const label = document.createElement('label');
-      label.htmlFor = checkbox.id;
-      label.textContent = `${atom.label} (${atom.type})`;
+      label.textContent = `Position ${index + 1}:`;
       
-      checkboxItem.appendChild(checkbox);
-      checkboxItem.appendChild(label);
-      checkboxContainer.appendChild(checkboxItem);
-
-      // Add event listener to update button state
-      checkbox.addEventListener('change', () => {
-        const relationTypeInput = this.controlsContainer?.querySelector('.relation-type-input') as HTMLInputElement;
-        const addRelationBtn = this.controlsContainer?.querySelector('.add-relation-btn') as HTMLButtonElement;
-        const checkboxes = this.controlsContainer?.querySelectorAll('.atom-checkboxes input[type="checkbox"]:checked');
-        const hasChecked = checkboxes && checkboxes.length >= 2;
-        const hasType = relationTypeInput?.value.trim();
-        if (addRelationBtn) {
-          addRelationBtn.disabled = !hasChecked || !hasType;
+      const select = document.createElement('select');
+      select.dataset.position = index.toString();
+      
+      // Add default option
+      const defaultOption = document.createElement('option');
+      defaultOption.value = '';
+      defaultOption.textContent = 'Select Atom';
+      select.appendChild(defaultOption);
+      
+      // Add atom options
+      atoms.forEach(atom => {
+        const option = document.createElement('option');
+        option.value = atom.id;
+        option.textContent = `${atom.label} (${atom.type})`;
+        if (atom.id === selectedAtomId) {
+          option.selected = true;
         }
+        select.appendChild(option);
       });
+      
+      // Add event listener
+      select.addEventListener('change', () => {
+        this.relationAtomPositions[index] = select.value;
+        this.updateRelationButtonState();
+      });
+      
+      positionDiv.appendChild(label);
+      positionDiv.appendChild(select);
+      positionsContainer.appendChild(positionDiv);
     });
+  }
+
+  /**
+   * Update the add relation button state based on current positions
+   */
+  private updateRelationButtonState(): void {
+    if (!this.controlsContainer) return;
+    
+    const relationTypeInput = this.controlsContainer.querySelector('.relation-type-input') as HTMLInputElement;
+    const addRelationBtn = this.controlsContainer.querySelector('.add-relation-btn') as HTMLButtonElement;
+    
+    const filledPositions = this.relationAtomPositions.filter(pos => pos.trim() !== '').length;
+    const hasEnoughPositions = filledPositions >= 2;
+    const hasType = relationTypeInput?.value.trim();
+    
+    if (addRelationBtn) {
+      addRelationBtn.disabled = !hasEnoughPositions || !hasType;
+    }
   }
 
   /**
@@ -951,8 +1069,8 @@ export class StructuredInputGraph extends WebColaCnDGraph {
 
       if (!relationType) return;
 
-      const checkboxes = this.controlsContainer.querySelectorAll('.atom-checkboxes input[type="checkbox"]:checked') as NodeListOf<HTMLInputElement>;
-      const selectedAtomIds = Array.from(checkboxes).map(cb => cb.value);
+      // Get selected atom IDs from position selectors in order
+      const selectedAtomIds = this.relationAtomPositions.filter(id => id.trim() !== '');
 
       if (selectedAtomIds.length < 2) {
         console.warn('Need at least 2 atoms for a relation');
@@ -1037,7 +1155,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       console.log('📍 Atom added to instance - updating UI');
       this.refreshTypesFromDataInstance();
       this.updateDeletionSelects();
-      this.updateAtomCheckboxes();
+      this.updateAtomPositions();
     });
 
     instance.addEventListener('relationTupleAdded', () => {
@@ -1046,9 +1164,9 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       this.updateDeletionSelects();
     });
 
-    // Initial update of deletion selects and atom checkboxes
+    // Initial update of deletion selects and atom positions
     this.updateDeletionSelects();
-    this.updateAtomCheckboxes();
+    this.updateAtomPositions();
     
     console.log('✅ Data instance set successfully');
   }
@@ -1085,7 +1203,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         relationDeleteSelect.removeChild(relationDeleteSelect.lastChild!);
       }
 
-      // Add current relations with user-friendly labels
+      // Add current relations with user-friendly labels using ID and source-target
       const relations = this.dataInstance.getRelations();
       relations.forEach((relation, index) => {
         const option = document.createElement('option');
@@ -1100,8 +1218,9 @@ export class StructuredInputGraph extends WebColaCnDGraph {
           return atom ? atom.label : atomId;
         });
         
-        const relationType = relation.types[0] || 'relation';
-        option.textContent = `${relationType}: ${atomLabels.join(' → ')}`;
+        // Use relation ID and source-target format instead of just type
+        const relationDisplayName = relation.id || relation.name || 'relation';
+        option.textContent = `${relationDisplayName}: ${atomLabels.join(' → ')}`;
         relationDeleteSelect.appendChild(option);
       });
     }
