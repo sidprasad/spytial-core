@@ -674,7 +674,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
     // Confirm self-loop edges
     if (sourceNode.id === targetNode.id) {
-      const confirmSelfLoop = confirm(
+      const confirmSelfLoop = await this.showConfirmDialog(
         `Are you sure you want to create a self-loop edge on "${sourceNode.label || sourceNode.id}"?`
       );
       if (!confirmSelfLoop) {
@@ -694,7 +694,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Show edge label input dialog and create the edge
    */
   private async showEdgeLabelInput(sourceNode: NodeWithMetadata, targetNode: NodeWithMetadata): Promise<void> {
-    const label = prompt(`Enter label for edge from "${sourceNode.label || sourceNode.id}" to "${targetNode.label || targetNode.id}":`);
+    const label = await this.showPromptDialog(
+      `Enter label for edge from "${sourceNode.label || sourceNode.id}" to "${targetNode.label || targetNode.id}":`,
+      ''
+    );
     
     if (label !== null) { // User didn't cancel
       await this.createNewEdge(sourceNode, targetNode, label || '');
@@ -812,7 +815,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     if (!this.isInputModeActive) return;
 
     const currentLabel = edgeData.label || edgeData.relName || '';
-    const newLabel = prompt(`Edit edge label:`, currentLabel);
+    const newLabel = await this.showPromptDialog(`Edit edge label:`, currentLabel);
     
     if (newLabel !== null && newLabel !== currentLabel) {
       // Get source and target nodes for data instance update
@@ -2958,6 +2961,103 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         color: #9ca3af;
         transform: none;
       }
+
+      /* Modal Overlay and Dialog */
+      .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        font-family: system-ui, -apple-system, sans-serif;
+      }
+
+      .modal-dialog {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        padding: 24px;
+        max-width: 500px;
+        width: 90%;
+        max-height: 90vh;
+        overflow-y: auto;
+      }
+
+      .modal-header {
+        margin-bottom: 16px;
+      }
+
+      .modal-title {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+        color: #333;
+      }
+
+      .modal-body {
+        margin-bottom: 20px;
+      }
+
+      .modal-message {
+        margin: 0 0 16px 0;
+        font-size: 14px;
+        color: #555;
+        line-height: 1.5;
+      }
+
+      .modal-input {
+        width: 100%;
+        padding: 8px 12px;
+        border: 2px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+        box-sizing: border-box;
+      }
+
+      .modal-input:focus {
+        outline: none;
+        border-color: #007acc;
+      }
+
+      .modal-footer {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+      }
+
+      .modal-button {
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+
+      .modal-button.primary {
+        background: #007acc;
+        color: white;
+      }
+
+      .modal-button.primary:hover {
+        background: #005fa3;
+      }
+
+      .modal-button.secondary {
+        background: #f8f9fa;
+        color: #666;
+        border: 1px solid #ddd;
+      }
+
+      .modal-button.secondary:hover {
+        background: #e9ecef;
+      }
     `;
   }
 
@@ -3022,6 +3122,133 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private hideErrorIcon(): void {
     const errorIcon = this.shadowRoot!.querySelector('#error-icon') as HTMLElement;
     errorIcon.classList.remove('visible');
+  }
+
+  // =========================================
+  // MODAL DIALOG METHODS
+  // =========================================
+
+  /**
+   * Show a confirmation dialog
+   */
+  private showConfirmDialog(message: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+
+      overlay.innerHTML = `
+        <div class="modal-dialog">
+          <div class="modal-header">
+            <h3 class="modal-title">Confirm Action</h3>
+          </div>
+          <div class="modal-body">
+            <p class="modal-message">${message}</p>
+          </div>
+          <div class="modal-footer">
+            <button class="modal-button secondary" data-action="cancel">Cancel</button>
+            <button class="modal-button primary" data-action="confirm">Confirm</button>
+          </div>
+        </div>
+      `;
+
+      // Add event listeners
+      overlay.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement;
+        if (target.classList.contains('modal-overlay')) {
+          // Clicked outside dialog
+          this.shadowRoot!.removeChild(overlay);
+          resolve(false);
+        } else if (target.dataset.action === 'cancel') {
+          this.shadowRoot!.removeChild(overlay);
+          resolve(false);
+        } else if (target.dataset.action === 'confirm') {
+          this.shadowRoot!.removeChild(overlay);
+          resolve(true);
+        }
+      });
+
+      // Handle escape key
+      const handleKeydown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          this.shadowRoot!.removeChild(overlay);
+          document.removeEventListener('keydown', handleKeydown);
+          resolve(false);
+        }
+      };
+      document.addEventListener('keydown', handleKeydown);
+
+      this.shadowRoot!.appendChild(overlay);
+      
+      // Focus the confirm button
+      const confirmBtn = overlay.querySelector('[data-action="confirm"]') as HTMLButtonElement;
+      confirmBtn?.focus();
+    });
+  }
+
+  /**
+   * Show a prompt dialog for text input
+   */
+  private showPromptDialog(message: string, defaultValue: string = ''): Promise<string | null> {
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+
+      overlay.innerHTML = `
+        <div class="modal-dialog">
+          <div class="modal-header">
+            <h3 class="modal-title">Input Required</h3>
+          </div>
+          <div class="modal-body">
+            <p class="modal-message">${message}</p>
+            <input type="text" class="modal-input" value="${defaultValue}" placeholder="Enter text...">
+          </div>
+          <div class="modal-footer">
+            <button class="modal-button secondary" data-action="cancel">Cancel</button>
+            <button class="modal-button primary" data-action="ok">OK</button>
+          </div>
+        </div>
+      `;
+
+      const input = overlay.querySelector('.modal-input') as HTMLInputElement;
+
+      // Add event listeners
+      overlay.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement;
+        if (target.classList.contains('modal-overlay')) {
+          // Clicked outside dialog
+          this.shadowRoot!.removeChild(overlay);
+          resolve(null);
+        } else if (target.dataset.action === 'cancel') {
+          this.shadowRoot!.removeChild(overlay);
+          resolve(null);
+        } else if (target.dataset.action === 'ok') {
+          const value = input.value;
+          this.shadowRoot!.removeChild(overlay);
+          resolve(value);
+        }
+      });
+
+      // Handle enter and escape keys
+      const handleKeydown = (e: KeyboardEvent) => {
+        if (e.key === 'Enter') {
+          const value = input.value;
+          this.shadowRoot!.removeChild(overlay);
+          document.removeEventListener('keydown', handleKeydown);
+          resolve(value);
+        } else if (e.key === 'Escape') {
+          this.shadowRoot!.removeChild(overlay);
+          document.removeEventListener('keydown', handleKeydown);
+          resolve(null);
+        }
+      };
+      document.addEventListener('keydown', handleKeydown);
+
+      this.shadowRoot!.appendChild(overlay);
+      
+      // Focus and select the input
+      input.focus();
+      input.select();
+    });
   }
 
   // =========================================
