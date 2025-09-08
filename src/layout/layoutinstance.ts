@@ -19,6 +19,14 @@ import {
 import IEvaluator from '../evaluators/interfaces';
 import { ColorPicker } from './colorpicker';
 import { type ConstraintError, ConstraintValidator } from './constraint-validator';
+
+// Import accessibility translator
+import { 
+  DataNavigatorTranslator, 
+  DataNavigatorStructure, 
+  AccessibilityTranslatorOptions 
+} from '../translators/accessibility/data-navigator-translator';
+
 const UNIVERSAL_TYPE = "univ";
 
 
@@ -838,6 +846,20 @@ export class LayoutInstance {
         }
 
         return { layout, projectionData, error: null };
+    }
+
+    /**
+     * Generates Data Navigator accessibility structure from the layout
+     * @param layout - The generated layout instance
+     * @param options - Optional configuration for the accessibility translator
+     * @returns Data Navigator structure for accessibility integration
+     */
+    public generateAccessibilityData(
+        layout: InstanceLayout, 
+        options?: AccessibilityTranslatorOptions
+    ): DataNavigatorStructure {
+        const translator = new DataNavigatorTranslator(options);
+        return translator.translate(layout);
     }
 
     /**

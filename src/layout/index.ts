@@ -9,6 +9,12 @@ export * from './layoutinstance';
 export * from './colorpicker';
 export * from './constraint-validator';
 
+// Re-export accessibility types for convenience
+export type { 
+  DataNavigatorStructure, 
+  AccessibilityTranslatorOptions 
+} from '../translators/accessibility';
+
 // Utility functions
 import { LayoutInstance } from './layoutinstance';
 import { LayoutSpec, parseLayoutSpec } from './layoutspec';

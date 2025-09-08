@@ -25,8 +25,20 @@ export { type default as IEvaluator } from './evaluators/interfaces';
 export { ForgeEvaluator, WrappedForgeEvaluator } from './evaluators/forge-evaluator';
 export { WebColaTranslator } from './translators';
 export { StructuredInputGraph } from './translators';
-export type { ParsedCnDSpec } from './translators';
 export { SGraphQueryEvaluator } from "./evaluators/sgq-evaluator";
+
+// Accessibility exports
+export { 
+  DataNavigatorTranslator,
+  createDataNavigatorTranslator,
+  translateToDataNavigator
+} from './translators/accessibility';
+export type {
+  DataNavigatorStructure,
+  AccessibilityTranslatorOptions,
+  SemanticProperties,
+  SpatialProperties
+} from './translators/accessibility';
 
 // Browser-specific exports and initialization
 if (typeof window !== 'undefined') {

@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CnD Accessibility Demo</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        #graph-container {
+            width: 100%;
+            height: 400px;
+            border: 2px solid #007acc;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .accessibility-output {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .button-group {
+            margin: 10px 0;
+        }
+        .button-group button {
+            margin: 5px;
+        }
+        .alert {
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>CnD Core - Visual Accessibility Demo</h1>
+        <p class="lead">
+            This demo shows how CnD Core integrates with Data Navigator for visual accessibility.
+            Generate a layout and see how it's translated to an accessible data structure.
+        </p>
+    </div>
+
+    <div class="container">
+        <h2>Visualization</h2>
+        <div class="button-group">
+            <button id="generateLayoutBtn" class="btn btn-primary">Generate Layout</button>
+            <button id="generateAccessibilityBtn" class="btn btn-success" disabled>Generate Accessibility Data</button>
+            <button id="clearBtn" class="btn btn-secondary">Clear</button>
+        </div>
+        
+        <div id="status" class="alert alert-info" style="display: none;"></div>
+        
+        <webcola-cnd-graph 
+            id="graph-container"
+            width="100%" 
+            height="400">
+        </webcola-cnd-graph>
+    </div>
+
+    <div class="container">
+        <h2>Accessibility Data Structure</h2>
+        <p>
+            The Data Navigator structure below shows how the layout is translated for screen readers and other assistive technologies:
+        </p>
+        <div id="accessibility-output" class="accessibility-output">
+            Generate a layout first to see the accessibility data structure...
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>How It Works</h2>
+        <div class="row">
+            <div class="col-md-6">
+                <h4>Visual Accessibility Features:</h4>
+                <ul>
+                    <li><strong>Semantic Labels:</strong> Each node gets descriptive labels with type and attribute information</li>
+                    <li><strong>Navigation Rules:</strong> Arrow key navigation based on layout constraints</li>
+                    <li><strong>Hierarchical Structure:</strong> Groups become navigable dimensions</li>
+                    <li><strong>Spatial Properties:</strong> Position and size information for screen readers</li>
+                </ul>
+            </div>
+            <div class="col-md-6">
+                <h4>Data Navigator Integration:</h4>
+                <ul>
+                    <li><strong>Nodes:</strong> CnD nodes → Data Navigator nodes with accessibility metadata</li>
+                    <li><strong>Edges:</strong> CnD edges → Navigation relationships</li>
+                    <li><strong>Groups:</strong> CnD groups → Hierarchical dimensions</li>
+                    <li><strong>Constraints:</strong> Layout constraints → Navigation rules</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load the CnD Core library -->
+    <script src="dist/browser/cnd-core-complete.global.js"></script>
+    
+    <script>
+        // Wait for the library to be available
+        document.addEventListener('DOMContentLoaded', function() {
+            const { 
+                JSONDataInstance, 
+                SGraphQueryEvaluator, 
+                LayoutInstance, 
+                parseLayoutSpec,
+                translateToDataNavigator 
+            } = CndCore;
+
+            let currentLayout = null;
+            let layoutInstance = null;
+
+            // Sample data
+            const sampleData = {
+                atoms: [
+                    { id: 'Alice', type: 'Person', label: 'Alice' },
+                    { id: 'Bob', type: 'Person', label: 'Bob' },
+                    { id: 'Charlie', type: 'Person', label: 'Charlie' },
+                    { id: 'TechCorp', type: 'Company', label: 'TechCorp' },
+                    { id: 'InnovateCo', type: 'Company', label: 'InnovateCo' }
+                ],
+                relations: [
+                    {
+                        id: 'works_for',
+                        name: 'works_for',
+                        types: ['Person', 'Company'],
+                        tuples: [
+                            { atoms: ['Alice', 'TechCorp'], types: ['Person', 'Company'] },
+                            { atoms: ['Bob', 'TechCorp'], types: ['Person', 'Company'] },
+                            { atoms: ['Charlie', 'InnovateCo'], types: ['Person', 'Company'] }
+                        ]
+                    },
+                    {
+                        id: 'knows',
+                        name: 'knows',
+                        types: ['Person', 'Person'],
+                        tuples: [
+                            { atoms: ['Alice', 'Bob'], types: ['Person', 'Person'] },
+                            { atoms: ['Bob', 'Charlie'], types: ['Person', 'Person'] }
+                        ]
+                    }
+                ]
+            };
+
+            // Layout specification
+            const layoutSpecYaml = `
+nodes:
+  - { id: Person, type: atom, color: "#FF6B35" }
+  - { id: Company, type: atom, color: "#4ECDC4" }
+constraints:
+  - orient:
+      selector: Person->Company
+      directions: [below]
+  - orient:
+      selector: Person->Person
+      directions: [directlyRight]
+groups:
+  - groupByField:
+      name: "employees"
+      relationName: "works_for"
+      groupOn: 1
+      addToGroup: 0
+`;
+
+            function showStatus(message, type = 'info') {
+                const statusDiv = document.getElementById('status');
+                statusDiv.className = `alert alert-${type}`;
+                statusDiv.textContent = message;
+                statusDiv.style.display = 'block';
+            }
+
+            function hideStatus() {
+                document.getElementById('status').style.display = 'none';
+            }
+
+            function generateLayout() {
+                try {
+                    showStatus('Generating layout...', 'info');
+                    
+                    // Create data instance and evaluator
+                    const dataInstance = new JSONDataInstance(sampleData);
+                    const evaluator = new SGraphQueryEvaluator();
+                    evaluator.initialize({ sourceData: dataInstance });
+                    
+                    // Parse layout spec and create layout instance
+                    const layoutSpec = parseLayoutSpec(layoutSpecYaml);
+                    layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
+                    
+                    // Generate the layout
+                    const result = layoutInstance.generateLayout(dataInstance, {});
+                    currentLayout = result.layout;
+                    
+                    // Render the layout
+                    const graphElement = document.getElementById('graph-container');
+                    graphElement.renderLayout(currentLayout);
+                    
+                    showStatus(`Layout generated successfully! Found ${currentLayout.nodes.length} nodes, ${currentLayout.edges.length} edges, and ${currentLayout.groups.length} groups.`, 'success');
+                    
+                    // Enable accessibility button
+                    document.getElementById('generateAccessibilityBtn').disabled = false;
+                    
+                } catch (error) {
+                    console.error('Error generating layout:', error);
+                    showStatus(`Error generating layout: ${error.message}`, 'danger');
+                }
+            }
+
+            function generateAccessibilityData() {
+                if (!currentLayout || !layoutInstance) {
+                    showStatus('Please generate a layout first!', 'warning');
+                    return;
+                }
+
+                try {
+                    showStatus('Generating accessibility data...', 'info');
+                    
+                    // Generate accessibility data
+                    const accessibilityData = layoutInstance.generateAccessibilityData(currentLayout, {
+                        includeSpatialProperties: true,
+                        generateNavigationRules: true,
+                        createDimensions: true
+                    });
+                    
+                    // Display the accessibility data
+                    const outputDiv = document.getElementById('accessibility-output');
+                    outputDiv.innerHTML = '<h5>Data Navigator Structure:</h5><pre>' + 
+                        JSON.stringify(accessibilityData, null, 2) + '</pre>';
+                    
+                    showStatus('Accessibility data generated successfully!', 'success');
+                    
+                } catch (error) {
+                    console.error('Error generating accessibility data:', error);
+                    showStatus(`Error generating accessibility data: ${error.message}`, 'danger');
+                }
+            }
+
+            function clearAll() {
+                currentLayout = null;
+                layoutInstance = null;
+                
+                const graphElement = document.getElementById('graph-container');
+                graphElement.clear();
+                
+                document.getElementById('accessibility-output').textContent = 
+                    'Generate a layout first to see the accessibility data structure...';
+                
+                document.getElementById('generateAccessibilityBtn').disabled = true;
+                hideStatus();
+            }
+
+            // Event listeners
+            document.getElementById('generateLayoutBtn').addEventListener('click', generateLayout);
+            document.getElementById('generateAccessibilityBtn').addEventListener('click', generateAccessibilityData);
+            document.getElementById('clearBtn').addEventListener('click', clearAll);
+
+            // Initial status
+            showStatus('Ready! Click "Generate Layout" to start.', 'info');
+        });
+    </script>
+</body>
+</html>

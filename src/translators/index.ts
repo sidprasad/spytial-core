@@ -10,7 +10,19 @@ export { WebColaCnDGraph } from './webcola/webcola-cnd-graph';
 
 // StructuredInputGraph web component for structured input
 export { StructuredInputGraph } from './webcola/structured-input-graph';
-export type { ParsedCnDSpec } from './webcola/structured-input-graph';
+
+// Accessibility translators
+export { 
+  DataNavigatorTranslator,
+  createDataNavigatorTranslator,
+  translateToDataNavigator
+} from './accessibility';
+export type {
+  DataNavigatorStructure,
+  AccessibilityTranslatorOptions,
+  SemanticProperties,
+  SpatialProperties
+} from './accessibility';
 
 // Re-export types for convenience
 export type { 

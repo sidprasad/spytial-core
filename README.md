@@ -4,6 +4,32 @@ A fully-typed, tree-shakable TypeScript implementation of `Cope and Drag`.
 Supports multiple languages (e.g. Alloy, Forge, DOT, Racket), 
 with pluggable evaluators and layouts for extensibility.
 
+## ♿ Visual Accessibility Features
+
+CnD Core integrates with [Data Navigator](https://github.com/cmudig/data-navigator) to provide comprehensive visual accessibility support:
+
+- **Screen Reader Support**: Automatic generation of semantic labels and navigation structures
+- **Keyboard Navigation**: Arrow key navigation based on layout constraints and relationships  
+- **Hierarchical Structure**: Groups and constraints become navigable dimensions
+- **Spatial Properties**: Position and size information for assistive technologies
+
+```typescript
+import { LayoutInstance, translateToDataNavigator } from 'cnd-core';
+
+// Generate your layout as normal
+const { layout } = layoutInstance.generateLayout(dataInstance, {});
+
+// Generate Data Navigator accessibility structure
+const accessibilityData = translateToDataNavigator(layout, {
+  includeSpatialProperties: true,
+  generateNavigationRules: true,
+  createDimensions: true
+});
+
+// The accessibility data can now be used with Data Navigator
+// for screen reader and keyboard navigation support
+```
+
 ## 🚀 New: Combined Input Component
 
 The **Combined Input Component** provides a simplified API that eliminates the need to write complex synchronization logic between REPL, layout interface, and visualization components.
