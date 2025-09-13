@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Progressive Disclosure Test</title>
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+        .demo-container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .graph-container {
+            width: 100%;
+            height: 600px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .instructions {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            border-left: 4px solid #2196f3;
+        }
+        .instructions h3 {
+            margin-top: 0;
+            color: #1976d2;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Progressive Disclosure Feature Demo</h1>
+    
+    <div class="instructions">
+        <h3>How to Test Progressive Disclosure</h3>
+        <ol>
+            <li>Look for <strong>groups</strong> rendered as rectangles containing multiple nodes</li>
+            <li>Find the <strong>toggle button</strong> (− or +) in the top-right corner of each group</li>
+            <li>Click the toggle button to <strong>collapse/expand</strong> the group</li>
+            <li>When collapsed:
+                <ul>
+                    <li>Nodes inside the group should be hidden</li>
+                    <li>The group should show a different visual style (dashed border, higher opacity)</li>
+                    <li>Edges connected to hidden nodes should also be hidden</li>
+                    <li>Button changes from − to +</li>
+                </ul>
+            </li>
+            <li>Click again to expand the group and restore full visibility</li>
+        </ol>
+    </div>
+
+    <div class="demo-container">
+        <h2>WebCola CnD Graph with Groups</h2>
+        <div class="graph-container">
+            <webcola-cnd-graph id="demo-graph"></webcola-cnd-graph>
+        </div>
+    </div>
+
+    <!-- Load dependencies -->
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="/home/runner/work/cnd-core/cnd-core/vendor/cola.js"></script>
+    
+    <!-- Load our library -->
+    <script src="/home/runner/work/cnd-core/cnd-core/dist/browser/cnd-core-complete.global.js"></script>
+
+    <script>
+        // Initialize the demo with sample data that includes groups
+        console.log('CnDCore available:', typeof CnDCore);
+        
+        if (typeof CnDCore !== 'undefined') {
+            // Create sample data with groups
+            const atoms = [
+                { id: 'alice', type: 'Person', label: 'Alice' },
+                { id: 'bob', type: 'Person', label: 'Bob' },
+                { id: 'charlie', type: 'Person', label: 'Charlie' },
+                { id: 'book1', type: 'Book', label: 'Programming Book' },
+                { id: 'book2', type: 'Book', label: 'Math Book' },
+                { id: 'library1', type: 'Library', label: 'Main Library' }
+            ];
+
+            const relations = [
+                {
+                    id: 'friendship',
+                    name: 'friendship',
+                    types: ['Person', 'Person'],
+                    tuples: [
+                        { atoms: ['alice', 'bob'], types: ['Person', 'Person'] },
+                        { atoms: ['bob', 'charlie'], types: ['Person', 'Person'] }
+                    ]
+                },
+                {
+                    id: 'likes',
+                    name: 'likes', 
+                    types: ['Person', 'Book'],
+                    tuples: [
+                        { atoms: ['alice', 'book1'], types: ['Person', 'Book'] },
+                        { atoms: ['charlie', 'book2'], types: ['Person', 'Book'] }
+                    ]
+                },
+                {
+                    id: 'contains',
+                    name: 'contains',
+                    types: ['Library', 'Book'],
+                    tuples: [
+                        { atoms: ['library1', 'book1'], types: ['Library', 'Book'] },
+                        { atoms: ['library1', 'book2'], types: ['Library', 'Book'] }
+                    ]
+                }
+            ];
+
+            const dataInstance = new CnDCore.JSONDataInstance({
+                atoms,
+                relations,
+                types: []
+            });
+
+            // Create CnD spec with group constraints that will create visual groups
+            const cndSpec = `
+nodes:
+  - { id: "Person", type: "atom", color: "#FF6B35", size: 20 }
+  - { id: "Book", type: "atom", color: "#4CAF50", size: 15 }
+  - { id: "Library", type: "atom", color: "#2196F3", size: 25 }
+edges:
+  - { id: "friendship", type: "relation", color: "#E91E63", width: 3 }
+  - { id: "likes", type: "relation", color: "#9C27B0", width: 2 }
+  - { id: "contains", type: "relation", color: "#FF9800", width: 2 }
+constraints:
+  - type: "groupBy"
+    field: "likes"
+    name: "readers"
+  - type: "groupBy"
+    field: "contains"  
+    name: "library-contents"
+directives:
+  - type: "hideDisconnected"
+    value: false
+`;
+
+            // Get the graph element and set up the visualization
+            setTimeout(() => {
+                const demoGraph = document.getElementById('demo-graph');
+                if (demoGraph) {
+                    console.log('Setting up demo graph with progressive disclosure...');
+                    
+                    // Set data instance
+                    demoGraph.setDataInstance(dataInstance);
+                    
+                    // Set CnD spec to create groups
+                    demoGraph.setCnDSpec(cndSpec);
+                    
+                    // Render the layout
+                    demoGraph.renderLayout().then(() => {
+                        console.log('✅ Progressive disclosure demo ready! Look for toggle buttons on groups.');
+                    }).catch(error => {
+                        console.error('❌ Error rendering layout:', error);
+                    });
+                } else {
+                    console.error('❌ Demo graph element not found');
+                }
+            }, 100);
+        } else {
+            console.error('❌ CnDCore library not loaded');
+            document.body.innerHTML = '<h2 style="color: red;">Error: CnDCore library failed to load</h2>';
+        }
+    </script>
+</body>
+</html>

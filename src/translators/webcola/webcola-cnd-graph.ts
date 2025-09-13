@@ -144,6 +144,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private dragStartPositions: Map<string, { x: number; y: number }> = new Map();
 
   /**
+   * Progressive disclosure state management for group expansion/collapse
+   */
+  private collapsedGroups: Set<string> = new Set();
+
+  /**
    * Input mode state management for edge creation and modification
    */
   private isInputModeActive: boolean = false;
@@ -1211,6 +1216,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // Add labels to groups that should display them
     this.svgGroupLabels = this.setupGroupLabels(groups, layout);
 
+    // Add expand/collapse buttons to groups
+    this.setupGroupToggleButtons(groups, layout);
+
     return groupRects;
   }
 
@@ -1307,6 +1315,55 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         
         return "";
       }).call((layout as any).drag);
+  }
+
+  /**
+   * Adds expand/collapse toggle buttons to groups for progressive disclosure.
+   * Buttons are positioned at the top-right corner of each group.
+   * 
+   * @param groups - Array of group objects to add buttons to
+   * @param layout - WebCola layout instance for drag behavior
+   * @returns D3 selection of created toggle buttons
+   */
+  private setupGroupToggleButtons(
+    groups: any[], 
+    layout: Layout
+  ): d3.Selection<SVGGElement, any, any, unknown> {
+    // Filter out disconnected groups (they don't need toggle buttons)
+    const regularGroups = groups.filter(group => !this.isDisconnectedGroup(group));
+    
+    return this.container
+      .selectAll(".group-toggle")
+      .data(regularGroups)
+      .enter()
+      .append("g")
+      .attr("class", "group-toggle")
+      .style("cursor", "pointer")
+      .on("click", (d: any) => {
+        d3.event.stopPropagation();
+        this.toggleGroupCollapse(d);
+      })
+      .each(function(d: any) {
+        const toggleGroup = d3.select(this);
+        
+        // Add button circle background
+        toggleGroup.append("circle")
+          .attr("r", 8)
+          .attr("fill", "#ffffff")
+          .attr("stroke", "#666666")
+          .attr("stroke-width", 1);
+        
+        // Add expand/collapse icon (+ or -)
+        toggleGroup.append("text")
+          .attr("text-anchor", "middle")
+          .attr("dominant-baseline", "middle")
+          .attr("font-family", "monospace")
+          .attr("font-size", "12px")
+          .attr("font-weight", "bold")
+          .attr("fill", "#666666")
+          .attr("pointer-events", "none")
+          .text("−"); // Start expanded (minus sign)
+      });
   }
 
   /**
@@ -1879,6 +1936,16 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr('text-anchor', 'middle')
       .lower();
 
+    // Update group toggle buttons (top-right corner of each group)
+    this.container.selectAll('.group-toggle')
+      .attr('transform', (d: any) => {
+        if (!d.bounds) return 'translate(0,0)';
+        const x = d.bounds.x + d.bounds.width() - 12;
+        const y = d.bounds.y + 12;
+        return `translate(${x},${y})`;
+      })
+      .raise();
+
     // Ensure proper layering - raise important elements
     this.svgLinkGroups.selectAll('marker').raise();
     this.svgLinkGroups.selectAll('.linklabel').raise();
@@ -1955,6 +2022,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         .attr("y", function (d: any) { return d.bounds.y + 12; })
         .attr("text-anchor", "middle") // Center the text on its position
         .raise();
+
+    // Update group toggle buttons
+    this.container.selectAll('.group-toggle')
+      .attr('transform', function(d: any) {
+        const x = d.bounds.x + d.bounds.width() - 12;
+        const y = d.bounds.y + 12;
+        return `translate(${x},${y})`;
+      })
+      .raise();
 
     const linkGroups = this.container.selectAll(".linkGroup");
     linkGroups.select("text.linklabel").raise(); // Ensure link labels are raised
@@ -3058,6 +3134,57 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .modal-button.secondary:hover {
         background: #e9ecef;
       }
+
+      /* Progressive Disclosure Styles */
+      .group-toggle {
+        cursor: pointer;
+        pointer-events: all;
+        z-index: 100;
+      }
+
+      .group-toggle circle {
+        stroke-width: 1.5px;
+        filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2));
+        transition: all 0.2s ease;
+      }
+
+      .group-toggle:hover circle {
+        stroke-width: 2px;
+        r: 9px;
+        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+      }
+
+      .group-toggle text {
+        user-select: none;
+        transition: all 0.2s ease;
+      }
+
+      .group-toggle:hover text {
+        font-weight: bold;
+        font-size: 13px;
+      }
+
+      .group.collapsed {
+        stroke-dasharray: 3,3;
+        animation: pulse 2s ease-in-out infinite;
+      }
+
+      @keyframes pulse {
+        0%, 100% {
+          stroke-opacity: 0.6;
+        }
+        50% {
+          stroke-opacity: 1;
+        }
+      }
+
+      .node[style*="display: none"] {
+        pointer-events: none;
+      }
+
+      .link-group[style*="display: none"] {
+        pointer-events: none;
+      }
     `;
   }
 
@@ -3249,6 +3376,130 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       input.focus();
       input.select();
     });
+  }
+
+  /**
+   * Toggle the collapsed/expanded state of a group for progressive disclosure
+   * @param group - The group object to toggle
+   */
+  private toggleGroupCollapse(group: any): void {
+    const groupId = group.id || group.name;
+    if (!groupId) return;
+    
+    if (this.collapsedGroups.has(groupId)) {
+      this.collapsedGroups.delete(groupId);
+    } else {
+      this.collapsedGroups.add(groupId);
+    }
+    
+    // Update the visual state of the toggle button
+    this.updateGroupToggleButton(group);
+    
+    // Update the visibility of nodes within the group
+    this.updateGroupNodeVisibility(group);
+    
+    // Trigger a layout update to handle the size changes
+    this.updateGroupLayout(group);
+  }
+
+  /**
+   * Update the visual appearance of a group's toggle button
+   * @param group - The group to update
+   */
+  private updateGroupToggleButton(group: any): void {
+    const groupId = group.id || group.name;
+    const isCollapsed = this.collapsedGroups.has(groupId);
+    
+    this.container.selectAll(".group-toggle")
+      .filter((d: any) => (d.id || d.name) === groupId)
+      .select("text")
+      .text(isCollapsed ? "+" : "−");
+  }
+
+  /**
+   * Update the visibility of nodes within a group based on its collapsed state
+   * @param group - The group to update
+   */
+  private updateGroupNodeVisibility(group: any): void {
+    const groupId = group.id || group.name;
+    const isCollapsed = this.collapsedGroups.has(groupId);
+    
+    if (!group.leaves) return;
+    
+    // Get the node IDs that are in this group
+    const nodeIds = group.leaves.map((nodeIndex: number) => {
+      const node = this.currentLayout?.nodes[nodeIndex];
+      return node?.id;
+    }).filter(Boolean);
+    
+    // Update node visibility
+    this.container.selectAll(".node")
+      .filter((d: any) => nodeIds.includes(d.id))
+      .style("display", isCollapsed ? "none" : "block");
+    
+    // Update edge visibility for edges connecting to hidden nodes
+    if (isCollapsed) {
+      this.container.selectAll(".link-group")
+        .filter((d: any) => {
+          const sourceId = d.source?.id;
+          const targetId = d.target?.id;
+          return nodeIds.includes(sourceId) || nodeIds.includes(targetId);
+        })
+        .style("display", "none");
+    } else {
+      // Show edges that should be visible (not hidden by other collapsed groups)
+      this.container.selectAll(".link-group")
+        .filter((d: any) => {
+          const sourceId = d.source?.id;
+          const targetId = d.target?.id;
+          return nodeIds.includes(sourceId) || nodeIds.includes(targetId);
+        })
+        .style("display", (d: any) => {
+          // Check if either end is hidden by other collapsed groups
+          const sourceHidden = this.isNodeHiddenByCollapsedGroup(d.source?.id);
+          const targetHidden = this.isNodeHiddenByCollapsedGroup(d.target?.id);
+          return (sourceHidden || targetHidden) ? "none" : "block";
+        });
+    }
+  }
+
+  /**
+   * Check if a node is hidden due to being in a collapsed group
+   * @param nodeId - The node ID to check
+   * @returns True if the node is hidden by a collapsed group
+   */
+  private isNodeHiddenByCollapsedGroup(nodeId: string): boolean {
+    if (!nodeId || !this.currentLayout?.groups) return false;
+    
+    for (const group of this.currentLayout.groups) {
+      const groupId = group.id || group.name;
+      if (this.collapsedGroups.has(groupId) && group.leaves) {
+        const nodeIds = group.leaves.map((nodeIndex: number) => {
+          const node = this.currentLayout?.nodes[nodeIndex];
+          return node?.id;
+        });
+        if (nodeIds.includes(nodeId)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Update the group's layout to reflect its collapsed state
+   * @param group - The group to update
+   */
+  private updateGroupLayout(group: any): void {
+    const groupId = group.id || group.name;
+    const isCollapsed = this.collapsedGroups.has(groupId);
+    
+    // Update the group rectangle styling to indicate collapsed state
+    this.container.selectAll(".group")
+      .filter((d: any) => (d.id || d.name) === groupId)
+      .classed("collapsed", isCollapsed)
+      .style("fill-opacity", isCollapsed ? 0.8 : WebColaCnDGraph.GROUP_FILL_OPACITY)
+      .style("stroke-width", isCollapsed ? 3 : 1);
   }
 
   // =========================================
