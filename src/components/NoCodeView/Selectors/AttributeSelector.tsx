@@ -10,15 +10,15 @@ interface AttributeSelectorProps {
 
 /**
  * Minimal React component for attribute field selection.
- * Simple field input for attribute directives.
+ * Simple field input for attribute directives with prominence option.
  */
 export const AttributeSelector: React.FC<AttributeSelectorProps> = (props: AttributeSelectorProps) => {
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = event.target;
+    const { name, value, type, checked } = event.target;
     props.onUpdate({
       params: {
         ...props.directiveData.params,
-        [name]: value || undefined
+        [name]: type === 'checkbox' ? checked : (value || undefined)
       }
     });
   };
@@ -50,6 +50,25 @@ export const AttributeSelector: React.FC<AttributeSelectorProps> = (props: Attri
           placeholder="Optional: target specific atoms (e.g., Person)"
           onChange={handleInputChange}
         />
+      </div>
+      <div className="input-group">
+        <div className="input-group-prepend">
+          <div className="input-group-text">
+            <input
+              type="checkbox"
+              name="prominent"
+              checked={props.directiveData.params.prominent as boolean || false}
+              onChange={handleInputChange}
+              aria-describedby="prominent-help"
+            />
+          </div>
+        </div>
+        <div className="form-control d-flex align-items-center">
+          <label htmlFor="prominent" className="mb-0">
+            <strong>Prominent</strong>
+            <small className="text-muted d-block">Make this attribute larger and bolder than the node label</small>
+          </label>
+        </div>
       </div>
     </>
   );
