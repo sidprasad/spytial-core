@@ -1640,8 +1640,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           );
           
           // Prominent attributes get larger font size than main label
-          const prominentAttributeFontSize = Math.min(
-            mainLabelFontSize * 1.3, // Larger than main label
+          const prominentAttributeFontSize = Math.max(
+            mainLabelFontSize * 1.3, // Ensure it's larger than main label
             this.calculateOptimalFontSize(
               "prominent: value", // Sample prominent attribute text for sizing
               maxTextWidth,

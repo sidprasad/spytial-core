@@ -33,7 +33,7 @@ export const AttributeSelector: React.FC<AttributeSelectorProps> = (props: Attri
           type="text"
           name="field"
           className="form-control"
-          defaultValue={props.directiveData.params.field as string || ''}
+          value={props.directiveData.params.field as string || ''}
           onChange={handleInputChange}
           required
         />
@@ -46,7 +46,7 @@ export const AttributeSelector: React.FC<AttributeSelectorProps> = (props: Attri
           type="text"
           name="selector"
           className="form-control code-input"
-          defaultValue={props.directiveData.params.selector as string || ''}
+          value={props.directiveData.params.selector as string || ''}
           placeholder="Optional: target specific atoms (e.g., Person)"
           onChange={handleInputChange}
         />
@@ -56,17 +56,16 @@ export const AttributeSelector: React.FC<AttributeSelectorProps> = (props: Attri
           <div className="input-group-text">
             <input
               type="checkbox"
+              id="prominent"
               name="prominent"
               checked={props.directiveData.params.prominent as boolean || false}
               onChange={handleInputChange}
-              aria-describedby="prominent-help"
             />
           </div>
         </div>
         <div className="form-control d-flex align-items-center">
           <label htmlFor="prominent" className="mb-0">
-            <strong>Prominent</strong>
-            <small className="text-muted d-block">Make this attribute larger and bolder than the node label</small>
+            <strong>Prominent</strong> <small className="text-muted">(larger & bold)</small>
           </label>
         </div>
       </div>
