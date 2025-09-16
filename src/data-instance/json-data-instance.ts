@@ -311,11 +311,18 @@ export class JSONDataInstance implements IInputDataInstance {
           const sourceId = tuple.atoms[0];
           const targetId = tuple.atoms[tuple.atoms.length - 1];
           
-          // Create edge label that includes middle atoms for higher-arity relations
+          // Create edge label that includes middle atom labels for higher-arity relations
           const middleAtoms = tuple.atoms.slice(1, -1);
-          const edgeLabel = middleAtoms.length > 0
-            ? `${relation.name}[${middleAtoms.join(', ')}]`
-            : relation.name;
+          let edgeLabel = relation.name;
+          
+          if (middleAtoms.length > 0) {
+            // Get labels for middle atoms instead of using IDs
+            const middleLabels = middleAtoms.map(atomId => {
+              const atom = this.atoms.find(a => a.id === atomId);
+              return atom ? atom.label : atomId; // Fallback to ID if atom not found
+            });
+            edgeLabel = `${relation.name}[${middleLabels.join(', ')}]`;
+          }
 
           // Use tuple index to create unique edge names for multigraph
           const edgeName = `${relation.id}_${tupleIndex}`;
@@ -326,7 +333,7 @@ export class JSONDataInstance implements IInputDataInstance {
           const atomId = tuple.atoms[0];
           const edgeName = `${relation.id}_${tupleIndex}`;
           
-          graph.setEdge(atomId, atomId,relation.name, edgeName);
+          graph.setEdge(atomId, atomId, relation.name, edgeName);
         }
       });
     });
