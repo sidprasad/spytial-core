@@ -2857,11 +2857,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
       svg.input-mode .link {
         cursor: pointer;
-        stroke-width: 2px;
       }
 
       svg.input-mode .link:hover {
-        stroke-width: 3px;
         opacity: 0.8;
       }
 
