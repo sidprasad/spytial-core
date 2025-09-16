@@ -1615,9 +1615,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         // Handle attributes (show all that fit)
         const attributeEntries = Object.entries(attributes);
         if (attributeEntries.length > 0) {
-          // Separate prominent and regular attributes
-          const prominentAttributeEntries = attributeEntries.filter(([key]) => prominentAttributes.has(key));
-          const regularAttributeEntries = attributeEntries.filter(([key]) => !prominentAttributes.has(key));
+          // Separate prominent and regular attributes and sort each alphabetically
+          const prominentAttributeEntries = attributeEntries
+            .filter(([key]) => prominentAttributes.has(key))
+            .sort(([a], [b]) => a.localeCompare(b));
+          const regularAttributeEntries = attributeEntries
+            .filter(([key]) => !prominentAttributes.has(key))
+            .sort(([a], [b]) => a.localeCompare(b));
           
           const remainingHeight = maxTextHeight - (mainLabelLines.length * lineHeight);
           
