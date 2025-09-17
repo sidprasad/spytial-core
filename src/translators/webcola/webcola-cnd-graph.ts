@@ -910,7 +910,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       throw new Error('Invalid instance layout provided. Expected an InstanceLayout instance.');
     }
 
-
+    // Reset zoom transform to identity on each render for a fresh start
+    if (this.svg && this.zoomBehavior && d3) {
+      try {
+        const identity = d3.zoomIdentity;
+        this.svg.call(this.zoomBehavior.transform, identity);
+      } catch (error) {
+        console.warn('Failed to reset zoom transform:', error);
+      }
+    }
 
     try {
       console.log('D3 version:', d3.version);
