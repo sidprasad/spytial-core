@@ -2630,10 +2630,18 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       bbox.height + 2 * padding
     ].join(' ');
 
-    console.log('fitViewportToContent:', {
+    console.log('🔧 fitViewportToContent final calculation:', {
       usedManualBounds: !!manualBounds,
-      bounds: bbox,
+      originalBounds: bbox,
+      padding: padding,
       viewBox: viewBox,
+      viewBoxParts: {
+        x: bbox.x - padding,
+        y: bbox.y - padding,
+        width: bbox.width + 2 * padding,
+        height: bbox.height + 2 * padding,
+        bottomY: (bbox.y + bbox.height) + padding
+      },
       totalNodes: this.currentLayout?.nodes?.length || 0
     });
 
@@ -2657,7 +2665,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       // Check all nodes
       const nodes = this.currentLayout.nodes;
       if (nodes && nodes.length > 0) {
-        nodes.forEach((node: NodeWithMetadata) => {
+        console.log(`🔍 Calculating bounds for ${nodes.length} nodes:`);
+        
+        nodes.forEach((node: NodeWithMetadata, index: number) => {
           if (typeof node.x === 'number' && typeof node.y === 'number') {
             const nodeWidth = node.width || 0;
             const nodeHeight = node.height || 0;
@@ -2668,12 +2678,27 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
             const nodeMinY = node.y - nodeHeight / 2;
             const nodeMaxY = node.y + nodeHeight / 2;
 
+            // Log details for bottom nodes (highest Y values)
+            if (index < 5 || node.y > 400) {
+              console.log(`  Node ${node.id || index}: pos(${node.x}, ${node.y}) size(${nodeWidth}x${nodeHeight}) bounds(${nodeMinX}, ${nodeMinY}, ${nodeMaxX}, ${nodeMaxY})`);
+            }
+
+            const prevMinY = minY;
+            const prevMaxY = maxY;
+            
             minX = Math.min(minX, nodeMinX);
             maxX = Math.max(maxX, nodeMaxX);
             minY = Math.min(minY, nodeMinY);
             maxY = Math.max(maxY, nodeMaxY);
+
+            // Log if this node extends the bottom boundary
+            if (nodeMaxY > prevMaxY) {
+              console.log(`  ⬇️  Node ${node.id || index} extends bottom boundary: ${prevMaxY} → ${nodeMaxY}`);
+            }
           }
         });
+        
+        console.log(`📏 After nodes: bounds(${minX}, ${minY}, ${maxX}, ${maxY})`);
       }
 
       // Check all edge paths by examining actual DOM elements
@@ -2712,6 +2737,47 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         });
       }
 
+      // Check all text elements separately for better text bounds calculation
+      const textElements = this.container.selectAll('text');
+      if (!textElements.empty()) {
+        console.log(`📝 Checking ${textElements.size()} text elements for bounds:`);
+        let textBoundsFound = 0;
+        
+        textElements.each(function(this: SVGTextElement) {
+          try {
+            const bbox = this.getBBox();
+            if (bbox.width > 0 && bbox.height > 0) {
+              textBoundsFound++;
+              
+              // Add extra padding for text elements due to font metrics
+              const textPadding = 5;
+              const textMinY = bbox.y - textPadding;
+              const textMaxY = bbox.y + bbox.height + textPadding;
+              
+              // Log text elements that might extend the bottom boundary
+              if (textMaxY > maxY || textBoundsFound <= 3) {
+                console.log(`  Text element: bbox(${bbox.x}, ${bbox.y}, ${bbox.width}, ${bbox.height}) → with padding(${bbox.x - textPadding}, ${textMinY}, ${bbox.x + bbox.width + textPadding}, ${textMaxY})`);
+              }
+              
+              const prevMaxY = maxY;
+              
+              minX = Math.min(minX, bbox.x - textPadding);
+              maxX = Math.max(maxX, bbox.x + bbox.width + textPadding);
+              minY = Math.min(minY, textMinY);
+              maxY = Math.max(maxY, textMaxY);
+              
+              if (textMaxY > prevMaxY) {
+                console.log(`  ⬇️  Text extends bottom boundary: ${prevMaxY} → ${textMaxY}`);
+              }
+            }
+          } catch (e) {
+            // Skip elements that can't provide bbox
+          }
+        });
+        
+        console.log(`📝 After text elements (found ${textBoundsFound}): bounds(${minX}, ${minY}, ${maxX}, ${maxY})`);
+      }
+
       // Check for any group elements
       const groupElements = this.container.selectAll('.group');
       if (!groupElements.empty()) {
@@ -2743,7 +2809,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         height: maxY - minY
       };
 
-      console.debug('Calculated content bounds:', bounds);
+      console.log('🎯 Final calculated content bounds:', {
+        ...bounds,
+        bottomY: maxY,
+        rightX: maxX,
+        topY: minY,
+        leftX: minX
+      });
+      
       return bounds;
 
     } catch (error) {
