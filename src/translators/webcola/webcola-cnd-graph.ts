@@ -2622,6 +2622,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       bbox.height + 2 * padding
     ].join(' ');
 
+    console.log('fitViewportToContent:', {
+      usedManualBounds: !!manualBounds,
+      bounds: bbox,
+      viewBox: viewBox,
+      totalNodes: this.currentLayout?.nodes?.length || 0
+    });
+
     this.svg.attr('viewBox', viewBox);
   }
 
@@ -2632,7 +2639,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private calculateContentBounds(): { x: number; y: number; width: number; height: number } | null {
     try {
-      if (!this.currentLayout) return null;
+      if (!this.currentLayout || !this.container) return null;
 
       let minX = Infinity;
       let minY = Infinity;
