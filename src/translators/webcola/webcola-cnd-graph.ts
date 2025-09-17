@@ -2602,12 +2602,17 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
   /**
    * Fits the viewport to show all content with padding.
+   * Uses manual calculation of bounds from all nodes and edges to ensure complete coverage.
    */
   private fitViewportToContent(): void {
     const svgElement = this.svg.node();
     if (!svgElement) return;
 
-    const bbox = svgElement.getBBox();
+    // First try to get bounds from manual calculation of all elements
+    const manualBounds = this.calculateContentBounds();
+    
+    // Fallback to SVG getBBox if manual calculation fails
+    const bbox = manualBounds || svgElement.getBBox();
     const padding = WebColaCnDGraph.VIEWBOX_PADDING;
 
     const viewBox = [
@@ -2618,6 +2623,118 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     ].join(' ');
 
     this.svg.attr('viewBox', viewBox);
+  }
+
+  /**
+   * Manually calculates the bounding box of all content to ensure accurate viewport fitting.
+   * This method examines all nodes, edges, and groups to determine the true content bounds.
+   * @returns Bounding box with x, y, width, height properties or null if calculation fails
+   */
+  private calculateContentBounds(): { x: number; y: number; width: number; height: number } | null {
+    try {
+      if (!this.currentLayout) return null;
+
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+
+      // Check all nodes
+      const nodes = this.currentLayout.nodes;
+      if (nodes && nodes.length > 0) {
+        nodes.forEach((node: NodeWithMetadata) => {
+          if (typeof node.x === 'number' && typeof node.y === 'number') {
+            const nodeWidth = node.width || 0;
+            const nodeHeight = node.height || 0;
+            
+            // Calculate node bounds (nodes are positioned from their center)
+            const nodeMinX = node.x - nodeWidth / 2;
+            const nodeMaxX = node.x + nodeWidth / 2;
+            const nodeMinY = node.y - nodeHeight / 2;
+            const nodeMaxY = node.y + nodeHeight / 2;
+
+            minX = Math.min(minX, nodeMinX);
+            maxX = Math.max(maxX, nodeMaxX);
+            minY = Math.min(minY, nodeMinY);
+            maxY = Math.max(maxY, nodeMaxY);
+          }
+        });
+      }
+
+      // Check all edge paths by examining actual DOM elements
+      const linkGroups = this.container.selectAll('.link-group');
+      if (!linkGroups.empty()) {
+        linkGroups.each(function(this: SVGGElement) {
+          try {
+            const bbox = this.getBBox();
+            if (bbox.width > 0 && bbox.height > 0) {
+              minX = Math.min(minX, bbox.x);
+              maxX = Math.max(maxX, bbox.x + bbox.width);
+              minY = Math.min(minY, bbox.y);
+              maxY = Math.max(maxY, bbox.y + bbox.height);
+            }
+          } catch (e) {
+            // Skip elements that can't provide bbox
+          }
+        });
+      }
+
+      // Check all node groups by examining actual DOM elements
+      const nodeGroups = this.container.selectAll('.node, .error-node');
+      if (!nodeGroups.empty()) {
+        nodeGroups.each(function(this: SVGGElement) {
+          try {
+            const bbox = this.getBBox();
+            if (bbox.width > 0 && bbox.height > 0) {
+              minX = Math.min(minX, bbox.x);
+              maxX = Math.max(maxX, bbox.x + bbox.width);
+              minY = Math.min(minY, bbox.y);
+              maxY = Math.max(maxY, bbox.y + bbox.height);
+            }
+          } catch (e) {
+            // Skip elements that can't provide bbox
+          }
+        });
+      }
+
+      // Check for any group elements
+      const groupElements = this.container.selectAll('.group');
+      if (!groupElements.empty()) {
+        groupElements.each(function(this: SVGGElement) {
+          try {
+            const bbox = this.getBBox();
+            if (bbox.width > 0 && bbox.height > 0) {
+              minX = Math.min(minX, bbox.x);
+              maxX = Math.max(maxX, bbox.x + bbox.width);
+              minY = Math.min(minY, bbox.y);
+              maxY = Math.max(maxY, bbox.y + bbox.height);
+            }
+          } catch (e) {
+            // Skip elements that can't provide bbox
+          }
+        });
+      }
+
+      // Return null if no valid bounds were found
+      if (minX === Infinity || minY === Infinity || maxX === -Infinity || maxY === -Infinity) {
+        console.warn('Could not calculate content bounds - no valid elements found');
+        return null;
+      }
+
+      const bounds = {
+        x: minX,
+        y: minY,
+        width: maxX - minX,
+        height: maxY - minY
+      };
+
+      console.debug('Calculated content bounds:', bounds);
+      return bounds;
+
+    } catch (error) {
+      console.error('Error calculating content bounds:', error);
+      return null;
+    }
   }
 
   /**
