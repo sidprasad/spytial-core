@@ -921,7 +921,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     }
 
     try {
-      console.log('D3 version:', d3.version);
+
       // Check if D3 and WebCola are available
       if (!d3) {
         throw new Error('D3 library not available. Please ensure D3 v4 is loaded from CDN.');
@@ -936,7 +936,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
       // Ensure D3 and container are properly initialized
       if (!this.container || !this.svg) {
-        console.log('Re-initializing D3 selections...');
+
         this.initializeD3();
       }
       
@@ -957,8 +957,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       const translator = new WebColaTranslator();
       const webcolaLayout = await translator.translate(instanceLayout, containerWidth, containerHeight);
 
-      console.log('🔄 Starting WebCola layout with cola.d3adaptor');
-      console.log('Layout data:', webcolaLayout);
+
+
 
       // Get scaled constraints and link length
       const { scaledConstraints, linkLength, groupCompactness } = this.getScaledDetails(webcolaLayout.constraints, DEFAULT_SCALE_FACTOR);
@@ -1000,7 +1000,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           }
         })
         .on('end', () => {
-          console.log('✅ WebCola layout converged');
+
           // Call advanced edge routing after layout converges
           if (this.layoutFormat === 'default' || !this.layoutFormat ) {
             this.routeEdges();
@@ -1733,7 +1733,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * group edge routing, and element layering.
    */
   private updatePositions(): void {
-    console.log('tick - updating positions');
+
     
     // Update group positions and sizes first (lower layer)
     this.svgGroups
@@ -1895,7 +1895,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   private gridUpdatePositions() {
-    console.log('grid tick - updating positions');
+
     
     const node = this.container.selectAll(".node");
     const mostSpecificTypeLabel = this.container.selectAll(".mostSpecificTypeLabel");
@@ -1982,7 +1982,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         );
       }
 
-      console.log('Routing edges for the nth time', ++this.edgeRouteIdx);
+
 
       // Route all link paths with advanced logic
       this.routeLinkPaths(); 
@@ -2025,7 +2025,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
   private gridify(nudgeGap: number, margin: number, groupMargin: number): void {
     try {
-      console.log("Gridify");
+
       // Create the grid router
       const gridrouter = this.route(this.currentLayout?.nodes, this.currentLayout?.groups, margin, groupMargin);
 
@@ -2041,7 +2041,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       // Route edges using the GridRouter
       routes = gridrouter.routeEdges(edges, nudgeGap, function (e: any) { return e.source.routerNode.id; }, function (e: any) { return e.target.routerNode.id; });
 
-      console.log("GridRouter routes: ", routes);
+
 
       // Clear existing paths; 
       // NOTE: This is crucial to avoid node explosion when re-routing
@@ -2143,7 +2143,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   private gridUpdateLinkLabels(routes: any[], edges: any[]) {
-    console.log("Updating link labels");
+
     routes.forEach((route: any, index: number) => {
         var edgeData = edges[index];
         
@@ -2605,7 +2605,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private minimizeOverlap(currentLabel: SVGTextElement, overlappingLabels: SVGTextElement[]): void {
     // Implementation would reposition labels to minimize overlap
     // This is a placeholder for the actual overlap resolution algorithm
-    console.log('Minimizing label overlap for', overlappingLabels.length, 'labels');
+
   }
 
   /**
@@ -2622,31 +2622,32 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // Fallback to SVG getBBox if manual calculation fails
     const bbox = manualBounds || svgElement.getBBox();
     const padding = WebColaCnDGraph.VIEWBOX_PADDING;
+    
+    // Calculate smart bottom padding based on bottom-most node
+    let extraBottomPadding = 50; // Default fallback
+    if (this.currentLayout?.nodes) {
+      const bottomNode = this.currentLayout.nodes.reduce((bottom: any, node: any) => {
+        if (typeof node.x === 'number' && typeof node.y === 'number') {
+          const nodeBottom = node.y + (node.height || 0);
+          const currentBottom = bottom ? (bottom.y + (bottom.height || 0)) : -Infinity;
+          return nodeBottom > currentBottom ? node : bottom;
+        }
+        return bottom;
+      }, null);
+      
+      if (bottomNode && bottomNode.height) {
+        extraBottomPadding = Math.min(50, bottomNode.height / 1.5);
+      }
+    }
 
     const viewBox = [
       bbox.x - padding,
       bbox.y - padding,
       bbox.width + 2 * padding,
-      bbox.height + 2 * padding
+      bbox.height + 2 * padding + extraBottomPadding
     ].join(' ');
 
-    console.log('🔧 fitViewportToContent final calculation:', {
-      usedManualBounds: !!manualBounds,
-      originalBounds: bbox,
-      padding: padding,
-      viewBox: viewBox,
-      contentBottom: bbox.y + bbox.height,
-      contentTop: bbox.y,
-      viewBoxParts: {
-        x: bbox.x - padding,
-        y: bbox.y - padding,
-        width: bbox.width + 2 * padding,
-        height: bbox.height + 2 * padding,
-        viewBoxBottom: (bbox.y - padding) + (bbox.height + 2 * padding),
-        originalBottomY: bbox.y + bbox.height
-      },
-      totalNodes: this.currentLayout?.nodes?.length || 0
-    });
+
 
     this.svg.attr('viewBox', viewBox);
   }
@@ -2668,23 +2669,18 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       // Check all nodes
       const nodes = this.currentLayout.nodes;
       if (nodes && nodes.length > 0) {
-        console.log(`🔍 Calculating bounds for ${nodes.length} nodes:`);
         
         nodes.forEach((node: NodeWithMetadata, index: number) => {
           if (typeof node.x === 'number' && typeof node.y === 'number') {
             const nodeWidth = node.width || 0;
             const nodeHeight = node.height || 0;
             
-            // Calculate node bounds (nodes are positioned from their center)
-            const nodeMinX = node.x - nodeWidth / 2;
-            const nodeMaxX = node.x + nodeWidth / 2;
-            const nodeMinY = node.y - nodeHeight / 2;
-            const nodeMaxY = node.y + nodeHeight / 2;
+            // Calculate node bounds (nodes are positioned from top-left)
+            const nodeMinX = node.x;
+            const nodeMaxX = node.x + nodeWidth;
+            const nodeMinY = node.y;
+            const nodeMaxY = node.y + nodeHeight;
 
-            // Log details for bottom nodes (highest Y values)
-            if (index < 5 || node.y > 400) {
-              console.log(`  Node ${node.id || index}: pos(${node.x}, ${node.y}) size(${nodeWidth}x${nodeHeight}) bounds(${nodeMinX}, ${nodeMinY}, ${nodeMaxX}, ${nodeMaxY})`);
-            }
 
             const prevMinY = minY;
             const prevMaxY = maxY;
@@ -2693,35 +2689,18 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
             maxX = Math.max(maxX, nodeMaxX);
             minY = Math.min(minY, nodeMinY);
             maxY = Math.max(maxY, nodeMaxY);
-
-            // Log if this node extends the bottom boundary
-            if (nodeMaxY > prevMaxY) {
-              console.log(`  ⬇️  Node ${node.id || index} extends bottom boundary: ${prevMaxY} → ${nodeMaxY}`);
-            }
           }
         });
         
         // Find and log the node with the highest Y (bottom-most)
         const bottomMostNode = nodes.reduce((bottom, node) => {
           if (typeof node.x === 'number' && typeof node.y === 'number') {
-            const nodeBottom = node.y + (node.height || 0) / 2;
-            const currentBottom = bottom ? (bottom.y + (bottom.height || 0) / 2) : -Infinity;
+            const nodeBottom = node.y + (node.height || 0);
+            const currentBottom = bottom ? (bottom.y + (bottom.height || 0)) : -Infinity;
             return nodeBottom > currentBottom ? node : bottom;
           }
           return bottom;
         }, null as NodeWithMetadata | null);
-
-        if (bottomMostNode) {
-          const bottomNodeY = bottomMostNode.y + (bottomMostNode.height || 0) / 2;
-          console.log(`🔍 Bottom-most node: ${bottomMostNode.id} at Y=${bottomMostNode.y}, bottom edge at Y=${bottomNodeY}`);
-          console.log(`📏 Calculated maxY=${maxY}, should include bottom edge=${bottomNodeY}`);
-          
-          if (bottomNodeY > maxY) {
-            console.error(`❌ CLIPPING DETECTED: Bottom node edge (${bottomNodeY}) extends beyond calculated maxY (${maxY})`);
-          }
-        }
-
-        console.log(`📏 After nodes: bounds(${minX}, ${minY}, ${maxX}, ${maxY})`);
       }
 
       // Check all edge paths by examining actual DOM elements
@@ -2763,7 +2742,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       // Check all text elements separately for better text bounds calculation
       const textElements = this.container.selectAll('text');
       if (!textElements.empty()) {
-        console.log(`📝 Checking ${textElements.size()} text elements for bounds:`);
         let textBoundsFound = 0;
         
         textElements.each(function(this: SVGTextElement) {
@@ -2778,9 +2756,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
               const textMaxY = bbox.y + bbox.height + textPadding;
               
               // Log text elements that might extend the bottom boundary
-              if (textMaxY > maxY || textBoundsFound <= 3) {
-                console.log(`  Text element: bbox(${bbox.x}, ${bbox.y}, ${bbox.width}, ${bbox.height}) → with padding(${bbox.x - textPadding}, ${textMinY}, ${bbox.x + bbox.width + textPadding}, ${textMaxY})`);
-              }
+
               
               const prevMaxY = maxY;
               
@@ -2789,16 +2765,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
               minY = Math.min(minY, textMinY);
               maxY = Math.max(maxY, textMaxY);
               
-              if (textMaxY > prevMaxY) {
-                console.log(`  ⬇️  Text extends bottom boundary: ${prevMaxY} → ${textMaxY}`);
-              }
+
+
             }
           } catch (e) {
             // Skip elements that can't provide bbox
           }
         });
         
-        console.log(`📝 After text elements (found ${textBoundsFound}): bounds(${minX}, ${minY}, ${maxX}, ${maxY})`);
+
       }
 
       // Check for any group elements
@@ -2831,14 +2806,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         width: maxX - minX,
         height: maxY - minY
       };
-
-      console.log('🎯 Final calculated content bounds:', {
-        ...bounds,
-        bottomY: maxY,
-        rightX: maxX,
-        topY: minY,
-        leftX: minX
-      });
       
       return bounds;
 
