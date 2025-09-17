@@ -2635,12 +2635,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       originalBounds: bbox,
       padding: padding,
       viewBox: viewBox,
+      contentBottom: bbox.y + bbox.height,
+      contentTop: bbox.y,
       viewBoxParts: {
         x: bbox.x - padding,
         y: bbox.y - padding,
         width: bbox.width + 2 * padding,
         height: bbox.height + 2 * padding,
-        bottomY: (bbox.y + bbox.height) + padding
+        viewBoxBottom: (bbox.y - padding) + (bbox.height + 2 * padding),
+        originalBottomY: bbox.y + bbox.height
       },
       totalNodes: this.currentLayout?.nodes?.length || 0
     });
@@ -2698,6 +2701,26 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           }
         });
         
+        // Find and log the node with the highest Y (bottom-most)
+        const bottomMostNode = nodes.reduce((bottom, node) => {
+          if (typeof node.x === 'number' && typeof node.y === 'number') {
+            const nodeBottom = node.y + (node.height || 0) / 2;
+            const currentBottom = bottom ? (bottom.y + (bottom.height || 0) / 2) : -Infinity;
+            return nodeBottom > currentBottom ? node : bottom;
+          }
+          return bottom;
+        }, null as NodeWithMetadata | null);
+
+        if (bottomMostNode) {
+          const bottomNodeY = bottomMostNode.y + (bottomMostNode.height || 0) / 2;
+          console.log(`🔍 Bottom-most node: ${bottomMostNode.id} at Y=${bottomMostNode.y}, bottom edge at Y=${bottomNodeY}`);
+          console.log(`📏 Calculated maxY=${maxY}, should include bottom edge=${bottomNodeY}`);
+          
+          if (bottomNodeY > maxY) {
+            console.error(`❌ CLIPPING DETECTED: Bottom node edge (${bottomNodeY}) extends beyond calculated maxY (${maxY})`);
+          }
+        }
+
         console.log(`📏 After nodes: bounds(${minX}, ${minY}, ${maxX}, ${maxY})`);
       }
 
