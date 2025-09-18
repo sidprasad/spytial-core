@@ -6,6 +6,7 @@ export { CyclicSelector } from './Selectors/CyclicSelector';
 export { FlagSelector } from './Selectors/FlagSelector';
 export { GroupByFieldSelector } from './Selectors/GroupByFieldSelector';
 export { GroupBySelectorSelector } from './Selectors/GroupBySelectorSelector';
+export { GroupsSelector } from './Selectors/GroupsSelector';
 export { HelperEdgeSelector } from './Selectors/HelperEdgeSelector';
 export { HideAtomSelector } from './Selectors/HideAtomSelector';
 export { HideFieldSelector } from './Selectors/HideFieldSelector';

@@ -5,3 +5,4 @@ export const CYCLIC_DESCRIPTION = "Arrange elements along the perimeter of a cir
 export const ORIENTATION_DESCRIPTION = "Specify the relative positioning of elements."
 export const GROUPING_SELECTOR_DESCRIPTION = "Group elements based on a selector."
 export const GROUPING_FIELD_DESCRIPTION = "Group elements based on a field."
+export const GROUPS_DESCRIPTION = "Create multiple groups based on binary selectors where each unique first element becomes a separate group."

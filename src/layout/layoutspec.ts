@@ -119,6 +119,25 @@ export class GroupBySelector extends ConstraintOperation{
     }
 }
 
+/**
+ * Groups constraint that creates multiple groups based on binary selectors.
+ * Each unique value from the first element of the selector becomes a separate group
+ * containing the corresponding second elements.
+ */
+export class GroupsBySelector extends ConstraintOperation{
+    name: string;
+
+    constructor(selector : string, name: string) {
+        super(selector);
+        this.name = name;
+    }
+
+    override toHTML(): string {
+        return `GroupsBySelector with selector <pre>${this.selector}</pre> 
+        and base name <pre>${this.name}</pre>.`;
+    }
+}
+
 
 /*
 
@@ -231,6 +250,7 @@ interface ConstraintsBlock
     grouping : {
         byfield : GroupByField[];
         byselector : GroupBySelector[];
+        groups : GroupsBySelector[];
     }
 
 }
@@ -268,7 +288,8 @@ function DEFAULT_LAYOUT() : LayoutSpec
             },
             grouping : {
                 byfield : [] as GroupByField[],
-                byselector : [] as GroupBySelector[]
+                byselector : [] as GroupBySelector[],
+                groups : [] as GroupsBySelector[]
             }
         },
         directives: {
@@ -469,6 +490,17 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
             return new GroupBySelector(c.group.selector, c.group.name);
         });
 
+    let groups: GroupsBySelector[] = typedConstraints.filter(c => c.groups)
+        .map(c => {
+            if(!c.groups.selector) {
+                throw new Error("Groups constraint must have a selector.");
+            }
+            if(!c.groups.name) {
+                throw new Error("Groups constraint must have a name.");
+            }
+            return new GroupsBySelector(c.groups.selector, c.groups.name);
+        });
+
     return {
         orientation: {
             relative: relativeOrientationConstraints,
@@ -476,7 +508,8 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
         },
         grouping: {
             byfield: byfield,
-            byselector: byselector
+            byselector: byselector,
+            groups: groups
         }
     }
 

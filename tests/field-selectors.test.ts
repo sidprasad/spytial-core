@@ -47,6 +47,22 @@ constraints:
     expect(layoutSpec.constraints.grouping.byfield[0].selector).toBe('Car');
   });
 
+  it('should parse groups constraints with binary selectors', () => {
+    const layoutSpecStr = `
+constraints:
+  - groups:
+      selector: 'Person->Car'
+      name: 'ownership'
+`;
+
+    const layoutSpec = parseLayoutSpec(layoutSpecStr);
+    
+    // Test groups constraint parsing
+    expect(layoutSpec.constraints.grouping.groups).toHaveLength(1);
+    expect(layoutSpec.constraints.grouping.groups[0].selector).toBe('Person->Car');
+    expect(layoutSpec.constraints.grouping.groups[0].name).toBe('ownership');
+  });
+
   it('should parse field directives without selectors (legacy)', () => {
     const layoutSpecStr = `
 directives:

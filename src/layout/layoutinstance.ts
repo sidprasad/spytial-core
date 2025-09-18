@@ -12,7 +12,7 @@ import {
 import {
     LayoutSpec,
     RelativeOrientationConstraint, CyclicOrientationConstraint,
-    GroupByField, GroupBySelector
+    GroupByField, GroupBySelector, GroupsBySelector
 } from './layoutspec';
 
 
@@ -250,9 +250,10 @@ export class LayoutInstance {
 
         let groupByFieldConstraints: GroupByField[] = this._layoutSpec.constraints.grouping.byfield;
         let groupBySelectorConstraints: GroupBySelector[] = this._layoutSpec.constraints.grouping.byselector;
+        let groupsConstraints: GroupsBySelector[] = this._layoutSpec.constraints.grouping.groups;
 
 
-        if (!groupByFieldConstraints && !groupBySelectorConstraints) {
+        if (!groupByFieldConstraints && !groupBySelectorConstraints && !groupsConstraints) {
             return [];
         }
 
@@ -325,6 +326,45 @@ export class LayoutInstance {
                 };
                 groups.push(newGroup);
             }
+        }
+
+        // Handle the new groups constraints (specifically for binary selectors)
+        for (var gc of groupsConstraints) {
+            let selector = gc.selector;
+            let selectorRes = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
+
+            // Groups constraints expect binary selectors
+            let selectedTwoples: string[][] = selectorRes.selectedTwoples();
+
+            if (selectedTwoples.length > 0) {
+                // The first element of each tuple is the key (i.e. groupOn)
+                // The second element is the element to add to the group (i.e. addToGroup)
+
+                for (var t of selectedTwoples) {
+                    let groupOn = t[0];
+                    let addToGroup = t[1];
+
+                    let groupName = `${gc.name}[${groupOn}]`;
+
+                    // Check if the group already exists
+                    let existingGroup: LayoutGroup | undefined = groups.find((group) => group.name === groupName);
+
+                    if (existingGroup) {
+                        existingGroup.nodeIds.push(addToGroup);
+                    }
+                    else {
+                        let newGroup: LayoutGroup =
+                        {
+                            name: groupName,
+                            nodeIds: [addToGroup],
+                            keyNodeId: groupOn,
+                            showLabel: true
+                        };
+                        groups.push(newGroup);
+                    }
+                }
+            }
+            // Note: Groups constraints do not fall back to unary selectors like GroupBySelector does
         }
 
 
