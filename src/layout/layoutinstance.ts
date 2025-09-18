@@ -953,7 +953,7 @@ export class LayoutInstance {
 
         // First, for each, get the tuples / fragments.
         let constraintFragments: Array<{
-            source: RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint,
+            source: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint,
             fragmentList: string[]
         }> = [];
 
@@ -1058,7 +1058,7 @@ export class LayoutInstance {
     private getCyclicConstraintForFragment(fragment: string[],
         layoutNodes: LayoutNode[],
         perturbationIdx: number,
-        c: RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint): LayoutConstraint[] {
+        c: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint): LayoutConstraint[] {
         const minRadius = 100;
 
 
@@ -1304,14 +1304,14 @@ export class LayoutInstance {
     }
 
 
-    private leftConstraint(leftId: string, rightId: string, minDistance: number, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint): LeftConstraint {
+    private leftConstraint(leftId: string, rightId: string, minDistance: number, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint): LeftConstraint {
 
         let left = this.getNodeFromId(leftId, layoutNodes);
         let right = this.getNodeFromId(rightId, layoutNodes);
         return { left: left, right: right, minDistance: minDistance, sourceConstraint: sourceConstraint };
     }
 
-    private topConstraint(topId: string, bottomId: string, minDistance: number, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint): TopConstraint {
+    private topConstraint(topId: string, bottomId: string, minDistance: number, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint): TopConstraint {
 
         let top = this.getNodeFromId(topId, layoutNodes);
         let bottom = this.getNodeFromId(bottomId, layoutNodes);
