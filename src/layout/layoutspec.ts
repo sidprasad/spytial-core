@@ -130,40 +130,18 @@ export class AlignConstraint extends ConstraintOperation {
 
 export class GroupBySelector extends ConstraintOperation{
     name: string;
+    addEdge: boolean;
 
-    constructor(selector : string, name: string) {
+    constructor(selector : string, name: string, addEdge: boolean = false) {
         super(selector);
         this.name = name;
+        this.addEdge = addEdge;
     }
 
     override toHTML(): string {
+        const edgeText = this.addEdge ? ' (with edge)' : '';
         return `GroupBySelector with selector <pre>${this.selector}</pre> 
-        and name <pre>${this.name}</pre>.`;
-    }
-}
-
-/**
- * Groups constraint that creates multiple groups based on binary selectors.
- * Each unique value from the first element of the selector becomes a separate group
- * containing the corresponding second elements.
- */
-export class GroupsBySelector extends ConstraintOperation{
-    name: string;
-    edgeName?: string;
-
-    constructor(selector : string, name: string, edgeName?: string) {
-        super(selector);
-        this.name = name;
-        this.edgeName = edgeName;
-    }
-
-    override toHTML(): string {
-        let html = `GroupsBySelector with selector <pre>${this.selector}</pre> 
-        and base group name <pre>${this.name}</pre>`;
-        if (this.edgeName) {
-            html += ` with edge name <pre>${this.edgeName}</pre>`;
-        }
-        return html + '.';
+        and name <pre>${this.name}</pre>${edgeText}.`;
     }
 }
 
@@ -280,7 +258,6 @@ interface ConstraintsBlock
     grouping : {
         byfield : GroupByField[];
         byselector : GroupBySelector[];
-        groups : GroupsBySelector[];
     }
 
 }
@@ -319,8 +296,7 @@ function DEFAULT_LAYOUT() : LayoutSpec
             alignment: [] as AlignConstraint[],
             grouping : {
                 byfield : [] as GroupByField[],
-                byselector : [] as GroupBySelector[],
-                groups : [] as GroupsBySelector[]
+                byselector : [] as GroupBySelector[]
             }
         },
         directives: {
@@ -518,18 +494,7 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
             if(!c.group.name) {
                 throw new Error("Grouping constraint must have a name.");
             }
-            return new GroupBySelector(c.group.selector, c.group.name);
-        });
-
-    let groupbyConstraints: GroupsBySelector[] = typedConstraints.filter(c => c.groupby)
-        .map(c => {
-            if(!c.groupby.selector) {
-                throw new Error("Groupby constraint must have a selector.");
-            }
-            if(!c.groupby.name) {
-                throw new Error("Groupby constraint must have a name.");
-            }
-            return new GroupsBySelector(c.groupby.selector, c.groupby.name, c.groupby.edgeName);
+            return new GroupBySelector(c.group.selector, c.group.name, c.group.addEdge);
         });
 
     let alignConstraints: AlignConstraint[] = typedConstraints.filter(c => c.align)
@@ -562,8 +527,7 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
         alignment: alignConstraints,
         grouping: {
             byfield: byfield,
-            byselector: byselector,
-            groups: groupbyConstraints
+            byselector: byselector
         }
     }
 
