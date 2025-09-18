@@ -416,8 +416,8 @@ export class LayoutInstance {
                         // Choose the first member as the representative for the edge
                         const representative = groupInfo.members[0];
                         if (representative && groupInfo.keyNode !== representative) {
-                            // Create unique group edge ID with _g_ prefix
-                            const groupEdgePrefix = `_g_${groupInfo.keyNode}_${representative}_`;
+                            // This is hacky, but it works?
+                            const groupEdgePrefix = `_g_0_1_${gc.edgeName}:${groupInfo.keyNode}->${representative}`;
                             const edgeId = groupEdgePrefix + gc.edgeName;
                             g.setEdge(groupInfo.keyNode, representative, gc.edgeName, edgeId);
                         }
