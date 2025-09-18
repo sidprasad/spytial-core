@@ -521,7 +521,7 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
             return new GroupBySelector(c.group.selector, c.group.name);
         });
 
-    let groups: GroupsBySelector[] = typedConstraints.filter(c => c.groupby)
+    let groupbyConstraints: GroupsBySelector[] = typedConstraints.filter(c => c.groupby)
         .map(c => {
             if(!c.groupby.selector) {
                 throw new Error("Groupby constraint must have a selector.");
@@ -563,7 +563,7 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
         grouping: {
             byfield: byfield,
             byselector: byselector,
-            groups: groups
+            groups: groupbyConstraints
         }
     }
 

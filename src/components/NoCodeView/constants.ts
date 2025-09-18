@@ -6,4 +6,4 @@ export const ORIENTATION_DESCRIPTION = "Specify the relative positioning of elem
 export const ALIGN_DESCRIPTION = "Ensure elements are aligned horizontally or vertically."
 export const GROUPING_SELECTOR_DESCRIPTION = "Group elements based on a selector."
 export const GROUPING_FIELD_DESCRIPTION = "Group elements based on a field."
-export const GROUPS_DESCRIPTION = "Create multiple groups based on binary selectors where each unique first element becomes a separate group."
+export const GROUPS_DESCRIPTION = "Create groups based on binary selectors. The first element of selected is grouped on, while the second is added to the group."
