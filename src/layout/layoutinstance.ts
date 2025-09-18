@@ -12,7 +12,7 @@ import {
 import {
     LayoutSpec,
     RelativeOrientationConstraint, CyclicOrientationConstraint,
-    GroupByField, GroupBySelector, AlignConstraint
+    GroupByField, GroupBySelector, GroupsBySelector, AlignConstraint
 } from './layoutspec';
 
 
@@ -281,9 +281,10 @@ export class LayoutInstance {
 
         let groupByFieldConstraints: GroupByField[] = this._layoutSpec.constraints.grouping.byfield;
         let groupBySelectorConstraints: GroupBySelector[] = this._layoutSpec.constraints.grouping.byselector;
+        let groupsConstraints: GroupsBySelector[] = this._layoutSpec.constraints.grouping.groups;
 
 
-        if (!groupByFieldConstraints && !groupBySelectorConstraints) {
+        if (!groupByFieldConstraints && !groupBySelectorConstraints && !groupsConstraints) {
             return [];
         }
 
@@ -356,6 +357,74 @@ export class LayoutInstance {
                 };
                 groups.push(newGroup);
             }
+        }
+
+        // Handle the new groups constraints (specifically for binary selectors)
+        for (var gc of groupsConstraints) {
+            let selector = gc.selector;
+            let selectorRes = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
+
+            // Groups constraints expect binary selectors
+            let selectedTwoples: string[][] = selectorRes.selectedTwoples();
+
+            if (selectedTwoples.length > 0) {
+                // The first element of each tuple is the key (i.e. groupOn)
+                // The second element is the element to add to the group (i.e. addToGroup)
+
+                // Keep track of created groups for edge generation
+                let createdGroups: { [groupName: string]: { keyNode: string, members: string[] } } = {};
+
+                for (var t of selectedTwoples) {
+                    let groupOn = t[0];
+                    let addToGroup = t[1];
+
+                    // Use the node's label if available, fallback to the node ID
+                    let groupOnLabel = g.node(groupOn)?.label || groupOn;
+                    let groupName = `${gc.name}[${groupOnLabel}]`;
+
+                    // Check if the group already exists
+                    let existingGroup: LayoutGroup | undefined = groups.find((group) => group.name === groupName);
+
+                    if (existingGroup) {
+                        existingGroup.nodeIds.push(addToGroup);
+                        // Update tracking info
+                        if (createdGroups[groupName]) {
+                            createdGroups[groupName].members.push(addToGroup);
+                        }
+                    }
+                    else {
+                        let newGroup: LayoutGroup =
+                        {
+                            name: groupName,
+                            nodeIds: [addToGroup],
+                            keyNodeId: groupOn,
+                            showLabel: true
+                        };
+                        groups.push(newGroup);
+                        
+                        // Track this group for edge generation
+                        createdGroups[groupName] = {
+                            keyNode: groupOn,
+                            members: [addToGroup]
+                        };
+                    }
+                }
+
+                // Generate edges between key and group members if edgeName is specified
+                if (gc.edgeName) {
+                    for (const [groupName, groupInfo] of Object.entries(createdGroups)) {
+                        // Choose the first member as the representative for the edge
+                        const representative = groupInfo.members[0];
+                        if (representative && groupInfo.keyNode !== representative) {
+                            // This is hacky, but it works?
+                            const groupEdgePrefix = `_g_0_1_${gc.edgeName}:${groupInfo.keyNode}->${representative}`;
+                            const edgeId = groupEdgePrefix + gc.edgeName;
+                            g.setEdge(groupInfo.keyNode, representative, gc.edgeName, edgeId);
+                        }
+                    }
+                }
+            }
+            // Note: Groups constraints do not fall back to unary selectors like GroupBySelector does
         }
 
 

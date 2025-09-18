@@ -142,6 +142,31 @@ export class GroupBySelector extends ConstraintOperation{
     }
 }
 
+/**
+ * Groups constraint that creates multiple groups based on binary selectors.
+ * Each unique value from the first element of the selector becomes a separate group
+ * containing the corresponding second elements.
+ */
+export class GroupsBySelector extends ConstraintOperation{
+    name: string;
+    edgeName?: string;
+
+    constructor(selector : string, name: string, edgeName?: string) {
+        super(selector);
+        this.name = name;
+        this.edgeName = edgeName;
+    }
+
+    override toHTML(): string {
+        let html = `GroupsBySelector with selector <pre>${this.selector}</pre> 
+        and base group name <pre>${this.name}</pre>`;
+        if (this.edgeName) {
+            html += ` with edge name <pre>${this.edgeName}</pre>`;
+        }
+        return html + '.';
+    }
+}
+
 
 /*
 
@@ -255,6 +280,7 @@ interface ConstraintsBlock
     grouping : {
         byfield : GroupByField[];
         byselector : GroupBySelector[];
+        groups : GroupsBySelector[];
     }
 
 }
@@ -293,7 +319,8 @@ function DEFAULT_LAYOUT() : LayoutSpec
             alignment: [] as AlignConstraint[],
             grouping : {
                 byfield : [] as GroupByField[],
-                byselector : [] as GroupBySelector[]
+                byselector : [] as GroupBySelector[],
+                groups : [] as GroupsBySelector[]
             }
         },
         directives: {
@@ -494,6 +521,17 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
             return new GroupBySelector(c.group.selector, c.group.name);
         });
 
+    let groupbyConstraints: GroupsBySelector[] = typedConstraints.filter(c => c.groupby)
+        .map(c => {
+            if(!c.groupby.selector) {
+                throw new Error("Groupby constraint must have a selector.");
+            }
+            if(!c.groupby.name) {
+                throw new Error("Groupby constraint must have a name.");
+            }
+            return new GroupsBySelector(c.groupby.selector, c.groupby.name, c.groupby.edgeName);
+        });
+
     let alignConstraints: AlignConstraint[] = typedConstraints.filter(c => c.align)
         .map(c => {
             if(!c.align.selector) {
@@ -524,7 +562,8 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
         alignment: alignConstraints,
         grouping: {
             byfield: byfield,
-            byselector: byselector
+            byselector: byselector,
+            groups: groupbyConstraints
         }
     }
 
