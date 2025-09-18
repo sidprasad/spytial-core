@@ -1,10 +1,11 @@
 import React, { useCallback, useState } from 'react';
-import { ORIENTATION_DESCRIPTION, CYCLIC_DESCRIPTION, ALIGN_DESCRIPTION, GROUPING_FIELD_DESCRIPTION, GROUPING_SELECTOR_DESCRIPTION } from './constants';
+import { ORIENTATION_DESCRIPTION, CYCLIC_DESCRIPTION, ALIGN_DESCRIPTION, GROUPING_FIELD_DESCRIPTION, GROUPING_SELECTOR_DESCRIPTION, GROUPS_DESCRIPTION } from './constants';
 import { CyclicSelector, 
     OrientationSelector, 
     AlignSelector,
     GroupByFieldSelector, 
-    GroupBySelectorSelector, 
+    GroupBySelectorSelector,
+    GroupsSelector,
 } from './index';
 import { useHighlight } from './hooks';
 import { ConstraintType } from './types';
@@ -34,7 +35,8 @@ const ConstraintCard = (props: ConstraintCardProps) => {
         orientation: <OrientationSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>,
         align: <AlignSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>,
         groupfield: <GroupByFieldSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>,
-        groupselector: <GroupBySelectorSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>,  
+        groupselector: <GroupBySelectorSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>,
+        groupby: <GroupsSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>,
     }
 
     const [cardHTML, setCardHTML] = useState<React.JSX.Element>(constraintsToSelectorComponentMap[props.constraintData.type]);
@@ -80,6 +82,7 @@ const ConstraintCard = (props: ConstraintCardProps) => {
                     <option value="align" title={ALIGN_DESCRIPTION}>Align</option>
                     <option value="groupfield" title={GROUPING_FIELD_DESCRIPTION}>Group by field</option>
                     <option value="groupselector"  title={GROUPING_SELECTOR_DESCRIPTION}>Group by selector</option>
+                    <option value="groupby" title={GROUPS_DESCRIPTION}>Groups (binary selector)</option>
                 </select>
             </div>
             <div className="params">
