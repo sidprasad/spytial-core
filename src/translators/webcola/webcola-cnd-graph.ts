@@ -3014,7 +3014,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         stroke-width: 4px !important; /* Thicker stroke for visibility */
         stroke-dasharray: 8 4 !important; /* Larger dash pattern */
         animation: dash 1s linear infinite, pulse-bg 2s ease-in-out infinite !important;
-        fill: rgba(255, 102, 102, 0.15) !important; /* Light reddish background */
+        fill: rgba(225, 59, 59, 0.32) !important; /* Light reddish background */
       }
 
       @keyframes dash {
