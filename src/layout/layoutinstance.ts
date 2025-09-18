@@ -1333,11 +1333,45 @@ export class LayoutInstance {
      * @param targetNodeId - Second node ID
      * @returns true if there's already an edge between the nodes
      */
-    private hasDirectEdgeBetween(g: Graph, sourceNodeId: string, targetNodeId: string): boolean {
-        return g.inEdges(sourceNodeId)?.some(e => e.v === targetNodeId) || 
-               g.outEdges(sourceNodeId)?.some(e => e.w === targetNodeId) ||
-               g.inEdges(targetNodeId)?.some(e => e.v === sourceNodeId) || 
-               g.outEdges(targetNodeId)?.some(e => e.w === sourceNodeId);
+     private hasDirectEdgeBetween(g: Graph, sourceNodeId: string, targetNodeId: string): { direct: boolean; connected: boolean } {
+
+        // Direct edge check (either direction). Prefer graphlib.hasEdge if available.
+        const direct =
+            (typeof (g as any).hasEdge === 'function' && ((g as any).hasEdge(sourceNodeId, targetNodeId) || (g as any).hasEdge(targetNodeId, sourceNodeId)))
+            ||
+            // fallback to scanning in/out edges (handles multi-edges)
+            ((g.inEdges(sourceNodeId) || []).some(e => e.v === targetNodeId) ||
+             (g.outEdges(sourceNodeId) || []).some(e => e.w === targetNodeId) ||
+             (g.inEdges(targetNodeId) || []).some(e => e.v === sourceNodeId) ||
+             (g.outEdges(targetNodeId) || []).some(e => e.w === sourceNodeId));
+
+        if(direct) {
+            return direct;
+        }
+
+        // Connected check: BFS treating graph as undirected (follow predecessors and successors)
+        const visited = new Set<string>();
+        const queue: string[] = [sourceNodeId];
+        let connected = false;
+
+        while (queue.length > 0) {
+            const cur = queue.shift()!;
+            if (cur === targetNodeId) {
+                connected = true;
+                break;
+            }
+            if (visited.has(cur)) continue;
+            visited.add(cur);
+
+            // neighbors: successors + predecessors (graphlib provides both)
+            const succ = g.successors(cur) || [];
+            const pred = g.predecessors(cur) || [];
+            for (const n of succ.concat(pred)) {
+                if (!visited.has(n)) queue.push(n);
+            }
+        }
+
+        return direct;
     }
 
     private getDisconnectedNodes(g: Graph): string[] {
