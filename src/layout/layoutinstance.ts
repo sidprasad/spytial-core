@@ -1243,11 +1243,7 @@ export class LayoutInstance {
 
                 directions.forEach((direction) => {
                     // Add alignment edge for ALL orientation constraints if enabled AND edge doesn't already exist in the graph
-                    const hasDirectEdge = g.inEdges(sourceNodeId)?.some(e => e.v === targetNodeId) || 
-                                         g.outEdges(sourceNodeId)?.some(e => e.w === targetNodeId) ||
-                                         g.inEdges(targetNodeId)?.some(e => e.v === sourceNodeId) || 
-                                         g.outEdges(targetNodeId)?.some(e => e.w === sourceNodeId);
-                    if (this.addAlignmentEdges && !hasDirectEdge) {
+                    if (this.addAlignmentEdges && !this.hasDirectEdgeBetween(g, sourceNodeId, targetNodeId)) {
                         const alignmentEdgeLabel = `_alignment_${sourceNodeId}_${targetNodeId}_`;
                         g.setEdge(sourceNodeId, targetNodeId, alignmentEdgeLabel, alignmentEdgeLabel);
                     }
@@ -1309,11 +1305,7 @@ export class LayoutInstance {
                 let targetNodeId = tuple[1];
 
                 // Add alignment edge for align constraints if enabled AND edge doesn't already exist in the graph
-                const hasDirectEdge = g.inEdges(sourceNodeId)?.some(e => e.v === targetNodeId) || 
-                                     g.outEdges(sourceNodeId)?.some(e => e.w === targetNodeId) ||
-                                     g.inEdges(targetNodeId)?.some(e => e.v === sourceNodeId) || 
-                                     g.outEdges(targetNodeId)?.some(e => e.w === sourceNodeId);
-                if (this.addAlignmentEdges && !hasDirectEdge) {
+                if (this.addAlignmentEdges && !this.hasDirectEdgeBetween(g, sourceNodeId, targetNodeId)) {
                     const alignmentEdgeLabel = `_alignment_${sourceNodeId}_${targetNodeId}_`;
                     g.setEdge(sourceNodeId, targetNodeId, alignmentEdgeLabel, alignmentEdgeLabel);
                 }
@@ -1333,6 +1325,20 @@ export class LayoutInstance {
 
 
 
+
+    /**
+     * Checks if there's already a direct edge (bidirectional) between two nodes in the graph.
+     * @param g - The graph to check
+     * @param sourceNodeId - First node ID
+     * @param targetNodeId - Second node ID
+     * @returns true if there's already an edge between the nodes
+     */
+    private hasDirectEdgeBetween(g: Graph, sourceNodeId: string, targetNodeId: string): boolean {
+        return g.inEdges(sourceNodeId)?.some(e => e.v === targetNodeId) || 
+               g.outEdges(sourceNodeId)?.some(e => e.w === targetNodeId) ||
+               g.inEdges(targetNodeId)?.some(e => e.v === sourceNodeId) || 
+               g.outEdges(targetNodeId)?.some(e => e.w === sourceNodeId);
+    }
 
     private getDisconnectedNodes(g: Graph): string[] {
         let inNodes = g.edges().map(edge => edge.w);
