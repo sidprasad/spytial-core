@@ -344,7 +344,9 @@ export class LayoutInstance {
                     let groupOn = t[0];
                     let addToGroup = t[1];
 
-                    let groupName = `${gc.name}[${groupOn}]`;
+                    // Use the node's label if available, fallback to the node ID
+                    let groupOnLabel = g.node(groupOn)?.label || groupOn;
+                    let groupName = `${gc.name}[${groupOnLabel}]`;
 
                     // Check if the group already exists
                     let existingGroup: LayoutGroup | undefined = groups.find((group) => group.name === groupName);

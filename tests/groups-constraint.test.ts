@@ -64,7 +64,8 @@ constraints:
 
     // Create a mock graph
     const mockGraph = {
-      edges: () => []
+      edges: () => [],
+      node: (nodeId: string) => ({ label: nodeId }) // Mock node method that returns label same as ID
     };
 
     // Access private method for testing
@@ -111,7 +112,8 @@ constraints:
 
     // Create a mock graph
     const mockGraph = {
-      edges: () => []
+      edges: () => [],
+      node: (nodeId: string) => ({ label: nodeId }) // Mock node method that returns label same as ID
     };
 
     // Access private method for testing

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { TUPLE_SELECTOR_TEXT } from '../constants';
 import { ConstraintData } from '../interfaces';
 
@@ -15,7 +15,7 @@ interface GroupsSelectorProps {
  * from the first element becomes a separate group containing the second elements.
  */
 export const GroupsSelector: React.FC<GroupsSelectorProps> = (props: GroupsSelectorProps) => {
-  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
     props.onUpdate({
       params: {
@@ -23,13 +23,13 @@ export const GroupsSelector: React.FC<GroupsSelectorProps> = (props: GroupsSelec
         [name]: value,
       },
     });
-  };
+  }, [props]);
 
   return (
     <>
       <div className="input-group">
         <div className="input-group-prepend">
-          <span className="input-group-text infolabel" title={`${TUPLE_SELECTOR_TEXT} - Creates multiple groups based on binary selector`}>
+          <span className="input-group-text infolabel" title={TUPLE_SELECTOR_TEXT}>
             Selector
           </span>
         </div>
@@ -39,7 +39,6 @@ export const GroupsSelector: React.FC<GroupsSelectorProps> = (props: GroupsSelec
           className="form-control code-input"
           defaultValue={props.constraintData.params.selector as string || ''}
           onChange={handleInputChange}
-          placeholder="e.g., Person->Car"
           required
         />
       </div>
@@ -53,7 +52,6 @@ export const GroupsSelector: React.FC<GroupsSelectorProps> = (props: GroupsSelec
           className="form-control"
           defaultValue={props.constraintData.params.name as string || ''}
           onChange={handleInputChange}
-          placeholder="e.g., ownership (becomes ownership[key])"
           required
         />
       </div>
