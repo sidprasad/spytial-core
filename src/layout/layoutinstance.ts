@@ -12,7 +12,7 @@ import {
 import {
     LayoutSpec,
     RelativeOrientationConstraint, CyclicOrientationConstraint,
-    GroupByField, GroupBySelector
+    GroupByField, GroupBySelector, AlignConstraint
 } from './layoutspec';
 
 
@@ -700,6 +700,7 @@ export class LayoutInstance {
 
         ///////////// CONSTRAINTS ////////////
         let constraints: LayoutConstraint[] = this.applyRelativeOrientationConstraints(layoutNodes, g);
+        constraints = constraints.concat(this.applyAlignConstraints(layoutNodes, g));
 
         let layoutEdges: LayoutEdge[] = g.edges().map((edge) => {
 
@@ -952,7 +953,7 @@ export class LayoutInstance {
 
         // First, for each, get the tuples / fragments.
         let constraintFragments: Array<{
-            source: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint,
+            source: RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint,
             fragmentList: string[]
         }> = [];
 
@@ -1057,7 +1058,7 @@ export class LayoutInstance {
     private getCyclicConstraintForFragment(fragment: string[],
         layoutNodes: LayoutNode[],
         perturbationIdx: number,
-        c: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint): LayoutConstraint[] {
+        c: RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint): LayoutConstraint[] {
         const minRadius = 100;
 
 
@@ -1244,6 +1245,40 @@ export class LayoutInstance {
         return constraints;
     }
 
+    /**
+     * Applies the align constraints to the layout nodes.
+     * @param layoutNodes - The layout nodes to which the constraints will be applied.
+     * @returns An array of layout constraints.
+     */
+    applyAlignConstraints(layoutNodes: LayoutNode[], g: Graph): LayoutConstraint[] {
+        let constraints: LayoutConstraint[] = [];
+        let alignConstraints = this._layoutSpec.constraints.alignment;
+
+        alignConstraints.forEach((c: AlignConstraint) => {
+            let direction = c.direction;
+            let selector = c.selector;
+
+            let selectorRes = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
+            let selectedTuples: string[][] = selectorRes.selectedTwoples();
+
+            // For each tuple, apply the alignment constraint
+            selectedTuples.forEach((tuple) => {
+                let sourceNodeId = tuple[0];
+                let targetNodeId = tuple[1];
+
+                if (direction === "horizontal") {
+                    // Horizontal alignment means same Y coordinate
+                    constraints.push(this.ensureSameYConstraint(sourceNodeId, targetNodeId, layoutNodes, c));
+                } else if (direction === "vertical") {
+                    // Vertical alignment means same X coordinate
+                    constraints.push(this.ensureSameXConstraint(sourceNodeId, targetNodeId, layoutNodes, c));
+                }
+            });
+        });
+
+        return constraints;
+    }
+
 
 
 
@@ -1269,14 +1304,14 @@ export class LayoutInstance {
     }
 
 
-    private leftConstraint(leftId: string, rightId: string, minDistance: number, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint): LeftConstraint {
+    private leftConstraint(leftId: string, rightId: string, minDistance: number, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint): LeftConstraint {
 
         let left = this.getNodeFromId(leftId, layoutNodes);
         let right = this.getNodeFromId(rightId, layoutNodes);
         return { left: left, right: right, minDistance: minDistance, sourceConstraint: sourceConstraint };
     }
 
-    private topConstraint(topId: string, bottomId: string, minDistance: number, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint): TopConstraint {
+    private topConstraint(topId: string, bottomId: string, minDistance: number, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint): TopConstraint {
 
         let top = this.getNodeFromId(topId, layoutNodes);
         let bottom = this.getNodeFromId(bottomId, layoutNodes);
@@ -1284,7 +1319,7 @@ export class LayoutInstance {
         return { top: top, bottom: bottom, minDistance: minDistance, sourceConstraint: sourceConstraint };
     }
 
-    private ensureSameYConstraint(node1Id: string, node2Id: string, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint): AlignmentConstraint {
+    private ensureSameYConstraint(node1Id: string, node2Id: string, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint): AlignmentConstraint {
 
         let node1 = this.getNodeFromId(node1Id, layoutNodes);
         let node2 = this.getNodeFromId(node2Id, layoutNodes);
@@ -1292,7 +1327,7 @@ export class LayoutInstance {
         return { axis: "y", node1: node1, node2: node2, sourceConstraint: sourceConstraint };
     }
 
-    private ensureSameXConstraint(node1Id: string, node2Id: string, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | ImplicitConstraint | CyclicOrientationConstraint): AlignmentConstraint {
+    private ensureSameXConstraint(node1Id: string, node2Id: string, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint): AlignmentConstraint {
 
         let node1 = this.getNodeFromId(node1Id, layoutNodes);
         let node2 = this.getNodeFromId(node2Id, layoutNodes);
