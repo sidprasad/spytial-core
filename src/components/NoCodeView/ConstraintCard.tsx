@@ -36,7 +36,7 @@ const ConstraintCard = (props: ConstraintCardProps) => {
         align: <AlignSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>,
         groupfield: <GroupByFieldSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>,
         groupselector: <GroupBySelectorSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>,
-        groups: <GroupsSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>,
+        groupby: <GroupsSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>,
     }
 
     const [cardHTML, setCardHTML] = useState<React.JSX.Element>(constraintsToSelectorComponentMap[props.constraintData.type]);
@@ -82,7 +82,7 @@ const ConstraintCard = (props: ConstraintCardProps) => {
                     <option value="align" title={ALIGN_DESCRIPTION}>Align</option>
                     <option value="groupfield" title={GROUPING_FIELD_DESCRIPTION}>Group by field</option>
                     <option value="groupselector"  title={GROUPING_SELECTOR_DESCRIPTION}>Group by selector</option>
-                    <option value="groups" title={GROUPS_DESCRIPTION}>Groups (binary selector)</option>
+                    <option value="groupby" title={GROUPS_DESCRIPTION}>Groups (binary selector)</option>
                 </select>
             </div>
             <div className="params">

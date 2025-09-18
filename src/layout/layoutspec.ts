@@ -149,15 +149,21 @@ export class GroupBySelector extends ConstraintOperation{
  */
 export class GroupsBySelector extends ConstraintOperation{
     name: string;
+    edgeName?: string;
 
-    constructor(selector : string, name: string) {
+    constructor(selector : string, name: string, edgeName?: string) {
         super(selector);
         this.name = name;
+        this.edgeName = edgeName;
     }
 
     override toHTML(): string {
-        return `GroupsBySelector with selector <pre>${this.selector}</pre> 
-        and base name <pre>${this.name}</pre>.`;
+        let html = `GroupsBySelector with selector <pre>${this.selector}</pre> 
+        and base name <pre>${this.name}</pre>`;
+        if (this.edgeName) {
+            html += ` with edge name <pre>${this.edgeName}</pre>`;
+        }
+        return html + '.';
     }
 }
 
@@ -515,15 +521,15 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
             return new GroupBySelector(c.group.selector, c.group.name);
         });
 
-    let groups: GroupsBySelector[] = typedConstraints.filter(c => c.groups)
+    let groups: GroupsBySelector[] = typedConstraints.filter(c => c.groupby)
         .map(c => {
-            if(!c.groups.selector) {
-                throw new Error("Groups constraint must have a selector.");
+            if(!c.groupby.selector) {
+                throw new Error("Groupby constraint must have a selector.");
             }
-            if(!c.groups.name) {
-                throw new Error("Groups constraint must have a name.");
+            if(!c.groupby.name) {
+                throw new Error("Groupby constraint must have a name.");
             }
-            return new GroupsBySelector(c.groups.selector, c.groups.name);
+            return new GroupsBySelector(c.groupby.selector, c.groupby.name, c.groupby.edgeName);
         });
 
     let alignConstraints: AlignConstraint[] = typedConstraints.filter(c => c.align)

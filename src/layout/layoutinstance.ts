@@ -371,6 +371,9 @@ export class LayoutInstance {
                 // The first element of each tuple is the key (i.e. groupOn)
                 // The second element is the element to add to the group (i.e. addToGroup)
 
+                // Keep track of created groups for edge generation
+                let createdGroups: { [groupName: string]: { keyNode: string, members: string[] } } = {};
+
                 for (var t of selectedTwoples) {
                     let groupOn = t[0];
                     let addToGroup = t[1];
@@ -384,6 +387,10 @@ export class LayoutInstance {
 
                     if (existingGroup) {
                         existingGroup.nodeIds.push(addToGroup);
+                        // Update tracking info
+                        if (createdGroups[groupName]) {
+                            createdGroups[groupName].members.push(addToGroup);
+                        }
                     }
                     else {
                         let newGroup: LayoutGroup =
@@ -394,6 +401,25 @@ export class LayoutInstance {
                             showLabel: true
                         };
                         groups.push(newGroup);
+                        
+                        // Track this group for edge generation
+                        createdGroups[groupName] = {
+                            keyNode: groupOn,
+                            members: [addToGroup]
+                        };
+                    }
+                }
+
+                // Generate edges between key and group members if edgeName is specified
+                if (gc.edgeName) {
+                    for (const [groupName, groupInfo] of Object.entries(createdGroups)) {
+                        // Choose the first member as the representative for the edge
+                        const representative = groupInfo.members[0];
+                        if (representative && groupInfo.keyNode !== representative) {
+                            // Create unique edge ID
+                            const edgeId = `${gc.edgeName}_${groupInfo.keyNode}_${representative}`;
+                            g.setEdge(groupInfo.keyNode, representative, gc.edgeName, edgeId);
+                        }
                     }
                 }
             }

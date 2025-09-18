@@ -4,7 +4,7 @@
  * 
  * @public
  */
-export type ConstraintType = 'orientation' | 'cyclic' | 'align' | 'groupfield' | 'groupselector' | 'groups';
+export type ConstraintType = 'orientation' | 'cyclic' | 'align' | 'groupfield' | 'groupselector' | 'groupby';
 
 
 /**

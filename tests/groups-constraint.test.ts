@@ -15,11 +15,11 @@ const mockDataInstance = {
   types: new Map()
 };
 
-describe('Groups constraint functionality', () => {
-  it('should parse groups constraint correctly', () => {
+describe('Groupby constraint functionality', () => {
+  it('should parse groupby constraint correctly', () => {
     const layoutSpecStr = `
 constraints:
-  - groups:
+  - groupby:
       selector: 'Person->Car'
       name: 'ownership'
 `;
@@ -37,7 +37,7 @@ constraints:
   it('should create multiple groups from binary selector results', () => {
     const layoutSpecStr = `
 constraints:
-  - groups:
+  - groupby:
       selector: 'Person->Car'
       name: 'ownership'
 `;
@@ -90,7 +90,7 @@ constraints:
   it('should handle empty binary selector results', () => {
     const layoutSpecStr = `
 constraints:
-  - groups:
+  - groupby:
       selector: 'Person->Car'
       name: 'ownership'
 `;
@@ -124,11 +124,11 @@ constraints:
     expect(groups).toHaveLength(0);
   });
 
-  it('should generate YAML correctly for groups constraint', () => {
+  it('should generate YAML correctly for groupby constraint', () => {
     const constraintData = [
       {
         id: '1',
-        type: 'groups' as const,
+        type: 'groupby' as const,
         params: {
           selector: 'Person->Car',
           name: 'ownership'
@@ -139,8 +139,26 @@ constraints:
     const yaml = generateLayoutSpecYaml(constraintData, []);
     
     expect(yaml).toContain('constraints:');
-    expect(yaml).toContain('- groups:');
+    expect(yaml).toContain('- groupby:');
     expect(yaml).toContain('selector: Person->Car');
     expect(yaml).toContain('name: ownership');
+  });
+
+  it('should handle groupby constraint with edgeName', () => {
+    const layoutSpecStr = `
+constraints:
+  - groupby:
+      selector: 'Person->Car'
+      name: 'ownership'
+      edgeName: 'owns'
+`;
+
+    const layoutSpec = parseLayoutSpec(layoutSpecStr);
+    
+    expect(layoutSpec.constraints.grouping.groups).toHaveLength(1);
+    expect(layoutSpec.constraints.grouping.groups[0].selector).toBe('Person->Car');
+    expect(layoutSpec.constraints.grouping.groups[0].name).toBe('ownership');
+    expect(layoutSpec.constraints.grouping.groups[0].edgeName).toBe('owns');
+    expect(layoutSpec.constraints.grouping.groups[0].toHTML()).toContain('owns');
   });
 });

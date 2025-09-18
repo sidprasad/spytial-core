@@ -10,7 +10,7 @@ interface GroupsSelectorProps {
 }
 
 /**
- * React component for groups constraint configuration.
+ * React component for groupby constraint configuration.
  * Creates multiple groups based on binary selectors where each unique value 
  * from the first element becomes a separate group containing the second elements.
  */
@@ -53,6 +53,18 @@ export const GroupsSelector: React.FC<GroupsSelectorProps> = (props: GroupsSelec
           defaultValue={props.constraintData.params.name as string || ''}
           onChange={handleInputChange}
           required
+        />
+      </div>
+      <div className="input-group">
+        <div className="input-group-prepend">
+          <span className="input-group-text">Edge Name</span>
+        </div>
+        <input
+          type="text"
+          name="edgeName"
+          className="form-control"
+          defaultValue={props.constraintData.params.edgeName as string || ''}
+          onChange={handleInputChange}
         />
       </div>
     </>

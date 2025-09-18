@@ -9,13 +9,13 @@
 <body>
     <div class="container mt-4">
         <h1>Groups Constraint Demo</h1>
-        <p>This demonstrates the new <code>groups</code> constraint for creating multiple groups from binary selectors.</p>
+        <p>This demonstrates the new <code>groupby</code> constraint for creating multiple groups from binary selectors.</p>
         
         <div class="row">
             <div class="col-md-6">
                 <h3>YAML Configuration</h3>
                 <pre><code>constraints:
-  - groups:
+  - groupby:
       selector: "Person->Car"
       name: "ownership"</code></pre>
             </div>
@@ -46,6 +46,12 @@
                                 <span class="input-group-text">Base Name</span>
                             </div>
                             <input type="text" class="form-control" value="ownership" placeholder="e.g., ownership (becomes ownership[key])">
+                        </div>
+                        <div class="input-group">
+                            <div class="input-group-prepend">
+                                <span class="input-group-text">Edge Name</span>
+                            </div>
+                            <input type="text" class="form-control" value="" placeholder="e.g., owns (optional)">
                         </div>
                     </div>
                 </div>
