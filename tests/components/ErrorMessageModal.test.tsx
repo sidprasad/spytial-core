@@ -20,7 +20,7 @@ describe('ErrorMessageModal Component', () => {
       expect(document.getElementById('error-message-modal')).toBeInTheDocument()
       
       // Check header
-      expect(screen.getByText('Could not produce a diagram')).toBeInTheDocument()
+      expect(screen.getByText('Could not satisfy all constraints')).toBeInTheDocument()
       expect(screen.getByText('Your instance cannot be visualized with the current CnD spec.')).toBeInTheDocument()
 
       // Check error card header
@@ -51,7 +51,7 @@ describe('ErrorMessageModal Component', () => {
       expect(document.getElementById('error-message-modal')).toBeInTheDocument()
 
       // Check headers
-      expect(screen.getByText('Could not produce a diagram')).toBeInTheDocument()
+      expect(screen.getByText('Could not satisfy all constraints')).toBeInTheDocument()
       expect(screen.getByText('Your instance cannot be visualized with the current CnD spec.')).toBeInTheDocument()
 
       // Check constraint table instruction
@@ -84,7 +84,7 @@ describe('ErrorMessageModal Component', () => {
       expect(document.getElementById('error-message-modal')).toBeInTheDocument()
 
       // Check headers
-      expect(screen.getByText('Could not produce a diagram')).toBeInTheDocument()
+      expect(screen.getByText('Could not satisfy all constraints')).toBeInTheDocument()
       expect(screen.getByText('Your instance cannot be visualized with the current CnD spec.')).toBeInTheDocument()
 
       // Check error card header
@@ -106,7 +106,7 @@ describe('ErrorMessageModal Component', () => {
       expect(document.getElementById('error-message-modal')).toBeInTheDocument()
 
       // Check headers
-      expect(screen.getByText('Could not produce a diagram')).toBeInTheDocument()
+      expect(screen.getByText('Could not satisfy all constraints')).toBeInTheDocument()
       expect(screen.getByText('Your instance cannot be visualized with the current CnD spec.')).toBeInTheDocument()
 
       // Check error card header (should be "Error" for general-error)

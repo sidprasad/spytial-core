@@ -246,6 +246,60 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     return errorNodes.some((errorNode: LayoutNode) => errorNode.id === node.id); // NOTE: `id` should be unique
   }
 
+  /**
+   * Check if a node is considered "small" and needs enhanced visibility
+   * Accounts for current zoom level to determine visual size on screen
+   * @param node - Node object with dimensions
+   * @returns True if the node appears smaller than the threshold on screen
+   */
+  private isSmallNode(node: any): boolean {
+    const minVisualSize = 30; // Minimum visual size threshold in screen pixels
+    
+    // Get current zoom scale
+    let zoomScale = 1;
+    if (this.svg && this.svg.node()) {
+      try {
+        const transform = d3.zoomTransform(this.svg.node());
+        zoomScale = transform.k;
+      } catch (e) {
+        // Fallback to scale 1 if transform is not available
+        zoomScale = 1;
+      }
+    }
+    
+    // Calculate visual size (coordinate size * zoom scale)
+    const visualWidth = (node.width || 0) * zoomScale;
+    const visualHeight = (node.height || 0) * zoomScale;
+    
+    return visualWidth < minVisualSize || visualHeight < minVisualSize;
+  }
+
+  /**
+   * Update node classes based on current zoom level
+   * Called when zoom changes to ensure small error nodes get proper styling
+   */
+  private updateSmallNodeClasses(): void {
+    if (!this.container) return;
+    
+    // Update all error nodes to check if they should have small-error-node class
+    this.container.selectAll('.error-node').each((d: any, i: number, nodes: any[]) => {
+      const nodeElement = d3.select(nodes[i]);
+      const isSmall = this.isSmallNode(d);
+      
+      if (isSmall) {
+        // Add small-error-node class if not present
+        if (!nodeElement.classed('small-error-node')) {
+          nodeElement.classed('small-error-node', true);
+        }
+      } else {
+        // Remove small-error-node class if present
+        if (nodeElement.classed('small-error-node')) {
+          nodeElement.classed('small-error-node', false);
+        }
+      }
+    });
+  }
+
   private isErrorGroup(group: {name: string}): boolean {
     const overlappingGroups = this.currentLayout.overlappingGroups;
     if (!overlappingGroups) {
@@ -386,6 +440,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         this.container.attr('transform', d3.event.transform);
         // Update zoom control states when zoom changes
         this.updateZoomControlStates();
+        // Update small node classes based on new zoom level
+        this.updateSmallNodeClasses();
       });
 
     this.svg.call(this.zoomBehavior);
@@ -1343,7 +1399,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .enter()
       .append("g")
       .attr("class", (d: any) => {
-        return this.isErrorNode(d) ? "error-node" : "node";
+        const baseClass = this.isErrorNode(d) ? "error-node" : "node";
+        if (this.isErrorNode(d) && this.isSmallNode(d)) {
+          return baseClass + " small-error-node";
+        }
+        return baseClass;
       })
       .call(nodeDrag)
       .on('mousedown.inputmode', (d: any) => {
@@ -2949,9 +3009,27 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         animation: dash 1s linear infinite;
       }
 
+      /* Enhanced visibility for small error nodes */
+      .small-error-node rect {
+        stroke-width: 4px !important; /* Thicker stroke for visibility */
+        stroke-dasharray: 8 4 !important; /* Larger dash pattern */
+        animation: dash 1s linear infinite, pulse-bg 2s ease-in-out infinite !important;
+        fill: rgba(225, 112, 46, 0.46) !important; /* Light reddish background */
+      }
+
       @keyframes dash {
         to {
           stroke-dashoffset: -10;
+        }
+      }
+
+      /* Pulsing background animation for small error nodes */
+      @keyframes pulse-bg {
+        0%, 100% { 
+          fill-opacity: 0.15; 
+        }
+        50% { 
+          fill-opacity: 0.55; 
         }
       }
       
