@@ -169,6 +169,25 @@ export class CyclicOrientationConstraint extends ConstraintOperation {
     }
 }
 
+export type AlignmentDirection = "horizontal" | "vertical";
+
+export class AlignmentConstraint extends ConstraintOperation {
+    direction : AlignmentDirection;
+
+    constructor(direction: AlignmentDirection, selector: string) {
+        super(selector);
+        this.direction = direction;
+    }
+
+    override inconsistencyMessage(): string {
+        return `Alignment constraint with direction [${this.direction}] with selector <code>${this.selector}</code> is inconsistent.`;  
+    }
+
+    override toHTML(): string {
+        return `Alignment constraint with direction [${this.direction}] and selector <code>${this.selector}</code>`;
+    }
+}
+
 
 // And directive operations (TODO: THESE ALSO NEED TO BE SELECTORS!)
 
@@ -228,6 +247,7 @@ interface ConstraintsBlock
         relative: RelativeOrientationConstraint[];
         cyclic: CyclicOrientationConstraint[];
     };
+    alignment: AlignmentConstraint[];
     grouping : {
         byfield : GroupByField[];
         byselector : GroupBySelector[];
@@ -266,6 +286,7 @@ function DEFAULT_LAYOUT() : LayoutSpec
                 relative: [] as RelativeOrientationConstraint[],
                 cyclic: [] as CyclicOrientationConstraint[]
             },
+            alignment: [] as AlignmentConstraint[],
             grouping : {
                 byfield : [] as GroupByField[],
                 byselector : [] as GroupBySelector[]
@@ -469,11 +490,34 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
             return new GroupBySelector(c.group.selector, c.group.name);
         });
 
+    let alignmentConstraints: AlignmentConstraint[] = typedConstraints.filter(c => c.align)
+        .map(c => {
+            if(!c.align.selector) {
+                throw new Error("Alignment constraint must have a selector");
+            }
+
+            if(!c.align.direction) {
+                throw new Error("Alignment constraint must have a direction");
+            }
+
+            const direction = Array.isArray(c.align.direction) ? c.align.direction[0] : c.align.direction;
+            
+            if(direction !== "horizontal" && direction !== "vertical") {
+                throw new Error("Alignment constraint direction must be 'horizontal' or 'vertical'");
+            }
+
+            return new AlignmentConstraint(
+                direction as AlignmentDirection,
+                c.align.selector
+            );
+        });
+
     return {
         orientation: {
             relative: relativeOrientationConstraints,
             cyclic: cyclicConstraints
         },
+        alignment: alignmentConstraints,
         grouping: {
             byfield: byfield,
             byselector: byselector

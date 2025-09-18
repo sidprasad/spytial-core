@@ -48,6 +48,9 @@ export function generateLayoutSpecYaml(
         if (type === "orientation") {
             return "orientation";
         }
+        if (type === "align") {
+            return "align";
+        }
         if (type === "groupfield" || type === "groupselector") {
             return "group";
         }

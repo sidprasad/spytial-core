@@ -75,7 +75,7 @@ export function parseLayoutSpecToData(yamlString: string): {
         const type = Object.keys(constraint)[0]; // Get the constraint type
         const params = constraint[type]; // Get the parameters for the constraint
 
-        if (type === "cyclic" || type === "orientation") {
+        if (type === "cyclic" || type === "orientation" || type === "align") {
             return type;
         }
         if (type === "group") {
