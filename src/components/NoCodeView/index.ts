@@ -1,4 +1,5 @@
 // Export all selector components
+export { AlignmentSelector } from './Selectors/AlignmentSelector';
 export { AttributeSelector } from './Selectors/AttributeSelector';
 export { ColorAtomSelector } from './Selectors/ColorAtomSelector';
 export { ColorEdgeSelector } from './Selectors/ColorEdgeSelector';
