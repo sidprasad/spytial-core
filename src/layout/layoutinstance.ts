@@ -1242,9 +1242,12 @@ export class LayoutInstance {
                 let targetNodeId = tuple[1];
 
                 directions.forEach((direction) => {
-                    // Only add alignment edge if enabled AND edge doesn't already exist in the graph
-                    const edgeExists = g.hasEdge(sourceNodeId, targetNodeId) || g.hasEdge(targetNodeId, sourceNodeId);
-                    if (direction.startsWith("directly") && this.addAlignmentEdges && !edgeExists) {
+                    // Add alignment edge for ALL orientation constraints if enabled AND edge doesn't already exist in the graph
+                    const hasDirectEdge = g.inEdges(sourceNodeId)?.some(e => e.v === targetNodeId) || 
+                                         g.outEdges(sourceNodeId)?.some(e => e.w === targetNodeId) ||
+                                         g.inEdges(targetNodeId)?.some(e => e.v === sourceNodeId) || 
+                                         g.outEdges(targetNodeId)?.some(e => e.w === sourceNodeId);
+                    if (this.addAlignmentEdges && !hasDirectEdge) {
                         const alignmentEdgeLabel = `_alignment_${sourceNodeId}_${targetNodeId}_`;
                         g.setEdge(sourceNodeId, targetNodeId, alignmentEdgeLabel, alignmentEdgeLabel);
                     }
@@ -1304,6 +1307,16 @@ export class LayoutInstance {
             selectedTuples.forEach((tuple) => {
                 let sourceNodeId = tuple[0];
                 let targetNodeId = tuple[1];
+
+                // Add alignment edge for align constraints if enabled AND edge doesn't already exist in the graph
+                const hasDirectEdge = g.inEdges(sourceNodeId)?.some(e => e.v === targetNodeId) || 
+                                     g.outEdges(sourceNodeId)?.some(e => e.w === targetNodeId) ||
+                                     g.inEdges(targetNodeId)?.some(e => e.v === sourceNodeId) || 
+                                     g.outEdges(targetNodeId)?.some(e => e.w === sourceNodeId);
+                if (this.addAlignmentEdges && !hasDirectEdge) {
+                    const alignmentEdgeLabel = `_alignment_${sourceNodeId}_${targetNodeId}_`;
+                    g.setEdge(sourceNodeId, targetNodeId, alignmentEdgeLabel, alignmentEdgeLabel);
+                }
 
                 if (direction === "horizontal") {
                     // Horizontal alignment means same Y coordinate
