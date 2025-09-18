@@ -19,6 +19,22 @@ const jsonData: IJsonDataInstance = {
   ]
 };
 
+const jsonDataDisconnected: IJsonDataInstance = {
+  atoms: [
+    { id: 'A', type: 'Type1', label: 'A' },
+    { id: 'B', type: 'Type1', label: 'B' },
+    { id: 'C', type: 'Type1', label: 'C' }
+  ],
+  relations: [
+    {
+      id: 'r',
+      name: 'r',
+      types: ['Type1', 'Type1'],
+      tuples: [ { atoms: ['A', 'B'], types: ['Type1', 'Type1'] } ]
+    }
+  ]
+};
+
 const layoutSpecStr = `
 constraints:
   - orientation:
@@ -27,7 +43,16 @@ constraints:
         - right
 `;
 
+const layoutSpecDisconnected = `
+constraints:
+  - orientation:
+      selector: A->C
+      directions:
+        - right
+`;
+
 const layoutSpec = parseLayoutSpec(layoutSpecStr);
+const layoutSpecDisconnectedNodes = parseLayoutSpec(layoutSpecDisconnected);
 
 function createEvaluator(instance: JSONDataInstance) {
   const evaluator = new SGraphQueryEvaluator();
@@ -44,8 +69,74 @@ describe('LayoutInstance', () => {
     const { layout } = layoutInstance.generateLayout(instance, {});
 
     expect(layout.nodes).toHaveLength(2);
-    expect(layout.edges).toHaveLength(1);
+    expect(layout.edges).toHaveLength(1); // Only the original relation edge, no alignment edge because they're already connected
     expect(layout.constraints.length).toBeGreaterThan(0);
+  });
+
+  it('adds alignment edges for disconnected nodes with orientation constraints', () => {
+    const instance = new JSONDataInstance(jsonDataDisconnected);
+    const evaluator = createEvaluator(instance);
+
+    const layoutInstance = new LayoutInstance(layoutSpecDisconnectedNodes, evaluator, 0, true);
+    const { layout } = layoutInstance.generateLayout(instance, {});
+
+    expect(layout.nodes).toHaveLength(3);
+    expect(layout.edges).toHaveLength(2); // Original relation edge A->B + alignment edge A->C
+    expect(layout.constraints.length).toBeGreaterThan(0);
+
+    // Check that we have both the original edge and the alignment edge
+    const edgeLabels = layout.edges.map(e => e.label);
+    expect(edgeLabels).toContain('r'); // Original relation
+    expect(edgeLabels).toContain('_alignment_A_C_'); // Added alignment edge
+  });
+
+  it('adds alignment edges for align constraints on disconnected nodes', () => {
+    const alignConstraintData: IJsonDataInstance = {
+      atoms: [
+        { id: 'A', type: 'Type1', label: 'A' },
+        { id: 'B', type: 'Type1', label: 'B' },
+        { id: 'C', type: 'Type1', label: 'C' }
+      ],
+      relations: []
+    };
+
+    const alignConstraintSpec = `
+constraints:
+  - align:
+      selector: A->B
+      direction: horizontal
+`;
+
+    const instance = new JSONDataInstance(alignConstraintData);
+    const evaluator = createEvaluator(instance);
+    const alignLayoutSpec = parseLayoutSpec(alignConstraintSpec);
+
+    const layoutInstance = new LayoutInstance(alignLayoutSpec, evaluator, 0, true);
+    const { layout } = layoutInstance.generateLayout(instance, {});
+
+    expect(layout.nodes).toHaveLength(3);
+    expect(layout.edges).toHaveLength(1); // Only the alignment edge A->B
+    expect(layout.constraints.length).toBeGreaterThan(0);
+
+    // Check that we have the alignment edge
+    const edgeLabels = layout.edges.map(e => e.label);
+    expect(edgeLabels).toContain('_alignment_A_B_'); // Added alignment edge
+  });
+
+  it('does not add alignment edges when addAlignmentEdges is false', () => {
+    const instance = new JSONDataInstance(jsonDataDisconnected);
+    const evaluator = createEvaluator(instance);
+
+    const layoutInstance = new LayoutInstance(layoutSpecDisconnectedNodes, evaluator, 0, false);
+    const { layout } = layoutInstance.generateLayout(instance, {});
+
+    expect(layout.nodes).toHaveLength(3);
+    expect(layout.edges).toHaveLength(1); // Only the original relation edge A->B
+    expect(layout.constraints.length).toBeGreaterThan(0);
+
+    // Should not have alignment edge
+    const edgeLabels = layout.edges.map(e => e.label);
+    expect(edgeLabels).not.toContain('_alignment_A_C_');
   });
 });
 

@@ -1311,9 +1311,8 @@ export class LayoutInstance {
                 let targetNodeId = tuple[1];
 
                 directions.forEach((direction) => {
-                    // Only add alignment edge if enabled AND edge doesn't already exist in the graph
-                    const edgeExists = g.hasEdge(sourceNodeId, targetNodeId) || g.hasEdge(targetNodeId, sourceNodeId);
-                    if (direction.startsWith("directly") && this.addAlignmentEdges && !edgeExists) {
+                    // Add alignment edge for ALL orientation constraints if enabled AND edge doesn't already exist in the graph
+                    if (this.addAlignmentEdges && !this.hasDirectEdgeBetween(g, sourceNodeId, targetNodeId)) {
                         const alignmentEdgeLabel = `_alignment_${sourceNodeId}_${targetNodeId}_`;
                         g.setEdge(sourceNodeId, targetNodeId, alignmentEdgeLabel, alignmentEdgeLabel);
                     }
@@ -1374,6 +1373,12 @@ export class LayoutInstance {
                 let sourceNodeId = tuple[0];
                 let targetNodeId = tuple[1];
 
+                // Add alignment edge for align constraints if enabled AND edge doesn't already exist in the graph
+                if (this.addAlignmentEdges && !this.hasDirectEdgeBetween(g, sourceNodeId, targetNodeId)) {
+                    const alignmentEdgeLabel = `_alignment_${sourceNodeId}_${targetNodeId}_`;
+                    g.setEdge(sourceNodeId, targetNodeId, alignmentEdgeLabel, alignmentEdgeLabel);
+                }
+
                 if (direction === "horizontal") {
                     // Horizontal alignment means same Y coordinate
                     constraints.push(this.ensureSameYConstraint(sourceNodeId, targetNodeId, layoutNodes, c));
@@ -1389,6 +1394,54 @@ export class LayoutInstance {
 
 
 
+
+    /**
+     * Checks if there's already a direct edge (bidirectional) between two nodes in the graph.
+     * @param g - The graph to check
+     * @param sourceNodeId - First node ID
+     * @param targetNodeId - Second node ID
+     * @returns true if there's already an edge between the nodes
+     */
+     private hasDirectEdgeBetween(g: Graph, sourceNodeId: string, targetNodeId: string): { direct: boolean; connected: boolean } {
+
+        // Direct edge check (either direction). Prefer graphlib.hasEdge if available.
+        const direct =
+            (typeof (g as any).hasEdge === 'function' && ((g as any).hasEdge(sourceNodeId, targetNodeId) || (g as any).hasEdge(targetNodeId, sourceNodeId)))
+            ||
+            // fallback to scanning in/out edges (handles multi-edges)
+            ((g.inEdges(sourceNodeId) || []).some(e => e.v === targetNodeId) ||
+             (g.outEdges(sourceNodeId) || []).some(e => e.w === targetNodeId) ||
+             (g.inEdges(targetNodeId) || []).some(e => e.v === sourceNodeId) ||
+             (g.outEdges(targetNodeId) || []).some(e => e.w === sourceNodeId));
+
+        if(direct) {
+            return direct;
+        }
+
+        // Connected check: BFS treating graph as undirected (follow predecessors and successors)
+        const visited = new Set<string>();
+        const queue: string[] = [sourceNodeId];
+        let connected = false;
+
+        while (queue.length > 0) {
+            const cur = queue.shift()!;
+            if (cur === targetNodeId) {
+                connected = true;
+                break;
+            }
+            if (visited.has(cur)) continue;
+            visited.add(cur);
+
+            // neighbors: successors + predecessors (graphlib provides both)
+            const succ = g.successors(cur) || [];
+            const pred = g.predecessors(cur) || [];
+            for (const n of succ.concat(pred)) {
+                if (!visited.has(n)) queue.push(n);
+            }
+        }
+
+        return direct;
+    }
 
     private getDisconnectedNodes(g: Graph): string[] {
         let inNodes = g.edges().map(edge => edge.w);
