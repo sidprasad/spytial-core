@@ -3,6 +3,7 @@ import * as yaml from 'js-yaml';
 export type RelativeDirection = "above" | "below" | "left" | "right" | "directlyAbove" | "directlyBelow" | "directlyLeft" | "directlyRight";
 export type RotationDirection = "clockwise" | "counterclockwise";
 export type ClusterTarget = "domain" | "range";
+export type AlignDirection = "horizontal" | "vertical";
 
 
 
@@ -99,6 +100,28 @@ export class RelativeOrientationConstraint extends ConstraintOperation {
 
         let directions = this.directions.join(", ");
         return `OrientationConstraint with directions [${directions}] and selector <code>${this.selector}</code>`;
+    }
+}
+
+export class AlignConstraint extends ConstraintOperation {
+    direction: AlignDirection;
+
+    constructor(direction: AlignDirection, selector: string) {
+        super(selector);
+        this.direction = direction;
+    }
+    
+    override isInternallyConsistent(): boolean {
+        // Direction must be horizontal or vertical
+        return this.direction === "horizontal" || this.direction === "vertical";
+    }
+
+    override inconsistencyMessage(): string {
+        return `Align Constraint with direction [${this.direction}] and selector <code>${this.selector}</code> is internally inconsistent.`;  
+    }
+
+    override toHTML(): string {
+        return `AlignConstraint with direction [${this.direction}] and selector <code>${this.selector}</code>`;
     }
 }
 
@@ -228,6 +251,7 @@ interface ConstraintsBlock
         relative: RelativeOrientationConstraint[];
         cyclic: CyclicOrientationConstraint[];
     };
+    alignment: AlignConstraint[];
     grouping : {
         byfield : GroupByField[];
         byselector : GroupBySelector[];
@@ -266,6 +290,7 @@ function DEFAULT_LAYOUT() : LayoutSpec
                 relative: [] as RelativeOrientationConstraint[],
                 cyclic: [] as CyclicOrientationConstraint[]
             },
+            alignment: [] as AlignConstraint[],
             grouping : {
                 byfield : [] as GroupByField[],
                 byselector : [] as GroupBySelector[]
@@ -469,11 +494,34 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
             return new GroupBySelector(c.group.selector, c.group.name);
         });
 
+    let alignConstraints: AlignConstraint[] = typedConstraints.filter(c => c.align)
+        .map(c => {
+            if(!c.align.selector) {
+                throw new Error("Align constraint must have a selector");
+            }
+            
+            if(!c.align.direction) {
+                throw new Error("Align constraint must have a direction");
+            }
+
+            let alignConstraint = new AlignConstraint(
+                c.align.direction,
+                c.align.selector
+            );
+            
+            if(!alignConstraint.isInternallyConsistent()) {
+                throw new Error(alignConstraint.inconsistencyMessage());
+            }
+            
+            return alignConstraint;
+        });
+
     return {
         orientation: {
             relative: relativeOrientationConstraints,
             cyclic: cyclicConstraints
         },
+        alignment: alignConstraints,
         grouping: {
             byfield: byfield,
             byselector: byselector
