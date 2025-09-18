@@ -312,7 +312,7 @@ export class LayoutInstance {
                 for (var t of selectedTwoples) {
                     let groupOn = t[0];
                     let addToGroup = t[1];
-
+                    // TODO: SHOULD THIS BE THE GROUP ON ID?
                     let groupName = `${gc.name}[${groupOn}]`;
 
                     // Check if the group already exists
@@ -380,6 +380,12 @@ export class LayoutInstance {
 
                     // Use the node's label if available, fallback to the node ID
                     let groupOnLabel = g.node(groupOn)?.label || groupOn;
+
+                    if (groupOnLabel !== groupOn) {
+                        groupOnLabel = groupOnLabel + ":" + groupOn;
+                    }
+
+
                     let groupName = `${gc.name}[${groupOnLabel}]`;
 
                     // Check if the group already exists
