@@ -159,7 +159,7 @@ export class GroupsBySelector extends ConstraintOperation{
 
     override toHTML(): string {
         let html = `GroupsBySelector with selector <pre>${this.selector}</pre> 
-        and base name <pre>${this.name}</pre>`;
+        and base group name <pre>${this.name}</pre>`;
         if (this.edgeName) {
             html += ` with edge name <pre>${this.edgeName}</pre>`;
         }

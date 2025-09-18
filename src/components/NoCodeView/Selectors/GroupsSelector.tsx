@@ -44,7 +44,7 @@ export const GroupsSelector: React.FC<GroupsSelectorProps> = (props: GroupsSelec
       </div>
       <div className="input-group">
         <div className="input-group-prepend">
-          <span className="input-group-text">Base Name</span>
+          <span className="input-group-text">Name</span>
         </div>
         <input
           type="text"
