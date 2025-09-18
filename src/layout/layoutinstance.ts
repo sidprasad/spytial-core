@@ -6,13 +6,13 @@ import { PositionalConstraintError, GroupOverlapError, isPositionalConstraintErr
 import {
     LayoutNode, LayoutEdge, LayoutConstraint, InstanceLayout,
     LeftConstraint, TopConstraint, AlignmentConstraint, LayoutGroup,
-    ImplicitConstraint
+    ImplicitConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint
 } from './interfaces';
 
 import {
     LayoutSpec,
     RelativeOrientationConstraint, CyclicOrientationConstraint,
-    GroupByField, GroupBySelector, GroupsBySelector
+    GroupByField, GroupBySelector, GroupsBySelector, AlignConstraint
 } from './layoutspec';
 
 
@@ -22,6 +22,37 @@ import { type ConstraintError, ConstraintValidator } from './constraint-validato
 const UNIVERSAL_TYPE = "univ";
 
 
+// Should create a NEW list when it returns.
+function removeDuplicateConstraints(constraints: LayoutConstraint[]): LayoutConstraint[] {
+    const uniqueConstraints: LayoutConstraint[] = [];
+    const seen = new Set<string>();
+    
+    for (const constraint of constraints) {
+        let key: string;
+        
+        if (isLeftConstraint(constraint)) {
+            // For left constraints: left_node_id|right_node_id|minDistance
+            key = `left|${constraint.left.id}|${constraint.right.id}|${constraint.minDistance}`;
+        } else if (isTopConstraint(constraint)) {
+            // For top constraints: top_node_id|bottom_node_id|minDistance
+            key = `top|${constraint.top.id}|${constraint.bottom.id}|${constraint.minDistance}`;
+        } else if (isAlignmentConstraint(constraint)) {
+            // For alignment constraints: axis|node1_id|node2_id (order normalized)
+            const [node1, node2] = [constraint.node1.id, constraint.node2.id].sort();
+            key = `align|${constraint.axis}|${node1}|${node2}`;
+        } else {
+            // Fallback for unknown constraint types - include all in case they're different
+            key = `unknown|${JSON.stringify(constraint)}`;
+        }
+        
+        if (!seen.has(key)) {
+            seen.add(key);
+            uniqueConstraints.push(constraint);
+        }
+    }
+    
+    return uniqueConstraints;
+}
 
 class LayoutNodePath {
     constructor(
@@ -742,6 +773,13 @@ export class LayoutInstance {
 
         ///////////// CONSTRAINTS ////////////
         let constraints: LayoutConstraint[] = this.applyRelativeOrientationConstraints(layoutNodes, g);
+        constraints = constraints.concat(this.applyAlignConstraints(layoutNodes, g));
+
+        // THERE MAY BE SOME ISSUES DUE TO DUPLICATE CONSTRAINTS HERE :(
+        // HOWEVER, MAYBE THATS OK?
+        // TODO: Explore what it would mean to remove duplicates here.
+        constraints = removeDuplicateConstraints(constraints);
+
 
         let layoutEdges: LayoutEdge[] = g.edges().map((edge) => {
 
@@ -805,6 +843,8 @@ export class LayoutInstance {
 
             throw nonCyclicConstraintError;
         }
+
+
         // And updating constraints, since the validator may add constraints.
         // (IN particular these would be non-overlap constraints for spacing in groups.)
         // TODO: However, this introduces
@@ -1286,6 +1326,40 @@ export class LayoutInstance {
         return constraints;
     }
 
+    /**
+     * Applies the align constraints to the layout nodes.
+     * @param layoutNodes - The layout nodes to which the constraints will be applied.
+     * @returns An array of layout constraints.
+     */
+    applyAlignConstraints(layoutNodes: LayoutNode[], g: Graph): LayoutConstraint[] {
+        let constraints: LayoutConstraint[] = [];
+        let alignConstraints = this._layoutSpec.constraints.alignment;
+
+        alignConstraints.forEach((c: AlignConstraint) => {
+            let direction = c.direction;
+            let selector = c.selector;
+
+            let selectorRes = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
+            let selectedTuples: string[][] = selectorRes.selectedTwoples();
+
+            // For each tuple, apply the alignment constraint
+            selectedTuples.forEach((tuple) => {
+                let sourceNodeId = tuple[0];
+                let targetNodeId = tuple[1];
+
+                if (direction === "horizontal") {
+                    // Horizontal alignment means same Y coordinate
+                    constraints.push(this.ensureSameYConstraint(sourceNodeId, targetNodeId, layoutNodes, c));
+                } else if (direction === "vertical") {
+                    // Vertical alignment means same X coordinate
+                    constraints.push(this.ensureSameXConstraint(sourceNodeId, targetNodeId, layoutNodes, c));
+                }
+            });
+        });
+
+        return constraints;
+    }
+
 
 
 
@@ -1326,7 +1400,7 @@ export class LayoutInstance {
         return { top: top, bottom: bottom, minDistance: minDistance, sourceConstraint: sourceConstraint };
     }
 
-    private ensureSameYConstraint(node1Id: string, node2Id: string, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint): AlignmentConstraint {
+    private ensureSameYConstraint(node1Id: string, node2Id: string, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint): AlignmentConstraint {
 
         let node1 = this.getNodeFromId(node1Id, layoutNodes);
         let node2 = this.getNodeFromId(node2Id, layoutNodes);
@@ -1334,7 +1408,7 @@ export class LayoutInstance {
         return { axis: "y", node1: node1, node2: node2, sourceConstraint: sourceConstraint };
     }
 
-    private ensureSameXConstraint(node1Id: string, node2Id: string, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | ImplicitConstraint | CyclicOrientationConstraint): AlignmentConstraint {
+    private ensureSameXConstraint(node1Id: string, node2Id: string, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint): AlignmentConstraint {
 
         let node1 = this.getNodeFromId(node1Id, layoutNodes);
         let node2 = this.getNodeFromId(node2Id, layoutNodes);

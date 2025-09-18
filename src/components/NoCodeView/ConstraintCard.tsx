@@ -1,7 +1,8 @@
 import React, { useCallback, useState } from 'react';
-import { ORIENTATION_DESCRIPTION, CYCLIC_DESCRIPTION, GROUPING_FIELD_DESCRIPTION, GROUPING_SELECTOR_DESCRIPTION, GROUPS_DESCRIPTION } from './constants';
+import { ORIENTATION_DESCRIPTION, CYCLIC_DESCRIPTION, ALIGN_DESCRIPTION, GROUPING_FIELD_DESCRIPTION, GROUPING_SELECTOR_DESCRIPTION, GROUPS_DESCRIPTION } from './constants';
 import { CyclicSelector, 
     OrientationSelector, 
+    AlignSelector,
     GroupByFieldSelector, 
     GroupBySelectorSelector,
     GroupsSelector,
@@ -32,6 +33,7 @@ const ConstraintCard = (props: ConstraintCardProps) => {
     const constraintsToSelectorComponentMap: Record<ConstraintType, React.JSX.Element> = {
         cyclic: <CyclicSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>,
         orientation: <OrientationSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>,
+        align: <AlignSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>,
         groupfield: <GroupByFieldSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>,
         groupselector: <GroupBySelectorSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>,
         groups: <GroupsSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>,
@@ -77,6 +79,7 @@ const ConstraintCard = (props: ConstraintCardProps) => {
                 <select onChange={ updateFields } value={ props.constraintData.type }>
                     <option value="orientation" title={ORIENTATION_DESCRIPTION}>Orientation</option>
                     <option value="cyclic" title={CYCLIC_DESCRIPTION}>Cyclic</option>
+                    <option value="align" title={ALIGN_DESCRIPTION}>Align</option>
                     <option value="groupfield" title={GROUPING_FIELD_DESCRIPTION}>Group by field</option>
                     <option value="groupselector"  title={GROUPING_SELECTOR_DESCRIPTION}>Group by selector</option>
                     <option value="groups" title={GROUPS_DESCRIPTION}>Groups (binary selector)</option>

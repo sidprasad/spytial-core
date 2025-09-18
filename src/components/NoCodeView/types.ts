@@ -4,7 +4,8 @@
  * 
  * @public
  */
-export type ConstraintType = 'orientation' | 'cyclic' | 'groupfield' | 'groupselector' | 'groups';
+export type ConstraintType = 'orientation' | 'cyclic' | 'align' | 'groupfield' | 'groupselector' | 'groups';
+
 
 /**
  * Directive types supported by the CND layout system
