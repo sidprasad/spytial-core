@@ -1942,7 +1942,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       })
       .attr('y', (d: any) => {
         if (!d.bounds) return 0;
-        return d.bounds.y + 12;
+        return d.bounds.y + 5; // Slight padding from top
       })
       .attr('text-anchor', 'middle')
       .lower();
