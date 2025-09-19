@@ -9,41 +9,40 @@ describe('WebCola Enhanced Edge Length Computation', () => {
   beforeEach(() => {
     translator = new WebColaTranslator();
     
-    // Create mock nodes with different content characteristics
-    const node1: LayoutNode = {
-      id: 'node1',
-      label: 'Short',
+    // Create mock nodes with different actual dimensions
+    const smallNode: LayoutNode = {
+      id: 'small',
+      label: 'Small',
       color: '#000000',
-      width: 100,
-      height: 60,
+      width: 80,
+      height: 50,
       mostSpecificType: 'type1',
       types: ['type1'],
       showLabels: true,
       attributes: {}
     };
 
-    const node2: LayoutNode = {
-      id: 'node2', 
-      label: 'Very Long Node Label That Should Affect Spacing',
+    const largeNode: LayoutNode = {
+      id: 'large', 
+      label: 'Large Node',
       color: '#000000',
-      width: 100,
-      height: 60,
+      width: 200,
+      height: 120,
       mostSpecificType: 'type2',
       types: ['type2'],
       showLabels: true,
       attributes: {
         'property1': ['value1'],
-        'property2': ['value2', 'value3'],
-        'longPropertyName': ['very long property value that should affect spacing']
+        'property2': ['value2']
       }
     };
 
-    const node3: LayoutNode = {
-      id: 'node3',
-      label: 'Medium Label',
+    const mediumNode: LayoutNode = {
+      id: 'medium',
+      label: 'Medium',
       color: '#000000', 
-      width: 100,
-      height: 60,
+      width: 120,
+      height: 80,
       mostSpecificType: 'type3',
       types: ['type3'],
       showLabels: true,
@@ -53,8 +52,8 @@ describe('WebCola Enhanced Edge Length Computation', () => {
     };
 
     const edge1: LayoutEdge = {
-      source: node1,
-      target: node2,
+      source: smallNode,
+      target: largeNode,
       label: 'edge1',
       relationName: 'relation1',
       id: 'edge1',
@@ -63,98 +62,138 @@ describe('WebCola Enhanced Edge Length Computation', () => {
 
     const leftConstraint: LeftConstraint = {
       sourceConstraint: {} as any,
-      left: node1,
-      right: node2,
+      left: smallNode,
+      right: largeNode,
       minDistance: 20
     };
 
     const topConstraint: TopConstraint = {
       sourceConstraint: {} as any,
-      top: node1,
-      bottom: node3,
+      top: smallNode,
+      bottom: mediumNode,
       minDistance: 15
     };
 
     mockInstanceLayout = {
-      nodes: [node1, node2, node3],
+      nodes: [smallNode, largeNode, mediumNode],
       edges: [edge1],
       constraints: [leftConstraint, topConstraint],
       groups: []
     };
   });
 
-  it('should calculate better separation distances for nodes with long labels', async () => {
+  it('should calculate better separation distances based on actual node dimensions', async () => {
     const webcolaLayout = await translator.translate(mockInstanceLayout, 800, 600);
     
-    // Find the constraint that separates the short-label node from the long-label node
+    // Find the constraint that separates the small node from the large node
     const separationConstraints = webcolaLayout.constraints.filter(c => c.type === 'separation');
     expect(separationConstraints.length).toBeGreaterThan(0);
 
-    // The constraint involving the long-label node should have a larger gap
+    // The constraint involving the large node should have a larger gap than basic calculation
     const horizontalConstraint = separationConstraints.find(c => c.axis === 'x');
     expect(horizontalConstraint).toBeDefined();
-    expect(horizontalConstraint!.gap).toBeGreaterThan(100); // Should be more than basic node width
+    
+    // Should use actual widths: (80/2) + (200/2) + 20 + adaptive padding = 40 + 100 + 20 + padding > 160
+    expect(horizontalConstraint!.gap).toBeGreaterThan(160);
   });
 
-  it('should calculate better separation distances for nodes with many attributes', async () => {
-    const webcolaLayout = await translator.translate(mockInstanceLayout, 800, 600);
-    
-    const separationConstraints = webcolaLayout.constraints.filter(c => c.type === 'separation');
-    const horizontalConstraint = separationConstraints.find(c => c.axis === 'x');
-    
-    // Should account for dense attribute content
-    expect(horizontalConstraint!.gap).toBeGreaterThan(120);
-  });
-
-  it('should adapt link lengths based on node content', () => {
+  it('should adapt link lengths based on actual node dimensions and graph density', () => {
     // This is tested indirectly through the WebColaCnDGraph component
-    // The linkLength should be computed dynamically based on node content
+    // The linkLength should be computed based on actual node dimensions
     expect(mockInstanceLayout.nodes.length).toBe(3);
     expect(mockInstanceLayout.constraints.length).toBe(2);
   });
 
-  it('should handle nodes with no attributes gracefully', async () => {
-    // Create a minimal layout with basic nodes
-    const simpleNode1: LayoutNode = {
-      id: 'simple1',
-      label: 'A',
+  it('should handle nodes with standard dimensions gracefully', async () => {
+    // Create a layout with standard-sized nodes
+    const standardNode1: LayoutNode = {
+      id: 'std1',
+      label: 'Standard A',
       color: '#000000',
-      width: 50,
-      height: 30,
-      mostSpecificType: 'simple',
-      types: ['simple'],
+      width: 100,
+      height: 60,
+      mostSpecificType: 'standard',
+      types: ['standard'],
       showLabels: true
     };
 
-    const simpleNode2: LayoutNode = {
-      id: 'simple2',
-      label: 'B', 
+    const standardNode2: LayoutNode = {
+      id: 'std2',
+      label: 'Standard B', 
       color: '#000000',
-      width: 50,
-      height: 30,
-      mostSpecificType: 'simple',
-      types: ['simple'],
+      width: 100,
+      height: 60,
+      mostSpecificType: 'standard',
+      types: ['standard'],
       showLabels: true
     };
 
-    const simpleConstraint: LeftConstraint = {
+    const standardConstraint: LeftConstraint = {
       sourceConstraint: {} as any,
-      left: simpleNode1,
-      right: simpleNode2,
+      left: standardNode1,
+      right: standardNode2,
       minDistance: 10
     };
 
-    const simpleLayout: InstanceLayout = {
-      nodes: [simpleNode1, simpleNode2],
+    const standardLayout: InstanceLayout = {
+      nodes: [standardNode1, standardNode2],
       edges: [],
-      constraints: [simpleConstraint],
+      constraints: [standardConstraint],
       groups: []
     };
 
-    const webcolaLayout = await translator.translate(simpleLayout, 400, 300);
+    const webcolaLayout = await translator.translate(standardLayout, 400, 300);
     const separationConstraints = webcolaLayout.constraints.filter(c => c.type === 'separation'); 
     
     expect(separationConstraints.length).toBe(1);
-    expect(separationConstraints[0].gap).toBeGreaterThan(0);
+    // Should use: (100/2) + (100/2) + 10 + small adaptive padding = 110 + padding
+    expect(separationConstraints[0].gap).toBeGreaterThan(110);
+    expect(separationConstraints[0].gap).toBeLessThan(140); // reasonable upper bound
+  });
+
+  it('should provide larger separations for larger nodes', async () => {
+    // Test that larger nodes get more separation
+    const tinyNode: LayoutNode = {
+      id: 'tiny',
+      label: 'Tiny',
+      color: '#000000',
+      width: 60,
+      height: 40,
+      mostSpecificType: 'tiny',
+      types: ['tiny'],
+      showLabels: true
+    };
+
+    const hugeNode: LayoutNode = {
+      id: 'huge',
+      label: 'Huge',
+      color: '#000000',
+      width: 300,
+      height: 200,
+      mostSpecificType: 'huge',
+      types: ['huge'],
+      showLabels: true
+    };
+
+    const constraint: LeftConstraint = {
+      sourceConstraint: {} as any,
+      left: tinyNode,
+      right: hugeNode,
+      minDistance: 10
+    };
+
+    const layout: InstanceLayout = {
+      nodes: [tinyNode, hugeNode],
+      edges: [],
+      constraints: [constraint],
+      groups: []
+    };
+
+    const webcolaLayout = await translator.translate(layout, 600, 400);
+    const separationConstraints = webcolaLayout.constraints.filter(c => c.type === 'separation');
+    
+    expect(separationConstraints.length).toBe(1);
+    // Should use: (60/2) + (300/2) + 10 + adaptive padding = 190 + padding
+    expect(separationConstraints[0].gap).toBeGreaterThan(190);
   });
 });
