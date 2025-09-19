@@ -6,7 +6,7 @@ import { PositionalConstraintError, GroupOverlapError, isPositionalConstraintErr
 import {
     LayoutNode, LayoutEdge, LayoutConstraint, InstanceLayout,
     LeftConstraint, TopConstraint, AlignmentConstraint, LayoutGroup,
-    ImplicitConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint
+    ImplicitConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, AttributeMetadata
 } from './interfaces';
 
 import {
@@ -223,6 +223,47 @@ export class LayoutInstance {
                 }
             } catch (error) {
                 console.warn(`Failed to evaluate attribute selector "${directive.selector}":`, error);
+                // Continue to next directive on error
+            }
+        }
+        
+        return false;
+    }
+
+    /**
+     * Check if a field is marked as prominent for specific atoms
+     */
+    isProminentAttribute(fieldId: string, sourceAtom?: string): boolean {
+        const matchingDirectives = this._layoutSpec.directives.attributes.filter(
+            (ad) => ad.field === fieldId && ad.prominent === true
+        );
+        
+        if (matchingDirectives.length === 0) {
+            return false;
+        }
+        
+        // If no atoms provided or no selector-based directives, use legacy behavior
+        if (!sourceAtom) {
+            return matchingDirectives.some(ad => !ad.selector);
+        }
+        
+        // Check selector-based directives
+        for (const directive of matchingDirectives) {
+            if (!directive.selector) {
+                // Legacy directive without selector matches any atoms
+                return true;
+            }
+            
+            try {
+                const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
+                const selectedAtoms = selectorResult.selectedAtoms();
+                
+                // Check if source atom is selected by the selector
+                if (selectedAtoms.includes(sourceAtom)) {
+                    return true;
+                }
+            } catch (error) {
+                console.warn(`Failed to evaluate prominent attribute selector "${directive.selector}":`, error);
                 // Continue to next directive on error
             }
         }
@@ -467,11 +508,11 @@ export class LayoutInstance {
     /**
      * Generates groups based on the specified graph.
      * @param g - The graph, which will be modified to remove the edges that are used to determine attributes.
-     * @returns A record of attributes
+     * @returns A record of attributes with metadata
      */
-    private generateAttributesAndRemoveEdges(g: Graph): Record<string, Record<string, string[]>> {
-        // Node : [] of attributes
-        let attributes: Record<string, Record<string, string[]>> = {};
+    private generateAttributesAndRemoveEdges(g: Graph): Record<string, Record<string, AttributeMetadata>> {
+        // Node : {} of attributes with metadata
+        let attributes: Record<string, Record<string, AttributeMetadata>> = {};
 
         let graphEdges = [...g.edges()];
         // Go through all edge labels in the graph
@@ -507,12 +548,23 @@ export class LayoutInstance {
                 let targetLabel = g.node(target)?.label || target; // Use the node's label or the node ID if no label exists.
 
                 let nodeAttributes = attributes[source] || {};
+                
+                // Check if this attribute should be prominent
+                const isProminent = this.isProminentAttribute(relName, sourceAtom);
 
                 if (!nodeAttributes[attributeKey]) {
-                    nodeAttributes[attributeKey] = [];
+                    nodeAttributes[attributeKey] = {
+                        values: [],
+                        prominent: isProminent
+                    };
                     attributes[source] = nodeAttributes;
                 }
-                nodeAttributes[attributeKey].push(targetLabel);
+                nodeAttributes[attributeKey].values.push(targetLabel);
+                
+                // Update prominence flag if any directive marks it as prominent
+                if (isProminent) {
+                    nodeAttributes[attributeKey].prominent = true;
+                }
 
                 // Now remove the edge from the graph
                 g.removeEdge(edge.v, edge.w, edgeId);

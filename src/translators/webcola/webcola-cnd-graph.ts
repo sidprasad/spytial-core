@@ -1793,29 +1793,54 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         // Handle attributes (show all that fit)
         const attributeEntries = Object.entries(attributes);
         if (attributeEntries.length > 0) {
+          // Sort attributes alphabetically by key
+          attributeEntries.sort(([a], [b]) => a.localeCompare(b));
+          
+          // Check if there are any prominent attributes
+          const hasProminentAttributes = attributeEntries.some(([_, attr]) => attr.prominent);
+          
           const remainingHeight = maxTextHeight - (mainLabelLines.length * lineHeight);
-          const attributeFontSize = Math.min(
-            mainLabelFontSize * 0.8, // Slightly smaller than main label
-            this.calculateOptimalFontSize(
-              "sample: value", // Sample attribute text for sizing
-              maxTextWidth,
-              remainingHeight / Math.max(1, attributeEntries.length),
-              'system-ui'
-            )
-          );
+          
+          // Calculate font sizes based on prominence
+          let prominentFontSize = mainLabelFontSize;
+          let regularAttributeFontSize = mainLabelFontSize * 0.8;
+          let adjustedMainLabelFontSize = mainLabelFontSize;
+          
+          if (hasProminentAttributes) {
+            // When prominent attributes exist, make main label smaller (same as regular attributes)
+            adjustedMainLabelFontSize = mainLabelFontSize * 0.8;
+            // Prominent attributes get the original main label size or larger
+            prominentFontSize = Math.max(mainLabelFontSize, mainLabelFontSize * 1.2);
+            regularAttributeFontSize = adjustedMainLabelFontSize;
+            
+            // Update main label font size for existing tspans
+            textElement.selectAll("tspan").style("font-size", `${adjustedMainLabelFontSize}px`);
+          }
           
           for (let i = 0; i < attributeEntries.length; i++) {
-            const [key, value] = attributeEntries[i];
-            const attributeText = `${key}: ${value}`;
-            const attributeLines = this.wrapText(attributeText, maxTextWidth, attributeFontSize);
+            const [key, attributeMetadata] = attributeEntries[i];
+            const values = attributeMetadata.values || [];
+            const isProminent = attributeMetadata.prominent;
+            
+            // Join multiple values with commas
+            const attributeText = `${key}: ${values.join(', ')}`;
+            
+            // Use prominent font size for prominent attributes, regular size otherwise
+            const fontSize = isProminent ? prominentFontSize : regularAttributeFontSize;
+            const attributeLines = this.wrapText(attributeText, maxTextWidth, fontSize);
             
             attributeLines.forEach((line, subLineIndex) => {
-              textElement
+              const tspan = textElement
                 .append("tspan")
                 .attr("x", 0)
-                .attr("dy", `${attributeFontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO}px`)
-                .style("font-size", `${attributeFontSize}px`)
+                .attr("dy", `${fontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO}px`)
+                .style("font-size", `${fontSize}px`)
                 .text(line);
+                
+              // Make prominent attributes bold
+              if (isProminent) {
+                tspan.style("font-weight", "bold");
+              }
             });
           }
         }

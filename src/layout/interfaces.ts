@@ -1,5 +1,10 @@
 import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint } from "./layoutspec";
 
+export interface AttributeMetadata {
+    values: string[];
+    prominent?: boolean;
+}
+
 export interface LayoutGroup {
     // The name of the group
     name : string;
@@ -19,7 +24,7 @@ export interface LayoutNode {
     label: string;
     color : string;
     groups?: string[];
-    attributes?: Record<string, string[]>;
+    attributes?: Record<string, AttributeMetadata>;
     icon? : string;
     width : number;
     height : number;
