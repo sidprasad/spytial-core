@@ -346,14 +346,66 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     return group.name.startsWith(WebColaCnDGraph.DISCONNECTED_NODE_PREFIX);
   }
 
-  private getScaledDetails(constraints: any[], scaleFactor: number = DEFAULT_SCALE_FACTOR) {
+  /**
+   * Computes adaptive link length based on actual node dimensions and graph density
+   */
+  private computeAdaptiveLinkLength(nodes: any[], scaleFactor: number): number {
+    if (!nodes || nodes.length === 0) {
+      return 150; // fallback
+    }
+
+    // Calculate average node dimensions using actual width/height
+    let totalWidth = 0;
+    let totalHeight = 0;
+    let validNodes = 0;
+
+    nodes.forEach(node => {
+      if (node && !this.isHiddenNode(node)) {
+        totalWidth += (node.width || 100);
+        totalHeight += (node.height || 60);
+        validNodes++;
+      }
+    });
+
+    if (validNodes === 0) {
+      return 150; // fallback
+    }
+
+    const avgWidth = totalWidth / validNodes;
+    const avgHeight = totalHeight / validNodes;
+    const avgNodeSize = Math.max(avgWidth, avgHeight);
+
+    // Base link length should be larger of: average node size + separation, or minimum separation
+    const baseSeparation = 50; // minimum separation between nodes
+    let baseLinkLength = Math.max(avgNodeSize + baseSeparation, 120);
+
+    // Apply density factor - more nodes = slightly tighter spacing to fit better
+    const densityFactor = Math.max(0.7, 1 - Math.log10(validNodes) * 0.1);
+    baseLinkLength *= densityFactor;
+
+    // Apply scale factor
     const adjustedScaleFactor = scaleFactor / 5;
-    const min_sep = 150;
-    const default_node_width = 100;
+    const scaledLinkLength = baseLinkLength / adjustedScaleFactor;
+
+    // Ensure reasonable bounds - prevent tiny edges and excessive spacing
+    return Math.max(60, Math.min(scaledLinkLength, 350));
+  }
+
+  private getScaledDetails(constraints: any[], scaleFactor: number = DEFAULT_SCALE_FACTOR, nodes?: any[]) {
+    const adjustedScaleFactor = scaleFactor / 5;
 
     let groupCompactness = WebColaCnDGraph.DEFAULT_GROUP_COMPACTNESS * adjustedScaleFactor;
 
-    let linkLength = (min_sep + default_node_width) / adjustedScaleFactor;
+    // Use adaptive link length calculation if nodes are available
+    let linkLength: number;
+    if (nodes && nodes.length > 0) {
+      linkLength = this.computeAdaptiveLinkLength(nodes, scaleFactor);
+    } else {
+      // Fallback to original calculation
+      const min_sep = 150;
+      const default_node_width = 100;
+      linkLength = (min_sep + default_node_width) / adjustedScaleFactor;
+    }
 
     /*
     For each constraint, if it is a separation constraint, adjust the distance by the scale factor.
@@ -1017,7 +1069,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
 
       // Get scaled constraints and link length
-      const { scaledConstraints, linkLength, groupCompactness } = this.getScaledDetails(webcolaLayout.constraints, DEFAULT_SCALE_FACTOR);
+      const { scaledConstraints, linkLength, groupCompactness } = this.getScaledDetails(webcolaLayout.constraints, DEFAULT_SCALE_FACTOR, webcolaLayout.nodes);
 
       // Create WebCola layout using d3adaptor
       const layout: Layout = cola.d3adaptor(d3)
@@ -1685,54 +1737,29 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         // Handle attributes (show all that fit)
         const attributeEntries = Object.entries(attributes);
         if (attributeEntries.length > 0) {
-          // Sort attributes alphabetically by key
-          attributeEntries.sort(([a], [b]) => a.localeCompare(b));
-          
-          // Check if there are any prominent attributes
-          const hasProminentAttributes = attributeEntries.some(([_, attr]) => attr.prominent);
-          
           const remainingHeight = maxTextHeight - (mainLabelLines.length * lineHeight);
-          
-          // Calculate font sizes based on prominence
-          let prominentFontSize = mainLabelFontSize;
-          let regularAttributeFontSize = mainLabelFontSize * 0.8;
-          let adjustedMainLabelFontSize = mainLabelFontSize;
-          
-          if (hasProminentAttributes) {
-            // When prominent attributes exist, make main label smaller (same as regular attributes)
-            adjustedMainLabelFontSize = mainLabelFontSize * 0.8;
-            // Prominent attributes get the original main label size or larger
-            prominentFontSize = Math.max(mainLabelFontSize, mainLabelFontSize * 1.2);
-            regularAttributeFontSize = adjustedMainLabelFontSize;
-            
-            // Update main label font size for existing tspans
-            textElement.selectAll("tspan").style("font-size", `${adjustedMainLabelFontSize}px`);
-          }
+          const attributeFontSize = Math.min(
+            mainLabelFontSize * 0.8, // Slightly smaller than main label
+            this.calculateOptimalFontSize(
+              "sample: value", // Sample attribute text for sizing
+              maxTextWidth,
+              remainingHeight / Math.max(1, attributeEntries.length),
+              'system-ui'
+            )
+          );
           
           for (let i = 0; i < attributeEntries.length; i++) {
-            const [key, attributeMetadata] = attributeEntries[i];
-            const values = attributeMetadata.values || [];
-            const isProminent = attributeMetadata.prominent;
-            
-            // Join multiple values with commas
-            const attributeText = `${key}: ${values.join(', ')}`;
-            
-            // Use prominent font size for prominent attributes, regular size otherwise
-            const fontSize = isProminent ? prominentFontSize : regularAttributeFontSize;
-            const attributeLines = this.wrapText(attributeText, maxTextWidth, fontSize);
+            const [key, value] = attributeEntries[i];
+            const attributeText = `${key}: ${value}`;
+            const attributeLines = this.wrapText(attributeText, maxTextWidth, attributeFontSize);
             
             attributeLines.forEach((line, subLineIndex) => {
-              const tspan = textElement
+              textElement
                 .append("tspan")
                 .attr("x", 0)
-                .attr("dy", `${fontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO}px`)
-                .style("font-size", `${fontSize}px`)
+                .attr("dy", `${attributeFontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO}px`)
+                .style("font-size", `${attributeFontSize}px`)
                 .text(line);
-                
-              // Make prominent attributes bold
-              if (isProminent) {
-                tspan.style("font-weight", "bold");
-              }
             });
           }
         }
