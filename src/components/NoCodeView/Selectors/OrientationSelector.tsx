@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React from 'react';
 import { TUPLE_SELECTOR_TEXT } from '../constants';
 import { ConstraintData } from '../interfaces';
 
@@ -14,7 +14,7 @@ interface OrientationSelectorProps {
  * Includes selector input and multi-select direction dropdown.
  */
 export const OrientationSelector: React.FC<OrientationSelectorProps> = (props: OrientationSelectorProps) => {
-  const handleInputChange = (event) => {
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
     props.onUpdate({
       params: {
@@ -24,9 +24,9 @@ export const OrientationSelector: React.FC<OrientationSelectorProps> = (props: O
     });
   };
 
-  const handleSelectChange = (event) => {
+  const handleSelectChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const { name } = event.target;
-    const selectedValues = Array.from(event.target.selectedOptions, (option) => option.value);
+    const selectedValues = Array.from(event.target.selectedOptions, (option: HTMLOptionElement) => option.value);
     props.onUpdate({
       params: {
         ...props.constraintData.params,

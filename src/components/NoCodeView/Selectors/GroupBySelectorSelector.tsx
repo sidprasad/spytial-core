@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React from 'react';
 import { UNARY_SELECTOR_TEXT, TUPLE_SELECTOR_TEXT } from '../constants';
 import { ConstraintData } from '../interfaces';
 
@@ -14,7 +14,7 @@ interface GroupBySelectorSelectorProps {
  * Groups elements based on a Forge selector expression.
  */
 export const GroupBySelectorSelector: React.FC<GroupBySelectorSelectorProps> = (props: GroupBySelectorSelectorProps) => {
-  const handleParamsChange = (event: any) => {
+  const handleParamsChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = event.target;
     props.onUpdate({
       params: {
