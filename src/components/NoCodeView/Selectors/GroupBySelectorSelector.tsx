@@ -14,12 +14,12 @@ interface GroupBySelectorSelectorProps {
  * Groups elements based on a Forge selector expression.
  */
 export const GroupBySelectorSelector: React.FC<GroupBySelectorSelectorProps> = (props: GroupBySelectorSelectorProps) => {
-  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = event.target;
+  const handleParamsChange = (event: any) => {
+    const { name, value, type, checked } = event.target;
     props.onUpdate({
       params: {
         ...props.constraintData.params,
-        [name]: value,
+        [name]: type === 'checkbox' ? checked : value,
       },
     });
   };
@@ -36,8 +36,8 @@ export const GroupBySelectorSelector: React.FC<GroupBySelectorSelectorProps> = (
           type="text"
           name="selector"
           className="form-control code-input"
-          defaultValue={props.constraintData.params.selector as string || ''}
-          onChange={handleInputChange}
+          value={props.constraintData.params.selector as string || ''}
+          onChange={handleParamsChange}
           required
         />
       </div>
@@ -49,10 +49,25 @@ export const GroupBySelectorSelector: React.FC<GroupBySelectorSelectorProps> = (
           type="text"
           name="name"
           className="form-control"
-          defaultValue={props.constraintData.params.name as string || ''}
-          onChange={handleInputChange}
+          value={props.constraintData.params.name as string || ''}
+          onChange={handleParamsChange}
           required
         />
+      </div>
+      <div className="input-group">
+        <div className="input-group-prepend">
+          <div className="input-group-text">
+            <input
+              type="checkbox"
+              name="addEdge"
+              checked={props.constraintData.params.addEdge as boolean || false}
+              onChange={handleParamsChange}
+            />
+          </div>
+        </div>
+        <div className="form-control-static" style={{ padding: '0.375rem 0.75rem', backgroundColor: '#f8f9fa' }}>
+          Add Edge Between Groups
+        </div>
       </div>
     </>
   );

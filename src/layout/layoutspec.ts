@@ -3,6 +3,7 @@ import * as yaml from 'js-yaml';
 export type RelativeDirection = "above" | "below" | "left" | "right" | "directlyAbove" | "directlyBelow" | "directlyLeft" | "directlyRight";
 export type RotationDirection = "clockwise" | "counterclockwise";
 export type ClusterTarget = "domain" | "range";
+export type AlignDirection = "horizontal" | "vertical";
 
 
 
@@ -102,20 +103,45 @@ export class RelativeOrientationConstraint extends ConstraintOperation {
     }
 }
 
+export class AlignConstraint extends ConstraintOperation {
+    direction: AlignDirection;
+
+    constructor(direction: AlignDirection, selector: string) {
+        super(selector);
+        this.direction = direction;
+    }
+    
+    override isInternallyConsistent(): boolean {
+        // Direction must be horizontal or vertical
+        return this.direction === "horizontal" || this.direction === "vertical";
+    }
+
+    override inconsistencyMessage(): string {
+        return `Align Constraint with direction [${this.direction}] and selector <code>${this.selector}</code> is internally inconsistent.`;  
+    }
+
+    override toHTML(): string {
+        return `AlignConstraint with direction [${this.direction}] and selector <code>${this.selector}</code>`;
+    }
+}
+
 
 
 
 export class GroupBySelector extends ConstraintOperation{
     name: string;
+    addEdge: boolean;
 
-    constructor(selector : string, name: string) {
+    constructor(selector : string, name: string, addEdge: boolean = false) {
         super(selector);
         this.name = name;
+        this.addEdge = addEdge;
     }
 
     override toHTML(): string {
+        const edgeText = this.addEdge ? ' (with edge)' : '';
         return `GroupBySelector with selector <pre>${this.selector}</pre> 
-        and name <pre>${this.name}</pre>.`;
+        and name <pre>${this.name}</pre>${edgeText}.`;
     }
 }
 
@@ -207,7 +233,9 @@ export interface FieldDirective extends Operation {
 }
 
 
-export interface AttributeDirective extends FieldDirective {}
+export interface AttributeDirective extends FieldDirective {
+    prominent?: boolean; // Make this attribute more prominent than the main label
+}
 
 export interface FieldHidingDirective extends FieldDirective {}
 
@@ -228,6 +256,7 @@ interface ConstraintsBlock
         relative: RelativeOrientationConstraint[];
         cyclic: CyclicOrientationConstraint[];
     };
+    alignment: AlignConstraint[];
     grouping : {
         byfield : GroupByField[];
         byselector : GroupBySelector[];
@@ -266,6 +295,7 @@ function DEFAULT_LAYOUT() : LayoutSpec
                 relative: [] as RelativeOrientationConstraint[],
                 cyclic: [] as CyclicOrientationConstraint[]
             },
+            alignment: [] as AlignConstraint[],
             grouping : {
                 byfield : [] as GroupByField[],
                 byselector : [] as GroupBySelector[]
@@ -466,7 +496,29 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
             if(!c.group.name) {
                 throw new Error("Grouping constraint must have a name.");
             }
-            return new GroupBySelector(c.group.selector, c.group.name);
+            return new GroupBySelector(c.group.selector, c.group.name, c.group.addEdge);
+        });
+
+    let alignConstraints: AlignConstraint[] = typedConstraints.filter(c => c.align)
+        .map(c => {
+            if(!c.align.selector) {
+                throw new Error("Align constraint must have a selector");
+            }
+            
+            if(!c.align.direction) {
+                throw new Error("Align constraint must have a direction");
+            }
+
+            let alignConstraint = new AlignConstraint(
+                c.align.direction,
+                c.align.selector
+            );
+            
+            if(!alignConstraint.isInternallyConsistent()) {
+                throw new Error(alignConstraint.inconsistencyMessage());
+            }
+            
+            return alignConstraint;
         });
 
     return {
@@ -474,6 +526,7 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
             relative: relativeOrientationConstraints,
             cyclic: cyclicConstraints
         },
+        alignment: alignConstraints,
         grouping: {
             byfield: byfield,
             byselector: byselector
@@ -532,7 +585,8 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
     let attributes : AttributeDirective[]  = typedDirectives.filter(d => d.attribute).map(d => {
         return {
             field: d.attribute.field,
-            selector: d.attribute.selector
+            selector: d.attribute.selector,
+            prominent: d.attribute.prominent
         }
     });
 

@@ -246,6 +246,60 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     return errorNodes.some((errorNode: LayoutNode) => errorNode.id === node.id); // NOTE: `id` should be unique
   }
 
+  /**
+   * Check if a node is considered "small" and needs enhanced visibility
+   * Accounts for current zoom level to determine visual size on screen
+   * @param node - Node object with dimensions
+   * @returns True if the node appears smaller than the threshold on screen
+   */
+  private isSmallNode(node: any): boolean {
+    const minVisualSize = 30; // Minimum visual size threshold in screen pixels
+    
+    // Get current zoom scale
+    let zoomScale = 1;
+    if (this.svg && this.svg.node()) {
+      try {
+        const transform = d3.zoomTransform(this.svg.node());
+        zoomScale = transform.k;
+      } catch (e) {
+        // Fallback to scale 1 if transform is not available
+        zoomScale = 1;
+      }
+    }
+    
+    // Calculate visual size (coordinate size * zoom scale)
+    const visualWidth = (node.width || 0) * zoomScale;
+    const visualHeight = (node.height || 0) * zoomScale;
+    
+    return visualWidth < minVisualSize || visualHeight < minVisualSize;
+  }
+
+  /**
+   * Update node classes based on current zoom level
+   * Called when zoom changes to ensure small error nodes get proper styling
+   */
+  private updateSmallNodeClasses(): void {
+    if (!this.container) return;
+    
+    // Update all error nodes to check if they should have small-error-node class
+    this.container.selectAll('.error-node').each((d: any, i: number, nodes: any[]) => {
+      const nodeElement = d3.select(nodes[i]);
+      const isSmall = this.isSmallNode(d);
+      
+      if (isSmall) {
+        // Add small-error-node class if not present
+        if (!nodeElement.classed('small-error-node')) {
+          nodeElement.classed('small-error-node', true);
+        }
+      } else {
+        // Remove small-error-node class if present
+        if (nodeElement.classed('small-error-node')) {
+          nodeElement.classed('small-error-node', false);
+        }
+      }
+    });
+  }
+
   private isErrorGroup(group: {name: string}): boolean {
     const overlappingGroups = this.currentLayout.overlappingGroups;
     if (!overlappingGroups) {
@@ -292,14 +346,66 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     return group.name.startsWith(WebColaCnDGraph.DISCONNECTED_NODE_PREFIX);
   }
 
-  private getScaledDetails(constraints: any[], scaleFactor: number = DEFAULT_SCALE_FACTOR) {
+  /**
+   * Computes adaptive link length based on actual node dimensions and graph density
+   */
+  private computeAdaptiveLinkLength(nodes: any[], scaleFactor: number): number {
+    if (!nodes || nodes.length === 0) {
+      return 150; // fallback
+    }
+
+    // Calculate average node dimensions using actual width/height
+    let totalWidth = 0;
+    let totalHeight = 0;
+    let validNodes = 0;
+
+    nodes.forEach(node => {
+      if (node && !this.isHiddenNode(node)) {
+        totalWidth += (node.width || 100);
+        totalHeight += (node.height || 60);
+        validNodes++;
+      }
+    });
+
+    if (validNodes === 0) {
+      return 150; // fallback
+    }
+
+    const avgWidth = totalWidth / validNodes;
+    const avgHeight = totalHeight / validNodes;
+    const avgNodeSize = Math.max(avgWidth, avgHeight);
+
+    // Base link length should be larger of: average node size + separation, or minimum separation
+    const baseSeparation = 50; // minimum separation between nodes
+    let baseLinkLength = Math.max(avgNodeSize + baseSeparation, 120);
+
+    // Apply density factor - more nodes = slightly tighter spacing to fit better
+    const densityFactor = Math.max(0.7, 1 - Math.log10(validNodes) * 0.1);
+    baseLinkLength *= densityFactor;
+
+    // Apply scale factor
     const adjustedScaleFactor = scaleFactor / 5;
-    const min_sep = 150;
-    const default_node_width = 100;
+    const scaledLinkLength = baseLinkLength / adjustedScaleFactor;
+
+    // Ensure reasonable bounds - prevent tiny edges and excessive spacing
+    return Math.max(60, Math.min(scaledLinkLength, 350));
+  }
+
+  private getScaledDetails(constraints: any[], scaleFactor: number = DEFAULT_SCALE_FACTOR, nodes?: any[]) {
+    const adjustedScaleFactor = scaleFactor / 5;
 
     let groupCompactness = WebColaCnDGraph.DEFAULT_GROUP_COMPACTNESS * adjustedScaleFactor;
 
-    let linkLength = (min_sep + default_node_width) / adjustedScaleFactor;
+    // Use adaptive link length calculation if nodes are available
+    let linkLength: number;
+    if (nodes && nodes.length > 0) {
+      linkLength = this.computeAdaptiveLinkLength(nodes, scaleFactor);
+    } else {
+      // Fallback to original calculation
+      const min_sep = 150;
+      const default_node_width = 100;
+      linkLength = (min_sep + default_node_width) / adjustedScaleFactor;
+    }
 
     /*
     For each constraint, if it is a separation constraint, adjust the distance by the scale factor.
@@ -381,11 +487,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
     // Set up zoom behavior (D3 v4 API - matches your working pattern)
     this.zoomBehavior = d3.zoom()
-      .scaleExtent([0.1, 10])
+      .scaleExtent([0.01, 20])
       .on('zoom', () => {
         this.container.attr('transform', d3.event.transform);
         // Update zoom control states when zoom changes
         this.updateZoomControlStates();
+        // Update small node classes based on new zoom level
+        this.updateSmallNodeClasses();
       });
 
     this.svg.call(this.zoomBehavior);
@@ -910,10 +1018,18 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       throw new Error('Invalid instance layout provided. Expected an InstanceLayout instance.');
     }
 
-
+    // Reset zoom transform to identity on each render for a fresh start
+    if (this.svg && this.zoomBehavior && d3) {
+      try {
+        const identity = d3.zoomIdentity;
+        this.svg.call(this.zoomBehavior.transform, identity);
+      } catch (error) {
+        console.warn('Failed to reset zoom transform:', error);
+      }
+    }
 
     try {
-      console.log('D3 version:', d3.version);
+
       // Check if D3 and WebCola are available
       if (!d3) {
         throw new Error('D3 library not available. Please ensure D3 v4 is loaded from CDN.');
@@ -928,7 +1044,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
       // Ensure D3 and container are properly initialized
       if (!this.container || !this.svg) {
-        console.log('Re-initializing D3 selections...');
+
         this.initializeD3();
       }
       
@@ -949,11 +1065,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       const translator = new WebColaTranslator();
       const webcolaLayout = await translator.translate(instanceLayout, containerWidth, containerHeight);
 
-      console.log('🔄 Starting WebCola layout with cola.d3adaptor');
-      console.log('Layout data:', webcolaLayout);
+
+
 
       // Get scaled constraints and link length
-      const { scaledConstraints, linkLength, groupCompactness } = this.getScaledDetails(webcolaLayout.constraints, DEFAULT_SCALE_FACTOR);
+      const { scaledConstraints, linkLength, groupCompactness } = this.getScaledDetails(webcolaLayout.constraints, DEFAULT_SCALE_FACTOR, webcolaLayout.nodes);
 
       // Create WebCola layout using d3adaptor
       const layout: Layout = cola.d3adaptor(d3)
@@ -992,7 +1108,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           }
         })
         .on('end', () => {
-          console.log('✅ WebCola layout converged');
+
           // Call advanced edge routing after layout converges
           if (this.layoutFormat === 'default' || !this.layoutFormat ) {
             this.routeEdges();
@@ -1335,7 +1451,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .enter()
       .append("g")
       .attr("class", (d: any) => {
-        return this.isErrorNode(d) ? "error-node" : "node";
+        const baseClass = this.isErrorNode(d) ? "error-node" : "node";
+        if (this.isErrorNode(d) && this.isSmallNode(d)) {
+          return baseClass + " small-error-node";
+        }
+        return baseClass;
       })
       .call(nodeDrag)
       .on('mousedown.inputmode', (d: any) => {
@@ -1725,7 +1845,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * group edge routing, and element layering.
    */
   private updatePositions(): void {
-    console.log('tick - updating positions');
+
     
     // Update group positions and sizes first (lower layer)
     this.svgGroups
@@ -1874,7 +1994,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       })
       .attr('y', (d: any) => {
         if (!d.bounds) return 0;
-        return d.bounds.y + 12;
+        return d.bounds.y + 5; // Slight padding from top
       })
       .attr('text-anchor', 'middle')
       .lower();
@@ -1887,7 +2007,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   private gridUpdatePositions() {
-    console.log('grid tick - updating positions');
+
     
     const node = this.container.selectAll(".node");
     const mostSpecificTypeLabel = this.container.selectAll(".mostSpecificTypeLabel");
@@ -1974,7 +2094,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         );
       }
 
-      console.log('Routing edges for the nth time', ++this.edgeRouteIdx);
+
 
       // Route all link paths with advanced logic
       this.routeLinkPaths(); 
@@ -2017,7 +2137,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
   private gridify(nudgeGap: number, margin: number, groupMargin: number): void {
     try {
-      console.log("Gridify");
+
       // Create the grid router
       const gridrouter = this.route(this.currentLayout?.nodes, this.currentLayout?.groups, margin, groupMargin);
 
@@ -2033,7 +2153,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       // Route edges using the GridRouter
       routes = gridrouter.routeEdges(edges, nudgeGap, function (e: any) { return e.source.routerNode.id; }, function (e: any) { return e.target.routerNode.id; });
 
-      console.log("GridRouter routes: ", routes);
+
 
       // Clear existing paths; 
       // NOTE: This is crucial to avoid node explosion when re-routing
@@ -2135,7 +2255,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   private gridUpdateLinkLabels(routes: any[], edges: any[]) {
-    console.log("Updating link labels");
+
     routes.forEach((route: any, index: number) => {
         var edgeData = edges[index];
         
@@ -2597,27 +2717,214 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private minimizeOverlap(currentLabel: SVGTextElement, overlappingLabels: SVGTextElement[]): void {
     // Implementation would reposition labels to minimize overlap
     // This is a placeholder for the actual overlap resolution algorithm
-    console.log('Minimizing label overlap for', overlappingLabels.length, 'labels');
+
   }
 
   /**
    * Fits the viewport to show all content with padding.
+   * Uses manual calculation of bounds from all nodes and edges to ensure complete coverage.
    */
   private fitViewportToContent(): void {
     const svgElement = this.svg.node();
     if (!svgElement) return;
 
-    const bbox = svgElement.getBBox();
+    // First try to get bounds from manual calculation of all elements
+    const manualBounds = this.calculateContentBounds();
+    
+    // Fallback to SVG getBBox if manual calculation fails
+    const bbox = manualBounds || svgElement.getBBox();
     const padding = WebColaCnDGraph.VIEWBOX_PADDING;
+    
+    // Calculate smart bottom padding based on bottom-most node
+    let extraBottomPadding = 50; // Default fallback
+    if (this.currentLayout?.nodes) {
+      const bottomNode = this.currentLayout.nodes.reduce((bottom: any, node: any) => {
+        if (typeof node.x === 'number' && typeof node.y === 'number') {
+          const nodeBottom = node.y + (node.height || 0);
+          const currentBottom = bottom ? (bottom.y + (bottom.height || 0)) : -Infinity;
+          return nodeBottom > currentBottom ? node : bottom;
+        }
+        return bottom;
+      }, null);
+      
+      if (bottomNode && bottomNode.height) {
+        extraBottomPadding = Math.min(50, bottomNode.height / 1.5);
+      }
+    }
 
     const viewBox = [
       bbox.x - padding,
       bbox.y - padding,
       bbox.width + 2 * padding,
-      bbox.height + 2 * padding
+      bbox.height + 2 * padding + extraBottomPadding
     ].join(' ');
 
+
+
     this.svg.attr('viewBox', viewBox);
+  }
+
+  /**
+   * Manually calculates the bounding box of all content to ensure accurate viewport fitting.
+   * This method examines all nodes, edges, and groups to determine the true content bounds.
+   * @returns Bounding box with x, y, width, height properties or null if calculation fails
+   */
+  private calculateContentBounds(): { x: number; y: number; width: number; height: number } | null {
+    try {
+      if (!this.currentLayout || !this.container) return null;
+
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+
+      // Check all nodes
+      const nodes = this.currentLayout.nodes;
+      if (nodes && nodes.length > 0) {
+        
+        nodes.forEach((node: NodeWithMetadata, index: number) => {
+          if (typeof node.x === 'number' && typeof node.y === 'number') {
+            const nodeWidth = node.width || 0;
+            const nodeHeight = node.height || 0;
+            
+            // Calculate node bounds (nodes are positioned from top-left)
+            const nodeMinX = node.x;
+            const nodeMaxX = node.x + nodeWidth;
+            const nodeMinY = node.y;
+            const nodeMaxY = node.y + nodeHeight;
+
+
+            const prevMinY = minY;
+            const prevMaxY = maxY;
+            
+            minX = Math.min(minX, nodeMinX);
+            maxX = Math.max(maxX, nodeMaxX);
+            minY = Math.min(minY, nodeMinY);
+            maxY = Math.max(maxY, nodeMaxY);
+          }
+        });
+        
+        // Find and log the node with the highest Y (bottom-most)
+        const bottomMostNode = nodes.reduce((bottom, node) => {
+          if (typeof node.x === 'number' && typeof node.y === 'number') {
+            const nodeBottom = node.y + (node.height || 0);
+            const currentBottom = bottom ? (bottom.y + (bottom.height || 0)) : -Infinity;
+            return nodeBottom > currentBottom ? node : bottom;
+          }
+          return bottom;
+        }, null as NodeWithMetadata | null);
+      }
+
+      // Check all edge paths by examining actual DOM elements
+      const linkGroups = this.container.selectAll('.link-group');
+      if (!linkGroups.empty()) {
+        linkGroups.each(function(this: SVGGElement) {
+          try {
+            const bbox = this.getBBox();
+            if (bbox.width > 0 && bbox.height > 0) {
+              minX = Math.min(minX, bbox.x);
+              maxX = Math.max(maxX, bbox.x + bbox.width);
+              minY = Math.min(minY, bbox.y);
+              maxY = Math.max(maxY, bbox.y + bbox.height);
+            }
+          } catch (e) {
+            // Skip elements that can't provide bbox
+          }
+        });
+      }
+
+      // Check all node groups by examining actual DOM elements
+      const nodeGroups = this.container.selectAll('.node, .error-node');
+      if (!nodeGroups.empty()) {
+        nodeGroups.each(function(this: SVGGElement) {
+          try {
+            const bbox = this.getBBox();
+            if (bbox.width > 0 && bbox.height > 0) {
+              minX = Math.min(minX, bbox.x);
+              maxX = Math.max(maxX, bbox.x + bbox.width);
+              minY = Math.min(minY, bbox.y);
+              maxY = Math.max(maxY, bbox.y + bbox.height);
+            }
+          } catch (e) {
+            // Skip elements that can't provide bbox
+          }
+        });
+      }
+
+      // Check all text elements separately for better text bounds calculation
+      const textElements = this.container.selectAll('text');
+      if (!textElements.empty()) {
+        let textBoundsFound = 0;
+        
+        textElements.each(function(this: SVGTextElement) {
+          try {
+            const bbox = this.getBBox();
+            if (bbox.width > 0 && bbox.height > 0) {
+              textBoundsFound++;
+              
+              // Add extra padding for text elements due to font metrics
+              const textPadding = 5;
+              const textMinY = bbox.y - textPadding;
+              const textMaxY = bbox.y + bbox.height + textPadding;
+              
+              // Log text elements that might extend the bottom boundary
+
+              
+              const prevMaxY = maxY;
+              
+              minX = Math.min(minX, bbox.x - textPadding);
+              maxX = Math.max(maxX, bbox.x + bbox.width + textPadding);
+              minY = Math.min(minY, textMinY);
+              maxY = Math.max(maxY, textMaxY);
+              
+
+
+            }
+          } catch (e) {
+            // Skip elements that can't provide bbox
+          }
+        });
+        
+
+      }
+
+      // Check for any group elements
+      const groupElements = this.container.selectAll('.group');
+      if (!groupElements.empty()) {
+        groupElements.each(function(this: SVGGElement) {
+          try {
+            const bbox = this.getBBox();
+            if (bbox.width > 0 && bbox.height > 0) {
+              minX = Math.min(minX, bbox.x);
+              maxX = Math.max(maxX, bbox.x + bbox.width);
+              minY = Math.min(minY, bbox.y);
+              maxY = Math.max(maxY, bbox.y + bbox.height);
+            }
+          } catch (e) {
+            // Skip elements that can't provide bbox
+          }
+        });
+      }
+
+      // Return null if no valid bounds were found
+      if (minX === Infinity || minY === Infinity || maxX === -Infinity || maxY === -Infinity) {
+        console.warn('Could not calculate content bounds - no valid elements found');
+        return null;
+      }
+
+      const bounds = {
+        x: minX,
+        y: minY,
+        width: maxX - minX,
+        height: maxY - minY
+      };
+      
+      return bounds;
+
+    } catch (error) {
+      console.error('Error calculating content bounds:', error);
+      return null;
+    }
   }
 
   /**
@@ -2754,9 +3061,27 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         animation: dash 1s linear infinite;
       }
 
+      /* Enhanced visibility for small error nodes */
+      .small-error-node rect {
+        stroke-width: 4px !important; /* Thicker stroke for visibility */
+        stroke-dasharray: 8 4 !important; /* Larger dash pattern */
+        animation: dash 1s linear infinite, pulse-bg 2s ease-in-out infinite !important;
+        fill: rgba(225, 112, 46, 0.46) !important; /* Light reddish background */
+      }
+
       @keyframes dash {
         to {
           stroke-dashoffset: -10;
+        }
+      }
+
+      /* Pulsing background animation for small error nodes */
+      @keyframes pulse-bg {
+        0%, 100% { 
+          fill-opacity: 0.15; 
+        }
+        50% { 
+          fill-opacity: 0.55; 
         }
       }
       
@@ -2857,11 +3182,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
       svg.input-mode .link {
         cursor: pointer;
-        stroke-width: 2px;
       }
 
       svg.input-mode .link:hover {
-        stroke-width: 3px;
         opacity: 0.8;
       }
 

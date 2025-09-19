@@ -6,13 +6,13 @@ import { PositionalConstraintError, GroupOverlapError, isPositionalConstraintErr
 import {
     LayoutNode, LayoutEdge, LayoutConstraint, InstanceLayout,
     LeftConstraint, TopConstraint, AlignmentConstraint, LayoutGroup,
-    ImplicitConstraint
+    ImplicitConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, AttributeMetadata
 } from './interfaces';
 
 import {
     LayoutSpec,
     RelativeOrientationConstraint, CyclicOrientationConstraint,
-    GroupByField, GroupBySelector
+    GroupByField, GroupBySelector, AlignConstraint
 } from './layoutspec';
 
 
@@ -25,6 +25,37 @@ import { type ConstraintError, ConstraintValidator } from './constraint-validato
 const UNIVERSAL_TYPE = "univ";
 
 
+// Should create a NEW list when it returns.
+function removeDuplicateConstraints(constraints: LayoutConstraint[]): LayoutConstraint[] {
+    const uniqueConstraints: LayoutConstraint[] = [];
+    const seen = new Set<string>();
+    
+    for (const constraint of constraints) {
+        let key: string;
+        
+        if (isLeftConstraint(constraint)) {
+            // For left constraints: left_node_id|right_node_id|minDistance
+            key = `left|${constraint.left.id}|${constraint.right.id}|${constraint.minDistance}`;
+        } else if (isTopConstraint(constraint)) {
+            // For top constraints: top_node_id|bottom_node_id|minDistance
+            key = `top|${constraint.top.id}|${constraint.bottom.id}|${constraint.minDistance}`;
+        } else if (isAlignmentConstraint(constraint)) {
+            // For alignment constraints: axis|node1_id|node2_id (order normalized)
+            const [node1, node2] = [constraint.node1.id, constraint.node2.id].sort();
+            key = `align|${constraint.axis}|${node1}|${node2}`;
+        } else {
+            // Fallback for unknown constraint types - include all in case they're different
+            key = `unknown|${JSON.stringify(constraint)}`;
+        }
+        
+        if (!seen.has(key)) {
+            seen.add(key);
+            uniqueConstraints.push(constraint);
+        }
+    }
+    
+    return uniqueConstraints;
+}
 
 class LayoutNodePath {
     constructor(
@@ -202,6 +233,47 @@ export class LayoutInstance {
         return false;
     }
 
+    /**
+     * Check if a field is marked as prominent for specific atoms
+     */
+    isProminentAttribute(fieldId: string, sourceAtom?: string): boolean {
+        const matchingDirectives = this._layoutSpec.directives.attributes.filter(
+            (ad) => ad.field === fieldId && ad.prominent === true
+        );
+        
+        if (matchingDirectives.length === 0) {
+            return false;
+        }
+        
+        // If no atoms provided or no selector-based directives, use legacy behavior
+        if (!sourceAtom) {
+            return matchingDirectives.some(ad => !ad.selector);
+        }
+        
+        // Check selector-based directives
+        for (const directive of matchingDirectives) {
+            if (!directive.selector) {
+                // Legacy directive without selector matches any atoms
+                return true;
+            }
+            
+            try {
+                const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
+                const selectedAtoms = selectorResult.selectedAtoms();
+                
+                // Check if source atom is selected by the selector
+                if (selectedAtoms.includes(sourceAtom)) {
+                    return true;
+                }
+            } catch (error) {
+                console.warn(`Failed to evaluate prominent attribute selector "${directive.selector}":`, error);
+                // Continue to next directive on error
+            }
+        }
+        
+        return false;
+    }
+
     isHiddenField(fieldId: string, sourceAtom?: string, targetAtom?: string): boolean {
         const matchingDirectives = this._layoutSpec.directives.hiddenFields.filter((hd) => hd.field === fieldId);
         
@@ -275,16 +347,29 @@ export class LayoutInstance {
 
             if (selectedTwoples.length > 0) {
 
+                function constructGroupEdgeID(edgelabel: string, src : string, tgt: string): string {
+                    return `_g_0_1_` + edgelabel + `:` + src + `->` + tgt;
+                }
+
                 // The first element of each tuple is the key (i.e. groupOn)
                 // The second element is the element to add to the group (i.e. addToGroup)
 
                 // The name of the group is the relation name ':' the key node.
 
                 for (var t of selectedTwoples) {
+
+                    // Here, it should be the ID and the label of the node.
+
+
+
                     let groupOn = t[0];
                     let addToGroup = t[1];
 
-                    let groupName = `${gc.name}[${groupOn}]`;
+                    let groupOnLabel =  g.node(groupOn)?.label || groupOn;
+                    if(groupOnLabel != groupOn) {
+                        groupOnLabel = groupOnLabel + ":" + groupOn;
+                    }
+                    let groupName = `${gc.name}[${groupOnLabel}]`;
 
                     // Check if the group already exists
                     let existingGroup: LayoutGroup | undefined = groups.find((group) => group.name === groupName);
@@ -301,6 +386,14 @@ export class LayoutInstance {
                             showLabel: true
                         };
                         groups.push(newGroup);
+
+                        // NOW if we have the GroupBySelector addEdge flag set, we should add an edge between the keyNode and the new node.
+                        if(gc.addEdge) {
+
+                            const edgeId = constructGroupEdgeID(groupName, groupOn, addToGroup);
+                            g.setEdge(groupOn, addToGroup, groupName, edgeId);
+                        }
+
                     }
                 }
 
@@ -418,11 +511,11 @@ export class LayoutInstance {
     /**
      * Generates groups based on the specified graph.
      * @param g - The graph, which will be modified to remove the edges that are used to determine attributes.
-     * @returns A record of attributes
+     * @returns A record of attributes with metadata
      */
-    private generateAttributesAndRemoveEdges(g: Graph): Record<string, Record<string, string[]>> {
-        // Node : [] of attributes
-        let attributes: Record<string, Record<string, string[]>> = {};
+    private generateAttributesAndRemoveEdges(g: Graph): Record<string, Record<string, AttributeMetadata>> {
+        // Node : {} of attributes with metadata
+        let attributes: Record<string, Record<string, AttributeMetadata>> = {};
 
         let graphEdges = [...g.edges()];
         // Go through all edge labels in the graph
@@ -458,12 +551,23 @@ export class LayoutInstance {
                 let targetLabel = g.node(target)?.label || target; // Use the node's label or the node ID if no label exists.
 
                 let nodeAttributes = attributes[source] || {};
+                
+                // Check if this attribute should be prominent
+                const isProminent = this.isProminentAttribute(relName, sourceAtom);
 
                 if (!nodeAttributes[attributeKey]) {
-                    nodeAttributes[attributeKey] = [];
+                    nodeAttributes[attributeKey] = {
+                        values: [],
+                        prominent: isProminent
+                    };
                     attributes[source] = nodeAttributes;
                 }
-                nodeAttributes[attributeKey].push(targetLabel);
+                nodeAttributes[attributeKey].values.push(targetLabel);
+                
+                // Update prominence flag if any directive marks it as prominent
+                if (isProminent) {
+                    nodeAttributes[attributeKey].prominent = true;
+                }
 
                 // Now remove the edge from the graph
                 g.removeEdge(edge.v, edge.w, edgeId);
@@ -703,6 +807,13 @@ export class LayoutInstance {
 
         ///////////// CONSTRAINTS ////////////
         let constraints: LayoutConstraint[] = this.applyRelativeOrientationConstraints(layoutNodes, g);
+        constraints = constraints.concat(this.applyAlignConstraints(layoutNodes, g));
+
+        // THERE MAY BE SOME ISSUES DUE TO DUPLICATE CONSTRAINTS HERE :(
+        // HOWEVER, MAYBE THATS OK?
+        // TODO: Explore what it would mean to remove duplicates here.
+        constraints = removeDuplicateConstraints(constraints);
+
 
         let layoutEdges: LayoutEdge[] = g.edges().map((edge) => {
 
@@ -766,6 +877,8 @@ export class LayoutInstance {
 
             throw nonCyclicConstraintError;
         }
+
+
         // And updating constraints, since the validator may add constraints.
         // (IN particular these would be non-overlap constraints for spacing in groups.)
         // TODO: However, this introduces
@@ -1207,9 +1320,8 @@ export class LayoutInstance {
                 let targetNodeId = tuple[1];
 
                 directions.forEach((direction) => {
-                    // Only add alignment edge if enabled AND edge doesn't already exist in the graph
-                    const edgeExists = g.hasEdge(sourceNodeId, targetNodeId) || g.hasEdge(targetNodeId, sourceNodeId);
-                    if (direction.startsWith("directly") && this.addAlignmentEdges && !edgeExists) {
+                    // Add alignment edge for ALL orientation constraints if enabled AND edge doesn't already exist in the graph
+                    if (this.addAlignmentEdges && !this.hasDirectEdgeBetween(g, sourceNodeId, targetNodeId)) {
                         const alignmentEdgeLabel = `_alignment_${sourceNodeId}_${targetNodeId}_`;
                         g.setEdge(sourceNodeId, targetNodeId, alignmentEdgeLabel, alignmentEdgeLabel);
                     }
@@ -1249,8 +1361,96 @@ export class LayoutInstance {
         return constraints;
     }
 
+    /**
+     * Applies the align constraints to the layout nodes.
+     * @param layoutNodes - The layout nodes to which the constraints will be applied.
+     * @returns An array of layout constraints.
+     */
+    applyAlignConstraints(layoutNodes: LayoutNode[], g: Graph): LayoutConstraint[] {
+        let constraints: LayoutConstraint[] = [];
+        let alignConstraints = this._layoutSpec.constraints.alignment;
+
+        alignConstraints.forEach((c: AlignConstraint) => {
+            let direction = c.direction;
+            let selector = c.selector;
+
+            let selectorRes = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
+            let selectedTuples: string[][] = selectorRes.selectedTwoples();
+
+            // For each tuple, apply the alignment constraint
+            selectedTuples.forEach((tuple) => {
+                let sourceNodeId = tuple[0];
+                let targetNodeId = tuple[1];
+
+                // Add alignment edge for align constraints if enabled AND edge doesn't already exist in the graph
+                if (this.addAlignmentEdges && !this.hasDirectEdgeBetween(g, sourceNodeId, targetNodeId)) {
+                    const alignmentEdgeLabel = `_alignment_${sourceNodeId}_${targetNodeId}_`;
+                    g.setEdge(sourceNodeId, targetNodeId, alignmentEdgeLabel, alignmentEdgeLabel);
+                }
+
+                if (direction === "horizontal") {
+                    // Horizontal alignment means same Y coordinate
+                    constraints.push(this.ensureSameYConstraint(sourceNodeId, targetNodeId, layoutNodes, c));
+                } else if (direction === "vertical") {
+                    // Vertical alignment means same X coordinate
+                    constraints.push(this.ensureSameXConstraint(sourceNodeId, targetNodeId, layoutNodes, c));
+                }
+            });
+        });
+
+        return constraints;
+    }
 
 
+
+
+    /**
+     * Checks if there's already a direct edge (bidirectional) between two nodes in the graph.
+     * @param g - The graph to check
+     * @param sourceNodeId - First node ID
+     * @param targetNodeId - Second node ID
+     * @returns true if there's already an edge between the nodes
+     */
+     private hasDirectEdgeBetween(g: Graph, sourceNodeId: string, targetNodeId: string): { direct: boolean; connected: boolean } {
+
+        // Direct edge check (either direction). Prefer graphlib.hasEdge if available.
+        const direct =
+            (typeof (g as any).hasEdge === 'function' && ((g as any).hasEdge(sourceNodeId, targetNodeId) || (g as any).hasEdge(targetNodeId, sourceNodeId)))
+            ||
+            // fallback to scanning in/out edges (handles multi-edges)
+            ((g.inEdges(sourceNodeId) || []).some(e => e.v === targetNodeId) ||
+             (g.outEdges(sourceNodeId) || []).some(e => e.w === targetNodeId) ||
+             (g.inEdges(targetNodeId) || []).some(e => e.v === sourceNodeId) ||
+             (g.outEdges(targetNodeId) || []).some(e => e.w === sourceNodeId));
+
+        if(direct) {
+            return direct;
+        }
+
+        // Connected check: BFS treating graph as undirected (follow predecessors and successors)
+        const visited = new Set<string>();
+        const queue: string[] = [sourceNodeId];
+        let connected = false;
+
+        while (queue.length > 0) {
+            const cur = queue.shift()!;
+            if (cur === targetNodeId) {
+                connected = true;
+                break;
+            }
+            if (visited.has(cur)) continue;
+            visited.add(cur);
+
+            // neighbors: successors + predecessors (graphlib provides both)
+            const succ = g.successors(cur) || [];
+            const pred = g.predecessors(cur) || [];
+            for (const n of succ.concat(pred)) {
+                if (!visited.has(n)) queue.push(n);
+            }
+        }
+
+        return direct;
+    }
 
     private getDisconnectedNodes(g: Graph): string[] {
         let inNodes = g.edges().map(edge => edge.w);
@@ -1289,7 +1489,7 @@ export class LayoutInstance {
         return { top: top, bottom: bottom, minDistance: minDistance, sourceConstraint: sourceConstraint };
     }
 
-    private ensureSameYConstraint(node1Id: string, node2Id: string, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint): AlignmentConstraint {
+    private ensureSameYConstraint(node1Id: string, node2Id: string, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint): AlignmentConstraint {
 
         let node1 = this.getNodeFromId(node1Id, layoutNodes);
         let node2 = this.getNodeFromId(node2Id, layoutNodes);
@@ -1297,7 +1497,7 @@ export class LayoutInstance {
         return { axis: "y", node1: node1, node2: node2, sourceConstraint: sourceConstraint };
     }
 
-    private ensureSameXConstraint(node1Id: string, node2Id: string, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | ImplicitConstraint | CyclicOrientationConstraint): AlignmentConstraint {
+    private ensureSameXConstraint(node1Id: string, node2Id: string, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint): AlignmentConstraint {
 
         let node1 = this.getNodeFromId(node1Id, layoutNodes);
         let node2 = this.getNodeFromId(node2Id, layoutNodes);

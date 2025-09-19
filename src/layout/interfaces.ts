@@ -1,4 +1,9 @@
-import { RelativeOrientationConstraint, CyclicOrientationConstraint } from "./layoutspec";
+import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint } from "./layoutspec";
+
+export interface AttributeMetadata {
+    values: string[];
+    prominent?: boolean;
+}
 
 export interface LayoutGroup {
     // The name of the group
@@ -19,7 +24,7 @@ export interface LayoutNode {
     label: string;
     color : string;
     groups?: string[];
-    attributes?: Record<string, string[]>;
+    attributes?: Record<string, AttributeMetadata>;
     icon? : string;
     width : number;
     height : number;
@@ -48,7 +53,7 @@ export class ImplicitConstraint {
 }
 
 export interface LayoutConstraint {
-    sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint; // Not grouping, and I hate introducing implicit (which should hopefully never show up)
+    sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint; // Not grouping, and I hate introducing implicit (which should hopefully never show up)
 }
 
 

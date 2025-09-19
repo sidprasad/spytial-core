@@ -151,6 +151,42 @@ export class WebColaLayout {
     return this.colaNodes.findIndex(node => node.id === nodeId);
   }
 
+  /**
+   * Computes adaptive horizontal separation between two nodes using their actual dimensions
+   */
+  private computeHorizontalSeparation(node1: NodeWithMetadata, node2: NodeWithMetadata, minDistance: number): number {
+    // Use actual node widths
+    const node1Width = node1.width || 100;
+    const node2Width = node2.width || 100;
+    
+    // Base separation: half-widths + minimum distance
+    const baseSeparation = (node1Width / 2) + (node2Width / 2) + minDistance;
+    
+    // Add adaptive padding based on larger nodes (they likely have more content)
+    const maxWidth = Math.max(node1Width, node2Width);
+    const adaptivePadding = Math.min(maxWidth * 0.1, 20); // up to 20px extra for large nodes
+    
+    return baseSeparation + adaptivePadding;
+  }
+
+  /**
+   * Computes adaptive vertical separation between two nodes using their actual dimensions
+   */
+  private computeVerticalSeparation(node1: NodeWithMetadata, node2: NodeWithMetadata, minDistance: number): number {
+    // Use actual node heights
+    const node1Height = node1.height || 60;
+    const node2Height = node2.height || 60;
+    
+    // Base separation: half-heights + minimum distance
+    const baseSeparation = (node1Height / 2) + (node2Height / 2) + minDistance;
+    
+    // Add adaptive padding based on larger nodes (they likely have more content)
+    const maxHeight = Math.max(node1Height, node2Height);
+    const adaptivePadding = Math.min(maxHeight * 0.1, 15); // up to 15px extra for tall nodes
+    
+    return baseSeparation + adaptivePadding;
+  }
+
 
 
   private leftConstraint(leftNode: number, rightNode: number, sep: number) {
@@ -258,13 +294,13 @@ export class WebColaLayout {
       node1.fixed = 0;
       node2.fixed = 0;
 
-      let distance = constraint.minDistance + ((node1.width || 100) / 2) + ((node2.width || 100) / 2);
+      // Use improved horizontal separation calculation based on actual node dimensions
+      let distance = this.computeHorizontalSeparation(node1, node2, constraint.minDistance);
 
       return this.leftConstraint(this.getNodeIndex(constraint.left.id), this.getNodeIndex(constraint.right.id), distance);
     }
 
     if (isTopConstraint(constraint)) {
-
 
       // Get the two nodes that are being constrained
       let node1 = this.colaNodes[this.getNodeIndex(constraint.top.id)];
@@ -272,8 +308,9 @@ export class WebColaLayout {
       //      // Set fixed to 0 here.
       node1.fixed = 0;
       node2.fixed = 0;
-      let distance = constraint.minDistance + ((node1.height || 60) / 2) + ((node2.height || 60) / 2);
-
+      
+      // Use improved vertical separation calculation based on actual node dimensions
+      let distance = this.computeVerticalSeparation(node1, node2, constraint.minDistance);
 
       return this.topConstraint(this.getNodeIndex(constraint.top.id), this.getNodeIndex(constraint.bottom.id), distance);
     }

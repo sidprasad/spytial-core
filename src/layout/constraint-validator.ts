@@ -1,10 +1,10 @@
 import { Solver, Variable, Expression, Strength, Operator, Constraint } from 'kiwi.js';
 import { InstanceLayout, LayoutNode, LayoutEdge, LayoutGroup, LayoutConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, TopConstraint, LeftConstraint, AlignmentConstraint, ImplicitConstraint } from './interfaces';
-import { RelativeOrientationConstraint, CyclicOrientationConstraint } from './layoutspec';
+import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint } from './layoutspec';
 
 
 
-type SourceConstraint = RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint;
+type SourceConstraint = RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint;
 
 export interface ErrorMessages {
     conflictingConstraint: string;
