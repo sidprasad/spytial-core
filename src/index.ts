@@ -27,18 +27,18 @@ export { WebColaTranslator } from './translators';
 export { StructuredInputGraph } from './translators';
 export { SGraphQueryEvaluator } from "./evaluators/sgq-evaluator";
 
-// Accessibility exports
+// Data Navigator exports
 export { 
   DataNavigatorTranslator,
   createDataNavigatorTranslator,
   translateToDataNavigator
-} from './translators/accessibility';
+} from './translators/data-navigator';
 export type {
   DataNavigatorStructure,
   AccessibilityTranslatorOptions,
   SemanticProperties,
   SpatialProperties
-} from './translators/accessibility';
+} from './translators/data-navigator';
 
 // Browser-specific exports and initialization
 if (typeof window !== 'undefined') {

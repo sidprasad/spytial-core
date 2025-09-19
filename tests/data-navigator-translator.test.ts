@@ -3,7 +3,7 @@ import {
   DataNavigatorTranslator, 
   createDataNavigatorTranslator,
   translateToDataNavigator 
-} from '../src/translators/accessibility/data-navigator-translator';
+} from '../src/translators/data-navigator/data-navigator-translator';
 import { InstanceLayout, LayoutNode, LayoutEdge, LayoutGroup } from '../src/layout/interfaces';
 
 describe('DataNavigatorTranslator', () => {

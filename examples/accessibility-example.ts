@@ -52,7 +52,7 @@ groups:
 `;
 
 async function demonstrateAccessibility() {
-  console.log('=== CnD Core Accessibility Demo ===\n');
+  console.log('=== CnD Core Data Navigator Demo ===\n');
   
   // 1. Set up data instance and evaluator
   console.log('1. Setting up data and evaluator...');
@@ -80,31 +80,34 @@ async function demonstrateAccessibility() {
   console.log(`   - Groups: ${layout.groups.length}`);
   console.log(`   - Constraints: ${layout.constraints.length}\n`);
   
-  // 4. Generate accessibility data using utility function
-  console.log('4. Generating accessibility data (Method 1 - Utility function)...');
+  // 4. Simple approach: Create translator and translate layout directly
+  console.log('4. Translating layout to Data Navigator structure...');
+  
+  // Method 1: Use utility function
   const accessibilityData1 = translateToDataNavigator(layout, {
     includeSpatialProperties: true,
     generateNavigationRules: true,
     createDimensions: true
   });
   
-  console.log('✅ Accessibility data generated via utility function');
+  console.log('✅ Data Navigator structure generated via utility function');
   console.log(`   - Accessible nodes: ${Object.keys(accessibilityData1.nodes).length}`);
   console.log(`   - Navigation rules: ${Object.keys(accessibilityData1.navigationRules || {}).length}`);
-  console.log(`   - Element data: ${Object.keys(accessibilityData1.elementData || {}).length}\n`);
+  console.log(`   - Element data: ${Object.keys(accessibilityData1.elementData || {}).length}`);
   
-  // 5. Generate accessibility data using instance method
-  console.log('5. Generating accessibility data (Method 2 - Instance method)...');
-  const accessibilityData2 = layoutInstance.generateAccessibilityData(layout, {
+  // Method 2: Create translator directly and translate
+  console.log('\n5. Using DataNavigatorTranslator class directly...');
+  const translator = new DataNavigatorTranslator({
     includeSpatialProperties: true,
     generateNavigationRules: true,
     createDimensions: true
   });
   
-  console.log('✅ Accessibility data generated via instance method\n');
+  const accessibilityData2 = translator.translate(layout);
+  console.log('✅ Data Navigator structure generated via translator class\n');
   
   // 6. Demonstrate custom accessibility configuration
-  console.log('6. Demonstrating custom accessibility configuration...');
+  console.log('6. Demonstrating custom configuration...');
   const customTranslator = new DataNavigatorTranslator({
     includeSpatialProperties: false,
     generateNavigationRules: true,
@@ -121,7 +124,7 @@ async function demonstrateAccessibility() {
   });
   
   const customAccessibilityData = customTranslator.translate(layout);
-  console.log('✅ Custom accessibility data generated');
+  console.log('✅ Custom Data Navigator structure generated');
   
   // 7. Show sample accessibility metadata
   console.log('\n7. Sample accessibility metadata:');
@@ -150,7 +153,11 @@ async function demonstrateAccessibility() {
     console.log(`   ${ruleId}: ${rule.direction} navigation via "${rule.key}"`);
   });
   
-  console.log('\n🎉 Accessibility demo completed successfully!');
+  console.log('\n🎉 Data Navigator demo completed successfully!');
+  console.log('\nKey Benefits:');
+  console.log('• Simple API: Just pass your layout to the translator');
+  console.log('• Flexible: Customize semantic labels and navigation rules');
+  console.log('• Separates concerns: Layout generation and accessibility are distinct');
   console.log('\nThis Data Navigator structure can now be used with:');
   console.log('• Screen readers for audio descriptions');
   console.log('• Keyboard navigation systems');

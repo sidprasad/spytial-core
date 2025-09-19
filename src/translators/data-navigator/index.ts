@@ -1,5 +1,5 @@
 /**
- * Accessibility translators module
+ * Data Navigator translators module
  * 
  * Provides translators for making CnD layouts accessible to assistive technologies
  */
