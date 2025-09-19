@@ -233,9 +233,7 @@ export interface FieldDirective extends Operation {
 }
 
 
-export interface AttributeDirective extends FieldDirective {
-    prominent?: boolean; // Make this attribute more prominent than the main label
-}
+export interface AttributeDirective extends FieldDirective {}
 
 export interface FieldHidingDirective extends FieldDirective {}
 
@@ -585,8 +583,7 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
     let attributes : AttributeDirective[]  = typedDirectives.filter(d => d.attribute).map(d => {
         return {
             field: d.attribute.field,
-            selector: d.attribute.selector,
-            prominent: d.attribute.prominent
+            selector: d.attribute.selector
         }
     });
 
