@@ -151,6 +151,103 @@ export class WebColaLayout {
     return this.colaNodes.findIndex(node => node.id === nodeId);
   }
 
+  /**
+   * Estimates the visual content width of a node based on its label and attributes
+   */
+  private estimateNodeContentWidth(node: NodeWithMetadata): number {
+    let contentWidth = node.width || 100;
+
+    // Factor in label length
+    if (node.label) {
+      const labelLength = node.label.length;
+      const estimatedLabelWidth = labelLength * 8; // rough estimate: 8px per character
+      contentWidth = Math.max(contentWidth, estimatedLabelWidth + 20); // padding
+    }
+
+    // Factor in attributes
+    if (node.attributes && typeof node.attributes === 'object') {
+      const attributeEntries = Object.entries(node.attributes);
+      if (attributeEntries.length > 0) {
+        const maxAttrLength = attributeEntries.reduce((max, [key, value]) => {
+          const attrText = `${key}: ${Array.isArray(value) ? value.join(', ') : value}`;
+          return Math.max(max, attrText.length);
+        }, 0);
+        const estimatedAttrWidth = maxAttrLength * 7; // slightly smaller font
+        contentWidth = Math.max(contentWidth, estimatedAttrWidth + 20);
+      }
+    }
+
+    return Math.min(contentWidth, 300); // cap at reasonable maximum
+  }
+
+  /**
+   * Estimates the visual content height of a node based on its label and attributes
+   */
+  private estimateNodeContentHeight(node: NodeWithMetadata): number {
+    let contentHeight = node.height || 60;
+
+    // Base height for label
+    let lineCount = 1;
+    
+    // Add lines for attributes
+    if (node.attributes && typeof node.attributes === 'object') {
+      const attributeEntries = Object.entries(node.attributes);
+      lineCount += attributeEntries.length;
+    }
+
+    // Estimate height based on line count
+    const estimatedHeight = lineCount * 15 + 20; // 15px per line + padding
+    contentHeight = Math.max(contentHeight, estimatedHeight);
+
+    return Math.min(contentHeight, 200); // cap at reasonable maximum
+  }
+
+  /**
+   * Computes optimal separation distance between two nodes for horizontal constraints
+   */
+  private computeHorizontalSeparation(node1: NodeWithMetadata, node2: NodeWithMetadata, minDistance: number): number {
+    const node1ContentWidth = this.estimateNodeContentWidth(node1);
+    const node2ContentWidth = this.estimateNodeContentWidth(node2);
+    
+    // Base separation is half of each node's content width plus minimum distance
+    const baseSeparation = (node1ContentWidth / 2) + (node2ContentWidth / 2) + minDistance;
+    
+    // Add extra padding if nodes have many attributes (more visual density)
+    let densityPadding = 0;
+    const node1AttrCount = node1.attributes ? Object.keys(node1.attributes).length : 0;
+    const node2AttrCount = node2.attributes ? Object.keys(node2.attributes).length : 0;
+    const totalAttrCount = node1AttrCount + node2AttrCount;
+    
+    if (totalAttrCount > 2) {
+      densityPadding = Math.min(totalAttrCount * 5, 30); // up to 30px extra
+    }
+    
+    return baseSeparation + densityPadding;
+  }
+
+  /**
+   * Computes optimal separation distance between two nodes for vertical constraints
+   */
+  private computeVerticalSeparation(node1: NodeWithMetadata, node2: NodeWithMetadata, minDistance: number): number {
+    const node1ContentHeight = this.estimateNodeContentHeight(node1);
+    const node2ContentHeight = this.estimateNodeContentHeight(node2);
+    
+    // Base separation is half of each node's content height plus minimum distance
+    const baseSeparation = (node1ContentHeight / 2) + (node2ContentHeight / 2) + minDistance;
+    
+    // Add extra padding if nodes have many attributes (more visual density)
+    let densityPadding = 0;
+    const node1AttrCount = node1.attributes ? Object.keys(node1.attributes).length : 0;
+    const node2AttrCount = node2.attributes ? Object.keys(node2.attributes).length : 0;
+    const totalAttrCount = node1AttrCount + node2AttrCount;
+    
+    if (totalAttrCount > 2) {
+      densityPadding = Math.min(totalAttrCount * 3, 20); // up to 20px extra vertically
+    }
+    
+    return baseSeparation + densityPadding;
+  }
+
 
 
   private leftConstraint(leftNode: number, rightNode: number, sep: number) {
@@ -258,13 +355,13 @@ export class WebColaLayout {
       node1.fixed = 0;
       node2.fixed = 0;
 
-      let distance = constraint.minDistance + ((node1.width || 100) / 2) + ((node2.width || 100) / 2);
+      // Use improved horizontal separation calculation
+      let distance = this.computeHorizontalSeparation(node1, node2, constraint.minDistance);
 
       return this.leftConstraint(this.getNodeIndex(constraint.left.id), this.getNodeIndex(constraint.right.id), distance);
     }
 
     if (isTopConstraint(constraint)) {
-
 
       // Get the two nodes that are being constrained
       let node1 = this.colaNodes[this.getNodeIndex(constraint.top.id)];
@@ -272,8 +369,9 @@ export class WebColaLayout {
       //      // Set fixed to 0 here.
       node1.fixed = 0;
       node2.fixed = 0;
-      let distance = constraint.minDistance + ((node1.height || 60) / 2) + ((node2.height || 60) / 2);
-
+      
+      // Use improved vertical separation calculation
+      let distance = this.computeVerticalSeparation(node1, node2, constraint.minDistance);
 
       return this.topConstraint(this.getNodeIndex(constraint.top.id), this.getNodeIndex(constraint.bottom.id), distance);
     }

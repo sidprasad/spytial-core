@@ -346,14 +346,122 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     return group.name.startsWith(WebColaCnDGraph.DISCONNECTED_NODE_PREFIX);
   }
 
-  private getScaledDetails(constraints: any[], scaleFactor: number = DEFAULT_SCALE_FACTOR) {
+  /**
+   * Estimates the visual content width of a node based on its label and attributes
+   */
+  private estimateNodeContentWidth(node: any): number {
+    if (!node) return 100; // fallback
+
+    const baseWidth = node.width || 100;
+    let contentWidth = baseWidth;
+
+    // Factor in label length
+    if (node.label) {
+      const labelLength = node.label.length;
+      const estimatedLabelWidth = labelLength * 8; // rough estimate: 8px per character
+      contentWidth = Math.max(contentWidth, estimatedLabelWidth + 20); // padding
+    }
+
+    // Factor in attributes
+    if (node.attributes && typeof node.attributes === 'object') {
+      const attributeEntries = Object.entries(node.attributes);
+      if (attributeEntries.length > 0) {
+        const maxAttrLength = attributeEntries.reduce((max, [key, value]) => {
+          const attrText = `${key}: ${Array.isArray(value) ? value.join(', ') : value}`;
+          return Math.max(max, attrText.length);
+        }, 0);
+        const estimatedAttrWidth = maxAttrLength * 7; // slightly smaller font
+        contentWidth = Math.max(contentWidth, estimatedAttrWidth + 20);
+      }
+    }
+
+    return Math.min(contentWidth, 300); // cap at reasonable maximum
+  }
+
+  /**
+   * Estimates the visual content height of a node based on its label and attributes
+   */
+  private estimateNodeContentHeight(node: any): number {
+    if (!node) return 60; // fallback
+
+    const baseHeight = node.height || 60;
+    let contentHeight = baseHeight;
+
+    // Base height for label
+    let lineCount = 1;
+    
+    // Add lines for attributes
+    if (node.attributes && typeof node.attributes === 'object') {
+      const attributeEntries = Object.entries(node.attributes);
+      lineCount += attributeEntries.length;
+    }
+
+    // Estimate height based on line count
+    const estimatedHeight = lineCount * 15 + 20; // 15px per line + padding
+    contentHeight = Math.max(contentHeight, estimatedHeight);
+
+    return Math.min(contentHeight, 200); // cap at reasonable maximum
+  }
+
+  /**
+   * Computes optimal link length based on node content and graph density
+   */
+  private computeOptimalLinkLength(nodes: any[], scaleFactor: number): number {
+    if (!nodes || nodes.length === 0) {
+      return 150; // fallback
+    }
+
+    // Calculate average node dimensions based on content
+    let totalContentWidth = 0;
+    let totalContentHeight = 0;
+    let validNodes = 0;
+
+    nodes.forEach(node => {
+      if (node && !this.isHiddenNode(node)) {
+        totalContentWidth += this.estimateNodeContentWidth(node);
+        totalContentHeight += this.estimateNodeContentHeight(node);
+        validNodes++;
+      }
+    });
+
+    if (validNodes === 0) {
+      return 150; // fallback
+    }
+
+    const avgContentWidth = totalContentWidth / validNodes;
+    const avgContentHeight = totalContentHeight / validNodes;
+    const avgNodeSize = Math.max(avgContentWidth, avgContentHeight);
+
+    // Base link length should accommodate average node size plus some separation
+    let baseLinkLength = avgNodeSize + 50; // base separation
+
+    // Adjust for graph density - more nodes = tighter spacing
+    const densityFactor = Math.max(0.5, 1 - (validNodes / 100)); // reduce spacing as node count increases
+    baseLinkLength *= densityFactor;
+
+    // Apply scale factor
     const adjustedScaleFactor = scaleFactor / 5;
-    const min_sep = 150;
-    const default_node_width = 100;
+    const scaledLinkLength = baseLinkLength / adjustedScaleFactor;
+
+    // Ensure reasonable bounds
+    return Math.max(80, Math.min(scaledLinkLength, 400));
+  }
+
+  private getScaledDetails(constraints: any[], scaleFactor: number = DEFAULT_SCALE_FACTOR, nodes?: any[]) {
+    const adjustedScaleFactor = scaleFactor / 5;
 
     let groupCompactness = WebColaCnDGraph.DEFAULT_GROUP_COMPACTNESS * adjustedScaleFactor;
 
-    let linkLength = (min_sep + default_node_width) / adjustedScaleFactor;
+    // Use improved link length calculation if nodes are available
+    let linkLength: number;
+    if (nodes && nodes.length > 0) {
+      linkLength = this.computeOptimalLinkLength(nodes, scaleFactor);
+    } else {
+      // Fallback to original calculation
+      const min_sep = 150;
+      const default_node_width = 100;
+      linkLength = (min_sep + default_node_width) / adjustedScaleFactor;
+    }
 
     /*
     For each constraint, if it is a separation constraint, adjust the distance by the scale factor.
@@ -1017,7 +1125,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
 
       // Get scaled constraints and link length
-      const { scaledConstraints, linkLength, groupCompactness } = this.getScaledDetails(webcolaLayout.constraints, DEFAULT_SCALE_FACTOR);
+      const { scaledConstraints, linkLength, groupCompactness } = this.getScaledDetails(webcolaLayout.constraints, DEFAULT_SCALE_FACTOR, webcolaLayout.nodes);
 
       // Create WebCola layout using d3adaptor
       const layout: Layout = cola.d3adaptor(d3)
