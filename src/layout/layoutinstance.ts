@@ -549,7 +549,7 @@ export class LayoutInstance {
 
                 // New selector-based hiding logic
                 let hideBySelector = false;
-                const hiddenAtomDirectives = this._layoutSpec.directives.hiddenAtoms;
+                const hiddenAtomDirectives = this._layoutSpec.constraints.hiddenAtoms;
                 for (const directive of hiddenAtomDirectives) {
                     try {
                         const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
@@ -1466,8 +1466,8 @@ export class LayoutInstance {
         let nodeSizeMap: Record<string, { width: number; height: number }> = {};
         const DEFAULT_SIZE = { width: this.DEFAULT_NODE_WIDTH, height: this.DEFAULT_NODE_HEIGHT };
 
-        // Apply size directives first
-        let sizeDirectives = this._layoutSpec.directives.sizes;
+        // Apply size constraints first
+        let sizeDirectives = this._layoutSpec.constraints.sizes;
         sizeDirectives.forEach((sizeDirective) => {
             let selectedNodes = this.evaluator.evaluate(sizeDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
             let width = sizeDirective.width;

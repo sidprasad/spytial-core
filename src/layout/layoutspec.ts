@@ -258,8 +258,9 @@ interface ConstraintsBlock
     grouping : {
         byfield : GroupByField[];
         byselector : GroupBySelector[];
-    }
-
+    };
+    sizes: AtomSizeDirective[];
+    hiddenAtoms: AtomHidingDirective[];
 }
 
 interface DirectivesBlock {
@@ -297,7 +298,9 @@ function DEFAULT_LAYOUT() : LayoutSpec
             grouping : {
                 byfield : [] as GroupByField[],
                 byselector : [] as GroupBySelector[]
-            }
+            },
+            sizes: [] as AtomSizeDirective[],
+            hiddenAtoms: [] as AtomHidingDirective[]
         },
         directives: {
             atomColors: [],
@@ -371,8 +374,12 @@ export function parseLayoutSpec(s: string): LayoutSpec {
 
     if (directives && Array.isArray(directives)) {
         try {
-            let directivesParsed = parseDirectives(directives);
-            layoutSpec.directives = directivesParsed;
+            let directivesResult = parseDirectives(directives);
+            layoutSpec.directives = directivesResult.directives;
+            
+            // Handle backward compatibility: move size and hideAtom from directives to constraints
+            layoutSpec.constraints.sizes = layoutSpec.constraints.sizes.concat(directivesResult.backCompatSizes);
+            layoutSpec.constraints.hiddenAtoms = layoutSpec.constraints.hiddenAtoms.concat(directivesResult.backCompatHiddenAtoms);
         }
 
         catch (e) {
@@ -519,6 +526,23 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
             return alignConstraint;
         });
 
+    // Parse size constraints
+    let sizes : AtomSizeDirective[] = typedConstraints.filter(c => c.size)
+        .map(c => {
+            return {
+                height: c.size.height,
+                width: c.size.width,
+                selector: c.size.selector
+            }
+        });
+
+    // Parse hideAtom constraints  
+    let hiddenAtoms : AtomHidingDirective[] = typedConstraints.filter(c => c.hideAtom).map(c => {
+        return {
+            selector: c.hideAtom.selector
+        }
+    });
+
     return {
         orientation: {
             relative: relativeOrientationConstraints,
@@ -528,18 +552,26 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
         grouping: {
             byfield: byfield,
             byselector: byselector
-        }
+        },
+        sizes: sizes,
+        hiddenAtoms: hiddenAtoms
     }
 
+}
+
+interface DirectivesParseResult {
+    directives: DirectivesBlock;
+    backCompatSizes: AtomSizeDirective[];
+    backCompatHiddenAtoms: AtomHidingDirective[];
 }
 
 /**
  * Parses the directives from the YAML specification.
  * @param directives List of directives from the YAML specification.
- * @returns List of CnD directives
+ * @returns DirectivesParseResult containing directives and any backward compatibility items
  * @throws Error if there are inconsistencies in the directives.
  */
-function parseDirectives(directives: unknown[]): DirectivesBlock {
+function parseDirectives(directives: unknown[]): DirectivesParseResult {
     // Type assertion since we expect specific structure from YAML
     const typedDirectives = directives as Record<string, any>[];
 
@@ -619,16 +651,20 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
     });
 
     return {
-        atomColors,
-        sizes,
-        icons,
-        edgeColors,
-        projections,
-        attributes,
-        hiddenFields,
-        inferredEdges,
-        hiddenAtoms,
-        hideDisconnected,
-        hideDisconnectedBuiltIns
+        directives: {
+            atomColors,
+            sizes: [], // Empty since sizes should be constraints now
+            icons,
+            edgeColors,
+            projections,
+            attributes,
+            hiddenFields,
+            inferredEdges,
+            hiddenAtoms: [], // Empty since hiddenAtoms should be constraints now
+            hideDisconnected,
+            hideDisconnectedBuiltIns
+        },
+        backCompatSizes: sizes,
+        backCompatHiddenAtoms: hiddenAtoms
     }
 }
