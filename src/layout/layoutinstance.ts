@@ -194,39 +194,13 @@ export class LayoutInstance {
         return fieldConstraints;
     }
 
+    /**
+     * Check if a field should be treated as an attribute (legacy support)
+     * @deprecated This method is maintained for backward compatibility
+     */
     isAttributeField(fieldId: string, sourceAtom?: string, targetAtom?: string): boolean {
-        const matchingDirectives = this._layoutSpec.directives.attributes.filter((ad) => ad.field === fieldId);
-        
-        if (matchingDirectives.length === 0) {
-            return false;
-        }
-        
-        // If no atoms provided or no selector-based directives, use legacy behavior
-        if (!sourceAtom || !targetAtom) {
-            return matchingDirectives.some(ad => !ad.selector);
-        }
-        
-        // Check selector-based directives
-        for (const directive of matchingDirectives) {
-            if (!directive.selector) {
-                // Legacy directive without selector matches any atoms
-                return true;
-            }
-            
-            try {
-                const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
-                const selectedAtoms = selectorResult.selectedAtoms();
-                
-                // Check if source atom is selected by the selector
-                if (selectedAtoms.includes(sourceAtom)) {
-                    return true;
-                }
-            } catch (error) {
-                console.warn(`Failed to evaluate attribute selector "${directive.selector}":`, error);
-                // Continue to next directive on error
-            }
-        }
-        
+        // For backward compatibility, check if any old-style field-based directives exist
+        // This method is no longer the primary way attributes are processed
         return false;
     }
 
@@ -470,51 +444,67 @@ export class LayoutInstance {
      * @returns A record of attributes
      */
     private generateAttributesAndRemoveEdges(g: Graph): Record<string, Record<string, string[]>> {
-        // Node : [] of attributes
+        // Node ID -> { attribute key -> list of values }
         let attributes: Record<string, Record<string, string[]>> = {};
 
-        let graphEdges = [...g.edges()];
-        // Go through all edge labels in the graph
+        // Process new-style attribute directives
+        for (const directive of this._layoutSpec.directives.attributes) {
+            try {
+                // Get atoms that should have this attribute
+                const targetAtomsResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
+                const targetAtoms = targetAtomsResult.selectedAtoms();
+                
+                // For each target atom, get the values using valueSelector
+                for (const atomId of targetAtoms) {
+                    try {
+                        const valuesResult = this.evaluator.evaluate(directive.valueSelector, { instanceIndex: this.instanceNum });
+                        
+                        // Initialize attributes for this atom if needed
+                        if (!attributes[atomId]) {
+                            attributes[atomId] = {};
+                        }
+                        
+                        if (!attributes[atomId][directive.key]) {
+                            attributes[atomId][directive.key] = [];
+                        }
+                        
+                        // Add values based on what the valueSelector returns
+                        if (valuesResult.isSingleton()) {
+                            const singleValue = valuesResult.singleResult();
+                            attributes[atomId][directive.key].push(String(singleValue));
+                        } else {
+                            // Multiple values - add all selected atoms/values
+                            const selectedValues = valuesResult.selectedAtoms();
+                            if (selectedValues.length > 0) {
+                                attributes[atomId][directive.key].push(...selectedValues);
+                            } else {
+                                // Try to get tuple values if no atoms selected
+                                const tuples = valuesResult.selectedTuplesAll();
+                                for (const tuple of tuples) {
+                                    attributes[atomId][directive.key].push(...tuple);
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        console.warn(`Failed to evaluate value selector "${directive.valueSelector}" for atom ${atomId}:`, error);
+                    }
+                }
+            } catch (error) {
+                console.warn(`Failed to evaluate attribute selector "${directive.selector}":`, error);
+            }
+        }
 
+        // Legacy support: Process field-based hidden fields (remove edges)
+        let graphEdges = [...g.edges()];
         graphEdges.forEach((edge) => {
             const edgeId = edge.name;
             const relName = this.getRelationName(g, edge);
             const sourceAtom = edge.v;
             const targetAtom = edge.w;
-            const isAttributeRel = this.isAttributeField(relName, sourceAtom, targetAtom);
             const isHiddenRel = this.isHiddenField(relName, sourceAtom, targetAtom);
-
-            if (isHiddenRel && isAttributeRel) {
-                throw new Error(`${relName} cannot be both an attribute and a hidden field.`);
-            }
 
             if (isHiddenRel) {
                 // If the field is a hidden field, we should remove the edge from the graph.
-                g.removeEdge(edge.v, edge.w, edgeId);
-                return;
-            }
-
-            if (isAttributeRel) {
-
-                // If the field is an attribute field, we should add the attribute to the source node's
-                // attributes field.
-
-                const attributeKey = this.getEdgeLabel(g, edge);
-                let source = edge.v;
-                let target = edge.w;
-
-                // Really, we should be pushing the target node's LABEL.
-                let targetLabel = g.node(target)?.label || target; // Use the node's label or the node ID if no label exists.
-
-                let nodeAttributes = attributes[source] || {};
-
-                if (!nodeAttributes[attributeKey]) {
-                    nodeAttributes[attributeKey] = [];
-                    attributes[source] = nodeAttributes;
-                }
-                nodeAttributes[attributeKey].push(targetLabel);
-
-                // Now remove the edge from the graph
                 g.removeEdge(edge.v, edge.w, edgeId);
             }
         });

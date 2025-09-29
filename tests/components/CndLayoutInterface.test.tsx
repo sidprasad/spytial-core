@@ -273,7 +273,7 @@ describe('CndLayoutInterface Component', () => {
 
     it('Code View should update when No Code View changes', async () => {
       const user = userEvent.setup()
-      const directives: DirectiveData[] = [{ id: '1', type: 'attribute', params: {field: 'key'} }]
+      const directives: DirectiveData[] = [{ id: '1', type: 'attribute', params: {selector: 'Node', key: 'key', valueSelector: 'Node.key'} }]
 
       // Render the controlled test wrapper
       render(<TestWrapper initialDirectives={directives} initialIsNoCodeView={true} />)

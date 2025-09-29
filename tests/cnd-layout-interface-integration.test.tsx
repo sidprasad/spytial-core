@@ -111,7 +111,9 @@ describe('CnD Layout Interface Integration Tests', () => {
       - below
 directives:
 - attribute:
-    field: key
+    selector: 'Node'
+    key: 'key'
+    valueSelector: 'Node.key'
 - flag: hideDisconnectedBuiltIns
 `
 
@@ -121,7 +123,7 @@ directives:
   ]
 
   const testDirectives = [
-    { id: '1', type: 'attribute', params: { field: 'key' } },
+    { id: '1', type: 'attribute', params: { selector: 'Node', key: 'key', valueSelector: 'Node.key' } },
     { id: '2', type: 'flag', params: { flag: 'hideDisconnectedBuiltIns' } }
   ]
 
@@ -220,7 +222,9 @@ directives:
   
       const directiveElements = within(directivesSection).getAllByTestId(/^directive-/);
       expect(directiveElements).toHaveLength(2);
-      expect(screen.getByText(/"field":"key"/)).toBeInTheDocument();
+      expect(screen.getByText(/"selector":"Node"/)).toBeInTheDocument();
+      expect(screen.getByText(/"key":"key"/)).toBeInTheDocument();
+      expect(screen.getByText(/"valueSelector":"Node.key"/)).toBeInTheDocument();
       expect(screen.getByText(/"flag":"hideDisconnectedBuiltIns"/)).toBeInTheDocument();
     })
 

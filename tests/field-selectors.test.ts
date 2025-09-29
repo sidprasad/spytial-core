@@ -10,8 +10,9 @@ directives:
       value: 'red'
       selector: 'Person'
   - attribute:
-      field: 'age'
       selector: 'Person'
+      key: 'age'
+      valueSelector: 'Person.age'
   - hideField:
       field: 'secret'
       selector: 'User'
@@ -31,10 +32,11 @@ constraints:
     expect(layoutSpec.directives.edgeColors[0].color).toBe('red');
     expect(layoutSpec.directives.edgeColors[0].selector).toBe('Person');
     
-    // Test attribute directive with selector
+    // Test new attribute directive with selector
     expect(layoutSpec.directives.attributes).toHaveLength(1);
-    expect(layoutSpec.directives.attributes[0].field).toBe('age');
     expect(layoutSpec.directives.attributes[0].selector).toBe('Person');
+    expect(layoutSpec.directives.attributes[0].key).toBe('age');
+    expect(layoutSpec.directives.attributes[0].valueSelector).toBe('Person.age');
     
     // Test hidden field directive with selector
     expect(layoutSpec.directives.hiddenFields).toHaveLength(1);
@@ -54,7 +56,9 @@ directives:
       field: 'name'
       value: 'blue'
   - attribute:
-      field: 'age'
+      selector: 'Person'
+      key: 'age'
+      valueSelector: 'Person.age'
 `;
 
     const layoutSpec = parseLayoutSpec(layoutSpecStr);
@@ -66,7 +70,19 @@ directives:
     expect(layoutSpec.directives.edgeColors[0].selector).toBeUndefined();
     
     expect(layoutSpec.directives.attributes).toHaveLength(1);
-    expect(layoutSpec.directives.attributes[0].field).toBe('age');
-    expect(layoutSpec.directives.attributes[0].selector).toBeUndefined();
+    expect(layoutSpec.directives.attributes[0].selector).toBe('Person');
+    expect(layoutSpec.directives.attributes[0].key).toBe('age');
+    expect(layoutSpec.directives.attributes[0].valueSelector).toBe('Person.age');
+  });
+
+  it('should reject old field-based attribute format with helpful error', () => {
+    const layoutSpecStr = `
+directives:
+  - attribute:
+      field: 'age'
+      selector: 'Person'
+`;
+
+    expect(() => parseLayoutSpec(layoutSpecStr)).toThrow(/Attribute directive with old field-based format detected/);
   });
 });

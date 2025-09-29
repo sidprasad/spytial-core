@@ -91,7 +91,7 @@ describe('NoCodeView Component Tests', () => {
 
     it('should handle when directives are removed to empty gracefully', async () => {
       const user = userEvent.setup()
-      const directives: DirectiveData[] = [{ id: '1', type: 'attribute', params: { field: 'key' } }]
+      const directives: DirectiveData[] = [{ id: '1', type: 'attribute', params: { selector: 'Node', key: 'key', valueSelector: 'Node.key' } }]
 
       // Render the NoCodeView with one directive
       render(<TestWrapper initialDirectives={directives}/>)

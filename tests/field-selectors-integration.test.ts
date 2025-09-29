@@ -118,12 +118,13 @@ directives:
     });
   });
 
-  it('should apply attribute directive only to specified atoms via selector', () => {
+  it('should apply attribute directive using new selector-based approach', () => {
     const layoutSpecStr = `
 directives:
   - attribute:
-      field: 'name'
       selector: 'Person'
+      key: 'personName'
+      valueSelector: 'Person.name'
 `;
 
     const layoutSpec = parseLayoutSpec(layoutSpecStr);
@@ -133,40 +134,38 @@ directives:
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
     const { layout } = layoutInstance.generateLayout(instance, {});
 
-    // Find Person and Car nodes
+    // Find Person nodes
     const personNodes = layout.nodes.filter(n => n.types.includes('Person'));
     const carNodes = layout.nodes.filter(n => n.types.includes('Car'));
     const companyNodes = layout.nodes.filter(n => n.types.includes('Company'));
 
-    // Person nodes should have name attributes (edges converted to attributes)
+    // Person nodes should have personName attributes based on the new selector-based approach
     expect(personNodes.length).toBeGreaterThan(0);
     personNodes.forEach(node => {
       expect(node.attributes).toBeDefined();
-      // Should have name attribute since Person name edges were converted
-      expect(Object.keys(node.attributes || {})).toContain('name');
+      // Should have personName attribute from the value selector
+      expect(Object.keys(node.attributes || {})).toContain('personName');
+      
+      // The attribute values should be populated by the valueSelector
+      const personNameValues = node.attributes?.['personName'] || [];
+      expect(personNameValues.length).toBeGreaterThan(0);
     });
 
-    // Car and Company nodes should not have name attributes  
+    // Car and Company nodes should not have personName attributes since they don't match the selector
     carNodes.forEach(node => {
       const attrs = node.attributes || {};
-      expect(Object.keys(attrs)).not.toContain('name');
+      expect(Object.keys(attrs)).not.toContain('personName');
     });
 
     companyNodes.forEach(node => {
       const attrs = node.attributes || {};
-      expect(Object.keys(attrs)).not.toContain('name');
+      expect(Object.keys(attrs)).not.toContain('personName');
     });
 
-    // Car and Company name edges should still exist as edges (not converted to attributes)
-    const remainingNameEdges = layout.edges.filter(e => e.relationName === 'name');
-    const carNameEdges = remainingNameEdges.filter(e => 
-      e.source.types.includes('Car')
-    );
-    const companyNameEdges = remainingNameEdges.filter(e => 
-      e.source.types.includes('Company')
-    );
-
-    expect(carNameEdges.length).toBeGreaterThan(0);
+    // All name edges should still exist since the new attribute system doesn't remove edges
+    const nameEdges = layout.edges.filter(e => e.relationName === 'name');
+    expect(nameEdges.length).toBeGreaterThan(0);
+  });
     expect(companyNameEdges.length).toBeGreaterThan(0);
   });
 

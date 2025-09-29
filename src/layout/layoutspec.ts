@@ -233,7 +233,11 @@ export interface FieldDirective extends Operation {
 }
 
 
-export interface AttributeDirective extends FieldDirective {}
+export interface AttributeDirective extends Operation {
+    selector: string; // Selector which determines what atoms this attribute applies to
+    key: string; // String which defines the key of the attribute
+    valueSelector: string; // Selector which determines all the values to be collected (supports multiple values as list)
+}
 
 export interface FieldHidingDirective extends FieldDirective {}
 
@@ -581,9 +585,22 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
                 });
 
     let attributes : AttributeDirective[]  = typedDirectives.filter(d => d.attribute).map(d => {
+        // Check if using old field-based format
+        if (d.attribute.field !== undefined) {
+            throw new Error(`Attribute directive with old field-based format detected. Please update to new format: 
+Old: { field: "${d.attribute.field}", selector: "${d.attribute.selector || ''}" }
+New: { selector: "selector_for_target_atoms", key: "attribute_name", valueSelector: "selector_for_values" }`);
+        }
+        
+        // Validate new format has required fields
+        if (!d.attribute.selector || !d.attribute.key || !d.attribute.valueSelector) {
+            throw new Error(`Attribute directive must have selector, key, and valueSelector fields. Got: ${JSON.stringify(d.attribute)}`);
+        }
+        
         return {
-            field: d.attribute.field,
-            selector: d.attribute.selector
+            selector: d.attribute.selector,
+            key: d.attribute.key,
+            valueSelector: d.attribute.valueSelector
         }
     });
 
