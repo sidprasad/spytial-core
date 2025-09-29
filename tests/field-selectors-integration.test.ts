@@ -166,8 +166,6 @@ directives:
     const nameEdges = layout.edges.filter(e => e.relationName === 'name');
     expect(nameEdges.length).toBeGreaterThan(0);
   });
-    expect(companyNameEdges.length).toBeGreaterThan(0);
-  });
 
   it('should apply hide field directive only to specified atoms via selector', () => {
     const layoutSpecStr = `
