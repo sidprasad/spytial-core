@@ -1609,6 +1609,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
   /**
    * Calculates the optimal font size to fit text within given dimensions
+   * Considers text wrapping to maximize font size when text can span multiple lines
    */
   private calculateOptimalFontSize(
     text: string, 
@@ -1620,23 +1621,23 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     
     // Start with default size and scale down if needed
     while (fontSize > WebColaCnDGraph.MIN_FONT_SIZE) {
-      const textWidth = this.measureTextWidth(text, fontSize, fontFamily);
-      const lineHeight = fontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO;
+      const wrappedLines = this.wrapText(text, maxWidth, fontSize, fontFamily);
+      const totalHeight = wrappedLines.length * fontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO;
       
-      if (textWidth <= maxWidth && lineHeight <= maxHeight) {
+      if (totalHeight <= maxHeight) {
         break;
       }
       
       fontSize -= 0.5;
     }
     
-    // Scale up if there's room
+    // Scale up if there's room (considering wrapping)
     while (fontSize < WebColaCnDGraph.MAX_FONT_SIZE) {
       const testSize = fontSize + 0.5;
-      const textWidth = this.measureTextWidth(text, testSize, fontFamily);
-      const lineHeight = testSize * WebColaCnDGraph.LINE_HEIGHT_RATIO;
+      const wrappedLines = this.wrapText(text, maxWidth, testSize, fontFamily);
+      const totalHeight = wrappedLines.length * testSize * WebColaCnDGraph.LINE_HEIGHT_RATIO;
       
-      if (textWidth > maxWidth || lineHeight > maxHeight) {
+      if (totalHeight > maxHeight) {
         break;
       }
       
@@ -1709,12 +1710,18 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         
         const displayLabel = d.label || d.name || d.id || "Node";
         const attributes = d.attributes || {};
+        const attributeEntries = Object.entries(attributes);
+        
+        // Allocate space: prioritize main label, but allow attributes to use remaining space
+        // If there are attributes, reserve some space for them
+        const hasAttributes = attributeEntries.length > 0;
+        const mainLabelMaxHeight = hasAttributes ? maxTextHeight * 0.6 : maxTextHeight;
         
         // Calculate optimal font size for the main label
         const mainLabelFontSize = this.calculateOptimalFontSize(
           displayLabel,
           maxTextWidth,
-          Math.min(maxTextHeight / 3, WebColaCnDGraph.MAX_FONT_SIZE * WebColaCnDGraph.LINE_HEIGHT_RATIO),
+          mainLabelMaxHeight,
           'system-ui'
         );
         
@@ -1735,17 +1742,20 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         });
 
         // Handle attributes (show all that fit)
-        const attributeEntries = Object.entries(attributes);
-        if (attributeEntries.length > 0) {
+        if (hasAttributes) {
           const remainingHeight = maxTextHeight - (mainLabelLines.length * lineHeight);
-          const attributeFontSize = Math.min(
-            mainLabelFontSize * 0.8, // Slightly smaller than main label
-            this.calculateOptimalFontSize(
-              "sample: value", // Sample attribute text for sizing
-              maxTextWidth,
-              remainingHeight / Math.max(1, attributeEntries.length),
-              'system-ui'
-            )
+          
+          // Calculate optimal font size for attributes based on remaining space
+          // Use the longest attribute as sample for sizing
+          const sampleAttribute = attributeEntries
+            .map(([key, value]) => `${key}: ${value}`)
+            .reduce((longest, current) => current.length > longest.length ? current : longest, "sample: value");
+          
+          const attributeFontSize = this.calculateOptimalFontSize(
+            sampleAttribute,
+            maxTextWidth,
+            remainingHeight / attributeEntries.length,
+            'system-ui'
           );
           
           for (let i = 0; i < attributeEntries.length; i++) {
