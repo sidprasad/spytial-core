@@ -947,7 +947,12 @@ export class PyretDataInstance implements IInputDataInstance {
     }
 
     let relation = this.relations.get(relationId);
-    let name = relationId + (middleAtoms.length > 0 ? `[${middleAtoms.join(', ')}]` : '');
+    // Use middle atom labels instead of IDs for proper display (e.g., edge[3.14] instead of edge[weight1])
+    const middleLabels = middleAtoms.map(atomId => {
+      const atom = this.atoms.get(atomId);
+      return atom ? atom.label : atomId;
+    });
+    let name = relationId + (middleLabels.length > 0 ? `[${middleLabels.join(', ')}]` : '');
     if (!relation) {
       relation = {
         id: relationId,
@@ -1118,15 +1123,18 @@ export class PyretDataInstance implements IInputDataInstance {
           
           // Create edge label that includes middle atom labels for higher-arity relations
           const middleAtoms = tuple.atoms.slice(1, -1);
-          let edgeLabel = relation.name;
+          let edgeLabel: string;
           
           if (middleAtoms.length > 0) {
-            // Get labels for middle atoms instead of using IDs
+            // Get labels for middle atoms to properly display decimal numbers
             const middleLabels = middleAtoms.map(atomId => {
               const atom = this.atoms.get(atomId);
               return atom ? atom.label : atomId; // Fallback to ID if atom not found
             });
-            edgeLabel = `${relation.name}[${middleLabels.join(', ')}]`;
+            // Use just the relation ID (not the full name which might already have brackets)
+            edgeLabel = `${relation.id}[${middleLabels.join(', ')}]`;
+          } else {
+            edgeLabel = relation.name;
           }
 
           // Generate a unique edge ID
