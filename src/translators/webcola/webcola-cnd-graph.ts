@@ -1716,9 +1716,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         const hasAttributes = attributeEntries.length > 0;
         const mainLabelMaxHeight = hasAttributes ? maxTextHeight * 0.6 : maxTextHeight;
         
-        // Calculate optimal font size for the main label
+        // Calculate font size based on available space (for consistency across similar-sized nodes)
+        // Use a representative text length for sizing rather than the actual text
+        // This ensures nodes of similar size have consistent font sizes
+        const representativeText = "SampleText"; // Standard length for sizing
         const mainLabelFontSize = this.calculateOptimalFontSize(
-          displayLabel,
+          representativeText,
           maxTextWidth,
           mainLabelMaxHeight,
           'system-ui'
@@ -1741,14 +1744,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         if (hasAttributes) {
           const remainingHeight = maxTextHeight - lineHeight;
           
-          // Calculate optimal font size for attributes based on remaining space
-          // Use the longest attribute as sample for sizing
-          const sampleAttribute = attributeEntries
-            .map(([key, value]) => `${key}: ${value}`)
-            .reduce((longest, current) => current.length > longest.length ? current : longest, "sample: value");
-          
+          // Calculate font size based on available space for consistency
           const attributeFontSize = this.calculateOptimalFontSize(
-            sampleAttribute,
+            representativeText,
             maxTextWidth,
             remainingHeight / attributeEntries.length,
             'system-ui'
