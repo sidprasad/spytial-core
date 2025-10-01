@@ -1726,23 +1726,20 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         
         textElement.attr("font-size", `${mainLabelFontSize}px`);
         
-        // Add main name label with wrapping if needed
-        const mainLabelLines = this.wrapText(displayLabel, maxTextWidth, mainLabelFontSize);
+        // Add main name label on a single line
         const lineHeight = mainLabelFontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO;
         
-        mainLabelLines.forEach((line, lineIndex) => {
-          textElement
-            .append("tspan")
-            .attr("x", 0)
-            .attr("dy", lineIndex === 0 ? "0em" : `${lineHeight}px`)
-            .style("font-weight", "bold")
-            .style("font-size", `${mainLabelFontSize}px`)
-            .text(line);
-        });
+        textElement
+          .append("tspan")
+          .attr("x", 0)
+          .attr("dy", "0em")
+          .style("font-weight", "bold")
+          .style("font-size", `${mainLabelFontSize}px`)
+          .text(displayLabel);
 
         // Handle attributes (show all that fit)
         if (hasAttributes) {
-          const remainingHeight = maxTextHeight - (mainLabelLines.length * lineHeight);
+          const remainingHeight = maxTextHeight - lineHeight;
           
           // Calculate optimal font size for attributes based on remaining space
           // Use the longest attribute as sample for sizing
@@ -1760,16 +1757,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           for (let i = 0; i < attributeEntries.length; i++) {
             const [key, value] = attributeEntries[i];
             const attributeText = `${key}: ${value}`;
-            const attributeLines = this.wrapText(attributeText, maxTextWidth, attributeFontSize);
             
-            attributeLines.forEach((line, subLineIndex) => {
-              textElement
-                .append("tspan")
-                .attr("x", 0)
-                .attr("dy", `${attributeFontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO}px`)
-                .style("font-size", `${attributeFontSize}px`)
-                .text(line);
-            });
+            textElement
+              .append("tspan")
+              .attr("x", 0)
+              .attr("dy", `${attributeFontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO}px`)
+              .style("font-size", `${attributeFontSize}px`)
+              .text(attributeText);
           }
         }
       });
