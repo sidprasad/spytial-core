@@ -1609,7 +1609,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
   /**
    * Calculates the optimal font size to fit text within given dimensions
-   * Considers text wrapping to maximize font size when text can span multiple lines
    */
   private calculateOptimalFontSize(
     text: string, 
@@ -1621,23 +1620,23 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     
     // Start with default size and scale down if needed
     while (fontSize > WebColaCnDGraph.MIN_FONT_SIZE) {
-      const wrappedLines = this.wrapText(text, maxWidth, fontSize, fontFamily);
-      const totalHeight = wrappedLines.length * fontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO;
+      const textWidth = this.measureTextWidth(text, fontSize, fontFamily);
+      const lineHeight = fontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO;
       
-      if (totalHeight <= maxHeight) {
+      if (textWidth <= maxWidth && lineHeight <= maxHeight) {
         break;
       }
       
       fontSize -= 0.5;
     }
     
-    // Scale up if there's room (considering wrapping)
+    // Scale up if there's room
     while (fontSize < WebColaCnDGraph.MAX_FONT_SIZE) {
       const testSize = fontSize + 0.5;
-      const wrappedLines = this.wrapText(text, maxWidth, testSize, fontFamily);
-      const totalHeight = wrappedLines.length * testSize * WebColaCnDGraph.LINE_HEIGHT_RATIO;
+      const textWidth = this.measureTextWidth(text, testSize, fontFamily);
+      const lineHeight = testSize * WebColaCnDGraph.LINE_HEIGHT_RATIO;
       
-      if (totalHeight > maxHeight) {
+      if (textWidth > maxWidth || lineHeight > maxHeight) {
         break;
       }
       
