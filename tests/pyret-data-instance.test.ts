@@ -177,4 +177,60 @@ describe('PyretDataInstance', () => {
         const normalizedReifiedData = reifiedData.replace(/\s+/g, '');
         expect(normalizedReified).toBe(normalizedReifiedData);
     });
+
+    it('should handle Pyret rational numbers correctly', () => {
+        // Test with a rational number like 1.5 represented as {n: 3, d: 2}
+        const pyretDataWithRational = {
+            dict: {
+                value: {
+                    n: 3,
+                    d: 2
+                }
+            },
+            brands: {
+                "$brandtest": true
+            },
+            $name: "TestNode"
+        };
+
+        const instance = new PyretDataInstance(pyretDataWithRational);
+        const atoms = instance.getAtoms();
+        const relations = instance.getRelations();
+
+        // Should have 2 atoms: the parent object and the converted rational number
+        expect(atoms).toHaveLength(2);
+
+        // Find the number atom
+        const numberAtom = atoms.find(a => a.type === 'Number');
+        expect(numberAtom).toBeDefined();
+        expect(numberAtom?.label).toBe('1.5'); // 3/2 = 1.5
+
+        // Should have 1 relation connecting the parent to the rational number
+        expect(relations).toHaveLength(1);
+        expect(relations[0].id).toBe('value');
+    });
+
+    it('should handle multiple rational numbers', () => {
+        const pyretDataWithRationals = {
+            dict: {
+                half: { n: 1, d: 2 },
+                quarter: { n: 1, d: 4 },
+                threeHalves: { n: 3, d: 2 }
+            },
+            brands: { "$brandtest": true },
+            $name: "Fractions"
+        };
+
+        const instance = new PyretDataInstance(pyretDataWithRationals);
+        const atoms = instance.getAtoms();
+
+        // Find all number atoms
+        const numberAtoms = atoms.filter(a => a.type === 'Number');
+        expect(numberAtoms).toHaveLength(3);
+
+        const labels = numberAtoms.map(a => a.label).sort();
+        expect(labels).toContain('0.5');   // 1/2
+        expect(labels).toContain('0.25');  // 1/4
+        expect(labels).toContain('1.5');   // 3/2
+    });
 });

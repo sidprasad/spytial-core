@@ -803,9 +803,17 @@ export class PyretDataInstance implements IInputDataInstance {
   /**
    * Creates an atom from a primitive value, optionally reusing existing atoms based on configuration
    */
-  private createAtomFromPrimitive(value: string | number | boolean): string {
-    const type = this.mapPrimitiveType(value);
-    const label = String(value);
+  private createAtomFromPrimitive(value: string | number | boolean | { n: number; d: number }): string {
+    // Handle rational numbers
+    let actualValue: string | number | boolean;
+    if (this.isRationalNumber(value)) {
+      actualValue = this.rationalToDecimal(value);
+    } else {
+      actualValue = value;
+    }
+
+    const type = this.mapPrimitiveType(actualValue);
+    const label = String(actualValue);
 
     // Check idempotency settings for this type
     const shouldReuse = (type === 'String' && this.options.stringsIdempotent) ||
@@ -1014,12 +1022,34 @@ export class PyretDataInstance implements IInputDataInstance {
   }
 
   /**
-   * Type guard for atomic values
+   * Type guard for Pyret rational number objects
+   * Pyret represents rational numbers as objects with 'n' (numerator) and 'd' (denominator) properties
    */
-  private isAtomicValue(value: unknown): value is string | number | boolean {
+  private isRationalNumber(value: unknown): value is { n: number; d: number } {
+    return typeof value === 'object' &&
+      value !== null &&
+      'n' in value &&
+      'd' in value &&
+      typeof (value as { n: unknown }).n === 'number' &&
+      typeof (value as { d: unknown }).d === 'number';
+  }
+
+  /**
+   * Converts a Pyret rational number object to a decimal number
+   */
+  private rationalToDecimal(rational: { n: number; d: number }): number {
+    return rational.n / rational.d;
+  }
+
+  /**
+   * Type guard for atomic values
+   * Now includes Pyret rational numbers
+   */
+  private isAtomicValue(value: unknown): value is string | number | boolean | { n: number; d: number } {
     return typeof value === 'string' ||
       typeof value === 'number' ||
-      typeof value === 'boolean';
+      typeof value === 'boolean' ||
+      this.isRationalNumber(value);
   }
 
   /**
