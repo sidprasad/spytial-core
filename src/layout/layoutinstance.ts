@@ -767,7 +767,7 @@ export class LayoutInstance {
             let source = layoutNodes.find((node) => node.id === edge.v);
             let target = layoutNodes.find((node) => node.id === edge.w);
             let relName = this.getRelationName(g, edge);
-            let color = this.getEdgeColor(relName, edge.v, edge.w);
+            let color = this.getEdgeColor(relName, edge.v, edge.w, edgeId);
 
             // Skip edges with missing source or target nodes
             if (!source || !target || !edgeId) {
@@ -1577,9 +1577,27 @@ export class LayoutInstance {
      * @param relName - The relation name of the edge.
      * @param sourceAtom - The source atom ID.
      * @param targetAtom - The target atom ID.
+     * @param edgeId - The edge ID (optional, used to identify inferred edges).
      * @returns The color for the edge, or "black" as default.
      */
-    private getEdgeColor(relName: string, sourceAtom: string, targetAtom: string): string {
+    private getEdgeColor(relName: string, sourceAtom: string, targetAtom: string, edgeId?: string): string {
+        // Check for inferred edge colors first
+        const inferredEdgePrefix = "_inferred_";
+        if (edgeId && edgeId.includes(inferredEdgePrefix)) {
+            const inferredEdges = this._layoutSpec.directives.inferredEdges;
+            for (const directive of inferredEdges) {
+                // Check if this edge ID belongs to this inferred edge directive
+                if (edgeId.includes(`${inferredEdgePrefix}<:${directive.name}`)) {
+                    // If a color is specified, use it
+                    if (directive.color) {
+                        return directive.color;
+                    }
+                    // Otherwise, fall through to use default color
+                    break;
+                }
+            }
+        }
+
         const colorDirectives = this._layoutSpec.directives.edgeColors;
         
         for (const directive of colorDirectives) {
