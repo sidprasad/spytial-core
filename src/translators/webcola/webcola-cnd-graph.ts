@@ -1709,58 +1709,59 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         
         const displayLabel = d.label || d.name || d.id || "Node";
         const attributes = d.attributes || {};
+        const attributeEntries = Object.entries(attributes);
         
-        // Calculate optimal font size for the main label
+        // Allocate space: prioritize main label, but allow attributes to use remaining space
+        // If there are attributes, reserve some space for them
+        const hasAttributes = attributeEntries.length > 0;
+        const mainLabelMaxHeight = hasAttributes ? maxTextHeight * 0.6 : maxTextHeight;
+        
+        // Calculate font size based on available space (for consistency across similar-sized nodes)
+        // Use a representative text length for sizing rather than the actual text
+        // This ensures nodes of similar size have consistent font sizes
+        const representativeText = "SampleText"; // Standard length for sizing
         const mainLabelFontSize = this.calculateOptimalFontSize(
-          displayLabel,
+          representativeText,
           maxTextWidth,
-          Math.min(maxTextHeight / 3, WebColaCnDGraph.MAX_FONT_SIZE * WebColaCnDGraph.LINE_HEIGHT_RATIO),
+          mainLabelMaxHeight,
           'system-ui'
         );
         
         textElement.attr("font-size", `${mainLabelFontSize}px`);
         
-        // Add main name label with wrapping if needed
-        const mainLabelLines = this.wrapText(displayLabel, maxTextWidth, mainLabelFontSize);
+        // Add main name label on a single line
         const lineHeight = mainLabelFontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO;
         
-        mainLabelLines.forEach((line, lineIndex) => {
-          textElement
-            .append("tspan")
-            .attr("x", 0)
-            .attr("dy", lineIndex === 0 ? "0em" : `${lineHeight}px`)
-            .style("font-weight", "bold")
-            .style("font-size", `${mainLabelFontSize}px`)
-            .text(line);
-        });
+        textElement
+          .append("tspan")
+          .attr("x", 0)
+          .attr("dy", "0em")
+          .style("font-weight", "bold")
+          .style("font-size", `${mainLabelFontSize}px`)
+          .text(displayLabel);
 
         // Handle attributes (show all that fit)
-        const attributeEntries = Object.entries(attributes);
-        if (attributeEntries.length > 0) {
-          const remainingHeight = maxTextHeight - (mainLabelLines.length * lineHeight);
-          const attributeFontSize = Math.min(
-            mainLabelFontSize * 0.8, // Slightly smaller than main label
-            this.calculateOptimalFontSize(
-              "sample: value", // Sample attribute text for sizing
-              maxTextWidth,
-              remainingHeight / Math.max(1, attributeEntries.length),
-              'system-ui'
-            )
+        if (hasAttributes) {
+          const remainingHeight = maxTextHeight - lineHeight;
+          
+          // Calculate font size based on available space for consistency
+          const attributeFontSize = this.calculateOptimalFontSize(
+            representativeText,
+            maxTextWidth,
+            remainingHeight / attributeEntries.length,
+            'system-ui'
           );
           
           for (let i = 0; i < attributeEntries.length; i++) {
             const [key, value] = attributeEntries[i];
             const attributeText = `${key}: ${value}`;
-            const attributeLines = this.wrapText(attributeText, maxTextWidth, attributeFontSize);
             
-            attributeLines.forEach((line, subLineIndex) => {
-              textElement
-                .append("tspan")
-                .attr("x", 0)
-                .attr("dy", `${attributeFontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO}px`)
-                .style("font-size", `${attributeFontSize}px`)
-                .text(line);
-            });
+            textElement
+              .append("tspan")
+              .attr("x", 0)
+              .attr("dy", `${attributeFontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO}px`)
+              .style("font-size", `${attributeFontSize}px`)
+              .text(attributeText);
           }
         }
       });
