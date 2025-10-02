@@ -11,7 +11,7 @@ interface HelperEdgeSelectorProps {
 
 /**
  * Minimal React component for helper/inferred edge directive.
- * Includes selector input and edge name field.
+ * Includes selector input, edge name field, and optional color picker.
  */
 export const HelperEdgeSelector: React.FC<HelperEdgeSelectorProps> = ({
   directiveData,
@@ -19,6 +19,7 @@ export const HelperEdgeSelector: React.FC<HelperEdgeSelectorProps> = ({
 }) => {
   const selector = (directiveData.params.selector as string) || '';
   const name = (directiveData.params.name as string) || '';
+  const color = (directiveData.params.color as string) || '#000000';
 
   return (
     <>
@@ -48,6 +49,18 @@ export const HelperEdgeSelector: React.FC<HelperEdgeSelectorProps> = ({
           defaultValue={name}
           onChange={(e) => onUpdate({ params: { ...directiveData.params, name: e.target.value } })}
           required
+        />
+      </div>
+      <div className="input-group">
+        <div className="input-group-prepend">
+          <span className="input-group-text">Color</span>
+        </div>
+        <input
+          type="color"
+          name="color"
+          className="form-control"
+          defaultValue={color}
+          onChange={(e) => onUpdate({ params: { ...directiveData.params, color: e.target.value } })}
         />
       </div>
     </>

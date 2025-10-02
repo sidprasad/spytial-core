@@ -138,5 +138,94 @@ constraints:
     const edgeLabels = layout.edges.map(e => e.label);
     expect(edgeLabels).not.toContain('_alignment_A_C_');
   });
+
+  it('applies color to inferred edges when specified', () => {
+    const dataWithTransitiveRelation: IJsonDataInstance = {
+      atoms: [
+        { id: 'A', type: 'Node', label: 'A' },
+        { id: 'B', type: 'Node', label: 'B' },
+        { id: 'C', type: 'Node', label: 'C' }
+      ],
+      relations: [
+        {
+          id: 'next',
+          name: 'next',
+          types: ['Node', 'Node'],
+          tuples: [
+            { atoms: ['A', 'B'], types: ['Node', 'Node'] },
+            { atoms: ['B', 'C'], types: ['Node', 'Node'] }
+          ]
+        }
+      ]
+    };
+
+    const specWithInferredEdge = `
+directives:
+  - inferredEdge:
+      name: reachable
+      selector: next.next
+      color: '#ff0000'
+`;
+
+    const instance = new JSONDataInstance(dataWithTransitiveRelation);
+    const evaluator = createEvaluator(instance);
+    const spec = parseLayoutSpec(specWithInferredEdge);
+
+    const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
+    const { layout } = layoutInstance.generateLayout(instance, {});
+
+    expect(layout.nodes).toHaveLength(3);
+    // Should have original edges (A->B, B->C) and inferred edge (A->C)
+    expect(layout.edges.length).toBeGreaterThanOrEqual(3);
+
+    // Find the inferred edge
+    const inferredEdge = layout.edges.find(e => e.id.includes('_inferred_') && e.id.includes('reachable'));
+    expect(inferredEdge).toBeDefined();
+    expect(inferredEdge?.color).toBe('#ff0000');
+  });
+
+  it('uses default black color for inferred edges when color not specified', () => {
+    const dataWithTransitiveRelation: IJsonDataInstance = {
+      atoms: [
+        { id: 'A', type: 'Node', label: 'A' },
+        { id: 'B', type: 'Node', label: 'B' },
+        { id: 'C', type: 'Node', label: 'C' }
+      ],
+      relations: [
+        {
+          id: 'next',
+          name: 'next',
+          types: ['Node', 'Node'],
+          tuples: [
+            { atoms: ['A', 'B'], types: ['Node', 'Node'] },
+            { atoms: ['B', 'C'], types: ['Node', 'Node'] }
+          ]
+        }
+      ]
+    };
+
+    const specWithInferredEdge = `
+directives:
+  - inferredEdge:
+      name: reachable
+      selector: next.next
+`;
+
+    const instance = new JSONDataInstance(dataWithTransitiveRelation);
+    const evaluator = createEvaluator(instance);
+    const spec = parseLayoutSpec(specWithInferredEdge);
+
+    const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
+    const { layout } = layoutInstance.generateLayout(instance, {});
+
+    expect(layout.nodes).toHaveLength(3);
+    // Should have original edges (A->B, B->C) and inferred edge (A->C)
+    expect(layout.edges.length).toBeGreaterThanOrEqual(3);
+
+    // Find the inferred edge
+    const inferredEdge = layout.edges.find(e => e.id.includes('_inferred_') && e.id.includes('reachable'));
+    expect(inferredEdge).toBeDefined();
+    expect(inferredEdge?.color).toBe('black'); // Default color
+  });
 });
 

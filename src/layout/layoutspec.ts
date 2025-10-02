@@ -220,6 +220,7 @@ export interface AtomIconDirective extends VisualManipulation {
 
 export interface InferredEdgeDirective extends VisualManipulation {
     name : string;
+    color?: string;
 }
 
 export interface AtomHidingDirective extends VisualManipulation {
@@ -608,7 +609,8 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
     let inferredEdges : InferredEdgeDirective[] = typedDirectives.filter(d => d.inferredEdge).map(d => {
         return {
             name: d.inferredEdge.name,
-            selector: d.inferredEdge.selector
+            selector: d.inferredEdge.selector,
+            color: d.inferredEdge.color
         }
     });
 
