@@ -216,6 +216,9 @@ class ConstraintValidator {
         );
         disjunctiveSolver.addConjunctiveConstraints(existingKiwiConstraints);
 
+        // Track the mapping from disjunction index to layout constraints for each perturbation
+        const disjunctionToLayoutConstraints: LayoutConstraint[][] [] = [];
+
         // For each cyclic fragment, create a disjunction of all possible perturbations
         for (const fragment of this.cyclicConstraintFragments!) {
             const fragmentList = fragment.fragmentList;
@@ -229,6 +232,7 @@ class ConstraintValidator {
 
             // Create alternatives (disjunction) for this fragment
             const alternatives: ConjunctiveConstraints[] = [];
+            const perturbationLayoutConstraints: LayoutConstraint[][] = [];
 
             for (let perturbation = 0; perturbation < fragmentLength; perturbation++) {
                 // Get layout constraints for this perturbation
@@ -238,6 +242,8 @@ class ConstraintValidator {
                     perturbation,
                     sourceConstraint
                 );
+
+                perturbationLayoutConstraints.push(layoutConstraints);
 
                 // Convert to Kiwi constraints
                 const kiwiConstraints = this.convertLayoutConstraintsToKiwi(
@@ -250,6 +256,9 @@ class ConstraintValidator {
 
             // Add this disjunction to the solver
             disjunctiveSolver.addDisjunction(alternatives);
+            
+            // Store the mapping for this disjunction
+            disjunctionToLayoutConstraints.push(perturbationLayoutConstraints);
         }
 
         // Solve the constraint system
@@ -271,6 +280,15 @@ class ConstraintValidator {
         // If satisfiable, update the solver with the solution
         // Use the solution from the disjunctive solver
         this.solver = result.solver!;
+        
+        // Add the selected cyclic constraints to the layout
+        if (result.selectedAlternativeIndices && result.selectedAlternativeIndices.length > 0) {
+            for (let i = 0; i < result.selectedAlternativeIndices.length; i++) {
+                const selectedIndex = result.selectedAlternativeIndices[i];
+                const selectedConstraints = disjunctionToLayoutConstraints[i][selectedIndex];
+                this.layout.constraints = this.layout.constraints.concat(selectedConstraints);
+            }
+        }
         
         // Get alignment orders
         let and_more_constraints = this.getAlignmentOrders();

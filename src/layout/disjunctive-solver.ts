@@ -88,16 +88,25 @@ export class DisjunctiveConstraintSolver {
     /**
      * Solves the constraint system using backtracking search.
      * 
-     * @returns An object indicating whether the system is satisfiable and the solution if found
+     * @returns An object indicating whether the system is satisfiable, the solution if found,
+     *          and the indices of the selected alternatives for each disjunction
      */
-    public solve(): { satisfiable: boolean; variables?: Map<string, Variable>; solver?: Solver } {
+    public solve(): { 
+        satisfiable: boolean; 
+        variables?: Map<string, Variable>; 
+        solver?: Solver;
+        selectedAlternativeIndices?: number[];
+    } {
         // If there are no disjunctions, just solve with the conjunctive constraints
         if (this.disjunctions.length === 0) {
-            return this.solveConjunctive(this.conjunctiveConstraints);
+            return { 
+                ...this.solveConjunctive(this.conjunctiveConstraints),
+                selectedAlternativeIndices: []
+            };
         }
 
         // Use backtracking search to find a satisfying assignment
-        return this.backtrackSearch(0, []);
+        return this.backtrackSearch(0, [], []);
     }
 
     /**
@@ -131,11 +140,18 @@ export class DisjunctiveConstraintSolver {
      * 
      * @param disjunctionIndex - The current disjunction being considered
      * @param selectedAlternatives - The alternatives selected so far
+     * @param selectedIndices - The indices of the selected alternatives
      */
     private backtrackSearch(
         disjunctionIndex: number,
-        selectedAlternatives: ConjunctiveConstraints[]
-    ): { satisfiable: boolean; variables?: Map<string, Variable>; solver?: Solver } {
+        selectedAlternatives: ConjunctiveConstraints[],
+        selectedIndices: number[]
+    ): { 
+        satisfiable: boolean; 
+        variables?: Map<string, Variable>; 
+        solver?: Solver;
+        selectedAlternativeIndices?: number[];
+    } {
         // Base case: all disjunctions have been assigned
         if (disjunctionIndex >= this.disjunctions.length) {
             // Try to solve with the conjunctive constraints plus all selected alternatives
@@ -143,13 +159,19 @@ export class DisjunctiveConstraintSolver {
                 ...this.conjunctiveConstraints,
                 ...selectedAlternatives.flat()
             ];
-            return this.solveConjunctive(allConstraints);
+            const result = this.solveConjunctive(allConstraints);
+            return {
+                ...result,
+                selectedAlternativeIndices: selectedIndices
+            };
         }
 
         // Try each alternative in the current disjunction
         const currentDisjunction = this.disjunctions[disjunctionIndex];
         
-        for (const alternative of currentDisjunction) {
+        for (let alternativeIndex = 0; alternativeIndex < currentDisjunction.length; alternativeIndex++) {
+            const alternative = currentDisjunction[alternativeIndex];
+            
             // Prune: Check if the current partial assignment is consistent
             const partialConstraints = [
                 ...this.conjunctiveConstraints,
@@ -163,7 +185,8 @@ export class DisjunctiveConstraintSolver {
                 // This alternative is consistent, try to extend it
                 const result = this.backtrackSearch(
                     disjunctionIndex + 1,
-                    [...selectedAlternatives, alternative]
+                    [...selectedAlternatives, alternative],
+                    [...selectedIndices, alternativeIndex]
                 );
                 
                 if (result.satisfiable) {
