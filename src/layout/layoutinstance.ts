@@ -792,6 +792,9 @@ export class LayoutInstance {
         // The disjunctive solver handles multiple perturbations of cyclic constraints
         // by modeling them as OR operations, eliminating the need for ad-hoc backtracking.
 
+        // Build cyclic constraint fragments for the validator
+        const cyclicConstraintFragments = this.buildCyclicConstraintFragments(layoutNodes);
+
         // First, ensure that the layout is satisfiable BEFORE cyclic constraints.
         let layoutWithoutCyclicConstraints: InstanceLayout = { nodes: layoutNodes, edges: layoutEdges, constraints: constraints, groups: groups };
         const validatorWithoutCyclic = new ConstraintValidator(layoutWithoutCyclicConstraints);
@@ -827,13 +830,33 @@ export class LayoutInstance {
 
 
 
-        // This function applies cyclic constraints using the disjunctive constraint solver
-        // which systematically explores perturbations until it finds a satisfying layout.
+        // Validate with cyclic constraints using the ConstraintValidator with disjunctive solver
         try {
-            let closureConstraints = this.applyCyclicConstraints(layoutNodes, layoutWithoutCyclicConstraints);
-            // Append the closure constraints to the constraints
-            constraints = constraints.concat(closureConstraints);
-            layoutWithCyclicConstraints.constraints = constraints;
+            const validatorWithCyclic = new ConstraintValidator(layoutWithCyclicConstraints, cyclicConstraintFragments);
+            const cyclicConstraintError = validatorWithCyclic.validateConstraints();
+            
+            if (cyclicConstraintError) {
+                if ((cyclicConstraintError as PositionalConstraintError).minimalConflictingSet) {
+                    return this.handlePositionalConstraintError(
+                        cyclicConstraintError as PositionalConstraintError,
+                        layoutWithCyclicConstraints,
+                        projectionData
+                    );
+                }
+                
+                if ((cyclicConstraintError as GroupOverlapError).overlappingNodes) {
+                    return this.handleGroupOverlapError(
+                        cyclicConstraintError as GroupOverlapError,
+                        layoutWithCyclicConstraints,
+                        projectionData
+                    );
+                }
+                
+                throw cyclicConstraintError;
+            }
+            
+            // Update constraints with those added by the validator
+            constraints = layoutWithCyclicConstraints.constraints;
         } catch (error) {
             if (isPositionalConstraintError(error)) {
                 return this.handlePositionalConstraintError(
@@ -977,7 +1000,86 @@ export class LayoutInstance {
     }
 
     /**
+     * Builds cyclic constraint fragments for the validator.
+     * Extracts the fragment lists from cyclic constraints that will be used by
+     * the disjunctive solver to explore different perturbations.
+     * 
+     * @param layoutNodes - The layout nodes to which the constraints will be applied.
+     * @returns Array of constraint fragments with their source and fragment list.
+     */
+    private buildCyclicConstraintFragments(layoutNodes: LayoutNode[]): Array<{
+        source: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint,
+        fragmentList: string[],
+        getCyclicConstraintForFragment: (
+            fragment: string[],
+            layoutNodes: LayoutNode[],
+            perturbationIdx: number,
+            sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint
+        ) => LayoutConstraint[]
+    }> {
+        const cyclicConstraints = this._layoutSpec.constraints.orientation.cyclic;
+
+        // First, for each cyclic constraint, get the tuples / fragments.
+        let constraintFragments: Array<{
+            source: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint,
+            fragmentList: string[],
+            getCyclicConstraintForFragment: (
+                fragment: string[],
+                layoutNodes: LayoutNode[],
+                perturbationIdx: number,
+                sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint
+            ) => LayoutConstraint[]
+        }> = [];
+
+        for (const [, c] of cyclicConstraints.entries()) {
+            let selectedTuples: string[][] = this.evaluator.evaluate(c.selector, { instanceIndex: this.instanceNum }).selectedTwoples();
+            let nextNodeMap: Map<LayoutNode, LayoutNode[]> = new Map<LayoutNode, LayoutNode[]>();
+            
+            // For each tuple, add to the nextNodeMap
+            selectedTuples.forEach((tuple) => {
+                let sourceNodeId = tuple[0];
+                let targetNodeId = tuple[1];
+
+                let srcN = layoutNodes.find((node) => node.id === sourceNodeId);
+                let tgtN = layoutNodes.find((node) => node.id === targetNodeId);
+
+                // Skip if either node is not found
+                if (!srcN || !tgtN) {
+                    return;
+                }
+
+                if (nextNodeMap.has(srcN)) {
+                    nextNodeMap.get(srcN)!.push(tgtN);
+                }
+                else {
+                    nextNodeMap.set(srcN, [tgtN]);
+                }
+            });
+
+            let relatedNodeFragments = this.getFragmentsToConstrain(nextNodeMap);
+            let relatedNodeIds = relatedNodeFragments.map((p) => p.Path.map((node) => node.id));
+
+            if (c.direction === "counterclockwise") {
+                // Reverse each fragment
+                relatedNodeIds = relatedNodeIds.map((fragment) => fragment.reverse());
+            }
+
+            relatedNodeIds.forEach((fragment) => {
+                constraintFragments.push({
+                    source: c,
+                    fragmentList: fragment,
+                    getCyclicConstraintForFragment: this.getCyclicConstraintForFragment.bind(this)
+                });
+            });
+        }
+
+        return constraintFragments;
+    }
+
+    /**
      * Applies the cyclic orientation constraints to the layout nodes using a disjunctive constraint solver.
+     * 
+     * @deprecated This method is now handled by ConstraintValidator. Use buildCyclicConstraintFragments instead.
      * 
      * This method replaces the previous ad-hoc backtracking approach with a proper disjunctive
      * constraint solver that can handle OR operations between different cyclic constraint perturbations.

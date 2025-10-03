@@ -1,6 +1,7 @@
 import { Solver, Variable, Expression, Strength, Operator, Constraint } from 'kiwi.js';
 import { InstanceLayout, LayoutNode, LayoutEdge, LayoutGroup, LayoutConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, TopConstraint, LeftConstraint, AlignmentConstraint, ImplicitConstraint } from './interfaces';
 import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint } from './layoutspec';
+import { DisjunctiveConstraintSolver, type ConjunctiveConstraints } from './disjunctive-solver';
 
 
 
@@ -89,7 +90,8 @@ export function orientationConstraintToString(constraint: LayoutConstraint) {
  * Validates layout constraints and detects conflicts.
  * 
  * This validator uses Kiwi.js to check if a set of conjunctive constraints is satisfiable.
- * For disjunctive constraints (OR operations), use the DisjunctiveConstraintSolver instead.
+ * It also uses the DisjunctiveConstraintSolver to handle cyclic constraints with multiple
+ * valid perturbations/rotations.
  * 
  * @see DisjunctiveConstraintSolver for handling OR constraints
  */
@@ -110,7 +112,31 @@ class ConstraintValidator {
     public horizontallyAligned: LayoutNode[][] = [];
     public verticallyAligned: LayoutNode[][] = [];
 
-    constructor(layout: InstanceLayout) {
+    // Optional cyclic constraint fragments for disjunctive solving
+    private cyclicConstraintFragments?: Array<{
+        source: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint,
+        fragmentList: string[],
+        getCyclicConstraintForFragment: (
+            fragment: string[],
+            layoutNodes: LayoutNode[],
+            perturbationIdx: number,
+            sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint
+        ) => LayoutConstraint[]
+    }>;
+
+    constructor(
+        layout: InstanceLayout, 
+        cyclicConstraintFragments?: Array<{
+            source: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint,
+            fragmentList: string[],
+            getCyclicConstraintForFragment: (
+                fragment: string[],
+                layoutNodes: LayoutNode[],
+                perturbationIdx: number,
+                sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint
+            ) => LayoutConstraint[]
+        }>
+    ) {
         this.layout = layout;
         this.solver = new Solver();
         this.nodes = layout.nodes;
@@ -119,6 +145,7 @@ class ConstraintValidator {
         this.variables = {};
         this.groups = layout.groups;
         this.added_constraints = [];
+        this.cyclicConstraintFragments = cyclicConstraintFragments;
     }
 
     public validateConstraints(): ConstraintError | null {
@@ -135,8 +162,14 @@ class ConstraintValidator {
             };
         });
 
+        // If we have cyclic constraint fragments, use the disjunctive solver
+        if (this.cyclicConstraintFragments && this.cyclicConstraintFragments.length > 0) {
+            return this.validateWithDisjunctiveSolver();
+        }
+
+        // Otherwise, use the standard approach
         for (let i = 0; i < this.orientationConstraints.length; i++) {
-            let constraint = this.orientationConstraints[i]; // TODO: This changes?
+            let constraint = this.orientationConstraints[i];
             let error = this.addConstraintToSolver(constraint);
             if (error) {
                 return error;
@@ -145,8 +178,6 @@ class ConstraintValidator {
 
         this.solver.updateVariables();
 
-        //// TODO: Does adding these play badly when we have circular layouts?
-
         // Now that the solver has solved, we can get an ALIGNMENT ORDER for the nodes.
         let and_more_constraints = this.getAlignmentOrders();
 
@@ -154,6 +185,150 @@ class ConstraintValidator {
         this.layout.constraints = this.layout.constraints.concat(and_more_constraints);
 
         return null;
+    }
+
+    /**
+     * Validates constraints using the disjunctive solver for cyclic constraints.
+     * This handles multiple valid perturbations/rotations of cyclic constraints.
+     * @private
+     */
+    private validateWithDisjunctiveSolver(): PositionalConstraintError | null {
+        // Setup node variables for the disjunctive solver
+        const nodeVariables = new Map<string, { x: Variable, y: Variable }>();
+        this.nodes.forEach(node => {
+            const index = this.getNodeIndex(node.id);
+            nodeVariables.set(node.id, this.variables[index]);
+        });
+
+        const disjunctiveSolver = new DisjunctiveConstraintSolver();
+
+        // Register all variables with the disjunctive solver
+        this.nodes.forEach(node => {
+            const vars = nodeVariables.get(node.id)!;
+            disjunctiveSolver.registerVariable(`${node.id}_x`, vars.x);
+            disjunctiveSolver.registerVariable(`${node.id}_y`, vars.y);
+        });
+
+        // Convert existing layout constraints to Kiwi constraints
+        const existingKiwiConstraints = this.convertLayoutConstraintsToKiwi(
+            this.orientationConstraints,
+            nodeVariables
+        );
+        disjunctiveSolver.addConjunctiveConstraints(existingKiwiConstraints);
+
+        // For each cyclic fragment, create a disjunction of all possible perturbations
+        for (const fragment of this.cyclicConstraintFragments!) {
+            const fragmentList = fragment.fragmentList;
+            const sourceConstraint = fragment.source;
+            const fragmentLength = fragmentList.length;
+
+            if (fragmentLength <= 2) {
+                // No disjunction needed for 2-node fragments
+                continue;
+            }
+
+            // Create alternatives (disjunction) for this fragment
+            const alternatives: ConjunctiveConstraints[] = [];
+
+            for (let perturbation = 0; perturbation < fragmentLength; perturbation++) {
+                // Get layout constraints for this perturbation
+                const layoutConstraints = fragment.getCyclicConstraintForFragment(
+                    fragmentList,
+                    this.nodes,
+                    perturbation,
+                    sourceConstraint
+                );
+
+                // Convert to Kiwi constraints
+                const kiwiConstraints = this.convertLayoutConstraintsToKiwi(
+                    layoutConstraints,
+                    nodeVariables
+                );
+
+                alternatives.push(kiwiConstraints);
+            }
+
+            // Add this disjunction to the solver
+            disjunctiveSolver.addDisjunction(alternatives);
+        }
+
+        // Solve the constraint system
+        const result = disjunctiveSolver.solve();
+
+        if (!result.satisfiable) {
+            // Create error using standard validation
+            for (let i = 0; i < this.orientationConstraints.length; i++) {
+                let constraint = this.orientationConstraints[i];
+                let error = this.addConstraintToSolver(constraint);
+                if (error) {
+                    return error;
+                }
+            }
+            // If no specific error found, return a generic one
+            return null;
+        }
+
+        // If satisfiable, update the solver with the solution
+        // Use the solution from the disjunctive solver
+        this.solver = result.solver!;
+        
+        // Get alignment orders
+        let and_more_constraints = this.getAlignmentOrders();
+        this.layout.constraints = this.layout.constraints.concat(and_more_constraints);
+
+        return null;
+    }
+
+    /**
+     * Converts layout constraints to Kiwi constraints for use in the disjunctive solver.
+     * @private
+     */
+    private convertLayoutConstraintsToKiwi(
+        constraints: LayoutConstraint[],
+        nodeVariables: Map<string, { x: Variable, y: Variable }>
+    ): ConjunctiveConstraints {
+        const kiwiConstraints: ConjunctiveConstraints = [];
+
+        for (const constraint of constraints) {
+            if (isTopConstraint(constraint)) {
+                const tc = constraint as TopConstraint;
+                const topVars = nodeVariables.get(tc.top.id)!;
+                const bottomVars = nodeVariables.get(tc.bottom.id)!;
+                
+                // topVar + minDistance <= bottomVar
+                kiwiConstraints.push(
+                    new Constraint(topVars.y.plus(tc.minDistance), Operator.Le, bottomVars.y, Strength.required)
+                );
+            } else if (isLeftConstraint(constraint)) {
+                const lc = constraint as LeftConstraint;
+                const leftVars = nodeVariables.get(lc.left.id)!;
+                const rightVars = nodeVariables.get(lc.right.id)!;
+                
+                // leftVar + minDistance <= rightVar
+                kiwiConstraints.push(
+                    new Constraint(leftVars.x.plus(lc.minDistance), Operator.Le, rightVars.x, Strength.required)
+                );
+            } else if (isAlignmentConstraint(constraint)) {
+                const ac = constraint as AlignmentConstraint;
+                const node1Vars = nodeVariables.get(ac.node1.id)!;
+                const node2Vars = nodeVariables.get(ac.node2.id)!;
+                
+                // Register the alignment
+                if (ac.axis === 'x') {
+                    this.verticallyAligned.push([ac.node1, ac.node2]);
+                    kiwiConstraints.push(
+                        new Constraint(node1Vars.x, Operator.Eq, node2Vars.x, Strength.required)
+                    );
+                } else {
+                    this.horizontallyAligned.push([ac.node1, ac.node2]);
+                    kiwiConstraints.push(
+                        new Constraint(node1Vars.y, Operator.Eq, node2Vars.y, Strength.required)
+                    );
+                }
+            }
+        }
+
+        return kiwiConstraints;
     }
 
     /**
