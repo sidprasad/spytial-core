@@ -8,6 +8,7 @@ export * from './layoutspec';
 export * from './layoutinstance';
 export * from './colorpicker';
 export * from './constraint-validator';
+export * from './disjunctive-solver';
 
 // Utility functions
 import { LayoutInstance } from './layoutinstance';
