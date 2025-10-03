@@ -85,6 +85,14 @@ export function orientationConstraintToString(constraint: LayoutConstraint) {
 }
 
 
+/**
+ * Validates layout constraints and detects conflicts.
+ * 
+ * This validator uses Kiwi.js to check if a set of conjunctive constraints is satisfiable.
+ * For disjunctive constraints (OR operations), use the DisjunctiveConstraintSolver instead.
+ * 
+ * @see DisjunctiveConstraintSolver for handling OR constraints
+ */
 class ConstraintValidator {
 
     private solver: Solver;
