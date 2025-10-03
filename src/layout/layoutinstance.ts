@@ -788,93 +788,42 @@ export class LayoutInstance {
             return e;
         }).filter((edge): edge is LayoutEdge => edge !== null);
 
-        // Validate and apply cyclic constraints using the disjunctive constraint solver.
+        // Validate all constraints (including cyclic) using the ConstraintValidator with disjunctive solver.
         // The disjunctive solver handles multiple perturbations of cyclic constraints
-        // by modeling them as OR operations, eliminating the need for ad-hoc backtracking.
+        // by modeling them as OR operations.
 
         // Build cyclic constraint fragments for the validator
         const cyclicConstraintFragments = this.buildCyclicConstraintFragments(layoutNodes);
 
-        // First, ensure that the layout is satisfiable BEFORE cyclic constraints.
-        let layoutWithoutCyclicConstraints: InstanceLayout = { nodes: layoutNodes, edges: layoutEdges, constraints: constraints, groups: groups };
-        const validatorWithoutCyclic = new ConstraintValidator(layoutWithoutCyclicConstraints);
-        const nonCyclicConstraintError = validatorWithoutCyclic.validateConstraints();
+        // Create layout and validate with a single call to ConstraintValidator
+        let layout: InstanceLayout = { nodes: layoutNodes, edges: layoutEdges, constraints: constraints, groups: groups };
+        const validator = new ConstraintValidator(layout, cyclicConstraintFragments);
+        const constraintError = validator.validateConstraints();
 
-        if (nonCyclicConstraintError) {
-            if ((nonCyclicConstraintError as PositionalConstraintError).minimalConflictingSet) {
+        if (constraintError) {
+            if ((constraintError as PositionalConstraintError).minimalConflictingSet) {
                 return this.handlePositionalConstraintError(
-                    nonCyclicConstraintError as PositionalConstraintError,
-                    layoutWithoutCyclicConstraints,
+                    constraintError as PositionalConstraintError,
+                    layout,
                     projectionData
                 );
             }
 
-            if ((nonCyclicConstraintError as GroupOverlapError).overlappingNodes) {
+            if ((constraintError as GroupOverlapError).overlappingNodes) {
                 return this.handleGroupOverlapError(
-                    nonCyclicConstraintError as GroupOverlapError,
-                    layoutWithoutCyclicConstraints,
+                    constraintError as GroupOverlapError,
+                    layout,
                     projectionData
                 );
             }
 
-            // console.log("Layout is unsatisfiable even without cyclic constraints.")
-
-            throw nonCyclicConstraintError;
+            throw constraintError;
         }
 
-
-        // And updating constraints, since the validator may add constraints.
-        // (IN particular these would be non-overlap constraints for spacing in groups.)
-        constraints = layoutWithoutCyclicConstraints.constraints;
-        const layoutWithCyclicConstraints: InstanceLayout = { nodes: layoutWithoutCyclicConstraints.nodes, edges: layoutWithoutCyclicConstraints.edges, constraints: constraints, groups: layoutWithoutCyclicConstraints.groups };
-
-
-
-        // Validate with cyclic constraints using the ConstraintValidator with disjunctive solver
-        try {
-            const validatorWithCyclic = new ConstraintValidator(layoutWithCyclicConstraints, cyclicConstraintFragments);
-            const cyclicConstraintError = validatorWithCyclic.validateConstraints();
-            
-            if (cyclicConstraintError) {
-                if ((cyclicConstraintError as PositionalConstraintError).minimalConflictingSet) {
-                    return this.handlePositionalConstraintError(
-                        cyclicConstraintError as PositionalConstraintError,
-                        layoutWithCyclicConstraints,
-                        projectionData
-                    );
-                }
-                
-                if ((cyclicConstraintError as GroupOverlapError).overlappingNodes) {
-                    return this.handleGroupOverlapError(
-                        cyclicConstraintError as GroupOverlapError,
-                        layoutWithCyclicConstraints,
-                        projectionData
-                    );
-                }
-                
-                throw cyclicConstraintError;
-            }
-            
-            // Update constraints with those added by the validator
-            constraints = layoutWithCyclicConstraints.constraints;
-        } catch (error) {
-            if (isPositionalConstraintError(error)) {
-                return this.handlePositionalConstraintError(
-                    error as PositionalConstraintError,
-                    layoutWithCyclicConstraints,
-                    projectionData
-                );
-            }
-            if (isGroupOverlapError(error)) {
-                return this.handleGroupOverlapError(
-                    error as GroupOverlapError,
-                    layoutWithCyclicConstraints,
-                    projectionData
-                );
-            }
-
-            throw error;
-        }
+        // Update constraints with those added by the validator
+        // (In particular these would be non-overlap constraints for spacing in groups,
+        // and cyclic constraint perturbations selected by the disjunctive solver)
+        constraints = layout.constraints;
 
         // Filter out all edges that are hidden
         layoutEdges = layoutEdges.filter((edge) => !edge.id.startsWith(this.hideThisEdge));
@@ -888,15 +837,16 @@ export class LayoutInstance {
         groups = groups.concat(dcnGroups);
 
 
-        let layout = { nodes: layoutNodes, edges: layoutEdges, constraints: constraints, groups: groups };
+        // Create final layout and validate again (for any constraints added after filtering edges)
+        let finalLayout = { nodes: layoutNodes, edges: layoutEdges, constraints: constraints, groups: groups };
 
-        let finalConstraintValidator = new ConstraintValidator(layout);
+        let finalConstraintValidator = new ConstraintValidator(finalLayout);
         let finalLayoutError = finalConstraintValidator.validateConstraints();
         if (finalLayoutError) {
             if ((finalLayoutError as PositionalConstraintError).minimalConflictingSet) {
                 return this.handlePositionalConstraintError(
                     finalLayoutError as PositionalConstraintError,
-                    layout,
+                    finalLayout,
                     projectionData
                 );
             }
@@ -904,7 +854,7 @@ export class LayoutInstance {
             if ((finalLayoutError as GroupOverlapError).overlappingNodes) {
                 return this.handleGroupOverlapError(
                     finalLayoutError as GroupOverlapError,
-                    layout,
+                    finalLayout,
                     projectionData
                 );
             }
@@ -912,7 +862,7 @@ export class LayoutInstance {
             throw finalLayoutError;
         }
 
-        return { layout, projectionData, error: null };
+        return { layout: finalLayout, projectionData, error: null };
     }
 
     /**
