@@ -37,7 +37,8 @@ type EdgeWithMetadata = Link<NodeWithMetadata> & {
   relName: string, // This is the name of the relation for the edge
   id: string, // Unique identifier for the edge
   label: string, // This is what is displayed on the edge
-  color: string
+  color: string,
+  bidirectional?: boolean // Flag to indicate if this edge represents a bidirectional relationship
 };
 
 // Export the types for use in other modules
@@ -132,6 +133,8 @@ export class WebColaLayout {
     this.colaNodes = instanceLayout.nodes.map(node => this.toColaNode(node));
     this.colaEdges = instanceLayout.edges.map(edge => this.toColaEdge(edge));
 
+    // Collapse symmetric edges with the same label
+    this.colaEdges = this.collapseSymmetricEdges(this.colaEdges);
 
     this.groupDefinitions = this.determineGroups(instanceLayout.groups);
 
@@ -281,6 +284,60 @@ export class WebColaLayout {
     }
   }
 
+  /**
+   * Collapses symmetric edges with the same label into bidirectional edges.
+   * If two nodes have edges between them with the same label (A->B and B->A),
+   * they should be collapsed into a single bidirectional edge.
+   * Edges with different labels should NOT be collapsed.
+   * 
+   * @param edges - Array of edges to process
+   * @returns Array of edges with symmetric edges collapsed
+   */
+  private collapseSymmetricEdges(edges: EdgeWithMetadata[]): EdgeWithMetadata[] {
+    const edgeMap = new Map<string, EdgeWithMetadata>();
+    const processed = new Set<string>();
+
+    for (const edge of edges) {
+      // Skip if already processed
+      if (processed.has(edge.id)) {
+        continue;
+      }
+
+      // Create a key for the edge pair (always use lower source/target index first for consistency)
+      const minIndex = Math.min(edge.source, edge.target);
+      const maxIndex = Math.max(edge.source, edge.target);
+      const pairKey = `${minIndex}-${maxIndex}-${edge.label}`;
+
+      // Look for the reverse edge with the same label
+      const reverseEdge = edges.find(e => 
+        e.source === edge.target && 
+        e.target === edge.source && 
+        e.label === edge.label &&
+        !processed.has(e.id)
+      );
+
+      if (reverseEdge) {
+        // Found a symmetric pair with the same label - collapse them
+        // Keep the edge with the lower source index as the canonical direction
+        const canonicalEdge = edge.source < edge.target ? edge : reverseEdge;
+        
+        edgeMap.set(pairKey, {
+          ...canonicalEdge,
+          bidirectional: true
+        });
+
+        // Mark both edges as processed
+        processed.add(edge.id);
+        processed.add(reverseEdge.id);
+      } else {
+        // No matching reverse edge - keep as unidirectional
+        edgeMap.set(edge.id, edge);
+        processed.add(edge.id);
+      }
+    }
+
+    return Array.from(edgeMap.values());
+  }
 
   private toColaConstraint(constraint: LayoutConstraint): ColaConstraint {
 
