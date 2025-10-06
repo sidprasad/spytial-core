@@ -391,12 +391,43 @@ class ConstraintValidator {
      * Clones the current solver state (constraints only, not variable values).
      * Used for backtracking in disjunctive constraint solving.
      * 
+     * Note: The bounding box variables and member constraints are part of the main solver
+     * and will be included in the clone automatically since they're in the same solver instance.
+     * 
      * @returns A new Solver with the same constraints as the current one
      */
     private cloneSolver(): Solver {
         const newSolver = new Solver();
         
-        // Re-add all constraints from added_constraints
+        // First, re-add the bounding box member constraints (these are permanent conjunctive constraints)
+        for (const group of this.groups) {
+            if (group.nodeIds.length <= 1) continue;
+            if (!group.sourceConstraint) continue;
+
+            const bbox = this.groupBoundingBoxes.get(group.name);
+            if (!bbox) continue;
+
+            const memberNodes = group.nodeIds
+                .map(id => this.nodes.find(n => n.id === id))
+                .filter((n): n is LayoutNode => n !== undefined);
+
+            for (const member of memberNodes) {
+                const memberIndex = this.getNodeIndex(member.id);
+                const memberX = this.variables[memberIndex].x;
+                const memberY = this.variables[memberIndex].y;
+
+                try {
+                    newSolver.addConstraint(new Constraint(memberX, Operator.Ge, bbox.left, Strength.required));
+                    newSolver.addConstraint(new Constraint(memberX, Operator.Le, bbox.right, Strength.required));
+                    newSolver.addConstraint(new Constraint(memberY, Operator.Ge, bbox.top, Strength.required));
+                    newSolver.addConstraint(new Constraint(memberY, Operator.Le, bbox.bottom, Strength.required));
+                } catch (e) {
+                    // Constraint may already exist, ignore
+                }
+            }
+        }
+        
+        // Then re-add all constraints from added_constraints (regular + disjunctive choices made so far)
         for (const constraint of this.added_constraints) {
             const kiwiConstraints = this.constraintToKiwi(constraint);
             kiwiConstraints.forEach(kiwiConstraint => {
@@ -515,6 +546,8 @@ class ConstraintValidator {
 
             // Add constraints: each member must be inside the bounding box
             // These are conjunctive (always enforced), so add directly to solver
+            // IMPORTANT: We DON'T add these to added_constraints because they use the bbox variables
+            // which need to exist in the solver. They'll be automatically included when we clone the solver.
             for (const member of memberNodes) {
                 const memberIndex = this.getNodeIndex(member.id);
                 const memberX = this.variables[memberIndex].x;
