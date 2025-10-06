@@ -1,5 +1,5 @@
 import { Group } from "webcola";
-import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint } from "./layoutspec";
+import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint, GroupByField, GroupBySelector } from "./layoutspec";
 
 export interface LayoutGroup {
     // The name of the group
@@ -137,7 +137,7 @@ export class DisjunctiveConstraint {
      * @param alternatives - An array of alternatives, where each alternative is an array of constraints that must be satisfied together.
      */
     constructor(
-        public sourceConstraint:  CyclicOrientationConstraint | GroupingConstraint,
+        public sourceConstraint:  CyclicOrientationConstraint | GroupByField | GroupBySelector,
         public alternatives: LayoutConstraint[][]
     ) {}
 

@@ -148,8 +148,7 @@ export class GroupBySelector extends ConstraintOperation{
 
 /*
 
-    TODO: Could this be written with selectors (X, Y) and name --> edge name would have to be well 
-    generated.
+    TODO: Deprecate.
 
 */
 export class GroupByField  {
@@ -169,6 +168,12 @@ export class GroupByField  {
         this.groupOn = groupOn;
         this.addToGroup = addToGroup;
         this.selector = selector;
+    }
+
+    toHTML(): string {
+        const selectorText = this.selector ? ` with selector <pre>${this.selector}</pre>` : '';
+        return `GroupByField on field <pre>${this.field}</pre> grouping field index <pre>${this.groupOn}</pre> 
+        adding to group index <pre>${this.addToGroup}</pre>${selectorText}.`;
     }
 }
 
