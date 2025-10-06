@@ -50,21 +50,38 @@ export function generateEdgeId(
  * - Objects have a `dict` property containing field values
  * - Objects have a `brands` property indicating their type
  * - All dict entries are treated as relations
+ * - Pyret tables are parsed as semantic relations: each row becomes an n-ary tuple
+ * - Non-table arrays are parsed as relations with Array atoms
+ * - Nested arrays are supported with intermediate Array atoms
  * - Cycles are handled gracefully without infinite recursion
  * - Primitive idempotency is configurable via constructor options
  * 
  * @example
  * ```typescript
+ * // Tree data
  * const pyretData = {
  *   dict: { value: 11, left: {...}, right: {...} },
  *   brands: { "$brandtnode989": true }
  * };
- * 
- * // Create with default options (all primitives idempotent)
  * const instance1 = new PyretDataInstance(pyretData);
  * 
- * // Create with custom idempotency settings
- * const instance2 = new PyretDataInstance(pyretData, {
+ * // Table data - creates semantic relational tuples
+ * const tableData = {
+ *   dict: {
+ *     r: {
+ *       dict: {
+ *         "_header-raw-array": ["origin", "destination"],
+ *         "_rows-raw-array": [["PVD", "ORD"], ["ORD", "PVD"]]
+ *       },
+ *       brands: { "$brandtable168": true }
+ *     }
+ *   }
+ * };
+ * const instance2 = new PyretDataInstance(tableData);
+ * // Creates relation "table" with tuples: (PVD, ORD), (ORD, PVD)
+ * 
+ * // Custom idempotency settings
+ * const instance3 = new PyretDataInstance(pyretData, {
  *   stringsIdempotent: false,  // Different string instances won't be unified
  *   numbersIdempotent: true,   // Same numbers will be unified
  *   booleansIdempotent: true   // Same booleans will be unified
@@ -102,7 +119,9 @@ export class PyretDataInstance implements IInputDataInstance {
 
   /*
     TODO: List handling
-    - Handle Pyret Lists and Tables as special cases. They currently show as (link (link (link (link )))) etc.
+    - Pyret Tables are now parsed as semantic relations (each row becomes an n-ary tuple)
+    - Non-table arrays are parsed as structural relations with Array atoms
+    - Native Pyret Lists still show as (link (link (link (link )))) etc. and need special handling
   */
 
 
@@ -746,38 +765,178 @@ export class PyretDataInstance implements IInputDataInstance {
 
       // Process all dict entries as relations, but skip obvious function/method fields
       if (obj.dict && typeof obj.dict === 'object') {
-        Object.entries(obj.dict).forEach(([relationName, fieldValue]) => {
+        // Check if this is a Pyret table with semantic data
+        const isPyretTable = this.isPyretTable(obj);
+        
+        if (isPyretTable) {
+          // Handle Pyret tables specially: create semantic relational tuples
+          this.processTableSemantics(atomId, obj);
+        } else {
+          // Process regular objects
+          Object.entries(obj.dict).forEach(([relationName, fieldValue]) => {
 
 
-          // Heuristic: skip fields that look like Pyret methods (object with only a 'name' property)
-          if (
-            !this.options.showFunctions &&
-            fieldValue &&
-            typeof fieldValue === 'object' &&
-            'meth' in fieldValue &&
-            'full_meth' in fieldValue
-          ) {
-            // skip this field
-            return;
-          }
-          ////
+            // Heuristic: skip fields that look like Pyret methods (object with only a 'name' property)
+            if (
+              !this.options.showFunctions &&
+              fieldValue &&
+              typeof fieldValue === 'object' &&
+              'meth' in fieldValue &&
+              'full_meth' in fieldValue
+            ) {
+              // skip this field
+              return;
+            }
+            ////
 
 
-          if (this.isAtomicValue(fieldValue)) {
-            const valueAtomId = this.createAtomFromPrimitive(fieldValue);
-            this.addRelationTuple(
-              relationName,
-              { atoms: [atomId, valueAtomId], types: ['PyretObject', 'PyretObject'] }
-            );
-          } else if (this.isPyretObject(fieldValue)) {
-            processingQueue.push({
-              obj: fieldValue,
-              parentInfo: { parentId: atomId, relationName }
-            });
-          }
-        });
+            if (this.isAtomicValue(fieldValue)) {
+              const valueAtomId = this.createAtomFromPrimitive(fieldValue);
+              this.addRelationTuple(
+                relationName,
+                { atoms: [atomId, valueAtomId], types: ['PyretObject', 'PyretObject'] }
+              );
+            } else if (Array.isArray(fieldValue)) {
+              // Handle arrays: create atoms/relations for each element
+              this.processArrayField(atomId, relationName, fieldValue, processingQueue);
+            } else if (this.isPyretObject(fieldValue)) {
+              processingQueue.push({
+                obj: fieldValue,
+                parentInfo: { parentId: atomId, relationName }
+              });
+            }
+          });
+        }
       }
     }
+  }
+
+  /**
+   * Processes an array field value by creating relations for each element
+   * Handles both arrays of primitives and arrays of objects/nested arrays
+   * 
+   * @param parentAtomId - The parent atom ID
+   * @param relationName - The name of the relation
+   * @param arrayValue - The array to process
+   * @param processingQueue - The queue for objects that need further processing
+   */
+  private processArrayField(
+    parentAtomId: string,
+    relationName: string,
+    arrayValue: unknown[],
+    processingQueue: Array<{ obj: PyretObject; parentInfo?: { parentId: string; relationName: string } }>
+  ): void {
+    arrayValue.forEach((element, index) => {
+      if (this.isAtomicValue(element)) {
+        // Create an atom for the primitive value
+        const elementAtomId = this.createAtomFromPrimitive(element);
+        // Create a relation tuple from parent to this element
+        this.addRelationTuple(
+          relationName,
+          { atoms: [parentAtomId, elementAtomId], types: ['PyretObject', 'PyretObject'] }
+        );
+      } else if (Array.isArray(element)) {
+        // Nested array: create an intermediate atom to represent the array
+        const arrayAtomId = this.generateAtomId('Array');
+        const arrayAtom: IAtom = {
+          id: arrayAtomId,
+          type: 'Array',
+          label: `Array[${index}]`
+        };
+        this.atoms.set(arrayAtomId, arrayAtom);
+        this.ensureTypeExists('Array');
+        
+        // Create relation from parent to this array
+        this.addRelationTuple(
+          relationName,
+          { atoms: [parentAtomId, arrayAtomId], types: ['PyretObject', 'PyretObject'] }
+        );
+        
+        // Recursively process the nested array elements
+        this.processArrayField(arrayAtomId, 'element', element, processingQueue);
+      } else if (this.isPyretObject(element)) {
+        // Pyret object in array: add to processing queue
+        processingQueue.push({
+          obj: element,
+          parentInfo: { parentId: parentAtomId, relationName }
+        });
+      }
+    });
+  }
+
+  /**
+   * Checks if a Pyret object is a table with semantic data
+   */
+  private isPyretTable(obj: PyretObject): boolean {
+    if (!obj.dict || typeof obj.dict !== 'object') {
+      return false;
+    }
+    
+    // Check if it has the table brand
+    if (obj.brands && typeof obj.brands === 'object') {
+      const hasBrandTable = Object.keys(obj.brands).some(key => key.includes('brandtable'));
+      if (!hasBrandTable) {
+        return false;
+      }
+    }
+    
+    // Check if it has _header-raw-array and _rows-raw-array
+    return '_header-raw-array' in obj.dict && '_rows-raw-array' in obj.dict;
+  }
+
+  /**
+   * Processes a Pyret table to create semantic relational tuples
+   * Each row becomes a tuple in a relation
+   */
+  private processTableSemantics(tableAtomId: string, tableObj: PyretObject): void {
+    const dict = tableObj.dict as Record<string, unknown>;
+    const headerArray = dict['_header-raw-array'] as unknown[];
+    const rowsArray = dict['_rows-raw-array'] as unknown[];
+    
+    if (!Array.isArray(headerArray) || !Array.isArray(rowsArray)) {
+      // Fallback to regular processing if structure is unexpected
+      return;
+    }
+    
+    // Extract column names from header
+    const columnNames = headerArray.filter(h => typeof h === 'string') as string[];
+    
+    if (columnNames.length === 0) {
+      return;
+    }
+    
+    // Get the table type/name for the relation name
+    const tableType = this.extractType(tableObj);
+    const relationName = tableType; // Use the table type as the relation name
+    
+    // Process each row as a tuple
+    rowsArray.forEach((row) => {
+      if (!Array.isArray(row)) {
+        return;
+      }
+      
+      // Create atoms for each cell value and collect them as a tuple
+      const tupleAtomIds: string[] = [];
+      
+      row.forEach((cellValue) => {
+        if (this.isAtomicValue(cellValue)) {
+          const atomId = this.createAtomFromPrimitive(cellValue);
+          tupleAtomIds.push(atomId);
+        }
+      });
+      
+      // Only create the tuple if we have the expected number of values
+      if (tupleAtomIds.length === columnNames.length && tupleAtomIds.length > 0) {
+        // Create an n-ary tuple for this row
+        this.addRelationTuple(
+          relationName,
+          { 
+            atoms: tupleAtomIds, 
+            types: tupleAtomIds.map(() => 'String') // Assuming string types for now
+          }
+        );
+      }
+    });
   }
 
   /**
