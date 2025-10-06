@@ -1,4 +1,5 @@
-import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint } from "./layoutspec";
+import { Group } from "webcola";
+import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint, GroupByField, GroupBySelector } from "./layoutspec";
 
 export interface LayoutGroup {
     // The name of the group
@@ -12,6 +13,9 @@ export interface LayoutGroup {
 
     // Show label
     showLabel : boolean;
+
+    // The source constraint that created this group (GroupByField or GroupBySelector)
+    sourceConstraint?: GroupByField | GroupBySelector;
 }
 
 export interface LayoutNode {
@@ -48,7 +52,7 @@ export class ImplicitConstraint {
 }
 
 export interface LayoutConstraint {
-    sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint; // Not grouping, and I hate introducing implicit (which should hopefully never show up)
+    sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint | GroupByField | GroupBySelector;
 }
 
 
@@ -84,15 +88,51 @@ export function isAlignmentConstraint(constraint: LayoutConstraint): constraint 
     return (constraint as AlignmentConstraint).axis !== undefined;
 }
 
+/**
+ * Represents a bounding box constraint for a group.
+ * The bounding box has 4 variables (left, right, top, bottom).
+ * This is used in disjunctions to enforce that non-members are outside the group.
+ * 
+ * The actual Kiwi constraint generation happens in the solver - this is just the high-level representation.
+ */
+export interface BoundingBoxConstraint extends LayoutConstraint {
+    /** The group whose bounding box this represents */
+    group: LayoutGroup;
+    /** The node that must be positioned relative to the bounding box */
+    node: LayoutNode;
+    /** Which side of the bounding box: 'left' | 'right' | 'top' | 'bottom' */
+    side: 'left' | 'right' | 'top' | 'bottom';
+    /** Minimum padding from the bounding box edge */
+    minDistance: number;
+}
+
+export function isBoundingBoxConstraint(constraint: LayoutConstraint): constraint is BoundingBoxConstraint {
+    return (constraint as BoundingBoxConstraint).group !== undefined && 
+           (constraint as BoundingBoxConstraint).side !== undefined;
+}
+
 
 
 export interface InstanceLayout {
     nodes: LayoutNode[];
     edges: LayoutEdge[];
-    constraints: LayoutConstraint[];
+    constraints: LayoutConstraint[]; // Conjunctive constraints that must always be satisfied
     groups: LayoutGroup[];
     conflictingConstraints?: LayoutConstraint[];
     overlappingNodes?: LayoutNode[]; // IDs of overlapping nodes
+    /**
+     * Disjunctive constraints, where at least one alternative in each disjunction must be satisfiable.
+     * These are separate from conjunctive constraints for clearer solver integration.
+     */
+    disjunctiveConstraints?: DisjunctiveConstraint[];
+
+    // TODO: One frustration in the instance layout is that really this is not ..quite.. what the
+    // constraint validator should take. Its not a ``validator`` per se, its more like a ``refiner``
+    // that takes an instance layout and produces a refined instance layout with more constraints, but also
+    // validates if needed.
+
+    // Perhaps there is another intermediate type here that is like a ``RefinableInstanceLayout`` that has
+    // some of these extra fields, and then the constraint validator takes that and produces an InstanceLayout?
 }
 
 // Can we write a typeguard for this?
@@ -105,6 +145,51 @@ export function isInstanceLayout(obj: any): obj is InstanceLayout {
         obj.nodes.every((node: any) => typeof node.id === 'string') &&
         obj.edges.every((edge: any) => typeof edge.source === 'object' && typeof edge.target === 'object') &&
         obj.constraints.every((constraint: any) => typeof constraint.sourceConstraint === 'object') &&
-        obj.groups.every((group: any) => typeof group.name === 'string')
+        obj.groups.every((group: any) => typeof group.name === 'string') &&
+        (obj.disjunctiveConstraints === undefined || Array.isArray(obj.disjunctiveConstraints))
     );
+}
+
+
+/**
+ * Represents a disjunctive constraint, where at least one of the provided alternatives must be satisfiable.
+ * Each alternative is an array of layout constraints that must hold together if selected.
+ * Used primarily for cyclic constraints, where alternatives represent different perturbations (rotations) of a cycle.
+ */
+export class DisjunctiveConstraint {
+    /**
+     * Creates a new disjunctive constraint.
+     * @param sourceConstraint - The original constraint (e.g., CyclicOrientationConstraint, GroupByField, or ImplicitConstraint) that led to this disjunction.
+     * @param alternatives - An array of alternatives, where each alternative is an array of constraints that must be satisfied together.
+     */
+    constructor(
+        public sourceConstraint:  CyclicOrientationConstraint | GroupByField | GroupBySelector | ImplicitConstraint,
+        public alternatives: LayoutConstraint[][]
+    ) {}
+
+    /**
+     * Returns a string representation of the disjunctive constraint for debugging.
+     */
+    toString(): string {
+        return `DisjunctiveConstraint with ${this.alternatives.length} alternatives from ${this.sourceConstraint}`;
+    }
+
+    /**
+     * Add an alternative to the disjunctive constraint.
+     * @param alternative - An array of layout constraints that form a new alternative.
+     */
+    addAlternative(alternative: LayoutConstraint[]) {
+        this.alternatives.push(alternative);
+    }
+
+    //TODO: Should we have some simplification methods here? 
+}
+
+/**
+ * Type guard to check if a constraint is a disjunctive constraint.
+ * @param constraint - The constraint to check.
+ * @returns True if the constraint is a DisjunctiveConstraint instance.
+ */
+export function isDisjunctiveConstraint(constraint: LayoutConstraint | DisjunctiveConstraint): constraint is DisjunctiveConstraint {
+    return constraint instanceof DisjunctiveConstraint;
 }
