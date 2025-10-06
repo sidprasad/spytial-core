@@ -64,7 +64,7 @@ export function orientationConstraintToString(constraint: LayoutConstraint) {
     }
     else if (isLeftConstraint(constraint)) {
         let lc = constraint as LeftConstraint;
-        return `${nodeLabel(lc.left)} must be to the left of ${nodeLabel(lc.right)}`;
+        return `${nodeLabel(lc.left)}must be to the left of  ${nodeLabel(lc.right)}`;
     }
     else if (isAlignmentConstraint(constraint)) {
         let ac = constraint as AlignmentConstraint;
@@ -83,13 +83,14 @@ export function orientationConstraintToString(constraint: LayoutConstraint) {
     }
     else if (isBoundingBoxConstraint(constraint)) {
         let bc = constraint as BoundingBoxConstraint;
-        const sideDescriptions = {
-            'left': 'to the left of',
-            'right': 'to the right of',
-            'top': 'above',
-            'bottom': 'below'
-        };
-        return `${nodeLabel(bc.node)} must be ${sideDescriptions[bc.side]} group "${bc.group.name}"`;
+        // const sideDescriptions = {
+        //     'left': 'to the left of',
+        //     'right': 'to the right of',
+        //     'top': 'above',
+        //     'bottom': 'below'
+        // };
+        //return `${nodeLabel(bc.node)} must be ${sideDescriptions[bc.side]} group "${bc.group.name}"`;
+        return `${nodeLabel(bc.node)} cannot be in group "${bc.group.name}."`;
     }
     return `Unknown constraint type: ${constraint}`;
 }
