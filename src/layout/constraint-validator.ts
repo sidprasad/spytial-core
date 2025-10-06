@@ -312,13 +312,37 @@ class ConstraintValidator {
         // Return failure to trigger backtracking at previous disjunction level
         console.log(`  ✗✗ Disjunction ${disjunctionIndex + 1}: All ${alternatives.length} alternatives exhausted, returning failure`);
         
+        // Find the minimal set of existing constraints that conflict with this disjunction
+        // We need to check against ALL constraints that have been added so far
+        // We'll use the first alternative as a representative constraint for conflict analysis
+        const representativeConstraint = alternatives[0][0];
+        const minimalConflicting = this.getMinimalConflictingConstraints(this.added_constraints, representativeConstraint);
+        
+        // Build the minimalConflictingSet map grouped by source constraint
+        const minimalConflictingSet = new Map<SourceConstraint, LayoutConstraint[]>();
+        
+        for (const constraint of minimalConflicting) {
+            const source = constraint.sourceConstraint;
+            if (!minimalConflictingSet.has(source)) {
+                minimalConflictingSet.set(source, []);
+            }
+            minimalConflictingSet.get(source)!.push(constraint);
+        }
+        
+        // Also add the representative constraint itself under the disjunction's source
+        // This shows which constraint from the disjunction was involved in the conflict
+        minimalConflictingSet.set(currentDisjunction.sourceConstraint, [representativeConstraint]);
+        
+        // Format error message to match regular constraint errors (user-friendly, no mention of disjunctions)
+        const firstConstraintString = orientationConstraintToString(representativeConstraint);
+        
         const lastError: PositionalConstraintError = {
             name: "PositionalConstraintError",
             type: 'positional-conflict',
-            message: `No satisfiable alternative found for disjunctive constraint from ${currentDisjunction.sourceConstraint.toHTML()}`,
-            conflictingConstraint: alternatives[alternatives.length - 1][0], // Last constraint of last alternative
+            message: `Constraint "${firstConstraintString}" conflicts with existing constraints`,
+            conflictingConstraint: representativeConstraint,
             conflictingSourceConstraint: currentDisjunction.sourceConstraint,
-            minimalConflictingSet: new Map(),
+            minimalConflictingSet: minimalConflictingSet,
         };
 
         return { satisfiable: false, error: lastError };
