@@ -769,6 +769,9 @@ export class PyretDataInstance implements IInputDataInstance {
               relationName,
               { atoms: [atomId, valueAtomId], types: ['PyretObject', 'PyretObject'] }
             );
+          } else if (Array.isArray(fieldValue)) {
+            // Handle arrays: create atoms/relations for each element
+            this.processArrayField(atomId, relationName, fieldValue, processingQueue);
           } else if (this.isPyretObject(fieldValue)) {
             processingQueue.push({
               obj: fieldValue,
@@ -778,6 +781,59 @@ export class PyretDataInstance implements IInputDataInstance {
         });
       }
     }
+  }
+
+  /**
+   * Processes an array field value by creating relations for each element
+   * Handles both arrays of primitives and arrays of objects/nested arrays
+   * 
+   * @param parentAtomId - The parent atom ID
+   * @param relationName - The name of the relation
+   * @param arrayValue - The array to process
+   * @param processingQueue - The queue for objects that need further processing
+   */
+  private processArrayField(
+    parentAtomId: string,
+    relationName: string,
+    arrayValue: unknown[],
+    processingQueue: Array<{ obj: PyretObject; parentInfo?: { parentId: string; relationName: string } }>
+  ): void {
+    arrayValue.forEach((element, index) => {
+      if (this.isAtomicValue(element)) {
+        // Create an atom for the primitive value
+        const elementAtomId = this.createAtomFromPrimitive(element);
+        // Create a relation tuple from parent to this element
+        this.addRelationTuple(
+          relationName,
+          { atoms: [parentAtomId, elementAtomId], types: ['PyretObject', 'PyretObject'] }
+        );
+      } else if (Array.isArray(element)) {
+        // Nested array: create an intermediate atom to represent the array
+        const arrayAtomId = this.generateAtomId('Array');
+        const arrayAtom: IAtom = {
+          id: arrayAtomId,
+          type: 'Array',
+          label: `Array[${index}]`
+        };
+        this.atoms.set(arrayAtomId, arrayAtom);
+        this.ensureTypeExists('Array');
+        
+        // Create relation from parent to this array
+        this.addRelationTuple(
+          relationName,
+          { atoms: [parentAtomId, arrayAtomId], types: ['PyretObject', 'PyretObject'] }
+        );
+        
+        // Recursively process the nested array elements
+        this.processArrayField(arrayAtomId, 'element', element, processingQueue);
+      } else if (this.isPyretObject(element)) {
+        // Pyret object in array: add to processing queue
+        processingQueue.push({
+          obj: element,
+          parentInfo: { parentId: parentAtomId, relationName }
+        });
+      }
+    });
   }
 
   /**
