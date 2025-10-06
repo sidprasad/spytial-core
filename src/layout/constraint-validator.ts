@@ -407,11 +407,12 @@ class ConstraintValidator {
         for (const constraint of this.added_constraints) {
             const kiwiConstraints = this.constraintToKiwi(constraint);
             kiwiConstraints.forEach(kiwiConstraint => {
-                try {
-                    newSolver.addConstraint(kiwiConstraint);
-                } catch (e) {
-                    // Constraint may already exist, ignore
-                }
+                // try {
+                //     newSolver.addConstraint(kiwiConstraint);
+                // } catch (e) {
+                //     // Constraint may already exist, ignore
+                // }
+                newSolver.addConstraint(kiwiConstraint);
             });
         }
 
