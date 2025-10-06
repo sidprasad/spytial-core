@@ -88,6 +88,29 @@ export function isAlignmentConstraint(constraint: LayoutConstraint): constraint 
     return (constraint as AlignmentConstraint).axis !== undefined;
 }
 
+/**
+ * Represents a bounding box constraint for a group.
+ * The bounding box has 4 variables (left, right, top, bottom).
+ * This is used in disjunctions to enforce that non-members are outside the group.
+ * 
+ * The actual Kiwi constraint generation happens in the solver - this is just the high-level representation.
+ */
+export interface BoundingBoxConstraint extends LayoutConstraint {
+    /** The group whose bounding box this represents */
+    group: LayoutGroup;
+    /** The node that must be positioned relative to the bounding box */
+    node: LayoutNode;
+    /** Which side of the bounding box: 'left' | 'right' | 'top' | 'bottom' */
+    side: 'left' | 'right' | 'top' | 'bottom';
+    /** Minimum padding from the bounding box edge */
+    minDistance: number;
+}
+
+export function isBoundingBoxConstraint(constraint: LayoutConstraint): constraint is BoundingBoxConstraint {
+    return (constraint as BoundingBoxConstraint).group !== undefined && 
+           (constraint as BoundingBoxConstraint).side !== undefined;
+}
+
 
 
 export interface InstanceLayout {

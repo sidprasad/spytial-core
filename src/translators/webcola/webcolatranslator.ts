@@ -1,5 +1,5 @@
 import { Node, Group, Link, Rectangle } from 'webcola';
-import { InstanceLayout, LayoutNode, LayoutEdge, LayoutConstraint, LayoutGroup, LeftConstraint, TopConstraint, AlignmentConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint } from '../../layout/interfaces';
+import { InstanceLayout, LayoutNode, LayoutEdge, LayoutConstraint, LayoutGroup, LeftConstraint, TopConstraint, AlignmentConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, isBoundingBoxConstraint } from '../../layout/interfaces';
 import { LayoutInstance } from '../../layout/layoutinstance';
 import * as dagre from 'dagre';
 
@@ -342,6 +342,14 @@ export class WebColaLayout {
       return alignmentConstraint;
 
     }
+
+    if(isBoundingBoxConstraint(constraint)) {
+      // Log and ignore for now
+      console.log("BoundingBoxConstraint detected.");
+      // We should return a null constraint or something here
+      return { type: "noop" };
+    }
+
     throw new Error("Constraint type not recognized");
   }
 
