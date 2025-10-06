@@ -338,7 +338,8 @@ export class LayoutInstance {
                             name: groupName,
                             nodeIds: [addToGroup],
                             keyNodeId: groupOn,
-                            showLabel: true
+                            showLabel: true,
+                            sourceConstraint: gc
                         };
                         groups.push(newGroup);
 
@@ -372,7 +373,8 @@ export class LayoutInstance {
                     name: gc.name,
                     nodeIds: selectedElements,
                     keyNodeId: keyNode, //// TODO: I think introducing this random keynode could be a problem. Not sure why or when though.
-                    showLabel: true
+                    showLabel: true,
+                    sourceConstraint: gc
                 };
                 groups.push(newGroup);
             }
@@ -448,7 +450,8 @@ export class LayoutInstance {
                             name: groupName,
                             nodeIds: [toAdd],
                             keyNodeId: key, // What if the key is in the graph?
-                            showLabel: true // For now
+                            showLabel: true, // For now
+                            sourceConstraint: c
                         };
                         groups.push(newGroup);
 

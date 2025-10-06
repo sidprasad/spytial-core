@@ -158,6 +158,13 @@ class ConstraintValidator {
             this.layout.constraints = this.layout.constraints.concat(chosenConstraints);
         }
 
+        // Add group bounding box constraints (members inside, non-members outside)
+        // This must happen BEFORE updateVariables() so the solver enforces these constraints
+        const groupBoundingBoxError = this.addGroupBoundingBoxConstraints();
+        if (groupBoundingBoxError) {
+            return groupBoundingBoxError;
+        }
+
         this.solver.updateVariables();
 
         // Now that the solver has solved, we can get an ALIGNMENT ORDER for the nodes.
@@ -446,6 +453,88 @@ class ConstraintValidator {
         }
         
         return null; // No overlaps found
+    }
+
+    /**
+     * Adds group bounding box constraints to the solver.
+     * For each group:
+     * 1. Non-members must be OUTSIDE: Create disjunctive constraints
+     *    - Left of ALL members OR Right of ALL members OR Above ALL members OR Below ALL members
+     * 
+     * Note: We don't need to constrain members to be inside - the group structure already implies spatial proximity.
+     * 
+     * @returns PositionalConstraintError if adding constraints fails, null otherwise
+     */
+    private addGroupBoundingBoxConstraints(): PositionalConstraintError | null {
+        for (const group of this.groups) {
+            // Skip groups with no members or only one member
+            if (group.nodeIds.length <= 1) continue;
+
+            // Skip groups without a source constraint (e.g., singleton groups for disconnected nodes)
+            if (!group.sourceConstraint) continue;
+
+            // Get all member nodes
+            const memberNodes = group.nodeIds
+                .map(id => this.nodes.find(n => n.id === id))
+                .filter((n): n is LayoutNode => n !== undefined);
+
+            if (memberNodes.length === 0) continue;
+
+            // For each non-member, add disjunctive constraints that it must be outside the group
+            for (const node of this.nodes) {
+                // Skip if this node is a member of the group
+                if (group.nodeIds.includes(node.id)) continue;
+
+                // Use the group's source constraint (GroupByField or GroupBySelector)
+                const sourceConstraint = group.sourceConstraint;
+
+                // Alternative 1: Node is LEFT of ALL group members
+                const leftAlternative: LayoutConstraint[] = memberNodes.map(member => ({
+                    left: node,
+                    right: member,
+                    minDistance: this.minPadding,
+                    sourceConstraint: sourceConstraint
+                } as LeftConstraint));
+
+                // Alternative 2: Node is RIGHT of ALL group members
+                const rightAlternative: LayoutConstraint[] = memberNodes.map(member => ({
+                    left: member,
+                    right: node,
+                    minDistance: this.minPadding,
+                    sourceConstraint: sourceConstraint
+                } as LeftConstraint));
+
+                // Alternative 3: Node is ABOVE ALL group members
+                const aboveAlternative: LayoutConstraint[] = memberNodes.map(member => ({
+                    top: node,
+                    bottom: member,
+                    minDistance: this.minPadding,
+                    sourceConstraint: sourceConstraint
+                } as TopConstraint));
+
+                // Alternative 4: Node is BELOW ALL group members
+                const belowAlternative: LayoutConstraint[] = memberNodes.map(member => ({
+                    top: member,
+                    bottom: node,
+                    minDistance: this.minPadding,
+                    sourceConstraint: sourceConstraint
+                } as TopConstraint));
+
+                // Create the disjunction: node must satisfy ONE of these four alternatives
+                const disjunction = new DisjunctiveConstraint(
+                    sourceConstraint,
+                    [leftAlternative, rightAlternative, aboveAlternative, belowAlternative]
+                );
+
+                // Add to the list of disjunctive constraints that will be solved
+                if (!this.layout.disjunctiveConstraints) {
+                    this.layout.disjunctiveConstraints = [];
+                }
+                this.layout.disjunctiveConstraints.push(disjunction);
+            }
+        }
+
+        return null;
     }
 
     private getNodeIndex(nodeId: string) {

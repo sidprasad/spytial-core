@@ -13,6 +13,9 @@ export interface LayoutGroup {
 
     // Show label
     showLabel : boolean;
+
+    // The source constraint that created this group (GroupByField or GroupBySelector)
+    sourceConstraint?: GroupByField | GroupBySelector;
 }
 
 export interface LayoutNode {
@@ -49,7 +52,7 @@ export class ImplicitConstraint {
 }
 
 export interface LayoutConstraint {
-    sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint; // Not grouping, and I hate introducing implicit (which should hopefully never show up)
+    sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint | GroupByField | GroupBySelector;
 }
 
 
@@ -133,11 +136,11 @@ export function isInstanceLayout(obj: any): obj is InstanceLayout {
 export class DisjunctiveConstraint {
     /**
      * Creates a new disjunctive constraint.
-     * @param sourceConstraint - The original constraint (e.g., CyclicOrientationConstraint) that led to this disjunction.
+     * @param sourceConstraint - The original constraint (e.g., CyclicOrientationConstraint, GroupByField, or ImplicitConstraint) that led to this disjunction.
      * @param alternatives - An array of alternatives, where each alternative is an array of constraints that must be satisfied together.
      */
     constructor(
-        public sourceConstraint:  CyclicOrientationConstraint | GroupByField | GroupBySelector,
+        public sourceConstraint:  CyclicOrientationConstraint | GroupByField | GroupBySelector | ImplicitConstraint,
         public alternatives: LayoutConstraint[][]
     ) {}
 
