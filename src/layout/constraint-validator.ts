@@ -90,7 +90,7 @@ export function orientationConstraintToString(constraint: LayoutConstraint) {
         //     'bottom': 'below'
         // };
         //return `${nodeLabel(bc.node)} must be ${sideDescriptions[bc.side]} group "${bc.group.name}"`;
-        return `${nodeLabel(bc.node)} cannot be in group "${bc.group.name}."`;
+        return `${nodeLabel(bc.node)} cannot be in group "${bc.group.name}".`;
     }
     return `Unknown constraint type: ${constraint}`;
 }
@@ -401,32 +401,7 @@ class ConstraintValidator {
         const newSolver = new Solver();
         
         // First, re-add the bounding box member constraints (these are permanent conjunctive constraints)
-        for (const group of this.groups) {
-            if (group.nodeIds.length <= 1) continue;
-            if (!group.sourceConstraint) continue;
-
-            const bbox = this.groupBoundingBoxes.get(group.name);
-            if (!bbox) continue;
-
-            const memberNodes = group.nodeIds
-                .map(id => this.nodes.find(n => n.id === id))
-                .filter((n): n is LayoutNode => n !== undefined);
-
-            for (const member of memberNodes) {
-                const memberIndex = this.getNodeIndex(member.id);
-                const memberX = this.variables[memberIndex].x;
-                const memberY = this.variables[memberIndex].y;
-
-                try {
-                    newSolver.addConstraint(new Constraint(memberX, Operator.Ge, bbox.left, Strength.required));
-                    newSolver.addConstraint(new Constraint(memberX, Operator.Le, bbox.right, Strength.required));
-                    newSolver.addConstraint(new Constraint(memberY, Operator.Ge, bbox.top, Strength.required));
-                    newSolver.addConstraint(new Constraint(memberY, Operator.Le, bbox.bottom, Strength.required));
-                } catch (e) {
-                    // Constraint may already exist, ignore
-                }
-            }
-        }
+        this.addBoundingBoxMemberConstraintsToSolver(newSolver);
         
         // Then re-add all constraints from added_constraints (regular + disjunctive choices made so far)
         for (const constraint of this.added_constraints) {
@@ -626,6 +601,41 @@ class ConstraintValidator {
         return this.nodes.findIndex(node => node.id === nodeId);
     }
 
+    /**
+     * Adds bounding box member constraints to the given solver.
+     * Helper method used both in cloneSolver and getMinimalConflictingConstraints.
+     * 
+     * @param solver - The solver to add constraints to
+     */
+    private addBoundingBoxMemberConstraintsToSolver(solver: Solver): void {
+        for (const group of this.groups) {
+            if (group.nodeIds.length <= 1) continue;
+            if (!group.sourceConstraint) continue;
+
+            const bbox = this.groupBoundingBoxes.get(group.name);
+            if (!bbox) continue;
+
+            const memberNodes = group.nodeIds
+                .map(id => this.nodes.find(n => n.id === id))
+                .filter((n): n is LayoutNode => n !== undefined);
+
+            for (const member of memberNodes) {
+                const memberIndex = this.getNodeIndex(member.id);
+                const memberX = this.variables[memberIndex].x;
+                const memberY = this.variables[memberIndex].y;
+
+                try {
+                    solver.addConstraint(new Constraint(memberX, Operator.Ge, bbox.left, Strength.required));
+                    solver.addConstraint(new Constraint(memberX, Operator.Le, bbox.right, Strength.required));
+                    solver.addConstraint(new Constraint(memberY, Operator.Ge, bbox.top, Strength.required));
+                    solver.addConstraint(new Constraint(memberY, Operator.Le, bbox.bottom, Strength.required));
+                } catch (e) {
+                    // Constraint may already exist, ignore
+                }
+            }
+        }
+    }
+
 
     //Find the SMALLEST subset of consistentConstraints that is inconsistent with conflictingConstraint
 
@@ -642,15 +652,17 @@ class ConstraintValidator {
                 let testSet = core.slice(0, i).concat(core.slice(i + 1));
                 let solver = new Solver();
                 try {
+                    // First, add bounding box member constraints if any BoundingBoxConstraints are in testSet
+                    // This ensures the bounding box variables exist in the test solver
+                    const hasBoundingBoxConstraint = testSet.some(c => isBoundingBoxConstraint(c));
+                    if (hasBoundingBoxConstraint) {
+                        this.addBoundingBoxMemberConstraintsToSolver(solver);
+                    }
+
                     for (const c of testSet) {
-
-
                         let cassowaryConstraints = this.constraintToKiwi(c);
                         // Add the Cassowary constraints to the solver
                         cassowaryConstraints.forEach((cassowaryConstraint) => {
-                            // console.log("Adding constraint to solver:", cassowaryConstraint);
-                            // console.log("Constraint to add:", this.orientationConstraintToString(c));
-                            // console.log("Cassowary constraint:", cassowaryConstraint);
                             solver.addConstraint(cassowaryConstraint);
                         });
                     }
