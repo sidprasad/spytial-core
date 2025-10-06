@@ -44,8 +44,6 @@ describe('Pyret Table Parsing', () => {
     // The table should have atoms for:
     // - Root cnd object
     // - Table object
-    // - Array objects for each row (14 rows)
-    // - String atoms for header values (origin, destination)
     // - String atoms for unique airport codes
     expect(atoms.length).toBeGreaterThan(0);
     
@@ -53,52 +51,44 @@ describe('Pyret Table Parsing', () => {
     const types = [...new Set(atoms.map(a => a.type))];
     expect(types).toContain('cnd');
     expect(types).toContain('table');
-    expect(types).toContain('Array');
     expect(types).toContain('String');
   });
 
-  it('should identify table headers', () => {
+  it('should create semantic relational tuples from table rows', () => {
     const instance = new PyretDataInstance(pyretTableData);
     const relations = instance.getRelations();
     
-    // We should have a relation for the header
-    const headerRelation = relations.find(r => r.name === '_header-raw-array');
-    expect(headerRelation).toBeDefined();
+    // We should have a relation named after the table type
+    const tableRelation = relations.find(r => r.name === 'table');
+    expect(tableRelation).toBeDefined();
     
-    // The header relation should have 2 tuples (origin and destination)
-    expect(headerRelation?.tuples.length).toBe(2);
+    // The table relation should have 14 tuples (one per row)
+    expect(tableRelation?.tuples.length).toBe(14);
     
-    // Get the atoms for the header values
-    const atoms = instance.getAtoms();
-    const headerAtoms = headerRelation!.tuples.map(t => {
-      const atomId = t.atoms[1]; // Second atom in tuple is the value
-      return atoms.find(a => a.id === atomId);
+    // Each tuple should be binary (2 atoms: origin and destination)
+    tableRelation?.tuples.forEach(tuple => {
+      expect(tuple.atoms.length).toBe(2);
     });
     
-    const headerLabels = headerAtoms.map(a => a?.label);
-    expect(headerLabels).toContain('origin');
-    expect(headerLabels).toContain('destination');
+    // Check that the first tuple is (PVD, ORD)
+    const atoms = instance.getAtoms();
+    const firstTuple = tableRelation!.tuples[0];
+    const firstOrigin = atoms.find(a => a.id === firstTuple.atoms[0]);
+    const firstDestination = atoms.find(a => a.id === firstTuple.atoms[1]);
+    expect(firstOrigin?.label).toBe('PVD');
+    expect(firstDestination?.label).toBe('ORD');
   });
 
   it('should parse table rows correctly', () => {
     const instance = new PyretDataInstance(pyretTableData);
     const relations = instance.getRelations();
     
-    // We should have a relation for rows
-    const rowsRelation = relations.find(r => r.name === '_rows-raw-array');
-    expect(rowsRelation).toBeDefined();
+    // We should have a relation named 'table' with semantic tuples
+    const tableRelation = relations.find(r => r.name === 'table');
+    expect(tableRelation).toBeDefined();
     
-    // The rows relation should have 14 tuples (14 rows)
-    expect(rowsRelation?.tuples.length).toBe(14);
-  });
-
-  it('should create atoms for array elements', () => {
-    const instance = new PyretDataInstance(pyretTableData);
-    const atoms = instance.getAtoms();
-    
-    // Check that we have Array atoms for each row
-    const arrayAtoms = atoms.filter(a => a.type === 'Array');
-    expect(arrayAtoms.length).toBe(14); // 14 rows in the table
+    // The table relation should have 14 tuples (14 rows)
+    expect(tableRelation?.tuples.length).toBe(14);
   });
 
   it('should create atoms for airport codes', () => {
@@ -116,15 +106,24 @@ describe('Pyret Table Parsing', () => {
     });
   });
 
-  it('should handle element relations for nested arrays', () => {
+  it('should verify tuple structure represents table ⊆ Origin × Destination', () => {
     const instance = new PyretDataInstance(pyretTableData);
     const relations = instance.getRelations();
+    const atoms = instance.getAtoms();
     
-    // We should have an 'element' relation for the nested array elements
-    const elementRelation = relations.find(r => r.name === 'element');
-    expect(elementRelation).toBeDefined();
+    // Get the table relation
+    const tableRelation = relations.find(r => r.name === 'table');
+    expect(tableRelation).toBeDefined();
     
-    // Each row has 2 elements (origin and destination), so 14 rows * 2 = 28 elements
-    expect(elementRelation?.tuples.length).toBeGreaterThanOrEqual(28);
+    // Verify several known tuples exist
+    const tuples = tableRelation!.tuples.map(t => ({
+      origin: atoms.find(a => a.id === t.atoms[0])?.label,
+      destination: atoms.find(a => a.id === t.atoms[1])?.label
+    }));
+    
+    // Check for specific known routes
+    expect(tuples).toContainEqual({ origin: 'PVD', destination: 'ORD' });
+    expect(tuples).toContainEqual({ origin: 'ORD', destination: 'PVD' });
+    expect(tuples).toContainEqual({ origin: 'DEN', destination: 'SFO' });
   });
 });

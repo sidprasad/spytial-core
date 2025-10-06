@@ -80,18 +80,18 @@ describe('Pyret Table Graph Generation', () => {
     expect(ordAtoms.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('should properly structure nested arrays', () => {
+  it('should properly structure semantic relational tuples', () => {
     const instance = new PyretDataInstance(pyretTableData);
     const relations = instance.getRelations();
     
-    // The _rows-raw-array should connect the table to each row array
-    const rowsRelation = relations.find(r => r.name === '_rows-raw-array');
-    expect(rowsRelation).toBeDefined();
-    expect(rowsRelation?.tuples.length).toBe(3); // 3 rows
+    // The table should create a semantic relation with binary tuples
+    const tableRelation = relations.find(r => r.name === 'table');
+    expect(tableRelation).toBeDefined();
+    expect(tableRelation?.tuples.length).toBe(3); // 3 rows
     
-    // Each row array should connect to its elements via 'element' relation
-    const elementRelation = relations.find(r => r.name === 'element');
-    expect(elementRelation).toBeDefined();
-    expect(elementRelation?.tuples.length).toBe(6); // 3 rows * 2 elements = 6
+    // Each tuple should be binary (origin, destination)
+    tableRelation?.tuples.forEach(tuple => {
+      expect(tuple.atoms.length).toBe(2);
+    });
   });
 });
