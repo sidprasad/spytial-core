@@ -50,6 +50,8 @@ export function generateEdgeId(
  * - Objects have a `dict` property containing field values
  * - Objects have a `brands` property indicating their type
  * - All dict entries are treated as relations
+ * - Arrays (including table rows/columns) are parsed as relations with Array atoms
+ * - Nested arrays are supported with intermediate Array atoms
  * - Cycles are handled gracefully without infinite recursion
  * - Primitive idempotency is configurable via constructor options
  * 
@@ -102,7 +104,9 @@ export class PyretDataInstance implements IInputDataInstance {
 
   /*
     TODO: List handling
-    - Handle Pyret Lists and Tables as special cases. They currently show as (link (link (link (link )))) etc.
+    - Arrays (including table rows and columns) are now parsed as relations with Array atoms
+    - Native Pyret Lists still show as (link (link (link (link )))) etc. and need special handling
+    - Consider adding special handling for Pyret Table types to create more semantic relations
   */
 
 
