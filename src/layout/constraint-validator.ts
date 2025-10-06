@@ -1,5 +1,5 @@
 import { Solver, Variable, Expression, Strength, Operator, Constraint } from 'kiwi.js';
-import { DisjunctiveConstraint, InstanceLayout, LayoutNode, LayoutEdge, LayoutGroup, LayoutConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, TopConstraint, LeftConstraint, AlignmentConstraint, ImplicitConstraint } from './interfaces';
+import { DisjunctiveConstraint, InstanceLayout, LayoutNode, LayoutEdge, LayoutGroup, LayoutConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, isBoundingBoxConstraint, TopConstraint, LeftConstraint, AlignmentConstraint, BoundingBoxConstraint, ImplicitConstraint } from './interfaces';
 import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint, GroupByField, GroupBySelector } from './layoutspec';
 
 
@@ -64,7 +64,7 @@ export function orientationConstraintToString(constraint: LayoutConstraint) {
     }
     else if (isLeftConstraint(constraint)) {
         let lc = constraint as LeftConstraint;
-        return `${nodeLabel(lc.left)} must be to the left of ${nodeLabel(lc.right)}`;
+        return `${nodeLabel(lc.left)}must be to the left of  ${nodeLabel(lc.right)}`;
     }
     else if (isAlignmentConstraint(constraint)) {
         let ac = constraint as AlignmentConstraint;
@@ -81,6 +81,17 @@ export function orientationConstraintToString(constraint: LayoutConstraint) {
 
         return `${nodeLabel(node1)} must be aligned with ${nodeLabel(node2)} along the ${axis} axis`;
     }
+    else if (isBoundingBoxConstraint(constraint)) {
+        let bc = constraint as BoundingBoxConstraint;
+        // const sideDescriptions = {
+        //     'left': 'to the left of',
+        //     'right': 'to the right of',
+        //     'top': 'above',
+        //     'bottom': 'below'
+        // };
+        //return `${nodeLabel(bc.node)} must be ${sideDescriptions[bc.side]} group "${bc.group.name}"`;
+        return `${nodeLabel(bc.node)} cannot be in group "${bc.group.name}".`;
+    }
     return `Unknown constraint type: ${constraint}`;
 }
 
@@ -89,6 +100,7 @@ class ConstraintValidator {
 
     private solver: Solver;
     private variables: { [key: string]: { x: Variable, y: Variable } };
+    private groupBoundingBoxes: Map<string, { left: Variable, right: Variable, top: Variable, bottom: Variable }>;
 
     private added_constraints: LayoutConstraint[];
 
@@ -109,6 +121,7 @@ class ConstraintValidator {
         this.edges = layout.edges;
         this.orientationConstraints = layout.constraints;
         this.variables = {};
+        this.groupBoundingBoxes = new Map();
         this.groups = layout.groups;
         this.added_constraints = [];
     }
@@ -139,6 +152,13 @@ class ConstraintValidator {
         // Track how many constraints we have before disjunctions
         const constraintsBeforeDisjunctions = this.added_constraints.length;
 
+        // Add group bounding box constraints (members inside, non-members outside)
+        // This must happen BEFORE updateVariables() so the solver enforces these constraints
+        const groupBoundingBoxError = this.addGroupBoundingBoxConstraints();
+        if (groupBoundingBoxError) {
+            return groupBoundingBoxError;
+        }
+
         // Now handle disjunctive constraints using backtracking
         const disjunctiveConstraints = this.layout.disjunctiveConstraints || [];
         if (disjunctiveConstraints.length > 0) {
@@ -157,6 +177,8 @@ class ConstraintValidator {
             // Add the chosen constraints to the layout constraints so they're available downstream
             this.layout.constraints = this.layout.constraints.concat(chosenConstraints);
         }
+
+
 
         this.solver.updateVariables();
 
@@ -370,20 +392,27 @@ class ConstraintValidator {
      * Clones the current solver state (constraints only, not variable values).
      * Used for backtracking in disjunctive constraint solving.
      * 
+     * Note: The bounding box variables and member constraints are part of the main solver
+     * and will be included in the clone automatically since they're in the same solver instance.
+     * 
      * @returns A new Solver with the same constraints as the current one
      */
     private cloneSolver(): Solver {
         const newSolver = new Solver();
         
-        // Re-add all constraints from added_constraints
+        // First, re-add the bounding box member constraints (these are permanent conjunctive constraints)
+        this.addBoundingBoxMemberConstraintsToSolver(newSolver);
+        
+        // Then re-add all constraints from added_constraints (regular + disjunctive choices made so far)
         for (const constraint of this.added_constraints) {
             const kiwiConstraints = this.constraintToKiwi(constraint);
             kiwiConstraints.forEach(kiwiConstraint => {
-                try {
-                    newSolver.addConstraint(kiwiConstraint);
-                } catch (e) {
-                    // Constraint may already exist, ignore
-                }
+                // try {
+                //     newSolver.addConstraint(kiwiConstraint);
+                // } catch (e) {
+                //     // Constraint may already exist, ignore
+                // }
+                newSolver.addConstraint(kiwiConstraint);
             });
         }
 
@@ -448,8 +477,164 @@ class ConstraintValidator {
         return null; // No overlaps found
     }
 
+    /**
+     * Adds group bounding box constraints to the solver.
+     * 
+     * For each group, we create 4 variables representing the bounding box:
+     * - groupLeft, groupRight, groupTop, groupBottom
+     * 
+     * Then we add constraints:
+     * 1. Each member must be inside the bounding box (added directly to solver)
+     * 2. For each non-member, create a disjunctive constraint:
+     *    - Node is LEFT of box OR RIGHT of box OR ABOVE box OR BELOW box
+     * 
+     * This approach scales as O(members + non-members) per group instead of O(members × non-members × 4).
+     * 
+     * @returns PositionalConstraintError if adding constraints fails, null otherwise
+     */
+    private addGroupBoundingBoxConstraints(): PositionalConstraintError | null {
+        for (const group of this.groups) {
+            // Skip groups with no members or only one member
+            if (group.nodeIds.length <= 1) continue;
+
+            // Skip groups without a source constraint (e.g., singleton groups for disconnected nodes)
+            if (!group.sourceConstraint) continue;
+
+            // Get all member nodes
+            const memberNodes = group.nodeIds
+                .map(id => this.nodes.find(n => n.id === id))
+                .filter((n): n is LayoutNode => n !== undefined);
+
+            if (memberNodes.length === 0) continue;
+
+            // Create 4 variables for the bounding box
+            const groupLeft = new Variable(`${group.name}_bbox_left`);
+            const groupRight = new Variable(`${group.name}_bbox_right`);
+            const groupTop = new Variable(`${group.name}_bbox_top`);
+            const groupBottom = new Variable(`${group.name}_bbox_bottom`);
+
+            // Store the bounding box variables for this group
+            this.groupBoundingBoxes.set(group.name, {
+                left: groupLeft,
+                right: groupRight,
+                top: groupTop,
+                bottom: groupBottom
+            });
+
+            // Add constraints: each member must be inside the bounding box
+            // These are conjunctive (always enforced), so add directly to solver
+            // IMPORTANT: We DON'T add these to added_constraints because they use the bbox variables
+            // which need to exist in the solver. They'll be automatically included when we clone the solver.
+            for (const member of memberNodes) {
+                const memberIndex = this.getNodeIndex(member.id);
+                const memberX = this.variables[memberIndex].x;
+                const memberY = this.variables[memberIndex].y;
+
+                // member.x >= groupLeft
+                this.solver.addConstraint(new Constraint(memberX, Operator.Ge, groupLeft, Strength.required));
+                // member.x <= groupRight
+                this.solver.addConstraint(new Constraint(memberX, Operator.Le, groupRight, Strength.required));
+                // member.y >= groupTop
+                this.solver.addConstraint(new Constraint(memberY, Operator.Ge, groupTop, Strength.required));
+                // member.y <= groupBottom
+                this.solver.addConstraint(new Constraint(memberY, Operator.Le, groupBottom, Strength.required));
+            }
+
+            // For each non-member, add disjunctive constraint that it must be outside
+            for (const node of this.nodes) {
+                // Skip if this node is a member of the group
+                if (group.nodeIds.includes(node.id)) continue;
+
+                const sourceConstraint = group.sourceConstraint;
+
+                // Create 4 alternatives using BoundingBoxConstraint
+                const leftAlternative: BoundingBoxConstraint = {
+                    group: group,
+                    node: node,
+                    side: 'left',
+                    minDistance: this.minPadding,
+                    sourceConstraint: sourceConstraint
+                };
+
+                const rightAlternative: BoundingBoxConstraint = {
+                    group: group,
+                    node: node,
+                    side: 'right',
+                    minDistance: this.minPadding,
+                    sourceConstraint: sourceConstraint
+                };
+
+                const topAlternative: BoundingBoxConstraint = {
+                    group: group,
+                    node: node,
+                    side: 'top',
+                    minDistance: this.minPadding,
+                    sourceConstraint: sourceConstraint
+                };
+
+                const bottomAlternative: BoundingBoxConstraint = {
+                    group: group,
+                    node: node,
+                    side: 'bottom',
+                    minDistance: this.minPadding,
+                    sourceConstraint: sourceConstraint
+                };
+
+                // Create the disjunction: node must satisfy ONE of these four alternatives
+                // Each alternative is an array with a single BoundingBoxConstraint
+                const disjunction = new DisjunctiveConstraint(
+                    sourceConstraint,
+                    [[leftAlternative], [rightAlternative], [topAlternative], [bottomAlternative]]
+                );
+
+                // Add to the list of disjunctive constraints that will be solved
+                if (!this.layout.disjunctiveConstraints) {
+                    this.layout.disjunctiveConstraints = [];
+                }
+                this.layout.disjunctiveConstraints.push(disjunction);
+            }
+        }
+
+        return null;
+    }
+
     private getNodeIndex(nodeId: string) {
         return this.nodes.findIndex(node => node.id === nodeId);
+    }
+
+    /**
+     * Adds bounding box member constraints to the given solver.
+     * Helper method used both in cloneSolver and getMinimalConflictingConstraints.
+     * 
+     * @param solver - The solver to add constraints to
+     */
+    private addBoundingBoxMemberConstraintsToSolver(solver: Solver): void {
+        for (const group of this.groups) {
+            if (group.nodeIds.length <= 1) continue;
+            if (!group.sourceConstraint) continue;
+
+            const bbox = this.groupBoundingBoxes.get(group.name);
+            if (!bbox) continue;
+
+            const memberNodes = group.nodeIds
+                .map(id => this.nodes.find(n => n.id === id))
+                .filter((n): n is LayoutNode => n !== undefined);
+
+            for (const member of memberNodes) {
+                const memberIndex = this.getNodeIndex(member.id);
+                const memberX = this.variables[memberIndex].x;
+                const memberY = this.variables[memberIndex].y;
+
+                try {
+                    solver.addConstraint(new Constraint(memberX, Operator.Ge, bbox.left, Strength.required));
+                    solver.addConstraint(new Constraint(memberX, Operator.Le, bbox.right, Strength.required));
+                    solver.addConstraint(new Constraint(memberY, Operator.Ge, bbox.top, Strength.required));
+                    solver.addConstraint(new Constraint(memberY, Operator.Le, bbox.bottom, Strength.required));
+                } catch (e) {
+                    // Constraint may already exist, ignore
+                }
+            }
+        }
     }
 
 
@@ -468,15 +653,17 @@ class ConstraintValidator {
                 let testSet = core.slice(0, i).concat(core.slice(i + 1));
                 let solver = new Solver();
                 try {
+                    // First, add bounding box member constraints if any BoundingBoxConstraints are in testSet
+                    // This ensures the bounding box variables exist in the test solver
+                    const hasBoundingBoxConstraint = testSet.some(c => isBoundingBoxConstraint(c));
+                    if (hasBoundingBoxConstraint) {
+                        this.addBoundingBoxMemberConstraintsToSolver(solver);
+                    }
+
                     for (const c of testSet) {
-
-
                         let cassowaryConstraints = this.constraintToKiwi(c);
                         // Add the Cassowary constraints to the solver
                         cassowaryConstraints.forEach((cassowaryConstraint) => {
-                            // console.log("Adding constraint to solver:", cassowaryConstraint);
-                            // console.log("Constraint to add:", this.orientationConstraintToString(c));
-                            // console.log("Cassowary constraint:", cassowaryConstraint);
                             solver.addConstraint(cassowaryConstraint);
                         });
                     }
@@ -558,6 +745,42 @@ class ConstraintValidator {
 
             // Create equality constraint: node1Var == node2Var
             return [new Constraint(node1Var, Operator.Eq, node2Var, Strength.required)];
+        }
+        else if (isBoundingBoxConstraint(constraint)) {
+            const bc = constraint as BoundingBoxConstraint;
+            const bbox = this.groupBoundingBoxes.get(bc.group.name);
+            
+            if (!bbox) {
+                console.error(`Bounding box not found for group ${bc.group.name}`);
+                return [];
+            }
+
+            const nodeIndex = this.getNodeIndex(bc.node.id);
+            const nodeX = this.variables[nodeIndex].x;
+            const nodeY = this.variables[nodeIndex].y;
+
+            // Create constraint based on which side of the bounding box
+            switch (bc.side) {
+                case 'left':
+                    // node.x + padding <= bbox.left
+                    return [new Constraint(nodeX.plus(bc.minDistance), Operator.Le, bbox.left, Strength.required)];
+                
+                case 'right':
+                    // node.x >= bbox.right + padding
+                    return [new Constraint(nodeX, Operator.Ge, bbox.right.plus(bc.minDistance), Strength.required)];
+                
+                case 'top':
+                    // node.y + padding <= bbox.top
+                    return [new Constraint(nodeY.plus(bc.minDistance), Operator.Le, bbox.top, Strength.required)];
+                
+                case 'bottom':
+                    // node.y >= bbox.bottom + padding
+                    return [new Constraint(nodeY, Operator.Ge, bbox.bottom.plus(bc.minDistance), Strength.required)];
+                
+                default:
+                    console.error(`Unknown bounding box side: ${bc.side}`);
+                    return [];
+            }
         }
         else {
             console.log(constraint, "Unknown constraint type");

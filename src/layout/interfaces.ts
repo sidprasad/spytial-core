@@ -13,6 +13,9 @@ export interface LayoutGroup {
 
     // Show label
     showLabel : boolean;
+
+    // The source constraint that created this group (GroupByField or GroupBySelector)
+    sourceConstraint?: GroupByField | GroupBySelector;
 }
 
 export interface LayoutNode {
@@ -49,7 +52,7 @@ export class ImplicitConstraint {
 }
 
 export interface LayoutConstraint {
-    sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint; // Not grouping, and I hate introducing implicit (which should hopefully never show up)
+    sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint | GroupByField | GroupBySelector;
 }
 
 
@@ -83,6 +86,29 @@ export interface AlignmentConstraint extends LayoutConstraint {
 
 export function isAlignmentConstraint(constraint: LayoutConstraint): constraint is AlignmentConstraint {
     return (constraint as AlignmentConstraint).axis !== undefined;
+}
+
+/**
+ * Represents a bounding box constraint for a group.
+ * The bounding box has 4 variables (left, right, top, bottom).
+ * This is used in disjunctions to enforce that non-members are outside the group.
+ * 
+ * The actual Kiwi constraint generation happens in the solver - this is just the high-level representation.
+ */
+export interface BoundingBoxConstraint extends LayoutConstraint {
+    /** The group whose bounding box this represents */
+    group: LayoutGroup;
+    /** The node that must be positioned relative to the bounding box */
+    node: LayoutNode;
+    /** Which side of the bounding box: 'left' | 'right' | 'top' | 'bottom' */
+    side: 'left' | 'right' | 'top' | 'bottom';
+    /** Minimum padding from the bounding box edge */
+    minDistance: number;
+}
+
+export function isBoundingBoxConstraint(constraint: LayoutConstraint): constraint is BoundingBoxConstraint {
+    return (constraint as BoundingBoxConstraint).group !== undefined && 
+           (constraint as BoundingBoxConstraint).side !== undefined;
 }
 
 
@@ -133,11 +159,11 @@ export function isInstanceLayout(obj: any): obj is InstanceLayout {
 export class DisjunctiveConstraint {
     /**
      * Creates a new disjunctive constraint.
-     * @param sourceConstraint - The original constraint (e.g., CyclicOrientationConstraint) that led to this disjunction.
+     * @param sourceConstraint - The original constraint (e.g., CyclicOrientationConstraint, GroupByField, or ImplicitConstraint) that led to this disjunction.
      * @param alternatives - An array of alternatives, where each alternative is an array of constraints that must be satisfied together.
      */
     constructor(
-        public sourceConstraint:  CyclicOrientationConstraint | GroupByField | GroupBySelector,
+        public sourceConstraint:  CyclicOrientationConstraint | GroupByField | GroupBySelector | ImplicitConstraint,
         public alternatives: LayoutConstraint[][]
     ) {}
 
