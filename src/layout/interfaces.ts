@@ -1,3 +1,4 @@
+import { Group } from "webcola";
 import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint } from "./layoutspec";
 
 export interface LayoutGroup {
@@ -110,3 +111,45 @@ export function isInstanceLayout(obj: any): obj is InstanceLayout {
 }
 
 
+/**
+ * Represents a disjunctive constraint, where at least one of the provided alternatives must be satisfiable.
+ * Each alternative is an array of layout constraints that must hold together if selected.
+ * Used primarily for cyclic constraints, where alternatives represent different perturbations (rotations) of a cycle.
+ */
+export class DisjunctiveConstraint {
+    /**
+     * Creates a new disjunctive constraint.
+     * @param sourceConstraint - The original constraint (e.g., CyclicOrientationConstraint) that led to this disjunction.
+     * @param alternatives - An array of alternatives, where each alternative is an array of constraints that must be satisfied together.
+     */
+    constructor(
+        public sourceConstraint:  CyclicOrientationConstraint | GroupingConstraint,
+        public alternatives: LayoutConstraint[][]
+    ) {}
+
+    /**
+     * Returns a string representation of the disjunctive constraint for debugging.
+     */
+    toString(): string {
+        return `DisjunctiveConstraint with ${this.alternatives.length} alternatives from ${this.sourceConstraint}`;
+    }
+
+    /**
+     * Add an alternative to the disjunctive constraint.
+     * @param alternative - An array of layout constraints that form a new alternative.
+     */
+    addAlternative(alternative: LayoutConstraint[]) {
+        this.alternatives.push(alternative);
+    }
+
+    //TODO: Should we have some simplification methods here? 
+}
+
+/**
+ * Type guard to check if a constraint is a disjunctive constraint.
+ * @param constraint - The constraint to check.
+ * @returns True if the constraint is a DisjunctiveConstraint instance.
+ */
+export function isDisjunctiveConstraint(constraint: LayoutConstraint | DisjunctiveConstraint): constraint is DisjunctiveConstraint {
+    return constraint instanceof DisjunctiveConstraint;
+}
