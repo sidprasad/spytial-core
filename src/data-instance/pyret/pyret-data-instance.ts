@@ -78,7 +78,7 @@ export function generateEdgeId(
  *   }
  * };
  * const instance2 = new PyretDataInstance(tableData);
- * // Creates relation "table" with tuples: (PVD, ORD), (ORD, PVD)
+ * // Creates relation "row" with tuples: (PVD, ORD), (ORD, PVD)
  * 
  * // Custom idempotency settings
  * const instance3 = new PyretDataInstance(pyretData, {
@@ -905,9 +905,8 @@ export class PyretDataInstance implements IInputDataInstance {
       return;
     }
     
-    // Get the table type/name for the relation name
-    const tableType = this.extractType(tableObj);
-    const relationName = tableType; // Use the table type as the relation name
+    // Use "row" as the relation name to represent table rows
+    const relationName = 'row';
     
     // Process each row as a tuple
     rowsArray.forEach((row) => {
