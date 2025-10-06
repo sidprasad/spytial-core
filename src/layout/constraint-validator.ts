@@ -90,7 +90,7 @@ class ConstraintValidator {
     private solver: Solver;
     private variables: { [key: string]: { x: Variable, y: Variable } };
 
-    private added_constraints: any[];
+    private added_constraints: LayoutConstraint[];
 
     layout: InstanceLayout;
     orientationConstraints: LayoutConstraint[];
@@ -127,17 +127,38 @@ class ConstraintValidator {
             };
         });
 
+        // First, add all conjunctive constraints
         for (let i = 0; i < this.orientationConstraints.length; i++) {
-            let constraint = this.orientationConstraints[i]; // TODO: This changes?
+            let constraint = this.orientationConstraints[i];
             let error = this.addConstraintToSolver(constraint);
             if (error) {
                 return error;
             }
         }
 
-        this.solver.updateVariables();
+        // Track how many constraints we have before disjunctions
+        const constraintsBeforeDisjunctions = this.added_constraints.length;
 
-        //// TODO: Does adding these play badly when we have circular layouts?
+        // Now handle disjunctive constraints using backtracking
+        const disjunctiveConstraints = this.layout.disjunctiveConstraints || [];
+        if (disjunctiveConstraints.length > 0) {
+            const result = this.solveDisjunctiveConstraints(disjunctiveConstraints);
+            if (!result.satisfiable) {
+                return result.error || null;
+            }
+            
+            // Verify that chosen alternatives were added to added_constraints
+            const chosenConstraints = this.added_constraints.slice(constraintsBeforeDisjunctions);
+            console.assert(
+                chosenConstraints.length > 0,
+                'Disjunctive solver succeeded but no constraints were added'
+            );
+            
+            // Add the chosen constraints to the layout constraints so they're available downstream
+            this.layout.constraints = this.layout.constraints.concat(chosenConstraints);
+        }
+
+        this.solver.updateVariables();
 
         // Now that the solver has solved, we can get an ALIGNMENT ORDER for the nodes.
         let and_more_constraints = this.getAlignmentOrders();
@@ -146,6 +167,195 @@ class ConstraintValidator {
         this.layout.constraints = this.layout.constraints.concat(and_more_constraints);
 
         return null;
+    }
+
+    /**
+     * Solves disjunctive constraints using backtracking.
+     * For each disjunction, tries each alternative until finding a satisfiable combination.
+     * The chosen alternatives are added to this.added_constraints.
+     * 
+     * @param disjunctions - Array of disjunctive constraints to solve
+     * @returns Object indicating satisfiability and any error
+     */
+    private solveDisjunctiveConstraints(disjunctions: DisjunctiveConstraint[]): {
+        satisfiable: boolean;
+        error?: PositionalConstraintError;
+    } {
+        const constraintsBeforeDisjunctions = this.added_constraints.length;
+        
+        // Use backtracking to find a satisfying assignment
+        const result = this.backtrackDisjunctions(disjunctions, 0);
+        
+        if (result.satisfiable) {
+            // Verify that constraints were actually added
+            const chosenConstraintsCount = this.added_constraints.length - constraintsBeforeDisjunctions;
+            console.log(`Disjunctive solver: Successfully chose ${chosenConstraintsCount} constraints from ${disjunctions.length} disjunctions`);
+            
+            // Log which alternatives were chosen for debugging
+            if (chosenConstraintsCount > 0) {
+                console.log('Chosen constraints:', this.added_constraints.slice(constraintsBeforeDisjunctions));
+            }
+        }
+        
+        return result;
+    }
+
+    /**
+     * Returns the constraints that were chosen by the disjunctive solver.
+     * This is the subset of added_constraints that came from disjunctive alternatives.
+     * 
+     * @param beforeCount - Number of constraints before solving disjunctions
+     * @returns Array of constraints chosen from disjunctive alternatives
+     */
+    public getChosenDisjunctiveConstraints(beforeCount: number): LayoutConstraint[] {
+        return this.added_constraints.slice(beforeCount);
+    }
+
+    /**
+     * Recursive backtracking to solve disjunctive constraints.
+     * 
+     * This implements depth-first search with backtracking:
+     * - At each disjunction level, tries alternatives in order
+     * - If an alternative leads to success in all remaining disjunctions, keeps it
+     * - If an alternative fails in a later disjunction, backtracks to try the next alternative
+     * - Only backtracks to previous disjunction level after exhausting all alternatives at current level
+     * 
+     * Example execution for 3 disjunctions (D1, D2, D3):
+     * 1. Try D1-Alt0, then recursively try D2
+     * 2. Try D2-Alt0, then recursively try D3
+     * 3. Try all D3 alternatives - all fail
+     * 4. Backtrack to D2, try D2-Alt1, then recursively try D3
+     * 5. If D3 still fails, try D2-Alt2, etc.
+     * 6. Only after all D2 alternatives fail, backtrack to D1 and try D1-Alt1
+     * 
+     * When a satisfying assignment is found, the chosen alternatives remain in:
+     * - this.added_constraints (the LayoutConstraints that were chosen)
+     * - this.solver (the Kiwi solver with those constraints applied)
+     * 
+     * @param disjunctions - Array of all disjunctive constraints
+     * @param disjunctionIndex - Current index in the disjunctions array (current recursion depth)
+     * @returns Object indicating satisfiability and any error
+     */
+    private backtrackDisjunctions(
+        disjunctions: DisjunctiveConstraint[],
+        disjunctionIndex: number
+    ): {
+        satisfiable: boolean;
+        error?: PositionalConstraintError;
+    } {
+        // Base case: all disjunctions satisfied
+        if (disjunctionIndex >= disjunctions.length) {
+            // Success! The current state of this.added_constraints contains all chosen alternatives
+            console.log(`✓ Base case reached: All ${disjunctions.length} disjunctions satisfied`);
+            return { satisfiable: true };
+        }
+
+        const currentDisjunction = disjunctions[disjunctionIndex];
+        const alternatives = currentDisjunction.alternatives;
+        
+        console.log(`Disjunction ${disjunctionIndex + 1}/${disjunctions.length}: Trying ${alternatives.length} alternatives`);
+
+        // Try each alternative for this disjunction
+        for (let altIndex = 0; altIndex < alternatives.length; altIndex++) {
+            const alternative = alternatives[altIndex];
+            
+            console.log(`  → Disjunction ${disjunctionIndex + 1}: Trying alternative ${altIndex + 1}/${alternatives.length} (${alternative.length} constraints)`);
+
+            // Save current state for backtracking
+            const savedSolver = this.cloneSolver();
+            const savedConstraints = [...this.added_constraints];
+            const savedConstraintsLength = this.added_constraints.length;
+
+            // Try adding this alternative's constraints
+            let alternativeError: PositionalConstraintError | null = null;
+            for (const constraint of alternative) {
+                const error = this.addConstraintToSolver(constraint);
+                if (error) {
+                    alternativeError = error;
+                    console.log(`    ✗ Alternative ${altIndex + 1} conflicts with existing constraints`);
+                    break;
+                }
+            }
+
+            // If this alternative is satisfiable, try to satisfy remaining disjunctions
+            if (!alternativeError) {
+                console.log(`    ✓ Alternative ${altIndex + 1} is locally satisfiable, recursing to disjunction ${disjunctionIndex + 2}...`);
+                const result = this.backtrackDisjunctions(disjunctions, disjunctionIndex + 1);
+                
+                if (result.satisfiable) {
+                    // Success! This combination works
+                    // The chosen constraints are now in this.added_constraints
+                    // Do NOT restore - keep the successful state
+                    console.log(`    ✓✓ Alternative ${altIndex + 1} led to full success!`);
+                    return { satisfiable: true };
+                }
+                
+                // Otherwise, this alternative led to failure in later disjunctions
+                // Fall through to backtracking below
+                console.log(`    ✗ Alternative ${altIndex + 1} failed in later disjunctions, backtracking...`);
+            }
+
+            // Backtrack: restore solver state and try next alternative
+            this.restoreSolver(savedSolver);
+            this.added_constraints = savedConstraints;
+            
+            // Verify backtracking worked correctly
+            console.assert(
+                this.added_constraints.length === savedConstraintsLength,
+                `Backtracking failed: expected ${savedConstraintsLength} constraints, got ${this.added_constraints.length}`
+            );
+            
+            console.log(`    ⟲ Backtracked from alternative ${altIndex + 1}, state restored`);
+        }
+
+        // All alternatives exhausted for this disjunction
+        // Return failure to trigger backtracking at previous disjunction level
+        console.log(`  ✗✗ Disjunction ${disjunctionIndex + 1}: All ${alternatives.length} alternatives exhausted, returning failure`);
+        
+        const lastError: PositionalConstraintError = {
+            name: "PositionalConstraintError",
+            type: 'positional-conflict',
+            message: `No satisfiable alternative found for disjunctive constraint from ${currentDisjunction.sourceConstraint.toHTML()}`,
+            conflictingConstraint: alternatives[alternatives.length - 1][0], // Last constraint of last alternative
+            conflictingSourceConstraint: currentDisjunction.sourceConstraint,
+            minimalConflictingSet: new Map(),
+        };
+
+        return { satisfiable: false, error: lastError };
+    }
+
+    /**
+     * Clones the current solver state (constraints only, not variable values).
+     * Used for backtracking in disjunctive constraint solving.
+     * 
+     * @returns A new Solver with the same constraints as the current one
+     */
+    private cloneSolver(): Solver {
+        const newSolver = new Solver();
+        
+        // Re-add all constraints from added_constraints
+        for (const constraint of this.added_constraints) {
+            const kiwiConstraints = this.constraintToKiwi(constraint);
+            kiwiConstraints.forEach(kiwiConstraint => {
+                try {
+                    newSolver.addConstraint(kiwiConstraint);
+                } catch (e) {
+                    // Constraint may already exist, ignore
+                }
+            });
+        }
+
+        return newSolver;
+    }
+
+    /**
+     * Restores the solver to a previous state.
+     * Used for backtracking in disjunctive constraint solving.
+     * 
+     * @param savedSolver - The solver state to restore
+     */
+    private restoreSolver(savedSolver: Solver): void {
+        this.solver = savedSolver;
     }
 
     /**
@@ -242,7 +452,7 @@ class ConstraintValidator {
         return core.filter(c => c !== conflictingConstraint);
     }
 
-    private constraintToKiwi(constraint: LayoutConstraint): any[] {
+    private constraintToKiwi(constraint: LayoutConstraint): Constraint[] {
         // This is the main method that converts a LayoutConstraint to a Cassowary constraint.
         if (isTopConstraint(constraint)) {
             let tc = constraint as TopConstraint;
