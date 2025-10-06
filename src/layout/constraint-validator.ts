@@ -336,6 +336,19 @@ class ConstraintValidator {
         // Format error message to match regular constraint errors (user-friendly, no mention of disjunctions)
         const firstConstraintString = orientationConstraintToString(representativeConstraint);
         
+        // Build errorMessages for React component (HTML-formatted strings)
+        const sourceConstraintHTMLToLayoutConstraintsHTML = new Map<string, string[]>();
+        
+        for (const [source, constraints] of minimalConflictingSet.entries()) {
+            const sourceHTML = source.toHTML();
+            if (!sourceConstraintHTMLToLayoutConstraintsHTML.has(sourceHTML)) {
+                sourceConstraintHTMLToLayoutConstraintsHTML.set(sourceHTML, []);
+            }
+            constraints.forEach(c => {
+                sourceConstraintHTMLToLayoutConstraintsHTML.get(sourceHTML)!.push(orientationConstraintToString(c));
+            });
+        }
+        
         const lastError: PositionalConstraintError = {
             name: "PositionalConstraintError",
             type: 'positional-conflict',
@@ -343,6 +356,11 @@ class ConstraintValidator {
             conflictingConstraint: representativeConstraint,
             conflictingSourceConstraint: currentDisjunction.sourceConstraint,
             minimalConflictingSet: minimalConflictingSet,
+            errorMessages: {
+                conflictingConstraint: firstConstraintString,
+                conflictingSourceConstraint: currentDisjunction.sourceConstraint.toHTML(),
+                minimalConflictingConstraints: sourceConstraintHTMLToLayoutConstraintsHTML,
+            }
         };
 
         return { satisfiable: false, error: lastError };
