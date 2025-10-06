@@ -459,8 +459,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         <marker id="end-arrow" markerWidth="15" markerHeight="10" refX="12" refY="5" orient="auto">
           <polygon points="0 0, 15 5, 0 10" />
         </marker>
+        <marker id="start-arrow" markerWidth="15" markerHeight="10" refX="3" refY="5" orient="auto">
+          <polygon points="15 0, 0 5, 15 10" />
+        </marker>
         <marker id="hand-drawn-arrow" markerWidth="15" markerHeight="10" refX="12" refY="5" orient="auto">
           <polygon points="0 0, 15 5, 0 10" fill="#666666" />
+        </marker>
+        <marker id="hand-drawn-arrow-reverse" markerWidth="15" markerHeight="10" refX="3" refY="5" orient="auto">
+          <polygon points="15 0, 0 5, 15 10" fill="#666666" />
         </marker>
         </defs>
         <g class="zoomable"></g>
@@ -1259,6 +1265,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         if (this.isAlignmentEdge(d)) return "none";
         return this.isInferredEdge(d) ? "url(#hand-drawn-arrow)" : "url(#end-arrow)";
       })
+      .attr("marker-start", (d: any) => {
+        // Add marker-start for bidirectional edges
+        if (this.isAlignmentEdge(d) || !d.bidirectional) return "none";
+        return this.isInferredEdge(d) ? "url(#hand-drawn-arrow-reverse)" : "url(#start-arrow)";
+      })
       .on('click.inputmode', (d: any) => {
         if (this.isInputModeActive && !this.isAlignmentEdge(d)) {
           d3.event.stopPropagation();
@@ -1972,6 +1983,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr('marker-end', (d: EdgeWithMetadata) => {
         if (this.isAlignmentEdge(d)) return 'none';
         return this.isInferredEdge(d) ? 'url(#hand-drawn-arrow)' : 'url(#end-arrow)';
+      })
+      .attr('marker-start', (d: EdgeWithMetadata) => {
+        // Add marker-start for bidirectional edges
+        if (this.isAlignmentEdge(d) || !d.bidirectional) return 'none';
+        return this.isInferredEdge(d) ? 'url(#hand-drawn-arrow-reverse)' : 'url(#start-arrow)';
       })
       .raise();
 
