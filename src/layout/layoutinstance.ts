@@ -6,7 +6,7 @@ import { PositionalConstraintError, GroupOverlapError, isPositionalConstraintErr
 import {
     LayoutNode, LayoutEdge, LayoutConstraint, InstanceLayout,
     LeftConstraint, TopConstraint, AlignmentConstraint, LayoutGroup,
-    ImplicitConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint
+    ImplicitConstraint, DisjunctiveConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint
 } from './interfaces';
 
 import {
@@ -265,7 +265,6 @@ export class LayoutInstance {
         
         return false;
     }
-
 
 
     /**
@@ -590,8 +589,6 @@ export class LayoutInstance {
     }
 
 
-
-
     public getRelationName(g: Graph, edge: Edge): string {
         let relNameRaw = this.getEdgeLabel(g, edge);
 
@@ -679,6 +676,7 @@ export class LayoutInstance {
         error: ConstraintError | null
     } {
 
+        /** Here, we calculate some of the presentational directive choices */
         let projectionResult = this.applyLayoutProjections(a, projections);
         let ai = projectionResult.projectedInstance;
         let projectionData = projectionResult.finalProjectionChoices;
@@ -686,12 +684,9 @@ export class LayoutInstance {
         let g: Graph = ai.generateGraph(this.hideDisconnected, this.hideDisconnectedBuiltIns);
 
         const attributes = this.generateAttributesAndRemoveEdges(g);
-
-
         let nodeIconMap = this.getNodeIconMap(g);
         let nodeColorMap = this.getNodeColorMap(g, ai);
         let nodeSizeMap = this.getNodeSizeMap(g);
-
 
         // This is where we add the inferred edges to the graph.
         this.addinferredEdges(g);
@@ -704,6 +699,7 @@ export class LayoutInstance {
         let dcN = this.getDisconnectedNodes(g);
 
 
+
         /// NOW, we should get the nodes back with their IDs.
 
 
@@ -713,12 +709,8 @@ export class LayoutInstance {
             let nodeMetadata = g.node(nodeId);
             // If the node has a label, we can use it.
             // Otherwise, we can use the nodeId as the label.
-            let label = nodeMetadata?.label || nodeId; // TODO: Use atom name
-
-
+            let label = nodeMetadata?.label || nodeId; 
             let color = nodeColorMap[nodeId] || "black";
-
-
             let iconDetails = nodeIconMap[nodeId];
             let iconPath = iconDetails.path;
             let showLabels = iconDetails.showLabels;
@@ -732,7 +724,6 @@ export class LayoutInstance {
                 .filter((group) => group.nodeIds.includes(nodeId))
                 .map((group) => group.name);
             let nodeAttributes = attributes[nodeId] || {};
-
 
             return {
                 id: nodeId,
@@ -751,12 +742,12 @@ export class LayoutInstance {
         });
 
         ///////////// CONSTRAINTS ////////////
+
+
         let constraints: LayoutConstraint[] = this.applyRelativeOrientationConstraints(layoutNodes, g);
         constraints = constraints.concat(this.applyAlignConstraints(layoutNodes, g));
-
-        // THERE MAY BE SOME ISSUES DUE TO DUPLICATE CONSTRAINTS HERE :(
-        // HOWEVER, MAYBE THATS OK?
-        // TODO: Explore what it would mean to remove duplicates here.
+        
+        // Constraints NOW holds the conjuctive CORE of layout constraints.
         constraints = removeDuplicateConstraints(constraints);
 
 
@@ -785,82 +776,45 @@ export class LayoutInstance {
             return e;
         }).filter((edge): edge is LayoutEdge => edge !== null);
 
-        //////////////////////// HACK /////////////
-        /*
-            Here, we implement a hacky approach that tries MULTIPLE 
-            perturbations of the cyclic constraints to find a satisfying layout.
+        // Build cyclic constraint disjunctions
+        const cyclicDisjunctions = this.buildCyclicDisjunctions(layoutNodes);
 
-            This is because we're using a linear constraint solver and so don't have disjunctions.
-            TODO: Replacing this with something like MiniZinc would
-            make this much easier, since the solver could support disjunctions.
+        // Create layout with conjunctive constraints and disjunctive constraints
+        let layout: InstanceLayout = { 
+            nodes: layoutNodes, 
+            edges: layoutEdges, 
+            constraints: constraints, 
+            groups: groups,
+            disjunctiveConstraints: cyclicDisjunctions 
+        };
 
-        */
+        // Validate all constraints (conjunctive + disjunctive) in one pass
+        const validator = new ConstraintValidator(layout);
+        const constraintError = validator.validateConstraints();
 
-        // First, ensure that the layout is satisfiable BEFORE cyclic constraints.
-        let layoutWithoutCyclicConstraints: InstanceLayout = { nodes: layoutNodes, edges: layoutEdges, constraints: constraints, groups: groups };
-        const validatorWithoutCyclic = new ConstraintValidator(layoutWithoutCyclicConstraints);
-        const nonCyclicConstraintError = validatorWithoutCyclic.validateConstraints();
-
-        if (nonCyclicConstraintError) {
-            if ((nonCyclicConstraintError as PositionalConstraintError).minimalConflictingSet) {
+        if (constraintError) {
+            if ((constraintError as PositionalConstraintError).minimalConflictingSet) {
                 return this.handlePositionalConstraintError(
-                    nonCyclicConstraintError as PositionalConstraintError,
-                    layoutWithoutCyclicConstraints,
+                    constraintError as PositionalConstraintError,
+                    layout,
                     projectionData
                 );
             }
 
-            if ((nonCyclicConstraintError as GroupOverlapError).overlappingNodes) {
+            if ((constraintError as GroupOverlapError).overlappingNodes) {
                 return this.handleGroupOverlapError(
-                    nonCyclicConstraintError as GroupOverlapError,
-                    layoutWithoutCyclicConstraints,
+                    constraintError as GroupOverlapError,
+                    layout,
                     projectionData
                 );
             }
 
-            // console.log("Layout is unsatisfiable even without cyclic constraints.")
-
-            throw nonCyclicConstraintError;
+            throw constraintError;
         }
 
-
-        // And updating constraints, since the validator may add constraints.
-        // (IN particular these would be non-overlap constraints for spacing in groups.)
-        // TODO: However, this introduces
-        // ANOTHER POTENTIAL BUG, I THINK. WHAT IF CIRCULAR PERTURBATIONS CHANGE 
-        // DIRECTLY RIGHT/LEFT?
-        constraints = layoutWithoutCyclicConstraints.constraints;
-        const layoutWithCyclicConstraints: InstanceLayout = { nodes: layoutWithoutCyclicConstraints.nodes, edges: layoutWithoutCyclicConstraints.edges, constraints: constraints, groups: layoutWithoutCyclicConstraints.groups };
-
-
-
-        // This function applies permutations of the cyclic constraints
-        // until it finds a satisfying layout, or it runs out of permutations.
-        try {
-            let closureConstraints = this.applyCyclicConstraints(layoutNodes, layoutWithoutCyclicConstraints);
-            // Append the closure constraints to the constraints
-            constraints = constraints.concat(closureConstraints);
-            layoutWithCyclicConstraints.constraints = constraints;
-        } catch (error) {
-            if (isPositionalConstraintError(error)) {
-                return this.handlePositionalConstraintError(
-                    error as PositionalConstraintError,
-                    layoutWithCyclicConstraints,
-                    projectionData
-                );
-            }
-            if (isGroupOverlapError(error)) {
-                return this.handleGroupOverlapError(
-                    error as GroupOverlapError,
-                    layoutWithCyclicConstraints,
-                    projectionData
-                );
-            }
-
-            throw error;
-        }   
-
-        /////// END HACK //////////
+        // Update constraints with those added by the validator
+        // (includes chosen alternatives from disjunctions and implicit alignment constraints)
+        constraints = layout.constraints;
 
         // Filter out all edges that are hidden
         layoutEdges = layoutEdges.filter((edge) => !edge.id.startsWith(this.hideThisEdge));
@@ -873,30 +827,11 @@ export class LayoutInstance {
         );
         groups = groups.concat(dcnGroups);
 
-
-        let layout = { nodes: layoutNodes, edges: layoutEdges, constraints: constraints, groups: groups };
-
-        let finalConstraintValidator = new ConstraintValidator(layout);
-        let finalLayoutError = finalConstraintValidator.validateConstraints();
-        if (finalLayoutError) {
-            if ((finalLayoutError as PositionalConstraintError).minimalConflictingSet) {
-                return this.handlePositionalConstraintError(
-                    finalLayoutError as PositionalConstraintError,
-                    layout,
-                    projectionData
-                );
-            }
-
-            if ((finalLayoutError as GroupOverlapError).overlappingNodes) {
-                return this.handleGroupOverlapError(
-                    finalLayoutError as GroupOverlapError,
-                    layout,
-                    projectionData
-                );
-            }
-
-            throw finalLayoutError;
-        }
+        // Update the layout with final groups
+        layout.nodes = layoutNodes;
+        layout.edges = layoutEdges;
+        layout.constraints = constraints;
+        layout.groups = groups;
 
         return { layout, projectionData, error: null };
     }
@@ -991,37 +926,24 @@ export class LayoutInstance {
      * @throws {ConstraintError} If the layout cannot be satisfied with the cyclic constraints.
      * @returns An array of layout constraints.
      */
-    applyCyclicConstraints(layoutNodes: LayoutNode[], layoutWithoutCyclicConstraints: InstanceLayout): LayoutConstraint[] {
-
-        // FIXME: Throwing from this function causes cyclic constraints to not be correctly applied to the error graph.
-        // Impact: When an error is thrown here, the error graph does not include the cyclic constraints, which can lead to incomplete or misleading error diagnostics.
-        // Expected behavior: The error graph should reflect all relevant cyclic constraints, even in the presence of errors, to aid debugging and visualization.
-        // Potential solution: Instead of throwing immediately, consider collecting all cyclic constraints and applying them to the error graph before propagating the error.
-        // Alternatively, implement backtracking or restructure error handling so that cyclic constraints are always included in the error graph output.
-
-        // TODO: There is a bug here. There are equivalent cyclic constraints
-        // that are NOT being applied.
-        // The bug here is that constraint solver MAY come up with solutions for ALL cyclic constraints 
-        // separately, but in a way that they don't work together.
-
-
-        // Either: Backtracking in applyCyclicConstraints OR 
-        // Smush ALL together, and then try and put things together.
-
+    /**
+     * Builds disjunctive constraints for cyclic orientation constraints.
+     * Each cyclic fragment generates a disjunction with N alternatives (perturbations),
+     * where N is the number of nodes in the fragment.
+     * 
+     * @param layoutNodes - The layout nodes to which the constraints will be applied.
+     * @returns Array of DisjunctiveConstraint instances, one per cyclic fragment.
+     */
+    private buildCyclicDisjunctions(layoutNodes: LayoutNode[]): DisjunctiveConstraint[] {
         const cyclicConstraints = this._layoutSpec.constraints.orientation.cyclic;
+        const disjunctions: DisjunctiveConstraint[] = [];
 
-
-        // First, for each, get the tuples / fragments.
-        let constraintFragments: Array<{
-            source: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint,
-            fragmentList: string[]
-        }> = [];
-
+        // For each cyclic constraint, extract fragments
         for (const [, c] of cyclicConstraints.entries()) {
-
             let selectedTuples: string[][] = this.evaluator.evaluate(c.selector, { instanceIndex: this.instanceNum }).selectedTwoples();
             let nextNodeMap: Map<LayoutNode, LayoutNode[]> = new Map<LayoutNode, LayoutNode[]>();
-            // For each tuple, add to the nextNodeMap
+            
+            // Build nextNodeMap from selected tuples
             selectedTuples.forEach((tuple) => {
                 let sourceNodeId = tuple[0];
                 let targetNodeId = tuple[1];
@@ -1043,77 +965,42 @@ export class LayoutInstance {
             });
 
             let relatedNodeFragments = this.getFragmentsToConstrain(nextNodeMap);
-
-
-            // TODO: An optimization: Keep the existing fragments, not just their ids for now.
-            // Move the counterclockwise reversal to LATER.
-            // AFTER we dedup layoutNodePaths.
-
-
-
             let relatedNodeIds = relatedNodeFragments.map((p) => p.Path.map((node) => node.id));
-            // Now we have the related node fragments for this constraint.
 
+            // Apply counterclockwise reversal if needed
             if (c.direction === "counterclockwise") {
-                // Reverse each fragment
                 relatedNodeIds = relatedNodeIds.map((fragment) => fragment.reverse());
             }
 
+            // For each fragment, create a disjunction with N perturbations
             relatedNodeIds.forEach((fragment) => {
-                constraintFragments.push({
-                    source: c,
-                    fragmentList: fragment
-                });
-            });
-
-        }
-
-        const backtrackSolveFragments = (layoutConstraints: LayoutConstraint[], fragmentIdx: number): LayoutConstraint[] => {
-
-            let currentLayoutError = null;
-            if (fragmentIdx >= constraintFragments.length) {
-                // Base case: All fragments have been processed
-                return layoutConstraints;
-            }
-
-            let fragment = constraintFragments[fragmentIdx].fragmentList;
-            let sourceConstraint = constraintFragments[fragmentIdx].source;
-            let fragmentLength = fragment.length;
-            for (var perturbation = 0; perturbation < fragmentLength; perturbation++) {
-                // For each fragment, we try a perturbation
-                let fragmentConstraints = this.getCyclicConstraintForFragment(fragment, layoutNodes, perturbation, sourceConstraint);
-
-                let allConstraintsForFragment: LayoutConstraint[] = layoutConstraints.concat(fragmentConstraints);
-
-                let instanceLayout: InstanceLayout = {
-                    nodes: layoutWithoutCyclicConstraints.nodes,
-                    constraints: allConstraintsForFragment,
-                    edges: layoutWithoutCyclicConstraints.edges,
-                    groups: layoutWithoutCyclicConstraints.groups
-                };
-
-                let validator = new ConstraintValidator(instanceLayout);
-                currentLayoutError = validator.validateConstraints() || null;
-
-                if (!currentLayoutError) {
-                    // If we found a satisfying assignment, we can return the constraints.
-                    return backtrackSolveFragments(
-                        allConstraintsForFragment,
-                        fragmentIdx + 1
-                    );
+                const fragmentLength = fragment.length;
+                
+                // Fragments with 2 or fewer nodes don't need disjunctions
+                if (fragmentLength <= 2) {
+                    return;
                 }
-            }
 
-            if (currentLayoutError) {
-                throw currentLayoutError;
-            }
-            throw new Error(`Failed to find a satisfying layout for cyclic constraints.`);
+                // Generate all perturbations (rotations) of this fragment
+                const alternatives: LayoutConstraint[][] = [];
+                for (let perturbation = 0; perturbation < fragmentLength; perturbation++) {
+                    const constraintsForPerturbation = this.getCyclicConstraintForFragment(
+                        fragment,
+                        layoutNodes,
+                        perturbation,
+                        c
+                    );
+                    alternatives.push(constraintsForPerturbation);
+                }
+
+                // Create the disjunctive constraint
+                const disjunction = new DisjunctiveConstraint(c, alternatives);
+                disjunctions.push(disjunction);
+            });
         }
 
-        const finalConstraints: LayoutConstraint[] = backtrackSolveFragments(layoutWithoutCyclicConstraints.constraints, 0);
-        return finalConstraints;
+        return disjunctions;
     }
-
 
     private getCyclicConstraintForFragment(fragment: string[],
         layoutNodes: LayoutNode[],
