@@ -267,7 +267,6 @@ export class LayoutInstance {
     }
 
 
-
     /**
      * Generates groups based on the specified graph.
      * @param g - The graph, which will be modified to remove the edges that are used to generate groups.
@@ -590,8 +589,6 @@ export class LayoutInstance {
     }
 
 
-
-
     public getRelationName(g: Graph, edge: Edge): string {
         let relNameRaw = this.getEdgeLabel(g, edge);
 
@@ -679,6 +676,7 @@ export class LayoutInstance {
         error: ConstraintError | null
     } {
 
+        /** Here, we calculate some of the presentational directive choices */
         let projectionResult = this.applyLayoutProjections(a, projections);
         let ai = projectionResult.projectedInstance;
         let projectionData = projectionResult.finalProjectionChoices;
@@ -686,12 +684,9 @@ export class LayoutInstance {
         let g: Graph = ai.generateGraph(this.hideDisconnected, this.hideDisconnectedBuiltIns);
 
         const attributes = this.generateAttributesAndRemoveEdges(g);
-
-
         let nodeIconMap = this.getNodeIconMap(g);
         let nodeColorMap = this.getNodeColorMap(g, ai);
         let nodeSizeMap = this.getNodeSizeMap(g);
-
 
         // This is where we add the inferred edges to the graph.
         this.addinferredEdges(g);
@@ -704,6 +699,7 @@ export class LayoutInstance {
         let dcN = this.getDisconnectedNodes(g);
 
 
+
         /// NOW, we should get the nodes back with their IDs.
 
 
@@ -713,12 +709,8 @@ export class LayoutInstance {
             let nodeMetadata = g.node(nodeId);
             // If the node has a label, we can use it.
             // Otherwise, we can use the nodeId as the label.
-            let label = nodeMetadata?.label || nodeId; // TODO: Use atom name
-
-
+            let label = nodeMetadata?.label || nodeId; 
             let color = nodeColorMap[nodeId] || "black";
-
-
             let iconDetails = nodeIconMap[nodeId];
             let iconPath = iconDetails.path;
             let showLabels = iconDetails.showLabels;
@@ -732,7 +724,6 @@ export class LayoutInstance {
                 .filter((group) => group.nodeIds.includes(nodeId))
                 .map((group) => group.name);
             let nodeAttributes = attributes[nodeId] || {};
-
 
             return {
                 id: nodeId,
@@ -751,12 +742,12 @@ export class LayoutInstance {
         });
 
         ///////////// CONSTRAINTS ////////////
+
+
         let constraints: LayoutConstraint[] = this.applyRelativeOrientationConstraints(layoutNodes, g);
         constraints = constraints.concat(this.applyAlignConstraints(layoutNodes, g));
-
-        // THERE MAY BE SOME ISSUES DUE TO DUPLICATE CONSTRAINTS HERE :(
-        // HOWEVER, MAYBE THATS OK?
-        // TODO: Explore what it would mean to remove duplicates here.
+        
+        // Constraints NOW holds the conjuctive CORE of layout constraints.
         constraints = removeDuplicateConstraints(constraints);
 
 
