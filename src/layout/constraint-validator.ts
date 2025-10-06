@@ -1,5 +1,5 @@
 import { Solver, Variable, Expression, Strength, Operator, Constraint } from 'kiwi.js';
-import { InstanceLayout, LayoutNode, LayoutEdge, LayoutGroup, LayoutConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, TopConstraint, LeftConstraint, AlignmentConstraint, ImplicitConstraint } from './interfaces';
+import { DisjunctiveConstraint, InstanceLayout, LayoutNode, LayoutEdge, LayoutGroup, LayoutConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, TopConstraint, LeftConstraint, AlignmentConstraint, ImplicitConstraint } from './interfaces';
 import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint } from './layoutspec';
 
 

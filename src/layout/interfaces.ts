@@ -90,10 +90,23 @@ export function isAlignmentConstraint(constraint: LayoutConstraint): constraint 
 export interface InstanceLayout {
     nodes: LayoutNode[];
     edges: LayoutEdge[];
-    constraints: LayoutConstraint[];
+    constraints: LayoutConstraint[]; // Conjunctive constraints that must always be satisfied
     groups: LayoutGroup[];
     conflictingConstraints?: LayoutConstraint[];
     overlappingNodes?: LayoutNode[]; // IDs of overlapping nodes
+    /**
+     * Disjunctive constraints, where at least one alternative in each disjunction must be satisfiable.
+     * These are separate from conjunctive constraints for clearer solver integration.
+     */
+    disjunctiveConstraints?: DisjunctiveConstraint[];
+
+    // TODO: One frustration in the instance layout is that really this is not ..quite.. what the
+    // constraint validator should take. Its not a ``validator`` per se, its more like a ``refiner``
+    // that takes an instance layout and produces a refined instance layout with more constraints, but also
+    // validates if needed.
+
+    // Perhaps there is another intermediate type here that is like a ``RefinableInstanceLayout`` that has
+    // some of these extra fields, and then the constraint validator takes that and produces an InstanceLayout?
 }
 
 // Can we write a typeguard for this?
@@ -106,7 +119,8 @@ export function isInstanceLayout(obj: any): obj is InstanceLayout {
         obj.nodes.every((node: any) => typeof node.id === 'string') &&
         obj.edges.every((edge: any) => typeof edge.source === 'object' && typeof edge.target === 'object') &&
         obj.constraints.every((constraint: any) => typeof constraint.sourceConstraint === 'object') &&
-        obj.groups.every((group: any) => typeof group.name === 'string')
+        obj.groups.every((group: any) => typeof group.name === 'string') &&
+        (obj.disjunctiveConstraints === undefined || Array.isArray(obj.disjunctiveConstraints))
     );
 }
 
