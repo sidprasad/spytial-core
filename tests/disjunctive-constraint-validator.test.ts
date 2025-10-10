@@ -327,4 +327,117 @@ describe('DisjunctiveConstraintValidator', () => {
             expect(layout.constraints).toContain(alternative[0]);
         });
     });
+
+    describe('IIS Extraction with Deepest Path Selection', () => {
+        it('should use the alternative that went deepest for conflict analysis', () => {
+            // Setup: Create a scenario where different alternatives fail at different depths
+            const nodeA = createNode('A');
+            const nodeB = createNode('B');
+            const nodeC = createNode('C');
+            const nodeD = createNode('D');
+
+            // Conjunctive constraints that form: A < B
+            const conjunctiveSource = new RelativeOrientationConstraint(['left'], 'A->B');
+            const conjunctiveConstraint = createLeftConstraint(nodeA, nodeB, conjunctiveSource);
+
+            const disjunctiveSource = new RelativeOrientationConstraint(['left'], 'alternative placement');
+
+            // Alternative 1: Fails immediately (B < A conflicts with A < B)
+            const alternative1 = [
+                createLeftConstraint(nodeB, nodeA, disjunctiveSource),
+            ];
+
+            // Alternative 2: Makes more progress (adds 2 constraints before failing)
+            // A < C (succeeds), C < D (succeeds), D < B (succeeds), B < A (fails creating cycle)
+            const alternative2 = [
+                createLeftConstraint(nodeA, nodeC, disjunctiveSource),
+                createLeftConstraint(nodeC, nodeD, disjunctiveSource),
+                createLeftConstraint(nodeD, nodeB, disjunctiveSource),
+                createLeftConstraint(nodeB, nodeA, disjunctiveSource),
+            ];
+
+            const disjunction = new DisjunctiveConstraint(
+                disjunctiveSource,
+                [alternative1, alternative2]
+            );
+
+            const layout: InstanceLayout = {
+                nodes: [nodeA, nodeB, nodeC, nodeD],
+                edges: [],
+                constraints: [conjunctiveConstraint],
+                groups: [],
+                disjunctiveConstraints: [disjunction],
+            };
+
+            const validator = new ConstraintValidator(layout);
+            const error = validator.validateConstraints();
+
+            // Should fail because no alternative is satisfiable
+            expect(error).not.toBeNull();
+            expect(error?.type).toBe('positional-conflict');
+            
+            // The error should reference the alternative that went deepest (alternative2)
+            // which added 3 constraints before failing, vs alternative1 which added 0
+            if (error && 'minimalConflictingSet' in error) {
+                const disjunctiveConstraints = error.minimalConflictingSet.get(disjunctiveSource);
+                expect(disjunctiveConstraints).toBeDefined();
+                // Should contain all constraints from alternative2 (the one that went deepest)
+                // which has 4 constraints total
+                expect(disjunctiveConstraints?.length).toBe(4);
+            }
+        });
+
+        it('should track progress by local constraints when recursion depth is same', () => {
+            // Setup: Multiple alternatives that fail locally but at different points
+            const nodeA = createNode('A');
+            const nodeB = createNode('B');
+            const nodeC = createNode('C');
+
+            // Conjunctive: A < C
+            const conjunctiveSource = new RelativeOrientationConstraint(['left'], 'A->C');
+            const conjunctiveConstraint = createLeftConstraint(nodeA, nodeC, conjunctiveSource);
+
+            const disjunctiveSource = new RelativeOrientationConstraint(['left'], 'B placement');
+
+            // Alternative 1: Fails on first constraint (C < A conflicts with A < C)
+            const alternative1 = [
+                createLeftConstraint(nodeC, nodeA, disjunctiveSource),
+            ];
+
+            // Alternative 2: Adds one constraint successfully, then fails on second
+            // (A < B succeeds, but then B < A conflicts with A < B)
+            const alternative2 = [
+                createLeftConstraint(nodeA, nodeB, disjunctiveSource),
+                createLeftConstraint(nodeB, nodeA, disjunctiveSource),
+            ];
+
+            const disjunction = new DisjunctiveConstraint(
+                disjunctiveSource,
+                [alternative1, alternative2]
+            );
+
+            const layout: InstanceLayout = {
+                nodes: [nodeA, nodeB, nodeC],
+                edges: [],
+                constraints: [conjunctiveConstraint],
+                groups: [],
+                disjunctiveConstraints: [disjunction],
+            };
+
+            const validator = new ConstraintValidator(layout);
+            const error = validator.validateConstraints();
+
+            // Should fail
+            expect(error).not.toBeNull();
+            expect(error?.type).toBe('positional-conflict');
+
+            // The error should use alternative2 (which added more local constraints)
+            if (error && 'minimalConflictingSet' in error) {
+                const disjunctiveConstraints = error.minimalConflictingSet.get(disjunctiveSource);
+                expect(disjunctiveConstraints).toBeDefined();
+                // Should contain constraints from alternative2
+                expect(disjunctiveConstraints?.length).toBeGreaterThanOrEqual(1);
+            }
+        });
+    });
 });

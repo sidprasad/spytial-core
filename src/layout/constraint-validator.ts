@@ -277,6 +277,11 @@ class ConstraintValidator {
         
         console.log(`Disjunction ${disjunctionIndex + 1}/${disjunctions.length}: Trying ${alternatives.length} alternatives`);
 
+        // Track which alternative made the most progress (for better IIS extraction)
+        let bestAlternativeIndex = 0;
+        let bestConstraintsAdded = 0;
+        let bestRecursionDepth = 0;
+
         // Try each alternative for this disjunction
         for (let altIndex = 0; altIndex < alternatives.length; altIndex++) {
             const alternative = alternatives[altIndex];
@@ -290,14 +295,19 @@ class ConstraintValidator {
 
             // Try adding this alternative's constraints
             let alternativeError: PositionalConstraintError | null = null;
+            let constraintsAdded = 0;
             for (const constraint of alternative) {
                 const error = this.addConstraintToSolver(constraint);
                 if (error) {
                     alternativeError = error;
-                    console.log(`    ✗ Alternative ${altIndex + 1} conflicts with existing constraints`);
+                    console.log(`    ✗ Alternative ${altIndex + 1} conflicts with existing constraints (added ${constraintsAdded}/${alternative.length} constraints)`);
                     break;
                 }
+                constraintsAdded++;
             }
+
+            // Track progress for this alternative
+            let recursionDepth = 0;
 
             // If this alternative is satisfiable, try to satisfy remaining disjunctions
             if (!alternativeError) {
@@ -312,9 +322,22 @@ class ConstraintValidator {
                     return { satisfiable: true };
                 }
                 
+                // Track how far this alternative got before failing
+                recursionDepth = this.added_constraints.length - savedConstraintsLength;
+                
                 // Otherwise, this alternative led to failure in later disjunctions
                 // Fall through to backtracking below
-                console.log(`    ✗ Alternative ${altIndex + 1} failed in later disjunctions, backtracking...`);
+                console.log(`    ✗ Alternative ${altIndex + 1} failed in later disjunctions, backtracking... (depth: ${recursionDepth})`);
+            }
+
+            // Update best alternative if this one made more progress
+            // Priority: 1) recursion depth (constraints added in deeper levels)
+            //          2) local constraints added (constraints from this alternative)
+            if (recursionDepth > bestRecursionDepth || 
+                (recursionDepth === bestRecursionDepth && constraintsAdded > bestConstraintsAdded)) {
+                bestAlternativeIndex = altIndex;
+                bestConstraintsAdded = constraintsAdded;
+                bestRecursionDepth = recursionDepth;
             }
 
             // Backtrack: restore solver state and try next alternative
@@ -333,11 +356,12 @@ class ConstraintValidator {
         // All alternatives exhausted for this disjunction
         // Return failure to trigger backtracking at previous disjunction level
         console.log(`  ✗✗ Disjunction ${disjunctionIndex + 1}: All ${alternatives.length} alternatives exhausted, returning failure`);
+        console.log(`  → Using alternative ${bestAlternativeIndex + 1} for conflict analysis (went deepest: depth=${bestRecursionDepth}, local=${bestConstraintsAdded})`);
         
         // Find the minimal set of existing constraints that conflict with this disjunction
-        // We need to check against ALL constraints that have been added so far
-        // We'll use the first alternative as a representative constraint for conflict analysis
-        const representativeConstraint = alternatives[0][0];
+        // Use the alternative that made the most progress (went deepest) for better IIS extraction
+        const bestAlternative = alternatives[bestAlternativeIndex];
+        const representativeConstraint = bestAlternative[0];
         const minimalConflicting = this.getMinimalConflictingConstraints(this.added_constraints, representativeConstraint);
         
         // Build the minimalConflictingSet map grouped by source constraint
@@ -351,9 +375,10 @@ class ConstraintValidator {
             minimalConflictingSet.get(source)!.push(constraint);
         }
         
-        // Also add the representative constraint itself under the disjunction's source
-        // This shows which constraint from the disjunction was involved in the conflict
-        minimalConflictingSet.set(currentDisjunction.sourceConstraint, [representativeConstraint]);
+        // Also add all constraints from the best alternative under the disjunction's source
+        // This shows which constraints from the disjunction were involved in the conflict
+        // Using all constraints from the best alternative provides better conflict information
+        minimalConflictingSet.set(currentDisjunction.sourceConstraint, [...bestAlternative]);
         
         // Format error message to match regular constraint errors (user-friendly, no mention of disjunctions)
         const firstConstraintString = orientationConstraintToString(representativeConstraint);
