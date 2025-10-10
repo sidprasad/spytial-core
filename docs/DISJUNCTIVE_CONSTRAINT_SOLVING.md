@@ -304,6 +304,58 @@ The selection criteria are:
 1. **Recursion depth** (primary): How many constraints were added in deeper disjunction levels
 2. **Local constraints added** (secondary): How many constraints from the current alternative were successfully added before failure
 
+#### Algorithm
+
+The IIS extraction algorithm is augmented to handle disjunctive constraints:
+
+**Standard IIS Extraction (for single constraint):**
+```
+Given: Consistent prefix P, failing constraint c*
+1. M ← P ∪ {c*}  // Known to be infeasible
+2. Repeat:
+   a. changed ← false
+   b. For each c ∈ M where c ≠ c*:
+      - If (M \ {c}) ∪ {c*} is infeasible:
+        • M ← M \ {c}
+        • changed ← true
+3. Until ¬changed
+4. Return M  // Subset-minimal IIS
+```
+
+**Extended for Disjunctive Constraints:**
+```
+Given: Consistent prefix P, disjunction D with alternatives [A₁, A₂, ..., Aₙ]
+       where each Aᵢ = [cᵢ₁, cᵢ₂, ..., cᵢₘ] is a set of constraints
+
+1. Select best alternative A* that went deepest:
+   - Try each alternative Aᵢ in order
+   - Track progress: (recursionDepth, localConstraintsAdded)
+   - Select A* = argmax(recursionDepth, localConstraintsAdded)
+
+2. Extract minimal conflicting subset from P:
+   M_P ← getMinimalConflicting(P, A*[0])  // Use standard algorithm
+
+3. Extract minimal conflicting subset from A*:
+   M_A ← A*
+   Repeat:
+     changed ← false
+     For each c ∈ M_A:
+       - Test if (P ∪ (M_A \ {c})) is infeasible
+       - If still infeasible:
+         • M_A ← M_A \ {c}
+         • changed ← true
+         • break
+   Until ¬changed
+
+4. Return (M_P, M_A)  // Minimal IIS from both sides
+```
+
+The key insight is that we need to minimize **both**:
+- The subset of existing constraints (M_P) that conflict with the disjunction
+- The subset of the best alternative (M_A) that conflicts with existing constraints
+
+This ensures we report only the truly necessary constraints from both sides of the conflict.
+
 #### Example
 
 ```typescript

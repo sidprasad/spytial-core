@@ -378,10 +378,58 @@ class ConstraintValidator {
             minimalConflictingSet.get(source)!.push(constraint);
         }
         
-        // Also add all constraints from the best alternative under the disjunction's source
-        // This shows which constraints from the disjunction were involved in the conflict
-        // Using all constraints from the best alternative provides better conflict information
-        minimalConflictingSet.set(currentDisjunction.sourceConstraint, [...bestAlternative]);
+        // Also extract minimal subset of constraints from the best alternative
+        // We need to find which constraints from bestAlternative are actually involved in the conflict
+        // Try removing constraints from bestAlternative one at a time to find the minimal conflicting subset
+        let minimalFromBestAlternative = [...bestAlternative];
+        let changed = true;
+        
+        while (changed && minimalFromBestAlternative.length > 1) {
+            changed = false;
+            for (let i = 0; i < minimalFromBestAlternative.length; i++) {
+                const testAlternative = minimalFromBestAlternative.slice(0, i).concat(minimalFromBestAlternative.slice(i + 1));
+                
+                // Test if this reduced alternative still conflicts with added_constraints
+                let testSolver = new Solver();
+                let stillConflicts = false;
+                
+                try {
+                    // Add bounding box constraints if needed
+                    const hasBoundingBoxConstraint = this.added_constraints.some(c => isBoundingBoxConstraint(c)) ||
+                                                     testAlternative.some(c => isBoundingBoxConstraint(c));
+                    if (hasBoundingBoxConstraint) {
+                        this.addBoundingBoxMemberConstraintsToSolver(testSolver);
+                    }
+                    
+                    // Add existing constraints
+                    for (const c of this.added_constraints) {
+                        const kiwiConstraints = this.constraintToKiwi(c);
+                        kiwiConstraints.forEach(kc => testSolver.addConstraint(kc));
+                    }
+                    
+                    // Try adding the reduced alternative
+                    for (const c of testAlternative) {
+                        const kiwiConstraints = this.constraintToKiwi(c);
+                        kiwiConstraints.forEach(kc => testSolver.addConstraint(kc));
+                    }
+                    
+                    testSolver.updateVariables();
+                    // If we got here without error, this subset is satisfiable - keep trying
+                } catch {
+                    // Still conflicts, so we can remove this constraint from the alternative
+                    stillConflicts = true;
+                }
+                
+                if (stillConflicts) {
+                    minimalFromBestAlternative = testAlternative;
+                    changed = true;
+                    break;
+                }
+            }
+        }
+        
+        // Add the minimal subset from the best alternative
+        minimalConflictingSet.set(currentDisjunction.sourceConstraint, minimalFromBestAlternative);
         
         // Format error message to match regular constraint errors (user-friendly, no mention of disjunctions)
         const firstConstraintString = orientationConstraintToString(representativeConstraint);
