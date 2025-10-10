@@ -323,6 +323,7 @@ class ConstraintValidator {
                 }
                 
                 // Track how far this alternative got before failing
+                // Calculate immediately after recursive call, before backtracking modifies added_constraints
                 recursionDepth = this.added_constraints.length - savedConstraintsLength;
                 
                 // Otherwise, this alternative led to failure in later disjunctions
@@ -331,8 +332,10 @@ class ConstraintValidator {
             }
 
             // Update best alternative if this one made more progress
-            // Priority: 1) recursion depth (constraints added in deeper levels)
-            //          2) local constraints added (constraints from this alternative)
+            // Tie-breaking priority (most important first):
+            //   1) recursionDepth: Total constraints added (local + deeper disjunctions)
+            //   2) constraintsAdded: Local constraints added from this alternative
+            // This ensures we use the alternative that went "deepest" for better IIS extraction
             if (recursionDepth > bestRecursionDepth || 
                 (recursionDepth === bestRecursionDepth && constraintsAdded > bestConstraintsAdded)) {
                 bestAlternativeIndex = altIndex;

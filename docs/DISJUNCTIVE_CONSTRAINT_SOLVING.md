@@ -290,6 +290,45 @@ This tells users:
 - The source constraint (e.g., cyclic orientation)
 - Which specific constraints were tried last
 
+### IIS (Irreducible Inconsistent Subset) Extraction
+
+When all alternatives in a disjunction fail, the validator performs **minimal conflict analysis** to identify the smallest set of constraints that cause the conflict. This is known as IIS extraction.
+
+#### Deepest Path Selection
+
+**Problem**: Simply using the first alternative for conflict analysis can miss the most informative conflicts.
+
+**Solution**: The validator now tracks which alternative "went deepest" - i.e., satisfied the most constraints before failing. This alternative is then used for IIS extraction.
+
+The selection criteria are:
+1. **Recursion depth** (primary): How many constraints were added in deeper disjunction levels
+2. **Local constraints added** (secondary): How many constraints from the current alternative were successfully added before failure
+
+#### Example
+
+```typescript
+// Given conjunctive constraint: A < B
+const conjunctive = [leftConstraint(A, B)];
+
+// Two disjunctive alternatives:
+const alternative1 = [leftConstraint(B, A)];  // Fails immediately (conflicts with A < B)
+const alternative2 = [
+    leftConstraint(A, C),  // ✓ Succeeds
+    leftConstraint(C, D),  // ✓ Succeeds  
+    leftConstraint(D, B),  // ✓ Succeeds
+    leftConstraint(B, A),  // ✗ Fails (creates cycle)
+];
+
+// Result: alternative2 is used for conflict analysis because it:
+// - Added 3 constraints successfully before failing
+// - Provides more context about what constraints are incompatible
+// 
+// The error will reference all 4 constraints from alternative2,
+// giving users better insight into the conflict.
+```
+
+This improvement is especially important for **grouping constraints with orientation**, where disjunctive constraints encode "element is IN group" vs "element is OUT of group" alternatives. The deepest path often reveals which elements are being forced incorrectly.
+
 ## Future Enhancements
 
 ### 1. Smarter Alternative Ordering

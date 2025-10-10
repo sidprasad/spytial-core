@@ -377,7 +377,7 @@ describe('DisjunctiveConstraintValidator', () => {
             expect(error?.type).toBe('positional-conflict');
             
             // The error should reference the alternative that went deepest (alternative2)
-            // which added 3 constraints before failing, vs alternative1 which added 0
+            // which added 3 constraints successfully before the 4th failed
             if (error && 'minimalConflictingSet' in error) {
                 const disjunctiveConstraints = error.minimalConflictingSet.get(disjunctiveSource);
                 expect(disjunctiveConstraints).toBeDefined();
