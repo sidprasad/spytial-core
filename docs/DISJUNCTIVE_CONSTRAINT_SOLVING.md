@@ -292,94 +292,273 @@ This tells users:
 
 ### IIS (Irreducible Inconsistent Subset) Extraction
 
-When all alternatives in a disjunction fail, the validator performs **minimal conflict analysis** to identify the smallest set of constraints that cause the conflict. This is known as IIS extraction.
+When all alternatives in a disjunction fail, the validator performs **minimal conflict analysis** to identify the smallest set of constraints that cause the conflict. This is known as IIS extraction and is crucial for providing meaningful error messages to users.
 
-#### Deepest Path Selection
+#### Problem: Finding the Root Cause
 
-**Problem**: Simply using the first alternative for conflict analysis can miss the most informative conflicts.
+When a complex layout with many constraints fails, users need to understand:
+1. **Which constraints are actually conflicting** (not just which disjunction failed)
+2. **The minimal set of constraints** that must be changed to fix the conflict
+3. **Relevant constraints** that involve the elements they care about
 
-**Solution**: The validator now tracks which alternative "went deepest" - i.e., satisfied the most constraints before failing. This alternative is then used for IIS extraction.
+#### Solution: Context-Aware IIS Extraction
 
-The selection criteria are:
-1. **Recursion depth** (primary): How many constraints were added in deeper disjunction levels
-2. **Local constraints added** (secondary): How many constraints from the current alternative were successfully added before failure
+The validator uses a **bidirectional minimization algorithm** that handles both simple and grouping constraints:
 
-#### Algorithm
-
-The IIS extraction algorithm is augmented to handle disjunctive constraints:
-
-**Standard IIS Extraction (for single constraint):**
-```
-Given: Consistent prefix P, failing constraint c*
-1. M ← P ∪ {c*}  // Known to be infeasible
-2. Repeat:
-   a. changed ← false
-   b. For each c ∈ M where c ≠ c*:
-      - If (M \ {c}) ∪ {c*} is infeasible:
-        • M ← M \ {c}
-        • changed ← true
-3. Until ¬changed
-4. Return M  // Subset-minimal IIS
-```
-
-**Extended for Disjunctive Constraints:**
-```
-Given: Consistent prefix P, disjunction D with alternatives [A₁, A₂, ..., Aₙ]
-       where each Aᵢ = [cᵢ₁, cᵢ₂, ..., cᵢₘ] is a set of constraints
-
-1. Select best alternative A* that went deepest:
-   - Try each alternative Aᵢ in order
-   - Track progress: (recursionDepth, localConstraintsAdded)
-   - Select A* = argmax(recursionDepth, localConstraintsAdded)
-
-2. Extract minimal conflicting subset from P:
-   M_P ← getMinimalConflicting(P, A*[0])  // Use standard algorithm
-
-3. Extract minimal conflicting subset from A*:
-   M_A ← A*
-   Repeat:
-     changed ← false
-     For each c ∈ M_A:
-       - Test if (P ∪ (M_A \ {c})) is infeasible
-       - If still infeasible:
-         • M_A ← M_A \ {c}
-         • changed ← true
-         • break
-   Until ¬changed
-
-4. Return (M_P, M_A)  // Minimal IIS from both sides
-```
-
-The key insight is that we need to minimize **both**:
-- The subset of existing constraints (M_P) that conflict with the disjunction
-- The subset of the best alternative (M_A) that conflicts with existing constraints
-
-This ensures we report only the truly necessary constraints from both sides of the conflict.
-
-#### Example
+##### Algorithm Overview
 
 ```typescript
-// Given conjunctive constraint: A < B
-const conjunctive = [leftConstraint(A, B)];
-
-// Two disjunctive alternatives:
-const alternative1 = [leftConstraint(B, A)];  // Fails immediately (conflicts with A < B)
-const alternative2 = [
-    leftConstraint(A, C),  // ✓ Succeeds
-    leftConstraint(C, D),  // ✓ Succeeds  
-    leftConstraint(D, B),  // ✓ Succeeds
-    leftConstraint(B, A),  // ✗ Fails (creates cycle)
-];
-
-// Result: alternative2 is used for conflict analysis because it:
-// - Added 3 constraints successfully before failing
-// - Provides more context about what constraints are incompatible
-// 
-// The error will reference all 4 constraints from alternative2,
-// giving users better insight into the conflict.
+function getMinimalDisjunctiveConflict(
+    existingConstraints: LayoutConstraint[],
+    disjunctiveAlternative: LayoutConstraint[]
+): MinimalConflict {
+    
+    // Step 1: Determine conflict type
+    const hasGroupingConstraint = 
+        disjunctiveAlternative.some(isBoundingBoxConstraint) ||
+        existingConstraints.some(isBoundingBoxConstraint);
+    
+    if (hasGroupingConstraint) {
+        return getMinimalGroupingConflict(existingConstraints, disjunctiveAlternative);
+    } else {
+        return getMinimalSimpleConflict(existingConstraints, disjunctiveAlternative);
+    }
+}
 ```
 
-This improvement is especially important for **grouping constraints with orientation**, where disjunctive constraints encode "element is IN group" vs "element is OUT of group" alternatives. The deepest path often reveals which elements are being forced incorrectly.
+##### Simple Constraint IIS (Aggressive Minimization)
+
+For simple spatial constraints (→, ↓, alignment), the algorithm uses aggressive deletion-based minimization:
+
+```typescript
+function getMinimalSimpleConflict(
+    existingConstraints: LayoutConstraint[],
+    disjunctiveAlternative: LayoutConstraint[]
+): MinimalConflict {
+    
+    // Start with full set and iteratively remove constraints
+    let minimal = [...existingConstraints];
+    const representative = disjunctiveAlternative[0];
+    
+    // Bidirectional minimization
+    let changed = true;
+    while (changed) {
+        changed = false;
+        
+        // Try removing each constraint
+        for (let i = minimal.length - 1; i >= 0; i--) {
+            const testSet = minimal.filter((_, idx) => idx !== i);
+            
+            // If removing this constraint still causes conflict, remove it
+            if (isConflictingSet([...testSet, representative])) {
+                minimal.splice(i, 1);
+                changed = true;
+                break; // Restart to maintain order
+            }
+        }
+    }
+    
+    return {
+        existingConstraints: minimal,
+        disjunctiveConstraints: disjunctiveAlternative
+    };
+}
+```
+
+##### Grouping Constraint IIS (Conservative Minimization)
+
+For grouping constraints (bounding boxes, group membership), the algorithm is more conservative to preserve context:
+
+```typescript
+function getMinimalGroupingConflict(
+    existingConstraints: LayoutConstraint[],
+    disjunctiveAlternative: LayoutConstraint[]
+): MinimalConflict {
+    
+    // Step 1: Try traditional minimization with first alternative
+    const representative = disjunctiveAlternative[0];
+    let relevantExisting = [];
+    
+    const fullSet = [...existingConstraints, representative];
+    const hasConflict = isConflictingSet(fullSet);
+    
+    if (hasConflict) {
+        // Use standard deletion-based minimization
+        relevantExisting = getMinimalConflictingConstraints(existingConstraints, representative);
+    } else {
+        // Traditional minimization failed - use expansion
+        relevantExisting = [];
+    }
+    
+    // Step 2: If too few constraints found, expand based on group members
+    if (relevantExisting.length <= 1) {
+        // Get group members from the disjunctive constraints
+        const groupMembers = new Set<string>();
+        for (const constraint of disjunctiveAlternative) {
+            if (isBoundingBoxConstraint(constraint)) {
+                constraint.group.nodeIds.forEach(id => groupMembers.add(id));
+            }
+        }
+        
+        // Include constraints that involve group members
+        relevantExisting = existingConstraints.filter(constraint => {
+            if (isLeftConstraint(constraint)) {
+                return groupMembers.has(constraint.left.id) || groupMembers.has(constraint.right.id);
+            } else if (isTopConstraint(constraint)) {
+                return groupMembers.has(constraint.top.id) || groupMembers.has(constraint.bottom.id);
+            } else if (isAlignmentConstraint(constraint)) {
+                return groupMembers.has(constraint.node1.id) || groupMembers.has(constraint.node2.id);
+            }
+            return false;
+        });
+    }
+    
+    return {
+        existingConstraints: relevantExisting,
+        disjunctiveConstraints: disjunctiveAlternative
+    };
+}
+```
+
+#### Representative Constraint Selection
+
+To provide meaningful error highlighting, the validator selects a representative constraint from the IIS:
+
+```typescript
+function selectRepresentativeConstraint(
+    minimalIIS: MinimalConflict,
+    bestAlternative: LayoutConstraint[]
+): LayoutConstraint {
+    
+    // For grouping constraints, prefer constraints involving group members
+    if (hasGroupingConstraints) {
+        const groupMembers = new Set<string>();
+        bestAlternative.forEach(c => {
+            if (isBoundingBoxConstraint(c)) {
+                c.group.nodeIds.forEach(id => groupMembers.add(id));
+            }
+        });
+        
+        // Find first IIS constraint that involves group members
+        const relevantConstraint = minimalIIS.existingConstraints.find(c => {
+            if (isLeftConstraint(c)) {
+                return groupMembers.has(c.left.id) || groupMembers.has(c.right.id);
+            } else if (isTopConstraint(c)) {
+                return groupMembers.has(c.top.id) || groupMembers.has(c.bottom.id);
+            } else if (isAlignmentConstraint(c)) {
+                return groupMembers.has(c.node1.id) || groupMembers.has(c.node2.id);
+            }
+            return false;
+        });
+        
+        if (relevantConstraint) {
+            return relevantConstraint;
+        }
+    }
+    
+    // Fallback to first constraint from best alternative
+    return bestAlternative[0];
+}
+```
+
+#### Conflict Detection with Bounding Box Variables
+
+A critical aspect of IIS extraction for grouping constraints is properly testing conflicts. Bounding box constraints require special variable setup:
+
+```typescript
+function isConflictingSet(constraints: LayoutConstraint[]): boolean {
+    const testSolver = new kiwi.Solver();
+    const tempVariables = new Map<string, kiwi.Variable>();
+    
+    try {
+        for (const constraint of constraints) {
+            if (isBoundingBoxConstraint(constraint)) {
+                // Create temporary bounding box variables for testing
+                const groupKey = constraint.group.name;
+                if (!tempVariables.has(`${groupKey}_left`)) {
+                    tempVariables.set(`${groupKey}_left`, new kiwi.Variable(`${groupKey}_left`));
+                    tempVariables.set(`${groupKey}_right`, new kiwi.Variable(`${groupKey}_right`));
+                    tempVariables.set(`${groupKey}_top`, new kiwi.Variable(`${groupKey}_top`));
+                    tempVariables.set(`${groupKey}_bottom`, new kiwi.Variable(`${groupKey}_bottom`));
+                }
+            }
+            
+            // Convert constraint to Kiwi constraint with temporary variables
+            const kiwiConstraint = constraintToKiwi(constraint, tempVariables);
+            testSolver.addConstraint(kiwiConstraint);
+        }
+        
+        testSolver.updateVariables();
+        return false; // No conflict
+        
+    } catch (error) {
+        return true; // Conflict detected
+    }
+}
+```
+
+#### Example: Grouping Conflict Analysis
+
+Consider a layout with group `{Cell8, Cell4}` and orientation constraints:
+
+```typescript
+// Input constraints:
+const existingConstraints = [
+    topConstraint(Cell1, Cell7),        // Cell1 ↓ Cell7
+    alignConstraint(Cell7, Cell1, 'x'), // align Cell7 + Cell1 on x
+    leftConstraint(Cell8, Cell1),       // Cell8 → Cell1  
+    alignConstraint(Cell1, Cell8, 'y'), // align Cell1 + Cell8 on y
+    // ... more constraints
+];
+
+const disjunctiveAlternative = [
+    boundingBoxConstraint(Cell1, group_s, 'left') // Cell1 left of group s
+];
+
+// Analysis process:
+// 1. Test traditional minimization: Cell1 left of group s + existing constraints
+// 2. Conflict detected with 3 constraints in minimal set
+// 3. Representative selection: Choose "align Cell1 + Cell8 on y" 
+//    (involves Cell8, a group member)
+// 4. Return minimal IIS for user analysis
+```
+
+#### Benefits of the Approach
+
+1. **Mathematical Minimality**: Simple constraints get truly minimal IIS (deletion-based)
+2. **Contextual Relevance**: Grouping constraints preserve spatial relationships 
+3. **Consistent Representatives**: Deterministic selection based on group membership
+4. **Proper Conflict Detection**: Handles bounding box variables correctly
+5. **User-Friendly Errors**: Focus on constraints involving elements user cares about
+
+#### Performance Considerations
+
+- **Simple Constraints**: O(n²) deletion-based minimization where n = number of constraints
+- **Grouping Constraints**: O(n) filtering based on group membership  
+- **Conflict Testing**: O(c) where c = constraints per test (Kiwi solver overhead)
+- **Memory**: Temporary solver creation for each conflict test
+
+The algorithm prioritizes correctness and user experience over raw performance, since IIS extraction only happens on constraint failures (which should be relatively rare in normal usage).
+
+#### Integration with Error Reporting
+
+The minimal IIS is integrated into the error response:
+
+```typescript
+{
+    type: 'positional-conflict',
+    message: 'No satisfiable alternative found for disjunctive constraint...',
+    conflictingConstraint: representativeConstraint,           // For UI highlighting
+    conflictingSourceConstraint: originalSourceConstraint,    // For error context
+    minimalConflictingSet: groupedBySourceConstraint(minimalIIS) // For detailed analysis
+}
+```
+
+This allows the UI to:
+- **Highlight** the representative constraint/nodes
+- **Display** the full minimal conflicting set
+- **Group** constraints by their source (orientation, grouping, etc.)
+- **Provide** actionable feedback to users
 
 ## Future Enhancements
 
