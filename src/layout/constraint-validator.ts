@@ -64,7 +64,7 @@ export function orientationConstraintToString(constraint: LayoutConstraint) {
     }
     else if (isLeftConstraint(constraint)) {
         let lc = constraint as LeftConstraint;
-        return `${nodeLabel(lc.left)}must be to the left of  ${nodeLabel(lc.right)}`;
+        return `${nodeLabel(lc.left)} must be to the left of  ${nodeLabel(lc.right)}`;
     }
     else if (isAlignmentConstraint(constraint)) {
         let ac = constraint as AlignmentConstraint;

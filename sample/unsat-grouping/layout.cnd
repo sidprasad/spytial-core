@@ -1,0 +1,16 @@
+constraints:
+  - group:
+      selector: "Cell8 + Cell4"
+      name: "s"
+  - orientation:
+      selector: down
+      directions:
+        - directlyBelow
+  - orientation:
+      selector: right
+      directions:
+        - directlyRight
+directives:
+  - attribute:
+      field: mark
+  - flag: hideDisconnected
