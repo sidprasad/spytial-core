@@ -468,6 +468,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         <marker id="hand-drawn-arrow-reverse" markerWidth="15" markerHeight="10" refX="3" refY="5" orient="auto">
           <polygon points="15 0, 0 5, 15 10" fill="#666666" />
         </marker>
+        <filter id="hand-drawn-effect">
+          <feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="3" result="noise" />
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="2" xChannelSelector="R" yChannelSelector="G" />
+       </filter>
         </defs>
         <g class="zoomable"></g>
       </svg>
@@ -3109,9 +3113,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       }
       
       .inferredLink {
-        stroke-width: 1px;
+        stroke-width: 1.5px;
         fill: none;
         marker-end: url(#hand-drawn-arrow);
+        filter: url(#hand-drawn-effect); /* Apply a wavy filter */
+
       }
 
 
