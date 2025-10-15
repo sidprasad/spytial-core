@@ -139,9 +139,9 @@ export class GroupBySelector extends ConstraintOperation{
     }
 
     override toHTML(): string {
-        const edgeText = this.addEdge ? ' (with edge)' : '';
-        return `GroupBySelector with selector <pre>${this.selector}</pre> 
-        and name <pre>${this.name}</pre>${edgeText}.`;
+
+        return `GroupBySelector with selector <code>${this.selector}</code> 
+        and name <code>${this.name}</code>.`;
     }
 }
 
