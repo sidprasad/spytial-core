@@ -3109,9 +3109,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       }
       
       .inferredLink {
-        stroke: #666;
         stroke-width: 1px;
-        stroke-dasharray: 5,5;
         fill: none;
         marker-end: url(#hand-drawn-arrow);
       }
