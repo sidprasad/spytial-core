@@ -695,11 +695,72 @@ class ConstraintValidator {
             }
         }
 
+        // Add constraints to prevent group boundary overlaps (without disjunctions)
+        this.addGroupBoundaryNonOverlapConstraints();
+
         return null;
     }
 
     private getNodeIndex(nodeId: string) {
         return this.nodes.findIndex(node => node.id === nodeId);
+    }
+
+    /**
+     * Adds weak constraints to prevent group boundary overlaps.
+     * For each pair of non-subsumed groups, adds four Strength.weak constraints:
+     * - A.right + padding <= B.left
+     * - A.left >= B.right + padding
+     * - A.bottom + padding <= B.top
+     * - A.top >= B.bottom + padding
+     * 
+     * The solver will satisfy at least one of these, keeping boxes separated.
+     * Strength.weak allows these to be violated if stronger constraints require it.
+     */
+    private addGroupBoundaryNonOverlapConstraints(): void {
+        const padding = 10;
+        
+        for (let i = 0; i < this.groups.length; i++) {
+            for (let j = i + 1; j < this.groups.length; j++) {
+                const groupA = this.groups[i];
+                const groupB = this.groups[j];
+                
+                // Skip singletons
+                if (groupA.nodeIds.length <= 1 || groupB.nodeIds.length <= 1) {
+                    continue;
+                }
+                
+                // Skip if one subsumes the other
+                if (this.isSubGroup(groupA, groupB) || this.isSubGroup(groupB, groupA)) {
+                    continue;
+                }
+                
+                const bboxA = this.groupBoundingBoxes.get(groupA.name);
+                const bboxB = this.groupBoundingBoxes.get(groupB.name);
+                
+                if (!bboxA || !bboxB) continue;
+                
+                // Add four weak constraints - solver will satisfy at least one
+                // A right of B: A.right + padding <= B.left
+                this.solver.addConstraint(
+                    new Constraint(bboxA.right.plus(padding), Operator.Le, bboxB.left, Strength.weak)
+                );
+                
+                // A left of B: B.right + padding <= A.left
+                this.solver.addConstraint(
+                    new Constraint(bboxB.right.plus(padding), Operator.Le, bboxA.left, Strength.weak)
+                );
+                
+                // A above B: A.bottom + padding <= B.top
+                this.solver.addConstraint(
+                    new Constraint(bboxA.bottom.plus(padding), Operator.Le, bboxB.top, Strength.weak)
+                );
+                
+                // A below B: B.bottom + padding <= A.top
+                this.solver.addConstraint(
+                    new Constraint(bboxB.bottom.plus(padding), Operator.Le, bboxA.top, Strength.weak)
+                );
+            }
+        }
     }
 
     /**
