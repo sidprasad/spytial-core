@@ -462,16 +462,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         <marker id="start-arrow" markerWidth="15" markerHeight="10" refX="3" refY="5" orient="auto">
           <polygon points="15 0, 0 5, 15 10" />
         </marker>
-        <marker id="hand-drawn-arrow" markerWidth="15" markerHeight="10" refX="12" refY="5" orient="auto">
-          <polygon points="0 0, 15 5, 0 10" fill="#666666" />
-        </marker>
-        <marker id="hand-drawn-arrow-reverse" markerWidth="15" markerHeight="10" refX="3" refY="5" orient="auto">
-          <polygon points="15 0, 0 5, 15 10" fill="#666666" />
-        </marker>
-        <filter id="hand-drawn-effect">
-          <feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="3" result="noise" />
-          <feDisplacementMap in="SourceGraphic" in2="noise" scale="2" xChannelSelector="R" yChannelSelector="G" />
-       </filter>
         </defs>
         <g class="zoomable"></g>
       </svg>
@@ -1267,12 +1257,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr("stroke-width", 1)
       .attr("marker-end", (d: any) => {
         if (this.isAlignmentEdge(d)) return "none";
-        return this.isInferredEdge(d) ? "url(#hand-drawn-arrow)" : "url(#end-arrow)";
+        return "url(#end-arrow)";
       })
       .attr("marker-start", (d: any) => {
         // Add marker-start for bidirectional edges
         if (this.isAlignmentEdge(d) || !d.bidirectional) return "none";
-        return this.isInferredEdge(d) ? "url(#hand-drawn-arrow-reverse)" : "url(#start-arrow)";
+        return  "url(#start-arrow)";
       })
       .on('click.inputmode', (d: any) => {
         if (this.isInputModeActive && !this.isAlignmentEdge(d)) {
@@ -1986,12 +1976,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       })
       .attr('marker-end', (d: EdgeWithMetadata) => {
         if (this.isAlignmentEdge(d)) return 'none';
-        return this.isInferredEdge(d) ? 'url(#hand-drawn-arrow)' : 'url(#end-arrow)';
+        return this.isInferredEdge(d) ? 'url(#end-arrow)';
       })
       .attr('marker-start', (d: EdgeWithMetadata) => {
         // Add marker-start for bidirectional edges
         if (this.isAlignmentEdge(d) || !d.bidirectional) return 'none';
-        return this.isInferredEdge(d) ? 'url(#hand-drawn-arrow-reverse)' : 'url(#start-arrow)';
+        return this.isInferredEdge(d) ? 'url(#start-arrow)';
       })
       .raise();
 
@@ -3115,9 +3105,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .inferredLink {
         stroke-width: 1.5px;
         fill: none;
-        marker-end: url(#hand-drawn-arrow);
-        filter: url(#hand-drawn-effect); /* Apply a wavy filter */
-
+        marker-end: url(#end-arrow);
       }
 
 
