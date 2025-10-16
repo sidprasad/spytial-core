@@ -545,14 +545,35 @@ class ConstraintValidator {
      * 
      * Then we add constraints:
      * 1. Each member must be inside the bounding box (added directly to solver)
-     * 2. For each non-member, create a disjunctive constraint:
+     * 2. For each "free" node (not in any other non-singleton group), create a disjunctive constraint:
      *    - Node is LEFT of box OR RIGHT of box OR ABOVE box OR BELOW box
      * 
-     * This approach scales as O(members + non-members) per group instead of O(members × non-members × 4).
+     * Key optimization: Since groups cannot overlap (except via subsumption), we only create
+     * disjunctions for nodes that are not already members of other groups. This dramatically
+     * reduces the number of disjunctive constraints from O(n_nodes) to O(n_free_nodes) per group.
+     * 
+     * This approach scales as O(members + free_nodes) per group instead of O(members × n_nodes × 4).
      * 
      * @returns PositionalConstraintError if adding constraints fails, null otherwise
      */
     private addGroupBoundingBoxConstraints(): PositionalConstraintError | null {
+        // Pre-compute which nodes belong to which groups (for non-singleton groups)
+        // This allows us to identify "free" nodes that aren't in any group
+        const nodeToGroups = new Map<string, Set<LayoutGroup>>();
+        
+        for (const node of this.nodes) {
+            nodeToGroups.set(node.id, new Set());
+        }
+        
+        for (const group of this.groups) {
+            // Only track non-singleton groups with source constraints
+            if (group.nodeIds.length > 1 && group.sourceConstraint) {
+                for (const nodeId of group.nodeIds) {
+                    nodeToGroups.get(nodeId)?.add(group);
+                }
+            }
+        }
+
         for (const group of this.groups) {
             // Skip groups with no members or only one member
             if (group.nodeIds.length <= 1) continue;
@@ -566,6 +587,9 @@ class ConstraintValidator {
                 .filter((n): n is LayoutNode => n !== undefined);
 
             if (memberNodes.length === 0) continue;
+
+            // Pre-compute member set for O(1) lookup instead of O(n) with includes()
+            const memberIds = new Set(group.nodeIds);
 
             // Create 4 variables for the bounding box
             const groupLeft = new Variable(`${group.name}_bbox_left`);
@@ -600,10 +624,16 @@ class ConstraintValidator {
                 this.solver.addConstraint(new Constraint(memberY, Operator.Le, groupBottom, Strength.required));
             }
 
-            // For each non-member, add disjunctive constraint that it must be outside
+            // For each "free" node (not in any other non-singleton group), add disjunctive constraint
+            // This optimization leverages the fact that groups cannot overlap (except via subsumption)
             for (const node of this.nodes) {
-                // Skip if this node is a member of the group
-                if (group.nodeIds.includes(node.id)) continue;
+                // Skip if this node is a member of this group
+                if (memberIds.has(node.id)) continue;
+                
+                // Skip if this node belongs to other non-singleton groups
+                // (it's already constrained to be in those groups, so it can't be outside this one)
+                const nodeGroups = nodeToGroups.get(node.id);
+                if (nodeGroups && nodeGroups.size > 0) continue;
 
                 const sourceConstraint = group.sourceConstraint;
 
