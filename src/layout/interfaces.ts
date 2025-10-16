@@ -111,7 +111,29 @@ export function isBoundingBoxConstraint(constraint: LayoutConstraint): constrain
            (constraint as BoundingBoxConstraint).side !== undefined;
 }
 
+/**
+ * Constraint representing group-to-group boundary separation.
+ * Used in disjunctive constraints to ensure two groups are positioned in one of four ways:
+ * - groupA left of groupB
+ * - groupA right of groupB
+ * - groupA above groupB
+ * - groupA below groupB
+ */
+export interface GroupBoundaryConstraint extends LayoutConstraint {
+    /** First group */
+    groupA: LayoutGroup;
+    /** Second group */
+    groupB: LayoutGroup;
+    /** Which separation: 'left' (A left of B) | 'right' (A right of B) | 'top' (A above B) | 'bottom' (A below B) */
+    side: 'left' | 'right' | 'top' | 'bottom';
+    /** Minimum padding between group boundaries */
+    minDistance: number;
+}
 
+export function isGroupBoundaryConstraint(constraint: LayoutConstraint): constraint is GroupBoundaryConstraint {
+    return (constraint as GroupBoundaryConstraint).groupA !== undefined && 
+           (constraint as GroupBoundaryConstraint).groupB !== undefined;
+}
 
 export interface InstanceLayout {
     nodes: LayoutNode[];

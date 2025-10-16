@@ -1,5 +1,5 @@
 import { Solver, Variable, Expression, Strength, Operator, Constraint } from 'kiwi.js';
-import { DisjunctiveConstraint, InstanceLayout, LayoutNode, LayoutEdge, LayoutGroup, LayoutConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, isBoundingBoxConstraint, TopConstraint, LeftConstraint, AlignmentConstraint, BoundingBoxConstraint, ImplicitConstraint } from './interfaces';
+import { DisjunctiveConstraint, InstanceLayout, LayoutNode, LayoutEdge, LayoutGroup, LayoutConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, isBoundingBoxConstraint, TopConstraint, LeftConstraint, AlignmentConstraint, BoundingBoxConstraint, ImplicitConstraint, GroupBoundaryConstraint, isGroupBoundaryConstraint } from './interfaces';
 import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint, GroupByField, GroupBySelector } from './layoutspec';
 
 
@@ -91,6 +91,16 @@ export function orientationConstraintToString(constraint: LayoutConstraint) {
         // };
         //return `${nodeLabel(bc.node)} must be ${sideDescriptions[bc.side]} group "${bc.group.name}"`;
         return `${nodeLabel(bc.node)} cannot be in group "${bc.group.name}".`;
+    }
+    else if (isGroupBoundaryConstraint(constraint)) {
+        let gc = constraint as GroupBoundaryConstraint;
+        const sideDescriptions: { [key: string]: string } = {
+            'left': 'to the left of',
+            'right': 'to the right of',
+            'top': 'above',
+            'bottom': 'below'
+        };
+        return `Group "${gc.groupA.name}" must be ${sideDescriptions[gc.side]} group "${gc.groupB.name}"`;
     }
     return `Unknown constraint type: ${constraint}`;
 }
@@ -695,30 +705,8 @@ class ConstraintValidator {
             }
         }
 
-        // Add constraints to prevent group boundary overlaps (without disjunctions)
-        this.addGroupBoundaryNonOverlapConstraints();
-
-        return null;
-    }
-
-    private getNodeIndex(nodeId: string) {
-        return this.nodes.findIndex(node => node.id === nodeId);
-    }
-
-    /**
-     * Adds weak constraints to prevent group boundary overlaps.
-     * For each pair of non-subsumed groups, adds four Strength.weak constraints:
-     * - A.right + padding <= B.left
-     * - A.left >= B.right + padding
-     * - A.bottom + padding <= B.top
-     * - A.top >= B.bottom + padding
-     * 
-     * The solver will satisfy at least one of these, keeping boxes separated.
-     * Strength.weak allows these to be violated if stronger constraints require it.
-     */
-    private addGroupBoundaryNonOverlapConstraints(): void {
-        const padding = 10;
-        
+        // Add disjunctive constraints for group-to-group boundary separation
+        // For each pair of non-overlapping groups, ensure they are separated in one direction
         for (let i = 0; i < this.groups.length; i++) {
             for (let j = i + 1; j < this.groups.length; j++) {
                 const groupA = this.groups[i];
@@ -734,33 +722,64 @@ class ConstraintValidator {
                     continue;
                 }
                 
-                const bboxA = this.groupBoundingBoxes.get(groupA.name);
-                const bboxB = this.groupBoundingBoxes.get(groupB.name);
+                // Skip if groups share members - they're allowed to overlap
+                const intersection = this.groupIntersection(groupA, groupB);
+                if (intersection.length > 0) {
+                    continue;
+                }
                 
-                if (!bboxA || !bboxB) continue;
+                // Create four GroupBoundaryConstraint alternatives for group-to-group separation
+                const leftAlternative: GroupBoundaryConstraint = {
+                    groupA: groupA,
+                    groupB: groupB,
+                    side: 'left',  // A left of B
+                    minDistance: this.minPadding,
+                    sourceConstraint: groupA.sourceConstraint || groupB.sourceConstraint!
+                };
                 
-                // Add four weak constraints - solver will satisfy at least one
-                // A right of B: A.right + padding <= B.left
-                this.solver.addConstraint(
-                    new Constraint(bboxA.right.plus(padding), Operator.Le, bboxB.left, Strength.weak)
+                const rightAlternative: GroupBoundaryConstraint = {
+                    groupA: groupA,
+                    groupB: groupB,
+                    side: 'right',  // A right of B
+                    minDistance: this.minPadding,
+                    sourceConstraint: groupA.sourceConstraint || groupB.sourceConstraint!
+                };
+                
+                const topAlternative: GroupBoundaryConstraint = {
+                    groupA: groupA,
+                    groupB: groupB,
+                    side: 'top',  // A above B
+                    minDistance: this.minPadding,
+                    sourceConstraint: groupA.sourceConstraint || groupB.sourceConstraint!
+                };
+                
+                const bottomAlternative: GroupBoundaryConstraint = {
+                    groupA: groupA,
+                    groupB: groupB,
+                    side: 'bottom',  // A below B
+                    minDistance: this.minPadding,
+                    sourceConstraint: groupA.sourceConstraint || groupB.sourceConstraint!
+                };
+                
+                // Create the disjunction: groups must satisfy ONE of these four alternatives
+                const disjunction = new DisjunctiveConstraint(
+                    groupA.sourceConstraint || groupB.sourceConstraint!,
+                    [[leftAlternative], [rightAlternative], [topAlternative], [bottomAlternative]]
                 );
                 
-                // A left of B: B.right + padding <= A.left
-                this.solver.addConstraint(
-                    new Constraint(bboxB.right.plus(padding), Operator.Le, bboxA.left, Strength.weak)
-                );
-                
-                // A above B: A.bottom + padding <= B.top
-                this.solver.addConstraint(
-                    new Constraint(bboxA.bottom.plus(padding), Operator.Le, bboxB.top, Strength.weak)
-                );
-                
-                // A below B: B.bottom + padding <= A.top
-                this.solver.addConstraint(
-                    new Constraint(bboxB.bottom.plus(padding), Operator.Le, bboxA.top, Strength.weak)
-                );
+                // Add to the list of disjunctive constraints that will be solved
+                if (!this.layout.disjunctiveConstraints) {
+                    this.layout.disjunctiveConstraints = [];
+                }
+                this.layout.disjunctiveConstraints.push(disjunction);
             }
         }
+
+        return null;
+    }
+
+    private getNodeIndex(nodeId: string) {
+        return this.nodes.findIndex(node => node.id === nodeId);
     }
 
     /**
@@ -1121,8 +1140,8 @@ class ConstraintValidator {
         const testSolver = new Solver();
         
         try {
-            // Add bounding box constraints if needed
-            const hasBoundingBoxConstraint = constraints.some(c => isBoundingBoxConstraint(c));
+            // Check if we need bounding box variables for either BoundingBoxConstraint or GroupBoundaryConstraint
+            const hasBoundingBoxConstraint = constraints.some(c => isBoundingBoxConstraint(c) || isGroupBoundaryConstraint(c));
             if (hasBoundingBoxConstraint) {
                 // We need to set up a temporary bounding box system for testing
                 const testGroupBoundingBoxes = new Map<string, { left: Variable, right: Variable, top: Variable, bottom: Variable }>();
@@ -1132,6 +1151,9 @@ class ConstraintValidator {
                 constraints.forEach(c => {
                     if (isBoundingBoxConstraint(c)) {
                         groupsNeeded.add(c.group.name);
+                    } else if (isGroupBoundaryConstraint(c)) {
+                        groupsNeeded.add(c.groupA.name);
+                        groupsNeeded.add(c.groupB.name);
                     }
                 });
                 
@@ -1317,6 +1339,39 @@ class ConstraintValidator {
                 
                 default:
                     console.error(`Unknown bounding box side: ${bc.side}`);
+                    return [];
+            }
+        }
+        else if (isGroupBoundaryConstraint(constraint)) {
+            const gc = constraint as GroupBoundaryConstraint;
+            const bboxA = this.groupBoundingBoxes.get(gc.groupA.name);
+            const bboxB = this.groupBoundingBoxes.get(gc.groupB.name);
+            
+            if (!bboxA || !bboxB) {
+                console.error(`Bounding box not found for groups ${gc.groupA.name} or ${gc.groupB.name}`);
+                return [];
+            }
+
+            // Create constraint based on which side (direction) groups should be separated
+            switch (gc.side) {
+                case 'left':
+                    // groupA left of groupB: A.right + padding <= B.left
+                    return [new Constraint(bboxA.right.plus(gc.minDistance), Operator.Le, bboxB.left, Strength.required)];
+                
+                case 'right':
+                    // groupA right of groupB: B.right + padding <= A.left
+                    return [new Constraint(bboxB.right.plus(gc.minDistance), Operator.Le, bboxA.left, Strength.required)];
+                
+                case 'top':
+                    // groupA above groupB: A.bottom + padding <= B.top
+                    return [new Constraint(bboxA.bottom.plus(gc.minDistance), Operator.Le, bboxB.top, Strength.required)];
+                
+                case 'bottom':
+                    // groupA below groupB: B.bottom + padding <= A.top
+                    return [new Constraint(bboxB.bottom.plus(gc.minDistance), Operator.Le, bboxA.top, Strength.required)];
+                
+                default:
+                    console.error(`Unknown group boundary side: ${gc.side}`);
                     return [];
             }
         }
