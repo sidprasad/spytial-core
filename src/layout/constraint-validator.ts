@@ -152,11 +152,21 @@ class ConstraintValidator {
         // Track how many constraints we have before disjunctions
         const constraintsBeforeDisjunctions = this.added_constraints.length;
 
-        // Add group bounding box constraints (members inside, non-members outside)
-        // This must happen BEFORE updateVariables() so the solver enforces these constraints
-        const groupBoundingBoxError = this.addGroupBoundingBoxConstraints();
-        if (groupBoundingBoxError) {
-            return groupBoundingBoxError;
+        // Deduplicate groups before validation to reduce constraint solving space
+        const { dedupedGroups, groupMap } = this.deduplicateGroups(this.groups);
+        const originalGroups = this.groups;
+        this.groups = dedupedGroups; // Use deduplicated for solving
+
+        try {
+            // Add group bounding box constraints (members inside, non-members outside)
+            // This must happen BEFORE updateVariables() so the solver enforces these constraints
+            const groupBoundingBoxError = this.addGroupBoundingBoxConstraints();
+            if (groupBoundingBoxError) {
+                return groupBoundingBoxError;
+            }
+        } finally {
+            // Restore original groups
+            this.groups = originalGroups;
         }
 
         // Now handle disjunctive constraints using backtracking
@@ -690,6 +700,59 @@ class ConstraintValidator {
 
     private getNodeIndex(nodeId: string) {
         return this.nodes.findIndex(node => node.id === nodeId);
+    }
+
+    /**
+     * Creates a deduplicated view of groups for constraint solving.
+     * Groups with identical members are collapsed into a single representative.
+     * This reduces the constraint solving space without modifying the original groups.
+     * 
+     * @param groups - Original groups array
+     * @returns Object with deduplicated groups and mapping back to originals
+     */
+    private deduplicateGroups(groups: LayoutGroup[]): {
+        dedupedGroups: LayoutGroup[];
+        groupMap: Map<LayoutGroup, LayoutGroup[]>;
+    } {
+        
+        // Group by normalized member set (sorted IDs for comparison)
+        const groupsByMembers = new Map<string, LayoutGroup[]>();
+        
+        for (const group of groups) {
+            if (group.nodeIds.length <= 1) {
+                // Keep singleton groups as-is with unique key
+                const singletonKey = `_singleton_${group.nodeIds[0] || 'empty'}_${Math.random()}`;
+                groupsByMembers.set(singletonKey, [group]);
+                continue;
+            }
+            
+            // Create canonical key from sorted node IDs
+            // This allows us to detect groups with identical members
+            const sortedIds = [...group.nodeIds].sort();
+            const key = sortedIds.join('|');
+            
+            if (!groupsByMembers.has(key)) {
+                groupsByMembers.set(key, []);
+            }
+            groupsByMembers.get(key)!.push(group);
+        }
+        
+        // Create deduplicated groups (pick first of each equivalence class)
+        const dedupedGroups: LayoutGroup[] = [];
+        const groupMap = new Map<LayoutGroup, LayoutGroup[]>();
+        
+        for (const equivalentGroups of groupsByMembers.values()) {
+            const representative = equivalentGroups[0];
+            dedupedGroups.push(representative);
+            groupMap.set(representative, equivalentGroups);
+            
+            // Log if we're deduplicating multiple groups
+            if (equivalentGroups.length > 1) {
+                console.log(`Deduplicating ${equivalentGroups.length} groups with identical members: ${equivalentGroups.map(g => g.name).join(', ')}`);
+            }
+        }
+        
+        return { dedupedGroups, groupMap };
     }
 
     /**
