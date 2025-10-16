@@ -1976,12 +1976,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       })
       .attr('marker-end', (d: EdgeWithMetadata) => {
         if (this.isAlignmentEdge(d)) return 'none';
-        return this.isInferredEdge(d) ? 'url(#end-arrow)';
+        return 'url(#end-arrow)';
       })
       .attr('marker-start', (d: EdgeWithMetadata) => {
         // Add marker-start for bidirectional edges
         if (this.isAlignmentEdge(d) || !d.bidirectional) return 'none';
-        return this.isInferredEdge(d) ? 'url(#start-arrow)';
+        return 'url(#start-arrow)';
       })
       .raise();
 
