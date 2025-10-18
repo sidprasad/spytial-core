@@ -27,6 +27,11 @@ This replaces the complex setup shown in the Pyret REPL demo with a single, easy
 - **Custom Elements** for easy embedding in web apps
 - **Combined Input Component**: Simplified API for complete data visualization setups
 - **Real-time Synchronization**: Automatic sync between REPL, layout, and visualization
+- **Advanced Edge Routing**: Improved edge routing based on Sugiyama principles
+  - Node occlusion avoidance
+  - Edge crossing detection
+  - Smart label positioning
+  - See [Edge Routing Documentation](docs/EDGE_ROUTING.md) for details
 
 ---
 
