@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edge Routing Improvements Demo</title>
+    
+    <!-- Bootstrap CSS for component styling -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 90vw;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        #graph-container {
+            width: 100%;
+            height: 600px;
+            border: 2px solid #007acc;
+            border-radius: 8px;
+        }
+        .info-box {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .feature-list {
+            list-style: none;
+            padding-left: 0;
+        }
+        .feature-list li {
+            padding: 5px 0;
+        }
+        .feature-list li::before {
+            content: "✓ ";
+            color: #4caf50;
+            font-weight: bold;
+            margin-right: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Edge Routing Improvements Demo</h1>
+        <p>This demo showcases the improved edge routing based on Sugiyama principles.</p>
+        
+        <div class="info-box">
+            <h3>Features Demonstrated:</h3>
+            <ul class="feature-list">
+                <li><strong>Node Occlusion Avoidance:</strong> Edges route around nodes instead of passing under them</li>
+                <li><strong>Edge Crossing Detection:</strong> System detects and attempts to minimize edge crossings</li>
+                <li><strong>Smart Label Positioning:</strong> Edge labels are positioned to avoid overlapping with nodes</li>
+                <li><strong>Waypoint Routing:</strong> Edges use intermediate waypoints when routing around obstacles</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Graph Visualization</h2>
+        <webcola-cnd-graph id="graph-container"></webcola-cnd-graph>
+    </div>
+
+    <div class="container">
+        <h3>Test Scenario</h3>
+        <p>The graph below demonstrates a scenario where edges would normally cross nodes:</p>
+        <ul>
+            <li>Multiple nodes arranged in a grid</li>
+            <li>Edges connecting nodes that would pass through intermediate nodes</li>
+            <li>Edge labels positioned to remain readable</li>
+        </ul>
+    </div>
+
+    <!-- D3 and WebCola (required for layout/visualization) -->
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="../vendor/cola.js"></script>
+    
+    <!-- CnD Core browser bundle -->
+    <script src="../dist/browser/cnd-core-complete.global.js"></script>
+
+    <script>
+        // Create a test graph with potential edge crossings and occlusions
+        const testData = {
+            nodes: [
+                { id: 'A', label: 'Node A', type: 'Type1', color: '#FF6B6B' },
+                { id: 'B', label: 'Node B', type: 'Type1', color: '#4ECDC4' },
+                { id: 'C', label: 'Node C', type: 'Type1', color: '#45B7D1' },
+                { id: 'D', label: 'Node D', type: 'Type2', color: '#96CEB4' },
+                { id: 'E', label: 'Node E', type: 'Type2', color: '#FFEAA7' },
+                { id: 'F', label: 'Node F', type: 'Type2', color: '#DFE6E9' }
+            ],
+            relations: [
+                { id: 'r1', name: 'connects', types: ['Type1', 'Type1'], tuples: [
+                    { atoms: ['A', 'B'] },
+                    { atoms: ['B', 'C'] }
+                ]},
+                { id: 'r2', name: 'links', types: ['Type1', 'Type2'], tuples: [
+                    { atoms: ['A', 'D'] },
+                    { atoms: ['C', 'F'] }
+                ]},
+                { id: 'r3', name: 'relates', types: ['Type2', 'Type2'], tuples: [
+                    { atoms: ['D', 'E'] },
+                    { atoms: ['E', 'F'] }
+                ]}
+            ]
+        };
+
+        // CnD layout specification
+        const cndSpec = `
+nodes:
+  - selector: "*[type=Type1]"
+    color: "#FF6B6B"
+  - selector: "*[type=Type2]"
+    color: "#96CEB4"
+
+edges:
+  - selector: "connects"
+    color: "#333333"
+  - selector: "links"
+    color: "#666666"
+  - selector: "relates"
+    color: "#999999"
+
+constraints:
+  - type: alignment
+    direction: horizontal
+    nodes: ["A", "B", "C"]
+  - type: alignment
+    direction: vertical
+    nodes: ["D", "E", "F"]
+        `;
+
+        // Initialize the visualization
+        try {
+            const dataInstance = new CndCore.JSONDataInstance(testData);
+            const evaluator = new CndCore.SimpleGraphQueryEvaluator();
+            evaluator.initialize({ dataInstance });
+            
+            const layoutSpec = CndCore.parseLayoutSpec(cndSpec);
+            const layoutInstance = new CndCore.LayoutInstance(layoutSpec, evaluator, 0, true);
+            const { layout } = layoutInstance.generateLayout(dataInstance, {});
+            
+            const graphElement = document.getElementById('graph-container');
+            graphElement.renderLayout(layout);
+            
+            console.log('Graph rendered successfully with improved edge routing!');
+        } catch (error) {
+            console.error('Error rendering graph:', error);
+            document.getElementById('graph-container').innerHTML = 
+                '<div style="padding: 20px; color: red;">Error: ' + error.message + '</div>';
+        }
+    </script>
+</body>
+</html>

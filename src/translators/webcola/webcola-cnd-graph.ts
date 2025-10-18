@@ -117,6 +117,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private static readonly VIEWBOX_PADDING = 10;
   private static readonly NODE_OCCLUSION_MARGIN = 5; // Margin around nodes to avoid occlusion
   private static readonly EDGE_CROSSING_PENALTY = 1.5; // Multiplier for crossing detection
+  private static readonly EDGE_INTERSECTION_SAMPLES = 5; // Number of samples for curved edge intersection
+  private static readonly LABEL_POSITION_SAMPLES = 10; // Number of positions to try for label placement
+  private static readonly MAX_EDGES_FOR_CROSSING_DETECTION = 100; // Skip crossing detection above this threshold
 
   /**
    * Configuration constants for WebCola layout iterations
@@ -2332,11 +2335,19 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   /**
    * Attempts to minimize edge crossings by adjusting edge curvature.
    * Implements Sugiyama principle: minimize edge crossings.
+   * Performance optimization: Skips detection for large graphs.
    */
   private minimizeEdgeCrossings(): void {
     if (!this.currentLayout?.links) return;
     
     const edges = this.currentLayout.links.filter((e: any) => !this.isAlignmentEdge(e));
+    
+    // Performance optimization: Skip for large graphs to avoid O(n²) complexity
+    if (edges.length > WebColaCnDGraph.MAX_EDGES_FOR_CROSSING_DETECTION) {
+      console.log(`Skipping edge crossing detection for ${edges.length} edges (threshold: ${WebColaCnDGraph.MAX_EDGES_FOR_CROSSING_DETECTION})`);
+      return;
+    }
+    
     const crossingPairs: Array<[any, any]> = [];
     
     // Detect all crossing pairs
@@ -2379,7 +2390,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     
     // Simple intersection check using line segments
     // For curved paths, we sample points along the path
-    const samples = 5;
+    const samples = WebColaCnDGraph.EDGE_INTERSECTION_SAMPLES;
     const length1 = path1.getTotalLength();
     const length2 = path2.getTotalLength();
     
@@ -2562,6 +2573,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   /**
    * Checks if two line segments intersect.
    * 
+   * Note: Returns false for parallel lines. This implementation does not detect
+   * overlapping parallel segments. For most edge routing purposes, this is acceptable
+   * since parallel edges are handled separately by the multiple edge routing logic.
+   * 
    * @param x1 - X coordinate of first point of first line
    * @param y1 - Y coordinate of first point of first line
    * @param x2 - X coordinate of second point of first line
@@ -2577,7 +2592,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     x3: number, y3: number, x4: number, y4: number
   ): boolean {
     const denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1);
-    if (denom === 0) return false; // Parallel lines
+    if (denom === 0) return false; // Parallel lines (including overlapping parallel segments)
     
     const ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom;
     const ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom;
@@ -2588,6 +2603,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   /**
    * Avoids node occlusion by routing edges around nodes instead of through them.
    * Implements Sugiyama principle: try to avoid edges going 'under' nodes.
+   * 
+   * Note: Currently routes around the first intersecting node only. In graphs with
+   * many overlapping nodes, this may create suboptimal routing. Future improvement
+   * could handle multiple intersecting nodes by creating a more complex route.
    * 
    * @param edgeData - The edge data object
    * @param route - Current route points
@@ -2624,6 +2643,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       
       if (intersectingNodes.length > 0) {
         // Route around the first intersecting node
+        // NOTE: For complex layouts with many overlapping nodes, routing around
+        // all intersecting nodes would require a more sophisticated pathfinding algorithm
         const node = intersectingNodes[0];
         const waypoints = this.calculateWaypointsAroundNode(p1, p2, node);
         newRoute.push(...waypoints);
@@ -3093,7 +3114,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     overlappingNodes: any[]
   ): { x: number; y: number } | null {
     const pathLength = pathElement.getTotalLength();
-    const samples = 10; // Number of positions to try along the path
+    const samples = WebColaCnDGraph.LABEL_POSITION_SAMPLES;
     
     // Try different positions along the path
     for (let i = 0; i < samples; i++) {
