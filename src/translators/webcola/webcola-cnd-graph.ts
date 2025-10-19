@@ -115,7 +115,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private static readonly MIN_EDGE_DISTANCE = 10;
   private static readonly SELF_LOOP_CURVATURE_SCALE = 0.2;
   private static readonly VIEWBOX_PADDING = 10;
-  private static readonly NODE_OCCLUSION_MARGIN = 5; // Margin around nodes to avoid occlusion
+  private static readonly NODE_OCCLUSION_MARGIN = 15; // Margin around nodes to avoid occlusion
   private static readonly EDGE_CROSSING_PENALTY = 1.5; // Multiplier for crossing detection
   private static readonly EDGE_INTERSECTION_SAMPLES = 5; // Number of samples for curved edge intersection
   private static readonly LABEL_POSITION_SAMPLES = 10; // Number of positions to try for label placement
@@ -2658,6 +2658,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
   /**
    * Calculates waypoints to route around a node.
+   * Ensures the final approach to the target maintains a natural angle for arrow rendering.
    * 
    * @param start - Starting point of edge segment
    * @param end - Ending point of edge segment
@@ -2692,8 +2693,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       const routeAbove = (startRelY + endRelY) / 2 < 0;
       const y = routeAbove ? bounds.y - margin : bounds.Y + margin;
       
+      // Add intermediate waypoint for smoother routing
+      const midX = (start.x + end.x) / 2;
+      
       return [
         { x: start.x < centerX ? bounds.x - margin : bounds.X + margin, y },
+        { x: midX, y },
         { x: end.x < centerX ? bounds.x - margin : bounds.X + margin, y }
       ];
     } else {
@@ -2701,8 +2706,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       const routeLeft = (startRelX + endRelX) / 2 < 0;
       const x = routeLeft ? bounds.x - margin : bounds.X + margin;
       
+      // Add intermediate waypoint for smoother routing
+      const midY = (start.y + end.y) / 2;
+      
       return [
         { x, y: start.y < centerY ? bounds.y - margin : bounds.Y + margin },
+        { x, y: midY },
         { x, y: end.y < centerY ? bounds.y - margin : bounds.Y + margin }
       ];
     }

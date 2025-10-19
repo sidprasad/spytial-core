@@ -24,7 +24,7 @@ Edges are now routed around intermediate nodes rather than passing through them,
 
 **Configuration:**
 ```typescript
-NODE_OCCLUSION_MARGIN = 5  // Pixels of clearance around nodes
+NODE_OCCLUSION_MARGIN = 15  // Pixels of clearance around nodes
 ```
 
 **Limitations:**
@@ -83,7 +83,7 @@ The following constants can be modified to tune routing behavior:
 
 ```typescript
 class WebColaCnDGraph {
-  private static readonly NODE_OCCLUSION_MARGIN = 5;
+  private static readonly NODE_OCCLUSION_MARGIN = 15;
   private static readonly EDGE_INTERSECTION_SAMPLES = 5;
   private static readonly LABEL_POSITION_SAMPLES = 10;
   private static readonly MAX_EDGES_FOR_CROSSING_DETECTION = 100;
