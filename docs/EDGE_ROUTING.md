@@ -24,8 +24,17 @@ Edges are now routed around intermediate nodes rather than passing through them,
 
 **Configuration:**
 ```typescript
-NODE_OCCLUSION_MARGIN = 15  // Pixels of clearance around nodes
+NODE_OCCLUSION_MARGIN = 15         // Pixels of clearance around nodes
+EDGE_ROUTING_SMOOTHNESS = 0.7      // 0 = straight, 1 = full avoidance (0.7 = balanced)
 ```
+
+**Smoothness Parameter:**
+The `EDGE_ROUTING_SMOOTHNESS` parameter controls the balance between avoiding nodes and maintaining smooth curves:
+- **0.0-0.5**: Minimal routing, only avoids significant overlaps. Produces nearly straight lines.
+- **0.6-0.8**: Balanced routing (recommended). Avoids nodes while keeping curves smooth. Uses fewer waypoints.
+- **0.9-1.0**: Aggressive routing, avoids all overlaps with multiple waypoints. May create complex paths.
+
+Default value of **0.7** provides a good balance between clarity and smoothness.
 
 **Limitations:**
 - Currently routes around the first intersecting node only
@@ -87,6 +96,7 @@ class WebColaCnDGraph {
   private static readonly EDGE_INTERSECTION_SAMPLES = 5;
   private static readonly LABEL_POSITION_SAMPLES = 10;
   private static readonly MAX_EDGES_FOR_CROSSING_DETECTION = 100;
+  private static readonly EDGE_ROUTING_SMOOTHNESS = 0.7; // Controls curve complexity
 }
 ```
 

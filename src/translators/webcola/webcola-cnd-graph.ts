@@ -120,6 +120,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private static readonly EDGE_INTERSECTION_SAMPLES = 5; // Number of samples for curved edge intersection
   private static readonly LABEL_POSITION_SAMPLES = 10; // Number of positions to try for label placement
   private static readonly MAX_EDGES_FOR_CROSSING_DETECTION = 100; // Skip crossing detection above this threshold
+  private static readonly EDGE_ROUTING_SMOOTHNESS = 0.7; // 0 = straight lines, 1 = full avoidance (0.7 = balanced)
 
   /**
    * Configuration constants for WebCola layout iterations
@@ -2495,13 +2496,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
-   * Checks if a line segment intersects with a node's bounding box.
-   * Used to detect when edges pass under nodes.
+   * Checks if a line segment intersects with a node's bounding box significantly.
+   * Used to detect when edges pass under nodes. Only reports intersection if it's
+   * substantial enough to warrant routing around (controlled by smoothness factor).
    * 
    * @param p1 - First point of line segment
    * @param p2 - Second point of line segment
    * @param node - Node to check intersection with
-   * @returns True if the line segment intersects the node
+   * @returns True if the line segment significantly intersects the node
    */
   private lineIntersectsNode(
     p1: { x: number; y: number },
@@ -2520,8 +2522,37 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     const maxY = bounds.Y + margin;
     
     // Check if line segment intersects rectangle
-    // Use Liang-Barsky algorithm for line-rectangle intersection
-    return this.lineSegmentIntersectsRect(p1, p2, minX, minY, maxX, maxY);
+    const intersects = this.lineSegmentIntersectsRect(p1, p2, minX, minY, maxX, maxY);
+    
+    if (!intersects) return false;
+    
+    // Additional check: only route around if the intersection is significant
+    // This prevents routing for edges that barely graze the node
+    const smoothness = WebColaCnDGraph.EDGE_ROUTING_SMOOTHNESS;
+    
+    // If smoothness is low, require more significant intersection to trigger routing
+    if (smoothness < 0.8) {
+      // Calculate how much of the edge passes through the node
+      const centerX = (bounds.x + bounds.X) / 2;
+      const centerY = (bounds.y + bounds.Y) / 2;
+      const midX = (p1.x + p2.x) / 2;
+      const midY = (p1.y + p2.y) / 2;
+      
+      // Distance from edge midpoint to node center
+      const distToCenter = Math.sqrt(
+        Math.pow(midX - centerX, 2) + Math.pow(midY - centerY, 2)
+      );
+      
+      // Only route if edge passes close to node center
+      const nodeSize = Math.sqrt(
+        Math.pow(bounds.X - bounds.x, 2) + Math.pow(bounds.Y - bounds.y, 2)
+      );
+      
+      // Require edge to pass within half the node's diagonal to trigger routing
+      return distToCenter < nodeSize * 0.5;
+    }
+    
+    return true;
   }
 
   /**
@@ -2658,7 +2689,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
   /**
    * Calculates waypoints to route around a node.
-   * Ensures the final approach to the target maintains a natural angle for arrow rendering.
+   * Uses configurable smoothness factor to balance between avoiding nodes and maintaining smooth curves.
    * 
    * @param start - Starting point of edge segment
    * @param end - Ending point of edge segment
@@ -2674,6 +2705,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     
     const bounds = node.bounds || node.innerBounds;
     const margin = WebColaCnDGraph.NODE_OCCLUSION_MARGIN * 2;
+    const smoothness = WebColaCnDGraph.EDGE_ROUTING_SMOOTHNESS;
     
     // Determine which side of the node to route around based on edge direction
     const dx = end.x - start.x;
@@ -2693,27 +2725,40 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       const routeAbove = (startRelY + endRelY) / 2 < 0;
       const y = routeAbove ? bounds.y - margin : bounds.Y + margin;
       
-      // Add intermediate waypoint for smoother routing
-      const midX = (start.x + end.x) / 2;
-      
-      return [
-        { x: start.x < centerX ? bounds.x - margin : bounds.X + margin, y },
-        { x: midX, y },
-        { x: end.x < centerX ? bounds.x - margin : bounds.X + margin, y }
-      ];
+      // Use smoothness factor to reduce waypoints for smoother curves
+      // At smoothness < 1, we use fewer waypoints and gentler curves
+      if (smoothness < 0.9) {
+        // Simplified routing with single waypoint at the middle
+        const midX = (start.x + end.x) / 2;
+        return [{ x: midX, y }];
+      } else {
+        // Full routing with multiple waypoints for complex avoidance
+        const midX = (start.x + end.x) / 2;
+        return [
+          { x: start.x < centerX ? bounds.x - margin : bounds.X + margin, y },
+          { x: midX, y },
+          { x: end.x < centerX ? bounds.x - margin : bounds.X + margin, y }
+        ];
+      }
     } else {
       // Route left or right of the node
       const routeLeft = (startRelX + endRelX) / 2 < 0;
       const x = routeLeft ? bounds.x - margin : bounds.X + margin;
       
-      // Add intermediate waypoint for smoother routing
-      const midY = (start.y + end.y) / 2;
-      
-      return [
-        { x, y: start.y < centerY ? bounds.y - margin : bounds.Y + margin },
-        { x, y: midY },
-        { x, y: end.y < centerY ? bounds.y - margin : bounds.Y + margin }
-      ];
+      // Use smoothness factor to reduce waypoints for smoother curves
+      if (smoothness < 0.9) {
+        // Simplified routing with single waypoint at the middle
+        const midY = (start.y + end.y) / 2;
+        return [{ x, y: midY }];
+      } else {
+        // Full routing with multiple waypoints for complex avoidance
+        const midY = (start.y + end.y) / 2;
+        return [
+          { x, y: start.y < centerY ? bounds.y - margin : bounds.Y + margin },
+          { x, y: midY },
+          { x, y: end.y < centerY ? bounds.y - margin : bounds.Y + margin }
+        ];
+      }
     }
   }
 
