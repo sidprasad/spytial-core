@@ -120,7 +120,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private static readonly EDGE_INTERSECTION_SAMPLES = 5; // Number of samples for curved edge intersection
   private static readonly LABEL_POSITION_SAMPLES = 10; // Number of positions to try for label placement
   private static readonly MAX_EDGES_FOR_CROSSING_DETECTION = 100; // Skip crossing detection above this threshold
-  private static readonly EDGE_ROUTING_SMOOTHNESS = 0.7; // 0 = straight lines, 1 = full avoidance (0.7 = balanced)
+  private static readonly EDGE_ROUTING_SMOOTHNESS = 0.9; // 0 = straight lines, 1 = full avoidance (0.7 = balanced)
 
   /**
    * Configuration constants for WebCola layout iterations
