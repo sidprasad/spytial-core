@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { WebColaCnDGraph } from './webcola-cnd-graph';
-import { IInputDataInstance, IAtom, ITuple } from '../../data-instance/interfaces';
+import { IInputDataInstance, IAtom, ITuple, IRelation } from '../../data-instance/interfaces';
 import { JSONDataInstance } from '../../data-instance/json-data-instance';
 import { SGraphQueryEvaluator } from '../../evaluators/sgq-evaluator';
 import { LayoutInstance } from '../../layout/layoutinstance';
@@ -137,7 +137,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
               <select class="atom-type-select" aria-label="Select atom type">
                 <option value="">Select type...</option>
               </select>
-              <textarea class="custom-type-input" placeholder="Enter custom type name..." style="display: none;"></textarea>
+              <textarea class="custom-type-input" placeholder="Or enter custom type name..."></textarea>
               <input type="text" class="atom-label-input" placeholder="Enter label..." aria-label="Atom label">
               <button class="add-atom-btn" disabled>Add Atom</button>
             </div>
@@ -509,51 +509,63 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     const updateAddButtonState = () => {
       const selectedType = typeSelect.value;
       const customType = customTypeInput.value.trim();
-      const effectiveType = selectedType === 'Other...' ? customType : selectedType;
+      // Use custom type if provided, otherwise use dropdown selection
+      const effectiveType = customType || selectedType;
       addBtn.disabled = !effectiveType || !labelInput.value.trim();
     };
 
     typeSelect?.addEventListener('change', () => {
-      const selectedValue = typeSelect.value;
-      if (selectedValue === 'Other...') {
-        customTypeInput.style.display = 'block';
-        customTypeInput.focus();
-      } else {
-        customTypeInput.style.display = 'none';
+      // Clear custom type input when a dropdown option is selected (unless it's "Select type...")
+      if (typeSelect.value && typeSelect.value !== 'Other...') {
         customTypeInput.value = '';
       }
       updateAddButtonState();
     });
 
     customTypeInput?.addEventListener('input', () => {
+      // Clear dropdown selection when custom type is entered
+      if (customTypeInput.value.trim()) {
+        typeSelect.value = '';
+      }
       updateAddButtonState();
     });
 
     labelInput?.addEventListener('input', updateAddButtonState);
 
     addBtn?.addEventListener('click', async () => {
-      let selectedType = typeSelect.value;
+      // Use custom type if provided, otherwise use dropdown selection
+      const customType = customTypeInput.value.trim();
+      let selectedType = customType || typeSelect.value;
       
-      if (selectedType === 'Other...') {
-        const customType = customTypeInput.value.trim();
-        if (customType) {
-          // Add to custom types set
-          this.customTypes.add(customType);
-          selectedType = customType;
-          
-          // Add to dropdown for future use
+      if (customType) {
+        // Add to custom types set for future reference
+        this.customTypes.add(customType);
+        
+        // Remove "Other..." temporarily to add it back at the end
+        const otherOption = Array.from(typeSelect.options).find(opt => opt.value === 'Other...');
+        if (otherOption) {
+          typeSelect.removeChild(otherOption);
+        }
+        
+        // Add to dropdown for future use if not already there
+        const existingOption = Array.from(typeSelect.options).find(opt => opt.value === customType);
+        if (!existingOption) {
           const option = document.createElement('option');
           option.value = customType;
           option.textContent = customType;
           typeSelect.appendChild(option);
-          
-          // Reset to new custom type
-          typeSelect.value = customType;
-          customTypeInput.style.display = 'none';
-          customTypeInput.value = '';
-        } else {
-          return; // Don't proceed if no custom type entered
         }
+        
+        // Re-add "Other..." at the end to keep it always available
+        if (otherOption) {
+          typeSelect.appendChild(otherOption);
+        }
+        
+        // Reset selections
+        typeSelect.value = '';
+        customTypeInput.value = '';
+      } else if (!selectedType) {
+        return; // Don't proceed if no type selected
       }
       
       await this.addAtomFromForm(selectedType, labelInput.value.trim());
@@ -1117,8 +1129,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       
       const data = {
         atoms: this.dataInstance.getAtoms(),
-        relations: this.dataInstance.getRelations(),
-        timestamp: new Date().toISOString()
+        relations: this.dataInstance.getRelations()
       };
 
       const jsonString = JSON.stringify(data, null, 2);
@@ -1203,25 +1214,27 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         relationDeleteSelect.removeChild(relationDeleteSelect.lastChild!);
       }
 
-      // Add current relations with user-friendly labels using ID and source-target
+      // Add current relation tuples (not relations) with user-friendly labels
       const relations = this.dataInstance.getRelations();
-      relations.forEach((relation, index) => {
-        const option = document.createElement('option');
-        option.value = index.toString();
-        
-        // Convert atom IDs to labels for better UX
-        const firstTuple = relation.tuples[0];
-        if (!firstTuple) return; // Skip if no tuples
-        
-        const atomLabels = firstTuple.atoms.map((atomId: string) => {
-          const atom = this.dataInstance!.getAtoms().find(a => a.id === atomId);
-          return atom ? atom.label : atomId;
+      let tupleIndex = 0;
+      relations.forEach((relation) => {
+        relation.tuples.forEach((tuple) => {
+          const option = document.createElement('option');
+          // Use tupleIndex as value to uniquely identify each tuple
+          option.value = tupleIndex.toString();
+          
+          // Convert atom IDs to labels for better UX
+          const atomLabels = tuple.atoms.map((atomId: string) => {
+            const atom = this.dataInstance!.getAtoms().find(a => a.id === atomId);
+            return atom ? atom.label : atomId;
+          });
+          
+          // Use relation ID and source-target format instead of just type
+          const relationDisplayName = relation.id || relation.name || 'relation';
+          option.textContent = `${relationDisplayName}: ${atomLabels.join(' → ')}`;
+          relationDeleteSelect.appendChild(option);
+          tupleIndex++;
         });
-        
-        // Use relation ID and source-target format instead of just type
-        const relationDisplayName = relation.id || relation.name || 'relation';
-        option.textContent = `${relationDisplayName}: ${atomLabels.join(' → ')}`;
-        relationDeleteSelect.appendChild(option);
       });
     }
   }
@@ -1276,49 +1289,60 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   }
 
   /**
-   * Delete a relation by index
+   * Delete a specific relation tuple by its global index
    */
-  private async deleteRelation(relationIndex: string): Promise<void> {
-    if (!relationIndex) return;
+  private async deleteRelation(tupleIndexStr: string): Promise<void> {
+    if (!tupleIndexStr) return;
 
     try {
-      console.log(`🗑️ Deleting relation at index: ${relationIndex}`);
+      const tupleIndex = parseInt(tupleIndexStr, 10);
+      console.log(`🗑️ Deleting relation tuple at index: ${tupleIndex}`);
       
       const relations = this.dataInstance.getRelations();
-      const index = parseInt(relationIndex, 10);
       
-      if (index < 0 || index >= relations.length) {
-        console.warn(`⚠️ Relation index ${index} out of range`);
+      // Find the relation and tuple at the given global tuple index
+      let currentIndex = 0;
+      let targetRelation: IRelation | null = null;
+      let targetTuple: ITuple | null = null;
+      
+      for (const relation of relations) {
+        for (const tuple of relation.tuples) {
+          if (currentIndex === tupleIndex) {
+            targetRelation = relation;
+            targetTuple = tuple;
+            break;
+          }
+          currentIndex++;
+        }
+        if (targetRelation) break;
+      }
+      
+      if (!targetRelation || !targetTuple) {
+        console.warn(`⚠️ Relation tuple at index ${tupleIndex} not found`);
         return;
       }
 
-      const relationToDelete = relations[index];
-      const remainingRelations = relations.filter((_, i) => i !== index);
-
-      const newInstance = new JSONDataInstance({
-        atoms: [...this.dataInstance.getAtoms()],
-        relations: remainingRelations,
-        types: []
-      });
-
-      this.setDataInstance(newInstance);
+      const relationId = targetRelation.id || targetRelation.name;
+      console.log(`🗑️ Found tuple in relation "${relationId}": ${targetTuple.atoms.join(' → ')}`);
       
-      const relationType = relationToDelete.types[0] || 'relation';
-      const firstTuple = relationToDelete.tuples[0];
-      const tupleString = firstTuple ? firstTuple.atoms.join(' → ') : '';
-      console.log(`✅ Relation removed from data instance: ${relationType}: ${tupleString}`);
+      // Use the removeRelationTuple method to remove just this tuple
+      this.dataInstance.removeRelationTuple(relationId, targetTuple);
+      console.log(`✅ Relation tuple removed from data instance: ${relationId}: ${targetTuple.atoms.join(' → ')}`);
       
       // Trigger constraint enforcement and layout regeneration
       await this.enforceConstraintsAndRegenerate();
 
-      console.log(`🎉 Relation deletion completed: ${relationType}: ${tupleString}`);
+      console.log(`🎉 Relation tuple deletion completed: ${relationId}: ${targetTuple.atoms.join(' → ')}`);
+      
+      // Update the UI
+      this.updateDeletionSelects();
       
       // Dispatch event
-      this.dispatchEvent(new CustomEvent('relation-deleted', {
-        detail: { relation: relationToDelete }
+      this.dispatchEvent(new CustomEvent('relation-tuple-deleted', {
+        detail: { relationId, tuple: targetTuple }
       }));
     } catch (error) {
-      console.error('❌ Failed to delete relation:', error);
+      console.error('❌ Failed to delete relation tuple:', error);
     }
   }
 
