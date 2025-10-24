@@ -34,21 +34,23 @@ Three key performance optimizations have been implemented to improve the efficie
 
 **Issue:** During layout generation, the same selector expressions were being evaluated multiple times (up to ~13 times in some cases), causing unnecessary computation.
 
-**Solution:** Implemented a caching mechanism that stores evaluator results for the duration of a single layout generation, reusing cached results when the same selector is evaluated again.
+**Solution:** Implemented a caching mechanism within the evaluator classes themselves (SGraphQueryEvaluator and ForgeEvaluator) that stores evaluator results for the duration of the evaluator's lifetime, reusing cached results when the same selector is evaluated again.
 
 **Implementation Details:**
-- Added `evaluatorCache` property to `LayoutInstance` class
-- Implemented `evaluateWithCache()` method that checks cache before evaluating
-- Implemented `clearEvaluatorCache()` method called at the start of each layout generation
-- Replaced all direct `evaluator.evaluate()` calls with `evaluateWithCache()` calls
+- Added `evaluatorCache` property to both `SGraphQueryEvaluator` and `ForgeEvaluator` classes
+- Cache is scoped to the lifetime of each evaluator instance (from initialization to reinitialization)
+- Uses JSON.stringify for robust cache key construction (prevents collisions)
+- Cache is automatically cleared when the evaluator is reinitialized with new data
+- All evaluator.evaluate() calls now check the cache first before performing actual evaluation
 
 **Impact:**
 - Significant reduction in redundant evaluator queries
 - Faster layout generation, especially for specs with repeated selectors
-- Cache is properly scoped to individual layout generations to ensure correctness
+- Cache is properly scoped to evaluator lifetime, ensuring correctness across data changes
 
 **Files Modified:**
-- `src/layout/layoutinstance.ts`
+- `src/evaluators/sgq-evaluator.ts`
+- `src/evaluators/forge-evaluator.ts`
 
 **Tests Added:**
 - `tests/evaluator-cache.test.ts` - 4 tests verifying caching behavior and correctness

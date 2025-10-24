@@ -312,6 +312,8 @@ export class ForgeEvaluator implements IEvaluator {
     private evaluator?: ForgeExprEvaluatorUtil;
     private sourceCode: string = '';
     private initialized: boolean = false;
+    // Cache for evaluator results - lifetime tied to this evaluator instance
+    private evaluatorCache: Map<string, IEvaluatorResult> = new Map();
 
     initialize(context: EvaluationContext): void {
         this.context = context;
@@ -332,6 +334,9 @@ export class ForgeEvaluator implements IEvaluator {
             // Initialize the forge evaluator
             this.evaluator = new ForgeExprEvaluatorUtil(datumParsed, this.sourceCode);
             this.initialized = true;
+            
+            // Clear cache on initialization
+            this.evaluatorCache.clear();
         } catch (error) {
             this.initialized = false;
             throw new Error(`Failed to initialize ForgeEvaluator: ${error instanceof Error ? error.message : String(error)}`);
@@ -359,6 +364,14 @@ export class ForgeEvaluator implements IEvaluator {
         try {
             const instanceIndex = config?.instanceIndex ?? 0;
 
+            // Create cache key using JSON.stringify for robustness
+            const cacheKey = JSON.stringify({ expression, instanceIndex });
+            
+            // Check cache first
+            if (this.evaluatorCache.has(cacheKey)) {
+                return this.evaluatorCache.get(cacheKey)!;
+            }
+
             console.log("Evaluator", this.evaluator);
 
             const result: EvaluationResult = this.evaluator!.evaluateExpression(expression, instanceIndex);
@@ -367,7 +380,13 @@ export class ForgeEvaluator implements IEvaluator {
                 throw new Error(result.error.message);
             }
             console.log(`Evaluated expression: ${expression} at ${config} with result:`, result);
-            return new ForgeEvaluatorResult(result, expression);
+            
+            const wrappedResult = new ForgeEvaluatorResult(result, expression);
+            
+            // Store in cache
+            this.evaluatorCache.set(cacheKey, wrappedResult);
+            
+            return wrappedResult;
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             // Create a forge-compatible error result

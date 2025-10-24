@@ -16,7 +16,7 @@ import {
 } from './layoutspec';
 
 
-import IEvaluator, { IEvaluatorResult } from '../evaluators/interfaces';
+import IEvaluator from '../evaluators/interfaces';
 import { ColorPicker } from './colorpicker';
 import { type ConstraintError, ConstraintValidator } from './constraint-validator';
 const UNIVERSAL_TYPE = "univ";
@@ -124,9 +124,6 @@ export class LayoutInstance {
 
     private readonly addAlignmentEdges: boolean;
 
-    // Cache for evaluator results within a single layout generation
-    private evaluatorCache: Map<string, IEvaluatorResult> = new Map();
-
 
     /**
      * Constructs a new `LayoutInstance` object.
@@ -164,31 +161,6 @@ export class LayoutInstance {
 
 
     /**
-     * Evaluates a selector with caching to avoid redundant evaluations.
-     * @param selector - The selector expression to evaluate
-     * @returns The cached or newly evaluated result
-     */
-    private evaluateWithCache(selector: string): IEvaluatorResult {
-        // Use JSON.stringify to create a robust cache key that won't have collisions
-        const cacheKey = JSON.stringify({ selector, instanceNum: this.instanceNum });
-        
-        if (this.evaluatorCache.has(cacheKey)) {
-            return this.evaluatorCache.get(cacheKey)!;
-        }
-        
-        const result = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
-        this.evaluatorCache.set(cacheKey, result);
-        return result;
-    }
-
-    /**
-     * Clears the evaluator cache. Should be called at the start of each layout generation.
-     */
-    private clearEvaluatorCache(): void {
-        this.evaluatorCache.clear();
-    }
-
-    /**
      * Gets GroupByField constraints that apply to a specific field and atoms.
      * @param fieldName - The field name to match.
      * @param sourceAtom - The source atom ID.
@@ -209,7 +181,7 @@ export class LayoutInstance {
             }
             
             try {
-                const selectorResult = this.evaluateWithCache(d.selector);
+                const selectorResult = this.evaluator.evaluate(d.selector, { instanceIndex: this.instanceNum });
                 const selectedAtoms = selectorResult.selectedAtoms();
                 
                 // Check if source atom is selected by the selector
@@ -242,7 +214,7 @@ export class LayoutInstance {
             }
             
             try {
-                const selectorResult = this.evaluateWithCache(directive.selector);
+                const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
                 const selectedAtoms = selectorResult.selectedAtoms();
                 
                 // Check if source atom is selected by the selector
@@ -278,7 +250,7 @@ export class LayoutInstance {
             }
             
             try {
-                const selectorResult = this.evaluateWithCache(directive.selector);
+                const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
                 const selectedAtoms = selectorResult.selectedAtoms();
                 
                 // Check if source atom is selected by the selector
@@ -320,7 +292,7 @@ export class LayoutInstance {
         for (var gc of groupBySelectorConstraints) {
 
             let selector = gc.selector;
-            let selectorRes = this.evaluateWithCache(selector);
+            let selectorRes = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
 
 
             // Now, we should support both unary and binary selectors.
@@ -587,7 +559,7 @@ export class LayoutInstance {
                 const hiddenAtomDirectives = this._layoutSpec.directives.hiddenAtoms;
                 for (const directive of hiddenAtomDirectives) {
                     try {
-                        const selectorResult = this.evaluateWithCache(directive.selector);
+                        const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
                         const selectedAtoms = selectorResult.selectedAtoms();
                         if (selectedAtoms.includes(node)) {
                             hideBySelector = true;
@@ -711,9 +683,6 @@ export class LayoutInstance {
         projectionData: { type: string, projectedAtom: string, atoms: string[] }[],
         error: ConstraintError | null
     } {
-
-        // Clear the evaluator cache at the start of each layout generation
-        this.clearEvaluatorCache();
 
         /** Here, we calculate some of the presentational directive choices */
         let projectionResult = this.applyLayoutProjections(a, projections);
@@ -979,7 +948,7 @@ export class LayoutInstance {
 
         // For each cyclic constraint, extract fragments
         for (const [, c] of cyclicConstraints.entries()) {
-            let selectedTuples: string[][] = this.evaluateWithCache(c.selector).selectedTwoples();
+            let selectedTuples: string[][] = this.evaluator.evaluate(c.selector, { instanceIndex: this.instanceNum }).selectedTwoples();
             let nextNodeMap: Map<LayoutNode, LayoutNode[]> = new Map<LayoutNode, LayoutNode[]>();
             
             // Build nextNodeMap from selected tuples
@@ -1180,7 +1149,7 @@ export class LayoutInstance {
             let directions = c.directions;
             let selector = c.selector;
 
-            let selectorRes = this.evaluateWithCache(selector);
+            let selectorRes = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
             let selectedTuples: string[][] = selectorRes.selectedTwoples();
 
             // For each tuple, we need to apply the constraints
@@ -1243,7 +1212,7 @@ export class LayoutInstance {
             let direction = c.direction;
             let selector = c.selector;
 
-            let selectorRes = this.evaluateWithCache(selector);
+            let selectorRes = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
             let selectedTuples: string[][] = selectorRes.selectedTwoples();
 
             // For each tuple, apply the alignment constraint
@@ -1395,7 +1364,7 @@ export class LayoutInstance {
         // Apply size directives first
         let sizeDirectives = this._layoutSpec.directives.sizes;
         sizeDirectives.forEach((sizeDirective) => {
-            let selectedNodes = this.evaluateWithCache(sizeDirective.selector).selectedAtoms();
+            let selectedNodes = this.evaluator.evaluate(sizeDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
             let width = sizeDirective.width;
             let height = sizeDirective.height;
 
@@ -1436,7 +1405,7 @@ export class LayoutInstance {
         // Apply color directives first
         let colorDirectives = this._layoutSpec.directives.atomColors;
         colorDirectives.forEach((colorDirective) => {
-            let selected = this.evaluateWithCache(colorDirective.selector).selectedAtoms();
+            let selected = this.evaluator.evaluate(colorDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
             let color = colorDirective.color;
 
             selected.forEach((nodeId) => {
@@ -1471,7 +1440,7 @@ export class LayoutInstance {
         // Apply icon directives first
         let iconDirectives = this._layoutSpec.directives.icons;
         iconDirectives.forEach((iconDirective) => {
-            let selected = this.evaluateWithCache(iconDirective.selector).selectedAtoms();
+            let selected = this.evaluator.evaluate(iconDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
             let iconPath = iconDirective.path;
 
             selected.forEach((nodeId) => {
@@ -1537,7 +1506,7 @@ export class LayoutInstance {
             }
             
             try {
-                const selectorResult = this.evaluateWithCache(directive.selector);
+                const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
                 const selectedAtoms = selectorResult.selectedAtoms();
                 
                 // Check if source atom is selected by the selector
@@ -1609,7 +1578,7 @@ export class LayoutInstance {
         inferredEdges.forEach((he) => {
 
 
-            let res = this.evaluateWithCache(he.selector);
+            let res = this.evaluator.evaluate(he.selector, { instanceIndex: this.instanceNum });
 
             let selectedTuples: string[][] = res.selectedTuplesAll();
             let edgeIdPrefix = `${inferredEdgePrefix}<:${he.name}`;
