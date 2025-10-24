@@ -46,9 +46,6 @@ directives: []
       expect(layoutSpec.constraints.sizes[0].width).toBe(200);
       expect(layoutSpec.constraints.sizes[0].height).toBe(150);
       expect(layoutSpec.constraints.sizes[0].selector).toBe('Type1');
-      
-      // Directives sizes should be empty
-      expect(layoutSpec.directives.sizes).toHaveLength(0);
     });
 
     it('should move size from directives to constraints for backward compatibility', () => {
@@ -68,9 +65,6 @@ directives:
       expect(layoutSpec.constraints.sizes[0].width).toBe(150);
       expect(layoutSpec.constraints.sizes[0].height).toBe(100);
       expect(layoutSpec.constraints.sizes[0].selector).toBe('Type1');
-      
-      // Directives should be empty
-      expect(layoutSpec.directives.sizes).toHaveLength(0);
     });
 
     it('should combine size from both constraints and directives sections', () => {
@@ -91,7 +85,6 @@ directives:
       
       // Both sizes should be in constraints
       expect(layoutSpec.constraints.sizes).toHaveLength(2);
-      expect(layoutSpec.directives.sizes).toHaveLength(0);
       
       // Check both size constraints
       const sizes = layoutSpec.constraints.sizes;
@@ -135,7 +128,6 @@ directives: []
       // Verify parsing structure
       expect(layoutSpec.constraints.hiddenAtoms).toHaveLength(1);
       expect(layoutSpec.constraints.hiddenAtoms[0].selector).toBe('Type2');
-      expect(layoutSpec.directives.hiddenAtoms).toHaveLength(0);
     });
 
     it('should move hideAtom from directives to constraints for backward compatibility', () => {
@@ -164,7 +156,6 @@ directives:
       // Verify it was moved to constraints
       expect(layoutSpec.constraints.hiddenAtoms).toHaveLength(1);
       expect(layoutSpec.constraints.hiddenAtoms[0].selector).toBe('Type2');
-      expect(layoutSpec.directives.hiddenAtoms).toHaveLength(0);
     });
 
     it('should combine hideAtom from both constraints and directives sections', () => {
@@ -194,7 +185,6 @@ directives:
       
       // Verify both are in constraints
       expect(layoutSpec.constraints.hiddenAtoms).toHaveLength(2);
-      expect(layoutSpec.directives.hiddenAtoms).toHaveLength(0);
       
       const selectors = layoutSpec.constraints.hiddenAtoms.map(h => h.selector);
       expect(selectors).toContain('C');
@@ -226,8 +216,6 @@ directives:
       // All should be moved to constraints
       expect(layoutSpec.constraints.sizes).toHaveLength(2);
       expect(layoutSpec.constraints.hiddenAtoms).toHaveLength(2);
-      expect(layoutSpec.directives.sizes).toHaveLength(0);
-      expect(layoutSpec.directives.hiddenAtoms).toHaveLength(0);
       
       // Verify the content
       const sizes = layoutSpec.constraints.sizes;

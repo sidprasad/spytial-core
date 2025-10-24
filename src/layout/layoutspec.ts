@@ -265,14 +265,12 @@ interface ConstraintsBlock
 
 interface DirectivesBlock {
     atomColors: AtomColorDirective[];
-    sizes: AtomSizeDirective[];
     icons: AtomIconDirective[];
     edgeColors: EdgeColorDirective[];
     projections: ProjectionDirective[];
     attributes: AttributeDirective[];
     hiddenFields: FieldHidingDirective[];
     inferredEdges: InferredEdgeDirective[];
-    hiddenAtoms: AtomHidingDirective[];
     hideDisconnected : boolean;
     hideDisconnectedBuiltIns : boolean;
 }
@@ -304,14 +302,12 @@ function DEFAULT_LAYOUT() : LayoutSpec
         },
         directives: {
             atomColors: [],
-            sizes: [],
             icons: [],
             edgeColors: [],
             projections: [],
             attributes: [],
             hiddenFields: [],
             inferredEdges: [],
-            hiddenAtoms: [],
             hideDisconnected: false,
             hideDisconnectedBuiltIns: false
         }
@@ -653,14 +649,12 @@ function parseDirectives(directives: unknown[]): DirectivesParseResult {
     return {
         directives: {
             atomColors,
-            sizes: [], // Empty since sizes should be constraints now
             icons,
             edgeColors,
             projections,
             attributes,
             hiddenFields,
             inferredEdges,
-            hiddenAtoms: [], // Empty since hiddenAtoms should be constraints now
             hideDisconnected,
             hideDisconnectedBuiltIns
         },
