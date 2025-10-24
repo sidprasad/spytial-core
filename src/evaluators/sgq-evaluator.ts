@@ -216,19 +216,19 @@ export class SGraphQueryEvaluator implements IEvaluator {
     this.context = context;
 
 
-    console.log("Initializing SimpleGraphQueryEvaluator with context.sourceData:", context.sourceData);
+    //console.log("Initializing SimpleGraphQueryEvaluator with context.sourceData:", context.sourceData);
 
     
 
     if (!context.sourceData || !isDataInstance(context.sourceData)) {
-        console.log("Invalid context.sourceData:", context.sourceData);
+        //console.log("Invalid context.sourceData:", context.sourceData);
       throw new Error("Invalid context.sourceData: Expected an instance of IDataInstance");
     }
 
 
     const id : IDataInstance = context.sourceData as IDataInstance;
     this.eval = new SimpleGraphQueryEvaluator(id);
-    console.log("SimpleGraphQueryEvaluator initialized with context:", context);
+    //console.log("SimpleGraphQueryEvaluator initialized with context:", context);
     this.ready = true;
     
     // Clear cache on initialization
