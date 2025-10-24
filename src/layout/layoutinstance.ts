@@ -16,7 +16,7 @@ import {
 } from './layoutspec';
 
 
-import IEvaluator from '../evaluators/interfaces';
+import IEvaluator, { IEvaluatorResult } from '../evaluators/interfaces';
 import { ColorPicker } from './colorpicker';
 import { type ConstraintError, ConstraintValidator } from './constraint-validator';
 const UNIVERSAL_TYPE = "univ";
