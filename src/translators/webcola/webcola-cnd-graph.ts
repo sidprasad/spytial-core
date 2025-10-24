@@ -2963,10 +2963,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // Dispatch the event from this element
     this.dispatchEvent(event);
     
-    console.log('🎯 Dispatched relations-available event:', {
-      relations,
-      count: relations.length
-    });
+    // console.log('🎯 Dispatched relations-available event:', {
+    //   relations,
+    //   count: relations.length
+    // });
   }
 
   /** Public API for relation highlighting */

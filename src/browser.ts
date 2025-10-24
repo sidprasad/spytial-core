@@ -40,6 +40,6 @@ if (typeof window !== 'undefined') {
   // Import and expose CnD Core on the global object
   import('./index').then((CndCore) => {
     globalWindow.CndCore = CndCore;
-    console.log('✅ CndCore library loaded globally with JSONDataInstance support');
+    //console.log('✅ CndCore library loaded globally with JSONDataInstance support');
   }).catch(console.error);
 }

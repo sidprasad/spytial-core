@@ -231,11 +231,11 @@ class ConstraintValidator {
         if (result.satisfiable) {
             // Verify that constraints were actually added
             const chosenConstraintsCount = this.added_constraints.length - constraintsBeforeDisjunctions;
-            console.log(`Disjunctive solver: Successfully chose ${chosenConstraintsCount} constraints from ${disjunctions.length} disjunctions`);
+            //console.log(`Disjunctive solver: Successfully chose ${chosenConstraintsCount} constraints from ${disjunctions.length} disjunctions`);
             
             // Log which alternatives were chosen for debugging
             if (chosenConstraintsCount > 0) {
-                console.log('Chosen constraints:', this.added_constraints.slice(constraintsBeforeDisjunctions));
+                //console.log('Chosen constraints:', this.added_constraints.slice(constraintsBeforeDisjunctions));
             }
         }
         
@@ -293,7 +293,6 @@ class ConstraintValidator {
         const currentDisjunction = disjunctions[disjunctionIndex];
         const alternatives = currentDisjunction.alternatives;
         
-        //console.log(`Disjunction ${disjunctionIndex + 1}/${disjunctions.length}: Trying ${alternatives.length} alternatives`);
 
         // Track which alternative made the most progress (for better IIS extraction)
         let bestAlternativeIndex = 0;
@@ -304,8 +303,6 @@ class ConstraintValidator {
         for (let altIndex = 0; altIndex < alternatives.length; altIndex++) {
             const alternative = alternatives[altIndex];
             
-            console.log(`  → Disjunction ${disjunctionIndex + 1}: Trying alternative ${altIndex + 1}/${alternatives.length} (${alternative.length} constraints)`);
-
             // Save current state for backtracking
             const savedSolver = this.cloneSolver();
             const savedConstraints = [...this.added_constraints];
@@ -318,7 +315,6 @@ class ConstraintValidator {
                 const error = this.addConstraintToSolver(constraint);
                 if (error) {
                     alternativeError = error;
-                    console.log(`    ✗ Alternative ${altIndex + 1} conflicts with existing constraints (added ${constraintsAdded}/${alternative.length} constraints)`);
                     break;
                 }
                 constraintsAdded++;
@@ -329,14 +325,12 @@ class ConstraintValidator {
 
             // If this alternative is satisfiable, try to satisfy remaining disjunctions
             if (!alternativeError) {
-                console.log(`    ✓ Alternative ${altIndex + 1} is locally satisfiable, recursing to disjunction ${disjunctionIndex + 2}...`);
                 const result = this.backtrackDisjunctions(disjunctions, disjunctionIndex + 1);
                 
                 if (result.satisfiable) {
                     // Success! This combination works
                     // The chosen constraints are now in this.added_constraints
                     // Do NOT restore - keep the successful state
-                    console.log(`    ✓✓ Alternative ${altIndex + 1} led to full success!`);
                     return { satisfiable: true };
                 }
                 
@@ -346,7 +340,6 @@ class ConstraintValidator {
                 
                 // Otherwise, this alternative led to failure in later disjunctions
                 // Fall through to backtracking below
-                console.log(`    ✗ Alternative ${altIndex + 1} failed in later disjunctions, backtracking... (depth: ${recursionDepth})`);
             }
 
             // Update best alternative if this one made more progress
@@ -371,14 +364,11 @@ class ConstraintValidator {
                 `Backtracking failed: expected ${savedConstraintsLength} constraints, got ${this.added_constraints.length}`
             );
             
-            console.log(`    ⟲ Backtracked from alternative ${altIndex + 1}, state restored`);
         }
 
         // All alternatives exhausted for this disjunction
         // Return failure to trigger backtracking at previous disjunction level
-        console.log(`  ✗✗ Disjunction ${disjunctionIndex + 1}: All ${alternatives.length} alternatives exhausted, returning failure`);
-        console.log(`  → Using alternative ${bestAlternativeIndex + 1} for conflict analysis (went deepest: depth=${bestRecursionDepth}, local=${bestConstraintsAdded})`);
-        
+
         // Find the minimal set of existing constraints that conflict with this disjunction
         // Use the alternative that made the most progress (went deepest) for better IIS extraction
         const bestAlternative = alternatives[bestAlternativeIndex];
@@ -416,7 +406,6 @@ class ConstraintValidator {
             
             if (relevantConstraint) {
                 representativeConstraint = relevantConstraint;
-                console.log(`  Using IIS constraint as representative: ${orientationConstraintToString(relevantConstraint)}`);
             }
         }
         
@@ -915,8 +904,7 @@ class ConstraintValidator {
         disjunctiveConstraints: LayoutConstraint[];
     } {
         // Debug logging for your specific case
-        console.log(`🔍 Grouping Conflict Analysis:`);
-        console.log(`  Existing constraints (${existingConstraints.length}):`);
+        //console.log(`  Existing constraints (${existingConstraints.length}):`);
         existingConstraints.forEach((c, i) => {
             let desc = `${i}: `;
             if (isLeftConstraint(c)) {
@@ -930,10 +918,10 @@ class ConstraintValidator {
             } else {
                 desc += `unknown constraint type`;
             }
-            console.log(`    ${desc} (source: ${c.sourceConstraint?.toHTML?.() || 'unknown'})`);
+            //console.log(`    ${desc} (source: ${c.sourceConstraint?.toHTML?.() || 'unknown'})`);
         });
         
-        console.log(`  Disjunctive alternative (${disjunctiveAlternative.length}):`);
+        //console.log(`  Disjunctive alternative (${disjunctiveAlternative.length}):`);
         disjunctiveAlternative.forEach((c, i) => {
             let desc = `${i}: `;
             if (isBoundingBoxConstraint(c)) {
@@ -947,7 +935,7 @@ class ConstraintValidator {
             } else {
                 desc += `unknown constraint type`;
             }
-            console.log(`    ${desc}`);
+            //console.log(`    ${desc}`);
         });
         
         // For grouping conflicts, we need to be more conservative about minimization
@@ -959,21 +947,21 @@ class ConstraintValidator {
         // Try the traditional minimization approach first, but recognize its limitations for disjunctive constraints
         if (disjunctiveAlternative.length > 0) {
             const representative = disjunctiveAlternative[0];
-            console.log(`  Testing traditional minimization with representative:`, 
-                        isBoundingBoxConstraint(representative) ? 
-                        `${representative.node.id} ${representative.side} of group ${representative.group.name}` : 
-                        'non-bbox constraint');
+            // console.log(`  Testing traditional minimization with representative:`, 
+            //             isBoundingBoxConstraint(representative) ? 
+            //             `${representative.node.id} ${representative.side} of group ${representative.group.name}` : 
+            //             'non-bbox constraint');
             
             // Test if there's actually a conflict first
             const fullSet = [...existingConstraints, representative];
             const hasConflict = this.isConflictingSet(fullSet);
-            console.log(`  Full set conflict test: ${hasConflict}`);
+            //console.log(`  Full set conflict test: ${hasConflict}`);
             
             if (hasConflict) {
                 relevantExisting = this.getMinimalConflictingConstraints(existingConstraints, representative);
-                console.log(`  After traditional minimization: ${relevantExisting.length} constraints`);
+                //console.log(`  After traditional minimization: ${relevantExisting.length} constraints`);
             } else {
-                console.log(`  No conflict detected with traditional approach!`);
+                //console.log(`  No conflict detected with traditional approach!`);
                 // For grouping constraints, fall back to a simple expansion
                 relevantExisting = [];
             }
@@ -981,7 +969,7 @@ class ConstraintValidator {
         
         // If we get too few constraints, include a broader set
         if (relevantExisting.length <= 1) {
-            console.log(`  Too few constraints (${relevantExisting.length}), expanding based on group members...`);
+            //console.log(`  Too few constraints (${relevantExisting.length}), expanding based on group members...`);
             
             // Get group members from the disjunctive constraints
             const groupMembers = new Set<string>();
@@ -991,7 +979,7 @@ class ConstraintValidator {
                 }
             }
             
-            console.log(`  Group members: ${Array.from(groupMembers).join(', ')}`);
+            //console.log(`  Group members: ${Array.from(groupMembers).join(', ')}`);
             
             // Include constraints that involve group members
             relevantExisting = existingConstraints.filter(constraint => {
@@ -1005,10 +993,10 @@ class ConstraintValidator {
                 return false;
             });
             
-            console.log(`  After expansion: ${relevantExisting.length} constraints`);
+            //console.log(`  After expansion: ${relevantExisting.length} constraints`);
         }
         
-        console.log(`  Final IIS - Existing constraints:`);
+        //console.log(`  Final IIS - Existing constraints:`);
         relevantExisting.forEach((c, i) => {
             let desc = `${i}: `;
             if (isLeftConstraint(c)) {
@@ -1022,7 +1010,7 @@ class ConstraintValidator {
             } else {
                 desc += `unknown constraint type`;
             }
-            console.log(`    ${desc}`);
+            //console.log(`    ${desc}`);
         });
         
         return {
@@ -1376,7 +1364,7 @@ class ConstraintValidator {
             }
         }
         else {
-            console.log(constraint, "Unknown constraint type");
+            //console.log(constraint, "Unknown constraint type");
             return [];
         }
     }
