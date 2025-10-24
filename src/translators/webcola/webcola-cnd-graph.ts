@@ -1075,6 +1075,24 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
       this.updateLoadingProgress(`Computing layout for ${webcolaLayout.nodes.length} nodes...`);
 
+      // Adaptive iteration counts based on graph size for better performance
+      // For small graphs, use default values. For large graphs, reduce iterations.
+      const nodeCount = webcolaLayout.nodes.length;
+      let unconstrainedIters = WebColaCnDGraph.INITIAL_UNCONSTRAINED_ITERATIONS;
+      let userConstraintIters = WebColaCnDGraph.INITIAL_USER_CONSTRAINT_ITERATIONS;
+      let allConstraintIters = WebColaCnDGraph.INITIAL_ALL_CONSTRAINTS_ITERATIONS;
+      
+      if (nodeCount > 100) {
+        // For large graphs (>100 nodes), reduce iterations more aggressively
+        unconstrainedIters = Math.max(5, Math.floor(unconstrainedIters * 0.5));
+        userConstraintIters = Math.max(25, Math.floor(userConstraintIters * 0.5));
+        allConstraintIters = Math.max(100, Math.floor(allConstraintIters * 0.5));
+      } else if (nodeCount > 50) {
+        // For medium graphs (>50 nodes), reduce iterations moderately
+        unconstrainedIters = Math.max(8, Math.floor(unconstrainedIters * 0.8));
+        userConstraintIters = Math.max(40, Math.floor(userConstraintIters * 0.8));
+        allConstraintIters = Math.max(150, Math.floor(allConstraintIters * 0.75));
+      }
 
 
       // Get scaled constraints and link length
@@ -1109,9 +1127,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
       // Track iteration progress
       let tickCount = 0;
-      const totalIterations = WebColaCnDGraph.INITIAL_UNCONSTRAINED_ITERATIONS + 
-                             WebColaCnDGraph.INITIAL_USER_CONSTRAINT_ITERATIONS + 
-                             WebColaCnDGraph.INITIAL_ALL_CONSTRAINTS_ITERATIONS;
+      const totalIterations = unconstrainedIters + userConstraintIters + allConstraintIters;
 
       // Start the layout with specific iteration counts and proper event handling
       layout
@@ -1157,9 +1173,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       // Start the layout with error handling for D3/WebCola compatibility issues
       try {
         layout.start(
-          WebColaCnDGraph.INITIAL_UNCONSTRAINED_ITERATIONS,
-          WebColaCnDGraph.INITIAL_USER_CONSTRAINT_ITERATIONS,
-          WebColaCnDGraph.INITIAL_ALL_CONSTRAINTS_ITERATIONS,
+          unconstrainedIters,
+          userConstraintIters,
+          allConstraintIters,
           WebColaCnDGraph.GRID_SNAP_ITERATIONS
         );
       } catch (layoutError) {
