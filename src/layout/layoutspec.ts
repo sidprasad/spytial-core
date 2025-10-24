@@ -390,6 +390,106 @@ export function parseLayoutSpec(s: string): LayoutSpec {
 }
 
 /**
+ * Removes duplicate cyclic orientation constraints based on selector and direction.
+ * @param constraints Array of cyclic constraints
+ * @returns Array with duplicates removed
+ */
+function removeDuplicateCyclicConstraints(constraints: CyclicOrientationConstraint[]): CyclicOrientationConstraint[] {
+    const seen = new Map<string, CyclicOrientationConstraint>();
+    const result: CyclicOrientationConstraint[] = [];
+    
+    for (const constraint of constraints) {
+        const key = `${constraint.selector.trim()}|${constraint.direction}`;
+        if (!seen.has(key)) {
+            seen.set(key, constraint);
+            result.push(constraint);
+        }
+    }
+    
+    return result;
+}
+
+/**
+ * Removes duplicate relative orientation constraints based on selector and directions.
+ * @param constraints Array of relative orientation constraints
+ * @returns Array with duplicates removed
+ */
+function removeDuplicateRelativeOrientationConstraints(constraints: RelativeOrientationConstraint[]): RelativeOrientationConstraint[] {
+    const seen = new Map<string, RelativeOrientationConstraint>();
+    const result: RelativeOrientationConstraint[] = [];
+    
+    for (const constraint of constraints) {
+        const key = `${constraint.selector.trim()}|${constraint.directions.sort().join(',')}`;
+        if (!seen.has(key)) {
+            seen.set(key, constraint);
+            result.push(constraint);
+        }
+    }
+    
+    return result;
+}
+
+/**
+ * Removes duplicate align constraints based on selector and direction.
+ * @param constraints Array of align constraints
+ * @returns Array with duplicates removed
+ */
+function removeDuplicateAlignConstraints(constraints: AlignConstraint[]): AlignConstraint[] {
+    const seen = new Map<string, AlignConstraint>();
+    const result: AlignConstraint[] = [];
+    
+    for (const constraint of constraints) {
+        const key = `${constraint.selector.trim()}|${constraint.direction}`;
+        if (!seen.has(key)) {
+            seen.set(key, constraint);
+            result.push(constraint);
+        }
+    }
+    
+    return result;
+}
+
+/**
+ * Removes duplicate group by selector constraints based on selector and name.
+ * @param constraints Array of group by selector constraints
+ * @returns Array with duplicates removed
+ */
+function removeDuplicateGroupBySelectorConstraints(constraints: GroupBySelector[]): GroupBySelector[] {
+    const seen = new Map<string, GroupBySelector>();
+    const result: GroupBySelector[] = [];
+    
+    for (const constraint of constraints) {
+        const key = `${constraint.selector.trim()}|${constraint.name}|${constraint.addEdge}`;
+        if (!seen.has(key)) {
+            seen.set(key, constraint);
+            result.push(constraint);
+        }
+    }
+    
+    return result;
+}
+
+/**
+ * Removes duplicate group by field constraints based on field, groupOn, addToGroup, and selector.
+ * @param constraints Array of group by field constraints
+ * @returns Array with duplicates removed
+ */
+function removeDuplicateGroupByFieldConstraints(constraints: GroupByField[]): GroupByField[] {
+    const seen = new Map<string, GroupByField>();
+    const result: GroupByField[] = [];
+    
+    for (const constraint of constraints) {
+        const key = `${constraint.field}|${constraint.groupOn}|${constraint.addToGroup}|${constraint.selector || ''}`;
+        if (!seen.has(key)) {
+            seen.set(key, constraint);
+            result.push(constraint);
+        }
+    }
+    
+    return result;
+}
+
+/**
  * Parses the constraints from the YAML specification.
  * @param constraints List of constraints from the YAML specification.
  * @returns List of CnD constraints
@@ -414,6 +514,8 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
             );
         });
 
+        // Remove duplicate cyclic constraints
+        cyclicConstraints = removeDuplicateCyclicConstraints(cyclicConstraints);
 
         let cyclicDirectionsBySelector : Record<string, RotationDirection> = {};
 
@@ -458,6 +560,9 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
             return roc;
         });
 
+    // Remove duplicate relative orientation constraints
+    relativeOrientationConstraints = removeDuplicateRelativeOrientationConstraints(relativeOrientationConstraints);
+
 
     let byfield: GroupByField[] = typedConstraints.filter(c => c.group)
         .filter(c => c.group.field)
@@ -491,6 +596,9 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
             // }
         });
 
+    // Remove duplicate group by field constraints
+    byfield = removeDuplicateGroupByFieldConstraints(byfield);
+
     let byselector: GroupBySelector[] = typedConstraints.filter(c => c.group)
         .filter(c => c.group.selector && c.group.name && !c.group.field)
         .map(c => {
@@ -502,6 +610,9 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
             }
             return new GroupBySelector(c.group.selector, c.group.name, c.group.addEdge);
         });
+
+    // Remove duplicate group by selector constraints
+    byselector = removeDuplicateGroupBySelectorConstraints(byselector);
 
     let alignConstraints: AlignConstraint[] = typedConstraints.filter(c => c.align)
         .map(c => {
@@ -524,6 +635,9 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
             
             return alignConstraint;
         });
+
+    // Remove duplicate align constraints
+    alignConstraints = removeDuplicateAlignConstraints(alignConstraints);
 
     return {
         orientation: {
