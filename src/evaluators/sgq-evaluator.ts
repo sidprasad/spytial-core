@@ -202,6 +202,8 @@ export class SGQEvaluatorResult implements IEvaluatorResult {
 export class SGraphQueryEvaluator implements IEvaluator {
   private context: EvaluationContext | undefined;
   private eval!: SimpleGraphQueryEvaluator;
+  // Cache for evaluator results - lifetime tied to this evaluator instance
+  private evaluatorCache: Map<string, IEvaluatorResult> = new Map();
 
   constructor() {
    
@@ -228,6 +230,9 @@ export class SGraphQueryEvaluator implements IEvaluator {
     this.eval = new SimpleGraphQueryEvaluator(id);
     console.log("SimpleGraphQueryEvaluator initialized with context:", context);
     this.ready = true;
+    
+    // Clear cache on initialization
+    this.evaluatorCache.clear();
   }
 
   isReady(): boolean {
@@ -239,11 +244,24 @@ export class SGraphQueryEvaluator implements IEvaluator {
       throw new Error("Evaluator not initialized");
     }
 
+    // Create cache key using JSON.stringify for robustness
+    const instanceIndex = config?.instanceIndex ?? 0;
+    const cacheKey = JSON.stringify({ expression, instanceIndex });
+    
+    // Check cache first
+    if (this.evaluatorCache.has(cacheKey)) {
+      return this.evaluatorCache.get(cacheKey)!;
+    }
+
     const result = this.eval.evaluateExpression(expression);
 
 
     // Now we need to wrap the result in our IEvaluatorResult interface
     const wrappedResult = new SGQEvaluatorResult(result, expression);
+    
+    // Store in cache
+    this.evaluatorCache.set(cacheKey, wrappedResult);
+    
     return wrappedResult;
   }
 }
