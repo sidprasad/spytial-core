@@ -118,11 +118,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
   /**
    * Configuration constants for WebCola layout iterations
+   * Reduced from previous values (10, 100, 1000, 5) to improve performance
+   * and prevent browser timeouts on large graphs
    */
   private static readonly INITIAL_UNCONSTRAINED_ITERATIONS = 10;
-  private static readonly INITIAL_USER_CONSTRAINT_ITERATIONS = 100;
-  private static readonly INITIAL_ALL_CONSTRAINTS_ITERATIONS = 1000;
-  private static readonly GRID_SNAP_ITERATIONS = 5; // Set to 0 to disable grid snapping
+  private static readonly INITIAL_USER_CONSTRAINT_ITERATIONS = 50;
+  private static readonly INITIAL_ALL_CONSTRAINTS_ITERATIONS = 200;
+  private static readonly GRID_SNAP_ITERATIONS = 0; // Disabled for performance (was 5)
 
   /**
    * Counter for edge routing iterations (for performance tracking)
@@ -466,7 +468,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         <g class="zoomable"></g>
       </svg>
       </div>
-      <div id="loading" style="display: none;">Loading...</div>
+      <div id="loading" style="display: none;">
+        <div style="text-align: center; padding: 20px; background: rgba(255, 255, 255, 0.9); border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+          <div style="font-size: 16px; margin-bottom: 10px;">Computing layout...</div>
+          <div id="loading-progress" style="font-size: 12px; color: #666;"></div>
+        </div>
+      </div>
       <div id="error" style="display: none; color: red;"></div>
     `;
   }
@@ -1054,6 +1061,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       }
 
       this.showLoading();
+      this.updateLoadingProgress('Translating layout...');
 
       // Get actual container dimensions for responsive layout
       const svgContainer = this.shadowRoot!.querySelector('#svg-container') as HTMLElement;
@@ -1065,11 +1073,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       const translator = new WebColaTranslator();
       const webcolaLayout = await translator.translate(instanceLayout, containerWidth, containerHeight);
 
+      this.updateLoadingProgress(`Computing layout for ${webcolaLayout.nodes.length} nodes...`);
 
 
 
       // Get scaled constraints and link length
       const { scaledConstraints, linkLength, groupCompactness } = this.getScaledDetails(webcolaLayout.constraints, DEFAULT_SCALE_FACTOR, webcolaLayout.nodes);
+
+      this.updateLoadingProgress('Applying constraints and initializing...');
 
       // Create WebCola layout using d3adaptor
       const layout: Layout = cola.d3adaptor(d3)
@@ -1096,9 +1107,22 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       this.renderLinks(webcolaLayout.links, layout);
       this.renderNodes(webcolaLayout.nodes, layout);
 
+      // Track iteration progress
+      let tickCount = 0;
+      const totalIterations = WebColaCnDGraph.INITIAL_UNCONSTRAINED_ITERATIONS + 
+                             WebColaCnDGraph.INITIAL_USER_CONSTRAINT_ITERATIONS + 
+                             WebColaCnDGraph.INITIAL_ALL_CONSTRAINTS_ITERATIONS;
+
       // Start the layout with specific iteration counts and proper event handling
       layout
         .on('tick', () => {
+          tickCount++;
+          if (tickCount % 20 === 0) {
+            // Update progress every 20 ticks to avoid excessive DOM updates
+            const progress = Math.min(95, Math.round((tickCount / totalIterations) * 100));
+            this.updateLoadingProgress(`Computing layout... ${progress}%`);
+          }
+          
           if (this.layoutFormat === 'default' || !this.layoutFormat || this.layoutFormat === null) {
             this.updatePositions();
           } else if (this.layoutFormat === 'grid') {
@@ -1108,6 +1132,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           }
         })
         .on('end', () => {
+          this.updateLoadingProgress('Finalizing...');
 
           // Call advanced edge routing after layout converges
           if (this.layoutFormat === 'default' || !this.layoutFormat ) {
@@ -3417,8 +3442,25 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private showLoading(): void {
     const loading = this.shadowRoot!.querySelector('#loading') as HTMLElement;
     const error = this.shadowRoot!.querySelector('#error') as HTMLElement;
-    loading.style.display = 'block';
+    loading.style.display = 'flex';
+    loading.style.justifyContent = 'center';
+    loading.style.alignItems = 'center';
+    loading.style.position = 'absolute';
+    loading.style.top = '50%';
+    loading.style.left = '50%';
+    loading.style.transform = 'translate(-50%, -50%)';
+    loading.style.zIndex = '1000';
     error.style.display = 'none';
+  }
+
+  /**
+   * Update loading progress message
+   */
+  private updateLoadingProgress(message: string): void {
+    const progressEl = this.shadowRoot!.querySelector('#loading-progress') as HTMLElement;
+    if (progressEl) {
+      progressEl.textContent = message;
+    }
   }
 
   /**
