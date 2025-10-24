@@ -169,7 +169,8 @@ export class LayoutInstance {
      * @returns The cached or newly evaluated result
      */
     private evaluateWithCache(selector: string): IEvaluatorResult {
-        const cacheKey = `${selector}|${this.instanceNum}`;
+        // Use JSON.stringify to create a robust cache key that won't have collisions
+        const cacheKey = JSON.stringify({ selector, instanceNum: this.instanceNum });
         
         if (this.evaluatorCache.has(cacheKey)) {
             return this.evaluatorCache.get(cacheKey)!;

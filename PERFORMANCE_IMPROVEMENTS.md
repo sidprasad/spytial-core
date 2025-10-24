@@ -57,7 +57,7 @@ Three key performance optimizations have been implemented to improve the efficie
 
 **Issue:** Even after YAML parsing, duplicate constraints could still appear in the final constraint list during layout generation.
 
-**Solution:** The existing `removeDuplicateConstraints()` function (lines 26-55 in `layoutinstance.ts`) already handled this case. This function removes duplicate constraints from the final constraint list before constraint validation.
+**Solution:** The existing `removeDuplicateConstraints()` function (lines 26-55 in `layoutinstance.ts`) handles this case. This function was already present in the codebase and removes duplicate constraints from the final constraint list before constraint validation. This optimization documents and highlights the importance of this existing functionality.
 
 **Impact:**
 - Ensures no duplicate constraints reach the constraint solver
