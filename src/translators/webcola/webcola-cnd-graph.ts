@@ -124,7 +124,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private static readonly INITIAL_UNCONSTRAINED_ITERATIONS = 10;
   private static readonly INITIAL_USER_CONSTRAINT_ITERATIONS = 50;
   private static readonly INITIAL_ALL_CONSTRAINTS_ITERATIONS = 200;
-  private static readonly GRID_SNAP_ITERATIONS = 0; // Disabled for performance (was 5)
+  private static readonly GRID_SNAP_ITERATIONS = 1; // Reduced from 5 for performance, but kept at 1 for alignment
 
   /**
    * Counter for edge routing iterations (for performance tracking)

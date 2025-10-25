@@ -14,29 +14,29 @@ Multiple performance optimizations have been implemented to improve the efficien
 - `INITIAL_UNCONSTRAINED_ITERATIONS`: 10 (unchanged)
 - `INITIAL_USER_CONSTRAINT_ITERATIONS`: **100 → 50** (50% reduction)
 - `INITIAL_ALL_CONSTRAINTS_ITERATIONS`: **1000 → 200** (80% reduction)
-- `GRID_SNAP_ITERATIONS`: **5 → 0** (disabled for performance)
+- `GRID_SNAP_ITERATIONS`: **5 → 1** (reduced but not disabled to maintain alignment)
 
 **Implementation Details:**
-- Total iterations reduced from ~1115 to ~260 (**76% reduction** from original)
-- Grid snapping disabled as it provides minimal visual benefit with significant cost
+- Total iterations reduced from ~1115 to ~261 (**76.6% reduction** from original)
+- Grid snapping reduced to 1 iteration to maintain node alignment while minimizing cost
 - WebCola's convergence threshold (1e-3) still ensures good layout quality
 
 **Impact:**
-- **76% reduction in layout computation time** compared to original values (1115 → 260 iterations)
+- **76.6% reduction in layout computation time** compared to original values (1115 → 261 iterations)
 - Significantly reduces likelihood of browser timeouts
-- Layout quality remains high due to convergence threshold
+- Layout quality remains high with grid alignment and convergence threshold
 
 **Files Modified:**
 - `src/translators/webcola/webcola-cnd-graph.ts`
 
 ### 2. Adaptive Iteration Counts Based on Graph Size (NEW)
 
-**Issue:** Large graphs (>50 nodes) were timing out even with the reduced iteration counts of 260.
+**Issue:** Large graphs (>50 nodes) were timing out even with the reduced iteration counts of 261.
 
 **Solution:** Implemented adaptive iteration scaling based on node count:
-- Small graphs (<50 nodes): Use standard 260 iterations (10 + 50 + 200)
-- Medium graphs (50-100 nodes): Reduce by 20-25% to ~195-208 iterations
-- Large graphs (>100 nodes): Reduce by 50% to ~130 iterations
+- Small graphs (<50 nodes): Use standard 261 iterations (10 + 50 + 200 + 1)
+- Medium graphs (50-100 nodes): Reduce by 20-25% to ~196-209 iterations
+- Large graphs (>100 nodes): Reduce by 50% to ~131 iterations
 
 **Implementation Details:**
 ```typescript
@@ -151,9 +151,9 @@ if (nodeCount > 100) {
 The combined optimizations provide significant performance improvements:
 
 ### Iteration Reduction Impact (compared to original 1115 iterations)
-1. **Small graphs (<50 nodes):** ~76% reduction in computation time (1115 → 260 iterations)
-2. **Medium graphs (50-100 nodes):** ~80-82% reduction (1115 → 195-208 iterations)
-3. **Large graphs (>100 nodes):** ~88% reduction (1115 → 130 iterations)
+1. **Small graphs (<50 nodes):** ~76.6% reduction in computation time (1115 → 261 iterations)
+2. **Medium graphs (50-100 nodes):** ~80-82% reduction (1115 → 196-209 iterations)
+3. **Large graphs (>100 nodes):** ~88% reduction (1115 → 131 iterations)
 
 ### Other Optimizations
 4. **Parsing Performance:** Up to 100x improvement for YAML specs with many duplicate constraints (tested with 100 duplicate constraints reduced to 1)
