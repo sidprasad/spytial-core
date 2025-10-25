@@ -27,21 +27,25 @@ Three key optimizations that work synergistically to improve performance:
 
 ### Test Results (from `tests/constraint-validation-performance.test.ts`)
 
-| Test Scenario | Complexity | Time | Result |
+| Test Scenario | Complexity | Performance Threshold | Result |
 |--------------|------------|------|--------|
-| Caching benefits | 5 disjunctions, 4 alternatives each | ~3ms | ✅ Pass |
-| Early termination | Direct conflict detection | ~0.2ms | ✅ Pass |
-| Alternative ordering | Simple vs complex alternatives | ~0.1ms | ✅ Pass |
-| Large scale | 50 nodes, 10 groups | ~300ms | ✅ Pass |
-| Complex backtracking | 729 possible combinations | ~0.3ms | ✅ Pass |
+| Caching benefits | 5 disjunctions, 4 alternatives each | < 100ms | ✅ Pass |
+| Early termination | Direct conflict detection | < 50ms | ✅ Pass |
+| Alternative ordering | Simple vs complex alternatives | < 30ms | ✅ Pass |
+| Large scale | 50 nodes, 10 groups | < 5000ms | ✅ Pass |
+| Complex backtracking | 729 possible combinations | < 500ms | ✅ Pass |
+
+*Note: Actual performance in tests is typically much faster than the thresholds shown above. Thresholds are set conservatively to account for different environments.*
 
 ### Correctness Validation
 
-All 10 existing disjunctive constraint validator tests pass:
-- ✅ Chosen alternatives tracking
-- ✅ Backtracking with conjunctive constraints
-- ✅ Empty and edge cases
-- ✅ IIS extraction with deepest path selection
+All 15 constraint-related tests pass (verified by running both test files):
+- ✅ 10 existing disjunctive constraint validator tests (correctness)
+- ✅ 5 new performance benchmark tests
+  - Chosen alternatives tracking
+  - Backtracking with conjunctive constraints
+  - Empty and edge cases
+  - IIS extraction with deepest path selection
 
 ## Addressing Original Questions
 
@@ -57,7 +61,7 @@ The issue raised four specific questions:
 ### Q2: "Can we leverage the fact that groups cannot intersect without subsumption?"
 
 **Answer:** ✅ **Already Optimized**
-- Existing code (lines 571-646 in constraint-validator.ts) implements this
+- Existing code in `addGroupBoundingBoxConstraints()` method implements this
 - Pre-computes node-to-group membership
 - Only creates disjunctions for "free" nodes not in other groups
 - Reduces constraint space from O(nodes × groups) to O(free_nodes × groups)
