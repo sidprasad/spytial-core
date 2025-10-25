@@ -97,7 +97,6 @@ describe('Constraint Validation Performance', () => {
             // Without caching, this would be significantly slower due to repeated conversions
             expect(error).toBeNull();
             expect(duration).toBeLessThan(100); // Should complete in under 100ms
-            console.log(`Validation with 5 disjunctions (4 alternatives each) completed in ${duration.toFixed(2)}ms`);
         });
     });
 
@@ -143,7 +142,6 @@ describe('Constraint Validation Performance', () => {
             
             // Should be very fast due to early termination of alternative1
             expect(duration).toBeLessThan(50);
-            console.log(`Early termination test completed in ${duration.toFixed(2)}ms`);
         });
     });
 
@@ -193,7 +191,6 @@ describe('Constraint Validation Performance', () => {
             
             // Should be fast because simpler alternative is tried first and succeeds
             expect(duration).toBeLessThan(30);
-            console.log(`Alternative ordering test completed in ${duration.toFixed(2)}ms`);
             
             // Verify the simple alternative was chosen
             expect(layout.constraints.length).toBe(1);
@@ -223,9 +220,9 @@ describe('Constraint Validation Performance', () => {
                 }
                 
                 const groupSource = new GroupByField(
-                    'group' + g,
                     `field${g}`,
-                    `value${g}`
+                    0, // groupOn index
+                    1  // addToGroup index
                 );
                 
                 groups.push({
@@ -253,9 +250,6 @@ describe('Constraint Validation Performance', () => {
             // Should not error (or if it does, we still measure performance)
             // The key is that it should complete in reasonable time
             expect(duration).toBeLessThan(5000); // 5 seconds max for this scale
-            
-            console.log(`Large scale test (50 nodes, 10 groups) completed in ${duration.toFixed(2)}ms`);
-            console.log(`Error: ${error ? error.message : 'none'}`);
         });
 
         it('should handle complex backtracking scenarios', () => {
@@ -303,9 +297,6 @@ describe('Constraint Validation Performance', () => {
             // With optimizations, this should complete quickly despite large search space
             // Without optimizations, this could take much longer
             expect(duration).toBeLessThan(500); // Should complete in under 500ms
-            
-            console.log(`Complex backtracking (6 disjunctions, 3^6 = 729 combinations) completed in ${duration.toFixed(2)}ms`);
-            console.log(`Result: ${error ? 'Conflict detected' : 'Satisfiable solution found'}`);
         });
     });
 });
