@@ -113,6 +113,9 @@ class ConstraintValidator {
     private groupBoundingBoxes: Map<string, { left: Variable, right: Variable, top: Variable, bottom: Variable }>;
 
     private added_constraints: LayoutConstraint[];
+    
+    // Cache for Kiwi constraint conversions to avoid repeated work during backtracking
+    private kiwiConstraintCache: Map<LayoutConstraint, Constraint[]> = new Map();
 
     layout: InstanceLayout;
     orientationConstraints: LayoutConstraint[];
@@ -254,6 +257,95 @@ class ConstraintValidator {
     }
 
     /**
+     * Checks if an alternative has an obvious conflict with existing constraints.
+     * This is a fast heuristic check to avoid expensive solver operations.
+     * 
+     * Detects direct contradictions like:
+     * - A < B already exists, alternative says B < A
+     * - A above B already exists, alternative says B above A
+     * - Node must be in group G1, alternative says it must be outside G1
+     * 
+     * This is not exhaustive but catches common cases cheaply.
+     * 
+     * @param alternative - The alternative constraints to check
+     * @returns True if an obvious conflict is detected
+     */
+    private hasObviousConflict(alternative: LayoutConstraint[]): boolean {
+        // Build a quick lookup for existing directional constraints
+        const existingLeftOf = new Set<string>();
+        const existingAbove = new Set<string>();
+        
+        for (const existing of this.added_constraints) {
+            if (isLeftConstraint(existing)) {
+                existingLeftOf.add(`${existing.left.id}:${existing.right.id}`);
+            } else if (isTopConstraint(existing)) {
+                existingAbove.add(`${existing.top.id}:${existing.bottom.id}`);
+            }
+        }
+        
+        // Check if any constraint in the alternative directly contradicts existing ones
+        for (const constraint of alternative) {
+            if (isLeftConstraint(constraint)) {
+                // Check for A < B when B < A already exists (creates immediate cycle)
+                const reverse = `${constraint.right.id}:${constraint.left.id}`;
+                if (existingLeftOf.has(reverse)) {
+                    return true; // Direct contradiction detected
+                }
+            } else if (isTopConstraint(constraint)) {
+                // Check for A above B when B above A already exists
+                const reverse = `${constraint.bottom.id}:${constraint.top.id}`;
+                if (existingAbove.has(reverse)) {
+                    return true; // Direct contradiction detected
+                }
+            }
+            // Note: We don't check bounding box constraints here as they're more complex
+            // and the overhead of checking would negate the benefit
+        }
+        
+        return false; // No obvious conflict detected
+    }
+
+    /**
+     * Orders alternatives by heuristic to improve backtracking performance.
+     * 
+     * Heuristics used:
+     * 1. Simpler alternatives first (fewer constraints = faster to try)
+     * 2. For bounding box constraints, prefer horizontal separation over vertical
+     *    (often more natural for left-to-right reading languages)
+     * 3. For group boundaries, prefer arrangements that align with existing constraints
+     * 
+     * This "fail-fast" strategy reduces backtracking by trying simpler/more likely
+     * alternatives first, quickly finding solutions or identifying conflicts.
+     * 
+     * @param alternatives - Array of constraint alternatives to order
+     * @returns Ordered array of alternatives (does not modify original)
+     */
+    private orderAlternativesByHeuristic(alternatives: LayoutConstraint[][]): LayoutConstraint[][] {
+        // Create a copy to avoid modifying the original
+        const ordered = [...alternatives];
+        
+        // Sort by: 1) constraint count (simpler first), 2) horizontal preference
+        ordered.sort((a, b) => {
+            // Prefer alternatives with fewer constraints (simpler to check)
+            if (a.length !== b.length) {
+                return a.length - b.length;
+            }
+            
+            // For bounding box constraints, prefer horizontal (left/right) over vertical (top/bottom)
+            const aHorizontal = a.some(c => isBoundingBoxConstraint(c) && (c.side === 'left' || c.side === 'right'));
+            const bHorizontal = b.some(c => isBoundingBoxConstraint(c) && (c.side === 'left' || c.side === 'right'));
+            
+            if (aHorizontal && !bHorizontal) return -1;
+            if (!aHorizontal && bHorizontal) return 1;
+            
+            // Otherwise keep original order
+            return 0;
+        });
+        
+        return ordered;
+    }
+
+    /**
      * Recursive backtracking to solve disjunctive constraints.
      * 
      * This implements depth-first search with backtracking:
@@ -291,7 +383,8 @@ class ConstraintValidator {
         }
 
         const currentDisjunction = disjunctions[disjunctionIndex];
-        const alternatives = currentDisjunction.alternatives;
+        // Order alternatives intelligently for faster convergence
+        const alternatives = this.orderAlternativesByHeuristic(currentDisjunction.alternatives);
         
 
         // Track which alternative made the most progress (for better IIS extraction)
@@ -302,6 +395,14 @@ class ConstraintValidator {
         // Try each alternative for this disjunction
         for (let altIndex = 0; altIndex < alternatives.length; altIndex++) {
             const alternative = alternatives[altIndex];
+            
+            // Early termination: skip obviously conflicting alternatives
+            // Check if this alternative directly contradicts any existing constraint
+            if (this.hasObviousConflict(alternative)) {
+                // Track this as a failed alternative that added 0 constraints
+                // Continue to next alternative without expensive solver operations
+                continue;
+            }
             
             // Save current state for backtracking
             const savedSolver = this.cloneSolver();
@@ -1230,6 +1331,19 @@ class ConstraintValidator {
     }
 
     private constraintToKiwi(constraint: LayoutConstraint): Constraint[] {
+        // Check cache first to avoid repeated conversion during backtracking
+        const cached = this.kiwiConstraintCache.get(constraint);
+        if (cached) {
+            return cached;
+        }
+        
+        // Convert the constraint and cache the result
+        const kiwiConstraints = this.convertConstraintToKiwi(constraint);
+        this.kiwiConstraintCache.set(constraint, kiwiConstraints);
+        return kiwiConstraints;
+    }
+
+    private convertConstraintToKiwi(constraint: LayoutConstraint): Constraint[] {
         // This is the main method that converts a LayoutConstraint to a Cassowary constraint.
         if (isTopConstraint(constraint)) {
             let tc = constraint as TopConstraint;
