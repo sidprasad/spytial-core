@@ -59,6 +59,9 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     
     // Listen for edge creation events from the parent WebColaCnDGraph
     this.addEventListener('edge-creation-requested', this.handleEdgeCreationRequest.bind(this) as unknown as EventListener);
+    
+    // Listen for edge movement events from the parent WebColaCnDGraph
+    this.addEventListener('edge-movement-requested', this.handleEdgeMovementRequest.bind(this) as unknown as EventListener);
   }
 
   /**
@@ -681,6 +684,36 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       
     } catch (error) {
       console.error('❌ Failed to handle edge creation request:', error);
+    }
+  }
+
+  /**
+   * Handle edge movement requests from input mode
+   */
+  private async handleEdgeMovementRequest(event: CustomEvent): Promise<void> {
+    console.log('🔄 Handling edge movement request:', event.detail);
+    
+    const { relationId, oldTuple, newTuple } = event.detail;
+    
+    try {
+      // Remove the old relation tuple
+      this.dataInstance.removeRelationTuple(relationId, oldTuple);
+      console.log(`🗑️ Removed old relation tuple: ${relationId}(${oldTuple.atoms.join(', ')})`);
+      
+      // Add the new relation tuple
+      this.dataInstance.addRelationTuple(relationId, newTuple);
+      console.log(`✅ Added new relation tuple: ${relationId}(${newTuple.atoms.join(', ')})`);
+      
+      // Trigger constraint enforcement and layout regeneration
+      await this.enforceConstraintsAndRegenerate();
+      
+      // Update UI components
+      this.updateDeletionSelects();
+      
+      console.log(`✅ Edge moved successfully from (${oldTuple.atoms.join(', ')}) to (${newTuple.atoms.join(', ')})`);
+      
+    } catch (error) {
+      console.error('❌ Failed to handle edge movement request:', error);
     }
   }
 
