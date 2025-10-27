@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edge Movement Demo</title>
+    
+    <!-- Bootstrap CSS for styling -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .demo-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+        }
+        .demo-instructions {
+            background: #e3f2fd;
+            border: 1px solid #bbdefb;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .demo-instructions h4 {
+            color: #1976d2;
+            margin-top: 0;
+        }
+        .demo-instructions ul {
+            margin-bottom: 0;
+        }
+        .demo-instructions li {
+            margin-bottom: 8px;
+        }
+        .demo-instructions .shortcut {
+            background: #fff;
+            padding: 2px 6px;
+            border-radius: 3px;
+            border: 1px solid #1976d2;
+            font-family: monospace;
+            font-weight: bold;
+        }
+        .graph-container {
+            width: 100%;
+            height: 600px;
+            border: 2px solid #007acc;
+            border-radius: 8px;
+            position: relative;
+            background: #fafafa;
+        }
+        button {
+            margin: 5px;
+            padding: 8px 16px;
+            background: #007acc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #005fa3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+        .status.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .status.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .status.info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        .spec-display {
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 Edge Movement Demo</h1>
+        <p>This demo showcases the new <strong>edge movement</strong> feature that allows you to move edges from one node to another using <span class="shortcut">Shift+Click</span>.</p>
+        
+        <div class="demo-instructions">
+            <h4>How to Move Edges:</h4>
+            <ul>
+                <li><strong>Step 1:</strong> Hold down the <span class="shortcut">Shift</span> key - you'll see blue circles appear at edge endpoints (arrows)</li>
+                <li><strong>Step 2:</strong> Click on one of the blue circles to select that edge endpoint</li>
+                <li><strong>Step 3:</strong> Drag your mouse to the new target node</li>
+                <li><strong>Step 4:</strong> Click on the new node to complete the move</li>
+                <li><strong>Note:</strong> You can move either the source (start) or target (end) of an edge</li>
+            </ul>
+            <h4>Other Features:</h4>
+            <ul>
+                <li><strong>Add Nodes:</strong> Use the structured input panel on the right to add atoms</li>
+                <li><strong>Create Edges:</strong> Hold <span class="shortcut">Cmd/Ctrl</span> and drag between nodes</li>
+                <li><strong>Edit Edge Labels:</strong> Hold <span class="shortcut">Cmd/Ctrl</span> and click on an edge</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="demo-section">
+            <h3>Demo Controls</h3>
+            
+            <div>
+                <button onclick="loadSampleData()">Load Sample Data</button>
+                <button onclick="clearGraph()">Clear Graph</button>
+                <button onclick="showExportedData()">Show Exported Data</button>
+            </div>
+
+            <div id="status" class="status" style="display: none;"></div>
+            
+            <h4>Current CnD Specification:</h4>
+            <div id="spec-display" class="spec-display">No spec loaded</div>
+        </div>
+        
+        <div class="demo-section">
+            <h3>Structured Input Graph with Edge Movement</h3>
+            <div class="graph-container">
+                <structured-input-graph 
+                    id="structured-graph"
+                    cnd-spec=""
+                    show-export="true"
+                    style="width: 100%; height: 100%;">
+                </structured-input-graph>
+            </div>
+        </div>
+    </div>
+
+    <!-- Include the built library -->
+    <script src="../dist/browser/cnd-core-complete.global.js"></script>
+    
+    <script>
+        let isComponentReady = false;
+        let currentGraph = null;
+        
+        // Wait for components to be ready
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log('DOM loaded, waiting for components...');
+            setTimeout(initializeDemo, 1000); // Give time for custom elements to register
+        });
+
+        function initializeDemo() {
+            console.log('Initializing Edge Movement demo...');
+            
+            currentGraph = document.getElementById('structured-graph');
+            
+            if (!currentGraph) {
+                showStatus('❌ Structured Input Graph element not found', 'error');
+                return;
+            }
+
+            // Create empty data instance to pass to the component
+            const emptyDataInstance = new CndCore.JSONDataInstance({
+                atoms: [],
+                relations: []
+            });
+            
+            console.log('📦 Created empty data instance for initialization');
+            
+            // Set data instance on the graph  
+            if (typeof currentGraph.setDataInstance === 'function') {
+                currentGraph.setDataInstance(emptyDataInstance);
+                console.log('✅ Empty data instance set on graph');
+            } else {
+                console.warn('⚠️ setDataInstance method not available');
+            }
+
+            // Listen for events
+            currentGraph.addEventListener('atom-added', (event) => {
+                console.log('🔵 Atom added:', event.detail);
+                showStatus(`✅ Added atom: ${event.detail.atom.label} (${event.detail.atom.id}:${event.detail.atom.type})`, 'success');
+            });
+
+            currentGraph.addEventListener('edge-creation-requested', (event) => {
+                console.log('🔗 Edge creation requested:', event.detail);
+                showStatus(`✅ Edge created: ${event.detail.sourceNodeId} → ${event.detail.targetNodeId}`, 'success');
+            });
+
+            currentGraph.addEventListener('edge-movement-requested', (event) => {
+                console.log('🔄 Edge movement requested:', event.detail);
+                const oldEdge = `${event.detail.oldSourceNodeId} → ${event.detail.oldTargetNodeId}`;
+                const newEdge = `${event.detail.newSourceNodeId} → ${event.detail.newTargetNodeId}`;
+                showStatus(`✅ Edge moved: ${oldEdge} ⇒ ${newEdge}`, 'success');
+            });
+
+            currentGraph.addEventListener('edge-moved', (event) => {
+                console.log('✨ Edge moved successfully:', event.detail);
+                showStatus(`✨ Edge successfully moved!`, 'info');
+            });
+
+            currentGraph.addEventListener('data-exported', (event) => {
+                console.log('📤 Data exported:', event.detail);
+                showStatus('✅ Data exported successfully', 'success');
+            });
+
+            isComponentReady = true;
+            showStatus('✅ Edge Movement demo ready! Try the features above.', 'success');
+            
+            // Load sample data automatically
+            setTimeout(() => loadSampleData(), 500);
+        }
+
+        function showStatus(message, type = 'success') {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+            statusEl.style.display = 'block';
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                statusEl.style.display = 'none';
+            }, 5000);
+        }
+
+        function loadSampleData() {
+            if (!isComponentReady) {
+                showStatus('❌ Component not ready yet', 'error');
+                return;
+            }
+
+            // Sample CnD specification
+            const sampleSpec = `nodes:
+  - { id: "Person", type: "Person", color: "#FF6B35", size: 20 }
+  - { id: "City", type: "City", color: "#4CAF50", size: 15 }
+edges:
+  - { id: "livesIn", type: "livesIn", color: "#E91E63", width: 3 }
+  - { id: "friend", type: "friend", color: "#2196F3", width: 2 }
+constraints: []
+directives:
+  - type: "hideDisconnected"
+    value: false`;
+
+            try {
+                currentGraph.setCnDSpec(sampleSpec);
+                document.getElementById('spec-display').textContent = sampleSpec;
+                
+                // Create sample data with atoms and relations
+                const sampleDataInstance = new CndCore.JSONDataInstance({
+                    atoms: [
+                        { id: 'alice', type: 'Person', label: 'Alice' },
+                        { id: 'bob', type: 'Person', label: 'Bob' },
+                        { id: 'charlie', type: 'Person', label: 'Charlie' },
+                        { id: 'nyc', type: 'City', label: 'New York' },
+                        { id: 'sf', type: 'City', label: 'San Francisco' }
+                    ],
+                    relations: [
+                        {
+                            id: 'friend',
+                            name: 'friend',
+                            types: ['Person', 'Person'],
+                            tuples: [
+                                { atoms: ['alice', 'bob'], types: ['Person', 'Person'] },
+                                { atoms: ['bob', 'charlie'], types: ['Person', 'Person'] }
+                            ]
+                        },
+                        {
+                            id: 'livesIn',
+                            name: 'livesIn',
+                            types: ['Person', 'City'],
+                            tuples: [
+                                { atoms: ['alice', 'nyc'], types: ['Person', 'City'] },
+                                { atoms: ['bob', 'sf'], types: ['Person', 'City'] }
+                            ]
+                        }
+                    ]
+                });
+
+                currentGraph.setDataInstance(sampleDataInstance);
+                showStatus('✅ Sample data loaded! Try moving edges with Shift+Click', 'success');
+            } catch (error) {
+                showStatus(`❌ Error loading sample data: ${error.message}`, 'error');
+            }
+        }
+
+        function clearGraph() {
+            if (!isComponentReady) {
+                showStatus('❌ Component not ready yet', 'error');
+                return;
+            }
+
+            // Create a new empty data instance
+            const emptyDataInstance = new CndCore.JSONDataInstance({
+                atoms: [],
+                relations: []
+            });
+            
+            currentGraph.setDataInstance(emptyDataInstance);
+            showStatus('✅ Graph cleared', 'success');
+        }
+
+        function showExportedData() {
+            if (!isComponentReady) {
+                showStatus('❌ Component not ready yet', 'error');
+                return;
+            }
+
+            // Trigger export by clicking the export button in the component
+            const exportButton = currentGraph.shadowRoot?.querySelector('.export-json-btn');
+            if (exportButton) {
+                exportButton.click();
+                showStatus('✅ Export triggered - check component export area', 'success');
+            } else {
+                showStatus('❌ Export button not found in component', 'error');
+            }
+        }
+
+        // Error handling
+        window.addEventListener('error', (event) => {
+            console.error('Global error:', event.error);
+            showStatus(`❌ Error: ${event.error.message}`, 'error');
+        });
+    </script>
+</body>
+</html>
