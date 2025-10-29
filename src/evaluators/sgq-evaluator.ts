@@ -203,7 +203,9 @@ export class SGraphQueryEvaluator implements IEvaluator {
   private context: EvaluationContext | undefined;
   private eval!: SimpleGraphQueryEvaluator;
   // Cache for evaluator results - lifetime tied to this evaluator instance
+  // Using LRU strategy with a maximum size to prevent unbounded growth
   private evaluatorCache: Map<string, IEvaluatorResult> = new Map();
+  private readonly MAX_CACHE_SIZE = 1000; // Limit cache to 1000 entries
 
   constructor() {
    
@@ -248,9 +250,13 @@ export class SGraphQueryEvaluator implements IEvaluator {
     const instanceIndex = config?.instanceIndex ?? 0;
     const cacheKey = JSON.stringify({ expression, instanceIndex });
     
-    // Check cache first
+    // Check cache first - if found, delete and re-add to move to end (LRU)
     if (this.evaluatorCache.has(cacheKey)) {
-      return this.evaluatorCache.get(cacheKey)!;
+      const cachedResult = this.evaluatorCache.get(cacheKey)!;
+      // Move to end of map for LRU tracking
+      this.evaluatorCache.delete(cacheKey);
+      this.evaluatorCache.set(cacheKey, cachedResult);
+      return cachedResult;
     }
 
     const result = this.eval.evaluateExpression(expression);
@@ -258,6 +264,15 @@ export class SGraphQueryEvaluator implements IEvaluator {
 
     // Now we need to wrap the result in our IEvaluatorResult interface
     const wrappedResult = new SGQEvaluatorResult(result, expression);
+    
+    // Implement LRU eviction: if cache is at max size, remove oldest entry
+    if (this.evaluatorCache.size >= this.MAX_CACHE_SIZE) {
+      // Maps maintain insertion order, so first key is oldest
+      const firstKey = this.evaluatorCache.keys().next().value;
+      if (firstKey !== undefined) {
+        this.evaluatorCache.delete(firstKey);
+      }
+    }
     
     // Store in cache
     this.evaluatorCache.set(cacheKey, wrappedResult);
