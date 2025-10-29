@@ -566,8 +566,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         this.activateInputMode();
       }
       // Track Shift key for edge movement
-      if (event.shiftKey) {
+      if (event.shiftKey && !this.isShiftKeyPressed) {
         this.isShiftKeyPressed = true;
+        // Immediately update marker visibility
+        this.updateEdgeMarkerVisibility();
       }
     });
 
@@ -577,8 +579,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         this.deactivateInputMode();
       }
       // Track Shift key release
-      if (!event.shiftKey) {
+      if (!event.shiftKey && this.isShiftKeyPressed) {
         this.isShiftKeyPressed = false;
+        // Immediately update marker visibility
+        this.updateEdgeMarkerVisibility();
         // Cancel edge movement if in progress
         if (this.edgeMovementState.isMoving) {
           this.cancelEdgeMovement();
@@ -591,7 +595,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       if (this.isInputModeActive) {
         this.deactivateInputMode();
       }
-      this.isShiftKeyPressed = false;
+      if (this.isShiftKeyPressed) {
+        this.isShiftKeyPressed = false;
+        this.updateEdgeMarkerVisibility();
+      }
       if (this.edgeMovementState.isMoving) {
         this.cancelEdgeMovement();
       }
@@ -2479,6 +2486,23 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         return targetNode ? targetNode.y : 0;
       })
       .style('opacity', () => self.isShiftKeyPressed ? 0.6 : 0);
+  }
+
+  /**
+   * Update just the visibility of edge markers (called when Shift key is pressed/released)
+   */
+  private updateEdgeMarkerVisibility(): void {
+    if (!this.svgLinkGroups) {
+      return;
+    }
+
+    const targetOpacity = this.isShiftKeyPressed ? 0.6 : 0;
+    
+    this.svgLinkGroups.selectAll('.edge-marker-source')
+      .style('opacity', targetOpacity);
+
+    this.svgLinkGroups.selectAll('.edge-marker-target')
+      .style('opacity', targetOpacity);
   }
 
   /**
