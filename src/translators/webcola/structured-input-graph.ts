@@ -40,6 +40,26 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   private customTypes: Set<string> = new Set();
   private relationAtomPositions: string[] = ['', '']; // Default to 2 positions
 
+  /**
+   * Edge movement state management
+   */
+  private isShiftKeyPressed: boolean = false;
+  private edgeMovementState: {
+    isMoving: boolean;
+    selectedEdge: any | null;
+    selectedMarker: 'source' | 'target' | null;
+    temporaryLine: any;
+    originalSourceNode: any | null;
+    originalTargetNode: any | null;
+  } = {
+    isMoving: false,
+    selectedEdge: null,
+    selectedMarker: null,
+    temporaryLine: null,
+    originalSourceNode: null,
+    originalTargetNode: null
+  };
+
   constructor(dataInstance?: IInputDataInstance) {
     super();
     
@@ -60,8 +80,12 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     // Listen for edge creation events from the parent WebColaCnDGraph
     this.addEventListener('edge-creation-requested', this.handleEdgeCreationRequest.bind(this) as unknown as EventListener);
     
-    // Listen for edge movement events from the parent WebColaCnDGraph
-    this.addEventListener('edge-movement-requested', this.handleEdgeMovementRequest.bind(this) as unknown as EventListener);
+    // Listen for edge movement events (handled directly in this class now)
+    // No longer needed as we handle it internally
+    // this.addEventListener('edge-movement-requested', this.handleEdgeMovementRequest.bind(this) as unknown as EventListener);
+    
+    // Initialize edge movement handlers (Shift key)
+    this.initializeEdgeMovementHandlers();
   }
 
   /**
@@ -1432,5 +1456,425 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    */
   getAvailableTypes(): string[] {
     return this.getAvailableAtomTypes();
+  }
+
+  /**
+   * Initialize keyboard event handlers for edge movement (Shift key)
+   */
+  private initializeEdgeMovementHandlers(): void {
+    // Handle keydown for Shift press
+    document.addEventListener('keydown', (event) => {
+      if (event.shiftKey && !this.isShiftKeyPressed) {
+        this.isShiftKeyPressed = true;
+        // Immediately update marker visibility
+        this.updateEdgeMarkerVisibility();
+      }
+    });
+
+    // Handle keyup for Shift release
+    document.addEventListener('keyup', (event) => {
+      if (!event.shiftKey && this.isShiftKeyPressed) {
+        this.isShiftKeyPressed = false;
+        // Immediately update marker visibility
+        this.updateEdgeMarkerVisibility();
+        // Cancel edge movement if in progress
+        if (this.edgeMovementState.isMoving) {
+          this.cancelEdgeMovement();
+        }
+      }
+    });
+
+    // Handle window blur to ensure Shift state is reset
+    window.addEventListener('blur', () => {
+      if (this.isShiftKeyPressed) {
+        this.isShiftKeyPressed = false;
+        this.updateEdgeMarkerVisibility();
+      }
+      if (this.edgeMovementState.isMoving) {
+        this.cancelEdgeMovement();
+      }
+    });
+  }
+
+  /**
+   * Override setupLinkPaths to add edge markers
+   */
+  protected setupLinkPathsWithEdgeMovement(linkGroups: any): void {
+    // Call parent implementation (but we can't easily do this, so we'll need to hook into the rendering)
+    // Instead, we'll add the markers after the links are set up
+    this.setupEdgeMarkers(linkGroups);
+  }
+
+  /**
+   * Sets up clickable edge markers at endpoints for edge movement.
+   * These markers are invisible circles that become visible when Shift is pressed.
+   * 
+   * @param linkGroups - D3 selection of link group elements
+   */
+  private setupEdgeMarkers(linkGroups: any): void {
+    const self = this;
+
+    // Add source marker (for bidirectional edges)
+    linkGroups
+      .filter((d: any) => !this.isAlignmentEdge(d) && d.bidirectional)
+      .append("circle")
+      .attr("class", "edge-marker edge-marker-source")
+      .attr("r", 8)
+      .attr("fill", "rgba(0, 123, 255, 0.3)")
+      .attr("stroke", "#007bff")
+      .attr("stroke-width", 2)
+      .style("cursor", "grab")
+      .style("opacity", 0)
+      .on('mousedown', function(d: any) {
+        if (self.isShiftKeyPressed) {
+          (d3 as any).event.stopPropagation();
+          self.startEdgeMovement(d, 'source');
+        }
+      });
+
+    // Add target marker (for all non-alignment edges)
+    linkGroups
+      .filter((d: any) => !this.isAlignmentEdge(d))
+      .append("circle")
+      .attr("class", "edge-marker edge-marker-target")
+      .attr("r", 8)
+      .attr("fill", "rgba(0, 123, 255, 0.3)")
+      .attr("stroke", "#007bff")
+      .attr("stroke-width", 2)
+      .style("cursor", "grab")
+      .style("opacity", 0)
+      .on('mousedown', function(d: any) {
+        if (self.isShiftKeyPressed) {
+          (d3 as any).event.stopPropagation();
+          self.startEdgeMovement(d, 'target');
+        }
+      });
+  }
+
+  /**
+   * Start moving an edge endpoint to a new node
+   */
+  private startEdgeMovement(edgeData: any, marker: 'source' | 'target'): void {
+    console.log(`Starting edge movement for ${marker} marker of edge:`, edgeData);
+
+    // Get source and target nodes
+    const sourceNode = this.getNodeFromEdge(edgeData, 'source');
+    const targetNode = this.getNodeFromEdge(edgeData, 'target');
+
+    if (!sourceNode || !targetNode) {
+      console.error('Could not find nodes for edge');
+      return;
+    }
+
+    // Store edge movement state
+    this.edgeMovementState = {
+      isMoving: true,
+      selectedEdge: edgeData,
+      selectedMarker: marker,
+      temporaryLine: null,
+      originalSourceNode: sourceNode,
+      originalTargetNode: targetNode
+    };
+
+    // Get the fixed endpoint (the one we're not moving)
+    const fixedNode = marker === 'source' ? targetNode : sourceNode;
+
+    // Create a temporary line to show the new connection
+    this.edgeMovementState.temporaryLine = (this as any).container
+      .append('line')
+      .attr('class', 'temporary-edge-movement')
+      .attr('x1', fixedNode.x)
+      .attr('y1', fixedNode.y)
+      .attr('x2', fixedNode.x)
+      .attr('y2', fixedNode.y)
+      .attr('stroke', '#ff6b6b')
+      .attr('stroke-width', 3)
+      .attr('stroke-dasharray', '8,4')
+      .attr('opacity', 0.7)
+      .style('pointer-events', 'none');
+
+    // Add mousemove listener to visualize the new connection
+    (this as any).svg.on('mousemove.edgemovement', () => {
+      if (this.edgeMovementState.isMoving && this.edgeMovementState.temporaryLine) {
+        const [mouseX, mouseY] = (d3 as any).mouse((this as any).container.node());
+        if (marker === 'source') {
+          this.edgeMovementState.temporaryLine
+            .attr('x1', mouseX)
+            .attr('y1', mouseY);
+        } else {
+          this.edgeMovementState.temporaryLine
+            .attr('x2', mouseX)
+            .attr('y2', mouseY);
+        }
+      }
+    });
+
+    // Highlight the edge being moved
+    (this as any).container.selectAll('.link-group')
+      .filter((d: any) => d.id === edgeData.id)
+      .select('path')
+      .attr('stroke', '#ff6b6b')
+      .attr('stroke-width', 3)
+      .attr('opacity', 0.5);
+
+    console.log('Edge movement started, waiting for node selection...');
+  }
+
+  /**
+   * Finish moving an edge endpoint to a new node
+   */
+  async finishEdgeMovement(newNode: any): Promise<void> {
+    if (!this.edgeMovementState.isMoving || 
+        !this.edgeMovementState.selectedEdge || 
+        !this.edgeMovementState.selectedMarker ||
+        !this.edgeMovementState.originalSourceNode ||
+        !this.edgeMovementState.originalTargetNode) {
+      return;
+    }
+
+    const edge = this.edgeMovementState.selectedEdge;
+    const marker = this.edgeMovementState.selectedMarker;
+    const oldSourceNode = this.edgeMovementState.originalSourceNode;
+    const oldTargetNode = this.edgeMovementState.originalTargetNode;
+
+    // Determine new source and target based on which marker was moved
+    const newSourceNode = marker === 'source' ? newNode : oldSourceNode;
+    const newTargetNode = marker === 'target' ? newNode : oldTargetNode;
+
+    console.log(`Moving edge ${marker} from ${marker === 'source' ? oldSourceNode.id : oldTargetNode.id} to ${newNode.id}`);
+
+    // Check if the move is valid (not moving to the same node)
+    if ((marker === 'source' && newNode.id === oldSourceNode.id) ||
+        (marker === 'target' && newNode.id === oldTargetNode.id)) {
+      console.log('Edge not moved - same node selected');
+      this.cancelEdgeMovement();
+      return;
+    }
+
+    // Confirm self-loop if moving creates one
+    if (newSourceNode.id === newTargetNode.id) {
+      const confirmSelfLoop = await (this as any).showConfirmDialog(
+        `Moving this edge will create a self-loop on "${newNode.label || newNode.id}". Continue?`
+      );
+      if (!confirmSelfLoop) {
+        this.cancelEdgeMovement();
+        return;
+      }
+    }
+
+    // Update the data instance directly
+    await this.updateDataInstanceForEdgeMovement(
+      oldSourceNode, 
+      oldTargetNode, 
+      newSourceNode, 
+      newTargetNode, 
+      edge.label || edge.relName || ''
+    );
+
+    // Update the edge data locally
+    const sourceIndex = (this as any).currentLayout.nodes.findIndex((n: any) => n.id === newSourceNode.id);
+    const targetIndex = (this as any).currentLayout.nodes.findIndex((n: any) => n.id === newTargetNode.id);
+    
+    if (sourceIndex !== -1 && targetIndex !== -1) {
+      edge.source = sourceIndex;
+      edge.target = targetIndex;
+    }
+
+    // Dispatch event for external listeners
+    this.dispatchEvent(new CustomEvent('edge-moved', {
+      detail: { 
+        edge: edge,
+        marker: marker,
+        oldNode: marker === 'source' ? oldSourceNode : oldTargetNode,
+        newNode: newNode
+      }
+    }));
+
+    // Clean up and re-render
+    this.cancelEdgeMovement();
+    (this as any).rerenderGraph();
+
+    console.log('Edge movement completed successfully');
+  }
+
+  /**
+   * Cancel edge movement and clean up
+   */
+  private cancelEdgeMovement(): void {
+    // Remove temporary line
+    if (this.edgeMovementState.temporaryLine) {
+      this.edgeMovementState.temporaryLine.remove();
+    }
+
+    // Remove mousemove listener
+    (this as any).svg.on('mousemove.edgemovement', null);
+
+    // Restore original edge styling
+    if (this.edgeMovementState.selectedEdge) {
+      (this as any).container.selectAll('.link-group')
+        .filter((d: any) => d.id === this.edgeMovementState.selectedEdge!.id)
+        .select('path')
+        .attr('stroke', this.edgeMovementState.selectedEdge.color)
+        .attr('stroke-width', 1)
+        .attr('opacity', 1);
+    }
+
+    // Reset state
+    this.edgeMovementState = {
+      isMoving: false,
+      selectedEdge: null,
+      selectedMarker: null,
+      temporaryLine: null,
+      originalSourceNode: null,
+      originalTargetNode: null
+    };
+  }
+
+  /**
+   * Update data instance for edge movement
+   */
+  private async updateDataInstanceForEdgeMovement(
+    oldSourceNode: any,
+    oldTargetNode: any,
+    newSourceNode: any,
+    newTargetNode: any,
+    relationName: string
+  ): Promise<void> {
+    try {
+      // Create old and new tuples
+      const oldTuple: ITuple = {
+        atoms: [oldSourceNode.id, oldTargetNode.id],
+        types: [oldSourceNode.type || 'untyped', oldTargetNode.type || 'untyped']
+      };
+
+      const newTuple: ITuple = {
+        atoms: [newSourceNode.id, newTargetNode.id],
+        types: [newSourceNode.type || 'untyped', newTargetNode.type || 'untyped']
+      };
+
+      console.log(`Updating data instance: ${relationName} from (${oldSourceNode.id}, ${oldTargetNode.id}) to (${newSourceNode.id}, ${newTargetNode.id})`);
+
+      // Remove the old relation tuple
+      this.dataInstance.removeRelationTuple(relationName, oldTuple);
+      console.log(`🗑️ Removed old relation tuple: ${relationName}(${oldTuple.atoms.join(', ')})`);
+      
+      // Add the new relation tuple
+      this.dataInstance.addRelationTuple(relationName, newTuple);
+      console.log(`✅ Added new relation tuple: ${relationName}(${newTuple.atoms.join(', ')})`);
+      
+      // Trigger constraint enforcement and layout regeneration
+      await this.enforceConstraintsAndRegenerate();
+      
+      // Update UI components
+      this.updateDeletionSelects();
+      
+      console.log(`✅ Edge moved successfully from (${oldTuple.atoms.join(', ')}) to (${newTuple.atoms.join(', ')})`);
+    } catch (error) {
+      console.error('Failed to update data instance for edge movement:', error);
+    }
+  }
+
+  /**
+   * Update edge marker positions (called during layout ticks)
+   */
+  private updateEdgeMarkerPositions(): void {
+    const self = this;
+    const svgLinkGroups = (this as any).svgLinkGroups;
+
+    if (!svgLinkGroups) {
+      return;
+    }
+
+    // Update source markers
+    svgLinkGroups.selectAll('.edge-marker-source')
+      .attr('cx', (d: any) => {
+        const sourceNode = self.getNodeFromEdge(d, 'source');
+        return sourceNode ? sourceNode.x : 0;
+      })
+      .attr('cy', (d: any) => {
+        const sourceNode = self.getNodeFromEdge(d, 'source');
+        return sourceNode ? sourceNode.y : 0;
+      })
+      .style('opacity', () => self.isShiftKeyPressed ? 0.6 : 0);
+
+    // Update target markers
+    svgLinkGroups.selectAll('.edge-marker-target')
+      .attr('cx', (d: any) => {
+        const targetNode = self.getNodeFromEdge(d, 'target');
+        return targetNode ? targetNode.x : 0;
+      })
+      .attr('cy', (d: any) => {
+        const targetNode = self.getNodeFromEdge(d, 'target');
+        return targetNode ? targetNode.y : 0;
+      })
+      .style('opacity', () => self.isShiftKeyPressed ? 0.6 : 0);
+  }
+
+  /**
+   * Update just the visibility of edge markers (called when Shift key is pressed/released)
+   */
+  private updateEdgeMarkerVisibility(): void {
+    const svgLinkGroups = (this as any).svgLinkGroups;
+
+    if (!svgLinkGroups) {
+      return;
+    }
+
+    const targetOpacity = this.isShiftKeyPressed ? 0.6 : 0;
+    
+    svgLinkGroups.selectAll('.edge-marker-source')
+      .style('opacity', targetOpacity);
+
+    svgLinkGroups.selectAll('.edge-marker-target')
+      .style('opacity', targetOpacity);
+  }
+
+  /**
+   * Override the parent's rendering to inject edge markers and handle edge movement
+   * This method is called after the graph is rendered
+   */
+  protected afterRender(): void {
+    // Set up edge markers after the graph is rendered
+    const svgLinkGroups = (this as any).svgLinkGroups;
+    if (svgLinkGroups) {
+      this.setupEdgeMarkers(svgLinkGroups);
+    }
+
+    // Set up node mouseup handler for completing edge movement
+    this.setupNodeEdgeMovementHandler();
+
+    // Call parent afterRender if it exists
+    if (super.afterRender) {
+      super.afterRender();
+    }
+  }
+
+  /**
+   * Set up node mouseup handler for completing edge movement
+   */
+  private setupNodeEdgeMovementHandler(): void {
+    const svgNodes = (this as any).svgNodes;
+    if (!svgNodes) {
+      return;
+    }
+
+    // Add mouseup handler to complete edge movement
+    svgNodes.on('mouseup.edgemovement', (d: any) => {
+      if (this.edgeMovementState.isMoving) {
+        (d3 as any).event.stopPropagation();
+        // Handle async operation without blocking the event
+        this.finishEdgeMovement(d).catch((error: Error) => {
+          console.error('Error finishing edge movement:', error);
+        });
+      }
+    });
+  }
+
+  /**
+   * Override updatePositions to include edge marker updates
+   */
+  protected updatePositionsWithMarkers(): void {
+    // Update edge markers during layout animation
+    this.updateEdgeMarkerPositions();
   }
 }
