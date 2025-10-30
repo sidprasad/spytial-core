@@ -1249,9 +1249,23 @@ export class LayoutInstance {
      * @param targetNodeId - Second node ID
      * @returns true if there's already an edge between the nodes
      */
-     private hasDirectEdgeBetween(g: Graph, sourceNodeId: string, targetNodeId: string): { direct: boolean; connected: boolean } {
+    /**
+     * Checks if two nodes are connected in the graph.
+     * This is used to determine whether to add alignment edges for WebCola.
+     * 
+     * Performance optimization: We skip alignment edges when nodes are already
+     * connected via any path (not just directly connected). This significantly
+     * reduces the number of constraints for large graphs while maintaining good
+     * layout quality, as connected nodes are less likely to fall into bad local minima.
+     * 
+     * @param g - The graph to check
+     * @param sourceNodeId - First node ID
+     * @param targetNodeId - Second node ID
+     * @returns true if there's any path between the nodes (treating graph as undirected)
+     */
+    private hasDirectEdgeBetween(g: Graph, sourceNodeId: string, targetNodeId: string): boolean {
 
-        // Direct edge check (either direction). Prefer graphlib.hasEdge if available.
+        // Quick check: Direct edge (either direction). Prefer graphlib.hasEdge if available.
         const direct =
             (typeof (g as any).hasEdge === 'function' && ((g as any).hasEdge(sourceNodeId, targetNodeId) || (g as any).hasEdge(targetNodeId, sourceNodeId)))
             ||
@@ -1262,19 +1276,21 @@ export class LayoutInstance {
              (g.outEdges(targetNodeId) || []).some(e => e.w === sourceNodeId));
 
         if(direct) {
-            return direct;
+            return true;
         }
 
-        // Connected check: BFS treating graph as undirected (follow predecessors and successors)
+        // Performance optimization: Check if nodes are connected via any path.
+        // This prevents adding unnecessary alignment edges when nodes are already
+        // connected through other nodes, significantly reducing constraint count
+        // for large graphs with many alignment constraints.
+        // BFS treating graph as undirected (follow predecessors and successors)
         const visited = new Set<string>();
         const queue: string[] = [sourceNodeId];
-        let connected = false;
 
         while (queue.length > 0) {
             const cur = queue.shift()!;
             if (cur === targetNodeId) {
-                connected = true;
-                break;
+                return true; // Connected via path
             }
             if (visited.has(cur)) continue;
             visited.add(cur);
@@ -1287,7 +1303,7 @@ export class LayoutInstance {
             }
         }
 
-        return direct;
+        return false; // Not connected
     }
 
     private getDisconnectedNodes(g: Graph): string[] {
