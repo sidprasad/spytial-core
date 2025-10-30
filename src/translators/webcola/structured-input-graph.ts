@@ -57,8 +57,9 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     // Add structured input specific initialization
     this.initializeStructuredInput();
     
-    // Listen for edge creation events from the parent WebColaCnDGraph
+    // Listen for edge creation and modification events from the parent WebColaCnDGraph
     this.addEventListener('edge-creation-requested', this.handleEdgeCreationRequest.bind(this) as unknown as EventListener);
+    this.addEventListener('edge-modification-requested', this.handleEdgeModificationRequest.bind(this) as unknown as EventListener);
   }
 
   /**
@@ -681,6 +682,57 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       
     } catch (error) {
       console.error('❌ Failed to handle edge creation request:', error);
+    }
+  }
+
+  /**
+   * Handle edge modification requests from input mode
+   * This updates the data instance when an edge label is edited
+   */
+  private async handleEdgeModificationRequest(event: CustomEvent): Promise<void> {
+    console.log('🔗 Handling edge modification request:', event.detail);
+    
+    const { oldRelationId, newRelationId, sourceNodeId, targetNodeId, tuple } = event.detail;
+    
+    try {
+      // If the new relation name is empty, delete the edge
+      if (!newRelationId || newRelationId.trim() === '') {
+        console.log('🗑️ Deleting edge (empty new relation name)');
+        if (oldRelationId && oldRelationId.trim()) {
+          this.dataInstance.removeRelationTuple(oldRelationId, tuple);
+          console.log(`✅ Removed relation tuple from ${oldRelationId}`);
+        }
+      }
+      // If the names are the same, no change needed
+      else if (oldRelationId.trim() === newRelationId.trim()) {
+        console.log('⏭️ Same relation name, no data changes needed');
+        return;
+      }
+      // Otherwise, move the tuple from old relation to new relation
+      else {
+        // Remove from old relation if it has a valid name
+        // Use try-catch to gracefully handle cases where the old relation doesn't exist
+        if (oldRelationId && oldRelationId.trim()) {
+          try {
+            this.dataInstance.removeRelationTuple(oldRelationId, tuple);
+            console.log(`🗑️ Removed from ${oldRelationId}`);
+          } catch (error) {
+            // Relation may not exist, which is fine - just skip removal and proceed with adding to new relation
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            console.log(`⚠️ Could not remove from ${oldRelationId}: ${errorMsg}`);
+          }
+        }
+        
+        // Add to new relation (will create if doesn't exist)
+        this.dataInstance.addRelationTuple(newRelationId, tuple);
+        console.log(`➕ Added to ${newRelationId}`);
+      }
+      
+      // Trigger constraint enforcement and layout regeneration
+      await this.enforceConstraintsAndRegenerate();
+      
+    } catch (error) {
+      console.error('❌ Failed to handle edge modification request:', error);
     }
   }
 
