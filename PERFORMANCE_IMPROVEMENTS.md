@@ -29,7 +29,8 @@ Multiple performance optimizations have been implemented to improve the efficien
 **Example:**
 - Graph with 10 nodes in a chain (A->B->C->...->J) with all-pairs alignment:
   - Before: 9 data edges + 36 alignment edges = 45 total edges
-  - After: 9 data edges + 0 alignment edges = 9 total edges (80% reduction)
+  - After: 9 data edges + 0 alignment edges = 9 total edges
+  - **Reduction: 36 fewer edges (80% reduction in total edge count from 45 to 9)**
 
 **Files Modified:**
 - `src/layout/layoutinstance.ts` (hasDirectEdgeBetween function)

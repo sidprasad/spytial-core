@@ -163,7 +163,8 @@ constraints:
   });
 
   it('should optimize for large graphs with many alignment constraints', () => {
-    // Create a fully connected graph: every node connects to every other node
+    // Create a chain graph: Node0 -> Node1 -> Node2 -> ... -> Node9
+    // This simulates a scenario where all nodes are connected via a path
     const nodes = Array.from({ length: 10 }, (_, i) => ({
       id: `Node${i}`,
       type: 'Node',
@@ -190,7 +191,9 @@ constraints:
       ]
     };
 
-    // Layout spec that aligns ALL pairs of nodes (would be n*(n-1)/2 = 45 pairs for 10 nodes)
+    // Layout spec that aligns ALL pairs of nodes
+    // Without optimization, this would create n*(n-1)/2 = 45 alignment edges for 10 nodes
+    // With optimization, no alignment edges are needed since all nodes are connected via the chain
     const layoutSpec = parseLayoutSpec(`
 constraints:
   - align:
