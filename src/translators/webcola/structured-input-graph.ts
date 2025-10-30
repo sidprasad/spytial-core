@@ -1459,6 +1459,31 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   }
 
   /**
+   * Override renderLayout to add edge markers and node handlers after parent renders
+   */
+  public async renderLayout(instanceLayout: any): Promise<void> {
+    // Call parent renderLayout
+    await super.renderLayout(instanceLayout);
+    
+    // After parent completes rendering, add edge markers
+    const svgLinkGroups = (this as any).svgLinkGroups;
+    if (svgLinkGroups) {
+      this.setupEdgeMarkers(svgLinkGroups);
+    }
+    
+    // Set up node mouseup handler for completing edge movement
+    this.setupNodeEdgeMovementHandler();
+    
+    // Set up a custom tick handler to update edge marker positions
+    const colaLayout = (this as any).colaLayout;
+    if (colaLayout) {
+      colaLayout.on('tick.edgemarkers', () => {
+        this.updateEdgeMarkerPositions();
+      });
+    }
+  }
+
+  /**
    * Initialize keyboard event handlers for edge movement (Shift key)
    */
   private initializeEdgeMovementHandlers(): void {
