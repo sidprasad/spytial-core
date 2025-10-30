@@ -1,0 +1,499 @@
+import { describe, it, expect } from 'vitest';
+import { JSONDataInstance, IJsonDataInstance } from '../src/data-instance/json-data-instance';
+import { parseLayoutSpec } from '../src/layout/layoutspec';
+import { LayoutInstance, AlignmentEdgeStrategy } from '../src/layout/layoutinstance';
+import { SGraphQueryEvaluator } from '../src/evaluators/sgq-evaluator';
+
+/**
+ * Tests for alignment edge optimization.
+ * 
+ * This test verifies that alignment edges are only added when nodes are NOT
+ * already connected, which significantly reduces the number of constraints
+ * for large graphs and improves WebCola performance.
+ */
+
+describe('Alignment Edge Optimization', () => {
+  it('should not add alignment edges when nodes are already directly connected', () => {
+    // Create a simple graph: A -> B -> C
+    const jsonData: IJsonDataInstance = {
+      atoms: [
+        { id: 'A', type: 'Node', label: 'A' },
+        { id: 'B', type: 'Node', label: 'B' },
+        { id: 'C', type: 'Node', label: 'C' }
+      ],
+      relations: [
+        {
+          id: 'R',
+          name: 'R',
+          types: ['Node', 'Node'],
+          tuples: [
+            { atoms: ['A', 'B'], types: ['Node', 'Node'] },
+            { atoms: ['B', 'C'], types: ['Node', 'Node'] }
+          ]
+        }
+      ]
+    };
+
+    // Layout spec that aligns all nodes (A-B and B-C are already connected)
+    const layoutSpec = parseLayoutSpec(`
+constraints:
+  - align:
+      selector: "{x, y : Node | some x.R or some y.R or some R.x or some R.y}"
+      direction: "horizontal"
+`);
+
+    const dataInstance = new JSONDataInstance(jsonData);
+    const evaluator = new SGraphQueryEvaluator();
+    evaluator.initialize({ sourceData: dataInstance });
+    
+    // Generate layout with alignment edges enabled
+    const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
+    const result = layoutInstance.generateLayout(dataInstance, {});
+    
+    // Count edges - should only have the original 2 edges (A->B, B->C)
+    // No alignment edges should be added since A-B and B-C are already connected
+    // and A-C are connected via B
+    expect(result.layout.edges.length).toBe(2);
+  });
+
+  it('should add alignment edges when nodes are disconnected', () => {
+    // Create a graph with disconnected nodes: A and B have no relation
+    const jsonData: IJsonDataInstance = {
+      atoms: [
+        { id: 'A', type: 'Node', label: 'A' },
+        { id: 'B', type: 'Node', label: 'B' }
+      ],
+      relations: []
+    };
+
+    // Layout spec that aligns disconnected nodes
+    const layoutSpec = parseLayoutSpec(`
+constraints:
+  - align:
+      selector: "{x, y : Node | x != y}"
+      direction: "horizontal"
+`);
+
+    const dataInstance = new JSONDataInstance(jsonData);
+    const evaluator = new SGraphQueryEvaluator();
+    evaluator.initialize({ sourceData: dataInstance });
+    
+    // Generate layout with alignment edges enabled
+    const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
+    const result = layoutInstance.generateLayout(dataInstance, {});
+    
+    // Should have added 1 alignment edge since A and B are disconnected
+    expect(result.layout.edges.length).toBe(1);
+    expect(result.layout.edges[0].id).toContain('_alignment_');
+  });
+
+  it('should not add alignment edges when nodes are connected via path', () => {
+    // Create a longer path: A -> B -> C -> D
+    const jsonData: IJsonDataInstance = {
+      atoms: [
+        { id: 'A', type: 'Node', label: 'A' },
+        { id: 'B', type: 'Node', label: 'B' },
+        { id: 'C', type: 'Node', label: 'C' },
+        { id: 'D', type: 'Node', label: 'D' }
+      ],
+      relations: [
+        {
+          id: 'R',
+          name: 'R',
+          types: ['Node', 'Node'],
+          tuples: [
+            { atoms: ['A', 'B'], types: ['Node', 'Node'] },
+            { atoms: ['B', 'C'], types: ['Node', 'Node'] },
+            { atoms: ['C', 'D'], types: ['Node', 'Node'] }
+          ]
+        }
+      ]
+    };
+
+    // Layout spec that aligns all pairs of nodes
+    const layoutSpec = parseLayoutSpec(`
+constraints:
+  - align:
+      selector: "{x, y : Node | x != y}"
+      direction: "vertical"
+`);
+
+    const dataInstance = new JSONDataInstance(jsonData);
+    const evaluator = new SGraphQueryEvaluator();
+    evaluator.initialize({ sourceData: dataInstance });
+    
+    // Generate layout with alignment edges enabled
+    const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
+    const result = layoutInstance.generateLayout(dataInstance, {});
+    
+    // Should only have the original 3 edges (A->B, B->C, C->D)
+    // No alignment edges needed because all nodes are connected via paths:
+    // A-D connected via B and C, A-C connected via B, B-D connected via C
+    expect(result.layout.edges.length).toBe(3);
+    expect(result.layout.edges.filter(e => e.id.includes('_alignment_')).length).toBe(0);
+  });
+
+  it('should respect addAlignmentEdges=false flag', () => {
+    // Create disconnected nodes
+    const jsonData: IJsonDataInstance = {
+      atoms: [
+        { id: 'A', type: 'Node', label: 'A' },
+        { id: 'B', type: 'Node', label: 'B' }
+      ],
+      relations: []
+    };
+
+    const layoutSpec = parseLayoutSpec(`
+constraints:
+  - align:
+      selector: "{x, y : Node | x != y}"
+      direction: "horizontal"
+`);
+
+    const dataInstance = new JSONDataInstance(jsonData);
+    const evaluator = new SGraphQueryEvaluator();
+    evaluator.initialize({ sourceData: dataInstance });
+    
+    // Generate layout with alignment edges DISABLED
+    const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, false);
+    const result = layoutInstance.generateLayout(dataInstance, {});
+    
+    // Should have NO edges at all since alignment edge creation is disabled
+    expect(result.layout.edges.length).toBe(0);
+  });
+
+  it('should optimize for large graphs with many alignment constraints', () => {
+    // Create a chain graph: Node0 -> Node1 -> Node2 -> ... -> Node9
+    // This simulates a scenario where all nodes are connected via a path
+    const nodes = Array.from({ length: 10 }, (_, i) => ({
+      id: `Node${i}`,
+      type: 'Node',
+      label: `Node${i}`
+    }));
+
+    const tuples = [];
+    for (let i = 0; i < nodes.length - 1; i++) {
+      tuples.push({
+        atoms: [`Node${i}`, `Node${i + 1}`],
+        types: ['Node', 'Node']
+      });
+    }
+
+    const jsonData: IJsonDataInstance = {
+      atoms: nodes,
+      relations: [
+        {
+          id: 'R',
+          name: 'R',
+          types: ['Node', 'Node'],
+          tuples
+        }
+      ]
+    };
+
+    // Layout spec that aligns ALL pairs of nodes
+    // Without optimization, this would create n*(n-1)/2 = 45 alignment edges for 10 nodes
+    // With optimization, no alignment edges are needed since all nodes are connected via the chain
+    const layoutSpec = parseLayoutSpec(`
+constraints:
+  - align:
+      selector: "{x, y : Node | x != y}"
+      direction: "horizontal"
+`);
+
+    const dataInstance = new JSONDataInstance(jsonData);
+    const evaluator = new SGraphQueryEvaluator();
+    evaluator.initialize({ sourceData: dataInstance });
+    
+    const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
+    const result = layoutInstance.generateLayout(dataInstance, {});
+    
+    // Should only have 9 edges (the chain connections), not 9 + 45 alignment edges
+    // All nodes are connected via the chain, so no alignment edges needed
+    expect(result.layout.edges.length).toBe(9);
+    
+    // Verify no alignment edges were added
+    const alignmentEdges = result.layout.edges.filter(e => e.id.includes('_alignment_'));
+    expect(alignmentEdges.length).toBe(0);
+  });
+});
+
+describe('Alignment Edge Strategy', () => {
+  it('should respect NEVER strategy', () => {
+    // Create disconnected nodes
+    const jsonData: IJsonDataInstance = {
+      atoms: [
+        { id: 'A', type: 'Node', label: 'A' },
+        { id: 'B', type: 'Node', label: 'B' }
+      ],
+      relations: []
+    };
+
+    const layoutSpec = parseLayoutSpec(`
+constraints:
+  - align:
+      selector: "{x, y : Node | x != y}"
+      direction: "horizontal"
+`);
+
+    const dataInstance = new JSONDataInstance(jsonData);
+    const evaluator = new SGraphQueryEvaluator();
+    evaluator.initialize({ sourceData: dataInstance });
+    
+    // Generate layout with NEVER strategy
+    const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true, AlignmentEdgeStrategy.NEVER);
+    const result = layoutInstance.generateLayout(dataInstance, {});
+    
+    // Should have NO edges at all with NEVER strategy
+    expect(result.layout.edges.length).toBe(0);
+  });
+
+  it('should respect DIRECT strategy', () => {
+    // Create a chain: A -> B -> C
+    const jsonData: IJsonDataInstance = {
+      atoms: [
+        { id: 'A', type: 'Node', label: 'A' },
+        { id: 'B', type: 'Node', label: 'B' },
+        { id: 'C', type: 'Node', label: 'C' }
+      ],
+      relations: [
+        {
+          id: 'R',
+          name: 'R',
+          types: ['Node', 'Node'],
+          tuples: [
+            { atoms: ['A', 'B'], types: ['Node', 'Node'] },
+            { atoms: ['B', 'C'], types: ['Node', 'Node'] }
+          ]
+        }
+      ]
+    };
+
+    // Align all pairs
+    const layoutSpec = parseLayoutSpec(`
+constraints:
+  - align:
+      selector: "{x, y : Node | x != y}"
+      direction: "horizontal"
+`);
+
+    const dataInstance = new JSONDataInstance(jsonData);
+    const evaluator = new SGraphQueryEvaluator();
+    evaluator.initialize({ sourceData: dataInstance });
+    
+    // Generate layout with DIRECT strategy
+    const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true, AlignmentEdgeStrategy.DIRECT);
+    const result = layoutInstance.generateLayout(dataInstance, {});
+    
+    // Should have 2 data edges + 1 alignment edge for A-C (not directly connected)
+    // A-B are directly connected: no alignment edge
+    // B-C are directly connected: no alignment edge
+    // A-C are NOT directly connected: alignment edge added
+    expect(result.layout.edges.length).toBe(3);
+    
+    const alignmentEdges = result.layout.edges.filter(e => e.id.includes('_alignment_'));
+    expect(alignmentEdges.length).toBe(1);
+  });
+
+  it('should respect CONNECTED strategy (default)', () => {
+    // Create a chain: A -> B -> C
+    const jsonData: IJsonDataInstance = {
+      atoms: [
+        { id: 'A', type: 'Node', label: 'A' },
+        { id: 'B', type: 'Node', label: 'B' },
+        { id: 'C', type: 'Node', label: 'C' }
+      ],
+      relations: [
+        {
+          id: 'R',
+          name: 'R',
+          types: ['Node', 'Node'],
+          tuples: [
+            { atoms: ['A', 'B'], types: ['Node', 'Node'] },
+            { atoms: ['B', 'C'], types: ['Node', 'Node'] }
+          ]
+        }
+      ]
+    };
+
+    // Align all pairs
+    const layoutSpec = parseLayoutSpec(`
+constraints:
+  - align:
+      selector: "{x, y : Node | x != y}"
+      direction: "horizontal"
+`);
+
+    const dataInstance = new JSONDataInstance(jsonData);
+    const evaluator = new SGraphQueryEvaluator();
+    evaluator.initialize({ sourceData: dataInstance });
+    
+    // Generate layout with CONNECTED strategy (default)
+    const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true, AlignmentEdgeStrategy.CONNECTED);
+    const result = layoutInstance.generateLayout(dataInstance, {});
+    
+    // Should have only 2 data edges, no alignment edges
+    // All nodes are connected via paths, so no alignment edges needed
+    expect(result.layout.edges.length).toBe(2);
+    
+    const alignmentEdges = result.layout.edges.filter(e => e.id.includes('_alignment_'));
+    expect(alignmentEdges.length).toBe(0);
+  });
+
+  it('should follow alignment edges when checking connectivity', () => {
+    // Create two disconnected pairs: A-B and C-D
+    const jsonData: IJsonDataInstance = {
+      atoms: [
+        { id: 'A', type: 'Node', label: 'A' },
+        { id: 'B', type: 'Node', label: 'B' },
+        { id: 'C', type: 'Node', label: 'C' },
+        { id: 'D', type: 'Node', label: 'D' }
+      ],
+      relations: [
+        {
+          id: 'R',
+          name: 'R',
+          types: ['Node', 'Node'],
+          tuples: [
+            { atoms: ['A', 'B'], types: ['Node', 'Node'] },
+            { atoms: ['C', 'D'], types: ['Node', 'Node'] }
+          ]
+        }
+      ]
+    };
+
+    // First, align A-C (creates alignment edge)
+    const layoutSpec1 = parseLayoutSpec(`
+constraints:
+  - align:
+      selector: "{x, y : Node | (x = A and y = C)}"
+      direction: "horizontal"
+`);
+
+    const dataInstance = new JSONDataInstance(jsonData);
+    const evaluator1 = new SGraphQueryEvaluator();
+    evaluator1.initialize({ sourceData: dataInstance });
+    
+    const layoutInstance1 = new LayoutInstance(layoutSpec1, evaluator1, 0, true, AlignmentEdgeStrategy.CONNECTED);
+    const result1 = layoutInstance1.generateLayout(dataInstance, {});
+    
+    // Should have 2 data edges (A-B, C-D) + 1 alignment edge (A-C)
+    expect(result1.layout.edges.length).toBe(3);
+    
+    // Now, with A-C connected via alignment edge, try to align B-D
+    // B is connected to A, A is connected to C via alignment edge, C is connected to D
+    // So B and D are connected via path including alignment edge
+    const layoutSpec2 = parseLayoutSpec(`
+constraints:
+  - align:
+      selector: "{x, y : Node | (x = A and y = C) or (x = B and y = D)}"
+      direction: "horizontal"
+`);
+
+    const evaluator2 = new SGraphQueryEvaluator();
+    evaluator2.initialize({ sourceData: dataInstance });
+    
+    const layoutInstance2 = new LayoutInstance(layoutSpec2, evaluator2, 0, true, AlignmentEdgeStrategy.CONNECTED);
+    const result2 = layoutInstance2.generateLayout(dataInstance, {});
+    
+    // Should have 2 data edges + 1 alignment edge (A-C only)
+    // B-D should NOT get alignment edge because they're connected via: B->A->C(alignment)->D
+    expect(result2.layout.edges.length).toBe(3);
+    
+    const alignmentEdges = result2.layout.edges.filter(e => e.id.includes('_alignment_'));
+    expect(alignmentEdges.length).toBe(1);
+  });
+
+  it('should prune redundant alignment edges in cycles', () => {
+    // Create a triangle: A -> B, B -> C, C -> A (data edges forming a cycle)
+    const jsonData: IJsonDataInstance = {
+      atoms: [
+        { id: 'A', type: 'Node', label: 'A' },
+        { id: 'B', type: 'Node', label: 'B' },
+        { id: 'C', type: 'Node', label: 'C' }
+      ],
+      relations: [
+        {
+          id: 'R',
+          name: 'R',
+          types: ['Node', 'Node'],
+          tuples: [
+            { atoms: ['A', 'B'], types: ['Node', 'Node'] },
+            { atoms: ['B', 'C'], types: ['Node', 'Node'] },
+            { atoms: ['C', 'A'], types: ['Node', 'Node'] }
+          ]
+        }
+      ]
+    };
+
+    // Try to align all pairs - this would create alignment edges for pairs without direct edges
+    // Since all nodes are already connected via the cycle, no alignment edges should be added
+    const layoutSpec = parseLayoutSpec(`
+constraints:
+  - align:
+      selector: "{x, y : Node | x != y}"
+      direction: "horizontal"
+`);
+
+    const dataInstance = new JSONDataInstance(jsonData);
+    const evaluator = new SGraphQueryEvaluator();
+    evaluator.initialize({ sourceData: dataInstance });
+    
+    const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true, AlignmentEdgeStrategy.CONNECTED);
+    const result = layoutInstance.generateLayout(dataInstance, {});
+    
+    // Should have only 3 data edges (the triangle), no alignment edges
+    // All nodes are already connected via the cycle
+    expect(result.layout.edges.length).toBe(3);
+    
+    const alignmentEdges = result.layout.edges.filter(e => e.id.includes('_alignment_'));
+    expect(alignmentEdges.length).toBe(0);
+  });
+
+  it('should prune redundant alignment edges but keep necessary ones', () => {
+    // Create two disconnected components: A-B and C-D
+    // Then add alignment constraints that would create a bridge
+    const jsonData: IJsonDataInstance = {
+      atoms: [
+        { id: 'A', type: 'Node', label: 'A' },
+        { id: 'B', type: 'Node', label: 'B' },
+        { id: 'C', type: 'Node', label: 'C' },
+        { id: 'D', type: 'Node', label: 'D' }
+      ],
+      relations: [
+        {
+          id: 'R',
+          name: 'R',
+          types: ['Node', 'Node'],
+          tuples: [
+            { atoms: ['A', 'B'], types: ['Node', 'Node'] },
+            { atoms: ['C', 'D'], types: ['Node', 'Node'] }
+          ]
+        }
+      ]
+    };
+
+    // Align B-C and A-D (creating a bridge between components)
+    // After adding both, one might be redundant
+    const layoutSpec = parseLayoutSpec(`
+constraints:
+  - align:
+      selector: "{x, y : Node | (x = B and y = C) or (x = A and y = D)}"
+      direction: "horizontal"
+`);
+
+    const dataInstance = new JSONDataInstance(jsonData);
+    const evaluator = new SGraphQueryEvaluator();
+    evaluator.initialize({ sourceData: dataInstance });
+    
+    const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true, AlignmentEdgeStrategy.CONNECTED);
+    const result = layoutInstance.generateLayout(dataInstance, {});
+    
+    // Should have 2 data edges (A-B, C-D) + 1 alignment edge
+    // One of the alignment edges (B-C or A-D) should be pruned as redundant
+    expect(result.layout.edges.length).toBe(3);
+    
+    const alignmentEdges = result.layout.edges.filter(e => e.id.includes('_alignment_'));
+    expect(alignmentEdges.length).toBe(1);
+  });
+});
