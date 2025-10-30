@@ -710,12 +710,15 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       }
       // Otherwise, move the tuple from old relation to new relation
       else {
-        // Remove from old relation if it exists and has a valid name
+        // Remove from old relation if it has a valid name
+        // Check if relation exists to avoid errors from removeRelationTuple
         if (oldRelationId && oldRelationId.trim()) {
-          const oldRelation = this.dataInstance.getRelations().find(r => r.id === oldRelationId);
-          if (oldRelation) {
+          try {
             this.dataInstance.removeRelationTuple(oldRelationId, tuple);
             console.log(`🗑️ Removed from ${oldRelationId}`);
+          } catch (error) {
+            // Relation may not exist yet, which is fine - just skip removal
+            console.log(`⚠️ Could not remove from ${oldRelationId}: ${error}`);
           }
         }
         
