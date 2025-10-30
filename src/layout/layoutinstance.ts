@@ -787,6 +787,9 @@ export class LayoutInstance {
         let constraints: LayoutConstraint[] = this.applyRelativeOrientationConstraints(layoutNodes, g);
         constraints = constraints.concat(this.applyAlignConstraints(layoutNodes, g));
         
+        // Prune redundant alignment edges after all have been added
+        this.pruneRedundantAlignmentEdges(g);
+        
         // Constraints NOW holds the conjuctive CORE of layout constraints.
         constraints = removeDuplicateConstraints(constraints);
 
@@ -1348,9 +1351,10 @@ export class LayoutInstance {
      * @param g - The graph to check
      * @param sourceNodeId - First node ID
      * @param targetNodeId - Second node ID
+     * @param excludeEdge - Optional edge to exclude from the connectivity check (for pruning)
      * @returns true if there's any path between the nodes (treating graph as undirected)
      */
-    private isConnectedViaPath(g: Graph, sourceNodeId: string, targetNodeId: string): boolean {
+    private isConnectedViaPath(g: Graph, sourceNodeId: string, targetNodeId: string, excludeEdge?: { v: string, w: string, name?: string }): boolean {
         // BFS treating graph as undirected (follow predecessors and successors)
         const visited = new Set<string>();
         const queue: string[] = [sourceNodeId];
@@ -1363,16 +1367,70 @@ export class LayoutInstance {
             if (visited.has(cur)) continue;
             visited.add(cur);
 
-            // neighbors: successors + predecessors (graphlib provides both)
-            // This includes ALL edges, including alignment edges
-            const succ = g.successors(cur) || [];
-            const pred = g.predecessors(cur) || [];
-            for (const n of succ.concat(pred)) {
-                if (!visited.has(n)) queue.push(n);
+            // Get all edges from current node
+            const outEdges = g.outEdges(cur) || [];
+            const inEdges = g.inEdges(cur) || [];
+            
+            // Process all edges, excluding the specified edge if provided
+            for (const edge of [...outEdges, ...inEdges]) {
+                // Skip the excluded edge if specified
+                if (excludeEdge && 
+                    ((edge.v === excludeEdge.v && edge.w === excludeEdge.w && edge.name === excludeEdge.name) ||
+                     (edge.v === excludeEdge.w && edge.w === excludeEdge.v && edge.name === excludeEdge.name))) {
+                    continue;
+                }
+                
+                // Add the neighbor to the queue
+                const neighbor = edge.v === cur ? edge.w : edge.v;
+                if (!visited.has(neighbor)) {
+                    queue.push(neighbor);
+                }
             }
         }
 
         return false; // Not connected
+    }
+
+    /**
+     * Prunes redundant alignment edges from the graph after all alignment edges have been added.
+     * An alignment edge is redundant if removing it doesn't disconnect the nodes it connects.
+     * 
+     * This is useful for the case where alignment constraints create cycles or multiple paths,
+     * and some edges can be removed without affecting connectivity.
+     * 
+     * Example: If a→b→c→a forms a cycle of alignment edges, one edge can be removed.
+     * 
+     * @param g - The graph containing alignment edges
+     */
+    private pruneRedundantAlignmentEdges(g: Graph): void {
+        // Only prune if strategy is CONNECTED (otherwise we might break the intended behavior)
+        if (this.alignmentEdgeStrategy !== AlignmentEdgeStrategy.CONNECTED) {
+            return;
+        }
+
+        // Collect all alignment edges
+        const alignmentEdges = g.edges().filter(edge => {
+            const edgeId = edge.name;
+            return edgeId && edgeId.includes('_alignment_');
+        });
+
+        // Track which edges we've removed
+        const removedEdges: typeof alignmentEdges = [];
+
+        // Try to remove each alignment edge
+        for (const edge of alignmentEdges) {
+            // Check if nodes are still connected without this edge
+            if (this.isConnectedViaPath(g, edge.v, edge.w, edge)) {
+                // Nodes are still connected, so this edge is redundant
+                g.removeEdge(edge.v, edge.w, edge.name);
+                removedEdges.push(edge);
+            }
+        }
+
+        // Log pruning statistics if any edges were removed
+        if (removedEdges.length > 0) {
+            console.log(`Pruned ${removedEdges.length} redundant alignment edges out of ${alignmentEdges.length} total alignment edges`);
+        }
     }
 
     private getDisconnectedNodes(g: Graph): string[] {

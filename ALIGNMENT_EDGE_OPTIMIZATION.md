@@ -36,7 +36,8 @@ The optimization introduces an `AlignmentEdgeStrategy` enum with three options:
 
 1. **Configurable Strategy**: Users can now choose their preferred alignment edge strategy based on their performance/quality tradeoffs
 2. **Follows Alignment Edges**: The BFS connectivity check now follows ALL edges, including previously added alignment edges, preventing redundant alignment edges
-3. **Backward Compatible**: Existing code continues to work; `addAlignmentEdges` boolean parameter is converted to the appropriate strategy
+3. **Pruning Redundant Edges**: After all alignment edges are added, a final pruning pass removes edges that are redundant (i.e., nodes remain connected even without that edge)
+4. **Backward Compatible**: Existing code continues to work; `addAlignmentEdges` boolean parameter is converted to the appropriate strategy
 
 ### Code Changes
 
@@ -70,10 +71,31 @@ private shouldAddAlignmentEdge(g: Graph, source: string, target: string): boolea
     // CONNECTED: check if nodes are connected via any path (including alignment edges)
     return !isConnectedViaPath(g, source, target);
 }
+
+private pruneRedundantAlignmentEdges(g: Graph): void {
+    // Only prune if strategy is CONNECTED
+    if (this.alignmentEdgeStrategy !== AlignmentEdgeStrategy.CONNECTED) return;
+    
+    // For each alignment edge, check if removing it still leaves nodes connected
+    for (const edge of alignmentEdges) {
+        if (this.isConnectedViaPath(g, edge.v, edge.w, edge)) {
+            g.removeEdge(edge.v, edge.w, edge.name);  // Remove redundant edge
+        }
     }
-    // ... BFS connectivity check ...
-    return connected;  // Use the connectivity result
 }
+```
+
+**Pruning Example**:
+```
+Before pruning:
+A --data--> B --data--> C --data--> A (cycle)
+A --align--> B (redundant)
+B --align--> C (redundant)
+C --align--> A (redundant)
+
+After pruning:
+A --data--> B --data--> C --data--> A (cycle)
+(All alignment edges removed as they're redundant given the data edge cycle)
 ```
 
 ## Performance Impact
@@ -158,6 +180,46 @@ The BFS connectivity check now follows **ALL edges**, including alignment edges.
 
 This cascading effect prevents O(n²) alignment edge explosion in densely aligned graphs.
 
+### Key Feature: Pruning Redundant Alignment Edges
+
+After all alignment edges have been added, a final pruning pass removes redundant edges:
+
+**How it works**:
+1. For each alignment edge, temporarily exclude it from the graph
+2. Check if the two nodes it connects are still connected via other paths
+3. If yes, the edge is redundant and can be safely removed
+4. If no, the edge is necessary and is kept
+
+**Example - Cycle Pruning**:
+```
+Before pruning:
+A --align--> B
+B --align--> C  
+C --align--> A
+(All three form a cycle)
+
+After pruning:
+A --align--> B
+B --align--> C
+(C--align-->A removed as A-C still connected via A->B->C)
+```
+
+**Example - Bridge Pruning**:
+```
+Components: [A-B] and [C-D] (connected by data edges)
+Alignment constraints: B-C and A-D
+
+Before pruning:
+A --data--> B --align--> C --data--> D
+A --align--> D
+
+After pruning:
+A --data--> B --align--> C --data--> D
+(A--align-->D removed as A-D still connected via A->B->C->D)
+```
+
+This pruning is only applied when using the `CONNECTED` strategy, as it relies on path-based connectivity.
+
 ### Algorithmic Complexity
 
 - **Direct edge check**: O(1) for connected node pairs
@@ -165,14 +227,17 @@ This cascading effect prevents O(n²) alignment edge explosion in densely aligne
   - Only runs when no direct edge exists
   - Early termination when target found
   - Most graphs have small diameter, so BFS completes quickly
+- **Pruning pass**: O(E_align × (V + E)) where E_align is the number of alignment edges
+  - Only runs once after all edges are added
+  - Typically E_align << E (alignment edges are a small fraction of total edges)
 
-The BFS cost is amortized across many alignment constraint checks and is far outweighed by the constraint reduction benefit.
+The BFS and pruning costs are amortized across the layout generation and far outweighed by the constraint reduction benefit.
 
 ## Validation
 
 ### Tests
 
-Comprehensive test suite in `tests/alignment-edge-optimization.test.ts` (9 tests):
+Comprehensive test suite in `tests/alignment-edge-optimization.test.ts` (11 tests):
 
 1. **Direct connection test**: Verifies no alignment edges added when nodes are directly connected
 2. **Disconnected nodes test**: Verifies alignment edges ARE added when nodes are truly disconnected
@@ -183,6 +248,8 @@ Comprehensive test suite in `tests/alignment-edge-optimization.test.ts` (9 tests
 7. **DIRECT strategy test**: Verifies DIRECT strategy adds alignment edges when no direct edge
 8. **CONNECTED strategy test**: Verifies CONNECTED strategy (default) works correctly
 9. **Following alignment edges test**: Verifies BFS follows alignment edges to prevent redundancy
+10. **Cycle pruning test**: Verifies redundant alignment edges are pruned in cycles
+11. **Bridge pruning test**: Verifies redundant alignment edges are pruned but necessary ones kept
 
 All tests pass ✅
 
