@@ -21,6 +21,22 @@ import { ColorPicker } from './colorpicker';
 import { type ConstraintError, ConstraintValidator } from './constraint-validator';
 const UNIVERSAL_TYPE = "univ";
 
+/**
+ * Strategy for adding alignment edges to prevent WebCola from falling into bad local minima.
+ * 
+ * - `never`: Never add alignment edges (maximum performance, may result in suboptimal layouts)
+ * - `direct`: Only add alignment edges when nodes have no direct edge between them
+ * - `connected`: Only add alignment edges when nodes are not connected via any path (default, best balance)
+ */
+export enum AlignmentEdgeStrategy {
+    /** Never add alignment edges - maximum performance but may result in poor layouts */
+    NEVER = 'never',
+    /** Add alignment edges only when no direct edge exists between nodes */
+    DIRECT = 'direct',
+    /** Add alignment edges only when nodes are not connected via any path (default) */
+    CONNECTED = 'connected'
+}
+
 
 // Should create a NEW list when it returns.
 function removeDuplicateConstraints(constraints: LayoutConstraint[]): LayoutConstraint[] {
@@ -122,7 +138,7 @@ export class LayoutInstance {
     private evaluator: IEvaluator;
     private instanceNum: number;
 
-    private readonly addAlignmentEdges: boolean;
+    private readonly alignmentEdgeStrategy: AlignmentEdgeStrategy;
 
 
     /**
@@ -131,16 +147,32 @@ export class LayoutInstance {
      * @param layoutSpec - The layout specification that defines constraints, directives, and other layout-related configurations.
      * @param evaluator - An evaluator instance used to evaluate selectors and constraints within the layout specification.
      * @param instNum - The instance number (default is 0), used to differentiate between multiple instances of the same layout.
-     * @param addAlignmentEdges - A boolean flag indicating whether alignment edges should be added to the graph (default is `true`).
+     * @param addAlignmentEdges - Deprecated. Use alignmentEdgeStrategy instead. A boolean flag indicating whether alignment edges should be added (default is `true`, equivalent to 'connected' strategy).
+     * @param alignmentEdgeStrategy - Strategy for adding alignment edges (default is `AlignmentEdgeStrategy.CONNECTED`). Takes precedence over addAlignmentEdges if provided.
      *
      * The `LayoutInstance` class is responsible for generating a layout for a given data instance based on the provided layout specification.
      * It applies constraints, directives, and projections to produce a structured layout that can be rendered using a graph visualization library.
      */
-    constructor(layoutSpec: LayoutSpec, evaluator: IEvaluator, instNum: number = 0, addAlignmentEdges: boolean = true) {
+    constructor(
+        layoutSpec: LayoutSpec, 
+        evaluator: IEvaluator, 
+        instNum: number = 0, 
+        addAlignmentEdges: boolean = true,
+        alignmentEdgeStrategy?: AlignmentEdgeStrategy
+    ) {
         this.instanceNum = instNum;
         this.evaluator = evaluator;
         this._layoutSpec = layoutSpec;
-        this.addAlignmentEdges = addAlignmentEdges;
+        
+        // Handle backward compatibility: if alignmentEdgeStrategy is provided, use it
+        // Otherwise, convert boolean addAlignmentEdges to strategy
+        if (alignmentEdgeStrategy !== undefined) {
+            this.alignmentEdgeStrategy = alignmentEdgeStrategy;
+        } else {
+            this.alignmentEdgeStrategy = addAlignmentEdges 
+                ? AlignmentEdgeStrategy.CONNECTED 
+                : AlignmentEdgeStrategy.NEVER;
+        }
     }
 
     get projectedSigs(): string[] {
@@ -1159,7 +1191,7 @@ export class LayoutInstance {
 
                 directions.forEach((direction) => {
                     // Add alignment edge for ALL orientation constraints if enabled AND edge doesn't already exist in the graph
-                    if (this.addAlignmentEdges && !this.hasDirectEdgeBetween(g, sourceNodeId, targetNodeId)) {
+                    if (this.shouldAddAlignmentEdge(g, sourceNodeId, targetNodeId)) {
                         const alignmentEdgeLabel = `_alignment_${sourceNodeId}_${targetNodeId}_`;
                         g.setEdge(sourceNodeId, targetNodeId, alignmentEdgeLabel, alignmentEdgeLabel);
                     }
@@ -1221,7 +1253,7 @@ export class LayoutInstance {
                 let targetNodeId = tuple[1];
 
                 // Add alignment edge for align constraints if enabled AND edge doesn't already exist in the graph
-                if (this.addAlignmentEdges && !this.hasDirectEdgeBetween(g, sourceNodeId, targetNodeId)) {
+                if (this.shouldAddAlignmentEdge(g, sourceNodeId, targetNodeId)) {
                     const alignmentEdgeLabel = `_alignment_${sourceNodeId}_${targetNodeId}_`;
                     g.setEdge(sourceNodeId, targetNodeId, alignmentEdgeLabel, alignmentEdgeLabel);
                 }
@@ -1250,7 +1282,58 @@ export class LayoutInstance {
      * @returns true if there's already an edge between the nodes
      */
     /**
-     * Checks if two nodes are connected in the graph.
+     * Checks if two nodes should have an alignment edge added based on the current strategy.
+     * 
+     * @param g - The graph to check
+     * @param sourceNodeId - First node ID
+     * @param targetNodeId - Second node ID
+     * @returns true if an alignment edge should be added (nodes are not connected according to strategy)
+     */
+    private shouldAddAlignmentEdge(g: Graph, sourceNodeId: string, targetNodeId: string): boolean {
+        // If strategy is NEVER, never add alignment edges
+        if (this.alignmentEdgeStrategy === AlignmentEdgeStrategy.NEVER) {
+            return false;
+        }
+
+        // Check for direct edge
+        const hasDirectEdge = this.hasDirectEdgeBetween(g, sourceNodeId, targetNodeId);
+        
+        // If strategy is DIRECT, only check for direct edges
+        if (this.alignmentEdgeStrategy === AlignmentEdgeStrategy.DIRECT) {
+            return !hasDirectEdge;
+        }
+
+        // Strategy is CONNECTED: check if nodes are connected via any path
+        // If they have a direct edge, they're connected
+        if (hasDirectEdge) {
+            return false;
+        }
+
+        // Check if connected via any path (including alignment edges)
+        return !this.isConnectedViaPath(g, sourceNodeId, targetNodeId);
+    }
+
+    /**
+     * Checks if there's a direct edge between two nodes (either direction).
+     * 
+     * @param g - The graph to check
+     * @param sourceNodeId - First node ID
+     * @param targetNodeId - Second node ID
+     * @returns true if there's a direct edge between the nodes
+     */
+    private hasDirectEdgeBetween(g: Graph, sourceNodeId: string, targetNodeId: string): boolean {
+        // Direct edge check (either direction). Prefer graphlib.hasEdge if available.
+        return (typeof (g as any).hasEdge === 'function' && ((g as any).hasEdge(sourceNodeId, targetNodeId) || (g as any).hasEdge(targetNodeId, sourceNodeId)))
+            ||
+            // fallback to scanning in/out edges (handles multi-edges)
+            ((g.inEdges(sourceNodeId) || []).some(e => e.v === targetNodeId) ||
+             (g.outEdges(sourceNodeId) || []).some(e => e.w === targetNodeId) ||
+             (g.inEdges(targetNodeId) || []).some(e => e.v === sourceNodeId) ||
+             (g.outEdges(targetNodeId) || []).some(e => e.w === sourceNodeId));
+    }
+
+    /**
+     * Checks if two nodes are connected via any path in the graph.
      * This is used to determine whether to add alignment edges for WebCola.
      * 
      * Performance optimization: We skip alignment edges when nodes are already
@@ -1258,31 +1341,16 @@ export class LayoutInstance {
      * reduces the number of constraints for large graphs while maintaining good
      * layout quality, as connected nodes are less likely to fall into bad local minima.
      * 
+     * Note: This follows ALL edges including alignment edges (edges with _alignment_ prefix).
+     * This ensures we don't add redundant alignment edges when nodes are already connected
+     * via other alignment edges.
+     * 
      * @param g - The graph to check
      * @param sourceNodeId - First node ID
      * @param targetNodeId - Second node ID
      * @returns true if there's any path between the nodes (treating graph as undirected)
      */
-    private hasDirectEdgeBetween(g: Graph, sourceNodeId: string, targetNodeId: string): boolean {
-
-        // Quick check: Direct edge (either direction). Prefer graphlib.hasEdge if available.
-        const direct =
-            (typeof (g as any).hasEdge === 'function' && ((g as any).hasEdge(sourceNodeId, targetNodeId) || (g as any).hasEdge(targetNodeId, sourceNodeId)))
-            ||
-            // fallback to scanning in/out edges (handles multi-edges)
-            ((g.inEdges(sourceNodeId) || []).some(e => e.v === targetNodeId) ||
-             (g.outEdges(sourceNodeId) || []).some(e => e.w === targetNodeId) ||
-             (g.inEdges(targetNodeId) || []).some(e => e.v === sourceNodeId) ||
-             (g.outEdges(targetNodeId) || []).some(e => e.w === sourceNodeId));
-
-        if(direct) {
-            return true;
-        }
-
-        // Performance optimization: Check if nodes are connected via any path.
-        // This prevents adding unnecessary alignment edges when nodes are already
-        // connected through other nodes, significantly reducing constraint count
-        // for large graphs with many alignment constraints.
+    private isConnectedViaPath(g: Graph, sourceNodeId: string, targetNodeId: string): boolean {
         // BFS treating graph as undirected (follow predecessors and successors)
         const visited = new Set<string>();
         const queue: string[] = [sourceNodeId];
@@ -1296,6 +1364,7 @@ export class LayoutInstance {
             visited.add(cur);
 
             // neighbors: successors + predecessors (graphlib provides both)
+            // This includes ALL edges, including alignment edges
             const succ = g.successors(cur) || [];
             const pred = g.predecessors(cur) || [];
             for (const n of succ.concat(pred)) {

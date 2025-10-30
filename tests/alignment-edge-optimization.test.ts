@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { JSONDataInstance, IJsonDataInstance } from '../src/data-instance/json-data-instance';
 import { parseLayoutSpec } from '../src/layout/layoutspec';
-import { LayoutInstance } from '../src/layout/layoutinstance';
+import { LayoutInstance, AlignmentEdgeStrategy } from '../src/layout/layoutinstance';
 import { SGraphQueryEvaluator } from '../src/evaluators/sgq-evaluator';
 
 /**
@@ -215,5 +215,192 @@ constraints:
     // Verify no alignment edges were added
     const alignmentEdges = result.layout.edges.filter(e => e.id.includes('_alignment_'));
     expect(alignmentEdges.length).toBe(0);
+  });
+});
+
+describe('Alignment Edge Strategy', () => {
+  it('should respect NEVER strategy', () => {
+    // Create disconnected nodes
+    const jsonData: IJsonDataInstance = {
+      atoms: [
+        { id: 'A', type: 'Node', label: 'A' },
+        { id: 'B', type: 'Node', label: 'B' }
+      ],
+      relations: []
+    };
+
+    const layoutSpec = parseLayoutSpec(`
+constraints:
+  - align:
+      selector: "{x, y : Node | x != y}"
+      direction: "horizontal"
+`);
+
+    const dataInstance = new JSONDataInstance(jsonData);
+    const evaluator = new SGraphQueryEvaluator();
+    evaluator.initialize({ sourceData: dataInstance });
+    
+    // Generate layout with NEVER strategy
+    const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true, AlignmentEdgeStrategy.NEVER);
+    const result = layoutInstance.generateLayout(dataInstance, {});
+    
+    // Should have NO edges at all with NEVER strategy
+    expect(result.layout.edges.length).toBe(0);
+  });
+
+  it('should respect DIRECT strategy', () => {
+    // Create a chain: A -> B -> C
+    const jsonData: IJsonDataInstance = {
+      atoms: [
+        { id: 'A', type: 'Node', label: 'A' },
+        { id: 'B', type: 'Node', label: 'B' },
+        { id: 'C', type: 'Node', label: 'C' }
+      ],
+      relations: [
+        {
+          id: 'R',
+          name: 'R',
+          types: ['Node', 'Node'],
+          tuples: [
+            { atoms: ['A', 'B'], types: ['Node', 'Node'] },
+            { atoms: ['B', 'C'], types: ['Node', 'Node'] }
+          ]
+        }
+      ]
+    };
+
+    // Align all pairs
+    const layoutSpec = parseLayoutSpec(`
+constraints:
+  - align:
+      selector: "{x, y : Node | x != y}"
+      direction: "horizontal"
+`);
+
+    const dataInstance = new JSONDataInstance(jsonData);
+    const evaluator = new SGraphQueryEvaluator();
+    evaluator.initialize({ sourceData: dataInstance });
+    
+    // Generate layout with DIRECT strategy
+    const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true, AlignmentEdgeStrategy.DIRECT);
+    const result = layoutInstance.generateLayout(dataInstance, {});
+    
+    // Should have 2 data edges + 1 alignment edge for A-C (not directly connected)
+    // A-B are directly connected: no alignment edge
+    // B-C are directly connected: no alignment edge
+    // A-C are NOT directly connected: alignment edge added
+    expect(result.layout.edges.length).toBe(3);
+    
+    const alignmentEdges = result.layout.edges.filter(e => e.id.includes('_alignment_'));
+    expect(alignmentEdges.length).toBe(1);
+  });
+
+  it('should respect CONNECTED strategy (default)', () => {
+    // Create a chain: A -> B -> C
+    const jsonData: IJsonDataInstance = {
+      atoms: [
+        { id: 'A', type: 'Node', label: 'A' },
+        { id: 'B', type: 'Node', label: 'B' },
+        { id: 'C', type: 'Node', label: 'C' }
+      ],
+      relations: [
+        {
+          id: 'R',
+          name: 'R',
+          types: ['Node', 'Node'],
+          tuples: [
+            { atoms: ['A', 'B'], types: ['Node', 'Node'] },
+            { atoms: ['B', 'C'], types: ['Node', 'Node'] }
+          ]
+        }
+      ]
+    };
+
+    // Align all pairs
+    const layoutSpec = parseLayoutSpec(`
+constraints:
+  - align:
+      selector: "{x, y : Node | x != y}"
+      direction: "horizontal"
+`);
+
+    const dataInstance = new JSONDataInstance(jsonData);
+    const evaluator = new SGraphQueryEvaluator();
+    evaluator.initialize({ sourceData: dataInstance });
+    
+    // Generate layout with CONNECTED strategy (default)
+    const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true, AlignmentEdgeStrategy.CONNECTED);
+    const result = layoutInstance.generateLayout(dataInstance, {});
+    
+    // Should have only 2 data edges, no alignment edges
+    // All nodes are connected via paths, so no alignment edges needed
+    expect(result.layout.edges.length).toBe(2);
+    
+    const alignmentEdges = result.layout.edges.filter(e => e.id.includes('_alignment_'));
+    expect(alignmentEdges.length).toBe(0);
+  });
+
+  it('should follow alignment edges when checking connectivity', () => {
+    // Create two disconnected pairs: A-B and C-D
+    const jsonData: IJsonDataInstance = {
+      atoms: [
+        { id: 'A', type: 'Node', label: 'A' },
+        { id: 'B', type: 'Node', label: 'B' },
+        { id: 'C', type: 'Node', label: 'C' },
+        { id: 'D', type: 'Node', label: 'D' }
+      ],
+      relations: [
+        {
+          id: 'R',
+          name: 'R',
+          types: ['Node', 'Node'],
+          tuples: [
+            { atoms: ['A', 'B'], types: ['Node', 'Node'] },
+            { atoms: ['C', 'D'], types: ['Node', 'Node'] }
+          ]
+        }
+      ]
+    };
+
+    // First, align A-C (creates alignment edge)
+    const layoutSpec1 = parseLayoutSpec(`
+constraints:
+  - align:
+      selector: "{x, y : Node | (x = A and y = C)}"
+      direction: "horizontal"
+`);
+
+    const dataInstance = new JSONDataInstance(jsonData);
+    const evaluator1 = new SGraphQueryEvaluator();
+    evaluator1.initialize({ sourceData: dataInstance });
+    
+    const layoutInstance1 = new LayoutInstance(layoutSpec1, evaluator1, 0, true, AlignmentEdgeStrategy.CONNECTED);
+    const result1 = layoutInstance1.generateLayout(dataInstance, {});
+    
+    // Should have 2 data edges (A-B, C-D) + 1 alignment edge (A-C)
+    expect(result1.layout.edges.length).toBe(3);
+    
+    // Now, with A-C connected via alignment edge, try to align B-D
+    // B is connected to A, A is connected to C via alignment edge, C is connected to D
+    // So B and D are connected via path including alignment edge
+    const layoutSpec2 = parseLayoutSpec(`
+constraints:
+  - align:
+      selector: "{x, y : Node | (x = A and y = C) or (x = B and y = D)}"
+      direction: "horizontal"
+`);
+
+    const evaluator2 = new SGraphQueryEvaluator();
+    evaluator2.initialize({ sourceData: dataInstance });
+    
+    const layoutInstance2 = new LayoutInstance(layoutSpec2, evaluator2, 0, true, AlignmentEdgeStrategy.CONNECTED);
+    const result2 = layoutInstance2.generateLayout(dataInstance, {});
+    
+    // Should have 2 data edges + 1 alignment edge (A-C only)
+    // B-D should NOT get alignment edge because they're connected via: B->A->C(alignment)->D
+    expect(result2.layout.edges.length).toBe(3);
+    
+    const alignmentEdges = result2.layout.edges.filter(e => e.id.includes('_alignment_'));
+    expect(alignmentEdges.length).toBe(1);
   });
 });
