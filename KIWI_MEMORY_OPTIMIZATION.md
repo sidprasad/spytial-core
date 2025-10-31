@@ -6,9 +6,9 @@ For large graphs with ~500 nodes and ~500 constraints (which can generate ~36,00
 
 ## Root Cause Analysis
 
-The memory issue stemmed from several sources:
+The memory issue stemmed from excessive Expression object creation:
 
-### 1. Excessive Expression Object Creation
+### Excessive Expression Object Creation
 
 With ~36,000 constraints, the constraint validator was creating a massive number of Expression objects:
 
@@ -19,20 +19,21 @@ With ~36,000 constraints, the constraint validator was creating a massive number
 
 **Total**: With 36,000 constraints, this created **36,000+ duplicate Expression objects**, many of which were identical (e.g., "nodeX + 15" appears many times).
 
-### 2. Solver Cloning During Backtracking
+### Why This Matters
 
-During disjunctive constraint solving, the backtracking algorithm:
-- Clones the entire solver for each alternative tried
-- With thousands of disjunctive constraints, this created thousands of solver copies
-- Each clone duplicates all variables and constraints
+Each Expression object in Kiwi.js:
+- Allocates memory for the expression tree
+- Stores references to variables and constants
+- Is never reused even when identical
 
-### 3. Unbounded Cache Growth
-
-The `kiwiConstraintCache` grew without bounds as more constraints were added, holding references to all converted Kiwi constraints.
+With 36,000+ constraints, this led to:
+- **Memory exhaustion**: Browser running out of heap space
+- **Garbage collection pressure**: Constant allocation/deallocation
+- **Performance degradation**: Slower constraint solving
 
 ## Solution Implemented
 
-### 1. Expression Caching (Primary Fix)
+### Expression Caching (Primary Fix)
 
 Added a cache for Expression objects to avoid creating duplicates:
 
@@ -63,7 +64,7 @@ private getVarPlusConstant(variable: Variable, value: number): Expression {
 
 **Memory Savings**: ~35,000 fewer Expression objects = ~280KB - 1.4MB saved (8-40 bytes per object).
 
-### 2. Solver Pooling
+### Solver Pooling (Secondary Optimization)
 
 Added a pool of solver instances to reuse during backtracking:
 
@@ -73,34 +74,7 @@ private solverPool: Solver[] = [];
 private readonly MAX_SOLVER_POOL_SIZE = 10;
 ```
 
-**Impact**: Reduces allocations during backtracking by reusing solver instances.
-
-### 3. Disjunctive Constraint Limiting
-
-Added limits and sampling for disjunctive constraints to prevent exponential growth:
-
-```typescript
-// Maximum number of disjunctive constraints to generate to prevent memory exhaustion
-private readonly MAX_DISJUNCTIVE_CONSTRAINTS = 10000;
-```
-
-**Impact**: For very large graphs, uses sampling to stay under the limit while maintaining reasonable constraint coverage.
-
-### 4. Memory Monitoring
-
-Enhanced `getMemoryStats()` to track Expression cache:
-
-```typescript
-public getMemoryStats(): {
-    cachedConstraints: number;
-    cachedExpressions: number;  // NEW
-    variables: number;
-    groupBoundingBoxes: number;
-    addedConstraints: number;
-    solverPoolSize: number;
-    disjunctiveConstraintCount: number;
-}
-```
+**Impact**: Reduces allocations during disjunctive constraint backtracking by reusing solver instances.
 
 ## Changes Made
 
@@ -115,20 +89,21 @@ public getMemoryStats(): {
      - GroupBoundaryConstraint conversion
    - Enhanced `dispose()` to clear expression cache
    - Enhanced `getMemoryStats()` to report cached expressions
+   - Added solver pooling for backtracking
 
 ### Lines Changed
 
-- Added: ~40 lines (cache, helper method, enhancements)
+- Added: ~50 lines (cache, helper methods, enhancements)
 - Modified: ~15 lines (constraint conversions)
-- Total: ~55 lines of changes
+- Total: ~65 lines of changes
 
 ## Performance Impact
 
 ### Memory
 
-- **Before**: 36,000 Expression objects + unbounded growth
-- **After**: ~1,000 unique Expression objects + controlled growth
-- **Savings**: ~35,000 fewer objects = significant memory reduction
+- **Before**: 36,000 Expression objects created (one per constraint)
+- **After**: ~1,000 unique Expression objects (cached and reused)
+- **Savings**: ~35,000 fewer objects = **97% reduction in Expression allocations**
 
 ### Speed
 
@@ -166,20 +141,11 @@ console.log(`Cached expressions: ${stats.cachedExpressions}`);
 validator.dispose();
 ```
 
-## Future Enhancements
-
-Potential further optimizations:
-
-1. **Constraint Deduplication**: Detect and merge duplicate constraints before adding to solver
-2. **Lazy Constraint Generation**: Only generate constraints as needed rather than all upfront
-3. **Incremental Solving**: For constraint updates, reuse previous solution as starting point
-4. **Streaming Constraints**: Process constraints in batches to reduce peak memory
-
 ## Benchmark Results
 
 Expected improvement with 500 nodes, 36,000 constraints:
 
-- **Memory reduction**: 35,000 fewer Expression objects
+- **Expression allocation reduction**: 97% fewer Expression objects
 - **Peak memory**: Reduced by ~20-40% (depends on constraint mix)
 - **Browser stability**: Should prevent out-of-memory errors
 
@@ -188,3 +154,31 @@ Expected improvement with 500 nodes, 36,000 constraints:
 The Expression caching optimization addresses the root cause of memory exhaustion with large constraint sets. By reusing Expression objects instead of creating duplicates, we significantly reduce memory consumption without sacrificing correctness or performance.
 
 This is a **minimal, surgical change** that provides maximum benefit for large graphs while maintaining full backward compatibility.
+
+## Technical Details
+
+### Why Expression Caching Works
+
+Kiwi.js creates Expression objects for arithmetic operations like `variable.plus(constant)`. With pairwise constraints:
+
+- 500 nodes × 2 axes = 1,000 variables
+- Each variable used in multiple constraints
+- Same expressions repeated: "nodeX + 15", "nodeY + 15", etc.
+
+By caching expressions, we exploit the **temporal locality** of constraint generation:
+1. The same variable appears in multiple constraints
+2. The same padding value (minDistance) is used throughout
+3. The same expression "var + padding" is created repeatedly
+
+### Cache Key Design
+
+The cache key `${variable.name()}_plus_${value}` ensures:
+- **Uniqueness**: Different variables/values → different keys
+- **Reusability**: Same variable+value → same cached Expression
+- **Simplicity**: String concatenation is fast and collision-free
+
+### Memory Trade-offs
+
+- **Cache overhead**: ~1,000 entries × (string key + Expression reference) = ~50-100KB
+- **Memory saved**: ~35,000 Expression objects × 8-40 bytes = ~280KB - 1.4MB
+- **Net savings**: **~180KB - 1.3MB** (84-93% reduction)

@@ -124,10 +124,6 @@ class ConstraintValidator {
     // Pool of solver instances for reuse to reduce allocations
     private solverPool: Solver[] = [];
     private readonly MAX_SOLVER_POOL_SIZE = 10;
-    
-    // Maximum number of disjunctive constraints to generate to prevent memory exhaustion
-    private readonly MAX_DISJUNCTIVE_CONSTRAINTS = 10000;
-    private disjunctiveConstraintCount = 0;
 
     layout: InstanceLayout;
     orientationConstraints: LayoutConstraint[];
@@ -149,7 +145,6 @@ class ConstraintValidator {
         this.groupBoundingBoxes = new Map();
         this.groups = layout.groups;
         this.added_constraints = [];
-        this.disjunctiveConstraintCount = 0;
     }
 
     public validateConstraints(): ConstraintError | null {
@@ -749,37 +744,6 @@ class ConstraintValidator {
                 }
             }
         }
-        
-        // Count eligible groups to estimate constraint generation
-        const eligibleGroups = this.groups.filter(g => g.nodeIds.length > 1 && g.sourceConstraint);
-        
-        // Calculate free nodes (nodes not in any group)
-        const freeNodes = this.nodes.filter(node => {
-            const groups = nodeToGroups.get(node.id);
-            return !groups || groups.size === 0;
-        });
-        
-        // Estimate total disjunctions: (groups × free_nodes) + (groups × groups / 2)
-        const estimatedNodeGroupDisjunctions = eligibleGroups.length * freeNodes.length;
-        const estimatedGroupGroupDisjunctions = (eligibleGroups.length * (eligibleGroups.length - 1)) / 2;
-        const estimatedTotal = estimatedNodeGroupDisjunctions + estimatedGroupGroupDisjunctions;
-        
-        // If we're going to exceed the limit, use a sampling strategy
-        const shouldSample = estimatedTotal > this.MAX_DISJUNCTIVE_CONSTRAINTS;
-        let samplingRate = 1.0;
-        
-        if (shouldSample) {
-            // Calculate sampling rate to stay under the limit
-            // Reserve 20% of budget for group-group constraints, 80% for node-group
-            const nodeGroupBudget = this.MAX_DISJUNCTIVE_CONSTRAINTS * 0.8;
-            samplingRate = nodeGroupBudget / estimatedNodeGroupDisjunctions;
-            
-            console.warn(
-                `Large graph detected: ${this.nodes.length} nodes, ${eligibleGroups.length} groups. ` +
-                `Estimated ${estimatedTotal} disjunctive constraints. ` +
-                `Sampling at ${(samplingRate * 100).toFixed(1)}% to stay under ${this.MAX_DISJUNCTIVE_CONSTRAINTS} limit.`
-            );
-        }
 
         for (const group of this.groups) {
             // Skip groups with no members or only one member
@@ -841,20 +805,6 @@ class ConstraintValidator {
                 // (it's already constrained to be in those groups, so it can't be outside this one)
                 const nodeGroups = nodeToGroups.get(node.id);
                 if (nodeGroups && nodeGroups.size > 0) continue;
-                
-                // Apply sampling if needed to limit constraint generation
-                if (shouldSample && Math.random() > samplingRate) {
-                    continue; // Skip this node-group pair
-                }
-                
-                // Check if we've hit the limit
-                if (this.disjunctiveConstraintCount >= this.MAX_DISJUNCTIVE_CONSTRAINTS) {
-                    console.warn(
-                        `Reached maximum disjunctive constraint limit (${this.MAX_DISJUNCTIVE_CONSTRAINTS}). ` +
-                        `Stopping constraint generation to prevent memory exhaustion.`
-                    );
-                    return null; // Stop generating constraints
-                }
 
                 const sourceConstraint = group.sourceConstraint;
 
@@ -903,14 +853,11 @@ class ConstraintValidator {
                     this.layout.disjunctiveConstraints = [];
                 }
                 this.layout.disjunctiveConstraints.push(disjunction);
-                this.disjunctiveConstraintCount++;
             }
         }
 
         // Add disjunctive constraints for group-to-group boundary separation
         // For each pair of non-overlapping groups, ensure they are separated in one direction
-        // Apply more aggressive sampling here since group-group constraints grow O(n²)
-        const groupGroupSamplingRate = shouldSample ? Math.min(1.0, (this.MAX_DISJUNCTIVE_CONSTRAINTS * 0.2) / estimatedGroupGroupDisjunctions) : 1.0;
         
         for (let i = 0; i < this.groups.length; i++) {
             for (let j = i + 1; j < this.groups.length; j++) {
@@ -931,20 +878,6 @@ class ConstraintValidator {
                 const intersection = this.groupIntersection(groupA, groupB);
                 if (intersection.length > 0) {
                     continue;
-                }
-                
-                // Apply aggressive sampling for group-group constraints
-                if (shouldSample && Math.random() > groupGroupSamplingRate) {
-                    continue;
-                }
-                
-                // Check if we've hit the limit
-                if (this.disjunctiveConstraintCount >= this.MAX_DISJUNCTIVE_CONSTRAINTS) {
-                    console.warn(
-                        `Reached maximum disjunctive constraint limit (${this.MAX_DISJUNCTIVE_CONSTRAINTS}). ` +
-                        `Stopping group-group constraint generation.`
-                    );
-                    return null;
                 }
                 
                 // Create four GroupBoundaryConstraint alternatives for group-to-group separation
@@ -991,7 +924,6 @@ class ConstraintValidator {
                     this.layout.disjunctiveConstraints = [];
                 }
                 this.layout.disjunctiveConstraints.push(disjunction);
-                this.disjunctiveConstraintCount++;
             }
         }
 
@@ -1848,7 +1780,6 @@ class ConstraintValidator {
         groupBoundingBoxes: number;
         addedConstraints: number;
         solverPoolSize: number;
-        disjunctiveConstraintCount: number;
     } {
         return {
             cachedConstraints: this.kiwiConstraintCache.size,
@@ -1856,8 +1787,7 @@ class ConstraintValidator {
             variables: Object.keys(this.variables).length,
             groupBoundingBoxes: this.groupBoundingBoxes.size,
             addedConstraints: this.added_constraints?.length || 0,
-            solverPoolSize: this.solverPool.length,
-            disjunctiveConstraintCount: this.disjunctiveConstraintCount
+            solverPoolSize: this.solverPool.length
         };
     }
 }
