@@ -1674,6 +1674,44 @@ class ConstraintValidator {
         const commonElements = g1Elements.filter(element => g2Elements.includes(element));
         return commonElements;
     }
+
+    /**
+     * Disposes of resources and clears caches to help with garbage collection.
+     * Should be called when the validator is no longer needed.
+     */
+    public dispose(): void {
+        // Clear the Kiwi constraint cache which can hold many constraint objects
+        this.kiwiConstraintCache.clear();
+        
+        // Clear solver reference
+        this.solver = null as any;
+        
+        // Clear variables
+        this.variables = {};
+        
+        // Clear group bounding boxes
+        this.groupBoundingBoxes.clear();
+    }
+
+    /**
+     * Returns memory usage statistics for this validator.
+     * Useful for monitoring and debugging memory consumption.
+     * 
+     * @returns Object containing memory-related metrics
+     */
+    public getMemoryStats(): {
+        cachedConstraints: number;
+        variables: number;
+        groupBoundingBoxes: number;
+        addedConstraints: number;
+    } {
+        return {
+            cachedConstraints: this.kiwiConstraintCache.size,
+            variables: Object.keys(this.variables).length,
+            groupBoundingBoxes: this.groupBoundingBoxes.size,
+            addedConstraints: this.added_constraints?.length || 0
+        };
+    }
 }
 
 

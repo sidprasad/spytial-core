@@ -759,6 +759,39 @@ export class WebColaLayout {
 
     return Array.from(uniqueGroups);
   }
+
+  /**
+   * Disposes of resources to help with garbage collection.
+   * Clears the dagre_graph reference which can hold significant memory.
+   */
+  public dispose(): void {
+    // Clear the dagre graph which can be memory-intensive
+    if (this.dagre_graph) {
+      this.dagre_graph = null;
+    }
+  }
+
+  /**
+   * Returns memory usage statistics for this layout.
+   * Useful for monitoring and debugging memory consumption.
+   * 
+   * @returns Object containing memory-related metrics
+   */
+  public getMemoryStats(): {
+    nodeCount: number;
+    edgeCount: number;
+    groupCount: number;
+    constraintCount: number;
+    hasDagreGraph: boolean;
+  } {
+    return {
+      nodeCount: this.colaNodes?.length || 0,
+      edgeCount: this.colaEdges?.length || 0,
+      groupCount: this.groupDefinitions?.length || 0,
+      constraintCount: this.colaConstraints?.length || 0,
+      hasDagreGraph: !!this.dagre_graph
+    };
+  }
 }
 
 /**
