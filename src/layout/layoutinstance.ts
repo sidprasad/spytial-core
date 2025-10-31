@@ -1,6 +1,6 @@
 import { Graph, Edge } from 'graphlib';
 import { IAtom, IDataInstance, IType } from '../data-instance/interfaces';
-import { PositionalConstraintError, GroupOverlapError, isPositionalConstraintError, isGroupOverlapError } from './constraint-validator';
+import { PositionalConstraintError, GroupOverlapError, QueryConstraintError, isPositionalConstraintError, isGroupOverlapError, isQueryConstraintError } from './constraint-validator';
 
 
 import {
@@ -783,9 +783,29 @@ export class LayoutInstance {
 
         ///////////// CONSTRAINTS ////////////
 
-
-        let constraints: LayoutConstraint[] = this.applyRelativeOrientationConstraints(layoutNodes, g);
-        constraints = constraints.concat(this.applyAlignConstraints(layoutNodes, g));
+        let constraints: LayoutConstraint[] = [];
+        
+        try {
+            constraints = this.applyRelativeOrientationConstraints(layoutNodes, g);
+            constraints = constraints.concat(this.applyAlignConstraints(layoutNodes, g));
+        } catch (error) {
+            // If a QueryConstraintError is thrown, handle it as a constraint error
+            if (isQueryConstraintError(error)) {
+                return this.handleQueryConstraintError(
+                    error as QueryConstraintError,
+                    { 
+                        nodes: layoutNodes, 
+                        edges: [], 
+                        constraints: constraints, 
+                        groups: groups,
+                        disjunctiveConstraints: [] 
+                    },
+                    projectionData
+                );
+            }
+            // Re-throw other errors
+            throw error;
+        }
         
         // Prune redundant alignment edges after all have been added
         this.pruneRedundantAlignmentEdges(g);
@@ -820,7 +840,27 @@ export class LayoutInstance {
         }).filter((edge): edge is LayoutEdge => edge !== null);
 
         // Build cyclic constraint disjunctions
-        const cyclicDisjunctions = this.buildCyclicDisjunctions(layoutNodes);
+        let cyclicDisjunctions: DisjunctiveConstraint[] = [];
+        try {
+            cyclicDisjunctions = this.buildCyclicDisjunctions(layoutNodes);
+        } catch (error) {
+            // If a QueryConstraintError is thrown, handle it as a constraint error
+            if (isQueryConstraintError(error)) {
+                return this.handleQueryConstraintError(
+                    error as QueryConstraintError,
+                    { 
+                        nodes: layoutNodes, 
+                        edges: layoutEdges, 
+                        constraints: constraints, 
+                        groups: groups,
+                        disjunctiveConstraints: [] 
+                    },
+                    projectionData
+                );
+            }
+            // Re-throw other errors
+            throw error;
+        }
 
         // Create layout with conjunctive constraints and disjunctive constraints
         let layout: InstanceLayout = { 
@@ -847,6 +887,14 @@ export class LayoutInstance {
             if ((constraintError as GroupOverlapError).overlappingNodes) {
                 return this.handleGroupOverlapError(
                     constraintError as GroupOverlapError,
+                    layout,
+                    projectionData
+                );
+            }
+
+            if (isQueryConstraintError(constraintError)) {
+                return this.handleQueryConstraintError(
+                    constraintError as QueryConstraintError,
                     layout,
                     projectionData
                 );
@@ -904,6 +952,35 @@ export class LayoutInstance {
             ),
             groups: layout.groups,
             conflictingConstraints: [...minimalConflictingSet.values()].flat()
+        };
+        return {
+            layout: layoutWithErrorMetadata,
+            projectionData,
+            error: error
+        };
+    }
+
+    /**
+     * Helper function to handle query constraint errors that occur when evaluator queries
+     * reference hidden or filtered nodes.
+     * @returns An object containing the layout with error metadata, projection data, and the error itself.
+     */
+    private handleQueryConstraintError(
+        error: QueryConstraintError,
+        layout: InstanceLayout,
+        projectionData: { type: string, projectedAtom: string, atoms: string[] }[]
+    ): {
+        layout: InstanceLayout,
+        projectionData: { type: string, projectedAtom: string, atoms: string[] }[],
+        error: ConstraintError
+    } {
+        // For query constraint errors, we return the layout as is since the error occurred
+        // during constraint generation (before validation)
+        const layoutWithErrorMetadata: InstanceLayout = {
+            nodes: layout.nodes,
+            edges: layout.edges,
+            constraints: layout.constraints,
+            groups: layout.groups,
         };
         return {
             layout: layoutWithErrorMetadata,
@@ -1031,7 +1108,8 @@ export class LayoutInstance {
                         fragment,
                         layoutNodes,
                         perturbation,
-                        c
+                        c,
+                        c.selector
                     );
                     alternatives.push(constraintsForPerturbation);
                 }
@@ -1048,7 +1126,8 @@ export class LayoutInstance {
     private getCyclicConstraintForFragment(fragment: string[],
         layoutNodes: LayoutNode[],
         perturbationIdx: number,
-        c: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint): LayoutConstraint[] {
+        c: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint,
+        selector: string): LayoutConstraint[] {
         const minRadius = 100;
 
 
@@ -1077,25 +1156,25 @@ export class LayoutInstance {
                     let node2_pos = fragmentNodePositions[node2];
 
                     if (node1_pos.x > node2_pos.x) {
-                        fragmentConstraintsForCurrentOffset.push(this.leftConstraint(node2, node1, this.minSepWidth, layoutNodes, c));
+                        fragmentConstraintsForCurrentOffset.push(this.leftConstraint(node2, node1, this.minSepWidth, layoutNodes, c, selector));
                     }
                     else if (node1_pos.x < node2_pos.x) {
-                        fragmentConstraintsForCurrentOffset.push(this.leftConstraint(node1, node2, this.minSepWidth, layoutNodes, c));
+                        fragmentConstraintsForCurrentOffset.push(this.leftConstraint(node1, node2, this.minSepWidth, layoutNodes, c, selector));
                     }
                     else {
                         // If they are on the same x-axis, we need to ensure that they are not on top of each other
-                        fragmentConstraintsForCurrentOffset.push(this.ensureSameXConstraint(node1, node2, layoutNodes, c));
+                        fragmentConstraintsForCurrentOffset.push(this.ensureSameXConstraint(node1, node2, layoutNodes, c, selector));
                     }
 
                     if (node1_pos.y > node2_pos.y) {
-                        fragmentConstraintsForCurrentOffset.push(this.topConstraint(node2, node1, this.minSepHeight, layoutNodes, c));
+                        fragmentConstraintsForCurrentOffset.push(this.topConstraint(node2, node1, this.minSepHeight, layoutNodes, c, selector));
                     }
                     else if (node1_pos.y < node2_pos.y) {
-                        fragmentConstraintsForCurrentOffset.push(this.topConstraint(node1, node2, this.minSepHeight, layoutNodes, c));
+                        fragmentConstraintsForCurrentOffset.push(this.topConstraint(node1, node2, this.minSepHeight, layoutNodes, c, selector));
                     }
                     else {
                         // If they are on the same y-axis, we need to ensure that they are not on top of each other
-                        fragmentConstraintsForCurrentOffset.push(this.ensureSameYConstraint(node1, node2, layoutNodes, c));
+                        fragmentConstraintsForCurrentOffset.push(this.ensureSameYConstraint(node1, node2, layoutNodes, c, selector));
                     }
                 }
             }
@@ -1200,32 +1279,32 @@ export class LayoutInstance {
                     }
 
                     if (direction == "left") {
-                        constraints.push(this.leftConstraint(targetNodeId, sourceNodeId, this.minSepWidth, layoutNodes, c));
+                        constraints.push(this.leftConstraint(targetNodeId, sourceNodeId, this.minSepWidth, layoutNodes, c, selector));
                     }
                     else if (direction == "above") {
-                        constraints.push(this.topConstraint(targetNodeId, sourceNodeId, this.minSepHeight, layoutNodes, c));
+                        constraints.push(this.topConstraint(targetNodeId, sourceNodeId, this.minSepHeight, layoutNodes, c, selector));
                     }
                     else if (direction == "right") {
-                        constraints.push(this.leftConstraint(sourceNodeId, targetNodeId, this.minSepWidth, layoutNodes, c));
+                        constraints.push(this.leftConstraint(sourceNodeId, targetNodeId, this.minSepWidth, layoutNodes, c, selector));
                     }
                     else if (direction == "below") {
-                        constraints.push(this.topConstraint(sourceNodeId, targetNodeId, this.minSepHeight, layoutNodes, c));
+                        constraints.push(this.topConstraint(sourceNodeId, targetNodeId, this.minSepHeight, layoutNodes, c, selector));
                     }
                     else if (direction == "directlyLeft") {
-                        constraints.push(this.leftConstraint(targetNodeId, sourceNodeId, this.minSepWidth, layoutNodes, c));
-                        constraints.push(this.ensureSameYConstraint(targetNodeId, sourceNodeId, layoutNodes, c));
+                        constraints.push(this.leftConstraint(targetNodeId, sourceNodeId, this.minSepWidth, layoutNodes, c, selector));
+                        constraints.push(this.ensureSameYConstraint(targetNodeId, sourceNodeId, layoutNodes, c, selector));
                     }
                     else if (direction == "directlyAbove") {
-                        constraints.push(this.topConstraint(targetNodeId, sourceNodeId, this.minSepHeight, layoutNodes, c));
-                        constraints.push(this.ensureSameXConstraint(targetNodeId, sourceNodeId, layoutNodes, c));
+                        constraints.push(this.topConstraint(targetNodeId, sourceNodeId, this.minSepHeight, layoutNodes, c, selector));
+                        constraints.push(this.ensureSameXConstraint(targetNodeId, sourceNodeId, layoutNodes, c, selector));
                     }
                     else if (direction == "directlyRight") {
-                        constraints.push(this.leftConstraint(sourceNodeId, targetNodeId, this.minSepWidth, layoutNodes, c));
-                        constraints.push(this.ensureSameYConstraint(targetNodeId, sourceNodeId, layoutNodes, c));
+                        constraints.push(this.leftConstraint(sourceNodeId, targetNodeId, this.minSepWidth, layoutNodes, c, selector));
+                        constraints.push(this.ensureSameYConstraint(targetNodeId, sourceNodeId, layoutNodes, c, selector));
                     }
                     else if (direction == "directlyBelow") {
-                        constraints.push(this.topConstraint(sourceNodeId, targetNodeId, this.minSepHeight, layoutNodes, c));
-                        constraints.push(this.ensureSameXConstraint(targetNodeId, sourceNodeId, layoutNodes, c));
+                        constraints.push(this.topConstraint(sourceNodeId, targetNodeId, this.minSepHeight, layoutNodes, c, selector));
+                        constraints.push(this.ensureSameXConstraint(targetNodeId, sourceNodeId, layoutNodes, c, selector));
                     }
                 });
             });
@@ -1263,10 +1342,10 @@ export class LayoutInstance {
 
                 if (direction === "horizontal") {
                     // Horizontal alignment means same Y coordinate
-                    constraints.push(this.ensureSameYConstraint(sourceNodeId, targetNodeId, layoutNodes, c));
+                    constraints.push(this.ensureSameYConstraint(sourceNodeId, targetNodeId, layoutNodes, c, selector));
                 } else if (direction === "vertical") {
                     // Vertical alignment means same X coordinate
-                    constraints.push(this.ensureSameXConstraint(sourceNodeId, targetNodeId, layoutNodes, c));
+                    constraints.push(this.ensureSameXConstraint(sourceNodeId, targetNodeId, layoutNodes, c, selector));
                 }
             });
         });
@@ -1446,42 +1525,50 @@ export class LayoutInstance {
 
 
 
-    private getNodeFromId(nodeId: string, layoutNodes: LayoutNode[]): LayoutNode {
+    private getNodeFromId(nodeId: string, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint, selector: string): LayoutNode {
         let node = layoutNodes.find((node) => node.id === nodeId);
         if (!node) {
-            throw new Error(`Node ${nodeId} not found in graph. Did you hide it? If this is a built-in type, try removing any visibility flags.`);
+            const queryError: QueryConstraintError = {
+                name: "QueryConstraintError",
+                type: 'query-constraint',
+                message: `Node "${nodeId}" not found in graph. This node was referenced by the selector "${selector}" but has been hidden or filtered out by visibility constraints.`,
+                nodeId: nodeId,
+                sourceConstraint: sourceConstraint,
+                selector: selector
+            };
+            throw queryError;
         }
         return node;
     }
 
 
-    private leftConstraint(leftId: string, rightId: string, minDistance: number, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint): LeftConstraint {
+    private leftConstraint(leftId: string, rightId: string, minDistance: number, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint, selector: string): LeftConstraint {
 
-        let left = this.getNodeFromId(leftId, layoutNodes);
-        let right = this.getNodeFromId(rightId, layoutNodes);
+        let left = this.getNodeFromId(leftId, layoutNodes, sourceConstraint, selector);
+        let right = this.getNodeFromId(rightId, layoutNodes, sourceConstraint, selector);
         return { left: left, right: right, minDistance: minDistance, sourceConstraint: sourceConstraint };
     }
 
-    private topConstraint(topId: string, bottomId: string, minDistance: number, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint): TopConstraint {
+    private topConstraint(topId: string, bottomId: string, minDistance: number, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint, selector: string): TopConstraint {
 
-        let top = this.getNodeFromId(topId, layoutNodes);
-        let bottom = this.getNodeFromId(bottomId, layoutNodes);
+        let top = this.getNodeFromId(topId, layoutNodes, sourceConstraint, selector);
+        let bottom = this.getNodeFromId(bottomId, layoutNodes, sourceConstraint, selector);
 
         return { top: top, bottom: bottom, minDistance: minDistance, sourceConstraint: sourceConstraint };
     }
 
-    private ensureSameYConstraint(node1Id: string, node2Id: string, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint): AlignmentConstraint {
+    private ensureSameYConstraint(node1Id: string, node2Id: string, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint, selector: string): AlignmentConstraint {
 
-        let node1 = this.getNodeFromId(node1Id, layoutNodes);
-        let node2 = this.getNodeFromId(node2Id, layoutNodes);
+        let node1 = this.getNodeFromId(node1Id, layoutNodes, sourceConstraint, selector);
+        let node2 = this.getNodeFromId(node2Id, layoutNodes, sourceConstraint, selector);
 
         return { axis: "y", node1: node1, node2: node2, sourceConstraint: sourceConstraint };
     }
 
-    private ensureSameXConstraint(node1Id: string, node2Id: string, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint): AlignmentConstraint {
+    private ensureSameXConstraint(node1Id: string, node2Id: string, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint, selector: string): AlignmentConstraint {
 
-        let node1 = this.getNodeFromId(node1Id, layoutNodes);
-        let node2 = this.getNodeFromId(node2Id, layoutNodes);
+        let node1 = this.getNodeFromId(node1Id, layoutNodes, sourceConstraint, selector);
+        let node2 = this.getNodeFromId(node2Id, layoutNodes, sourceConstraint, selector);
 
         return { axis: "x", node1: node1, node2: node2, sourceConstraint: sourceConstraint };
     }
