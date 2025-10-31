@@ -1,0 +1,379 @@
+import { describe, it, expect } from 'vitest';
+import { LayoutInstance } from '../src/layout/layoutinstance';
+import { SGraphQueryEvaluator } from '../src/evaluators/sgq-evaluator';
+import { parseLayoutSpec } from '../src/layout/layoutspec';
+import { WebColaTranslator } from '../src/translators/webcola/webcolatranslator';
+import { JSONDataInstance } from '../src/data-instance/json-data-instance';
+import type { InstanceLayout, LayoutGroup } from '../src/layout/interfaces';
+
+/**
+ * Test suite for WebCola jitter reduction improvements:
+ * 1. Group deduplication for identical nested groups
+ * 2. Adaptive group compactness based on graph structure
+ */
+
+// Helper function to create test data
+function createTestData(atoms: string[]): any {
+  return {
+    atoms: atoms.map(id => ({ id, type: 'Node', label: id })),
+    relations: []
+  };
+}
+
+describe('WebCola Jitter Improvements', () => {
+  
+  describe('Group Deduplication', () => {
+    
+    it('should collapse groups with identical node sets', async () => {
+      const jsonData = createTestData(['A', 'B', 'C']);
+
+      const layoutSpec = parseLayoutSpec(`
+        nodes:
+          - { id: A, type: atom }
+          - { id: B, type: atom }
+          - { id: C, type: atom }
+        
+        groups:
+          - name: "Group1"
+            nodes: [A, B]
+          - name: "Group2"
+            nodes: [A, B]
+      `);
+
+      const dataInstance = new JSONDataInstance(jsonData);
+      const evaluator = new SGraphQueryEvaluator();
+      evaluator.initialize({ sourceData: dataInstance });
+
+      const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
+      const { layout } = layoutInstance.generateLayout(dataInstance, {});
+
+      const translator = new WebColaTranslator();
+      const webcolaLayout = await translator.translate(layout);
+
+      // Should have collapsed 2 duplicate user groups into 1
+      // Plus potentially disconnected node groups (nodes not in any edge)
+      // In this case: C is disconnected, A and B might be disconnected too
+      const userGroups = webcolaLayout.groups.filter((g: any) => !g.name.startsWith('_d_'));
+      expect(userGroups.length).toBe(1);
+      
+      // The merged group should have combined labels
+      expect(userGroups[0].name).toContain('Group1');
+      expect(userGroups[0].name).toContain('Group2');
+    });
+
+    it('should preserve separate groups with different node sets', async () => {
+      const jsonData = createTestData(['A', 'B', 'C']);
+
+      const layoutSpec = parseLayoutSpec(`
+        nodes:
+          - { id: A, type: atom }
+          - { id: B, type: atom }
+          - { id: C, type: atom }
+        
+        groups:
+          - name: "Group1"
+            nodes: [A, B]
+          - name: "Group2"
+            nodes: [B, C]
+      `);
+
+      const dataInstance = new JSONDataInstance(jsonData);
+      const evaluator = new SGraphQueryEvaluator();
+      evaluator.initialize({ sourceData: dataInstance });
+
+      const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
+      const { layout } = layoutInstance.generateLayout(dataInstance, {});
+
+      const translator = new WebColaTranslator();
+      const webcolaLayout = await translator.translate(layout);
+
+      // Should keep both user groups since they have different nodes
+      // Filter out disconnected node groups
+      const userGroups = webcolaLayout.groups.filter((g: any) => !g.name.startsWith('_d_'));
+      expect(userGroups.length).toBe(2);
+    });
+
+    it('should handle multiple duplicate groups', async () => {
+      const jsonData = createTestData(['A', 'B']);
+
+      const layoutSpec = parseLayoutSpec(`
+        nodes:
+          - { id: A, type: atom }
+          - { id: B, type: atom }
+        
+        groups:
+          - name: "Group1"
+            nodes: [A, B]
+          - name: "Group2"
+            nodes: [A, B]
+          - name: "Group3"
+            nodes: [A, B]
+      `);
+
+      const dataInstance = new JSONDataInstance(jsonData);
+      const evaluator = new SGraphQueryEvaluator();
+      evaluator.initialize({ sourceData: dataInstance });
+
+      const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
+      const { layout } = layoutInstance.generateLayout(dataInstance, {});
+
+      const translator = new WebColaTranslator();
+      const webcolaLayout = await translator.translate(layout);
+
+      // Should collapse 3 groups into 1
+      expect(webcolaLayout.groups.length).toBe(1);
+      
+      // Should combine all three names
+      const groupName = webcolaLayout.groups[0].name;
+      expect(groupName).toContain('Group1');
+      expect(groupName).toContain('Group2');
+      expect(groupName).toContain('Group3');
+    });
+
+    it('should preserve showLabel flag when any duplicate group has it true', async () => {
+      // Create groups programmatically to control showLabel
+      const groups: LayoutGroup[] = [
+        {
+          name: 'Group1',
+          nodeIds: ['A', 'B'],
+          keyNodeId: 'A',
+          showLabel: false
+        },
+        {
+          name: 'Group2',
+          nodeIds: ['A', 'B'],
+          keyNodeId: 'A',
+          showLabel: true // One has showLabel = true
+        }
+      ];
+
+      // Create a minimal InstanceLayout for testing
+      const instanceLayout: InstanceLayout = {
+        nodes: [
+          { id: 'A', label: 'A', color: '#000', width: 100, height: 60, attributes: {}, mostSpecificType: 'atom', showLabels: true, icon: '' },
+          { id: 'B', label: 'B', color: '#000', width: 100, height: 60, attributes: {}, mostSpecificType: 'atom', showLabels: true, icon: '' }
+        ],
+        edges: [],
+        constraints: [],
+        groups: groups
+      };
+
+      const translator = new WebColaTranslator();
+      const webcolaLayout = await translator.translate(instanceLayout);
+
+      // Should have merged to 1 group
+      expect(webcolaLayout.groups.length).toBe(1);
+      
+      // showLabel should be true (from Group2)
+      expect(webcolaLayout.groups[0].showLabel).toBe(true);
+    });
+
+    it('should handle empty groups array', async () => {
+      const jsonData = createTestData(['A', 'B']);
+
+      const layoutSpec = parseLayoutSpec(`
+        nodes:
+          - { id: A, type: atom }
+          - { id: B, type: atom }
+      `);
+
+      const dataInstance = new JSONDataInstance(jsonData);
+      const evaluator = new SGraphQueryEvaluator();
+      evaluator.initialize({ sourceData: dataInstance });
+
+      const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
+      const { layout } = layoutInstance.generateLayout(dataInstance, {});
+
+      const translator = new WebColaTranslator();
+      const webcolaLayout = await translator.translate(layout);
+
+      // Should handle empty groups gracefully
+      expect(webcolaLayout.groups).toBeDefined();
+      expect(webcolaLayout.groups.length).toBe(0);
+    });
+  });
+
+  describe('Adaptive Group Compactness', () => {
+    
+    it('should use default compactness for simple layouts', async () => {
+      const jsonData = createTestData(['A', 'B']);
+
+      const layoutSpec = parseLayoutSpec(`
+        nodes:
+          - { id: A, type: atom }
+          - { id: B, type: atom }
+      `);
+
+      const dataInstance = new JSONDataInstance(jsonData);
+      const evaluator = new SGraphQueryEvaluator();
+      evaluator.initialize({ sourceData: dataInstance });
+
+      const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
+      const { layout } = layoutInstance.generateLayout(dataInstance, {});
+
+      const translator = new WebColaTranslator();
+      const webcolaLayout = await translator.translate(layout);
+
+      // No groups, so groups array should be empty
+      expect(webcolaLayout.groups.length).toBe(0);
+    });
+
+    it('should handle nested group structures', async () => {
+      const jsonData = createTestData(['A', 'B', 'C', 'D']);
+
+      const layoutSpec = parseLayoutSpec(`
+        nodes:
+          - { id: A, type: atom }
+          - { id: B, type: atom }
+          - { id: C, type: atom }
+          - { id: D, type: atom }
+        
+        groups:
+          - name: "OuterGroup"
+            nodes: [A, B, C, D]
+          - name: "MiddleGroup"
+            nodes: [B, C, D]
+          - name: "InnerGroup"
+            nodes: [C, D]
+      `);
+
+      const dataInstance = new JSONDataInstance(jsonData);
+      const evaluator = new SGraphQueryEvaluator();
+      evaluator.initialize({ sourceData: dataInstance });
+
+      const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
+      const { layout } = layoutInstance.generateLayout(dataInstance, {});
+
+      const translator = new WebColaTranslator();
+      const webcolaLayout = await translator.translate(layout);
+
+      // Verify groups are created
+      expect(webcolaLayout.groups.length).toBeGreaterThan(0);
+      
+      // Verify the groups structure includes nesting
+      const hasNestedGroups = webcolaLayout.groups.some((g: any) => 
+        g.groups && Array.isArray(g.groups) && g.groups.length > 0
+      );
+      expect(hasNestedGroups).toBe(true);
+    });
+
+    it('should handle high group-to-node ratio', async () => {
+      const jsonData = createTestData(['A', 'B', 'C']);
+
+      const layoutSpec = parseLayoutSpec(`
+        nodes:
+          - { id: A, type: atom }
+          - { id: B, type: atom }
+          - { id: C, type: atom }
+        
+        groups:
+          - name: "Group1"
+            nodes: [A, B]
+          - name: "Group2"
+            nodes: [B, C]
+          - name: "Group3"
+            nodes: [A, C]
+      `);
+
+      const dataInstance = new JSONDataInstance(jsonData);
+      const evaluator = new SGraphQueryEvaluator();
+      evaluator.initialize({ sourceData: dataInstance });
+
+      const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
+      const { layout } = layoutInstance.generateLayout(dataInstance, {});
+
+      const translator = new WebColaTranslator();
+      const webcolaLayout = await translator.translate(layout);
+
+      // Group-to-node ratio is 3/3 = 1.0, which is > 0.3
+      // Verify all groups are present
+      expect(webcolaLayout.groups.length).toBe(3);
+    });
+  });
+
+  describe('Integration: Group Deduplication + Adaptive Compactness', () => {
+    
+    it('should work together for complex nested duplicate groups', async () => {
+      const jsonData = createTestData(['A', 'B', 'C', 'D']);
+
+      const layoutSpec = parseLayoutSpec(`
+        nodes:
+          - { id: A, type: atom }
+          - { id: B, type: atom }
+          - { id: C, type: atom }
+          - { id: D, type: atom }
+        
+        groups:
+          - name: "Outer1"
+            nodes: [A, B, C, D]
+          - name: "Outer2"
+            nodes: [A, B, C, D]
+          - name: "Inner1"
+            nodes: [B, C]
+          - name: "Inner2"
+            nodes: [B, C]
+      `);
+
+      const dataInstance = new JSONDataInstance(jsonData);
+      const evaluator = new SGraphQueryEvaluator();
+      evaluator.initialize({ sourceData: dataInstance });
+
+      const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
+      const { layout } = layoutInstance.generateLayout(dataInstance, {});
+
+      const translator = new WebColaTranslator();
+      const webcolaLayout = await translator.translate(layout);
+
+      // Should collapse Outer1+Outer2 and Inner1+Inner2
+      // So 4 groups -> 2 groups
+      expect(webcolaLayout.groups.length).toBe(2);
+      
+      // Verify names are combined
+      const groupNames = webcolaLayout.groups.map((g: any) => g.name);
+      expect(groupNames.some(name => name.includes('Outer1') && name.includes('Outer2'))).toBe(true);
+      expect(groupNames.some(name => name.includes('Inner1') && name.includes('Inner2'))).toBe(true);
+    });
+
+    it('should reduce jitter risk by minimizing constraint conflicts', async () => {
+      const jsonData = createTestData(['A', 'B', 'C']);
+
+      const layoutSpec = parseLayoutSpec(`
+        nodes:
+          - { id: A, type: atom }
+          - { id: B, type: atom }
+          - { id: C, type: atom }
+        
+        orientation:
+          - left: A
+            right: B
+        
+        groups:
+          - name: "Group1"
+            nodes: [A, B, C]
+          - name: "Group2"
+            nodes: [A, B, C]
+          - name: "Group3"
+            nodes: [A, B, C]
+      `);
+
+      const dataInstance = new JSONDataInstance(jsonData);
+      const evaluator = new SGraphQueryEvaluator();
+      evaluator.initialize({ sourceData: dataInstance });
+
+      const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
+      const { layout } = layoutInstance.generateLayout(dataInstance, {});
+
+      const translator = new WebColaTranslator();
+      const webcolaLayout = await translator.translate(layout);
+
+      // 3 duplicate groups should be collapsed to 1
+      expect(webcolaLayout.groups.length).toBe(1);
+      
+      // Should still have the orientation constraint
+      expect(webcolaLayout.constraints.length).toBeGreaterThan(0);
+      
+      // Verify group contains all nodes
+      expect(webcolaLayout.groups[0].leaves.length).toBe(3);
+    });
+  });
+});
