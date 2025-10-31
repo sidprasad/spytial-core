@@ -248,6 +248,11 @@ export class WebColaLayout {
     
     for (const constraint of constraints) {
       // Validate indices to prevent prototype pollution
+      // The indices come from constraint objects but we validate they are:
+      // 1. Actually numbers (not strings like '__proto__')
+      // 2. Integers (not floating point)
+      // 3. Within valid array bounds
+      // This prevents any prototype pollution attacks
       const left = constraint.left;
       const right = constraint.right;
       
