@@ -434,7 +434,7 @@ export class ForgeEvaluator implements IEvaluator {
         this.initialized = false;
         
         // Clear the data instance reference
-        this.alloyDatum = null as any;
+        //this.alloyDatum = null as any;
     }
 
 
@@ -473,7 +473,7 @@ export class ForgeEvaluator implements IEvaluator {
     } {
         return {
             cacheSize: this.evaluatorCache.size,
-            hasAlloyDatum: !!this.alloyDatum
+            hasAlloyDatum: false
         };
     }
 }

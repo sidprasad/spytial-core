@@ -287,9 +287,6 @@ export class SGraphQueryEvaluator implements IEvaluator {
   public dispose(): void {
     // Clear the evaluator cache which can hold many result objects
     this.evaluatorCache.clear();
-    
-    // Clear the data instance reference
-    this.dataInstance = null as any;
   }
 
   /**
@@ -306,7 +303,7 @@ export class SGraphQueryEvaluator implements IEvaluator {
     return {
       cacheSize: this.evaluatorCache.size,
       maxCacheSize: this.MAX_CACHE_SIZE,
-      hasDataInstance: !!this.dataInstance
+      hasDataInstance: false
     };
   }
 }
