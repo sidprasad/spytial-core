@@ -279,6 +279,36 @@ export class SGraphQueryEvaluator implements IEvaluator {
     
     return wrappedResult;
   }
+
+  /**
+   * Disposes of resources and clears caches to help with garbage collection.
+   * Should be called when the evaluator is no longer needed.
+   */
+  public dispose(): void {
+    // Clear the evaluator cache which can hold many result objects
+    this.evaluatorCache.clear();
+    
+    // Clear the data instance reference
+    this.dataInstance = null as any;
+  }
+
+  /**
+   * Returns memory usage statistics for this evaluator.
+   * Useful for monitoring and debugging memory consumption.
+   * 
+   * @returns Object containing memory-related metrics
+   */
+  public getMemoryStats(): {
+    cacheSize: number;
+    maxCacheSize: number;
+    hasDataInstance: boolean;
+  } {
+    return {
+      cacheSize: this.evaluatorCache.size,
+      maxCacheSize: this.MAX_CACHE_SIZE,
+      hasDataInstance: !!this.dataInstance
+    };
+  }
 }
 
 

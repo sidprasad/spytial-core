@@ -3645,6 +3645,105 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   // EVENT-BASED STATE INTEGRATION API
   // =========================================
 
+  // =========================================
+  // LIFECYCLE METHODS AND CLEANUP
+  // =========================================
+
+  /**
+   * Called when the custom element is disconnected from the DOM.
+   * Performs cleanup to prevent memory leaks.
+   */
+  disconnectedCallback(): void {
+    this.dispose();
+  }
+
+  /**
+   * Disposes of resources to prevent memory leaks.
+   * Should be called when the component is no longer needed.
+   * 
+   * This method cleans up:
+   * - D3 selections and event listeners
+   * - WebCola layout references
+   * - Keyboard event handlers
+   * - Temporary UI elements (modals, overlays)
+   */
+  public dispose(): void {
+    // Remove keyboard event handlers
+    // Note: We can't easily remove specific listeners without keeping references,
+    // but we can clear the component state that they depend on
+    this.deactivateInputMode();
+    
+    // Clear D3 selections and remove event listeners
+    if (this.svg) {
+      this.svg.on('.zoom', null); // Remove zoom event handlers
+      this.svg.selectAll('*').remove(); // Remove all child elements
+    }
+    
+    if (this.container) {
+      this.container.selectAll('*').remove(); // Remove all container children
+    }
+    
+    // Clear node drag event handlers
+    if (this.svgNodes) {
+      this.svgNodes.on('.drag', null);
+      this.svgNodes.on('.cnd', null);
+    }
+    
+    // Clear WebCola layout reference
+    if (this.colaLayout) {
+      // Stop any ongoing layout computation
+      if (typeof (this.colaLayout as any).stop === 'function') {
+        (this.colaLayout as any).stop();
+      }
+      // Remove event handlers
+      (this.colaLayout as any).on('tick', null);
+      (this.colaLayout as any).on('end', null);
+    }
+    
+    // Clear stored references to help garbage collection
+    this.currentLayout = null as any;
+    this.colaLayout = null as any;
+    this.svgNodes = null as any;
+    this.svgLinkGroups = null as any;
+    this.svgGroups = null as any;
+    this.svgGroupLabels = null as any;
+    this.zoomBehavior = null as any;
+    this.storedTransform = null as any;
+    
+    // Clear drag state
+    this.dragStartPositions.clear();
+    
+    // Clear edge creation state
+    this.cleanupEdgeCreation();
+    
+    // Clear text measurement canvas
+    if (this.textMeasurementCanvas) {
+      this.textMeasurementCanvas = null;
+    }
+  }
+
+  /**
+   * Returns memory usage statistics for monitoring and debugging.
+   * Useful for tracking memory consumption and identifying potential leaks.
+   * 
+   * @returns Object containing various memory-related metrics
+   */
+  public getMemoryStats(): {
+    nodeCount: number;
+    edgeCount: number;
+    groupCount: number;
+    constraintCount: number;
+    hasActiveLayout: boolean;
+  } {
+    return {
+      nodeCount: this.currentLayout?.nodes?.length || 0,
+      edgeCount: this.currentLayout?.links?.length || 0,
+      groupCount: this.currentLayout?.groups?.length || 0,
+      constraintCount: this.currentLayout?.constraints?.length || 0,
+      hasActiveLayout: !!this.colaLayout
+    };
+  }
+
 }
 
 // Register the custom element only in browser environments

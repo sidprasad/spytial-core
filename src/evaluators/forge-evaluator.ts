@@ -420,11 +420,21 @@ export class ForgeEvaluator implements IEvaluator {
 
 
 
+    /**
+     * Disposes of resources and clears caches to help with garbage collection.
+     * Should be called when the evaluator is no longer needed.
+     */
     dispose(): void {
+        // Clear the evaluator cache which can hold many result objects
+        this.evaluatorCache.clear();
+        
         this.context = undefined;
         this.evaluator = undefined;
         this.sourceCode = '';
         this.initialized = false;
+        
+        // Clear the data instance reference
+        this.alloyDatum = null as any;
     }
 
 
@@ -449,6 +459,22 @@ export class ForgeEvaluator implements IEvaluator {
             console.error("Error extracting source code from datum:", error);
             return "";
         }
+    }
+
+    /**
+     * Returns memory usage statistics for this evaluator.
+     * Useful for monitoring and debugging memory consumption.
+     * 
+     * @returns Object containing memory-related metrics
+     */
+    public getMemoryStats(): {
+        cacheSize: number;
+        hasAlloyDatum: boolean;
+    } {
+        return {
+            cacheSize: this.evaluatorCache.size,
+            hasAlloyDatum: !!this.alloyDatum
+        };
     }
 }
 
