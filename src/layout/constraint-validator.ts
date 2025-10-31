@@ -60,7 +60,6 @@ interface GroupOverlapError extends ConstraintError {
  */
 interface QueryConstraintError extends ConstraintError {
     type: 'query-constraint';
-    name: 'QueryConstraintError';
     /** The node ID that was not found */
     nodeId: string;
     /** The source constraint that triggered the query */

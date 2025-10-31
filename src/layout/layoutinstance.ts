@@ -1072,6 +1072,10 @@ export class LayoutInstance {
                 let tgtN = layoutNodes.find((node) => node.id === targetNodeId);
 
                 // Skip if either node is not found
+                // Note: Unlike other constraint generation methods that throw QueryConstraintError,
+                // we skip missing nodes here because we're building a relationship graph first,
+                // then extracting cyclic fragments from it. This allows partial cyclic constraints
+                // to be generated even if some nodes are hidden by visibility constraints.
                 if (!srcN || !tgtN) {
                     return;
                 }
