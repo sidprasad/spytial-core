@@ -3,7 +3,7 @@ import { JSONDataInstance, IJsonDataInstance } from '../src/data-instance/json-d
 import { parseLayoutSpec } from '../src/layout/layoutspec';
 import { LayoutInstance } from '../src/layout/layoutinstance';
 import { SGraphQueryEvaluator } from '../src/evaluators/sgq-evaluator';
-import { WebColaTranslator } from '../src/translators/webcola/webcolatranslator';
+import { WebColaTranslator, ColaSeparationConstraint } from '../src/translators/webcola/webcolatranslator';
 
 function createEvaluator(instance: JSONDataInstance) {
   const evaluator = new SGraphQueryEvaluator();
@@ -320,10 +320,10 @@ constraints:
       
       // Check that we have both types of constraints
       const hasOrientation = result.colaConstraints.some(
-        c => c.type === 'separation' && !(c as any).equality
+        c => c.type === 'separation' && !('equality' in c && (c as ColaSeparationConstraint).equality)
       );
       const hasAlignment = result.colaConstraints.some(
-        c => c.type === 'separation' && (c as any).equality
+        c => c.type === 'separation' && ('equality' in c && (c as ColaSeparationConstraint).equality)
       );
       
       expect(hasOrientation || hasAlignment).toBe(true);
@@ -380,7 +380,7 @@ constraints:
       // All constraints should be valid (have valid node indices)
       for (const constraint of result.colaConstraints) {
         if (constraint.type === 'separation') {
-          const sep = constraint as any;
+          const sep = constraint as ColaSeparationConstraint;
           if (sep.left !== undefined) {
             expect(sep.left).toBeGreaterThanOrEqual(0);
             expect(sep.left).toBeLessThan(result.colaNodes.length);

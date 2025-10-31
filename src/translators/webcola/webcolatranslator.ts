@@ -45,12 +45,12 @@ type EdgeWithMetadata = Link<NodeWithMetadata> & {
 export type { NodeWithMetadata, EdgeWithMetadata };
 
 // WebCola constraint types
-interface ColaConstraint {
+export interface ColaConstraint {
   type: string;
   [key: string]: unknown;
 }
 
-interface ColaSeparationConstraint extends ColaConstraint {
+export interface ColaSeparationConstraint extends ColaConstraint {
   type: 'separation';
   axis: 'x' | 'y';
   left: number;
@@ -59,7 +59,7 @@ interface ColaSeparationConstraint extends ColaConstraint {
   equality?: boolean;
 }
 
-interface ColaHierarchyConstraint extends ColaConstraint {
+export interface ColaHierarchyConstraint extends ColaConstraint {
   type: 'hierarchy';
   parent: number;
   child: number;
@@ -144,17 +144,23 @@ export class WebColaLayout {
 
     // Log constraint count for debugging and monitoring
     const originalConstraintCount = this.colaConstraints.length;
-    console.log(`WebColaTranslator: Generated ${originalConstraintCount} constraints for ${this.colaNodes.length} nodes`);
+    if (typeof console !== 'undefined' && console.log) {
+      console.log(`WebColaTranslator: Generated ${originalConstraintCount} constraints for ${this.colaNodes.length} nodes`);
+    }
 
     // Apply transitive reduction optimization if we have many constraints
     // Threshold: optimize when we have more than 100 constraints
     const OPTIMIZATION_THRESHOLD = 100;
     if (originalConstraintCount > OPTIMIZATION_THRESHOLD) {
-      console.log(`WebColaTranslator: Constraint count exceeds threshold (${OPTIMIZATION_THRESHOLD}), applying transitive reduction optimization...`);
+      if (typeof console !== 'undefined' && console.log) {
+        console.log(`WebColaTranslator: Constraint count exceeds threshold (${OPTIMIZATION_THRESHOLD}), applying transitive reduction optimization...`);
+      }
       this.colaConstraints = this.optimizeConstraints(this.colaConstraints);
       const optimizedCount = this.colaConstraints.length;
       const reductionPercent = ((originalConstraintCount - optimizedCount) / originalConstraintCount * 100).toFixed(1);
-      console.log(`WebColaTranslator: Reduced constraints from ${originalConstraintCount} to ${optimizedCount} (${reductionPercent}% reduction)`);
+      if (typeof console !== 'undefined' && console.log) {
+        console.log(`WebColaTranslator: Reduced constraints from ${originalConstraintCount} to ${optimizedCount} (${reductionPercent}% reduction)`);
+      }
     }
 
     if (this.colaConstraints.length === 0 && this.dagre_graph) {
