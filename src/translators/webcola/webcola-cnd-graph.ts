@@ -2431,6 +2431,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * @returns SVG path string for the edge
    */
   private routeSingleEdge(edgeData: any): string | null {
+    // Early return for alignment edges - they don't need complex routing
+    if (this.isAlignmentEdge(edgeData)) {
+      return this.lineFunction([
+        { x: edgeData.source.x || 0, y: edgeData.source.y || 0 },
+        { x: edgeData.target.x || 0, y: edgeData.target.y || 0 }
+      ]);
+    }
+
     const defaultRoute = [
       { x: edgeData.source.x || 0, y: edgeData.source.y || 0 },
       { x: edgeData.target.x || 0, y: edgeData.target.y || 0 }
@@ -2463,14 +2471,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     if (edgeData.source.id === edgeData.target.id) {
       route = this.createSelfLoopRoute(edgeData);
     }
-
     // Handle group edges
-    if (edgeData.id?.startsWith('_g_')) {
+    else if (edgeData.id?.startsWith('_g_')) {
       route = this.routeGroupEdge(edgeData, route);
     }
-
-    // Handle multiple edges between same nodes
-    if (!this.isAlignmentEdge(edgeData)) {
+    // Handle multiple edges between same nodes (only if not already handled above)
+    else {
       route = this.handleMultipleEdgeRouting(edgeData, route);
     }
 
