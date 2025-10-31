@@ -2216,6 +2216,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
   /**
    * Creates a consistent cache key for a node pair (order-independent).
+   * 
+   * @param sourceId - ID of the source node
+   * @param targetId - ID of the target node
+   * @returns Cache key string in format "id1:id2" where id1 < id2 lexicographically
    */
   private getNodePairKey(sourceId: string, targetId: string): string {
     return sourceId < targetId ? `${sourceId}:${targetId}` : `${targetId}:${sourceId}`;
@@ -2675,17 +2679,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
   /**
    * Calculates curvature using pre-computed edge index (optimized version).
+   * Alignment edges are already filtered out during cache building.
    * 
    * @param allEdges - All edges between the nodes
-   * @param edgeId - Current edge ID
+   * @param edgeId - Current edge ID (only used for legacy fallback)
    * @param edgeIndex - Pre-computed index of edge in allEdges array
    * @returns Curvature value for the edge
    */
   private calculateCurvatureWithIndex(allEdges: any[], edgeId: string, edgeIndex: number): number {
-    if (edgeId.startsWith('_alignment_')) {
-      return 0;
-    }
-
     const edgeCount = allEdges.length;
     if (edgeCount <= 1) {
       return 0;
@@ -2708,33 +2709,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private applyEdgeOffset(edgeData: any, route: Array<{ x: number; y: number }>, allEdges: any[], angle: number): Array<{ x: number; y: number }> {
     const edgeIndex = allEdges.findIndex(edge => edge.id === edgeData.id);
-    const offset = (edgeIndex % 2 === 0 ? 1 : -1) * 
-                    (Math.floor(edgeIndex / 2) + 1) * 
-                    WebColaCnDGraph.MIN_EDGE_DISTANCE;
-
-    const direction = this.getDominantDirection(angle);
-    
-    if (direction === 'right' || direction === 'left') {
-      route[0].y += offset;
-      route[route.length - 1].y += offset;
-    } else if (direction === 'up' || direction === 'down') {
-      route[0].x += offset;
-      route[route.length - 1].x += offset;
-    }
-
-    // Ensure points stay on rectangle perimeter
-    if (edgeData.source.innerBounds) {
-      route[0] = this.adjustPointToRectanglePerimeter(route[0], edgeData.source.innerBounds);
-    }
-    if (edgeData.target.innerBounds) {
-      route[route.length - 1] = this.adjustPointToRectanglePerimeter(route[route.length - 1], edgeData.target.innerBounds);
-    }
-
-    return route;
+    return this.applyEdgeOffsetWithIndex(edgeData, route, allEdges, angle, edgeIndex);
   }
 
   /**
    * Applies offset using pre-computed edge index (optimized version).
+   * Shared implementation for offset calculation to avoid code duplication.
    * 
    * @param edgeData - The edge data object
    * @param route - Route points
