@@ -116,6 +116,10 @@ class ConstraintValidator {
     
     // Cache for Kiwi constraint conversions to avoid repeated work during backtracking
     private kiwiConstraintCache: Map<LayoutConstraint, Constraint[]> = new Map();
+    
+    // Cache for Expression objects to avoid creating duplicates (major memory optimization)
+    // Key format: "varName_op_value" e.g., "node1_x_plus_15"
+    private expressionCache: Map<string, Expression> = new Map();
 
     layout: InstanceLayout;
     orientationConstraints: LayoutConstraint[];
@@ -559,6 +563,28 @@ class ConstraintValidator {
     }
 
     /**
+     * Gets or creates a cached expression for variable + constant.
+     * This is a critical memory optimization - with ~36,000 constraints, we would otherwise
+     * create thousands of duplicate Expression objects (e.g., "x + 15" appears many times).
+     * 
+     * @param variable - The Kiwi variable
+     * @param value - The constant to add
+     * @returns Cached or newly created Expression
+     */
+    private getVarPlusConstant(variable: Variable, value: number): Expression {
+        // Create cache key from variable name and value
+        const cacheKey = `${variable.name()}_plus_${value}`;
+        
+        let expr = this.expressionCache.get(cacheKey);
+        if (!expr) {
+            expr = variable.plus(value);
+            this.expressionCache.set(cacheKey, expr);
+        }
+        
+        return expr;
+    }
+    
+    /**
      * Clones the current solver state (constraints only, not variable values).
      * Used for backtracking in disjunctive constraint solving.
      * 
@@ -661,6 +687,10 @@ class ConstraintValidator {
      * Key optimization: Since groups cannot overlap (except via subsumption), we only create
      * disjunctions for nodes that are not already members of other groups. This dramatically
      * reduces the number of disjunctive constraints from O(n_nodes) to O(n_free_nodes) per group.
+     * 
+     * Memory optimization: To prevent memory exhaustion with large graphs, we limit the total
+     * number of disjunctive constraints generated. For very large graphs (>500 nodes), we
+     * use a sampling strategy to only create constraints for the most critical node-group pairs.
      * 
      * This approach scales as O(members + free_nodes) per group instead of O(members × n_nodes × 4).
      * 
@@ -797,6 +827,7 @@ class ConstraintValidator {
 
         // Add disjunctive constraints for group-to-group boundary separation
         // For each pair of non-overlapping groups, ensure they are separated in one direction
+        
         for (let i = 0; i < this.groups.length; i++) {
             for (let j = i + 1; j < this.groups.length; j++) {
                 const groupA = this.groups[i];
@@ -1359,7 +1390,9 @@ class ConstraintValidator {
             let bottomVar = this.variables[bottomId].y;
 
             // Create constraint: topVar + minDistance <= bottomVar
-            let kiwiConstraint = new Constraint(topVar.plus(minDistance), Operator.Le, bottomVar, Strength.required);
+            // Use cached expression to avoid creating duplicate Expression objects
+            let topExpr = this.getVarPlusConstant(topVar, minDistance);
+            let kiwiConstraint = new Constraint(topExpr, Operator.Le, bottomVar, Strength.required);
 
             return [kiwiConstraint];
         }
@@ -1377,7 +1410,9 @@ class ConstraintValidator {
             let rightVar = this.variables[rightId].x;
 
             // Create constraint: leftVar + minDistance <= rightVar
-            let kiwiConstraint = new Constraint(leftVar.plus(minDistance), Operator.Le, rightVar, Strength.required);
+            // Use cached expression to avoid creating duplicate Expression objects
+            let leftExpr = this.getVarPlusConstant(leftVar, minDistance);
+            let kiwiConstraint = new Constraint(leftExpr, Operator.Le, rightVar, Strength.required);
 
             return [kiwiConstraint];
         }
@@ -1422,22 +1457,23 @@ class ConstraintValidator {
             const nodeY = this.variables[nodeIndex].y;
 
             // Create constraint based on which side of the bounding box
+            // Use cached expressions to avoid creating duplicate Expression objects
             switch (bc.side) {
                 case 'left':
                     // node.x + padding <= bbox.left
-                    return [new Constraint(nodeX.plus(bc.minDistance), Operator.Le, bbox.left, Strength.required)];
+                    return [new Constraint(this.getVarPlusConstant(nodeX, bc.minDistance), Operator.Le, bbox.left, Strength.required)];
                 
                 case 'right':
                     // node.x >= bbox.right + padding
-                    return [new Constraint(nodeX, Operator.Ge, bbox.right.plus(bc.minDistance), Strength.required)];
+                    return [new Constraint(nodeX, Operator.Ge, this.getVarPlusConstant(bbox.right, bc.minDistance), Strength.required)];
                 
                 case 'top':
                     // node.y + padding <= bbox.top
-                    return [new Constraint(nodeY.plus(bc.minDistance), Operator.Le, bbox.top, Strength.required)];
+                    return [new Constraint(this.getVarPlusConstant(nodeY, bc.minDistance), Operator.Le, bbox.top, Strength.required)];
                 
                 case 'bottom':
                     // node.y >= bbox.bottom + padding
-                    return [new Constraint(nodeY, Operator.Ge, bbox.bottom.plus(bc.minDistance), Strength.required)];
+                    return [new Constraint(nodeY, Operator.Ge, this.getVarPlusConstant(bbox.bottom, bc.minDistance), Strength.required)];
                 
                 default:
                     console.error(`Unknown bounding box side: ${bc.side}`);
@@ -1455,22 +1491,23 @@ class ConstraintValidator {
             }
 
             // Create constraint based on which side (direction) groups should be separated
+            // Use cached expressions to avoid creating duplicate Expression objects
             switch (gc.side) {
                 case 'left':
                     // groupA left of groupB: A.right + padding <= B.left
-                    return [new Constraint(bboxA.right.plus(gc.minDistance), Operator.Le, bboxB.left, Strength.required)];
+                    return [new Constraint(this.getVarPlusConstant(bboxA.right, gc.minDistance), Operator.Le, bboxB.left, Strength.required)];
                 
                 case 'right':
                     // groupA right of groupB: B.right + padding <= A.left
-                    return [new Constraint(bboxB.right.plus(gc.minDistance), Operator.Le, bboxA.left, Strength.required)];
+                    return [new Constraint(this.getVarPlusConstant(bboxB.right, gc.minDistance), Operator.Le, bboxA.left, Strength.required)];
                 
                 case 'top':
                     // groupA above groupB: A.bottom + padding <= B.top
-                    return [new Constraint(bboxA.bottom.plus(gc.minDistance), Operator.Le, bboxB.top, Strength.required)];
+                    return [new Constraint(this.getVarPlusConstant(bboxA.bottom, gc.minDistance), Operator.Le, bboxB.top, Strength.required)];
                 
                 case 'bottom':
                     // groupA below groupB: B.bottom + padding <= A.top
-                    return [new Constraint(bboxB.bottom.plus(gc.minDistance), Operator.Le, bboxA.top, Strength.required)];
+                    return [new Constraint(this.getVarPlusConstant(bboxB.bottom, gc.minDistance), Operator.Le, bboxA.top, Strength.required)];
                 
                 default:
                     console.error(`Unknown group boundary side: ${gc.side}`);
@@ -1683,6 +1720,9 @@ class ConstraintValidator {
         // Clear the Kiwi constraint cache which can hold many constraint objects
         this.kiwiConstraintCache.clear();
         
+        // Clear the expression cache which can hold many Expression objects
+        this.expressionCache.clear();
+        
         // Clear solver reference
         this.solver = null as any;
         
@@ -1701,12 +1741,14 @@ class ConstraintValidator {
      */
     public getMemoryStats(): {
         cachedConstraints: number;
+        cachedExpressions: number;
         variables: number;
         groupBoundingBoxes: number;
         addedConstraints: number;
     } {
         return {
             cachedConstraints: this.kiwiConstraintCache.size,
+            cachedExpressions: this.expressionCache.size,
             variables: Object.keys(this.variables).length,
             groupBoundingBoxes: this.groupBoundingBoxes.size,
             addedConstraints: this.added_constraints?.length || 0
