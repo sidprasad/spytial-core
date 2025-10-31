@@ -120,10 +120,6 @@ class ConstraintValidator {
     // Cache for Expression objects to avoid creating duplicates (major memory optimization)
     // Key format: "varName_op_value" e.g., "node1_x_plus_15"
     private expressionCache: Map<string, Expression> = new Map();
-    
-    // Pool of solver instances for reuse to reduce allocations
-    private solverPool: Solver[] = [];
-    private readonly MAX_SOLVER_POOL_SIZE = 10;
 
     layout: InstanceLayout;
     orientationConstraints: LayoutConstraint[];
@@ -467,9 +463,6 @@ class ConstraintValidator {
             this.restoreSolver(savedSolver);
             this.added_constraints = savedConstraints;
             
-            // Return the discarded solver to the pool for reuse
-            // Note: We don't return savedSolver since it's now in use as this.solver
-            
             // Verify backtracking worked correctly
             console.assert(
                 this.added_constraints.length === savedConstraintsLength,
@@ -570,32 +563,8 @@ class ConstraintValidator {
     }
 
     /**
-     * Gets a solver from the pool or creates a new one.
-     * Used to reduce allocations during backtracking.
-     * 
-     * @returns A Solver instance (either from pool or newly created)
-     */
-    private getSolverFromPool(): Solver {
-        return this.solverPool.pop() || new Solver();
-    }
-    
-    /**
-     * Returns a solver to the pool for reuse.
-     * Only keeps up to MAX_SOLVER_POOL_SIZE solvers to prevent unbounded memory growth.
-     * 
-     * @param solver - The solver to return to the pool
-     */
-    private returnSolverToPool(solver: Solver): void {
-        if (this.solverPool.length < this.MAX_SOLVER_POOL_SIZE) {
-            // Note: Kiwi.js Solver doesn't have a clear() method, so we just discard it
-            // The pool helps by reusing memory for short-lived solvers during backtracking
-        }
-        // If pool is full, let the solver be garbage collected
-    }
-    
-    /**
      * Gets or creates a cached expression for variable + constant.
-     * This is a critical memory optimization - with ~500 constraints, we would otherwise
+     * This is a critical memory optimization - with ~36,000 constraints, we would otherwise
      * create thousands of duplicate Expression objects (e.g., "x + 15" appears many times).
      * 
      * @param variable - The Kiwi variable
@@ -625,7 +594,7 @@ class ConstraintValidator {
      * @returns A new Solver with the same constraints as the current one
      */
     private cloneSolver(): Solver {
-        const newSolver = this.getSolverFromPool();
+        const newSolver = new Solver();
         
         // First, re-add the bounding box member constraints (these are permanent conjunctive constraints)
         this.addBoundingBoxMemberConstraintsToSolver(newSolver);
@@ -1754,9 +1723,6 @@ class ConstraintValidator {
         // Clear the expression cache which can hold many Expression objects
         this.expressionCache.clear();
         
-        // Clear solver pool
-        this.solverPool = [];
-        
         // Clear solver reference
         this.solver = null as any;
         
@@ -1779,15 +1745,13 @@ class ConstraintValidator {
         variables: number;
         groupBoundingBoxes: number;
         addedConstraints: number;
-        solverPoolSize: number;
     } {
         return {
             cachedConstraints: this.kiwiConstraintCache.size,
             cachedExpressions: this.expressionCache.size,
             variables: Object.keys(this.variables).length,
             groupBoundingBoxes: this.groupBoundingBoxes.size,
-            addedConstraints: this.added_constraints?.length || 0,
-            solverPoolSize: this.solverPool.length
+            addedConstraints: this.added_constraints?.length || 0
         };
     }
 }
