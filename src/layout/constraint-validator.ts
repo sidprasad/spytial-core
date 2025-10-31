@@ -1381,7 +1381,7 @@ class ConstraintValidator {
 
             let top = tc.top;
             let bottom = tc.bottom;
-            let minDistance = tc.minDistance;
+            let minDistance = top.height;
 
             const topId = this.getNodeIndex(top.id);
             const bottomId = this.getNodeIndex(bottom.id);
@@ -1401,7 +1401,7 @@ class ConstraintValidator {
 
             let left = lc.left;
             let right = lc.right;
-            let minDistance = lc.minDistance;
+            let minDistance = left.width;
 
             const leftId = this.getNodeIndex(left.id);
             const rightId = this.getNodeIndex(right.id);
@@ -1455,6 +1455,10 @@ class ConstraintValidator {
             const nodeIndex = this.getNodeIndex(bc.node.id);
             const nodeX = this.variables[nodeIndex].x;
             const nodeY = this.variables[nodeIndex].y;
+            const nodeWidth = bc.node.width || bc.minDistance;
+            const nodeHeight = bc.node.height || bc.minDistance
+
+            // TODO: Plumb these in.
 
             // Create constraint based on which side of the bounding box
             // Use cached expressions to avoid creating duplicate Expression objects
