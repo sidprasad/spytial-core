@@ -136,7 +136,9 @@ export class WebColaLayout {
     // Collapse symmetric edges with the same label
     this.colaEdges = this.collapseSymmetricEdges(this.colaEdges);
 
-    this.groupDefinitions = this.determineGroups(instanceLayout.groups);
+    // Collapse identical nested groups to reduce jitter and constraint conflicts
+    const deduplicatedGroups = this.collapseIdenticalGroups(instanceLayout.groups);
+    this.groupDefinitions = this.determineGroups(deduplicatedGroups);
 
     this.conflictingConstraints = instanceLayout.conflictingConstraints || [];
     this.overlappingNodesData = instanceLayout.overlappingNodes || [];
@@ -581,6 +583,63 @@ export class WebColaLayout {
     throw new Error("Constraint type not recognized");
   }
 
+  /**
+   * Collapses identical nested groups to reduce jitter and constraint conflicts.
+   * When multiple groups contain exactly the same set of nodes, they are merged
+   * into a single group with combined labels.
+   * 
+   * This addresses WebCola jitter issues where identical groups create conflicting
+   * constraints that cause the layout to oscillate rather than converge.
+   * 
+   * @param groups - Array of layout groups to deduplicate
+   * @returns Array of groups with duplicates collapsed
+   */
+  private collapseIdenticalGroups(groups: LayoutGroup[]): LayoutGroup[] {
+    if (groups.length === 0) return groups;
+
+    // Group by node set signature (sorted node IDs as string)
+    const groupsByNodes = new Map<string, LayoutGroup[]>();
+    
+    for (const group of groups) {
+      // Create a canonical key from sorted node IDs
+      const nodeKey = [...group.nodeIds].sort().join(',');
+      if (!groupsByNodes.has(nodeKey)) {
+        groupsByNodes.set(nodeKey, []);
+      }
+      groupsByNodes.get(nodeKey)!.push(group);
+    }
+    
+    const collapsed: LayoutGroup[] = [];
+    let deduplicationCount = 0;
+    
+    for (const [nodeKey, duplicateGroups] of groupsByNodes) {
+      if (duplicateGroups.length === 1) {
+        // No duplicates, keep as-is
+        collapsed.push(duplicateGroups[0]);
+      } else {
+        // Found duplicates - merge them
+        deduplicationCount += duplicateGroups.length - 1;
+        
+        // Merge groups: preserve first group's structure but combine labels
+        const mergedGroup: LayoutGroup = {
+          ...duplicateGroups[0],
+          // Combine names with separator for clarity
+          name: duplicateGroups.map(g => g.name).join(' / '),
+          // Show label if ANY of the duplicate groups wanted to show it
+          showLabel: duplicateGroups.some(g => g.showLabel)
+        };
+        
+        collapsed.push(mergedGroup);
+      }
+    }
+    
+    // Log deduplication results
+    if (deduplicationCount > 0 && typeof console !== 'undefined' && console.log) {
+      console.log(`WebColaTranslator: Collapsed ${deduplicationCount} duplicate group(s) from ${groups.length} to ${collapsed.length}`);
+    }
+    
+    return collapsed;
+  }
 
 
   private determineGroups(groups: LayoutGroup[]): { leaves: number[], padding: number, name: string, groups: number[] }[] {

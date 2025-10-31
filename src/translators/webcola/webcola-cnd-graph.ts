@@ -393,10 +393,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     return Math.max(60, Math.min(scaledLinkLength, 350));
   }
 
-  private getScaledDetails(constraints: any[], scaleFactor: number = DEFAULT_SCALE_FACTOR, nodes?: any[]) {
+  private getScaledDetails(constraints: any[], scaleFactor: number = DEFAULT_SCALE_FACTOR, nodes?: any[], groups?: any[]) {
     const adjustedScaleFactor = scaleFactor / 5;
 
-    let groupCompactness = WebColaCnDGraph.DEFAULT_GROUP_COMPACTNESS * adjustedScaleFactor;
+    // Calculate adaptive group compactness based on graph structure
+    let groupCompactness = this.calculateAdaptiveGroupCompactness(groups || [], nodes?.length || 0, adjustedScaleFactor);
 
     // Use adaptive link length calculation if nodes are available
     let linkLength: number;
@@ -433,6 +434,88 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       linkLength: linkLength,
       groupCompactness: groupCompactness
     }
+  }
+
+  /**
+   * Calculate adaptive group compactness based on graph characteristics.
+   * 
+   * This helps reduce jitter in layouts with complex group structures by:
+   * - Increasing compactness for deeply nested groups (stronger group boundaries)
+   * - Increasing compactness when there are many groups relative to nodes
+   * - Using default compactness for simple group structures
+   * 
+   * Higher compactness values create stronger attraction between group boundaries,
+   * which helps groups stabilize faster and reduces oscillation.
+   * 
+   * @param groups - Array of group definitions
+   * @param nodeCount - Total number of nodes in the graph
+   * @param scaleFactor - Current scale factor adjustment
+   * @returns Calculated group compactness value
+   */
+  private calculateAdaptiveGroupCompactness(groups: any[], nodeCount: number, scaleFactor: number): number {
+    const DEFAULT_GROUP_COMPACTNESS = WebColaCnDGraph.DEFAULT_GROUP_COMPACTNESS * scaleFactor;
+    
+    if (!groups || groups.length === 0) {
+      return DEFAULT_GROUP_COMPACTNESS;
+    }
+    
+    // Calculate maximum nesting depth
+    const maxDepth = this.calculateMaxGroupDepth(groups);
+    
+    // Calculate group-to-node ratio
+    const groupRatio = groups.length / Math.max(nodeCount, 1);
+    
+    // Base compactness
+    let compactness = DEFAULT_GROUP_COMPACTNESS;
+    
+    // Increase compactness for deeply nested groups (depth > 2)
+    // Deeper nesting requires stronger group boundaries to prevent jitter
+    if (maxDepth > 2) {
+      compactness *= 10; // 10x stronger for deeply nested groups
+      if (typeof console !== 'undefined' && console.log) {
+        console.log(`WebCola: Using 10x group compactness for depth ${maxDepth} nested groups`);
+      }
+    } else if (maxDepth > 1) {
+      compactness *= 5; // 5x stronger for moderately nested groups
+    }
+    
+    // Increase compactness when there are many groups relative to nodes
+    // Many groups can create conflicting constraints that cause oscillation
+    if (groupRatio > 0.3) {
+      compactness *= 2; // Double strength for high group density
+      if (typeof console !== 'undefined' && console.log) {
+        console.log(`WebCola: Using 2x group compactness for high group density (ratio: ${groupRatio.toFixed(2)})`);
+      }
+    }
+    
+    return compactness;
+  }
+
+  /**
+   * Calculate the maximum nesting depth of groups.
+   * Depth 1 = groups with only leaf nodes
+   * Depth 2 = groups containing other groups
+   * And so on...
+   * 
+   * @param groups - Array of group definitions
+   * @returns Maximum nesting depth
+   */
+  private calculateMaxGroupDepth(groups: any[]): number {
+    if (!groups || groups.length === 0) return 0;
+    
+    let maxDepth = 1;
+    
+    for (const group of groups) {
+      if (group.groups && Array.isArray(group.groups) && group.groups.length > 0) {
+        // This group contains subgroups
+        const subgroupDepth = 1 + this.calculateMaxGroupDepth(
+          group.groups.map((idx: number) => groups[idx]).filter((g: any) => g)
+        );
+        maxDepth = Math.max(maxDepth, subgroupDepth);
+      }
+    }
+    
+    return maxDepth;
   }
 
   /**
@@ -1095,8 +1178,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       }
 
 
-      // Get scaled constraints and link length
-      const { scaledConstraints, linkLength, groupCompactness } = this.getScaledDetails(webcolaLayout.constraints, DEFAULT_SCALE_FACTOR, webcolaLayout.nodes);
+      // Get scaled constraints, link length, and adaptive group compactness
+      const { scaledConstraints, linkLength, groupCompactness } = this.getScaledDetails(
+        webcolaLayout.constraints, 
+        DEFAULT_SCALE_FACTOR, 
+        webcolaLayout.nodes,
+        webcolaLayout.groups
+      );
 
       this.updateLoadingProgress('Applying constraints and initializing...');
 
