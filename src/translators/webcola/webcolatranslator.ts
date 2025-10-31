@@ -241,7 +241,16 @@ export class WebColaLayout {
     const direct: (ColaSeparationConstraint | null)[][] = Array(n).fill(null).map(() => Array(n).fill(null));
     
     for (const constraint of constraints) {
-      direct[constraint.left][constraint.right] = constraint;
+      // Validate indices to prevent prototype pollution
+      const left = constraint.left;
+      const right = constraint.right;
+      
+      // Ensure indices are valid numbers within bounds
+      if (typeof left === 'number' && typeof right === 'number' && 
+          left >= 0 && left < n && right >= 0 && right < n &&
+          Number.isInteger(left) && Number.isInteger(right)) {
+        direct[left][right] = constraint;
+      }
     }
 
     // Compute transitive closure using Floyd-Warshall
