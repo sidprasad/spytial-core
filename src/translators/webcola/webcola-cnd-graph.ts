@@ -508,10 +508,16 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     for (const group of groups) {
       if (group.groups && Array.isArray(group.groups) && group.groups.length > 0) {
         // This group contains subgroups
-        const subgroupDepth = 1 + this.calculateMaxGroupDepth(
-          group.groups.map((idx: number) => groups[idx]).filter((g: any) => g)
-        );
-        maxDepth = Math.max(maxDepth, subgroupDepth);
+        // Safely map indices to groups, filtering out invalid indices
+        const validSubgroups = group.groups
+          .filter((idx: number) => typeof idx === 'number' && idx >= 0 && idx < groups.length)
+          .map((idx: number) => groups[idx])
+          .filter((g: any) => g != null);
+        
+        if (validSubgroups.length > 0) {
+          const subgroupDepth = 1 + this.calculateMaxGroupDepth(validSubgroups);
+          maxDepth = Math.max(maxDepth, subgroupDepth);
+        }
       }
     }
     
