@@ -1389,9 +1389,13 @@ class ConstraintValidator {
             let topVar = this.variables[topId].y;
             let bottomVar = this.variables[bottomId].y;
 
-            // Create constraint: topVar + minDistance <= bottomVar
+            // Use the maximum of node height and minDistance
+            const topHeight = top.height || 0;
+            const actualDistance = Math.max(topHeight, minDistance);
+
+            // Create constraint: topVar + max(topHeight, minDistance) <= bottomVar
             // Use cached expression to avoid creating duplicate Expression objects
-            let topExpr = this.getVarPlusConstant(topVar, minDistance);
+            let topExpr = this.getVarPlusConstant(topVar, actualDistance);
             let kiwiConstraint = new Constraint(topExpr, Operator.Le, bottomVar, Strength.required);
 
             return [kiwiConstraint];
@@ -1409,9 +1413,13 @@ class ConstraintValidator {
             let leftVar = this.variables[leftId].x;
             let rightVar = this.variables[rightId].x;
 
-            // Create constraint: leftVar + minDistance <= rightVar
+            // Use the maximum of node width and minDistance
+            const leftWidth = left.width || 0;
+            const actualDistance = Math.max(leftWidth, minDistance);
+
+            // Create constraint: leftVar + max(leftWidth, minDistance) <= rightVar
             // Use cached expression to avoid creating duplicate Expression objects
-            let leftExpr = this.getVarPlusConstant(leftVar, minDistance);
+            let leftExpr = this.getVarPlusConstant(leftVar, actualDistance);
             let kiwiConstraint = new Constraint(leftExpr, Operator.Le, rightVar, Strength.required);
 
             return [kiwiConstraint];
@@ -1455,21 +1463,23 @@ class ConstraintValidator {
             const nodeIndex = this.getNodeIndex(bc.node.id);
             const nodeX = this.variables[nodeIndex].x;
             const nodeY = this.variables[nodeIndex].y;
+            const nodeWidth = bc.node.width || 0;
+            const nodeHeight = bc.node.height || 0;
 
             // Create constraint based on which side of the bounding box
             // Use cached expressions to avoid creating duplicate Expression objects
             switch (bc.side) {
                 case 'left':
-                    // node.x + padding <= bbox.left
-                    return [new Constraint(this.getVarPlusConstant(nodeX, bc.minDistance), Operator.Le, bbox.left, Strength.required)];
+                    // node.x + max(nodeWidth, padding) <= bbox.left
+                    return [new Constraint(this.getVarPlusConstant(nodeX, Math.max(nodeWidth, bc.minDistance)), Operator.Le, bbox.left, Strength.required)];
                 
                 case 'right':
                     // node.x >= bbox.right + padding
                     return [new Constraint(nodeX, Operator.Ge, this.getVarPlusConstant(bbox.right, bc.minDistance), Strength.required)];
                 
                 case 'top':
-                    // node.y + padding <= bbox.top
-                    return [new Constraint(this.getVarPlusConstant(nodeY, bc.minDistance), Operator.Le, bbox.top, Strength.required)];
+                    // node.y + max(nodeHeight, padding) <= bbox.top
+                    return [new Constraint(this.getVarPlusConstant(nodeY, Math.max(nodeHeight, bc.minDistance)), Operator.Le, bbox.top, Strength.required)];
                 
                 case 'bottom':
                     // node.y >= bbox.bottom + padding
