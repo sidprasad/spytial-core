@@ -131,6 +131,16 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private edgeRouteIdx = 0;
 
+  /**
+   * Cache for edge routing optimizations
+   */
+  private edgeRoutingCache: {
+    edgesBetweenNodes: Map<string, EdgeWithMetadata[]>;
+    alignmentEdges: Set<string>;
+  } = {
+    edgesBetweenNodes: new Map(),
+    alignmentEdges: new Set()
+  };
 
   // We use these to store state and references.
   private svgNodes : any;
@@ -198,6 +208,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   /**
    * Determines if an edge is used for alignment purposes.
    * Alignment edges are identified by IDs starting with "_alignment_".
+   * Uses cached set for O(1) lookup performance.
    * 
    * @param edge - Edge object to check
    * @returns True if the edge is an alignment constraint edge
@@ -209,6 +220,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * ```
    */
   private isAlignmentEdge(edge: { id: string }): boolean {
+    // Use cache if available (during routing), otherwise fall back to string check
+    if (this.edgeRoutingCache.alignmentEdges.size > 0) {
+      return this.edgeRoutingCache.alignmentEdges.has(edge.id);
+    }
     return edge.id.startsWith("_alignment_");
   }
 
@@ -2146,7 +2161,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         );
       }
 
-
+      // Build caches for optimization before routing edges
+      this.buildEdgeRoutingCaches();
 
       // Route all link paths with advanced logic
       this.routeLinkPaths(); 
@@ -2160,6 +2176,49 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       console.error('Error in edge routing:', error);
       this.showError(`Edge routing failed: ${(error as Error).message}`);
     }
+  }
+
+  /**
+   * Builds caches for edge routing optimization.
+   * Pre-computes edge relationships and alignment edge sets to avoid redundant calculations.
+   */
+  private buildEdgeRoutingCaches(): void {
+    // Clear existing caches
+    this.edgeRoutingCache.edgesBetweenNodes.clear();
+    this.edgeRoutingCache.alignmentEdges.clear();
+
+    if (!this.currentLayout?.links) return;
+
+    // Build alignment edge set for O(1) lookups
+    this.currentLayout.links.forEach((edge: EdgeWithMetadata) => {
+      if (edge.id?.startsWith("_alignment_")) {
+        this.edgeRoutingCache.alignmentEdges.add(edge.id);
+      }
+    });
+
+    // Build edges-between-nodes cache
+    // Group edges by node pairs (both directions)
+    this.currentLayout.links.forEach((edge: EdgeWithMetadata) => {
+      if (this.isAlignmentEdge(edge)) return; // Skip alignment edges
+
+      const sourceId = edge.source.id;
+      const targetId = edge.target.id;
+      
+      // Create sorted key to handle bidirectional lookups
+      const key = this.getNodePairKey(sourceId, targetId);
+      
+      if (!this.edgeRoutingCache.edgesBetweenNodes.has(key)) {
+        this.edgeRoutingCache.edgesBetweenNodes.set(key, []);
+      }
+      this.edgeRoutingCache.edgesBetweenNodes.get(key)!.push(edge);
+    });
+  }
+
+  /**
+   * Creates a consistent cache key for a node pair (order-independent).
+   */
+  private getNodePairKey(sourceId: string, targetId: string): string {
+    return sourceId < targetId ? `${sourceId}:${targetId}` : `${targetId}:${sourceId}`;
   }
 
   private route(nodes: any, groups: any, margin: number, groupMargin: number): GridRouter<any> {
@@ -2522,6 +2581,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private handleMultipleEdgeRouting(edgeData: any, route: Array<{ x: number; y: number }>): Array<{ x: number; y: number }> {
     const allEdgesBetweenNodes = this.getAllEdgesBetweenNodes(edgeData.source.id, edgeData.target.id);
     
+    // Early return for single edge - no curvature needed
+    if (allEdgesBetweenNodes.length <= 1) {
+      return route;
+    }
+
     // Add midpoint if route only has start and end
     if (route.length === 2) {
       const midpoint = {
@@ -2531,26 +2595,28 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       route.splice(1, 0, midpoint);
     }
 
-    // Calculate direction and distance
+    // Calculate direction and distance once
     const dx = route[1].x - route[0].x;
     const dy = route[1].y - route[0].y;
     const angle = Math.atan2(dy, dx);
     const distance = Math.sqrt(dx * dx + dy * dy);
 
-    // Apply offset for multiple edges
-    if (allEdgesBetweenNodes.length > 1) {
-      route = this.applyEdgeOffset(edgeData, route, allEdgesBetweenNodes, angle);
+    // Find edge index once and reuse for both offset and curvature
+    const edgeIndex = allEdgesBetweenNodes.findIndex(edge => edge.id === edgeData.id);
+    
+    // Apply offset and curvature only if we found the edge
+    if (edgeIndex !== -1) {
+      route = this.applyEdgeOffsetWithIndex(edgeData, route, allEdgesBetweenNodes, angle, edgeIndex);
+      const curvature = this.calculateCurvatureWithIndex(allEdgesBetweenNodes, edgeData.id, edgeIndex);
+      route = this.applyCurvatureToRoute(route, curvature, angle, distance);
     }
-
-    // Apply curvature
-    const curvature = this.calculateCurvature(allEdgesBetweenNodes, edgeData.source.id, edgeData.target.id, edgeData.id);
-    route = this.applyCurvatureToRoute(route, curvature, angle, distance);
 
     return route;
   }
 
   /**
    * Gets all non-alignment edges between two nodes (bidirectional).
+   * Uses cached results for O(1) lookup performance during edge routing.
    * 
    * @param sourceId - Source node ID
    * @param targetId - Target node ID
@@ -2559,6 +2625,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private getAllEdgesBetweenNodes(sourceId: string, targetId: string): EdgeWithMetadata[] {
     if (!this.currentLayout?.links) return [];
     
+    // Use cache if available (during routing phase)
+    const key = this.getNodePairKey(sourceId, targetId);
+    if (this.edgeRoutingCache.edgesBetweenNodes.has(key)) {
+      return this.edgeRoutingCache.edgesBetweenNodes.get(key)!;
+    }
+    
+    // Fallback to direct filtering if cache not built (shouldn't happen during routing)
     return this.currentLayout.links.filter((edge: EdgeWithMetadata) => {
       return !this.isAlignmentEdge(edge) && (
         (edge.source.id === sourceId && edge.target.id === targetId) ||
@@ -2595,6 +2668,30 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
+   * Calculates curvature using pre-computed edge index (optimized version).
+   * 
+   * @param allEdges - All edges between the nodes
+   * @param edgeId - Current edge ID
+   * @param edgeIndex - Pre-computed index of edge in allEdges array
+   * @returns Curvature value for the edge
+   */
+  private calculateCurvatureWithIndex(allEdges: any[], edgeId: string, edgeIndex: number): number {
+    if (edgeId.startsWith('_alignment_')) {
+      return 0;
+    }
+
+    const edgeCount = allEdges.length;
+    if (edgeCount <= 1) {
+      return 0;
+    }
+
+    return (edgeIndex % 2 === 0 ? 1 : -1) * 
+            (Math.floor(edgeIndex / 2) + 1) * 
+            WebColaCnDGraph.CURVATURE_BASE_MULTIPLIER * 
+            edgeCount;
+  }
+
+  /**
    * Applies offset to edge points to prevent overlap between multiple edges.
    * 
    * @param edgeData - The edge data object
@@ -2605,6 +2702,42 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private applyEdgeOffset(edgeData: any, route: Array<{ x: number; y: number }>, allEdges: any[], angle: number): Array<{ x: number; y: number }> {
     const edgeIndex = allEdges.findIndex(edge => edge.id === edgeData.id);
+    const offset = (edgeIndex % 2 === 0 ? 1 : -1) * 
+                    (Math.floor(edgeIndex / 2) + 1) * 
+                    WebColaCnDGraph.MIN_EDGE_DISTANCE;
+
+    const direction = this.getDominantDirection(angle);
+    
+    if (direction === 'right' || direction === 'left') {
+      route[0].y += offset;
+      route[route.length - 1].y += offset;
+    } else if (direction === 'up' || direction === 'down') {
+      route[0].x += offset;
+      route[route.length - 1].x += offset;
+    }
+
+    // Ensure points stay on rectangle perimeter
+    if (edgeData.source.innerBounds) {
+      route[0] = this.adjustPointToRectanglePerimeter(route[0], edgeData.source.innerBounds);
+    }
+    if (edgeData.target.innerBounds) {
+      route[route.length - 1] = this.adjustPointToRectanglePerimeter(route[route.length - 1], edgeData.target.innerBounds);
+    }
+
+    return route;
+  }
+
+  /**
+   * Applies offset using pre-computed edge index (optimized version).
+   * 
+   * @param edgeData - The edge data object
+   * @param route - Route points
+   * @param allEdges - All edges between the nodes
+   * @param angle - Edge angle
+   * @param edgeIndex - Pre-computed index of edge in allEdges array
+   * @returns Modified route with offset applied
+   */
+  private applyEdgeOffsetWithIndex(edgeData: any, route: Array<{ x: number; y: number }>, allEdges: any[], angle: number, edgeIndex: number): Array<{ x: number; y: number }> {
     const offset = (edgeIndex % 2 === 0 ? 1 : -1) * 
                     (Math.floor(edgeIndex / 2) + 1) * 
                     WebColaCnDGraph.MIN_EDGE_DISTANCE;
