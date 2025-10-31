@@ -245,6 +245,83 @@ All optimizations maintain identical behavior to the original implementation:
 3. **Removed redundancy**: Eliminated unnecessary checks when cache guarantees correctness
 4. **Better control flow**: Changed sequential conditions to mutually exclusive if-else chains
 
+## Memory Usage Analysis
+
+### Current Memory Footprint
+
+The caching system introduces minimal memory overhead:
+
+**Cache Storage:**
+- `alignmentEdges` Set: O(A) where A = number of alignment edges
+  - Stores only edge IDs (strings), typically ~30-50 bytes per ID
+  - For 100 edges with 30% alignment: ~30 IDs × 50 bytes = 1.5 KB
+  
+- `edgesBetweenNodes` Map: O(P × E) where P = unique node pairs, E = avg edges per pair
+  - Stores edge references (not copies), so minimal overhead
+  - For 100 edges with 10% multiple edges: ~10 map entries × 8 bytes (pointer) = 80 bytes
+  - Edge arrays contain references, not copies: ~5-10 edges × 8 bytes = 40-80 bytes per pair
+
+**Total Cache Overhead:** Typically < 5 KB for graphs with 100 nodes and 100 edges
+
+### Memory Efficiency Improvements
+
+**Compared to original implementation:**
+
+1. **Reduced temporary arrays**: The original code created new filtered arrays on every lookup
+   - Before: O(N) temporary arrays per edge routing operation
+   - After: One-time cache building, then reference reuse
+
+2. **Reference storage**: Cache stores references to existing edge objects, not copies
+   - No duplication of edge data
+   - Same memory footprint as original edge storage
+
+3. **Cache lifecycle**: Cache is cleared and rebuilt on each layout render
+   - No memory leaks from stale caches
+   - Automatic cleanup when layout changes
+
+### Memory Optimization Opportunities
+
+While the current implementation is memory-efficient, potential improvements include:
+
+1. **Cache pooling** (advanced): Reuse cache objects across renders instead of recreating
+   ```typescript
+   // Instead of clear() + rebuild, could diff and update
+   // Only beneficial if layout changes are incremental
+   ```
+   **Trade-off**: Added complexity vs marginal memory savings
+
+2. **Lazy cache building**: Only cache node pairs with multiple edges
+   ```typescript
+   // Skip caching for node pairs with single edge
+   if (edgesForPair.length > 1) {
+     this.edgeRoutingCache.edgesBetweenNodes.set(key, edgesForPair);
+   }
+   ```
+   **Trade-off**: Slightly smaller cache vs fallback to filtering for single edges
+
+3. **WeakMap for edge references** (not practical): Use WeakMap for automatic GC
+   ```typescript
+   // Would require edge IDs as keys since WeakMap needs objects
+   // Not practical: we need string-based lookups for node pairs
+   ```
+   **Trade-off**: Not compatible with our string-key-based lookup pattern
+
+### Memory vs Performance Balance
+
+The current implementation strikes an optimal balance:
+
+✅ **Minimal overhead**: < 5 KB for typical graphs
+✅ **Significant speedup**: O(N²) → O(N) complexity reduction
+✅ **Clean lifecycle**: Automatic cleanup on layout changes
+✅ **Reference-based**: No data duplication
+
+**Recommendation**: Current memory usage is negligible compared to:
+- Node/edge data structures: ~10-50 KB for 100 nodes
+- SVG DOM elements: ~50-200 KB for rendered graph
+- WebCola layout structures: ~20-100 KB for constraint solver
+
+The performance gains (30-50% reduction in routing time) far outweigh the minimal memory cost.
+
 ## Security Analysis
 
 ✅ **CodeQL Analysis**: No security vulnerabilities detected
