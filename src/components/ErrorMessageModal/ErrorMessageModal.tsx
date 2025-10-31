@@ -55,6 +55,7 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
     (systemError.type === 'parse-error' 
       || systemError.type === 'general-error' 
       || systemError.type === 'group-overlap-error'
+      || systemError.type === 'query-constraint-error'
     );
   const isPositionalError = systemError && systemError.type === 'positional-error' && systemError.messages;
   
@@ -71,6 +72,8 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
       return `Parse Error ${systemError.source ? `(${systemError.source})` : ''}`;
     } else if (errorType === 'group-overlap-error') {
       return `Group Overlap Error ${systemError.source ? `(${systemError.source})` : ''}`;
+    } else if (errorType === 'query-constraint-error') {
+      return `Query Constraint Error ${systemError.source ? `(${systemError.source})` : ''}`;
     } else {
       return 'Error';
     }

@@ -18,7 +18,7 @@ export interface ErrorMessages {
  */
 export interface ConstraintError  extends Error {
     /** Type of constraint error */
-    readonly type: 'group-overlap' | 'positional-conflict' | 'unknown-constraint';
+    readonly type: 'group-overlap' | 'positional-conflict' | 'query-constraint' | 'unknown-constraint';
 
     /** Human-readable error message */
     readonly message: string;
@@ -31,6 +31,10 @@ export function isPositionalConstraintError(error: unknown): error is Positional
 
 export function isGroupOverlapError(error: unknown): error is GroupOverlapError {
     return (error as GroupOverlapError).type === 'group-overlap';
+}
+
+export function isQueryConstraintError(error: unknown): error is QueryConstraintError {
+    return (error as QueryConstraintError).type === 'query-constraint';
 }
 
 interface PositionalConstraintError extends ConstraintError {
@@ -48,7 +52,23 @@ interface GroupOverlapError extends ConstraintError {
     overlappingNodes: LayoutNode[];
 }
 
-export { type PositionalConstraintError, type GroupOverlapError }
+/**
+ * Represents an error that occurs when an evaluator query references nodes
+ * that have been hidden or filtered out by visibility constraints.
+ * This is a constraint-level error because it arises from the interaction
+ * between hiding constraints and layout constraints.
+ */
+interface QueryConstraintError extends ConstraintError {
+    type: 'query-constraint';
+    /** The node ID that was not found */
+    nodeId: string;
+    /** The source constraint that triggered the query */
+    sourceConstraint: SourceConstraint;
+    /** The selector/query that was being evaluated */
+    selector: string;
+}
+
+export { type PositionalConstraintError, type GroupOverlapError, type QueryConstraintError }
 
 
 // TODO: 
