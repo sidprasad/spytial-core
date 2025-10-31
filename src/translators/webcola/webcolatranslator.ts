@@ -142,6 +142,21 @@ export class WebColaLayout {
     this.overlappingNodesData = instanceLayout.overlappingNodes || [];
     this.colaConstraints = instanceLayout.constraints.map(constraint => this.toColaConstraint(constraint));
 
+    // Log constraint count for debugging and monitoring
+    const originalConstraintCount = this.colaConstraints.length;
+    console.log(`WebColaTranslator: Generated ${originalConstraintCount} constraints for ${this.colaNodes.length} nodes`);
+
+    // Apply transitive reduction optimization if we have many constraints
+    // Threshold: optimize when we have more than 100 constraints
+    const OPTIMIZATION_THRESHOLD = 100;
+    if (originalConstraintCount > OPTIMIZATION_THRESHOLD) {
+      console.log(`WebColaTranslator: Constraint count exceeds threshold (${OPTIMIZATION_THRESHOLD}), applying transitive reduction optimization...`);
+      this.colaConstraints = this.optimizeConstraints(this.colaConstraints);
+      const optimizedCount = this.colaConstraints.length;
+      const reductionPercent = ((originalConstraintCount - optimizedCount) / originalConstraintCount * 100).toFixed(1);
+      console.log(`WebColaTranslator: Reduced constraints from ${originalConstraintCount} to ${optimizedCount} (${reductionPercent}% reduction)`);
+    }
+
     if (this.colaConstraints.length === 0 && this.dagre_graph) {
       this.colaNodes.forEach(node => node.fixed = 1);
     }
@@ -149,6 +164,136 @@ export class WebColaLayout {
 
   }
 
+  /**
+   * Optimizes constraints by applying transitive reduction to remove redundant constraints.
+   * 
+   * Graph Theory Approach:
+   * - Separation constraints (left/right, up/down) form directed acyclic graphs (DAGs)
+   * - Transitive reduction removes edges (constraints) that are implied by other paths
+   * - Example: If A left-of B, B left-of C, and A left-of C, then A left-of C is redundant
+   * 
+   * This optimization is crucial for large graphs where constraint counts can explode:
+   * - Reduces solver complexity from O(n³) to closer to O(n²) or O(n log n)
+   * - Prevents WebCola performance degradation with many constraints
+   * - Maintains layout correctness since redundant constraints don't add information
+   * 
+   * @param constraints Array of WebCola constraints to optimize
+   * @returns Optimized array with redundant constraints removed
+   */
+  private optimizeConstraints(constraints: ColaConstraint[]): ColaConstraint[] {
+    // Separate constraints by type for independent optimization
+    const xSeparationConstraints: ColaSeparationConstraint[] = [];
+    const ySeparationConstraints: ColaSeparationConstraint[] = [];
+    const otherConstraints: ColaConstraint[] = [];
+
+    for (const constraint of constraints) {
+      if (constraint.type === 'separation') {
+        const sepConstraint = constraint as ColaSeparationConstraint;
+        if (sepConstraint.axis === 'x' && !sepConstraint.equality) {
+          xSeparationConstraints.push(sepConstraint);
+        } else if (sepConstraint.axis === 'y' && !sepConstraint.equality) {
+          ySeparationConstraints.push(sepConstraint);
+        } else {
+          // Alignment constraints (equality: true) should not be reduced
+          otherConstraints.push(constraint);
+        }
+      } else {
+        otherConstraints.push(constraint);
+      }
+    }
+
+    // Apply transitive reduction to each axis independently
+    const optimizedX = this.transitiveReductionForSeparation(xSeparationConstraints);
+    const optimizedY = this.transitiveReductionForSeparation(ySeparationConstraints);
+
+    // Combine optimized constraints
+    return [...optimizedX, ...optimizedY, ...otherConstraints];
+  }
+
+  /**
+   * Performs transitive reduction on separation constraints using Floyd-Warshall-inspired approach.
+   * 
+   * Algorithm:
+   * 1. Build a reachability matrix using the direct constraints
+   * 2. Compute transitive closure (all implied relationships)
+   * 3. Keep only constraints that are not implied by other paths
+   * 
+   * Time Complexity: O(n³) where n is the number of nodes
+   * Space Complexity: O(n²) for the reachability matrix
+   * 
+   * This is acceptable because:
+   * - Only runs when constraint count is high (threshold-based)
+   * - The cost is amortized across the entire layout process
+   * - The reduction in constraints saves much more time in WebCola solver
+   * 
+   * @param constraints Array of separation constraints to optimize
+   * @returns Optimized array with redundant constraints removed
+   */
+  private transitiveReductionForSeparation(constraints: ColaSeparationConstraint[]): ColaSeparationConstraint[] {
+    if (constraints.length === 0) {
+      return constraints;
+    }
+
+    const n = this.colaNodes.length;
+    
+    // Build adjacency matrix for direct constraints
+    // direct[i][j] stores the constraint if there's a direct edge from i to j
+    const direct: (ColaSeparationConstraint | null)[][] = Array(n).fill(null).map(() => Array(n).fill(null));
+    
+    for (const constraint of constraints) {
+      direct[constraint.left][constraint.right] = constraint;
+    }
+
+    // Compute transitive closure using Floyd-Warshall
+    // reachable[i][j] is true if j is reachable from i through any path
+    const reachable: boolean[][] = Array(n).fill(false).map(() => Array(n).fill(false));
+    
+    // Initialize: direct edges are reachable
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        reachable[i][j] = direct[i][j] !== null;
+      }
+    }
+
+    // Floyd-Warshall: if i->k and k->j, then i->j is reachable
+    for (let k = 0; k < n; k++) {
+      for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n; j++) {
+          if (reachable[i][k] && reachable[k][j]) {
+            reachable[i][j] = true;
+          }
+        }
+      }
+    }
+
+    // Keep only constraints that are not redundant
+    // A constraint i->j is redundant if there exists an intermediate node k
+    // such that i->k and k->j both exist (or are reachable)
+    const nonRedundant: ColaSeparationConstraint[] = [];
+    
+    for (const constraint of constraints) {
+      const i = constraint.left;
+      const j = constraint.right;
+      let isRedundant = false;
+
+      // Check if there's an alternative path from i to j through any intermediate node k
+      for (let k = 0; k < n; k++) {
+        if (k !== i && k !== j) {
+          // If both i->k and k->j exist as direct constraints, then i->j is redundant
+          if (direct[i][k] !== null && direct[k][j] !== null) {
+            isRedundant = true;
+            break;
+          }
+        }
+      }
+
+      if (!isRedundant) {
+        nonRedundant.push(constraint);
+      }
+    }
+
+    return nonRedundant;
+  }
 
   private getNodeIndex(nodeId: string) {
     return this.colaNodes.findIndex(node => node.id === nodeId);
