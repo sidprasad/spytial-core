@@ -11,8 +11,14 @@ export type SystemError = {
   type: 'positional-error';
   messages: ErrorMessages;
 } | {
-  type: 'group-overlap-error';  // New type
+  type: 'group-overlap-error';
   message: string;
+  source?: string;
+} | {
+  type: 'query-constraint-error';
+  message: string;
+  nodeId: string;
+  selector: string;
   source?: string;
 } | {
   type: 'general-error';
