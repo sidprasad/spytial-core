@@ -10,24 +10,69 @@ import { WebColaLayout } from '../src/translators/webcola/webcolatranslator';
 import { ConstraintValidator } from '../src/layout/constraint-validator';
 import { SGraphQueryEvaluator } from '../src/evaluators/sgq-evaluator';
 import { ForgeEvaluator } from '../src/evaluators/forge-evaluator';
-import type { InstanceLayout } from '../src/layout/interfaces';
+import type { InstanceLayout, LayoutNode } from '../src/layout/interfaces';
+
+/**
+ * Creates a mock layout node for testing.
+ */
+function createMockNode(id: string, label: string, color: string): LayoutNode {
+    return {
+        id,
+        label,
+        name: label,
+        color,
+        groups: [],
+        attributes: {},
+        icon: '',
+        height: 60,
+        width: 100,
+        mostSpecificType: 'Node',
+        types: ['Node'],
+        showLabels: true
+    };
+}
+
+/**
+ * Creates a simple mock layout with two nodes for testing.
+ */
+function createSimpleMockLayout(): InstanceLayout {
+    return {
+        nodes: [
+            createMockNode('A', 'A', 'red'),
+            createMockNode('B', 'B', 'blue')
+        ],
+        edges: [],
+        constraints: [],
+        groups: []
+    };
+}
+
+/**
+ * Creates a mock layout with an edge for testing.
+ */
+function createMockLayoutWithEdge(): InstanceLayout {
+    const nodeA = createMockNode('A', 'A', 'red');
+    const nodeB = createMockNode('B', 'B', 'blue');
+    
+    return {
+        nodes: [nodeA, nodeB],
+        edges: [{
+            source: nodeA,
+            target: nodeB,
+            label: 'edge',
+            relationName: 'rel',
+            id: 'e1',
+            color: 'black'
+        }],
+        constraints: [],
+        groups: []
+    };
+}
 
 describe('Memory Cleanup', () => {
     describe('WebColaLayout', () => {
         it('should clear dagre_graph reference on dispose', () => {
-            // Create a simple layout
-            const mockLayout: InstanceLayout = {
-                nodes: [
-                    { id: 'A', label: 'A', name: 'A', color: 'red', groups: [], attributes: {}, 
-                      icon: '', height: 60, width: 100, mostSpecificType: 'Node', types: ['Node'], showLabels: true },
-                    { id: 'B', label: 'B', name: 'B', color: 'blue', groups: [], attributes: {}, 
-                      icon: '', height: 60, width: 100, mostSpecificType: 'Node', types: ['Node'], showLabels: true }
-                ],
-                edges: [],
-                constraints: [],
-                groups: []
-            };
-
+            const mockLayout = createSimpleMockLayout();
             const webcolaLayout = new WebColaLayout(mockLayout, 800, 800);
             
             // Get initial stats
@@ -43,27 +88,7 @@ describe('Memory Cleanup', () => {
         });
 
         it('should report accurate memory stats', () => {
-            const mockLayout: InstanceLayout = {
-                nodes: [
-                    { id: 'A', label: 'A', name: 'A', color: 'red', groups: [], attributes: {}, 
-                      icon: '', height: 60, width: 100, mostSpecificType: 'Node', types: ['Node'], showLabels: true },
-                    { id: 'B', label: 'B', name: 'B', color: 'blue', groups: [], attributes: {}, 
-                      icon: '', height: 60, width: 100, mostSpecificType: 'Node', types: ['Node'], showLabels: true }
-                ],
-                edges: [{
-                    source: { id: 'A', label: 'A', name: 'A', color: 'red', groups: [], attributes: {}, 
-                             icon: '', height: 60, width: 100, mostSpecificType: 'Node', types: ['Node'], showLabels: true },
-                    target: { id: 'B', label: 'B', name: 'B', color: 'blue', groups: [], attributes: {}, 
-                             icon: '', height: 60, width: 100, mostSpecificType: 'Node', types: ['Node'], showLabels: true },
-                    label: 'edge',
-                    relationName: 'rel',
-                    id: 'e1',
-                    color: 'black'
-                }],
-                constraints: [],
-                groups: []
-            };
-
+            const mockLayout = createMockLayoutWithEdge();
             const webcolaLayout = new WebColaLayout(mockLayout, 800, 800);
             const stats = webcolaLayout.getMemoryStats();
 
@@ -76,11 +101,8 @@ describe('Memory Cleanup', () => {
 
     describe('ConstraintValidator', () => {
         it('should clear caches on dispose', () => {
-            const mockLayout: InstanceLayout = {
-                nodes: [
-                    { id: 'A', label: 'A', name: 'A', color: 'red', groups: [], attributes: {}, 
-                      icon: '', height: 60, width: 100, mostSpecificType: 'Node', types: ['Node'], showLabels: true }
-                ],
+            const mockLayout = {
+                nodes: [createMockNode('A', 'A', 'red')],
                 edges: [],
                 constraints: [],
                 groups: []
@@ -103,11 +125,8 @@ describe('Memory Cleanup', () => {
         });
 
         it('should report accurate memory stats', () => {
-            const mockLayout: InstanceLayout = {
-                nodes: [
-                    { id: 'A', label: 'A', name: 'A', color: 'red', groups: [], attributes: {}, 
-                      icon: '', height: 60, width: 100, mostSpecificType: 'Node', types: ['Node'], showLabels: true }
-                ],
+            const mockLayout = {
+                nodes: [createMockNode('A', 'A', 'red')],
                 edges: [],
                 constraints: [],
                 groups: []
@@ -183,26 +202,7 @@ describe('Memory Cleanup', () => {
     describe('Memory Stats Integration', () => {
         it('should provide comprehensive memory stats across components', () => {
             // Create a simple layout with multiple components
-            const mockLayout: InstanceLayout = {
-                nodes: [
-                    { id: 'A', label: 'A', name: 'A', color: 'red', groups: [], attributes: {}, 
-                      icon: '', height: 60, width: 100, mostSpecificType: 'Node', types: ['Node'], showLabels: true },
-                    { id: 'B', label: 'B', name: 'B', color: 'blue', groups: [], attributes: {}, 
-                      icon: '', height: 60, width: 100, mostSpecificType: 'Node', types: ['Node'], showLabels: true }
-                ],
-                edges: [{
-                    source: { id: 'A', label: 'A', name: 'A', color: 'red', groups: [], attributes: {}, 
-                             icon: '', height: 60, width: 100, mostSpecificType: 'Node', types: ['Node'], showLabels: true },
-                    target: { id: 'B', label: 'B', name: 'B', color: 'blue', groups: [], attributes: {}, 
-                             icon: '', height: 60, width: 100, mostSpecificType: 'Node', types: ['Node'], showLabels: true },
-                    label: 'edge',
-                    relationName: 'rel',
-                    id: 'e1',
-                    color: 'black'
-                }],
-                constraints: [],
-                groups: []
-            };
+            const mockLayout = createMockLayoutWithEdge();
 
             // Create all components
             const webcolaLayout = new WebColaLayout(mockLayout, 800, 800);
