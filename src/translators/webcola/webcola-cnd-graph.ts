@@ -170,6 +170,21 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   };
 
   /**
+   * Edge endpoint dragging state for moving edges between nodes
+   */
+  private edgeDragState: {
+    isDragging: boolean;
+    edge: EdgeWithMetadata | null;
+    endpoint: 'source' | 'target' | null;
+    dragMarker: any;
+  } = {
+    isDragging: false,
+    edge: null,
+    endpoint: null,
+    dragMarker: null
+  };
+
+  /**
    * Temporary canvas for text measurement
    */
   private textMeasurementCanvas: HTMLCanvasElement | null = null;
@@ -1034,9 +1049,18 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     if (!this.isInputModeActive) return;
 
     const currentLabel = edgeData.label || edgeData.relName || '';
-    const newLabel = await this.showPromptDialog(`Edit edge label:`, currentLabel);
+    const result = await this.showEdgeEditDialog(`Edit edge label:`, currentLabel);
     
-    if (newLabel !== null && newLabel !== currentLabel) {
+    // Handle deletion request
+    if (result === 'DELETE') {
+      await this.deleteEdge(edgeData);
+      return;
+    }
+    
+    // Handle label change
+    if (result !== null && result !== currentLabel) {
+      const newLabel = result;
+      
       // Get source and target nodes for data instance update
       const sourceNode = this.getNodeFromEdge(edgeData, 'source');
       const targetNode = this.getNodeFromEdge(edgeData, 'target');
@@ -1382,6 +1406,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // Add labels to non-alignment links
     this.setupLinkLabels(linkGroups);
 
+    // Add draggable endpoint markers for input mode
+    this.setupEdgeEndpointMarkers(linkGroups);
+
     return linkGroups;
   }
 
@@ -1448,6 +1475,273 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       //.attr("fill", "#555")
       .attr("pointer-events", "none")
       .text((d: any) => d.label || d.relName || "");
+  }
+
+  /**
+   * Adds draggable endpoint markers to edges for input mode.
+   * These markers allow users to drag edge endpoints to reconnect edges.
+   * 
+   * @param linkGroups - D3 selection of link group elements
+   */
+  private setupEdgeEndpointMarkers(
+    linkGroups: d3.Selection<SVGGElement, any, any, unknown>
+  ): void {
+    // Add target endpoint marker (at the arrow end)
+    linkGroups
+      .filter((d: any) => !this.isAlignmentEdge(d))
+      .append("circle")
+      .attr("class", "edge-endpoint-marker target-marker")
+      .attr("r", 8)
+      .attr("fill", "#007bff")
+      .attr("stroke", "white")
+      .attr("stroke-width", 2)
+      .attr("opacity", 0) // Hidden by default
+      .attr("cursor", "move")
+      .style("pointer-events", "none") // Will be enabled in input mode
+      .call(
+        d3.drag()
+          .on('start', (d: EdgeWithMetadata) => this.startEdgeEndpointDrag(d, 'target'))
+          .on('drag', (d: EdgeWithMetadata) => this.dragEdgeEndpoint(d, 'target'))
+          .on('end', (d: EdgeWithMetadata) => this.endEdgeEndpointDrag(d, 'target'))
+      );
+
+    // Add source endpoint marker (at the start, for bidirectional edges or moving the source)
+    linkGroups
+      .filter((d: any) => !this.isAlignmentEdge(d))
+      .append("circle")
+      .attr("class", "edge-endpoint-marker source-marker")
+      .attr("r", 8)
+      .attr("fill", "#28a745")
+      .attr("stroke", "white")
+      .attr("stroke-width", 2)
+      .attr("opacity", 0) // Hidden by default
+      .attr("cursor", "move")
+      .style("pointer-events", "none") // Will be enabled in input mode
+      .call(
+        d3.drag()
+          .on('start', (d: EdgeWithMetadata) => this.startEdgeEndpointDrag(d, 'source'))
+          .on('drag', (d: EdgeWithMetadata) => this.dragEdgeEndpoint(d, 'source'))
+          .on('end', (d: EdgeWithMetadata) => this.endEdgeEndpointDrag(d, 'source'))
+      );
+  }
+
+  /**
+   * Start dragging an edge endpoint
+   */
+  private startEdgeEndpointDrag(edgeData: EdgeWithMetadata, endpoint: 'source' | 'target'): void {
+    d3.event.sourceEvent.stopPropagation();
+    
+    this.edgeDragState.isDragging = true;
+    this.edgeDragState.edge = edgeData;
+    this.edgeDragState.endpoint = endpoint;
+    
+    console.log(`🔵 Started dragging ${endpoint} endpoint of edge:`, edgeData.id);
+  }
+
+  /**
+   * Drag an edge endpoint - update visual feedback
+   */
+  private dragEdgeEndpoint(edgeData: EdgeWithMetadata, endpoint: 'source' | 'target'): void {
+    if (!this.edgeDragState.isDragging) return;
+
+    const [mouseX, mouseY] = d3.mouse(this.container.node());
+    
+    // Update the marker position
+    const markerClass = endpoint === 'target' ? '.target-marker' : '.source-marker';
+    this.container
+      .selectAll('.link-group')
+      .filter((d: any) => d.id === edgeData.id)
+      .select(markerClass)
+      .attr('cx', mouseX)
+      .attr('cy', mouseY);
+  }
+
+  /**
+   * End dragging an edge endpoint - reconnect or delete edge
+   */
+  private async endEdgeEndpointDrag(edgeData: EdgeWithMetadata, endpoint: 'source' | 'target'): Promise<void> {
+    if (!this.edgeDragState.isDragging) return;
+
+    const [mouseX, mouseY] = d3.mouse(this.container.node());
+    
+    // Find the node under the cursor
+    const targetNode = this.findNodeAtPosition(mouseX, mouseY);
+    
+    if (targetNode) {
+      console.log(`🔗 Reconnecting ${endpoint} to node:`, targetNode.id);
+      await this.reconnectEdge(edgeData, endpoint, targetNode);
+    } else {
+      console.log(`🗑️ No node found - deleting edge:`, edgeData.id);
+      await this.deleteEdge(edgeData);
+    }
+    
+    // Clean up drag state
+    this.edgeDragState = {
+      isDragging: false,
+      edge: null,
+      endpoint: null,
+      dragMarker: null
+    };
+    
+    // Re-render to show changes
+    this.rerenderGraph();
+  }
+
+  /**
+   * Find a node at the given position
+   */
+  private findNodeAtPosition(x: number, y: number): NodeWithMetadata | null {
+    if (!this.currentLayout?.nodes) return null;
+    
+    // Check each node to see if the position is within its bounds
+    for (const node of this.currentLayout.nodes) {
+      const halfWidth = (node.width || 0) / 2;
+      const halfHeight = (node.height || 0) / 2;
+      
+      if (x >= node.x - halfWidth && x <= node.x + halfWidth &&
+          y >= node.y - halfHeight && y <= node.y + halfHeight) {
+        return node;
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * Reconnect an edge to a new node
+   */
+  private async reconnectEdge(
+    edgeData: EdgeWithMetadata,
+    endpoint: 'source' | 'target',
+    newNode: NodeWithMetadata
+  ): Promise<void> {
+    const oldSourceNode = this.getNodeFromEdge(edgeData, 'source');
+    const oldTargetNode = this.getNodeFromEdge(edgeData, 'target');
+    
+    if (!oldSourceNode || !oldTargetNode) {
+      console.error('Could not find source or target node');
+      return;
+    }
+
+    // Determine new source and target
+    let newSourceNode: NodeWithMetadata;
+    let newTargetNode: NodeWithMetadata;
+    
+    if (endpoint === 'source') {
+      newSourceNode = newNode;
+      newTargetNode = oldTargetNode;
+    } else {
+      newSourceNode = oldSourceNode;
+      newTargetNode = newNode;
+    }
+
+    // Don't allow reconnecting if it results in the same edge
+    if (newSourceNode.id === oldSourceNode.id && newTargetNode.id === oldTargetNode.id) {
+      console.log('⏭️ Edge already connected to this node, no change needed');
+      return;
+    }
+
+    const relationName = edgeData.label || edgeData.relName || '';
+    
+    if (!relationName.trim()) {
+      console.warn('Edge has no relation name, cannot reconnect');
+      return;
+    }
+
+    // Create tuples for old and new edges
+    const oldTuple: ITuple = {
+      atoms: [oldSourceNode.id, oldTargetNode.id],
+      types: [oldSourceNode.type || 'untyped', oldTargetNode.type || 'untyped']
+    };
+
+    const newTuple: ITuple = {
+      atoms: [newSourceNode.id, newTargetNode.id],
+      types: [newSourceNode.type || 'untyped', newTargetNode.type || 'untyped']
+    };
+
+    console.log(`🔄 Reconnecting edge from ${oldSourceNode.id}->${oldTargetNode.id} to ${newSourceNode.id}->${newTargetNode.id}`);
+
+    // Dispatch edge reconnection event
+    const edgeReconnectionEvent = new CustomEvent('edge-reconnection-requested', {
+      detail: {
+        relationId: relationName,
+        oldTuple: oldTuple,
+        newTuple: newTuple,
+        oldSourceNodeId: oldSourceNode.id,
+        oldTargetNodeId: oldTargetNode.id,
+        newSourceNodeId: newSourceNode.id,
+        newTargetNodeId: newTargetNode.id
+      },
+      bubbles: true
+    });
+    this.dispatchEvent(edgeReconnectionEvent);
+
+    // Update the edge data in the current layout
+    const sourceIndex = this.currentLayout.nodes.findIndex(n => n.id === newSourceNode.id);
+    const targetIndex = this.currentLayout.nodes.findIndex(n => n.id === newTargetNode.id);
+    
+    if (sourceIndex !== -1 && targetIndex !== -1) {
+      edgeData.source = sourceIndex;
+      edgeData.target = targetIndex;
+    }
+  }
+
+  /**
+   * Delete an edge from the graph
+   */
+  private async deleteEdge(edgeData: EdgeWithMetadata): Promise<void> {
+    const sourceNode = this.getNodeFromEdge(edgeData, 'source');
+    const targetNode = this.getNodeFromEdge(edgeData, 'target');
+    
+    if (!sourceNode || !targetNode) {
+      console.error('Could not find source or target node for edge deletion');
+      return;
+    }
+
+    const relationName = edgeData.label || edgeData.relName || '';
+    
+    if (!relationName.trim()) {
+      console.warn('Edge has no relation name, cannot delete from data instance');
+      // Still remove from visualization
+      this.removeEdgeFromLayout(edgeData);
+      return;
+    }
+
+    const tuple: ITuple = {
+      atoms: [sourceNode.id, targetNode.id],
+      types: [sourceNode.type || 'untyped', targetNode.type || 'untyped']
+    };
+
+    console.log(`🗑️ Deleting edge: ${relationName}(${sourceNode.id}, ${targetNode.id})`);
+
+    // Dispatch edge deletion event (using modification with empty new name)
+    const edgeDeletionEvent = new CustomEvent('edge-modification-requested', {
+      detail: {
+        oldRelationId: relationName,
+        newRelationId: '', // Empty string signals deletion
+        sourceNodeId: sourceNode.id,
+        targetNodeId: targetNode.id,
+        tuple: tuple
+      },
+      bubbles: true
+    });
+    this.dispatchEvent(edgeDeletionEvent);
+
+    // Remove from current layout
+    this.removeEdgeFromLayout(edgeData);
+  }
+
+  /**
+   * Remove an edge from the current layout
+   */
+  private removeEdgeFromLayout(edgeData: EdgeWithMetadata): void {
+    if (!this.currentLayout?.links) return;
+    
+    const index = this.currentLayout.links.findIndex(link => link.id === edgeData.id);
+    if (index !== -1) {
+      this.currentLayout.links.splice(index, 1);
+      console.log(`✅ Edge removed from layout: ${edgeData.id}`);
+    }
   }
 
   /**
@@ -2147,6 +2441,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       })
       .raise();
 
+    // Update edge endpoint markers for input mode
+    this.updateEdgeEndpointMarkers();
+
     // Update group labels (center top of each group)
     this.svgGroupLabels
       .attr('x', (d: any) => {
@@ -2165,6 +2462,60 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     this.svgLinkGroups.selectAll('.linklabel').raise();
     this.svgGroups.selectAll('.error-group').raise();
     this.svgNodes.selectAll('.error-node').raise();
+  }
+
+  /**
+   * Update positions of edge endpoint markers
+   * Positions them at the arrow/marker positions of edges
+   */
+  private updateEdgeEndpointMarkers(): void {
+    if (!this.svgLinkGroups) return;
+
+    // Update target markers (at the arrow end)
+    this.svgLinkGroups.select('.target-marker')
+      .attr('cx', (d: EdgeWithMetadata) => {
+        const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${d.id}"]`) as SVGPathElement;
+        if (pathElement) {
+          const pathLength = pathElement.getTotalLength();
+          const point = pathElement.getPointAtLength(pathLength);
+          return point.x;
+        }
+        return d.target.x || 0;
+      })
+      .attr('cy', (d: EdgeWithMetadata) => {
+        const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${d.id}"]`) as SVGPathElement;
+        if (pathElement) {
+          const pathLength = pathElement.getTotalLength();
+          const point = pathElement.getPointAtLength(pathLength);
+          return point.y;
+        }
+        return d.target.y || 0;
+      })
+      .attr('opacity', this.isInputModeActive ? 0.8 : 0)
+      .style('pointer-events', this.isInputModeActive ? 'all' : 'none')
+      .raise(); // Always on top
+
+    // Update source markers (at the start)
+    this.svgLinkGroups.select('.source-marker')
+      .attr('cx', (d: EdgeWithMetadata) => {
+        const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${d.id}"]`) as SVGPathElement;
+        if (pathElement) {
+          const point = pathElement.getPointAtLength(0);
+          return point.x;
+        }
+        return d.source.x || 0;
+      })
+      .attr('cy', (d: EdgeWithMetadata) => {
+        const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${d.id}"]`) as SVGPathElement;
+        if (pathElement) {
+          const point = pathElement.getPointAtLength(0);
+          return point.y;
+        }
+        return d.source.y || 0;
+      })
+      .attr('opacity', this.isInputModeActive ? 0.8 : 0)
+      .style('pointer-events', this.isInputModeActive ? 'all' : 'none')
+      .raise(); // Always on top
   }
 
   private gridUpdatePositions() {
@@ -3824,6 +4175,79 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         } else if (target.dataset.action === 'cancel') {
           this.shadowRoot!.removeChild(overlay);
           resolve(null);
+        } else if (target.dataset.action === 'ok') {
+          const value = input.value;
+          this.shadowRoot!.removeChild(overlay);
+          resolve(value);
+        }
+      });
+
+      // Handle enter and escape keys
+      const handleKeydown = (e: KeyboardEvent) => {
+        if (e.key === 'Enter') {
+          const value = input.value;
+          this.shadowRoot!.removeChild(overlay);
+          document.removeEventListener('keydown', handleKeydown);
+          resolve(value);
+        } else if (e.key === 'Escape') {
+          this.shadowRoot!.removeChild(overlay);
+          document.removeEventListener('keydown', handleKeydown);
+          resolve(null);
+        }
+      };
+      document.addEventListener('keydown', handleKeydown);
+
+      this.shadowRoot!.appendChild(overlay);
+      
+      // Focus and select the input
+      input.focus();
+      input.select();
+    });
+  }
+
+  /**
+   * Show a prompt dialog for text input with a delete button option
+   * @param message - Dialog message
+   * @param defaultValue - Default input value
+   * @returns Promise that resolves to: input value, null (cancel), or 'DELETE' (delete action)
+   */
+  private showEdgeEditDialog(message: string, defaultValue: string = ''): Promise<string | null> {
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+
+      overlay.innerHTML = `
+        <div class="modal-dialog">
+          <div class="modal-header">
+            <h3 class="modal-title">Edit Edge</h3>
+          </div>
+          <div class="modal-body">
+            <p class="modal-message">${message}</p>
+            <input type="text" class="modal-input" value="${defaultValue}" placeholder="Enter text...">
+          </div>
+          <div class="modal-footer">
+            <button class="modal-button secondary" data-action="cancel">Cancel</button>
+            <button class="modal-button danger" data-action="delete" style="background: #dc3545; margin-right: auto;">Delete Edge</button>
+            <button class="modal-button primary" data-action="ok">OK</button>
+          </div>
+        </div>
+      `;
+
+      const input = overlay.querySelector('.modal-input') as HTMLInputElement;
+
+      // Add event listeners
+      overlay.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement;
+        if (target.classList.contains('modal-overlay')) {
+          // Clicked outside dialog
+          this.shadowRoot!.removeChild(overlay);
+          resolve(null);
+        } else if (target.dataset.action === 'cancel') {
+          this.shadowRoot!.removeChild(overlay);
+          resolve(null);
+        } else if (target.dataset.action === 'delete') {
+          this.shadowRoot!.removeChild(overlay);
+          resolve('DELETE'); // Special signal for deletion
         } else if (target.dataset.action === 'ok') {
           const value = input.value;
           this.shadowRoot!.removeChild(overlay);
