@@ -35,8 +35,8 @@ The REPL Interface provides three terminals for interactive data instance constr
 ## Basic Usage
 
 ```tsx
-import { ReplInterface } from 'cnd-core';
-import { JSONDataInstance } from 'cnd-core';
+import { ReplInterface } from 'spytial-core';
+import { JSONDataInstance } from 'spytial-core';
 
 const instance = new JSONDataInstance({ atoms: [], relations: [] });
 
@@ -116,7 +116,7 @@ clear     # Clear entire instance
 ### Custom Terminal Configurations
 
 ```tsx
-import { TerminalConfig, AtomCommandParser, RelationCommandParser } from 'cnd-core';
+import { TerminalConfig, AtomCommandParser, RelationCommandParser } from 'spytial-core';
 
 const customTerminals: TerminalConfig[] = [
   {
@@ -135,7 +135,7 @@ const customTerminals: TerminalConfig[] = [
 ### Custom Command Parsers
 
 ```tsx
-import { ICommandParser, CommandResult } from 'cnd-core';
+import { ICommandParser, CommandResult } from 'spytial-core';
 
 class CustomParser implements ICommandParser {
   canHandle(command: string): boolean {
@@ -232,7 +232,7 @@ add [list: Alice,Bob]:people
 When an external Pyret evaluator is available (e.g., `window.__internalRepl`), the REPL interface gains enhanced capabilities:
 
 ```tsx
-import { PyretReplInterface } from 'cnd-core';
+import { PyretReplInterface } from 'spytial-core';
 
 // Assuming window.__internalRepl is available from the Pyret environment
 const externalEvaluator = window.__internalRepl;
@@ -264,10 +264,10 @@ clear     // Removes all data
 
 ## Integration with Other Components
 
-The REPL Interface works seamlessly with other cnd-core components:
+The REPL Interface works seamlessly with other spytial-core components:
 
 ```tsx
-import { ReplInterface, InstanceBuilder, LayoutInstance } from 'cnd-core';
+import { ReplInterface, InstanceBuilder, LayoutInstance } from 'spytial-core';
 
 function DataBuilderApp() {
   const [instance, setInstance] = useState(new JSONDataInstance({...}));
@@ -303,7 +303,7 @@ import {
   PyretReplInterface, 
   CndLayoutInterface, 
   ReplWithVisualization 
-} from 'cnd-core';
+} from 'spytial-core';
 
 function CompleteIntegrationApp() {
   const [pyretInstance, setPyretInstance] = useState(new PyretDataInstance());

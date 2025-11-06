@@ -159,7 +159,7 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
 };
 
 /**
- * Named export for better tree-shaking support following cnd-core guidelines
+ * Named export for better tree-shaking support following spytial-core guidelines
  * Avoids default exports to improve bundler optimization
  */
 export { CndLayoutInterface };

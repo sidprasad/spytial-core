@@ -11,7 +11,7 @@ import jsyaml from 'js-yaml';
  * This function is the inverse of parseLayoutSpec and ensures round-trip
  * compatibility for the No Code View.
  * 
- * Following cnd-core guidelines:
+ * Following spytial-core guidelines:
  * - Tree-shakable named export
  * - Client-side optimized (no Node.js APIs)
  * - TypeScript strict typing

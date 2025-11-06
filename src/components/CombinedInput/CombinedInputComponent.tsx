@@ -58,7 +58,7 @@ export interface CombinedInputProps extends CombinedInputConfig {
  * 
  * @example
  * ```tsx
- * import { CombinedInputComponent, PyretDataInstance } from 'cnd-core';
+ * import { CombinedInputComponent, PyretDataInstance } from 'spytial-core';
  * 
  * const initialInstance = new PyretDataInstance(myPyretData);
  * const evaluator = window.__internalRepl;

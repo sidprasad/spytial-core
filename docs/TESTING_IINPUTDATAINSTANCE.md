@@ -167,4 +167,4 @@ describe('AlloyDataInstance Tests', () => {
 - **Error Handling**: Throw descriptive errors for invalid operations
 - **Performance**: Optimize for common operations (add/remove atoms and relations)
 
-This test suite ensures that all `IInputDataInstance` implementations behave consistently and correctly, making them interchangeable in the cnd-core ecosystem.
+This test suite ensures that all `IInputDataInstance` implementations behave consistently and correctly, making them interchangeable in the spytial-core ecosystem.
