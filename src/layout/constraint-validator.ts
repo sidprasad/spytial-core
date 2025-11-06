@@ -520,20 +520,13 @@ class ConstraintValidator {
         // Collect all constraints to check for duplicates
         const allIISConstraints = [...minimalIIS.existingConstraints, ...minimalIIS.disjunctiveConstraints];
         
-        // Deduplicate by semantic identity (not just object reference)
-        // We compare constraints based on their content (node IDs, groups, sides, etc.)
-        const uniqueConstraints = new Map<LayoutConstraint, LayoutConstraint>();
+        // Deduplicate using hash-based approach for O(n) performance
+        // We use a string key derived from constraint properties for efficient lookup
+        const uniqueConstraints = new Map<string, LayoutConstraint>();
         for (const constraint of allIISConstraints) {
-            // Check if we already have a semantically identical constraint
-            let found = false;
-            for (const existing of uniqueConstraints.values()) {
-                if (this.areConstraintsIdentical(constraint, existing)) {
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                uniqueConstraints.set(constraint, constraint);
+            const key = this.getConstraintKey(constraint);
+            if (!uniqueConstraints.has(key)) {
+                uniqueConstraints.set(key, constraint);
             }
         }
         
@@ -602,6 +595,48 @@ class ConstraintValidator {
     }
     
     /**
+     * Generates a unique string key for a constraint based on its content.
+     * Used for efficient deduplication via hashing.
+     */
+    private getConstraintKey(constraint: LayoutConstraint): string {
+        if (isLeftConstraint(constraint)) {
+            return `left:${constraint.left.id}:${constraint.right.id}`;
+        }
+        
+        if (isTopConstraint(constraint)) {
+            return `top:${constraint.top.id}:${constraint.bottom.id}`;
+        }
+        
+        if (isAlignmentConstraint(constraint)) {
+            // Normalize alignment key to handle symmetry: always put smaller ID first
+            const [id1, id2] = [constraint.node1.id, constraint.node2.id].sort();
+            return `align:${id1}:${id2}:${constraint.axis}`;
+        }
+        
+        if (isBoundingBoxConstraint(constraint)) {
+            return `bbox:${constraint.node.id}:${constraint.group.name}:${constraint.side}`;
+        }
+        
+        if (isGroupBoundaryConstraint(constraint)) {
+            return `groupbound:${constraint.groupA.name}:${constraint.groupB.name}:${constraint.side}`;
+        }
+        
+        // Fallback for unknown constraint types
+        return `unknown:${JSON.stringify(constraint)}`;
+    }
+
+    /**
+     * Checks if two alignment constraints are semantically identical.
+     * Alignment is symmetric: align(A,B) is the same as align(B,A).
+     */
+    private areAlignmentsIdentical(c1: AlignmentConstraint, c2: AlignmentConstraint): boolean {
+        return c1.axis === c2.axis && (
+            (c1.node1.id === c2.node1.id && c1.node2.id === c2.node2.id) ||
+            (c1.node1.id === c2.node2.id && c1.node2.id === c2.node1.id)
+        );
+    }
+
+    /**
      * Checks if two constraints are semantically identical.
      * Used to detect and remove duplicates from the IIS.
      */
@@ -619,11 +654,7 @@ class ConstraintValidator {
         }
         
         if (isAlignmentConstraint(c1) && isAlignmentConstraint(c2)) {
-            // Alignment is symmetric - align(A,B) is the same as align(B,A)
-            return c1.axis === c2.axis && (
-                (c1.node1.id === c2.node1.id && c1.node2.id === c2.node2.id) ||
-                (c1.node1.id === c2.node2.id && c1.node2.id === c2.node1.id)
-            );
+            return this.areAlignmentsIdentical(c1, c2);
         }
         
         if (isBoundingBoxConstraint(c1) && isBoundingBoxConstraint(c2)) {
