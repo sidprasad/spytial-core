@@ -1,6 +1,6 @@
 {
   "name": "spytial-core",
-  "version": "1.4.8",
+  "version": "1.4.9",
   "description": "A fully client-side application for CnD.",
   "main": "./dist/browser/spytial-core-complete.global.js",
   "types": "./dist/browser/spytial-core-complete.global.d.ts",
