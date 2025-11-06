@@ -517,17 +517,34 @@ class ConstraintValidator {
         // Build the minimalConflictingSet map from the minimal IIS
         const minimalConflictingSet = new Map<SourceConstraint, LayoutConstraint[]>();
         
-        // Add minimal existing constraints grouped by source
-        for (const constraint of minimalIIS.existingConstraints) {
+        // Collect all constraints to check for duplicates
+        const allIISConstraints = [...minimalIIS.existingConstraints, ...minimalIIS.disjunctiveConstraints];
+        
+        // Deduplicate by creating a Set based on a unique identifier for each constraint
+        // We use object identity (the constraint object itself) as the key
+        const uniqueConstraints = new Map<LayoutConstraint, LayoutConstraint>();
+        for (const constraint of allIISConstraints) {
+            // Check if we already have a semantically identical constraint
+            let found = false;
+            for (const existing of uniqueConstraints.values()) {
+                if (this.areConstraintsIdentical(constraint, existing)) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                uniqueConstraints.set(constraint, constraint);
+            }
+        }
+        
+        // Now build the minimalConflictingSet from unique constraints
+        for (const constraint of uniqueConstraints.values()) {
             const source = constraint.sourceConstraint;
             if (!minimalConflictingSet.has(source)) {
                 minimalConflictingSet.set(source, []);
             }
             minimalConflictingSet.get(source)!.push(constraint);
         }
-        
-        // Add minimal disjunctive constraints
-        minimalConflictingSet.set(currentDisjunction.sourceConstraint, minimalIIS.disjunctiveConstraints);
         
         // Format error message to match regular constraint errors (user-friendly, no mention of disjunctions)
         const firstConstraintString = orientationConstraintToString(representativeConstraint);
@@ -584,6 +601,38 @@ class ConstraintValidator {
         return expr;
     }
     
+    /**
+     * Checks if two constraints are semantically identical.
+     * Used to detect and remove duplicates from the IIS.
+     */
+    private areConstraintsIdentical(c1: LayoutConstraint, c2: LayoutConstraint): boolean {
+        // Same object reference
+        if (c1 === c2) return true;
+        
+        // Check type and content
+        if (isLeftConstraint(c1) && isLeftConstraint(c2)) {
+            return c1.left.id === c2.left.id && c1.right.id === c2.right.id;
+        }
+        
+        if (isTopConstraint(c1) && isTopConstraint(c2)) {
+            return c1.top.id === c2.top.id && c1.bottom.id === c2.bottom.id;
+        }
+        
+        if (isAlignmentConstraint(c1) && isAlignmentConstraint(c2)) {
+            return c1.node1.id === c2.node1.id && c1.node2.id === c2.node2.id && c1.axis === c2.axis;
+        }
+        
+        if (isBoundingBoxConstraint(c1) && isBoundingBoxConstraint(c2)) {
+            return c1.node.id === c2.node.id && c1.group.name === c2.group.name && c1.side === c2.side;
+        }
+        
+        if (isGroupBoundaryConstraint(c1) && isGroupBoundaryConstraint(c2)) {
+            return c1.groupA.name === c2.groupA.name && c1.groupB.name === c2.groupB.name && c1.side === c2.side;
+        }
+        
+        return false;
+    }
+
     /**
      * Clones the current solver state (constraints only, not variable values).
      * Used for backtracking in disjunctive constraint solving.
@@ -1035,115 +1084,58 @@ class ConstraintValidator {
         existingConstraints: LayoutConstraint[];
         disjunctiveConstraints: LayoutConstraint[];
     } {
-        // Debug logging for your specific case
-        //console.log(`  Existing constraints (${existingConstraints.length}):`);
-        existingConstraints.forEach((c, i) => {
-            let desc = `${i}: `;
-            if (isLeftConstraint(c)) {
-                desc += `${c.left.id} → ${c.right.id}`;
-            } else if (isTopConstraint(c)) {
-                desc += `${c.top.id} ↓ ${c.bottom.id}`;
-            } else if (isBoundingBoxConstraint(c)) {
-                desc += `${c.node.id} ${c.side} of group ${c.group.name}`;
-            } else if (isAlignmentConstraint(c)) {
-                desc += `align ${c.node1.id} + ${c.node2.id} on ${c.axis}`;
-            } else {
-                desc += `unknown constraint type`;
-            }
-            //console.log(`    ${desc} (source: ${c.sourceConstraint?.toHTML?.() || 'unknown'})`);
-        });
+        // For grouping conflicts, we need to find the minimal set of existing constraints
+        // that make the disjunctive alternative unsatisfiable
         
-        //console.log(`  Disjunctive alternative (${disjunctiveAlternative.length}):`);
-        disjunctiveAlternative.forEach((c, i) => {
-            let desc = `${i}: `;
-            if (isBoundingBoxConstraint(c)) {
-                desc += `${c.node.id} ${c.side} of group ${c.group.name}`;
-            } else if (isLeftConstraint(c)) {
-                desc += `${c.left.id} → ${c.right.id}`;
-            } else if (isTopConstraint(c)) {
-                desc += `${c.top.id} ↓ ${c.bottom.id}`;
-            } else if (isAlignmentConstraint(c)) {
-                desc += `align ${c.node1.id} + ${c.node2.id} on ${c.axis}`;
-            } else {
-                desc += `unknown constraint type`;
-            }
-            //console.log(`    ${desc}`);
-        });
-        
-        // For grouping conflicts, we need to be more conservative about minimization
-        // because the conflict often involves the interaction of multiple constraints
-        
-        // Start with a simple approach: find constraints that directly conflict
+        // Start with all existing constraints
         let relevantExisting = [...existingConstraints];
         
-        // Try the traditional minimization approach first, but recognize its limitations for disjunctive constraints
+        // Try the traditional minimization approach with a representative constraint
         if (disjunctiveAlternative.length > 0) {
             const representative = disjunctiveAlternative[0];
-            // console.log(`  Testing traditional minimization with representative:`, 
-            //             isBoundingBoxConstraint(representative) ? 
-            //             `${representative.node.id} ${representative.side} of group ${representative.group.name}` : 
-            //             'non-bbox constraint');
             
-            // Test if there's actually a conflict first
+            // Test if there's actually a conflict
             const fullSet = [...existingConstraints, representative];
             const hasConflict = this.isConflictingSet(fullSet);
-            //console.log(`  Full set conflict test: ${hasConflict}`);
             
             if (hasConflict) {
+                // Find minimal set of existing constraints that conflict with this representative
                 relevantExisting = this.getMinimalConflictingConstraints(existingConstraints, representative);
-                //console.log(`  After traditional minimization: ${relevantExisting.length} constraints`);
             } else {
-                //console.log(`  No conflict detected with traditional approach!`);
-                // For grouping constraints, fall back to a simple expansion
+                // No conflict with representative alone - this shouldn't happen but handle gracefully
                 relevantExisting = [];
             }
         }
         
-        // If we get too few constraints, include a broader set
-        if (relevantExisting.length <= 1) {
-            //console.log(`  Too few constraints (${relevantExisting.length}), expanding based on group members...`);
-            
-            // Get group members from the disjunctive constraints
-            const groupMembers = new Set<string>();
+        // For very small results, try to include more context by finding constraints
+        // that involve the same nodes as the disjunctive constraints
+        if (relevantExisting.length <= 1 && disjunctiveAlternative.some(c => isBoundingBoxConstraint(c))) {
+            // Get nodes involved in the disjunctive constraints
+            const involvedNodes = new Set<string>();
             for (const constraint of disjunctiveAlternative) {
                 if (isBoundingBoxConstraint(constraint)) {
-                    constraint.group.nodeIds.forEach(id => groupMembers.add(id));
+                    involvedNodes.add(constraint.node.id);
+                    constraint.group.nodeIds.forEach(id => involvedNodes.add(id));
                 }
             }
             
-            //console.log(`  Group members: ${Array.from(groupMembers).join(', ')}`);
-            
-            // Include constraints that involve group members
-            relevantExisting = existingConstraints.filter(constraint => {
+            // Find constraints that involve these nodes
+            const contextConstraints = existingConstraints.filter(constraint => {
                 if (isLeftConstraint(constraint)) {
-                    return groupMembers.has(constraint.left.id) || groupMembers.has(constraint.right.id);
+                    return involvedNodes.has(constraint.left.id) || involvedNodes.has(constraint.right.id);
                 } else if (isTopConstraint(constraint)) {
-                    return groupMembers.has(constraint.top.id) || groupMembers.has(constraint.bottom.id);
+                    return involvedNodes.has(constraint.top.id) || involvedNodes.has(constraint.bottom.id);
                 } else if (isAlignmentConstraint(constraint)) {
-                    return groupMembers.has(constraint.node1.id) || groupMembers.has(constraint.node2.id);
+                    return involvedNodes.has(constraint.node1.id) || involvedNodes.has(constraint.node2.id);
                 }
                 return false;
             });
             
-            //console.log(`  After expansion: ${relevantExisting.length} constraints`);
-        }
-        
-        //console.log(`  Final IIS - Existing constraints:`);
-        relevantExisting.forEach((c, i) => {
-            let desc = `${i}: `;
-            if (isLeftConstraint(c)) {
-                desc += `${c.left.id} → ${c.right.id}`;
-            } else if (isTopConstraint(c)) {
-                desc += `${c.top.id} ↓ ${c.bottom.id}`;
-            } else if (isBoundingBoxConstraint(c)) {
-                desc += `${c.node.id} ${c.side} of group ${c.group.name}`;
-            } else if (isAlignmentConstraint(c)) {
-                desc += `align ${c.node1.id} + ${c.node2.id} on ${c.axis}`;
-            } else {
-                desc += `unknown constraint type`;
+            // Use context constraints if we found any
+            if (contextConstraints.length > 0) {
+                relevantExisting = contextConstraints;
             }
-            //console.log(`    ${desc}`);
-        });
+        }
         
         return {
             existingConstraints: relevantExisting,
