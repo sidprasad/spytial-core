@@ -25,8 +25,8 @@ The `InstanceBuilder` is a reusable, implementation-agnostic React component for
 
 ```tsx
 import React, { useState } from 'react';
-import { InstanceBuilder } from 'cnd-core';
-import { DotDataInstance } from 'cnd-core/data-instance/dot';
+import { InstanceBuilder } from 'spytial-core';
+import { DotDataInstance } from 'spytial-core/data-instance/dot';
 
 const MyApp: React.FC = () => {
   const [instance, setInstance] = useState(
@@ -115,7 +115,7 @@ The ErrorMessageModal is a React component for displaying structured error messa
 
 ```tsx
 import React, { useState } from 'react';
-import { ErrorMessageModal, ErrorStateManager } from 'cnd-core';
+import { ErrorMessageModal, ErrorStateManager } from 'spytial-core';
 
 const MyApp: React.FC = () => {
   const [errorManager] = useState(() => new ErrorStateManager());

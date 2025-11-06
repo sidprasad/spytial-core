@@ -1,4 +1,4 @@
-# cnd-core
+# spytial-core
 
 A fully-typed, tree-shakable TypeScript implementation of `Cope and Drag`.
 Supports multiple languages (e.g. Alloy, Forge, DOT, Racket), 
@@ -33,10 +33,12 @@ This replaces the complex setup shown in the Pyret REPL demo with a single, easy
 ## Installation
 
 ```bash
-npm install cnd-core
+npm install spytial-core
 ```
 
-- [View on npm](https://www.npmjs.com/package/cnd-core)
+- [View on npm](https://www.npmjs.com/package/spytial-core)
+
+> **Note:** This package was formerly published as `cnd-core`. For backward compatibility, you can still use `npm install cnd-core`, but we recommend migrating to `spytial-core` for future updates. See the [Migration Guide](MIGRATION.md) for details.
 
 ---
 
@@ -45,18 +47,20 @@ npm install cnd-core
 You can use the browser bundle directly from a CDN:
 
 - **jsDelivr:**  
-  [`https://cdn.jsdelivr.net/npm/cnd-core/dist/browser/cnd-core-complete.global.js`](https://cdn.jsdelivr.net/npm/cnd-core/dist/browser/cnd-core-complete.global.js)
+  [`https://cdn.jsdelivr.net/npm/spytial-core/dist/browser/spytial-core-complete.global.js`](https://cdn.jsdelivr.net/npm/spytial-core/dist/browser/spytial-core-complete.global.js)
 - **unpkg:**  
-  [`https://unpkg.com/cnd-core/dist/browser/cnd-core-complete.global.js`](https://unpkg.com/cnd-core/dist/browser/cnd-core-complete.global.js)
+  [`https://unpkg.com/spytial-core/dist/browser/spytial-core-complete.global.js`](https://unpkg.com/spytial-core/dist/browser/spytial-core-complete.global.js)
 
 **Example usage:**
 ```html
-<script src="https://cdn.jsdelivr.net/npm/cnd-core/dist/browser/cnd-core-complete.global.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/spytial-core/dist/browser/spytial-core-complete.global.js"></script>
 <script>
   // CndCore is now available as a global variable
   // Example: const evaluator = new CndCore.SimpleGraphQueryEvaluator();
 </script>
 ```
+
+> **Backward compatibility:** CDN links with `cnd-core` will continue to work for existing versions, but new versions will be published under `spytial-core`.
 
 ---
 
@@ -66,11 +70,11 @@ You can use the browser bundle directly from a CDN:
 
 ```typescript
 // Import the main API and types
-import { AlloyDataInstance, ForgeEvaluator, LayoutInstance, parseAlloyXML, parseLayoutSpec } from 'cnd-core';
+import { AlloyDataInstance, ForgeEvaluator, LayoutInstance, parseAlloyXML, parseLayoutSpec } from 'spytial-core';
 
 // Or import only what you need for tree-shaking
-import { RacketGDataInstance } from 'cnd-core/racket';
-import { SimpleGraphQueryEvaluator } from 'cnd-core/evaluators';
+import { RacketGDataInstance } from 'spytial-core/racket';
+import { SimpleGraphQueryEvaluator } from 'spytial-core/evaluators';
 ```
 
 ---
@@ -78,7 +82,7 @@ import { SimpleGraphQueryEvaluator } from 'cnd-core/evaluators';
 ### Example: Forge/Alloy XML → Layout → Render
 
 ```typescript
-import { AlloyDataInstance, ForgeEvaluator, LayoutInstance, parseAlloyXML, parseLayoutSpec } from 'cnd-core';
+import { AlloyDataInstance, ForgeEvaluator, LayoutInstance, parseAlloyXML, parseLayoutSpec } from 'spytial-core';
 
 // Parse Alloy XML
 const alloyDatum = parseAlloyXML(alloyXmlString);
@@ -103,7 +107,7 @@ const { layout } = layoutInstance.generateLayout(dataInstance, {});
 ### Example: Racket JSON → Layout
 
 ```typescript
-import { RacketGDataInstance, SimpleGraphQueryEvaluator, LayoutInstance, parseLayoutSpec } from 'cnd-core';
+import { RacketGDataInstance, SimpleGraphQueryEvaluator, LayoutInstance, parseLayoutSpec } from 'spytial-core';
 
 // Parse Racket JSON
 const datum = JSON.parse(racketJsonString);
@@ -154,8 +158,8 @@ The **Combined Input Component** provides a single, easy-to-use interface that c
 
 ```javascript
 // Load the component bundle
-<script src="https://cdn.jsdelivr.net/npm/cnd-core/dist/components/react-component-integration.global.js"></script>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cnd-core/dist/components/react-component-integration.css">
+<script src="https://cdn.jsdelivr.net/npm/spytial-core/dist/components/react-component-integration.global.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/spytial-core/dist/components/react-component-integration.css">
 
 // Simple setup
 CndCore.mountCombinedInput('my-container', {
@@ -229,9 +233,9 @@ This guide shows how to use CnD Core in a plain HTML page to visualize Alloy or 
 ```html
 <!-- D3 and WebCola (required for layout/visualization) -->
 <script src="https://d3js.org/d3.v4.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/cnd-core/vendor/cola.js"></script>
-<!-- CnD Core browser bundle -->
-<script src="https://cdn.jsdelivr.net/npm/cnd-core/dist/browser/cnd-core-complete.global.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/spytial-core/vendor/cola.js"></script>
+<!-- Spytial Core browser bundle -->
+<script src="https://cdn.jsdelivr.net/npm/spytial-core/dist/browser/spytial-core-complete.global.js"></script>
 ```
 
 ### 2. Add the Custom Element to Your HTML
@@ -300,8 +304,8 @@ document.getElementById('graph').renderLayout(layout);
 <html lang="en">
 <head>
   <script src="https://d3js.org/d3.v4.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/cnd-core/vendor/cola.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/cnd-core/dist/browser/cnd-core-complete.global.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/spytial-core/vendor/cola.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/spytial-core/dist/browser/spytial-core-complete.global.js"></script>
 </head>
 <body>
   <webcola-cnd-graph id="graph" width="800" height="600"></webcola-cnd-graph>

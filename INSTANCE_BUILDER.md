@@ -14,8 +14,8 @@ The `InstanceBuilder` is a reusable, implementation-agnostic React component for
 
 ```tsx
 import React, { useState } from 'react';
-import { InstanceBuilder } from 'cnd-core';
-import { DotDataInstance } from 'cnd-core/data-instance/dot';
+import { InstanceBuilder } from 'spytial-core';
+import { DotDataInstance } from 'spytial-core/data-instance/dot';
 
 const MyApp: React.FC = () => {
   const [instance, setInstance] = useState(

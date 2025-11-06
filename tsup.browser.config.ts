@@ -3,7 +3,7 @@ import { defineConfig } from 'tsup'
 export default defineConfig({
   entry: {
     // Complete browser bundle with everything
-    'cnd-core-complete': 'src/index.ts'
+    'spytial-core-complete': 'src/index.ts'
   },
   format: ['iife'], // Immediately Invoked Function Expression for browser
   globalName: 'CndCore', // Global variable name for the complete library

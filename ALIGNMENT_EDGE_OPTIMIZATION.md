@@ -105,7 +105,7 @@ A --data--> B --data--> C --data--> A (cycle)
 ### Using the Default Strategy (CONNECTED)
 
 ```typescript
-import { LayoutInstance, AlignmentEdgeStrategy } from 'cnd-core';
+import { LayoutInstance, AlignmentEdgeStrategy } from 'spytial-core';
 
 // Default behavior - uses CONNECTED strategy
 const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);

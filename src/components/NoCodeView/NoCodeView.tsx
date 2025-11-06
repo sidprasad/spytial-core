@@ -34,7 +34,7 @@ export function generateId(): string {
  * data suitable for the No Code View interface. This function complements
  * parseLayoutSpec by providing data in a format optimized for visual editing.
  * 
- * Following cnd-core guidelines:
+ * Following spytial-core guidelines:
  * - Error handling with structured error messages
  * - Client-side performance optimized
  * - Comprehensive type safety

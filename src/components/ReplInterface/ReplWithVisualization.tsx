@@ -32,7 +32,7 @@ export interface ReplWithVisualizationProps {
  * 
  * @example
  * ```tsx
- * import { ReplWithVisualization, JSONDataInstance } from 'cnd-core';
+ * import { ReplWithVisualization, JSONDataInstance } from 'spytial-core';
  * 
  * const instance = new JSONDataInstance({ atoms: [], relations: [] });
  * 

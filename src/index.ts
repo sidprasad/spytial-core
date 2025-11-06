@@ -1,5 +1,5 @@
 /**
- * Main entry point for the cnd-core library
+ * Main entry point for the spytial-core library
  */
 
 // Export sub-modules
