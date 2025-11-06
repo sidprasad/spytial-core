@@ -1,6 +1,6 @@
 {
   "name": "cnd-core",
-  "version": "1.4.7-beta.11",
+  "version": "1.4.8",
   "description": "A fully client-side application for CnD.",
   "main": "./dist/browser/cnd-core-complete.global.js",
   "types": "./dist/browser/cnd-core-complete.global.d.ts",

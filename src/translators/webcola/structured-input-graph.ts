@@ -57,9 +57,10 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     // Add structured input specific initialization
     this.initializeStructuredInput();
     
-    // Listen for edge creation and modification events from the parent WebColaCnDGraph
+    // Listen for edge creation, modification, and reconnection events from the parent WebColaCnDGraph
     this.addEventListener('edge-creation-requested', this.handleEdgeCreationRequest.bind(this) as unknown as EventListener);
     this.addEventListener('edge-modification-requested', this.handleEdgeModificationRequest.bind(this) as unknown as EventListener);
+    this.addEventListener('edge-reconnection-requested', this.handleEdgeReconnectionRequest.bind(this) as unknown as EventListener);
   }
 
   /**
@@ -733,6 +734,39 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       
     } catch (error) {
       console.error('❌ Failed to handle edge modification request:', error);
+    }
+  }
+
+  /**
+   * Handle edge reconnection requests from input mode
+   * This updates the data instance when an edge endpoint is dragged to a new node
+   */
+  private async handleEdgeReconnectionRequest(event: CustomEvent): Promise<void> {
+    console.log('🔄 Handling edge reconnection request:', event.detail);
+    
+    const { relationId, oldTuple, newTuple, oldSourceNodeId, oldTargetNodeId, newSourceNodeId, newTargetNodeId } = event.detail;
+    
+    try {
+      // Remove the old tuple
+      if (relationId && relationId.trim()) {
+        try {
+          this.dataInstance.removeRelationTuple(relationId, oldTuple);
+          console.log(`🗑️ Removed old tuple from ${relationId}: ${oldSourceNodeId} -> ${oldTargetNodeId}`);
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          console.log(`⚠️ Could not remove old tuple from ${relationId}: ${errorMsg}`);
+        }
+      }
+      
+      // Add the new tuple
+      this.dataInstance.addRelationTuple(relationId, newTuple);
+      console.log(`➕ Added new tuple to ${relationId}: ${newSourceNodeId} -> ${newTargetNodeId}`);
+      
+      // Trigger constraint enforcement and layout regeneration
+      await this.enforceConstraintsAndRegenerate();
+      
+    } catch (error) {
+      console.error('❌ Failed to handle edge reconnection request:', error);
     }
   }
 
