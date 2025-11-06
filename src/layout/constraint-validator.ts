@@ -55,6 +55,20 @@ export { type PositionalConstraintError, type GroupOverlapError }
 const ID_TOOLTIP_TEXT = "This is a unique identifier in the graph. Hover over graph nodes to see their IDs.";
 
 /**
+ * Escapes HTML special characters to prevent XSS attacks.
+ * @param str - String to escape
+ * @returns Escaped string safe for HTML insertion
+ */
+function escapeHtml(str: string): string {
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+/**
  * Formats a node label for display in error messages.
  * Prioritizes showing attributes when available, with fallback to label and ID.
  * 
@@ -62,8 +76,9 @@ const ID_TOOLTIP_TEXT = "This is a unique identifier in the graph. Hover over gr
  * @returns Formatted label string, potentially with HTML for tooltips
  */
 function formatNodeLabel(node: LayoutNode): string {
-    // Check if node has non-empty attributes
-    const hasAttributes = node.attributes && Object.keys(node.attributes).length > 0;
+    // Check if node has non-empty attributes with actual values
+    const hasAttributes = node.attributes && 
+        Object.entries(node.attributes).some(([_, values]) => values && values.length > 0);
     
     if (hasAttributes) {
         // Show attributes (truncated if needed) instead of ID
@@ -85,7 +100,8 @@ function formatNodeLabel(node: LayoutNode): string {
                 if (value.length > maxValueLength) {
                     value = value.substring(0, maxValueLength) + '...';
                 }
-                attributeParts.push(`${key}: ${value}`);
+                // Escape HTML to prevent XSS
+                attributeParts.push(`${escapeHtml(key)}: ${escapeHtml(value)}`);
             }
         }
         
@@ -94,19 +110,21 @@ function formatNodeLabel(node: LayoutNode): string {
         }
         
         if (attributeParts.length > 0) {
-            return `${node.label} (${attributeParts.join(', ')})`;
+            // Escape label to prevent XSS
+            return `${escapeHtml(node.label)} (${attributeParts.join(', ')})`;
         }
     }
     
     // No attributes present - show label with ID explanation
     // Use HTML title attribute for hover tooltip explaining what the ID is
+    // Escape all user-provided values to prevent XSS
     if (node.label && node.label !== node.id) {
         // Format: label (id = X) where hovering explains the ID
-        return `<span title="${ID_TOOLTIP_TEXT}">${node.label} (id = ${node.id})</span>`;
+        return `<span title="${ID_TOOLTIP_TEXT}">${escapeHtml(node.label)} (id = ${escapeHtml(node.id)})</span>`;
     }
     
     // Only ID available (label same as ID or no label)
-    return `<span title="${ID_TOOLTIP_TEXT}">${node.id}</span>`;
+    return `<span title="${ID_TOOLTIP_TEXT}">${escapeHtml(node.id)}</span>`;
 }
 
 // TODO: 

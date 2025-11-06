@@ -132,6 +132,28 @@ describe('IIS Reporting Format', () => {
         expect(errorMessage).toContain('unique identifier');
     });
 
+    it('should escape HTML special characters to prevent XSS', () => {
+        // Create nodes with potentially dangerous HTML/script content
+        const nodeA = createNodeWithAttributes('atom<script>', 'Label<b>Bold</b>', {
+            'name': ['<script>alert("xss")</script>'],
+            'data': ['<img src=x onerror=alert(1)>']
+        });
+        const nodeB = createNodeWithAttributes('atom&test', 'Label&Test', {});
+
+        const source = new RelativeOrientationConstraint(['left'], 'A->B');
+        const constraint = createLeftConstraint(nodeA, nodeB, source);
+
+        const errorMessage = orientationConstraintToString(constraint);
+        
+        // Verify HTML is escaped
+        expect(errorMessage).not.toContain('<script>');
+        expect(errorMessage).not.toContain('<b>');
+        expect(errorMessage).not.toContain('<img');
+        expect(errorMessage).toContain('&lt;');
+        expect(errorMessage).toContain('&gt;');
+        expect(errorMessage).toContain('&amp;');
+    });
+
     it('should generate proper IIS error with attributes in full constraint validation', () => {
         // Create a cycle with nodes that have attributes
         const nodeA = createNodeWithAttributes('atom1', 'Person', { 'name': ['Alice'] });
