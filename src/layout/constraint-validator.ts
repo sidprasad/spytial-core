@@ -82,7 +82,7 @@ function formatNodeLabel(node: LayoutNode): string {
     
     if (hasAttributes) {
         // Show attributes (truncated if needed) instead of ID
-        const attrs = node.attributes;
+        const attrs = node.attributes || {};
         const attrEntries = Object.entries(attrs);
         
         // Format: label with key attributes shown
