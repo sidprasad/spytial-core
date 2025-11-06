@@ -26,15 +26,6 @@ You can use the browser bundle directly from a CDN:
 - **unpkg:**  
   [`https://unpkg.com/spytial-core/dist/browser/spytial-core-complete.global.js`](https://unpkg.com/spytial-core/dist/browser/spytial-core-complete.global.js)
 
-**Example usage:**
-```html
-<script src="https://cdn.jsdelivr.net/npm/spytial-core/dist/browser/spytial-core-complete.global.js"></script>
-<script>
-  // CndCore is now available as a global variable
-  // Example: const evaluator = new CndCore.SimpleGraphQueryEvaluator();
-</script>
-```
----
 
 ## License
 
