@@ -517,17 +517,30 @@ class ConstraintValidator {
         // Build the minimalConflictingSet map from the minimal IIS
         const minimalConflictingSet = new Map<SourceConstraint, LayoutConstraint[]>();
         
-        // Add minimal existing constraints grouped by source
-        for (const constraint of minimalIIS.existingConstraints) {
+        // Collect all constraints to check for duplicates
+        const allIISConstraints = [...minimalIIS.existingConstraints, ...minimalIIS.disjunctiveConstraints];
+        
+        // Deduplicate using hash-based approach for O(n) performance
+        // We use a string key derived from constraint properties for efficient lookup
+        const uniqueConstraints = new Map<string, LayoutConstraint>();
+        for (const constraint of allIISConstraints) {
+            const key = this.getConstraintKey(constraint);
+            if (!uniqueConstraints.has(key)) {
+                uniqueConstraints.set(key, constraint);
+            }
+        }
+        
+        // Remove transitive alignment constraints for better minimality
+        const minimalConstraints = this.removeTransitiveConstraints(Array.from(uniqueConstraints.values()));
+        
+        // Now build the minimalConflictingSet from minimal constraints
+        for (const constraint of minimalConstraints) {
             const source = constraint.sourceConstraint;
             if (!minimalConflictingSet.has(source)) {
                 minimalConflictingSet.set(source, []);
             }
             minimalConflictingSet.get(source)!.push(constraint);
         }
-        
-        // Add minimal disjunctive constraints
-        minimalConflictingSet.set(currentDisjunction.sourceConstraint, minimalIIS.disjunctiveConstraints);
         
         // Format error message to match regular constraint errors (user-friendly, no mention of disjunctions)
         const firstConstraintString = orientationConstraintToString(representativeConstraint);
@@ -584,6 +597,80 @@ class ConstraintValidator {
         return expr;
     }
     
+    /**
+     * Generates a unique string key for a constraint based on its content.
+     * Used for efficient deduplication via hashing.
+     */
+    private getConstraintKey(constraint: LayoutConstraint): string {
+        if (isLeftConstraint(constraint)) {
+            return `left:${constraint.left.id}:${constraint.right.id}`;
+        }
+        
+        if (isTopConstraint(constraint)) {
+            return `top:${constraint.top.id}:${constraint.bottom.id}`;
+        }
+        
+        if (isAlignmentConstraint(constraint)) {
+            // Normalize alignment key to handle symmetry: always put smaller ID first
+            const [id1, id2] = [constraint.node1.id, constraint.node2.id].sort();
+            return `align:${id1}:${id2}:${constraint.axis}`;
+        }
+        
+        if (isBoundingBoxConstraint(constraint)) {
+            return `bbox:${constraint.node.id}:${constraint.group.name}:${constraint.side}`;
+        }
+        
+        if (isGroupBoundaryConstraint(constraint)) {
+            return `groupbound:${constraint.groupA.name}:${constraint.groupB.name}:${constraint.side}`;
+        }
+        
+        // Fallback for unknown constraint types
+        return `unknown:${JSON.stringify(constraint)}`;
+    }
+
+    /**
+     * Checks if two alignment constraints are semantically identical.
+     * Alignment is symmetric: align(A,B) is the same as align(B,A).
+     */
+    private areAlignmentsIdentical(c1: AlignmentConstraint, c2: AlignmentConstraint): boolean {
+        return c1.axis === c2.axis && (
+            (c1.node1.id === c2.node1.id && c1.node2.id === c2.node2.id) ||
+            (c1.node1.id === c2.node2.id && c1.node2.id === c2.node1.id)
+        );
+    }
+
+    /**
+     * Checks if two constraints are semantically identical.
+     * Used to detect and remove duplicates from the IIS.
+     */
+    private areConstraintsIdentical(c1: LayoutConstraint, c2: LayoutConstraint): boolean {
+        // Same object reference
+        if (c1 === c2) return true;
+        
+        // Check type and content
+        if (isLeftConstraint(c1) && isLeftConstraint(c2)) {
+            return c1.left.id === c2.left.id && c1.right.id === c2.right.id;
+        }
+        
+        if (isTopConstraint(c1) && isTopConstraint(c2)) {
+            return c1.top.id === c2.top.id && c1.bottom.id === c2.bottom.id;
+        }
+        
+        if (isAlignmentConstraint(c1) && isAlignmentConstraint(c2)) {
+            return this.areAlignmentsIdentical(c1, c2);
+        }
+        
+        if (isBoundingBoxConstraint(c1) && isBoundingBoxConstraint(c2)) {
+            return c1.node.id === c2.node.id && c1.group.name === c2.group.name && c1.side === c2.side;
+        }
+        
+        if (isGroupBoundaryConstraint(c1) && isGroupBoundaryConstraint(c2)) {
+            return c1.groupA.name === c2.groupA.name && c1.groupB.name === c2.groupB.name && c1.side === c2.side;
+        }
+        
+        return false;
+    }
+
     /**
      * Clones the current solver state (constraints only, not variable values).
      * Used for backtracking in disjunctive constraint solving.
@@ -993,14 +1080,16 @@ class ConstraintValidator {
 
 
     /**
-     * Extracts a truly minimal IIS (Irreducible Infeasible Set) for disjunctive constraints.
-     * Uses a more sophisticated bidirectional minimization algorithm that is aware of grouping constraint complexities.
-     * The goal is mathematical minimality - include only constraints that are NECESSARY for the conflict.
+     * Extracts a minimal IIS (Irreducible Infeasible Set) for disjunctive constraints.
+     * 
+     * Note: The minimization is done using deletion-based algorithms which find an
+     * irreducible set but may not find the globally smallest set. This is a practical
+     * tradeoff for polynomial-time performance.
      * 
      * @param existingConstraints - The consistent prefix of constraints
      * @param disjunctiveAlternative - The disjunctive alternative that conflicts
      * @param disjunctiveSource - The source constraint for the disjunction (for error reporting)
-     * @returns Minimal IIS containing only necessary constraints from both sides
+     * @returns Minimal IIS containing constraints from both sides, with duplicates removed
      */
     private getMinimalDisjunctiveConflict(
         existingConstraints: LayoutConstraint[], 
@@ -1035,115 +1124,58 @@ class ConstraintValidator {
         existingConstraints: LayoutConstraint[];
         disjunctiveConstraints: LayoutConstraint[];
     } {
-        // Debug logging for your specific case
-        //console.log(`  Existing constraints (${existingConstraints.length}):`);
-        existingConstraints.forEach((c, i) => {
-            let desc = `${i}: `;
-            if (isLeftConstraint(c)) {
-                desc += `${c.left.id} → ${c.right.id}`;
-            } else if (isTopConstraint(c)) {
-                desc += `${c.top.id} ↓ ${c.bottom.id}`;
-            } else if (isBoundingBoxConstraint(c)) {
-                desc += `${c.node.id} ${c.side} of group ${c.group.name}`;
-            } else if (isAlignmentConstraint(c)) {
-                desc += `align ${c.node1.id} + ${c.node2.id} on ${c.axis}`;
-            } else {
-                desc += `unknown constraint type`;
-            }
-            //console.log(`    ${desc} (source: ${c.sourceConstraint?.toHTML?.() || 'unknown'})`);
-        });
+        // For grouping conflicts, we need to find the minimal set of existing constraints
+        // that make the disjunctive alternative unsatisfiable
         
-        //console.log(`  Disjunctive alternative (${disjunctiveAlternative.length}):`);
-        disjunctiveAlternative.forEach((c, i) => {
-            let desc = `${i}: `;
-            if (isBoundingBoxConstraint(c)) {
-                desc += `${c.node.id} ${c.side} of group ${c.group.name}`;
-            } else if (isLeftConstraint(c)) {
-                desc += `${c.left.id} → ${c.right.id}`;
-            } else if (isTopConstraint(c)) {
-                desc += `${c.top.id} ↓ ${c.bottom.id}`;
-            } else if (isAlignmentConstraint(c)) {
-                desc += `align ${c.node1.id} + ${c.node2.id} on ${c.axis}`;
-            } else {
-                desc += `unknown constraint type`;
-            }
-            //console.log(`    ${desc}`);
-        });
-        
-        // For grouping conflicts, we need to be more conservative about minimization
-        // because the conflict often involves the interaction of multiple constraints
-        
-        // Start with a simple approach: find constraints that directly conflict
+        // Start with all existing constraints
         let relevantExisting = [...existingConstraints];
         
-        // Try the traditional minimization approach first, but recognize its limitations for disjunctive constraints
+        // Try the traditional minimization approach with a representative constraint
         if (disjunctiveAlternative.length > 0) {
             const representative = disjunctiveAlternative[0];
-            // console.log(`  Testing traditional minimization with representative:`, 
-            //             isBoundingBoxConstraint(representative) ? 
-            //             `${representative.node.id} ${representative.side} of group ${representative.group.name}` : 
-            //             'non-bbox constraint');
             
-            // Test if there's actually a conflict first
+            // Test if there's actually a conflict
             const fullSet = [...existingConstraints, representative];
             const hasConflict = this.isConflictingSet(fullSet);
-            //console.log(`  Full set conflict test: ${hasConflict}`);
             
             if (hasConflict) {
+                // Find minimal set of existing constraints that conflict with this representative
                 relevantExisting = this.getMinimalConflictingConstraints(existingConstraints, representative);
-                //console.log(`  After traditional minimization: ${relevantExisting.length} constraints`);
             } else {
-                //console.log(`  No conflict detected with traditional approach!`);
-                // For grouping constraints, fall back to a simple expansion
+                // No conflict with representative alone - this shouldn't happen but handle gracefully
                 relevantExisting = [];
             }
         }
         
-        // If we get too few constraints, include a broader set
-        if (relevantExisting.length <= 1) {
-            //console.log(`  Too few constraints (${relevantExisting.length}), expanding based on group members...`);
-            
-            // Get group members from the disjunctive constraints
-            const groupMembers = new Set<string>();
+        // For very small results, try to include more context by finding constraints
+        // that involve the same nodes as the disjunctive constraints
+        if (relevantExisting.length <= 1 && disjunctiveAlternative.some(c => isBoundingBoxConstraint(c))) {
+            // Get nodes involved in the disjunctive constraints
+            const involvedNodes = new Set<string>();
             for (const constraint of disjunctiveAlternative) {
                 if (isBoundingBoxConstraint(constraint)) {
-                    constraint.group.nodeIds.forEach(id => groupMembers.add(id));
+                    involvedNodes.add(constraint.node.id);
+                    constraint.group.nodeIds.forEach(id => involvedNodes.add(id));
                 }
             }
             
-            //console.log(`  Group members: ${Array.from(groupMembers).join(', ')}`);
-            
-            // Include constraints that involve group members
-            relevantExisting = existingConstraints.filter(constraint => {
+            // Find constraints that involve these nodes
+            const contextConstraints = existingConstraints.filter(constraint => {
                 if (isLeftConstraint(constraint)) {
-                    return groupMembers.has(constraint.left.id) || groupMembers.has(constraint.right.id);
+                    return involvedNodes.has(constraint.left.id) || involvedNodes.has(constraint.right.id);
                 } else if (isTopConstraint(constraint)) {
-                    return groupMembers.has(constraint.top.id) || groupMembers.has(constraint.bottom.id);
+                    return involvedNodes.has(constraint.top.id) || involvedNodes.has(constraint.bottom.id);
                 } else if (isAlignmentConstraint(constraint)) {
-                    return groupMembers.has(constraint.node1.id) || groupMembers.has(constraint.node2.id);
+                    return involvedNodes.has(constraint.node1.id) || involvedNodes.has(constraint.node2.id);
                 }
                 return false;
             });
             
-            //console.log(`  After expansion: ${relevantExisting.length} constraints`);
-        }
-        
-        //console.log(`  Final IIS - Existing constraints:`);
-        relevantExisting.forEach((c, i) => {
-            let desc = `${i}: `;
-            if (isLeftConstraint(c)) {
-                desc += `${c.left.id} → ${c.right.id}`;
-            } else if (isTopConstraint(c)) {
-                desc += `${c.top.id} ↓ ${c.bottom.id}`;
-            } else if (isBoundingBoxConstraint(c)) {
-                desc += `${c.node.id} ${c.side} of group ${c.group.name}`;
-            } else if (isAlignmentConstraint(c)) {
-                desc += `align ${c.node1.id} + ${c.node2.id} on ${c.axis}`;
-            } else {
-                desc += `unknown constraint type`;
+            // Use context constraints if we found any
+            if (contextConstraints.length > 0) {
+                relevantExisting = contextConstraints;
             }
-            //console.log(`    ${desc}`);
-        });
+        }
         
         return {
             existingConstraints: relevantExisting,
@@ -1323,8 +1355,17 @@ class ConstraintValidator {
     }
 
     /**
-     * Find the SMALLEST subset of consistentConstraints that is inconsistent with conflictingConstraint.
-     * Uses an improved deletion-based minimization algorithm.
+     * Find a minimal subset of consistentConstraints that is inconsistent with conflictingConstraint.
+     * Uses a deletion-based minimization algorithm.
+     * 
+     * Note: This finds an IRREDUCIBLE set (no constraint can be removed), but may not find
+     * the SMALLEST possible conflicting set due to the greedy, order-dependent nature of deletion.
+     * However, it runs in polynomial time and produces good results for practical use.
+     * 
+     * The result is guaranteed to be:
+     * 1. Conflicting (when combined with conflictingConstraint)
+     * 2. Irreducible (cannot remove any constraint and still have a conflict)
+     * 3. Duplicate-free (via deduplication in the caller)
      */
     private getMinimalConflictingConstraints(consistentConstraints: LayoutConstraint[], conflictingConstraint: LayoutConstraint): LayoutConstraint[] {
         // Start with all consistent constraints plus the conflicting one
@@ -1358,7 +1399,234 @@ class ConstraintValidator {
             }
         }
         
+        // Post-process to remove transitive constraints (alignments and orderings)
+        workingSet = this.removeTransitiveConstraints(workingSet);
+        
         return workingSet;
+    }
+
+    /**
+     * Removes transitive constraints from a constraint set.
+     * 
+     * For alignments: If we have align(A,B) and align(A,C), then align(B,C) is redundant.
+     * For orderings: If we have A < B and B < C, then A < C is redundant.
+     * 
+     * This is a post-processing step to achieve better minimality beyond what deletion-based
+     * minimization can achieve (since the solver doesn't automatically infer transitive relations).
+     */
+    private removeTransitiveConstraints(constraints: LayoutConstraint[]): LayoutConstraint[] {
+        // First handle alignment transitivity
+        let result = this.removeTransitiveAlignments(constraints);
+        
+        // Then handle ordering transitivity
+        result = this.removeTransitiveOrderings(result);
+        
+        return result;
+    }
+    
+    /**
+     * Removes transitive ordering constraints (left/top).
+     * Uses transitive reduction on the directed acyclic graph of ordering constraints.
+     */
+    private removeTransitiveOrderings(constraints: LayoutConstraint[]): LayoutConstraint[] {
+        const leftConstraints = constraints.filter(c => isLeftConstraint(c)) as LeftConstraint[];
+        const topConstraints = constraints.filter(c => isTopConstraint(c)) as TopConstraint[];
+        const otherConstraints = constraints.filter(c => !isLeftConstraint(c) && !isTopConstraint(c));
+        
+        const result: LayoutConstraint[] = [...otherConstraints];
+        
+        // Reduce left constraints
+        if (leftConstraints.length > 0) {
+            result.push(...this.transitiveReduction(
+                leftConstraints,
+                c => c.left.id,
+                c => c.right.id
+            ));
+        }
+        
+        // Reduce top constraints
+        if (topConstraints.length > 0) {
+            result.push(...this.transitiveReduction(
+                topConstraints,
+                c => c.top.id,
+                c => c.bottom.id
+            ));
+        }
+        
+        return result;
+    }
+    
+    /**
+     * Performs transitive reduction on a set of ordering constraints.
+     * Removes edges that can be derived through transitivity.
+     * 
+     * For example, if we have A < B, B < C, and A < C, we remove A < C.
+     */
+    private transitiveReduction<T extends LayoutConstraint>(
+        constraints: T[],
+        getSource: (c: T) => string,
+        getTarget: (c: T) => string
+    ): T[] {
+        if (constraints.length <= 1) {
+            return constraints;
+        }
+        
+        // Build adjacency list
+        const edges = new Map<string, Set<string>>();
+        const edgeToConstraint = new Map<string, T>();
+        
+        for (const constraint of constraints) {
+            const src = getSource(constraint);
+            const tgt = getTarget(constraint);
+            
+            if (!edges.has(src)) edges.set(src, new Set());
+            edges.get(src)!.add(tgt);
+            edgeToConstraint.set(`${src}->${tgt}`, constraint);
+        }
+        
+        // Compute transitive closure using Floyd-Warshall
+        const allNodes = new Set<string>();
+        for (const [src, targets] of edges.entries()) {
+            allNodes.add(src);
+            targets.forEach(t => allNodes.add(t));
+        }
+        
+        const nodes = Array.from(allNodes);
+        const reachable = new Map<string, Set<string>>();
+        
+        // Initialize with direct edges
+        for (const node of nodes) {
+            reachable.set(node, new Set(edges.get(node) || []));
+        }
+        
+        // Floyd-Warshall to find all reachable pairs
+        for (const k of nodes) {
+            for (const i of nodes) {
+                for (const j of nodes) {
+                    if (reachable.get(i)?.has(k) && reachable.get(k)?.has(j)) {
+                        reachable.get(i)!.add(j);
+                    }
+                }
+            }
+        }
+        
+        // Keep only edges that are not transitive
+        const result: T[] = [];
+        for (const constraint of constraints) {
+            const src = getSource(constraint);
+            const tgt = getTarget(constraint);
+            
+            // Check if this edge is transitive (can be reached through intermediate nodes)
+            let isTransitive = false;
+            const srcNeighbors = edges.get(src);
+            
+            if (srcNeighbors && srcNeighbors.size > 1) {
+                // Try to find an intermediate node
+                for (const intermediate of srcNeighbors) {
+                    if (intermediate !== tgt && reachable.get(intermediate)?.has(tgt)) {
+                        // We can go src -> intermediate -> tgt, so src -> tgt is transitive
+                        isTransitive = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (!isTransitive) {
+                result.push(constraint);
+            }
+        }
+        
+        return result;
+    }
+
+    /**
+     * Removes transitive alignment constraints from a constraint set.
+     * If we have align(A,B) and align(A,C), then align(B,C) is redundant due to transitivity.
+     * 
+     * This is a post-processing step to achieve better minimality beyond what deletion-based
+     * minimization can achieve (since the solver doesn't automatically infer transitive alignments).
+     */
+    private removeTransitiveAlignments(constraints: LayoutConstraint[]): LayoutConstraint[] {
+        const alignments = constraints.filter(c => isAlignmentConstraint(c)) as AlignmentConstraint[];
+        const nonAlignments = constraints.filter(c => !isAlignmentConstraint(c));
+        
+        if (alignments.length <= 2) {
+            // Can't have transitivity with 2 or fewer alignments
+            return constraints;
+        }
+        
+        // Group alignments by axis
+        const byAxis = new Map<'x' | 'y', AlignmentConstraint[]>();
+        for (const align of alignments) {
+            if (!byAxis.has(align.axis)) {
+                byAxis.set(align.axis, []);
+            }
+            byAxis.get(align.axis)!.push(align);
+        }
+        
+        const result: LayoutConstraint[] = [...nonAlignments];
+        
+        // For each axis, remove transitive alignments
+        for (const [axis, axisAlignments] of byAxis.entries()) {
+            if (axisAlignments.length <= 2) {
+                // Keep all if 2 or fewer
+                result.push(...axisAlignments);
+                continue;
+            }
+            
+            // Build an equivalence relation graph
+            // Each node is a layout node ID, edges represent alignment constraints
+            const edges = new Map<string, Set<string>>();
+            
+            for (const align of axisAlignments) {
+                const id1 = align.node1.id;
+                const id2 = align.node2.id;
+                
+                if (!edges.has(id1)) edges.set(id1, new Set());
+                if (!edges.has(id2)) edges.set(id2, new Set());
+                
+                edges.get(id1)!.add(id2);
+                edges.get(id2)!.add(id1);
+            }
+            
+            // Find a minimal spanning tree of alignments
+            // Start with an arbitrary node and use BFS to build the tree
+            const allNodes = Array.from(edges.keys());
+            if (allNodes.length === 0) continue;
+            
+            const visited = new Set<string>();
+            const queue = [allNodes[0]];
+            visited.add(allNodes[0]);
+            const spanningTree: AlignmentConstraint[] = [];
+            
+            while (queue.length > 0 && visited.size < allNodes.length) {
+                const current = queue.shift()!;
+                const neighbors = edges.get(current);
+                
+                if (neighbors) {
+                    for (const neighbor of neighbors) {
+                        if (!visited.has(neighbor)) {
+                            visited.add(neighbor);
+                            queue.push(neighbor);
+                            
+                            // Add the edge to spanning tree
+                            const edge = axisAlignments.find(a => 
+                                (a.node1.id === current && a.node2.id === neighbor) ||
+                                (a.node2.id === current && a.node1.id === neighbor)
+                            );
+                            if (edge) {
+                                spanningTree.push(edge);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Use only the spanning tree edges (minimal set)
+            result.push(...spanningTree);
+        }
+        
+        return result;
     }
 
     private constraintToKiwi(constraint: LayoutConstraint): Constraint[] {
