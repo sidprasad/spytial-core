@@ -51,12 +51,85 @@ interface GroupOverlapError extends ConstraintError {
 export { type PositionalConstraintError, type GroupOverlapError }
 
 
+// Tooltip text explaining what node IDs are
+const ID_TOOLTIP_TEXT = "This is a unique identifier in the graph. Hover over graph nodes to see their IDs.";
+
+/**
+ * Escapes HTML special characters to prevent XSS attacks.
+ * @param str - String to escape
+ * @returns Escaped string safe for HTML insertion
+ */
+function escapeHtml(str: string): string {
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+/**
+ * Formats a node label for display in error messages.
+ * Prioritizes showing attributes when available, with fallback to label and ID.
+ * 
+ * @param node - The layout node to format
+ * @returns Formatted label string, potentially with HTML for tooltips
+ */
+function formatNodeLabel(node: LayoutNode): string {
+    // Check if node has non-empty attributes with actual values
+    const hasAttributes = node.attributes && 
+        Object.entries(node.attributes).some(([_, values]) => values && values.length > 0);
+    
+    if (hasAttributes) {
+        // Show attributes (truncated if needed) instead of ID
+        const attrs = node.attributes;
+        const attrEntries = Object.entries(attrs);
+        
+        // Format: label with key attributes shown
+        // For single attribute with single value: "label (key: value)"
+        // For multiple or complex: "label (key1: val1, key2: val2, ...)"
+        const attributeParts: string[] = [];
+        const maxAttributes = 2; // Show at most 2 attributes to avoid clutter
+        const maxValueLength = 20; // Truncate long values
+        
+        for (let i = 0; i < Math.min(attrEntries.length, maxAttributes); i++) {
+            const [key, values] = attrEntries[i];
+            if (values && values.length > 0) {
+                // Take first value, truncate if too long
+                let value = values[0];
+                if (value.length > maxValueLength) {
+                    value = value.substring(0, maxValueLength) + '...';
+                }
+                // Escape HTML to prevent XSS
+                attributeParts.push(`${escapeHtml(key)}: ${escapeHtml(value)}`);
+            }
+        }
+        
+        if (attrEntries.length > maxAttributes) {
+            attributeParts.push('...');
+        }
+        
+        if (attributeParts.length > 0) {
+            // Escape label to prevent XSS
+            return `${escapeHtml(node.label)} (${attributeParts.join(', ')})`;
+        }
+    }
+    
+    // No attributes present - show label with ID explanation
+    // Use HTML title attribute for hover tooltip explaining what the ID is
+    // Escape all user-provided values to prevent XSS
+    if (node.label && node.label !== node.id) {
+        // Format: label (id = X) where hovering explains the ID
+        return `<span title="${ID_TOOLTIP_TEXT}">${escapeHtml(node.label)} (id = ${escapeHtml(node.id)})</span>`;
+    }
+    
+    // Only ID available (label same as ID or no label)
+    return `<span title="${ID_TOOLTIP_TEXT}">${escapeHtml(node.id)}</span>`;
+}
+
 // TODO: 
 export function orientationConstraintToString(constraint: LayoutConstraint) {
-    const nodeLabel = (node: LayoutNode) =>
-        node.label && node.label !== node.id
-            ? `${node.label} (${node.id})`
-            : node.id;
+    const nodeLabel = formatNodeLabel;
 
     if (isTopConstraint(constraint)) {
         let tc = constraint as TopConstraint;
