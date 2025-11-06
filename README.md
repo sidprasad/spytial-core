@@ -38,7 +38,7 @@ npm install spytial-core
 
 - [View on npm](https://www.npmjs.com/package/spytial-core)
 
-> **Note:** This package was formerly published as `cnd-core`. For backward compatibility, you can still use `npm install cnd-core`, but we recommend migrating to `spytial-core` for future updates.
+> **Note:** This package was formerly published as `cnd-core`. For backward compatibility, you can still use `npm install cnd-core`, but we recommend migrating to `spytial-core` for future updates. See the [Migration Guide](MIGRATION.md) for details.
 
 ---
 
