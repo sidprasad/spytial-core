@@ -1077,14 +1077,16 @@ class ConstraintValidator {
 
 
     /**
-     * Extracts a truly minimal IIS (Irreducible Infeasible Set) for disjunctive constraints.
-     * Uses a more sophisticated bidirectional minimization algorithm that is aware of grouping constraint complexities.
-     * The goal is mathematical minimality - include only constraints that are NECESSARY for the conflict.
+     * Extracts a minimal IIS (Irreducible Infeasible Set) for disjunctive constraints.
+     * 
+     * Note: The minimization is done using deletion-based algorithms which find an
+     * irreducible set but may not find the globally smallest set. This is a practical
+     * tradeoff for polynomial-time performance.
      * 
      * @param existingConstraints - The consistent prefix of constraints
      * @param disjunctiveAlternative - The disjunctive alternative that conflicts
      * @param disjunctiveSource - The source constraint for the disjunction (for error reporting)
-     * @returns Minimal IIS containing only necessary constraints from both sides
+     * @returns Minimal IIS containing constraints from both sides, with duplicates removed
      */
     private getMinimalDisjunctiveConflict(
         existingConstraints: LayoutConstraint[], 
@@ -1350,8 +1352,17 @@ class ConstraintValidator {
     }
 
     /**
-     * Find the SMALLEST subset of consistentConstraints that is inconsistent with conflictingConstraint.
-     * Uses an improved deletion-based minimization algorithm.
+     * Find a minimal subset of consistentConstraints that is inconsistent with conflictingConstraint.
+     * Uses a deletion-based minimization algorithm.
+     * 
+     * Note: This finds an IRREDUCIBLE set (no constraint can be removed), but may not find
+     * the SMALLEST possible conflicting set due to the greedy, order-dependent nature of deletion.
+     * However, it runs in polynomial time and produces good results for practical use.
+     * 
+     * The result is guaranteed to be:
+     * 1. Conflicting (when combined with conflictingConstraint)
+     * 2. Irreducible (cannot remove any constraint and still have a conflict)
+     * 3. Duplicate-free (via deduplication in the caller)
      */
     private getMinimalConflictingConstraints(consistentConstraints: LayoutConstraint[], conflictingConstraint: LayoutConstraint): LayoutConstraint[] {
         // Start with all consistent constraints plus the conflicting one
