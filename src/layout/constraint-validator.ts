@@ -520,8 +520,8 @@ class ConstraintValidator {
         // Collect all constraints to check for duplicates
         const allIISConstraints = [...minimalIIS.existingConstraints, ...minimalIIS.disjunctiveConstraints];
         
-        // Deduplicate by creating a Set based on a unique identifier for each constraint
-        // We use object identity (the constraint object itself) as the key
+        // Deduplicate by semantic identity (not just object reference)
+        // We compare constraints based on their content (node IDs, groups, sides, etc.)
         const uniqueConstraints = new Map<LayoutConstraint, LayoutConstraint>();
         for (const constraint of allIISConstraints) {
             // Check if we already have a semantically identical constraint
@@ -619,7 +619,11 @@ class ConstraintValidator {
         }
         
         if (isAlignmentConstraint(c1) && isAlignmentConstraint(c2)) {
-            return c1.node1.id === c2.node1.id && c1.node2.id === c2.node2.id && c1.axis === c2.axis;
+            // Alignment is symmetric - align(A,B) is the same as align(B,A)
+            return c1.axis === c2.axis && (
+                (c1.node1.id === c2.node1.id && c1.node2.id === c2.node2.id) ||
+                (c1.node1.id === c2.node2.id && c1.node2.id === c2.node1.id)
+            );
         }
         
         if (isBoundingBoxConstraint(c1) && isBoundingBoxConstraint(c2)) {

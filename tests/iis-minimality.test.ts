@@ -99,8 +99,6 @@ describe('IIS Minimality with Disjunctions', () => {
 
         // Should have at most 1 constraint of form "0<1"
         const count01 = constraintStrs.filter(s => s === '0<1').length;
-        console.log(`Number of '0<1' constraints: ${count01}`);
-        console.log('All constraints:', constraintStrs);
         
         // Note: We expect 2 because they have different sources
         // This is OK - they're not true duplicates, just semantically similar
@@ -239,21 +237,6 @@ describe('IIS Minimality with Disjunctions', () => {
                 allMinimalConstraints.push(...layoutConstraints);
             }
 
-            console.log('Minimal conflicting set size:', allMinimalConstraints.length);
-            console.log('Minimal conflicting set:');
-            for (const [source, layoutConstraints] of minimalSet.entries()) {
-                console.log(`  Source: ${source.toHTML?.()} (${layoutConstraints.length} constraints)`);
-                layoutConstraints.forEach((c: any) => {
-                    if (c.left && c.right) {
-                        console.log(`    ${c.left.id} must be to the left of ${c.right.id}`);
-                    } else if (c.node1 && c.node2) {
-                        console.log(`    ${c.node1.id} must be aligned with ${c.node2.id} on ${c.axis} axis`);
-                    } else if (c.node && c.group) {
-                        console.log(`    ${c.node.id} must be ${c.side} of group ${c.group.name}`);
-                    }
-                });
-            }
-
             // Check for duplicates - the IIS should be subset minimal
             // No constraint should appear twice
             const constraintStrings = allMinimalConstraints.map((c: any) => {
@@ -268,19 +251,14 @@ describe('IIS Minimality with Disjunctions', () => {
             });
 
             const uniqueConstraints = new Set(constraintStrings);
-            console.log('Unique constraints:', uniqueConstraints.size);
-            console.log('Total constraints:', constraintStrings.length);
 
             // Check for duplicates
             const duplicates = constraintStrings.filter((item, index) => 
                 constraintStrings.indexOf(item) !== index
             );
             
-            if (duplicates.length > 0) {
-                console.log('DUPLICATES FOUND:', duplicates);
-            }
-
             // The IIS should be subset minimal - no duplicates
+            expect(duplicates.length).toBe(0);
             expect(uniqueConstraints.size).toBe(constraintStrings.length);
         }
     });
