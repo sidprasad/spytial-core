@@ -696,6 +696,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     this.disableNodeDragging();
     this.disableZoom();
 
+    // Update edge endpoint markers visibility
+    this.updateEdgeEndpointMarkers();
+
     // Dispatch event for external listeners
     this.dispatchEvent(new CustomEvent('input-mode-activated', {
       detail: { active: true }
@@ -719,6 +722,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // Re-enable node dragging and zoom/translate
     this.enableNodeDragging();
     this.enableZoom();
+
+    // Update edge endpoint markers visibility
+    this.updateEdgeEndpointMarkers();
 
     // Dispatch event for external listeners
     this.dispatchEvent(new CustomEvent('input-mode-deactivated', {
