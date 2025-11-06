@@ -51,6 +51,9 @@ interface GroupOverlapError extends ConstraintError {
 export { type PositionalConstraintError, type GroupOverlapError }
 
 
+// Tooltip text explaining what node IDs are
+const ID_TOOLTIP_TEXT = "This is a unique identifier in the graph. Hover over graph nodes to see their IDs.";
+
 /**
  * Formats a node label for display in error messages.
  * Prioritizes showing attributes when available, with fallback to label and ID.
@@ -64,7 +67,7 @@ function formatNodeLabel(node: LayoutNode): string {
     
     if (hasAttributes) {
         // Show attributes (truncated if needed) instead of ID
-        const attrs = node.attributes!;
+        const attrs = node.attributes;
         const attrEntries = Object.entries(attrs);
         
         // Format: label with key attributes shown
@@ -99,11 +102,11 @@ function formatNodeLabel(node: LayoutNode): string {
     // Use HTML title attribute for hover tooltip explaining what the ID is
     if (node.label && node.label !== node.id) {
         // Format: label (id = X) where hovering explains the ID
-        return `<span title="This is a unique identifier in the graph. Hover over graph nodes to see their IDs.">${node.label} (id = ${node.id})</span>`;
+        return `<span title="${ID_TOOLTIP_TEXT}">${node.label} (id = ${node.id})</span>`;
     }
     
     // Only ID available (label same as ID or no label)
-    return `<span title="This is a unique identifier in the graph. Hover over graph nodes to see their IDs.">${node.id}</span>`;
+    return `<span title="${ID_TOOLTIP_TEXT}">${node.id}</span>`;
 }
 
 // TODO: 
