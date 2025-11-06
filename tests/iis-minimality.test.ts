@@ -262,4 +262,74 @@ describe('IIS Minimality with Disjunctions', () => {
             expect(uniqueConstraints.size).toBe(constraintStrings.length);
         }
     });
+
+    it('should remove transitive alignment and ordering constraints from IIS', () => {
+        // Test that transitive constraints are removed
+        const node0 = createNode('0');
+        const node1 = createNode('1');
+        const node2 = createNode('2');
+
+        const orderSource1 = new RelativeOrientationConstraint(['left'], '0->1');
+        const orderSource2 = new RelativeOrientationConstraint(['left'], '0->2');
+        const orderSource3 = new RelativeOrientationConstraint(['left'], '1->2');
+        
+        const alignSource1 = new AlignConstraint(['0', '1'], 'horizontally');
+        const alignSource2 = new AlignConstraint(['0', '2'], 'horizontally');
+        const alignSource3 = new AlignConstraint(['1', '2'], 'horizontally');
+        
+        const groupSource = new GroupByField('type', 'n');
+
+        const constraints: (LeftConstraint | AlignmentConstraint)[] = [
+            createLeftConstraint(node0, node1, orderSource1),
+            createLeftConstraint(node0, node2, orderSource2),
+            createLeftConstraint(node1, node2, orderSource3),
+            createAlignmentConstraint(node0, node1, 'y', alignSource1),
+            createAlignmentConstraint(node0, node2, 'y', alignSource2),
+            createAlignmentConstraint(node1, node2, 'y', alignSource3),
+        ];
+
+        const group: LayoutGroup = {
+            name: 'n',
+            nodeIds: ['0', '2'],
+            keyNodeId: '0',
+            showLabel: true,
+            sourceConstraint: groupSource
+        };
+
+        const layout: InstanceLayout = {
+            nodes: [node0, node1, node2],
+            edges: [],
+            constraints: constraints,
+            groups: [group],
+        };
+
+        const validator = new ConstraintValidator(layout);
+        const error = validator.validateConstraints();
+
+        expect(error).not.toBeNull();
+
+        if (error && 'minimalConflictingSet' in error) {
+            const positionalError = error as PositionalConstraintError;
+            const minimalSet = positionalError.minimalConflictingSet;
+
+            const allMinimalConstraints: any[] = [];
+            for (const [source, layoutConstraints] of minimalSet.entries()) {
+                allMinimalConstraints.push(...layoutConstraints);
+            }
+
+            // Count alignment constraints
+            const alignmentConstraints = allMinimalConstraints.filter((c: any) => c.node1 && c.node2);
+            // Should have at most 2 alignments due to transitivity
+            // If align(0,1) and align(0,2), then align(1,2) is redundant
+            expect(alignmentConstraints.length).toBeLessThanOrEqual(2);
+            
+            // Count ordering constraints
+            const orderingConstraints = allMinimalConstraints.filter((c: any) => 
+                (c.left && c.right) && !c.node // Not alignment
+            );
+            // Should have at most 2 orderings due to transitivity
+            // If 0 < 1 and 1 < 2, then 0 < 2 is redundant
+            expect(orderingConstraints.length).toBeLessThanOrEqual(2);
+        }
+    });
 });

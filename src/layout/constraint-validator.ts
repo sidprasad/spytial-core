@@ -530,8 +530,11 @@ class ConstraintValidator {
             }
         }
         
-        // Now build the minimalConflictingSet from unique constraints
-        for (const constraint of uniqueConstraints.values()) {
+        // Remove transitive alignment constraints for better minimality
+        const minimalConstraints = this.removeTransitiveConstraints(Array.from(uniqueConstraints.values()));
+        
+        // Now build the minimalConflictingSet from minimal constraints
+        for (const constraint of minimalConstraints) {
             const source = constraint.sourceConstraint;
             if (!minimalConflictingSet.has(source)) {
                 minimalConflictingSet.set(source, []);
@@ -1396,7 +1399,234 @@ class ConstraintValidator {
             }
         }
         
+        // Post-process to remove transitive constraints (alignments and orderings)
+        workingSet = this.removeTransitiveConstraints(workingSet);
+        
         return workingSet;
+    }
+
+    /**
+     * Removes transitive constraints from a constraint set.
+     * 
+     * For alignments: If we have align(A,B) and align(A,C), then align(B,C) is redundant.
+     * For orderings: If we have A < B and B < C, then A < C is redundant.
+     * 
+     * This is a post-processing step to achieve better minimality beyond what deletion-based
+     * minimization can achieve (since the solver doesn't automatically infer transitive relations).
+     */
+    private removeTransitiveConstraints(constraints: LayoutConstraint[]): LayoutConstraint[] {
+        // First handle alignment transitivity
+        let result = this.removeTransitiveAlignments(constraints);
+        
+        // Then handle ordering transitivity
+        result = this.removeTransitiveOrderings(result);
+        
+        return result;
+    }
+    
+    /**
+     * Removes transitive ordering constraints (left/top).
+     * Uses transitive reduction on the directed acyclic graph of ordering constraints.
+     */
+    private removeTransitiveOrderings(constraints: LayoutConstraint[]): LayoutConstraint[] {
+        const leftConstraints = constraints.filter(c => isLeftConstraint(c)) as LeftConstraint[];
+        const topConstraints = constraints.filter(c => isTopConstraint(c)) as TopConstraint[];
+        const otherConstraints = constraints.filter(c => !isLeftConstraint(c) && !isTopConstraint(c));
+        
+        const result: LayoutConstraint[] = [...otherConstraints];
+        
+        // Reduce left constraints
+        if (leftConstraints.length > 0) {
+            result.push(...this.transitiveReduction(
+                leftConstraints,
+                c => c.left.id,
+                c => c.right.id
+            ));
+        }
+        
+        // Reduce top constraints
+        if (topConstraints.length > 0) {
+            result.push(...this.transitiveReduction(
+                topConstraints,
+                c => c.top.id,
+                c => c.bottom.id
+            ));
+        }
+        
+        return result;
+    }
+    
+    /**
+     * Performs transitive reduction on a set of ordering constraints.
+     * Removes edges that can be derived through transitivity.
+     * 
+     * For example, if we have A < B, B < C, and A < C, we remove A < C.
+     */
+    private transitiveReduction<T extends LayoutConstraint>(
+        constraints: T[],
+        getSource: (c: T) => string,
+        getTarget: (c: T) => string
+    ): T[] {
+        if (constraints.length <= 1) {
+            return constraints;
+        }
+        
+        // Build adjacency list
+        const edges = new Map<string, Set<string>>();
+        const edgeToConstraint = new Map<string, T>();
+        
+        for (const constraint of constraints) {
+            const src = getSource(constraint);
+            const tgt = getTarget(constraint);
+            
+            if (!edges.has(src)) edges.set(src, new Set());
+            edges.get(src)!.add(tgt);
+            edgeToConstraint.set(`${src}->${tgt}`, constraint);
+        }
+        
+        // Compute transitive closure using Floyd-Warshall
+        const allNodes = new Set<string>();
+        for (const [src, targets] of edges.entries()) {
+            allNodes.add(src);
+            targets.forEach(t => allNodes.add(t));
+        }
+        
+        const nodes = Array.from(allNodes);
+        const reachable = new Map<string, Set<string>>();
+        
+        // Initialize with direct edges
+        for (const node of nodes) {
+            reachable.set(node, new Set(edges.get(node) || []));
+        }
+        
+        // Floyd-Warshall to find all reachable pairs
+        for (const k of nodes) {
+            for (const i of nodes) {
+                for (const j of nodes) {
+                    if (reachable.get(i)?.has(k) && reachable.get(k)?.has(j)) {
+                        reachable.get(i)!.add(j);
+                    }
+                }
+            }
+        }
+        
+        // Keep only edges that are not transitive
+        const result: T[] = [];
+        for (const constraint of constraints) {
+            const src = getSource(constraint);
+            const tgt = getTarget(constraint);
+            
+            // Check if this edge is transitive (can be reached through intermediate nodes)
+            let isTransitive = false;
+            const srcNeighbors = edges.get(src);
+            
+            if (srcNeighbors && srcNeighbors.size > 1) {
+                // Try to find an intermediate node
+                for (const intermediate of srcNeighbors) {
+                    if (intermediate !== tgt && reachable.get(intermediate)?.has(tgt)) {
+                        // We can go src -> intermediate -> tgt, so src -> tgt is transitive
+                        isTransitive = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (!isTransitive) {
+                result.push(constraint);
+            }
+        }
+        
+        return result;
+    }
+
+    /**
+     * Removes transitive alignment constraints from a constraint set.
+     * If we have align(A,B) and align(A,C), then align(B,C) is redundant due to transitivity.
+     * 
+     * This is a post-processing step to achieve better minimality beyond what deletion-based
+     * minimization can achieve (since the solver doesn't automatically infer transitive alignments).
+     */
+    private removeTransitiveAlignments(constraints: LayoutConstraint[]): LayoutConstraint[] {
+        const alignments = constraints.filter(c => isAlignmentConstraint(c)) as AlignmentConstraint[];
+        const nonAlignments = constraints.filter(c => !isAlignmentConstraint(c));
+        
+        if (alignments.length <= 2) {
+            // Can't have transitivity with 2 or fewer alignments
+            return constraints;
+        }
+        
+        // Group alignments by axis
+        const byAxis = new Map<'x' | 'y', AlignmentConstraint[]>();
+        for (const align of alignments) {
+            if (!byAxis.has(align.axis)) {
+                byAxis.set(align.axis, []);
+            }
+            byAxis.get(align.axis)!.push(align);
+        }
+        
+        const result: LayoutConstraint[] = [...nonAlignments];
+        
+        // For each axis, remove transitive alignments
+        for (const [axis, axisAlignments] of byAxis.entries()) {
+            if (axisAlignments.length <= 2) {
+                // Keep all if 2 or fewer
+                result.push(...axisAlignments);
+                continue;
+            }
+            
+            // Build an equivalence relation graph
+            // Each node is a layout node ID, edges represent alignment constraints
+            const edges = new Map<string, Set<string>>();
+            
+            for (const align of axisAlignments) {
+                const id1 = align.node1.id;
+                const id2 = align.node2.id;
+                
+                if (!edges.has(id1)) edges.set(id1, new Set());
+                if (!edges.has(id2)) edges.set(id2, new Set());
+                
+                edges.get(id1)!.add(id2);
+                edges.get(id2)!.add(id1);
+            }
+            
+            // Find a minimal spanning tree of alignments
+            // Start with an arbitrary node and use BFS to build the tree
+            const allNodes = Array.from(edges.keys());
+            if (allNodes.length === 0) continue;
+            
+            const visited = new Set<string>();
+            const queue = [allNodes[0]];
+            visited.add(allNodes[0]);
+            const spanningTree: AlignmentConstraint[] = [];
+            
+            while (queue.length > 0 && visited.size < allNodes.length) {
+                const current = queue.shift()!;
+                const neighbors = edges.get(current);
+                
+                if (neighbors) {
+                    for (const neighbor of neighbors) {
+                        if (!visited.has(neighbor)) {
+                            visited.add(neighbor);
+                            queue.push(neighbor);
+                            
+                            // Add the edge to spanning tree
+                            const edge = axisAlignments.find(a => 
+                                (a.node1.id === current && a.node2.id === neighbor) ||
+                                (a.node2.id === current && a.node1.id === neighbor)
+                            );
+                            if (edge) {
+                                spanningTree.push(edge);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Use only the spanning tree edges (minimal set)
+            result.push(...spanningTree);
+        }
+        
+        return result;
     }
 
     private constraintToKiwi(constraint: LayoutConstraint): Constraint[] {
