@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { WebColaCnDGraph } from './webcola-cnd-graph';
-import { IInputDataInstance, IAtom, ITuple, IRelation } from '../../data-instance/interfaces';
+import { IInputDataInstance, IAtom, ITuple, IRelation, DataInstanceEventListener } from '../../data-instance/interfaces';
 import { JSONDataInstance } from '../../data-instance/json-data-instance';
 import { SGraphQueryEvaluator } from '../../evaluators/sgq-evaluator';
 import { LayoutInstance } from '../../layout/layoutinstance';
@@ -50,10 +50,10 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   
   // Track event listeners to prevent duplicates
   private dataInstanceEventHandlers = {
-    atomAdded: null as ((event: any) => void) | null,
-    atomRemoved: null as ((event: any) => void) | null,
-    relationTupleAdded: null as ((event: any) => void) | null,
-    relationTupleRemoved: null as ((event: any) => void) | null,
+    atomAdded: null as DataInstanceEventListener | null,
+    atomRemoved: null as DataInstanceEventListener | null,
+    relationTupleAdded: null as DataInstanceEventListener | null,
+    relationTupleRemoved: null as DataInstanceEventListener | null,
   };
 
   constructor(dataInstance?: IInputDataInstance) {
@@ -1290,6 +1290,28 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   }
 
   /**
+   * Common handler for data changes that updates UI components
+   * @param includeAtomPositions - Whether to update atom position selectors (needed for atom changes)
+   */
+  private handleDataChangeUIUpdate(includeAtomPositions: boolean = false): void {
+    this.refreshTypesFromDataInstance();
+    this.updateDeletionSelects();
+    if (includeAtomPositions) {
+      this.updateAtomPositions();
+    }
+  }
+
+  /**
+   * Common handler for data deletions that updates UI and triggers constraint validation
+   * @param includeAtomPositions - Whether to update atom position selectors (needed for atom deletions)
+   */
+  private async handleDataDeletionWithValidation(includeAtomPositions: boolean = false): Promise<void> {
+    this.handleDataChangeUIUpdate(includeAtomPositions);
+    // Trigger constraint enforcement and layout regeneration
+    await this.enforceConstraintsAndRegenerate();
+  }
+
+  /**
    * Set the data instance for this graph
    */
   setDataInstance(instance: IInputDataInstance): void {
@@ -1320,32 +1342,22 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     // Create and store event handlers
     this.dataInstanceEventHandlers.atomAdded = () => {
       console.log('📍 Atom added to instance - updating UI');
-      this.refreshTypesFromDataInstance();
-      this.updateDeletionSelects();
-      this.updateAtomPositions();
+      this.handleDataChangeUIUpdate(true); // Include atom positions for atom additions
     };
 
     this.dataInstanceEventHandlers.relationTupleAdded = () => {
       console.log('🔗 Relation added to instance - updating UI');
-      this.refreshTypesFromDataInstance();
-      this.updateDeletionSelects();
+      this.handleDataChangeUIUpdate(false); // No atom positions needed for relation additions
     };
 
     this.dataInstanceEventHandlers.atomRemoved = async () => {
       console.log('🗑️ Atom removed from instance - updating UI and re-validating constraints');
-      this.refreshTypesFromDataInstance();
-      this.updateDeletionSelects();
-      this.updateAtomPositions();
-      // Trigger constraint enforcement and layout regeneration
-      await this.enforceConstraintsAndRegenerate();
+      await this.handleDataDeletionWithValidation(true); // Include atom positions for atom deletions
     };
 
     this.dataInstanceEventHandlers.relationTupleRemoved = async () => {
       console.log('🗑️ Relation tuple removed from instance - updating UI and re-validating constraints');
-      this.refreshTypesFromDataInstance();
-      this.updateDeletionSelects();
-      // Trigger constraint enforcement and layout regeneration
-      await this.enforceConstraintsAndRegenerate();
+      await this.handleDataDeletionWithValidation(false); // No atom positions needed for relation deletions
     };
     
     // Add event listeners to the new instance
