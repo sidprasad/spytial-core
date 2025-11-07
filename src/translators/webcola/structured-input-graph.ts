@@ -47,6 +47,14 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   private customTypes: Set<string> = new Set();
   private relationAtomPositions: string[] = ['', '']; // Default to 2 positions
   private currentConstraintError: ConstraintError | null = null; // Track current constraint validation error
+  
+  // Track event listeners to prevent duplicates
+  private dataInstanceEventHandlers = {
+    atomAdded: null as ((event: any) => void) | null,
+    atomRemoved: null as ((event: any) => void) | null,
+    relationTupleAdded: null as ((event: any) => void) | null,
+    relationTupleRemoved: null as ((event: any) => void) | null,
+  };
 
   constructor(dataInstance?: IInputDataInstance) {
     super();
@@ -1286,24 +1294,65 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    */
   setDataInstance(instance: IInputDataInstance): void {
     console.log('🔄 Setting new data instance');
+    
+    // Remove old event listeners if they exist
+    if (this.dataInstance) {
+      if (this.dataInstanceEventHandlers.atomAdded) {
+        this.dataInstance.removeEventListener('atomAdded', this.dataInstanceEventHandlers.atomAdded);
+      }
+      if (this.dataInstanceEventHandlers.atomRemoved) {
+        this.dataInstance.removeEventListener('atomRemoved', this.dataInstanceEventHandlers.atomRemoved);
+      }
+      if (this.dataInstanceEventHandlers.relationTupleAdded) {
+        this.dataInstance.removeEventListener('relationTupleAdded', this.dataInstanceEventHandlers.relationTupleAdded);
+      }
+      if (this.dataInstanceEventHandlers.relationTupleRemoved) {
+        this.dataInstance.removeEventListener('relationTupleRemoved', this.dataInstanceEventHandlers.relationTupleRemoved);
+      }
+    }
+    
+    // Set the new data instance
     this.dataInstance = instance;
     
     // Refresh types from the new data instance
     this.refreshTypesFromDataInstance();
     
-    // Listen for data instance changes to update the visualization
-    instance.addEventListener('atomAdded', () => {
+    // Create and store event handlers
+    this.dataInstanceEventHandlers.atomAdded = () => {
       console.log('📍 Atom added to instance - updating UI');
       this.refreshTypesFromDataInstance();
       this.updateDeletionSelects();
       this.updateAtomPositions();
-    });
+    };
 
-    instance.addEventListener('relationTupleAdded', () => {
+    this.dataInstanceEventHandlers.relationTupleAdded = () => {
       console.log('🔗 Relation added to instance - updating UI');
       this.refreshTypesFromDataInstance();
       this.updateDeletionSelects();
-    });
+    };
+
+    this.dataInstanceEventHandlers.atomRemoved = async () => {
+      console.log('🗑️ Atom removed from instance - updating UI and re-validating constraints');
+      this.refreshTypesFromDataInstance();
+      this.updateDeletionSelects();
+      this.updateAtomPositions();
+      // Trigger constraint enforcement and layout regeneration
+      await this.enforceConstraintsAndRegenerate();
+    };
+
+    this.dataInstanceEventHandlers.relationTupleRemoved = async () => {
+      console.log('🗑️ Relation tuple removed from instance - updating UI and re-validating constraints');
+      this.refreshTypesFromDataInstance();
+      this.updateDeletionSelects();
+      // Trigger constraint enforcement and layout regeneration
+      await this.enforceConstraintsAndRegenerate();
+    };
+    
+    // Add event listeners to the new instance
+    instance.addEventListener('atomAdded', this.dataInstanceEventHandlers.atomAdded);
+    instance.addEventListener('relationTupleAdded', this.dataInstanceEventHandlers.relationTupleAdded);
+    instance.addEventListener('atomRemoved', this.dataInstanceEventHandlers.atomRemoved);
+    instance.addEventListener('relationTupleRemoved', this.dataInstanceEventHandlers.relationTupleRemoved);
 
     // Initial update of deletion selects and atom positions
     this.updateDeletionSelects();
@@ -1378,7 +1427,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     try {
       console.log(`🗑️ Deleting atom: ${atomId}`);
       
-      // Find the atom
+      // Find the atom before removing it
       const atoms = this.dataInstance.getAtoms();
       const atomToDelete = atoms.find(atom => atom.id === atomId);
       
@@ -1387,29 +1436,20 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         return;
       }
 
-      // Remove the atom (this would need proper implementation in the data instance)
-      // For now, we'll create a new instance without this atom
-      const remainingAtoms = atoms.filter(atom => atom.id !== atomId);
-      const relations = this.dataInstance.getRelations().filter(rel => 
-        !rel.tuples.some(tuple => tuple.atoms.includes(atomId))
-      );
-
-      const newInstance = new JSONDataInstance({
-        atoms: remainingAtoms,
-        relations: relations,
-        types: []
-      });
-
-      this.setDataInstance(newInstance);
+      // Use the data instance's removeAtom method, which will:
+      // 1. Remove the atom from the atoms array
+      // 2. Remove it from its type
+      // 3. Remove all relation tuples containing this atom
+      // 4. Fire the 'atomRemoved' event (which triggers constraint validation)
+      this.dataInstance.removeAtom(atomId);
       
       console.log(`✅ Atom removed from data instance: ${atomToDelete.label} (${atomToDelete.id})`);
-      
-      // Trigger constraint enforcement and layout regeneration
-      await this.enforceConstraintsAndRegenerate();
-
       console.log(`🎉 Atom deletion completed: ${atomToDelete.label} (${atomToDelete.id})`);
       
-      // Dispatch event
+      // Note: No need to manually call enforceConstraintsAndRegenerate() here because
+      // the 'atomRemoved' event listener in setDataInstance() will handle it
+      
+      // Dispatch custom event for external listeners
       this.dispatchEvent(new CustomEvent('atom-deleted', {
         detail: { atom: atomToDelete }
       }));
@@ -1456,18 +1496,15 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       console.log(`🗑️ Found tuple in relation "${relationId}": ${targetTuple.atoms.join(' → ')}`);
       
       // Use the removeRelationTuple method to remove just this tuple
+      // This will fire the 'relationTupleRemoved' event (which triggers constraint validation)
       this.dataInstance.removeRelationTuple(relationId, targetTuple);
       console.log(`✅ Relation tuple removed from data instance: ${relationId}: ${targetTuple.atoms.join(' → ')}`);
-      
-      // Trigger constraint enforcement and layout regeneration
-      await this.enforceConstraintsAndRegenerate();
-
       console.log(`🎉 Relation tuple deletion completed: ${relationId}: ${targetTuple.atoms.join(' → ')}`);
       
-      // Update the UI
-      this.updateDeletionSelects();
+      // Note: No need to manually call enforceConstraintsAndRegenerate() or updateDeletionSelects() here because
+      // the 'relationTupleRemoved' event listener in setDataInstance() will handle both
       
-      // Dispatch event
+      // Dispatch custom event for external listeners
       this.dispatchEvent(new CustomEvent('relation-tuple-deleted', {
         detail: { relationId, tuple: targetTuple }
       }));
