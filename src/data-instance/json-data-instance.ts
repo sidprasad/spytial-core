@@ -497,10 +497,15 @@ export class JSONDataInstance implements IInputDataInstance {
       throw new Error(`Cannot remove tuple: relation '${relationId}' not found`);
     }
     
-    // Use JSON comparison for exact match (order-sensitive)
-    const tupleKey = JSON.stringify(tuple);
+    // Compare tuples by their atom arrays (order-sensitive) for more robust matching
+    // This is more reliable than JSON.stringify which can fail due to property order
+    const tupleMatches = (t1: ITuple, t2: ITuple): boolean => {
+      if (t1.atoms.length !== t2.atoms.length) return false;
+      return t1.atoms.every((atom, i) => atom === t2.atoms[i]);
+    };
+    
     const initialLength = relation.tuples.length;
-    relation.tuples = relation.tuples.filter(t => JSON.stringify(t) !== tupleKey);
+    relation.tuples = relation.tuples.filter(t => !tupleMatches(t, tuple));
     
     if (relation.tuples.length === initialLength) {
       throw new Error(`Tuple not found in relation '${relationId}'`);

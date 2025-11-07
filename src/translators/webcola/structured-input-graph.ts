@@ -1340,14 +1340,18 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     this.refreshTypesFromDataInstance();
     
     // Create and store event handlers
-    this.dataInstanceEventHandlers.atomAdded = () => {
-      console.log('📍 Atom added to instance - updating UI');
+    // ALL event handlers now trigger constraint validation to ensure constraints are
+    // checked on every data change (additions, deletions, modifications)
+    this.dataInstanceEventHandlers.atomAdded = async () => {
+      console.log('📍 Atom added to instance - updating UI and re-validating constraints');
       this.handleDataChangeUIUpdate(true); // Include atom positions for atom additions
+      await this.enforceConstraintsAndRegenerate(); // Re-run constraint validation
     };
 
-    this.dataInstanceEventHandlers.relationTupleAdded = () => {
-      console.log('🔗 Relation added to instance - updating UI');
+    this.dataInstanceEventHandlers.relationTupleAdded = async () => {
+      console.log('🔗 Relation added to instance - updating UI and re-validating constraints');
       this.handleDataChangeUIUpdate(false); // No atom positions needed for relation additions
+      await this.enforceConstraintsAndRegenerate(); // Re-run constraint validation
     };
 
     this.dataInstanceEventHandlers.atomRemoved = async () => {
