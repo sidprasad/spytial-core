@@ -30,6 +30,12 @@ import { parseLayoutSpec } from '../../layout/layoutspec';
  *   * event.detail: { data: string, format: 'json' }
  * - 'spec-loaded': When CnD spec is successfully loaded
  *   * event.detail: { spec: string }
+ * - 'constraint-error': When constraints cannot be satisfied (UNSAT core detected)
+ *   * event.detail: { error: ConstraintError, layout: InstanceLayout }
+ * - 'constraints-satisfied': When previously unsatisfied constraints become satisfied
+ *   * event.detail: { layout: InstanceLayout }
+ * - 'layout-generation-error': When an unexpected error occurs during layout generation
+ *   * event.detail: { error: Error }
  */
 export class StructuredInputGraph extends WebColaCnDGraph {
   private dataInstance!: IInputDataInstance;
@@ -39,6 +45,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   private controlsContainer: HTMLDivElement | null = null;
   private customTypes: Set<string> = new Set();
   private relationAtomPositions: string[] = ['', '']; // Default to 2 positions
+  private currentConstraintError: any = null; // Track current constraint validation error
 
   constructor(dataInstance?: IInputDataInstance) {
     super();
@@ -844,6 +851,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
 
   /**
    * Enforce constraints and regenerate layout
+   * This method validates constraints on every data update and reports UNSAT cores
    */
   private async enforceConstraintsAndRegenerate(): Promise<void> {
     console.log('🔄 enforceConstraintsAndRegenerate() called');
@@ -874,19 +882,54 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       const projections = {};
       const layoutResult = this.layoutInstance.generateLayout(this.dataInstance, projections);
       
+      // Check for constraint validation errors
       if (layoutResult.error) {
-        console.warn('⚠️ Constraint validation error:', layoutResult.error);
+        console.warn('⚠️ Constraint validation error detected:', layoutResult.error);
+        
+        // Store the error for potential future use
+        this.currentConstraintError = layoutResult.error;
+        
+        // Dispatch event to notify external components about the constraint violation
+        this.dispatchEvent(new CustomEvent('constraint-error', {
+          detail: { 
+            error: layoutResult.error,
+            layout: layoutResult.layout 
+          },
+          bubbles: true
+        }));
+        
+        console.log('📤 Dispatched constraint-error event with UNSAT core information');
       } else {
-        console.log('✅ Layout generated successfully');
+        console.log('✅ Layout generated successfully - all constraints satisfied');
+        
+        // Clear any previous constraint error since constraints are now satisfied
+        if (this.currentConstraintError !== null) {
+          console.log('🧹 Clearing previous constraint error - constraints now satisfied');
+          this.currentConstraintError = null;
+          
+          // Dispatch event to notify that constraints are now satisfied
+          this.dispatchEvent(new CustomEvent('constraints-satisfied', {
+            detail: { layout: layoutResult.layout },
+            bubbles: true
+          }));
+          
+          console.log('📤 Dispatched constraints-satisfied event');
+        }
       }
       
-      // Render the layout
+      // Render the layout (which will include visual indicators for error nodes if present)
       console.log('🎨 Rendering layout...');
       await this.renderLayout(layoutResult.layout);
       
       console.log('✅ Constraints enforced and layout regenerated successfully');
     } catch (error) {
       console.error('❌ Failed to enforce constraints and regenerate layout:', error);
+      
+      // Dispatch error event for unexpected errors
+      this.dispatchEvent(new CustomEvent('layout-generation-error', {
+        detail: { error },
+        bubbles: true
+      }));
     }
   }
 
@@ -1470,6 +1513,21 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    */
   getDataInstance(): IInputDataInstance | null {
     return this.dataInstance;
+  }
+
+  /**
+   * Get the current constraint error (if any)
+   * Returns null if all constraints are currently satisfied
+   */
+  getCurrentConstraintError(): any | null {
+    return this.currentConstraintError;
+  }
+
+  /**
+   * Check if there are currently unsatisfied constraints
+   */
+  hasConstraintErrors(): boolean {
+    return this.currentConstraintError !== null;
   }
 
   /**
