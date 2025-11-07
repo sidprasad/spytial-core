@@ -5,6 +5,7 @@ import { JSONDataInstance } from '../../data-instance/json-data-instance';
 import { SGraphQueryEvaluator } from '../../evaluators/sgq-evaluator';
 import { LayoutInstance } from '../../layout/layoutinstance';
 import { parseLayoutSpec } from '../../layout/layoutspec';
+import { ConstraintError } from '../../layout/constraint-validator';
 
 /**
  * Structured Input Graph Custom Element
@@ -45,7 +46,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   private controlsContainer: HTMLDivElement | null = null;
   private customTypes: Set<string> = new Set();
   private relationAtomPositions: string[] = ['', '']; // Default to 2 positions
-  private currentConstraintError: any = null; // Track current constraint validation error
+  private currentConstraintError: ConstraintError | null = null; // Track current constraint validation error
 
   constructor(dataInstance?: IInputDataInstance) {
     super();
@@ -1519,7 +1520,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * Get the current constraint error (if any)
    * Returns null if all constraints are currently satisfied
    */
-  getCurrentConstraintError(): any | null {
+  getCurrentConstraintError(): ConstraintError | null {
     return this.currentConstraintError;
   }
 
