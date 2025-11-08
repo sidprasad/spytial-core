@@ -362,12 +362,28 @@ export function parseLayoutSpec(s: string): LayoutSpec {
     let layoutSpec: LayoutSpec = DEFAULT_LAYOUT();
 
     // Now we go through the constraints and directives and extract them
-
+    // Note: size and hideAtom can appear in either constraints or directives
+    let sizesFromConstraints: AtomSizeDirective[] = [];
+    let hiddenAtomsFromConstraints: AtomHidingDirective[] = [];
 
     if (constraints && Array.isArray(constraints)) {
         try {
           let constraintsParsed = parseConstraints(constraints);
           layoutSpec.constraints = constraintsParsed;
+          
+          // Also extract size and hideAtom from constraints
+          const typedConstraints = constraints as Record<string, any>[];
+          sizesFromConstraints = typedConstraints.filter(c => c.size)
+            .map(c => ({
+                height: c.size.height,
+                width: c.size.width,
+                selector: c.size.selector
+            }));
+          
+          hiddenAtomsFromConstraints = typedConstraints.filter(c => c.hideAtom)
+            .map(c => ({
+                selector: c.hideAtom.selector
+            }));
         }
         catch (e) {
             const errorMessage = e instanceof Error ? e.message : String(e);
@@ -379,12 +395,20 @@ export function parseLayoutSpec(s: string): LayoutSpec {
         try {
             let directivesParsed = parseDirectives(directives);
             layoutSpec.directives = directivesParsed;
+            
+            // Merge size and hideAtom from constraints into directives
+            layoutSpec.directives.sizes = [...sizesFromConstraints, ...directivesParsed.sizes];
+            layoutSpec.directives.hiddenAtoms = [...hiddenAtomsFromConstraints, ...directivesParsed.hiddenAtoms];
         }
 
         catch (e) {
             const errorMessage = e instanceof Error ? e.message : String(e);
             throw new Error(`${errorMessage}`);
         }
+    } else {
+        // If no directives block exists, still use size/hideAtom from constraints
+        layoutSpec.directives.sizes = sizesFromConstraints;
+        layoutSpec.directives.hiddenAtoms = hiddenAtomsFromConstraints;
     }
     return layoutSpec;
 }
