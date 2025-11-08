@@ -54,6 +54,12 @@ export function generateLayoutSpecYaml(
         if (type === "groupfield" || type === "groupselector") {
             return "group";
         }
+        if (type === "size") {
+            return "size";
+        }
+        if (type === "hideAtom") {
+            return "hideAtom";
+        }
         return "unknown";
     }
 
