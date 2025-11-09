@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ReplInterface } from './ReplInterface';
-import { CndLayoutInterface } from '../CndLayoutInterface';
+import { SpytialLayoutInterface } from '../SpytialLayoutInterface';
 import { IInputDataInstance } from '../../data-instance/interfaces';
 
 export interface ReplWithVisualizationProps {
@@ -25,7 +25,7 @@ export interface ReplWithVisualizationProps {
  * 
  * This component provides an integrated solution that combines:
  * - ReplInterface for command-line style data entry
- * - CndLayoutInterface for layout specification
+ * - SpytialLayoutInterface for layout specification
  * - Real-time visualization updates
  * 
  * Perfect for demos, tutorials, and rapid prototyping.
@@ -110,7 +110,7 @@ export const ReplWithVisualization: React.FC<ReplWithVisualizationProps> = ({
         <div style={{ ...sectionStyle, height: '200px', minHeight: '150px' }}>
           <h3 style={headerStyle}>Layout Specification</h3>
           <div style={{ height: 'calc(200px - 40px)' }}>
-            <CndLayoutInterface 
+            <SpytialLayoutInterface 
               instance={currentInstance}
               value={cndSpec}
               onChange={handleCndSpecChange}

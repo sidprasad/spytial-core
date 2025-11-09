@@ -98,7 +98,7 @@ describe('WebCola Enhanced Edge Length Computation', () => {
   });
 
   it('should adapt link lengths based on actual node dimensions and graph density', () => {
-    // This is tested indirectly through the WebColaCnDGraph component
+    // This is tested indirectly through the WebColaSpytialGraph component
     // The linkLength should be computed based on actual node dimensions
     expect(mockInstanceLayout.nodes.length).toBe(3);
     expect(mockInstanceLayout.constraints.length).toBe(2);

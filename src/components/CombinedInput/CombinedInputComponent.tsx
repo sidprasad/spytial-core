@@ -5,12 +5,12 @@
  * into a single, easy-to-use component with automatic synchronization.
  * 
  * This component eliminates the need for users to write complex sync logic
- * between PyretReplInterface, CndLayoutInterface, and webcola-cnd-graph.
+ * between PyretReplInterface, SpytialLayoutInterface, and webcola-spytial-graph.
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { PyretReplInterface } from '../ReplInterface/PyretReplInterface';
-import { CndLayoutInterface } from '../CndLayoutInterface';
+import { SpytialLayoutInterface } from '../SpytialLayoutInterface';
 import { PyretDataInstance } from '../../data-instance/pyret/pyret-data-instance';
 import { PyretEvaluator } from '../ReplInterface/parsers/PyretExpressionParser';
 import { SGraphQueryEvaluator } from '../../evaluators/sgq-evaluator';
@@ -19,7 +19,7 @@ import { parseLayoutSpec } from '../../layout/layoutspec';
 import { ConstraintData, DirectiveData } from '../NoCodeView/interfaces';
 
 export interface CombinedInputConfig {
-  /** Initial CnD specification */
+  /** Initial Spytial specification */
   cndSpec?: string;
   /** Initial Pyret data instance */
   dataInstance?: PyretDataInstance;
@@ -44,7 +44,7 @@ export interface CombinedInputConfig {
 export interface CombinedInputProps extends CombinedInputConfig {
   /** Callback when data instance changes */
   onInstanceChange?: (instance: PyretDataInstance) => void;
-  /** Callback when CnD spec changes */
+  /** Callback when Spytial spec changes */
   onSpecChange?: (spec: string) => void;
   /** Callback when layout is applied */
   onLayoutApplied?: (layout: any) => void;
@@ -123,7 +123,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
     currentInstanceRef.current = currentInstance;
   }, [currentInstance]);
 
-  // Compose CnD specs by concatenating them with newlines
+  // Compose Spytial specs by concatenating them with newlines
   const composeCndSpecs = useCallback((baseSpec: string, extractedSpecs: string[]): string => {
     const specs = [baseSpec, ...extractedSpecs].filter(spec => spec && spec.trim());
     
@@ -144,7 +144,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
     return composeCndSpecs(cndSpec, extractedSpecs);
   }, [cndSpec, extractedSpecs]);
 
-  // Apply layout using the CnD pipeline
+  // Apply layout using the Spytial pipeline
   const applyLayout = useCallback(async (instance: PyretDataInstance, spec: string) => {
     try {
       console.log('Applying layout with SGraphQueryEvaluator...');
@@ -215,7 +215,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
     }
   }, [autoApplyLayout, cndSpec, extractedSpecs, composeCndSpecs, applyLayout, onInstanceChange]);
 
-  // Handle CnD spec changes from layout interface
+  // Handle Spytial spec changes from layout interface
   const handleSpecChange = useCallback((newSpec: string) => {
     setCurrentSpec(newSpec);
     setLayoutStale(true);
@@ -227,9 +227,9 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
     }
   }, [autoApplyLayout, currentInstance, applyLayout, onSpecChange]);
 
-  // Handle CnD spec extraction from REPL expressions
+  // Handle Spytial spec extraction from REPL expressions
   const handleCndSpecExtracted = useCallback((extractedSpec: string) => {
-    console.log('CnD spec extracted from expression:', extractedSpec);
+    console.log('Spytial spec extracted from expression:', extractedSpec);
     
     // Add to extracted specs list (avoid duplicates)
     setExtractedSpecs(prev => {
@@ -280,8 +280,8 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
   // Initialize graph element when container is available (runs only once)
   useEffect(() => {
     if (graphContainerRef.current && !graphElementRef.current) {
-      // Create webcola-cnd-graph custom element
-      const graphElement = document.createElement('webcola-cnd-graph');
+      // Create webcola-spytial-graph custom element
+      const graphElement = document.createElement('webcola-spytial-graph');
       graphElement.setAttribute('width', '100%');
       graphElement.setAttribute('height', '400');
       graphElement.setAttribute('layoutFormat', 'default');
@@ -572,7 +572,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
           )}
         </div>
 
-        {/* Bottom: CnD Layout Interface - simplified if shown */}
+        {/* Bottom: Spytial Layout Interface - simplified if shown */}
         {showLayoutInterface && (
           <div style={{ 
             border: '1px solid #ddd', 
@@ -601,7 +601,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
             </div>
             {!layoutCollapsed && (
               <div style={{ padding: '12px' }}>
-                <CndLayoutInterface
+                <SpytialLayoutInterface
                   yamlValue={currentSpec}
                   onChange={handleSpecChange}
                   isNoCodeView={isNoCodeView}

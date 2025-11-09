@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import './CndLayoutInterface.css';
+import './SpytialLayoutInterface.css';
 import { NoCodeView } from './NoCodeView/NoCodeView';
 import { ConstraintData, DirectiveData } from './NoCodeView/interfaces';
 import { CodeView, generateLayoutSpecYaml } from './NoCodeView/CodeView';
@@ -7,7 +7,7 @@ import { CodeView, generateLayoutSpecYaml } from './NoCodeView/CodeView';
 /**
  * Configuration options for the CND Layout Interface component
  */
-export interface CndLayoutInterfaceProps {
+export interface SpytialLayoutInterfaceProps {
   /** Current YAML value */
   yamlValue: string;
   /** Callback when YAML value changes */
@@ -43,7 +43,7 @@ export interface CndLayoutInterfaceProps {
  * 
  * @example
  * ```tsx
- * <CndLayoutInterface
+ * <SpytialLayoutInterface
  *   value={yamlValue}
  *   onChange={setYamlValue}
  *   isNoCodeView={isVisual}
@@ -51,7 +51,7 @@ export interface CndLayoutInterfaceProps {
  * />
  * ```
  */
-const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
+const SpytialLayoutInterface: React.FC<SpytialLayoutInterfaceProps> = ({
   yamlValue,
   onChange,
   isNoCodeView,
@@ -93,44 +93,44 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
 
   // Build CSS classes combining Bootstrap and custom styles for optimal tree-shaking
   const containerClasses = [
-    'cnd-layout-interface',
+    'spytial-layout-interface',
     'container-fluid', // Bootstrap fluid container
-    disabled && 'cnd-layout-interface--disabled',
+    disabled && 'spytial-layout-interface--disabled',
     className,
   ].filter(Boolean).join(' ');
 
   const toggleLabelCodeClasses = [
-    'cnd-layout-interface__toggle-label',
+    'spytial-layout-interface__toggle-label',
     'small', // Bootstrap small text
     !isNoCodeView && 'text-primary fw-semibold', // Bootstrap active styling
   ].filter(Boolean).join(' ');
 
   const toggleLabelNoCodeClasses = [
-    'cnd-layout-interface__toggle-label',
+    'spytial-layout-interface__toggle-label',
     'small', // Bootstrap small text
     isNoCodeView && 'text-primary fw-semibold', // Bootstrap active styling
   ].filter(Boolean).join(' ');
 
   return (
-    <section id="cnd-layout-interface-container" className={containerClasses} aria-label={ariaLabel}>
+    <section id="spytial-layout-interface-container" className={containerClasses} aria-label={ariaLabel}>
       <div className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
         <div className="d-flex align-items-center gap-3">
           <span className={toggleLabelCodeClasses}>
             Code View
           </span>
           
-          <label className="cnd-layout-interface__toggle" htmlFor="cnd-layout-toggle">
+          <label className="spytial-layout-interface__toggle" htmlFor="cnd-layout-toggle">
             <input
               id="cnd-layout-toggle"
               type="checkbox"
               checked={isNoCodeView}
               onChange={handleToggleChange}
               disabled={disabled}
-              className="cnd-layout-interface__toggle-input"
+              className="spytial-layout-interface__toggle-input"
               aria-describedby="cnd-layout-toggle-description"
               role='switch'
             />
-            <span className="cnd-layout-interface__toggle-slider"></span>
+            <span className="spytial-layout-interface__toggle-slider"></span>
           </label>
           
           <span className={toggleLabelNoCodeClasses}>
@@ -145,7 +145,7 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
       </div>
 
       {/* Content area with Bootstrap styling */}
-      <div className="cnd-layout-interface__content">
+      <div className="spytial-layout-interface__content">
         {isNoCodeView ? (
           // No Code View - Bootstrap card layout
           <NoCodeView yamlValue={yamlValue} constraints={constraints} setConstraints={setConstraints} directives={directives} setDirectives={setDirectives}/>
@@ -162,4 +162,4 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
  * Named export for better tree-shaking support following spytial-core guidelines
  * Avoids default exports to improve bundler optimization
  */
-export { CndLayoutInterface };
+export { SpytialLayoutInterface };

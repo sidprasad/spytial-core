@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document summarizes the implementation of memory usage improvements in CnD Core to address issue: "Memory usage issues - WebCola CnD graph sometimes uses a lot of memory (enough to cause Chrome err 5 on Mac)."
+This document summarizes the implementation of memory usage improvements in Spytial Core to address issue: "Memory usage issues - WebCola Spytial graph sometimes uses a lot of memory (enough to cause Chrome err 5 on Mac)."
 
 ## Problem Analysis
 

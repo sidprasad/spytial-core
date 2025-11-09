@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { WebColaCnDGraph } from './webcola-cnd-graph';
+import { WebColaSpytialGraph } from './webcola-spytial-graph';
 import { IInputDataInstance, IAtom, ITuple, IRelation, DataInstanceEventListener } from '../../data-instance/interfaces';
 import { JSONDataInstance } from '../../data-instance/json-data-instance';
 import { SGraphQueryEvaluator } from '../../evaluators/sgq-evaluator';
@@ -9,27 +9,27 @@ import { ConstraintError } from '../../layout/constraint-validator';
 
 /**
  * Structured Input Graph Custom Element
- * Extends WebColaCnDGraph to provide structured input capabilities
+ * Extends WebColaSpytialGraph to provide structured input capabilities
  * 
  * Features:
- * - All WebColaCnDGraph functionality (edge creation, visualization, etc.)
+ * - All WebColaSpytialGraph functionality (edge creation, visualization, etc.)
  * - Block-based structured input interface
  * - Auto-generated unique atom IDs with user-provided labels
- * - Full CnD pipeline integration (data instance, evaluator, layout instance)
+ * - Full Spytial pipeline integration (data instance, evaluator, layout instance)
  * - Constraint enforcement on data changes
  * - IDataInstance JSON export
  * 
  * Attributes:
- * - cnd-spec: CnD specification string (YAML/JSON)
+ * - spytial-spec: Spytial specification string (YAML/JSON)
  * - data-instance: Initial data instance (optional)
  * - show-export: Whether to show export functionality (default: true)
  * 
- * Events Fired (in addition to WebColaCnDGraph events):
+ * Events Fired (in addition to WebColaSpytialGraph events):
  * - 'atom-added': When a new atom is added via structured input
  *   * event.detail: { atom: IAtom }
  * - 'data-exported': When data is exported
  *   * event.detail: { data: string, format: 'json' }
- * - 'spec-loaded': When CnD spec is successfully loaded
+ * - 'spec-loaded': When Spytial spec is successfully loaded
  *   * event.detail: { spec: string }
  * - 'constraint-error': When constraints cannot be satisfied (UNSAT core detected)
  *   * event.detail: { error: ConstraintError, layout: InstanceLayout }
@@ -38,7 +38,7 @@ import { ConstraintError } from '../../layout/constraint-validator';
  * - 'layout-generation-error': When an unexpected error occurs during layout generation
  *   * event.detail: { error: Error }
  */
-export class StructuredInputGraph extends WebColaCnDGraph {
+export class StructuredInputGraph extends WebColaSpytialGraph {
   private dataInstance!: IInputDataInstance;
   private evaluator: SGraphQueryEvaluator | null = null;
   private layoutInstance: LayoutInstance | null = null;
@@ -73,7 +73,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     // Add structured input specific initialization
     this.initializeStructuredInput();
     
-    // Listen for edge creation, modification, and reconnection events from the parent WebColaCnDGraph
+    // Listen for edge creation, modification, and reconnection events from the parent WebColaSpytialGraph
     this.addEventListener('edge-creation-requested', this.handleEdgeCreationRequest.bind(this) as unknown as EventListener);
     this.addEventListener('edge-modification-requested', this.handleEdgeModificationRequest.bind(this) as unknown as EventListener);
     this.addEventListener('edge-reconnection-requested', this.handleEdgeReconnectionRequest.bind(this) as unknown as EventListener);
@@ -83,7 +83,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * Observed attributes for this custom element
    */
   static get observedAttributes(): string[] {
-    return ['cnd-spec', 'data-instance', 'show-export'];
+    return ['spytial-spec', 'data-instance', 'show-export'];
   }
 
   /**
@@ -93,8 +93,8 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     if (oldValue === newValue) return;
 
     switch (name) {
-      case 'cnd-spec':
-        this.parseCnDSpec(newValue);
+      case 'spytial-spec':
+        this.parseSpytialSpec(newValue);
         break;
       case 'data-instance':
         this.updateDataInstance(newValue);
@@ -787,15 +787,15 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   }
 
   /**
-   * Parse CnD specification and initialize the full CnD pipeline
+   * Parse Spytial specification and initialize the full Spytial pipeline
    */
-  private async parseCnDSpec(specString: string): Promise<void> {
+  private async parseSpytialSpec(specString: string): Promise<void> {
     try {
-      console.log('🔄 Parsing CnD spec and initializing pipeline...');
+      console.log('🔄 Parsing Spytial spec and initializing pipeline...');
       this.cndSpecString = specString;
       
-      // Initialize the full CnD pipeline
-      await this.initializeCnDPipeline(specString);
+      // Initialize the full Spytial pipeline
+      await this.initializeSpytialPipeline(specString);
       
       this.updateTypeSelector();
       this.updateSpecInfo();
@@ -808,17 +808,17 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         detail: { spec: this.cndSpecString }
       }));
       
-      console.log('✅ CnD spec parsed and pipeline initialized');
+      console.log('✅ Spytial spec parsed and pipeline initialized');
     } catch (error) {
-      console.error('❌ Failed to parse CnD spec:', error);
+      console.error('❌ Failed to parse Spytial spec:', error);
       this.updateSpecInfo('error', error instanceof Error ? error.message : 'Parse error');
     }
   }
 
   /**
-   * Initialize the complete CnD pipeline with evaluator and layout instance
+   * Initialize the complete Spytial pipeline with evaluator and layout instance
    */
-  private async initializeCnDPipeline(specString: string): Promise<void> {
+  private async initializeSpytialPipeline(specString: string): Promise<void> {
     if (!specString.trim()) {
       console.log('📝 Empty spec - clearing pipeline');
       this.evaluator = null;
@@ -827,9 +827,9 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     }
 
     try {
-      console.log('🔧 Initializing CnD pipeline with spec...');
+      console.log('🔧 Initializing Spytial pipeline with spec...');
       
-      // Parse the CnD spec to create a layout spec
+      // Parse the Spytial spec to create a layout spec
       const layoutSpec = parseLayoutSpec(specString);
       console.log('📋 Layout spec parsed successfully');
       
@@ -849,9 +849,9 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       );
       console.log('📐 LayoutInstance created');
 
-      console.log('✅ CnD pipeline initialized successfully (evaluator + layout instance)');
+      console.log('✅ Spytial pipeline initialized successfully (evaluator + layout instance)');
     } catch (error) {
-      console.error('❌ Failed to initialize CnD pipeline:', error);
+      console.error('❌ Failed to initialize Spytial pipeline:', error);
       this.evaluator = null;
       this.layoutInstance = null;
       throw error;
@@ -1585,11 +1585,11 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   }
 
   /**
-   * Set the CnD specification
+   * Set the Spytial specification
    */
-  async setCnDSpec(spec: string): Promise<void> {
-    this.setAttribute('cnd-spec', spec);
-    await this.parseCnDSpec(spec);
+  async setSpytialSpec(spec: string): Promise<void> {
+    this.setAttribute('spytial-spec', spec);
+    await this.parseSpytialSpec(spec);
   }
 
   /**

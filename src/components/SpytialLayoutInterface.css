@@ -12,17 +12,17 @@
  */
 
 /* Main Container - Minimal override, Bootstrap handles most styling */
-.cnd-layout-interface {
+.spytial-layout-interface {
   font-family: var(--bs-font-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif);
 }
 
-.cnd-layout-interface--disabled {
+.spytial-layout-interface--disabled {
   opacity: 0.6;
   pointer-events: none;
 }
 
 /* Custom Toggle Switch - Not available in Bootstrap */
-.cnd-layout-interface__toggle {
+.spytial-layout-interface__toggle {
   position: relative;
   display: inline-block;
   width: 48px;
@@ -31,14 +31,14 @@
   flex-shrink: 0; /* Prevent shrinking in flex layouts */
 }
 
-.cnd-layout-interface__toggle-input {
+.spytial-layout-interface__toggle-input {
   opacity: 0;
   width: 0;
   height: 0;
   position: absolute;
 }
 
-.cnd-layout-interface__toggle-slider {
+.spytial-layout-interface__toggle-slider {
   position: absolute;
   cursor: pointer;
   top: 0;
@@ -51,7 +51,7 @@
   z-index: 1;
 }
 
-.cnd-layout-interface__toggle-slider::before {
+.spytial-layout-interface__toggle-slider::before {
   position: absolute;
   content: "";
   height: 20px;
@@ -66,26 +66,26 @@
   z-index: 2;
 }
 
-.cnd-layout-interface__toggle-input:checked + .cnd-layout-interface__toggle-slider {
+.spytial-layout-interface__toggle-input:checked + .spytial-layout-interface__toggle-slider {
   background-color: #0d6efd; /* Fallback primary color */
   background-color: var(--bs-primary, #0d6efd);
 }
 
-.cnd-layout-interface__toggle-input:checked + .cnd-layout-interface__toggle-slider::before {
+.spytial-layout-interface__toggle-input:checked + .spytial-layout-interface__toggle-slider::before {
   transform: translateX(24px);
 }
 
-.cnd-layout-interface__toggle-input:disabled + .cnd-layout-interface__toggle-slider {
+.spytial-layout-interface__toggle-input:disabled + .spytial-layout-interface__toggle-slider {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.cnd-layout-interface__toggle-input:focus + .cnd-layout-interface__toggle-slider {
+.spytial-layout-interface__toggle-input:focus + .spytial-layout-interface__toggle-slider {
   box-shadow: 0 0 0 2px var(--bs-primary, #0d6efd), 0 0 0 4px rgba(13, 110, 253, 0.25);
 }
 
 /* Custom textarea styling - Extends Bootstrap form-control */
-.cnd-layout-interface__textarea {
+.spytial-layout-interface__textarea {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'Courier New', monospace;
   font-size: 0.875rem;
   line-height: 1.6;
@@ -93,24 +93,24 @@
   transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out, background-color 0.15s ease-in-out;
 }
 
-.cnd-layout-interface__textarea:focus {
+.spytial-layout-interface__textarea:focus {
   background-color: white;
   border-color: var(--bs-primary, #0d6efd);
   box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
 }
 
-.cnd-layout-interface__textarea:disabled {
+.spytial-layout-interface__textarea:disabled {
   background-color: var(--bs-gray-100, #e9ecef);
   opacity: 1; /* Override Bootstrap's default disabled opacity */
 }
 
 /* Content area minimum height */
-.cnd-layout-interface__content {
+.spytial-layout-interface__content {
   min-height: 400px;
 }
 
 /* Custom hover effects for feature buttons */
-.cnd-layout-interface .btn-outline-secondary:hover {
+.spytial-layout-interface .btn-outline-secondary:hover {
   transform: translateY(-1px);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   transition: all 0.2s ease;
@@ -118,46 +118,46 @@
 
 /* Responsive adjustments - Complement Bootstrap's responsive utilities */
 @media (max-width: 576px) {
-  .cnd-layout-interface__toggle {
+  .spytial-layout-interface__toggle {
     width: 44px;
     height: 22px;
   }
   
-  .cnd-layout-interface__toggle-slider::before {
+  .spytial-layout-interface__toggle-slider::before {
     height: 18px;
     width: 18px;
   }
   
-  .cnd-layout-interface__toggle-input:checked + .cnd-layout-interface__toggle-slider::before {
+  .spytial-layout-interface__toggle-input:checked + .spytial-layout-interface__toggle-slider::before {
     transform: translateX(22px);
   }
   
-  .cnd-layout-interface__textarea {
+  .spytial-layout-interface__textarea {
     font-size: 0.8125rem;
   }
 }
 
 /* Print styles - Hide interactive elements */
 @media print {
-  .cnd-layout-interface__toggle,
-  .cnd-layout-interface__toggle-label {
+  .spytial-layout-interface__toggle,
+  .spytial-layout-interface__toggle-label {
     display: none !important;
   }
 }
 
 /* Reduced motion accessibility */
 @media (prefers-reduced-motion: reduce) {
-  .cnd-layout-interface__toggle-slider,
-  .cnd-layout-interface__toggle-slider::before,
-  .cnd-layout-interface__textarea,
-  .cnd-layout-interface .btn-outline-secondary {
+  .spytial-layout-interface__toggle-slider,
+  .spytial-layout-interface__toggle-slider::before,
+  .spytial-layout-interface__textarea,
+  .spytial-layout-interface .btn-outline-secondary {
     transition: none !important;
   }
 }
 
 /* High contrast mode accessibility */
 @media (prefers-contrast: high) {
-  .cnd-layout-interface__toggle-slider {
+  .spytial-layout-interface__toggle-slider {
     border: 2px solid;
   }
 }

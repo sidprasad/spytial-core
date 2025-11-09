@@ -4,7 +4,7 @@ This document summarizes the performance optimizations implemented to prevent br
 
 ## Overview
 
-Multiple performance optimizations have been implemented to improve the efficiency of layout generation in CnD Core and prevent browser timeouts:
+Multiple performance optimizations have been implemented to improve the efficiency of layout generation in Spytial Core and prevent browser timeouts:
 
 ### 0. Smart Alignment Edge Addition (NEW - Addressing Core Issue)
 
@@ -241,4 +241,4 @@ Potential areas for further performance improvements:
 
 ## Backward Compatibility
 
-All optimizations are fully backward compatible. No changes are required to existing code using the CnD Core library.
+All optimizations are fully backward compatible. No changes are required to existing code using the Spytial Core library.

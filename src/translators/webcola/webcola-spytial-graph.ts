@@ -36,7 +36,7 @@ function hasInnerBounds(target: any): target is { innerBounds: any } {
 const DEFAULT_SCALE_FACTOR = 5;
 
 /**
- * WebCola CnD Graph Custom Element
+ * WebCola Spytial Graph Custom Element
  * Full implementation using WebCola constraint-based layout with D3 integration
  * @field currentLayout - Holds the current custom WebColaLayout instance
  * @field colaLayout - Holds the current layout instance used by WebCola
@@ -62,13 +62,13 @@ const DEFAULT_SCALE_FACTOR = 5;
  * External State Management:
  * React components should subscribe to these events and handle:
  * 1. Updating the IInputDataInstance with new atoms/relations
- * 2. Regenerating CnD layout constraints from the updated data
+ * 2. Regenerating Spytial layout constraints from the updated data
  * 3. Calling renderLayout() to apply changes and re-render the visualization
  * 
  * This ensures React components serve as the single source of truth for state
  * while the WebCola component focuses purely on visualization and user interaction.
  */
-export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'undefined' ? HTMLElement : (class {} as any)) {
+export class WebColaSpytialGraph extends  HTMLElement { //(typeof HTMLElement !== 'undefined' ? HTMLElement : (class {} as any)) {
   private svg!: any;
   private container!: any;
   private currentLayout!: WebColaLayout;
@@ -375,7 +375,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * ```
    */
   private isDisconnectedGroup(group: { name: string }): boolean {
-    return group.name.startsWith(WebColaCnDGraph.DISCONNECTED_NODE_PREFIX);
+    return group.name.startsWith(WebColaSpytialGraph.DISCONNECTED_NODE_PREFIX);
   }
 
   /**
@@ -483,7 +483,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * @returns Calculated group compactness value
    */
   private calculateAdaptiveGroupCompactness(groups: any[], nodeCount: number, scaleFactor: number): number {
-    const DEFAULT_GROUP_COMPACTNESS = WebColaCnDGraph.DEFAULT_GROUP_COMPACTNESS * scaleFactor;
+    const DEFAULT_GROUP_COMPACTNESS = WebColaSpytialGraph.DEFAULT_GROUP_COMPACTNESS * scaleFactor;
     
     if (!groups || groups.length === 0) {
       return DEFAULT_GROUP_COMPACTNESS;
@@ -1212,9 +1212,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       // Adaptive iteration counts based on graph size for better performance
       // For small graphs, use default values. For large graphs, reduce iterations.
       const nodeCount = webcolaLayout.nodes.length;
-      let unconstrainedIters = WebColaCnDGraph.INITIAL_UNCONSTRAINED_ITERATIONS;
-      let userConstraintIters = WebColaCnDGraph.INITIAL_USER_CONSTRAINT_ITERATIONS;
-      let allConstraintIters = WebColaCnDGraph.INITIAL_ALL_CONSTRAINTS_ITERATIONS;
+      let unconstrainedIters = WebColaSpytialGraph.INITIAL_UNCONSTRAINED_ITERATIONS;
+      let userConstraintIters = WebColaSpytialGraph.INITIAL_USER_CONSTRAINT_ITERATIONS;
+      let allConstraintIters = WebColaSpytialGraph.INITIAL_ALL_CONSTRAINTS_ITERATIONS;
       
       if (nodeCount > 100) {
         // For large graphs (>100 nodes), reduce iterations more aggressively
@@ -1315,7 +1315,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           unconstrainedIters,
           userConstraintIters,
           allConstraintIters,
-          WebColaCnDGraph.GRID_SNAP_ITERATIONS
+          WebColaSpytialGraph.GRID_SNAP_ITERATIONS
         );
       } catch (layoutError) {
         console.warn('WebCola layout start encountered an error, trying alternative approach:', layoutError);
@@ -1813,8 +1813,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           return "group";
         }
       })
-      .attr("rx", WebColaCnDGraph.GROUP_BORDER_RADIUS)
-      .attr("ry", WebColaCnDGraph.GROUP_BORDER_RADIUS)
+      .attr("rx", WebColaSpytialGraph.GROUP_BORDER_RADIUS)
+      .attr("ry", WebColaSpytialGraph.GROUP_BORDER_RADIUS)
       .style("fill", (d: any) => {
         // Disconnected groups are transparent
         if (this.isDisconnectedGroup(d)) {
@@ -1825,7 +1825,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         const targetNode = nodes[d.keyNode];
         return targetNode?.color || "#cccccc";
       })
-      .attr("fill-opacity", WebColaCnDGraph.GROUP_FILL_OPACITY)
+      .attr("fill-opacity", WebColaSpytialGraph.GROUP_FILL_OPACITY)
       .attr("stroke", (d: any) => {
         if (this.isDisconnectedGroup(d)) {
           return "none";
@@ -1871,7 +1871,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         if (shouldShowGroupLabel) {
           // Ensure adequate padding for label display
           if (d.padding) {
-            d.padding = Math.max(d.padding, WebColaCnDGraph.GROUP_LABEL_PADDING);
+            d.padding = Math.max(d.padding, WebColaSpytialGraph.GROUP_LABEL_PADDING);
           }
           return d.name || "";
         }
@@ -1969,9 +1969,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr("x", (d: any) => -(d.width ) / 2) // Center on node's x position
       .attr("y", (d: any) => -(d.height ) / 2) // Center on node's y position
       .attr("stroke", (d: any) => d.color || "black")
-      .attr("rx", WebColaCnDGraph.NODE_BORDER_RADIUS)
-      .attr("ry", WebColaCnDGraph.NODE_BORDER_RADIUS)
-      .attr("stroke-width", WebColaCnDGraph.NODE_STROKE_WIDTH)
+      .attr("rx", WebColaSpytialGraph.NODE_BORDER_RADIUS)
+      .attr("ry", WebColaSpytialGraph.NODE_BORDER_RADIUS)
+      .attr("stroke-width", WebColaSpytialGraph.NODE_STROKE_WIDTH)
       .attr("fill", (d: any) => {
         const isHidden = this.isHiddenNode(d);
         const hasIcon = !! d.icon;
@@ -1999,19 +1999,19 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr("xlink:href", (d: any) => d.icon)
       .attr("width", (d: any) => {
         return d.showLabels
-          ? (d.width ) * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR
+          ? (d.width ) * WebColaSpytialGraph.SMALL_IMG_SCALE_FACTOR
           : (d.width );
       })
       .attr("height", (d: any) => {
         return d.showLabels
-          ? (d.height ) * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR
+          ? (d.height ) * WebColaSpytialGraph.SMALL_IMG_SCALE_FACTOR
           : (d.height );
       })
       .attr("x", (d: any) => {
         const width = d.width ;
         if (d.showLabels) {
           // Position in top-right corner when labels are shown
-          return d.x + width - (width * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR);
+          return d.x + width - (width * WebColaSpytialGraph.SMALL_IMG_SCALE_FACTOR);
         }
         // Center horizontally when no labels
         return d.x - width / 2;
@@ -2071,12 +2071,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     maxHeight: number, 
     fontFamily: string = 'system-ui'
   ): number {
-    let fontSize = WebColaCnDGraph.DEFAULT_FONT_SIZE;
+    let fontSize = WebColaSpytialGraph.DEFAULT_FONT_SIZE;
     
     // Start with default size and scale down if needed
-    while (fontSize > WebColaCnDGraph.MIN_FONT_SIZE) {
+    while (fontSize > WebColaSpytialGraph.MIN_FONT_SIZE) {
       const textWidth = this.measureTextWidth(text, fontSize, fontFamily);
-      const lineHeight = fontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO;
+      const lineHeight = fontSize * WebColaSpytialGraph.LINE_HEIGHT_RATIO;
       
       if (textWidth <= maxWidth && lineHeight <= maxHeight) {
         break;
@@ -2086,10 +2086,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     }
     
     // Scale up if there's room
-    while (fontSize < WebColaCnDGraph.MAX_FONT_SIZE) {
+    while (fontSize < WebColaSpytialGraph.MAX_FONT_SIZE) {
       const testSize = fontSize + 0.5;
       const textWidth = this.measureTextWidth(text, testSize, fontFamily);
-      const lineHeight = testSize * WebColaCnDGraph.LINE_HEIGHT_RATIO;
+      const lineHeight = testSize * WebColaSpytialGraph.LINE_HEIGHT_RATIO;
       
       if (textWidth > maxWidth || lineHeight > maxHeight) {
         break;
@@ -2098,7 +2098,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       fontSize = testSize;
     }
     
-    return Math.max(WebColaCnDGraph.MIN_FONT_SIZE, Math.min(fontSize, WebColaCnDGraph.MAX_FONT_SIZE));
+    return Math.max(WebColaSpytialGraph.MIN_FONT_SIZE, Math.min(fontSize, WebColaSpytialGraph.MAX_FONT_SIZE));
   }
 
   /**
@@ -2159,8 +2159,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         const textElement = d3.select(nodes[i]);
         const nodeWidth = d.width || 100;
         const nodeHeight = d.height || 60;
-        const maxTextWidth = nodeWidth - WebColaCnDGraph.TEXT_PADDING * 2;
-        const maxTextHeight = nodeHeight - WebColaCnDGraph.TEXT_PADDING * 2;
+        const maxTextWidth = nodeWidth - WebColaSpytialGraph.TEXT_PADDING * 2;
+        const maxTextHeight = nodeHeight - WebColaSpytialGraph.TEXT_PADDING * 2;
         
         const displayLabel = d.label || d.name || d.id || "Node";
         const attributes = d.attributes || {};
@@ -2185,7 +2185,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         textElement.attr("font-size", `${mainLabelFontSize}px`);
         
         // Add main name label on a single line
-        const lineHeight = mainLabelFontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO;
+        const lineHeight = mainLabelFontSize * WebColaSpytialGraph.LINE_HEIGHT_RATIO;
         
         textElement
           .append("tspan")
@@ -2214,7 +2214,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
             textElement
               .append("tspan")
               .attr("x", 0)
-              .attr("dy", `${attributeFontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO}px`)
+              .attr("dy", `${attributeFontSize * WebColaSpytialGraph.LINE_HEIGHT_RATIO}px`)
               .style("font-size", `${attributeFontSize}px`)
               .text(attributeText);
           }
@@ -2328,7 +2328,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr('x', (d: any) => {
         if (d.showLabels) {
           // Move to the top-right corner
-          return d.x + (d.width) / 2 - ((d.width) * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR);
+          return d.x + (d.width) / 2 - ((d.width) * WebColaSpytialGraph.SMALL_IMG_SCALE_FACTOR);
         } else {
           // Align with bounds if available, otherwise center
           return d.bounds.x;
@@ -2546,7 +2546,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         .attr("x", function (d: any) {
             if (d.showLabels) {
                 // Move to the top-right corner
-                return d.x + (d.width / 2) - (d.width * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR);
+                return d.x + (d.width / 2) - (d.width * WebColaSpytialGraph.SMALL_IMG_SCALE_FACTOR);
             } else {
                 // Align with d.bounds.x
                 return d.bounds.x;
@@ -2608,7 +2608,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       // Prepare edge routing with margin
       if (typeof (this.colaLayout as any)?.prepareEdgeRouting === 'function') {
         (this.colaLayout as any).prepareEdgeRouting(
-          WebColaCnDGraph.VIEWBOX_PADDING / WebColaCnDGraph.EDGE_ROUTE_MARGIN_DIVISOR
+          WebColaSpytialGraph.VIEWBOX_PADDING / WebColaSpytialGraph.EDGE_ROUTE_MARGIN_DIVISOR
         );
       }
 
@@ -2972,7 +2972,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
     // Dynamic control point based on self-loop index
     const selfLoopIndex = edgeData.selfLoopIndex || 0;
-    const curvatureScale = 1 + selfLoopIndex * WebColaCnDGraph.SELF_LOOP_CURVATURE_SCALE;
+    const curvatureScale = 1 + selfLoopIndex * WebColaSpytialGraph.SELF_LOOP_CURVATURE_SCALE;
     
     const controlPoint = {
       x: bounds.X + (width / 2) * curvatureScale,
@@ -3124,7 +3124,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
     return (edgeIndex % 2 === 0 ? 1 : -1) * 
             (Math.floor(edgeIndex / 2) + 1) * 
-            WebColaCnDGraph.CURVATURE_BASE_MULTIPLIER * 
+            WebColaSpytialGraph.CURVATURE_BASE_MULTIPLIER * 
             edgeCount;
   }
 
@@ -3145,7 +3145,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
     return (edgeIndex % 2 === 0 ? 1 : -1) * 
             (Math.floor(edgeIndex / 2) + 1) * 
-            WebColaCnDGraph.CURVATURE_BASE_MULTIPLIER * 
+            WebColaSpytialGraph.CURVATURE_BASE_MULTIPLIER * 
             edgeCount;
   }
 
@@ -3177,7 +3177,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private applyEdgeOffsetWithIndex(edgeData: any, route: Array<{ x: number; y: number }>, allEdges: any[], angle: number, edgeIndex: number): Array<{ x: number; y: number }> {
     const offset = (edgeIndex % 2 === 0 ? 1 : -1) * 
                     (Math.floor(edgeIndex / 2) + 1) * 
-                    WebColaCnDGraph.MIN_EDGE_DISTANCE;
+                    WebColaSpytialGraph.MIN_EDGE_DISTANCE;
 
     const direction = this.getDominantDirection(angle);
     
@@ -3355,7 +3355,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     
     // Fallback to SVG getBBox if manual calculation fails
     const bbox = manualBounds || svgElement.getBBox();
-    const padding = WebColaCnDGraph.VIEWBOX_PADDING;
+    const padding = WebColaSpytialGraph.VIEWBOX_PADDING;
     
     // Calculate smart bottom padding based on bottom-most node
     let extraBottomPadding = 50; // Default fallback
@@ -4391,5 +4391,5 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
 // Register the custom element only in browser environments
 if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined') {
-  customElements.define('webcola-cnd-graph', WebColaCnDGraph);
+  customElements.define('webcola-cnd-graph', WebColaSpytialGraph);
 }

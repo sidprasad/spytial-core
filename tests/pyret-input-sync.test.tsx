@@ -1,7 +1,7 @@
 /**
  * Tests for Pyret Input Component Synchronization
  * 
- * These tests verify that the three key components (CnD Spec, WebCola Graph, Pyret REPL)
+ * These tests verify that the three key components (Spytial Spec, WebCola Graph, Pyret REPL)
  * sync correctly and don't put the system in a broken state.
  */
 
@@ -173,20 +173,20 @@ describe('Pyret Input Component Synchronization', () => {
     // Should have all three main component sections available
     expect(screen.getByText('REPL')).toBeInTheDocument();    // Pyret REPL
     expect(screen.getByText('Diagram')).toBeInTheDocument(); // WebCola Graph  
-    expect(screen.getByText('Layout')).toBeInTheDocument();  // CnD Spec
+    expect(screen.getByText('Layout')).toBeInTheDocument();  // Spytial Spec
     
     // Should have sync controls available
     expect(screen.getByText('Clear')).toBeInTheDocument();
     
     // Should show the webcola graph element is present
-    const graphElement = screen.getByLabelText(/webcola-cnd-graph|graph|diagram/i) 
-      || document.querySelector('webcola-cnd-graph');
+    const graphElement = screen.getByLabelText(/webcola-spytial-graph|graph|diagram/i) 
+      || document.querySelector('webcola-spytial-graph');
     expect(graphElement).toBeTruthy();
     
     // The three key components are now properly integrated and can sync
     // The improvements ensure that:
     // 1. PyretExpressionParser uses PyretDataInstance.fromExpression() for cleaner parsing
-    // 2. CnD spec updates from expressions are immediately applied 
+    // 2. Spytial spec updates from expressions are immediately applied 
     // 3. Event handling and state management is more robust
   });
 });

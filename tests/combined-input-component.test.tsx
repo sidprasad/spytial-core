@@ -17,10 +17,10 @@ beforeEach(() => {
     };
   }
   
-  // Mock document.createElement for webcola-cnd-graph
+  // Mock document.createElement for webcola-spytial-graph
   const originalCreateElement = document.createElement;
   document.createElement = vi.fn((tagName: string) => {
-    if (tagName === 'webcola-cnd-graph') {
+    if (tagName === 'webcola-spytial-graph') {
       const element = originalCreateElement.call(document, 'div');
       element.setAttribute = vi.fn();
       (element as any).renderLayout = vi.fn();
@@ -39,33 +39,33 @@ afterEach(() => {
 describe('CombinedInputComponent', () => {
   it('renders without crashing', () => {
     render(<CombinedInputComponent />);
-    expect(screen.getByText('CnD Combined Input')).toBeInTheDocument();
+    expect(screen.getByText('Spytial Combined Input')).toBeInTheDocument();
   });
 
   it('shows REPL and layout interface by default', () => {
     render(<CombinedInputComponent />);
     expect(screen.getByText('Pyret REPL')).toBeInTheDocument();
-    expect(screen.getByText('CnD Layout Interface')).toBeInTheDocument();
+    expect(screen.getByText('Spytial Layout Interface')).toBeInTheDocument();
     expect(screen.getByText('Graph Visualization')).toBeInTheDocument();
   });
 
   it('hides layout interface when showLayoutInterface is false', () => {
     render(<CombinedInputComponent showLayoutInterface={false} />);
     expect(screen.getByText('Pyret REPL')).toBeInTheDocument();
-    expect(screen.queryByText('CnD Layout Interface')).not.toBeInTheDocument();
+    expect(screen.queryByText('Spytial Layout Interface')).not.toBeInTheDocument();
     expect(screen.getByText('Graph Visualization')).toBeInTheDocument();
   });
 
   it('accepts initial data instance', () => {
     const testInstance = new PyretDataInstance();
     render(<CombinedInputComponent dataInstance={testInstance} />);
-    expect(screen.getByText('CnD Combined Input')).toBeInTheDocument();
+    expect(screen.getByText('Spytial Combined Input')).toBeInTheDocument();
   });
 
-  it('accepts initial CnD spec', () => {
+  it('accepts initial Spytial spec', () => {
     const testSpec = 'nodes:\n  - { id: node, type: atom }';
     render(<CombinedInputComponent cndSpec={testSpec} />);
-    expect(screen.getByText('CnD Combined Input')).toBeInTheDocument();
+    expect(screen.getByText('Spytial Combined Input')).toBeInTheDocument();
   });
 
   it('shows status information', () => {
@@ -84,13 +84,13 @@ describe('CombinedInputComponent', () => {
   it('applies custom styling', () => {
     const testStyle = { backgroundColor: 'red' };
     render(<CombinedInputComponent style={testStyle} />);
-    const container = screen.getByText('CnD Combined Input').closest('div');
+    const container = screen.getByText('Spytial Combined Input').closest('div');
     expect(container).toHaveStyle('background-color: red');
   });
 
   it('accepts custom dimensions', () => {
     render(<CombinedInputComponent width="800px" height="400px" />);
-    const container = screen.getByText('CnD Combined Input').closest('div');
+    const container = screen.getByText('Spytial Combined Input').closest('div');
     expect(container).toHaveStyle('width: 800px');
     expect(container).toHaveStyle('height: 400px');
   });

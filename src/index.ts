@@ -25,13 +25,13 @@ export { type default as IEvaluator } from './evaluators/interfaces';
 export { ForgeEvaluator, WrappedForgeEvaluator } from './evaluators/forge-evaluator';
 export { WebColaTranslator } from './translators';
 export { StructuredInputGraph } from './translators';
-export type { ParsedCnDSpec } from './translators';
+export type { ParsedSpytialSpec } from './translators';
 export { SGraphQueryEvaluator } from "./evaluators/sgq-evaluator";
 
 // Browser-specific exports and initialization
 if (typeof window !== 'undefined') {
   // Import and register WebCola custom element for browser environments
-  import('./translators/webcola/webcola-cnd-graph').then(({ WebColaCnDGraph }) => {
+  import('./translators/webcola/webcola-spytial-graph').then(({ WebColaSpytialGraph }) => {
     // Make d3 and webcola available globally for WebCola d3adaptor
     Promise.all([
       import('./vendor/d3.v4.min.js'),
@@ -41,9 +41,9 @@ if (typeof window !== 'undefined') {
       (window as any).cola = colaModule;
       
       // Register the custom element
-      if (typeof customElements !== 'undefined' && !customElements.get('webcola-cnd-graph')) {
-        customElements.define('webcola-cnd-graph', WebColaCnDGraph as any);
-        //console.log('✅ WebCola CnD Graph custom element registered');
+      if (typeof customElements !== 'undefined' && !customElements.get('webcola-spytial-graph')) {
+        customElements.define('webcola-spytial-graph', WebColaSpytialGraph as any);
+        //console.log('✅ WebCola Spytial Graph custom element registered');
       }
 
       // Register structured input graph
@@ -62,7 +62,7 @@ export interface CoreConfig {
   version?: string;
 }
 
-export class CndCore {
+export class SpytialCore {
   private config: CoreConfig;
 
   constructor(config: CoreConfig = {}) {
@@ -78,7 +78,7 @@ export class CndCore {
    */
   init(): void {
     if (this.config.debug) {
-      //console.log(`CndCore initialized with version ${this.config.version}`);
+      //console.log(`SpytialCore initialized with version ${this.config.version}`);
     }
   }
 
@@ -98,8 +98,8 @@ export class CndCore {
 }
 
 // Utility functions
-export const createCndCore = (config?: CoreConfig): CndCore => {
-  return new CndCore(config);
+export const createSpytialCore = (config?: CoreConfig): SpytialCore => {
+  return new SpytialCore(config);
 };
 
 export const version = '1.0.0';

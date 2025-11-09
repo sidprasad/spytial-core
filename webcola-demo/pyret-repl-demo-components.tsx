@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ReplInterface } from '../src/components/ReplInterface/ReplInterface';
-import { CndLayoutInterface } from '../src/components/CndLayoutInterface';
+import { SpytialLayoutInterface } from '../src/components/SpytialLayoutInterface';
 import { PyretDataInstance, createPyretDataInstance } from '../src/data-instance/pyret/pyret-data-instance';
 import { IInputDataInstance } from '../src/data-instance/interfaces';
 
 /**
- * Pyret REPL demo that combines ReplInterface with CndLayoutInterface
+ * Pyret REPL demo that combines ReplInterface with SpytialLayoutInterface
  * and connects to the webcola-pyret-repl-demo.html page
  * Uses PyretDataInstance for Pyret-specific functionality
  */
@@ -97,9 +97,9 @@ const ConnectedReplInterface: React.FC = () => {
 };
 
 /**
- * CndLayoutInterface wrapper that connects to the global demo state
+ * SpytialLayoutInterface wrapper that connects to the global demo state
  */
-const ConnectedCndLayoutInterface: React.FC = () => {
+const ConnectedSpytialLayoutInterface: React.FC = () => {
   const [cndSpec, setCndSpec] = useState<string>('');
   const [isNoCodeView, setIsNoCodeView] = useState(false);
   const [constraints, setConstraints] = useState<any[]>([]);
@@ -125,14 +125,14 @@ const ConnectedCndLayoutInterface: React.FC = () => {
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div style={{ marginBottom: '10px', padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
-        <h5 style={{ margin: 0, color: '#495057' }}>CnD Layout Interface</h5>
+        <h5 style={{ margin: 0, color: '#495057' }}>Spytial Layout Interface</h5>
         <small style={{ color: '#6c757d' }}>
           Configure visual layout constraints
         </small>
       </div>
       
       <div style={{ flex: 1, overflow: 'auto' }}>
-        <CndLayoutInterface 
+        <SpytialLayoutInterface 
           yamlValue={cndSpec}
           onChange={handleCndSpecChange}
           isNoCodeView={isNoCodeView}
@@ -163,16 +163,16 @@ document.addEventListener('DOMContentLoaded', () => {
     console.warn('REPL interface container not found');
   }
 
-  // Mount CndLayoutInterface  
+  // Mount SpytialLayoutInterface  
   const layoutContainer = document.getElementById('layout-interface-container');
   if (layoutContainer) {
     const layoutRoot = createRoot(layoutContainer);
-    layoutRoot.render(<ConnectedCndLayoutInterface />);
-    console.log('CndLayoutInterface mounted successfully');
+    layoutRoot.render(<ConnectedSpytialLayoutInterface />);
+    console.log('SpytialLayoutInterface mounted successfully');
   } else {
     console.warn('Layout interface container not found');
   }
 });
 
 // Export for potential external use
-export { ConnectedReplInterface, ConnectedCndLayoutInterface };
+export { ConnectedReplInterface, ConnectedSpytialLayoutInterface };

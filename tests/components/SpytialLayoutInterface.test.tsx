@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import '@testing-library/jest-dom'
-import { CndLayoutInterface } from '../../src/components/CndLayoutInterface'
+import { SpytialLayoutInterface } from '../../src/components/SpytialLayoutInterface'
 import type { ConstraintData, DirectiveData } from '../../src/components/NoCodeView/interfaces'
 import { useState } from 'react'
 
@@ -25,7 +25,7 @@ vi.mock(import('../../src/components/NoCodeView/CodeView'), async (importOrigina
   }
 })
 
-describe('CndLayoutInterface Component', () => {
+describe('SpytialLayoutInterface Component', () => {
   const defaultProps = {
     yamlValue: '',
     onChange: vi.fn(),
@@ -43,7 +43,7 @@ describe('CndLayoutInterface Component', () => {
 
   describe('Rendering', () => {
     it('should render with default props', () => {
-      render(<CndLayoutInterface {...defaultProps} />)
+      render(<SpytialLayoutInterface {...defaultProps} />)
       
       // Should render main container
       expect(screen.getByRole('region', {name: 'CND Layout Specification Interface'})).toBeInTheDocument()
@@ -55,14 +55,14 @@ describe('CndLayoutInterface Component', () => {
     })
 
     it('should apply custom className', () => {
-      render(<CndLayoutInterface {...defaultProps} className="custom-class" />)
+      render(<SpytialLayoutInterface {...defaultProps} className="custom-class" />)
       
       const container = screen.getByLabelText('CND Layout Specification Interface')
       expect(container).toHaveClass('custom-class')
     })
 
     it('should show Code View by default', () => {
-      render(<CndLayoutInterface {...defaultProps} />)
+      render(<SpytialLayoutInterface {...defaultProps} />)
       
       // Should show textarea for code view
       expect(screen.getByRole('textbox')).toBeInTheDocument()
@@ -73,7 +73,7 @@ describe('CndLayoutInterface Component', () => {
     })
 
     it('should show No Code View when isNoCodeView is true', () => {
-      render(<CndLayoutInterface {...defaultProps} isNoCodeView={true} />)
+      render(<SpytialLayoutInterface {...defaultProps} isNoCodeView={true} />)
       
       // Should not show textarea
       expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
@@ -84,7 +84,7 @@ describe('CndLayoutInterface Component', () => {
     })
 
     it('should display textArea empty by default', () => {
-      render(<CndLayoutInterface {...defaultProps} />)
+      render(<SpytialLayoutInterface {...defaultProps} />)
       
       const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
       expect(textarea.value).toBe('')
@@ -92,7 +92,7 @@ describe('CndLayoutInterface Component', () => {
 
     it('should display yamlValue in textarea, if given', () => {
       const testYaml = 'constraints:\n  - type: orientation'
-      render(<CndLayoutInterface {...defaultProps} yamlValue={testYaml} />)
+      render(<SpytialLayoutInterface {...defaultProps} yamlValue={testYaml} />)
       
       const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
       expect(textarea.value).toBe(testYaml)
@@ -104,7 +104,7 @@ describe('CndLayoutInterface Component', () => {
       const user = userEvent.setup()
       const mockOnChange = defaultProps.onChange
       
-      render(<CndLayoutInterface {...defaultProps} />)
+      render(<SpytialLayoutInterface {...defaultProps} />)
       
       const textarea = screen.getByRole('textbox')
       await user.type(textarea, 'test content')
@@ -116,7 +116,7 @@ describe('CndLayoutInterface Component', () => {
       const user = userEvent.setup()
       const mockOnViewChange = defaultProps.onViewChange
       
-      render(<CndLayoutInterface {...defaultProps} />)
+      render(<SpytialLayoutInterface {...defaultProps} />)
       
       // Find and click the view toggle
       const toggle = screen.queryByRole('button', { name: /toggle view/i }) || 
@@ -135,7 +135,7 @@ describe('CndLayoutInterface Component', () => {
       const user = userEvent.setup()
       const mockOnChange = defaultProps.onChange
       
-      render(<CndLayoutInterface {...defaultProps} disabled={true} />)
+      render(<SpytialLayoutInterface {...defaultProps} disabled={true} />)
       
       const textarea = screen.getByRole('textbox')
       expect(textarea).toBeDisabled()
@@ -147,7 +147,7 @@ describe('CndLayoutInterface Component', () => {
 
   describe('Accessibility', () => {
     it('should have proper ARIA labels', () => {
-      render(<CndLayoutInterface {...defaultProps} aria-label="Custom ARIA label" />)
+      render(<SpytialLayoutInterface {...defaultProps} aria-label="Custom ARIA label" />)
       
       expect(screen.getByLabelText('Custom ARIA label')).toBeInTheDocument()
     })
@@ -167,20 +167,20 @@ describe('CndLayoutInterface Component', () => {
         setDirectives: undefined as any,
       }
       
-      expect(() => render(<CndLayoutInterface {...propsWithoutCallbacks} />)).not.toThrow()
+      expect(() => render(<SpytialLayoutInterface {...propsWithoutCallbacks} />)).not.toThrow()
     })
 
     it('should handle large YAML values', () => {
       const largeYaml = 'constraints:\n'.repeat(1000)
       
-      render(<CndLayoutInterface {...defaultProps} yamlValue={largeYaml} />)
+      render(<SpytialLayoutInterface {...defaultProps} yamlValue={largeYaml} />)
       
       const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
       expect(textarea.value).toBe(largeYaml)
     })
 
     it('should handle empty constraints and directives arrays', () => {
-      render(<CndLayoutInterface 
+      render(<SpytialLayoutInterface 
         {...defaultProps} 
         isNoCodeView={true}
         constraints={[]}
@@ -209,7 +209,7 @@ describe('CndLayoutInterface Component', () => {
     const [directives, setDirectives] = useState<DirectiveData[]>(initialDirectives)
 
     return (
-      <CndLayoutInterface 
+      <SpytialLayoutInterface 
         {...defaultProps}
         isNoCodeView={isNoCodeView}
         onViewChange={setIsNoCodeView}

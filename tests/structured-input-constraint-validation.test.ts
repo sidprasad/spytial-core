@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { StructuredInputGraph } from '../src/translators/webcola/structured-input-graph';
 import { JSONDataInstance } from '../src/data-instance/json-data-instance';
 
-// Mock the WebColaCnDGraph parent class
-vi.mock('../src/translators/webcola/webcola-cnd-graph', () => ({
-  WebColaCnDGraph: class {
+// Mock the WebColaSpytialGraph parent class
+vi.mock('../src/translators/webcola/webcola-spytial-graph', () => ({
+  WebColaSpytialGraph: class {
     shadowRoot = document.createElement('div').attachShadow({ mode: 'open' });
     private eventListeners: Map<string, Function[]> = new Map();
     
@@ -61,7 +61,7 @@ describe('StructuredInputGraph Constraint Validation', () => {
 
     it('should track constraint errors when they occur', async () => {
       // This test demonstrates that the constraint error tracking system is in place
-      // In practice, constraint errors occur when the CnD spec creates conflicting
+      // In practice, constraint errors occur when the Spytial spec creates conflicting
       // layout requirements (e.g., A must be left of B AND A must be right of B)
       
       // For this test, we verify the API works correctly
@@ -89,7 +89,7 @@ describe('StructuredInputGraph Constraint Validation', () => {
         satisfiedEventFired = true;
       }) as EventListener);
 
-      await graph.setCnDSpec(spec);
+      await graph.setSpytialSpec(spec);
 
       // Add a valid relation
       const tuple = {
@@ -118,7 +118,7 @@ describe('StructuredInputGraph Constraint Validation', () => {
           - name: test
             arity: 2
       `;
-      await graph.setCnDSpec(spec);
+      await graph.setSpytialSpec(spec);
 
       // Note: Without actual conflicting constraints, the event won't fire
       // This test verifies the event system is in place
@@ -134,7 +134,7 @@ describe('StructuredInputGraph Constraint Validation', () => {
           - name: test
             arity: 2
       `;
-      await graph.setCnDSpec(spec);
+      await graph.setSpytialSpec(spec);
 
       // Add data that satisfies constraints
       const tuple = {
@@ -154,7 +154,7 @@ describe('StructuredInputGraph Constraint Validation', () => {
       graph.addEventListener('layout-generation-error', eventListener as EventListener);
 
       // Create an invalid spec that might cause an error
-      await graph.setCnDSpec('invalid yaml!!!').catch(() => {
+      await graph.setSpytialSpec('invalid yaml!!!').catch(() => {
         // Expected to fail
       });
 

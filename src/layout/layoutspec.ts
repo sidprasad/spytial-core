@@ -492,7 +492,7 @@ function removeDuplicateGroupByFieldConstraints(constraints: GroupByField[]): Gr
 /**
  * Parses the constraints from the YAML specification.
  * @param constraints List of constraints from the YAML specification.
- * @returns List of CnD constraints
+ * @returns List of Spytial constraints
  * @throws Error if there are inconsistencies in the constraints.
  */
 function parseConstraints(constraints: unknown[]):   ConstraintsBlock
@@ -656,7 +656,7 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
 /**
  * Parses the directives from the YAML specification.
  * @param directives List of directives from the YAML specification.
- * @returns List of CnD directives
+ * @returns List of Spytial directives
  * @throws Error if there are inconsistencies in the directives.
  */
 function parseDirectives(directives: unknown[]): DirectivesBlock {

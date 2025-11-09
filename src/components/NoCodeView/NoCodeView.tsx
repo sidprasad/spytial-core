@@ -142,7 +142,7 @@ export function parseLayoutSpecToData(yamlString: string): {
 }
 
 interface NoCodeViewProps {
-    /** YAML string of CnD layout spec */
+    /** YAML string of Spytial layout spec */
     yamlValue?: string;
     /** Constraints */
     constraints: ConstraintData[];

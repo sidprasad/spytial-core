@@ -1,5 +1,5 @@
 /**
- * Example integration of CndLayoutInterface and InstanceBuilder with webcola-integrated-demo.html
+ * Example integration of SpytialLayoutInterface and InstanceBuilder with webcola-integrated-demo.html
  * 
  * This file demonstrates how to mount the React components into the existing demo page
  * and integrate them with the existing JavaScript functions.
@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
-import { CndLayoutInterface } from '../src/components/CndLayoutInterface';
+import { SpytialLayoutInterface } from '../src/components/SpytialLayoutInterface';
 import { InstanceBuilder } from '../src/components/InstanceBuilder/InstanceBuilder';
 import { ConstraintData, DirectiveData } from '../src/components/NoCodeView/interfaces';
 import { generateLayoutSpecYaml } from '../src/components/NoCodeView/CodeView';
@@ -26,7 +26,7 @@ import { IEvaluator } from '../src/evaluators';
 import { RelationHighlighter } from '../src/components/RelationHighlighter/RelationHighlighter';
 
 /**
- * Configuration options for mounting CndLayoutInterface
+ * Configuration options for mounting SpytialLayoutInterface
  * @public
  */
 export interface CndLayoutMountConfig {
@@ -82,7 +82,7 @@ export interface ReplWithVisualizationMountConfig {
 
 
 /**
- * Singleton state manager for CnD layout specifications
+ * Singleton state manager for Spytial layout specifications
  * Handles constraints, directives, and YAML generation
  * 
  * @public
@@ -424,12 +424,12 @@ export const globalErrorManager = new ErrorStateManager();
 
 
 /**
- * React wrapper component for CndLayoutInterface
+ * React wrapper component for SpytialLayoutInterface
  * Integrates with global state management and provides compatibility hooks
  * 
  * @private
  */
-const CndLayoutInterfaceWrapper: React.FC<{ config?: CndLayoutMountConfig }> = ({ config }) => {
+const SpytialLayoutInterfaceWrapper: React.FC<{ config?: CndLayoutMountConfig }> = ({ config }) => {
   /** Get state manager instance */
   const stateManager = useMemo(() => CndLayoutStateManager.getInstance(), []);
   
@@ -521,7 +521,7 @@ const CndLayoutInterfaceWrapper: React.FC<{ config?: CndLayoutMountConfig }> = (
   }, []);
 
   return (
-    <CndLayoutInterface
+    <SpytialLayoutInterface
       yamlValue={yamlValue}
       onChange={handleYamlChange}
       isNoCodeView={isNoCodeView}
@@ -747,7 +747,7 @@ const ReplWithVisualizationWrapper: React.FC<{ config?: ReplWithVisualizationMou
 
 
 /**
- * Mount CndLayoutInterface component into specified container
+ * Mount SpytialLayoutInterface component into specified container
  * 
  * @param containerId - DOM element ID to mount into (default: 'webcola-cnd-container')
  * @returns Boolean indicating success
@@ -755,22 +755,22 @@ const ReplWithVisualizationWrapper: React.FC<{ config?: ReplWithVisualizationMou
  * @example
  * ```javascript
  * // Mount into default container
- * CnDCore.mountLayoutInterface();
+ * SpytialCore.mountLayoutInterface();
  * 
  * // Mount into custom container
- * CnDCore.mountLayoutInterface('my-custom-container');
+ * SpytialCore.mountLayoutInterface('my-custom-container');
  * ```
  * 
  * @public
  */
-export function mountCndLayoutInterface(
+export function mountSpytialLayoutInterface(
   containerId: string = 'webcola-cnd-container',
   config?: CndLayoutMountConfig
 ): boolean {
   const container = document.getElementById(containerId);
   
   if (!container) {
-    console.error(`CnD Layout Interface: Container '${containerId}' not found`);
+    console.error(`Spytial Layout Interface: Container '${containerId}' not found`);
     return false;
   }
 
@@ -786,21 +786,21 @@ export function mountCndLayoutInterface(
 
   try {
     const root = createRoot(container);
-    root.render(<CndLayoutInterfaceWrapper config={config} />);
+    root.render(<SpytialLayoutInterfaceWrapper config={config} />);
 
     if (config) {
-      console.log(`✅ CnD Layout Interface mounted to #${containerId} with initial config:`, {
+      console.log(`✅ Spytial Layout Interface mounted to #${containerId} with initial config:`, {
         yamlValue: config.initialYamlValue ? `${config.initialYamlValue.length} characters` : 'none',
         isNoCodeView: config.initialIsNoCodeView ?? 'default',
         constraints: config.initialConstraints?.length ?? 0,
         directives: config.initialDirectives?.length ?? 0
       });
     } else {
-      console.log(`✅ CnD Layout Interface mounted to #${containerId}`);
+      console.log(`✅ Spytial Layout Interface mounted to #${containerId}`);
     }
     return true;
   } catch (error) {
-    console.error('Failed to mount CnD Layout Interface:', error);
+    console.error('Failed to mount Spytial Layout Interface:', error);
     return false;
   }
 }
@@ -814,10 +814,10 @@ export function mountCndLayoutInterface(
  * @example
  * ```javascript
  * // Mount into default container  
- * CnDCore.mountInstanceBuilder();
+ * SpytialCore.mountInstanceBuilder();
  * 
  * // Mount into custom container
- * CnDCore.mountInstanceBuilder('my-builder-container');
+ * SpytialCore.mountInstanceBuilder('my-builder-container');
  * ```
  * 
  * @public
@@ -892,9 +892,9 @@ export function getCurrentCNDSpecFromReact(): string | undefined {
     }
   
     // Error handling if React component is not found
-    console.warn('CndLayoutInterface textarea not found');
+    console.warn('SpytialLayoutInterface textarea not found');
   } catch (error) {
-    console.error('Error accessing CndLayoutInterface instance:', error);
+    console.error('Error accessing SpytialLayoutInterface instance:', error);
   }
 }
 
@@ -908,16 +908,16 @@ export function getCurrentCNDSpecFromReact(): string | undefined {
  * @example
  * ```javascript
  * // Mount into default container
- * CnDCore.mountPyretRepl();
+ * SpytialCore.mountPyretRepl();
  * 
  * // Mount with external evaluator
- * CnDCore.mountPyretRepl('my-repl', { 
+ * SpytialCore.mountPyretRepl('my-repl', { 
  *   externalEvaluator: window.__internalRepl 
  * });
  * 
  * // Mount with initial instance
  * const instance = new PyretDataInstance(myPyretData);
- * CnDCore.mountPyretRepl('my-repl', { initialInstance: instance });
+ * SpytialCore.mountPyretRepl('my-repl', { initialInstance: instance });
  * ```
  * 
  * @public
@@ -978,10 +978,10 @@ export function mountPyretRepl(
  * @example
  * ```javascript
  * // Mount into default container
- * CnDCore.mountReplWithVisualization();
+ * SpytialCore.mountReplWithVisualization();
  * 
  * // Mount with custom configuration
- * CnDCore.mountReplWithVisualization('my-container', {
+ * SpytialCore.mountReplWithVisualization('my-container', {
  *   showLayoutInterface: true,
  *   replHeight: '400px',
  *   visualizationHeight: '600px'
@@ -1033,10 +1033,10 @@ export function mountReplWithVisualization(
  * @example
  * ```javascript
  * // Mount into default container
- * CnDCore.mountErrorModal();
+ * SpytialCore.mountErrorModal();
  * 
  * // Mount into custom container
- * CnDCore.mountErrorModal('my-error-container');
+ * SpytialCore.mountErrorModal('my-error-container');
  * ```
  * 
  * @public
@@ -1113,7 +1113,7 @@ export function mountRelationHighlighter(containerId: string, graphElementId: st
 }
 
 /**
- * Mount all CnD components into their default containers
+ * Mount all Spytial components into their default containers
  * Convenience function for quick setup
  * 
  * @returns Object with success status for each component
@@ -1121,7 +1121,7 @@ export function mountRelationHighlighter(containerId: string, graphElementId: st
  * @example
  * ```javascript
  * // Mount all components at once
- * const results = CnDCore.mountAllComponents();
+ * const results = SpytialCore.mountAllComponents();
  * console.log('Mount results:', results);
  * ```
  * 
@@ -1132,16 +1132,16 @@ export function mountAllComponents(): {
   instanceBuilder: boolean;
   errorModal: boolean;
 } {
-  console.log('🚀 Mounting all CnD components...');
+  console.log('🚀 Mounting all Spytial components...');
   
   const results = {
-    layoutInterface: mountCndLayoutInterface(),
+    layoutInterface: mountSpytialLayoutInterface(),
     instanceBuilder: mountInstanceBuilder(),
     errorModal: mountErrorMessageModal()
   };
 
   const successCount = Object.values(results).filter(Boolean).length;
-  console.log(`✅ Successfully mounted ${successCount}/3 CnD components`);
+  console.log(`✅ Successfully mounted ${successCount}/3 Spytial components`);
   
   return results;
 }
@@ -1150,7 +1150,7 @@ export function mountAllComponents(): {
  * Mount CombinedInputComponent into specified container
  * 
  * This provides the simple API requested in the issue:
- * - Pass in initial data, evaluator, and CnD spec
+ * - Pass in initial data, evaluator, and Spytial spec
  * - Get back a fully configured component with all sync logic handled internally
  * 
  * @param containerId - DOM element ID to mount into (default: 'combined-input-container')
@@ -1160,14 +1160,14 @@ export function mountAllComponents(): {
  * @example
  * ```javascript
  * // Simple usage as requested in the issue
- * const dataInstance = new CndCore.PyretDataInstance(v);
+ * const dataInstance = new SpytialCore.PyretDataInstance(v);
  * const evaluationContext = { sourceData: dataInstance };
- * const evaluator = new CndCore.Evaluators.SGraphQueryEvaluator();
+ * const evaluator = new SpytialCore.Evaluators.SGraphQueryEvaluator();
  * evaluator.initialize(evaluationContext);
  * const pyretREPLInternal = window.__internalRepl;
  * const projections = {};
  * 
- * const success = CndCore.mountCombinedInput('my-container', {
+ * const success = SpytialCore.mountCombinedInput('my-container', {
  *   cndSpec: 'nodes:\n  - { id: node, type: atom }',
  *   dataInstance: dataInstance,
  *   pyretEvaluator: pyretREPLInternal,
@@ -1175,7 +1175,7 @@ export function mountAllComponents(): {
  * });
  * 
  * // With callbacks
- * CndCore.mountCombinedInput('container', {
+ * SpytialCore.mountCombinedInput('container', {
  *   cndSpec: mySpec,
  *   onInstanceChange: (instance) => console.log('Data updated:', instance),
  *   onSpecChange: (spec) => console.log('Layout updated:', spec),
@@ -1196,7 +1196,7 @@ export function mountCombinedInputComponent(
 }
 
 /**
- * Mount all CnD components including Pyret REPL components into their default containers
+ * Mount all Spytial components including Pyret REPL components into their default containers
  * Convenience function for comprehensive setup
  * 
  * @returns Object with success status for each component
@@ -1204,7 +1204,7 @@ export function mountCombinedInputComponent(
  * @example
  * ```javascript
  * // Mount all components including Pyret ones at once
- * const results = CnDCore.mountAllComponentsWithPyret();
+ * const results = SpytialCore.mountAllComponentsWithPyret();
  * console.log('Mount results:', results);
  * ```
  * 
@@ -1218,10 +1218,10 @@ export function mountAllComponentsWithPyret(): {
   replWithVisualization: boolean;
   combinedInput: boolean;
 } {
-  console.log('🚀 Mounting all CnD components with Pyret REPL and Combined Input...');
+  console.log('🚀 Mounting all Spytial components with Pyret REPL and Combined Input...');
   
   const results = {
-    layoutInterface: mountCndLayoutInterface(),
+    layoutInterface: mountSpytialLayoutInterface(),
     instanceBuilder: mountInstanceBuilder(),
     errorModal: mountErrorMessageModal(),
     pyretRepl: mountPyretRepl(),
@@ -1230,7 +1230,7 @@ export function mountAllComponentsWithPyret(): {
   };
 
   const successCount = Object.values(results).filter(Boolean).length;
-  console.log(`✅ Successfully mounted ${successCount}/6 CnD components with Pyret integration and Combined Input`);
+  console.log(`✅ Successfully mounted ${successCount}/6 Spytial components with Pyret integration and Combined Input`);
   
   return results;
 }
@@ -1359,7 +1359,7 @@ export const DataAPI = {
         return reactTextarea.value.trim();
       }
 
-      console.warn('CndLayoutInterface not found or empty');
+      console.warn('SpytialLayoutInterface not found or empty');
       return undefined;
     } catch (error) {
       console.error('Error accessing CND specification:', error);
@@ -1462,21 +1462,21 @@ export const DataAPI = {
 
 /*******************************************************
  *                                                     *
- *               GLOBAL CnDCore OBJECT                 *
+ *               GLOBAL SpytialCore OBJECT                 *
  *                                                     *
  *******************************************************/
 
 
 
 /**
- * Global CnDCore object for CDN usage
+ * Global SpytialCore object for CDN usage
  * Exposes all public functions and classes in a clean namespace
  * 
  * @public
  */
-export const CnDCore = {
+export const SpytialCore = {
   // Mounting functions
-  mountCndLayoutInterface,
+  mountSpytialLayoutInterface,
   mountInstanceBuilder, 
   mountErrorMessageModal,
   mountAllComponents,
@@ -1517,10 +1517,10 @@ export const CnDCore = {
 
 // Expose to global scope for legacy usage
 if (typeof window !== 'undefined') {
-  (window as any).CnDCore = CnDCore;
+  (window as any).SpytialCore = SpytialCore;
   
   // Legacy compatibility - expose individual functions
-  (window as any).mountCndLayoutInterface = mountCndLayoutInterface;
+  (window as any).mountSpytialLayoutInterface = mountSpytialLayoutInterface;
   (window as any).mountInstanceBuilder = mountInstanceBuilder;
   (window as any).mountErrorMessageModal = mountErrorMessageModal;
   (window as any).mountIntegratedComponents = mountAllComponents;
@@ -1552,5 +1552,5 @@ if (typeof window !== 'undefined') {
   (window as any).showGeneralError = ErrorAPI.showGeneralError;
   (window as any).clearAllErrors = ErrorAPI.clearAllErrors;
 
-  console.log('🎉 CnD-Core CDN integration ready! Use window.CnDCore to access all features including Pyret REPL.');
+  console.log('🎉 Spytial-Core CDN integration ready! Use window.SpytialCore to access all features including Pyret REPL.');
 }

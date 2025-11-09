@@ -1,10 +1,10 @@
 # Memory Usage Optimization
 
-This document describes the memory usage improvements implemented in CnD Core to prevent memory leaks and reduce memory consumption that could cause browser errors (e.g., Chrome "Aw, Snap!" err 5 on Mac).
+This document describes the memory usage improvements implemented in Spytial Core to prevent memory leaks and reduce memory consumption that could cause browser errors (e.g., Chrome "Aw, Snap!" err 5 on Mac).
 
 ## Problem Statement
 
-WebCola CnD graph sometimes uses a lot of memory, enough to cause Chrome errors on some systems. The issue raised several questions:
+WebCola Spytial graph sometimes uses a lot of memory, enough to cause Chrome errors on some systems. The issue raised several questions:
 
 1. **How much of this is because of a leak, and how much is unavoidable?**
 2. **Can we clean anything up inside the process to help?**
@@ -16,7 +16,7 @@ WebCola CnD graph sometimes uses a lot of memory, enough to cause Chrome errors 
 Memory issues were found in several areas:
 
 ### 1. **Lack of Cleanup in Custom Element Lifecycle**
-The `WebColaCnDGraph` custom element did not implement proper cleanup when removed from the DOM. This meant:
+The `WebColaSpytialGraph` custom element did not implement proper cleanup when removed from the DOM. This meant:
 - D3 event listeners were not removed
 - WebCola layout computation continued running
 - SVG elements and references were not cleared
@@ -40,7 +40,7 @@ There was no way to track memory usage or diagnose memory issues in production.
 
 ### 1. Custom Element Lifecycle Management
 
-Added proper cleanup to `WebColaCnDGraph` custom element:
+Added proper cleanup to `WebColaSpytialGraph` custom element:
 
 ```typescript
 /**
@@ -148,7 +148,7 @@ public dispose(): void {
 Added `getMemoryStats()` methods to all major components:
 
 ```typescript
-// WebColaCnDGraph
+// WebColaSpytialGraph
 public getMemoryStats(): {
     nodeCount: number;
     edgeCount: number;
@@ -191,7 +191,7 @@ public getMemoryStats(): {
 
 ### For Application Developers
 
-If you're using CnD Core in your application and experiencing memory issues:
+If you're using Spytial Core in your application and experiencing memory issues:
 
 1. **Ensure Proper Cleanup:**
    ```javascript
@@ -226,7 +226,7 @@ If you're using CnD Core in your application and experiencing memory issues:
 
 ### For Library Developers
 
-If you're extending CnD Core:
+If you're extending Spytial Core:
 
 1. **Implement Disposal in New Components:**
    ```typescript

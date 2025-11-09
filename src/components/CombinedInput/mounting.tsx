@@ -27,7 +27,7 @@ export interface CombinedInputMountConfig extends CombinedInputConfig {
  * Mount CombinedInputComponent into specified container
  * 
  * This function provides the simple API requested in the issue:
- * - Pass in initial data, evaluator, and CnD spec
+ * - Pass in initial data, evaluator, and Spytial spec
  * - Get back a fully configured component with all sync logic handled internally
  * 
  * @param config - Configuration object with all the user's inputs
@@ -112,9 +112,9 @@ export function mountCombinedInput(config: CombinedInputMountConfig = {}): boole
  * 
  * @example
  * ```javascript
- * const dataInstance = new window.CndCore.PyretDataInstance(v);
+ * const dataInstance = new window.SpytialCore.PyretDataInstance(v);
  * const evaluationContext = { sourceData: dataInstance };
- * const evaluator = new CndCore.Evaluators.SGraphQueryEvaluator();
+ * const evaluator = new SpytialCore.Evaluators.SGraphQueryEvaluator();
  * evaluator.initialize(evaluationContext);
  * const pyretREPLInternal = window.__internalRepl;
  * const projections = {};
@@ -170,7 +170,7 @@ export function createCombinedInputSetup(
  * Simplified API that matches the exact interface requested in the issue
  * 
  * @param containerId - Container to mount into
- * @param cndSpec - Initial CnD spec
+ * @param cndSpec - Initial Spytial spec
  * @param dataInstance - Pyret data instance
  * @param pyretREPLInternal - Internal Pyret evaluator
  * @param projections - Projection atoms

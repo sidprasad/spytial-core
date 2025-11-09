@@ -1,12 +1,12 @@
 /**
- * Test for CnD spec extraction functionality
+ * Test for Spytial spec extraction functionality
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { PyretExpressionParser, PyretEvaluator } from '../src/components/ReplInterface/parsers/PyretExpressionParser';
 import { PyretDataInstance } from '../src/data-instance/pyret/pyret-data-instance';
 
-describe('CnD Spec Extraction', () => {
+describe('Spytial Spec Extraction', () => {
   let parser: PyretExpressionParser;
   let mockEvaluator: PyretEvaluator;
   let instance: PyretDataInstance;
@@ -24,7 +24,7 @@ describe('CnD Spec Extraction', () => {
     instance = new PyretDataInstance();
   });
 
-  it('should extract CnD spec from object with _cndspec method', async () => {
+  it('should extract Spytial spec from object with _cndspec method', async () => {
     // Mock the evaluator to return different results based on the expression
     (mockEvaluator.run as any).mockImplementation(async (code: string) => {
       if (code === '[test-expression]') {
@@ -33,7 +33,7 @@ describe('CnD Spec Extraction', () => {
           answer: { value: 'test' }
         };
       } else if (code === '([test-expression])._cndspec()') {
-        // Second call - return the CnD spec string
+        // Second call - return the Spytial spec string
         return {
           answer: 'constraints:\n  - orientation:\n      selector: test'
         };
@@ -45,7 +45,7 @@ describe('CnD Spec Extraction', () => {
 
     expect(result.success).toBe(true);
     expect(result.extractedCndSpec).toBe('constraints:\n  - orientation:\n      selector: test');
-    expect(result.message).toContain('Extracted CnD specification from result');
+    expect(result.message).toContain('Extracted Spytial specification from result');
   });
 
   it('should handle objects without _cndspec method', async () => {
@@ -67,7 +67,7 @@ describe('CnD Spec Extraction', () => {
 
     expect(result.success).toBe(true);
     expect(result.extractedCndSpec).toBeUndefined();
-    expect(result.message).not.toContain('Extracted CnD specification from result');
+    expect(result.message).not.toContain('Extracted Spytial specification from result');
   });
 
   it('should handle _cndspec method that returns an object', async () => {
@@ -99,8 +99,8 @@ describe('CnD Spec Extraction', () => {
     const result = await parser.execute('[test-expression]', instance);
 
     expect(result.success).toBe(true);
-    expect(result.extractedCndSpec).toBeUndefined(); // Objects are not considered valid CnD specs
-    expect(result.message).not.toContain('Extracted CnD specification from result');
+    expect(result.extractedCndSpec).toBeUndefined(); // Objects are not considered valid Spytial specs
+    expect(result.message).not.toContain('Extracted Spytial specification from result');
   });
 
   it('should handle errors in _cndspec method gracefully', async () => {
@@ -166,7 +166,7 @@ describe('CnD Spec Extraction', () => {
           }
         };
       } else if (code === '(Black(42, empty, empty))._cndspec()') {
-        // Second call - return the CnD spec string
+        // Second call - return the Spytial spec string
         return {
           answer: `constraints:
   - orientation:
@@ -192,6 +192,6 @@ describe('CnD Spec Extraction', () => {
     expect(result.extractedCndSpec).toContain('orientation:');
     expect(result.extractedCndSpec).toContain('right');
     expect(result.extractedCndSpec).toContain('left');
-    expect(result.message).toContain('Extracted CnD specification from result');
+    expect(result.message).toContain('Extracted Spytial specification from result');
   });
 });

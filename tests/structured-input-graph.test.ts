@@ -3,9 +3,9 @@ import { StructuredInputGraph } from '../src/translators/webcola/structured-inpu
 import { JSONDataInstance } from '../src/data-instance/json-data-instance';
 import { IAtom, ITuple } from '../src/data-instance/interfaces';
 
-// Mock the WebColaCnDGraph parent class
-vi.mock('../src/translators/webcola/webcola-cnd-graph', () => ({
-  WebColaCnDGraph: class {
+// Mock the WebColaSpytialGraph parent class
+vi.mock('../src/translators/webcola/webcola-spytial-graph', () => ({
+  WebColaSpytialGraph: class {
     shadowRoot = document.createElement('div').attachShadow({ mode: 'open' });
     addEventListener = vi.fn();
     dispatchEvent = vi.fn();
