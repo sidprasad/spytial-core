@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { InstanceBuilder, InstanceBuilderProps } from '../src/components/InstanceBuilder/InstanceBuilder';
-import { CndLayoutInterface } from '../src/components/CndLayoutInterface';
+import { SpytialLayoutInterface } from '../src/components/SpytialLayoutInterface';
 import { AlloyDataInstance, createEmptyAlloyDataInstance } from '../src/data-instance/alloy-data-instance';
 import { IInputDataInstance } from '../src/data-instance/interfaces';
 
 /**
- * Integrated demo that combines InstanceBuilder with CndLayoutInterface
+ * Integrated demo that combines InstanceBuilder with SpytialLayoutInterface
  * and connects to the webcola-integrated-demo.html page
  * Uses AlloyDataInstance following the Alloy/Forge pattern
  */
@@ -72,7 +72,7 @@ const ConnectedInstanceBuilder: React.FC = () => {
 };
 
 /**
- * CndLayoutInterface wrapper that connects to the global demo state
+ * SpytialLayoutInterface wrapper that connects to the global demo state
  */
 const ConnectedLayoutInterface: React.FC = () => {
   const [cndSpec, setCndSpec] = useState('');
@@ -80,7 +80,7 @@ const ConnectedLayoutInterface: React.FC = () => {
   const [constraints, setConstraints] = useState<any[]>([]);
   const [directives, setDirectives] = useState<any[]>([]);
 
-  // Expose CND spec getter to global scope
+  // Expose Spytial spec getter to global scope
   useEffect(() => {
     if (typeof window !== 'undefined') {
       (window as any).getCurrentCNDSpecFromReact = () => cndSpec;
@@ -90,15 +90,15 @@ const ConnectedLayoutInterface: React.FC = () => {
   const handleCndSpecChange = (newSpec: string) => {
     setCndSpec(newSpec);
     
-    // Trigger update in the HTML demo when CND spec changes
-    if (typeof window !== 'undefined' && (window as any).updateFromCnDSpec) {
-      (window as any).updateFromCnDSpec();
+    // Trigger update in the HTML demo when Spytial spec changes
+    if (typeof window !== 'undefined' && (window as any).updateFromSpytialSpec) {
+      (window as any).updateFromSpytialSpec();
     }
   };
 
   return (
     <div style={{ height: '100%', overflow: 'auto' }}>
-      <CndLayoutInterface
+      <SpytialLayoutInterface
         yamlValue={cndSpec}
         onChange={handleCndSpecChange}
         isNoCodeView={isNoCodeView}
@@ -123,7 +123,7 @@ export function mountIntegratedDemo() {
     builderRoot.render(<ConnectedInstanceBuilder />);
   }
 
-  // Mount CndLayoutInterface
+  // Mount SpytialLayoutInterface
   const layoutContainer = document.getElementById('layout-interface-container');
   if (layoutContainer) {
     const layoutRoot = createRoot(layoutContainer);
@@ -165,7 +165,7 @@ export const FullIntegratedDemo: React.FC = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', padding: '20px' }}>
-      <h1>🚀 Full Integrated CND Demo</h1>
+      <h1>🚀 Full Integrated Spytial Demo</h1>
       
       {/* Tab Navigation */}
       <div style={{ display: 'flex', borderBottom: '2px solid #ddd', marginBottom: '20px' }}>
@@ -219,7 +219,7 @@ export const FullIntegratedDemo: React.FC = () => {
         {currentTab === 'layout' && (
           <div style={{ flex: 1 }}>
             <h3>🎨 Layout Configuration</h3>
-            <CndLayoutInterface
+            <SpytialLayoutInterface
               yamlValue={cndSpec}
               onChange={setCndSpec}
               isNoCodeView={false}

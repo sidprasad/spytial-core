@@ -49,7 +49,7 @@ These remain as two separate edges because the labels differ.
    - Method is called during layout construction, after edges are converted to WebCola format
    - Uses label-based matching to identify symmetric edge pairs
 
-3. **Visual Rendering** (`src/translators/webcola/webcola-cnd-graph.ts`)
+3. **Visual Rendering** (`src/translators/webcola/webcola-spytial-graph.ts`)
    - Added `start-arrow` and `hand-drawn-arrow-reverse` SVG marker definitions
    - Updated `setupLinkPaths()` to set `marker-start` attribute for bidirectional edges
    - Updated edge positioning to handle bidirectional arrows

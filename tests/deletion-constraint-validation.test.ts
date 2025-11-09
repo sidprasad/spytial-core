@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { StructuredInputGraph } from '../src/translators/webcola/structured-input-graph';
 import { JSONDataInstance } from '../src/data-instance/json-data-instance';
 
-// Mock the WebColaCnDGraph parent class
-vi.mock('../src/translators/webcola/webcola-cnd-graph', () => ({
-  WebColaCnDGraph: class {
+// Mock the WebColaSpytialGraph parent class
+vi.mock('../src/translators/webcola/webcola-spytial-graph', () => ({
+  WebColaSpytialGraph: class {
     shadowRoot = document.createElement('div').attachShadow({ mode: 'open' });
     private eventListeners: Map<string, Function[]> = new Map();
     
@@ -84,7 +84,7 @@ describe('Deletion Triggers Constraint Validation', () => {
           - name: edge
             arity: 2
       `;
-      await graph.setCnDSpec(spec);
+      await graph.setSpytialSpec(spec);
       
       // Clear spy from spec loading
       constraintValidationSpy.mockClear();
@@ -106,7 +106,7 @@ describe('Deletion Triggers Constraint Validation', () => {
           - name: edge
             arity: 2
       `;
-      await graph.setCnDSpec(spec);
+      await graph.setSpytialSpec(spec);
       
       // Clear spy from spec loading
       constraintValidationSpy.mockClear();
@@ -131,7 +131,7 @@ describe('Deletion Triggers Constraint Validation', () => {
           - name: edge
             arity: 2
       `;
-      await graph.setCnDSpec(spec);
+      await graph.setSpytialSpec(spec);
       
       // Manually setup the controls if needed
       // The deleteAtom is private, but we can test it indirectly through the button click
@@ -158,7 +158,7 @@ describe('Deletion Triggers Constraint Validation', () => {
           - name: edge
             arity: 2
       `;
-      await graph.setCnDSpec(spec);
+      await graph.setSpytialSpec(spec);
       
       constraintValidationSpy.mockClear();
 
@@ -192,7 +192,7 @@ describe('Deletion Triggers Constraint Validation', () => {
           - name: edge
             arity: 2
       `;
-      await graph.setCnDSpec(spec);
+      await graph.setSpytialSpec(spec);
       
       constraintValidationSpy.mockClear();
       
@@ -222,7 +222,7 @@ describe('Deletion Triggers Constraint Validation', () => {
           - name: edge
             arity: 2
       `;
-      await graph.setCnDSpec(spec);
+      await graph.setSpytialSpec(spec);
       
       constraintValidationSpy.mockClear();
       
@@ -250,7 +250,7 @@ describe('Deletion Triggers Constraint Validation', () => {
           - name: edge
             arity: 2
       `;
-      await graph.setCnDSpec(spec);
+      await graph.setSpytialSpec(spec);
       
       // Create a new data instance and set it
       const newInstance = new JSONDataInstance({

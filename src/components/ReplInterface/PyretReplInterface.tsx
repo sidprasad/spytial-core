@@ -27,7 +27,7 @@ export interface PyretReplInterfaceProps extends Omit<ReplInterfaceProps, 'insta
   initialInstance?: PyretDataInstance;
   /** Callback fired when the instance changes */
   onChange?: (instance: PyretDataInstance) => void;
-  /** Callback when CnD specification is extracted from an expression */
+  /** Callback when Spytial specification is extracted from an expression */
   onCndSpecExtracted?: (spec: string) => void;
   /** Optional external Pyret evaluator (e.g., window.__internalRepl) */
   externalEvaluator?: PyretEvaluator;

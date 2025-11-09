@@ -24,7 +24,7 @@ export interface ReplInterfaceProps {
   instance: IInputDataInstance;
   /** Callback when the instance changes */
   onChange?: (instance: IInputDataInstance) => void;
-  /** Callback when CnD specification is extracted from an expression */
+  /** Callback when Spytial specification is extracted from an expression */
   onCndSpecExtracted?: (spec: string) => void;
   /** Whether the component is disabled */
   disabled?: boolean;
@@ -250,7 +250,7 @@ export const ReplInterface: React.FC<ReplInterfaceProps> = ({
       notifyChange();
     }
 
-    // Notify parent if CnD specification was extracted
+    // Notify parent if Spytial specification was extracted
     if (result.success && result.extractedCndSpec && onCndSpecExtracted) {
       onCndSpecExtracted(result.extractedCndSpec);
     }

@@ -2,11 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import './RelationHighlighter.css';
 
 interface RelationHighlighterProps {
-  /** ID of the webcola-cnd-graph HTML element */
+  /** ID of the webcola-spytial-graph HTML element */
   graphElementId: string;
 }
 
-// Type for the webcola-cnd-graph element with its public API
+// Type for the webcola-spytial-graph element with its public API
 interface WebColaGraphElement extends HTMLElement {
   highlightRelation(relationName: string): boolean;
   clearHighlightRelation(relationName: string): boolean;
@@ -34,11 +34,11 @@ export const RelationHighlighter: React.FC<RelationHighlighterProps> = ({
   const [relations, setRelations] = useState<string[]>([]);
   const [isCollapsed, setIsCollapsed] = useState(true);
   
-  // Ref to the webcola-cnd-graph element
+  // Ref to the webcola-spytial-graph element
   const graphElementRef = useRef<WebColaGraphElement | null>(null);
 
   useEffect(() => {
-    // Get reference to the webcola-cnd-graph element
+    // Get reference to the webcola-spytial-graph element
     const element = document.getElementById(graphElementId) as WebColaGraphElement | null;
     graphElementRef.current = element;
     

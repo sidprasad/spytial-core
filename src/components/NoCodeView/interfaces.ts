@@ -7,7 +7,7 @@ import { ConstraintType, DirectiveType } from './types';
  * This interface bridges the gap between the visual interface and the core
  * LayoutSpec constraint types.
  * 
- * Following cnd-core TypeScript guidelines:
+ * Following spytial-core TypeScript guidelines:
  * - Strict typing for all properties
  * - Comprehensive JSDoc documentation
  * - Tree-shakable interface exports
@@ -31,7 +31,7 @@ export interface ConstraintData {
  * This interface provides a structured approach to managing visual directives
  * within the No Code View interface.
  * 
- * Following cnd-core TypeScript guidelines:
+ * Following spytial-core TypeScript guidelines:
  * - Comprehensive type safety
  * - Extensible parameter system
  * - Client-side performance optimization

@@ -4,7 +4,7 @@ This document summarizes the performance optimizations implemented to prevent br
 
 ## Overview
 
-Multiple performance optimizations have been implemented to improve the efficiency of layout generation in CnD Core and prevent browser timeouts:
+Multiple performance optimizations have been implemented to improve the efficiency of layout generation in Spytial Core and prevent browser timeouts:
 
 ### 0. Smart Alignment Edge Addition (NEW - Addressing Core Issue)
 
@@ -59,7 +59,7 @@ Multiple performance optimizations have been implemented to improve the efficien
 - Layout quality remains high with grid alignment and convergence threshold
 
 **Files Modified:**
-- `src/translators/webcola/webcola-cnd-graph.ts`
+- `src/translators/webcola/webcola-spytial-graph.ts`
 
 ### 2. Adaptive Iteration Counts Based on Graph Size (NEW)
 
@@ -89,7 +89,7 @@ if (nodeCount > 100) {
 - Maintains good layout quality through convergence threshold
 
 **Files Modified:**
-- `src/translators/webcola/webcola-cnd-graph.ts`
+- `src/translators/webcola/webcola-spytial-graph.ts`
 
 ### 3. Enhanced Loading Indicators with Progress (NEW)
 
@@ -116,7 +116,7 @@ if (nodeCount > 100) {
 - Prevents premature browser tab closure
 
 **Files Modified:**
-- `src/translators/webcola/webcola-cnd-graph.ts`
+- `src/translators/webcola/webcola-spytial-graph.ts`
 
 ### 4. Duplicate Constraint Removal During YAML Parsing
 
@@ -241,4 +241,4 @@ Potential areas for further performance improvements:
 
 ## Backward Compatibility
 
-All optimizations are fully backward compatible. No changes are required to existing code using the CnD Core library.
+All optimizations are fully backward compatible. No changes are required to existing code using the Spytial Core library.

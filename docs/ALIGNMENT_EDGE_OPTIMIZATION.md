@@ -302,7 +302,7 @@ This optimization complements other performance improvements:
 4. **Evaluator result caching**
 5. **Constraint deduplication**
 
-Together, these optimizations make CnD Core significantly more performant on large graphs with many constraints.
+Together, these optimizations make Spytial Core significantly more performant on large graphs with many constraints.
 
 ## Future Work
 

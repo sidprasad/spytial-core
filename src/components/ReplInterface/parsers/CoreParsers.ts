@@ -7,7 +7,7 @@ export interface CommandResult {
   success: boolean;
   message: string;
   action?: 'add' | 'remove' | 'info' | 'help';
-  /** Extracted CnD specification (if any) from expressions with _cndspec method */
+  /** Extracted Spytial specification (if any) from expressions with _cndspec method */
   extractedCndSpec?: string;
 }
 

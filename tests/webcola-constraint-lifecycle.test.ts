@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { StructuredInputGraph } from '../src/translators/webcola/structured-input-graph';
 import { JSONDataInstance } from '../src/data-instance/json-data-instance';
 
-// Mock the WebColaCnDGraph parent class
-vi.mock('../src/translators/webcola/webcola-cnd-graph', () => ({
-  WebColaCnDGraph: class {
+// Mock the WebColaSpytialGraph parent class
+vi.mock('../src/translators/webcola/webcola-spytial-graph', () => ({
+  WebColaSpytialGraph: class {
     shadowRoot = document.createElement('div').attachShadow({ mode: 'open' });
     private eventListeners: Map<string, Function[]> = new Map();
     
@@ -81,7 +81,7 @@ describe('WebCola Constraint Validation Lifecycle', () => {
           - name: edge
             arity: 2
       `;
-      await graph.setCnDSpec(spec);
+      await graph.setSpytialSpec(spec);
       
       // Clear any events from spec loading
       constraintErrorSpy.mockClear();
@@ -109,7 +109,7 @@ describe('WebCola Constraint Validation Lifecycle', () => {
                 directions: [directlyLeft]
                 selector: leftOf
       `;
-      await graph.setCnDSpec(spec);
+      await graph.setSpytialSpec(spec);
       
       // Clear any events from spec loading
       constraintErrorSpy.mockClear();
@@ -141,7 +141,7 @@ describe('WebCola Constraint Validation Lifecycle', () => {
           - name: edge
             arity: 2
       `;
-      await graph.setCnDSpec(spec);
+      await graph.setSpytialSpec(spec);
       
       // Clear any events from spec loading
       constraintErrorSpy.mockClear();
@@ -170,7 +170,7 @@ describe('WebCola Constraint Validation Lifecycle', () => {
           - name: edge
             arity: 2
       `;
-      await graph.setCnDSpec(spec);
+      await graph.setSpytialSpec(spec);
       
       // Clear any events from spec loading
       constraintErrorSpy.mockClear();
@@ -200,7 +200,7 @@ describe('WebCola Constraint Validation Lifecycle', () => {
           - name: connection
             arity: 2
       `;
-      await graph.setCnDSpec(spec);
+      await graph.setSpytialSpec(spec);
 
       // Verify initial state
       const initialRelation = dataInstance.getRelations().find(r => r.id === 'connection');
@@ -262,7 +262,7 @@ describe('WebCola Constraint Validation Lifecycle', () => {
           - name: connection
             arity: 2
       `;
-      await graph.setCnDSpec(spec);
+      await graph.setSpytialSpec(spec);
 
       // Verify initial state: 2 tuples
       expect(dataInstance.getRelations().find(r => r.id === 'connection')!.tuples.length).toBe(2);
@@ -330,7 +330,7 @@ describe('WebCola Constraint Validation Lifecycle', () => {
           - name: edge
             arity: 2
       `;
-      await graph.setCnDSpec(spec);
+      await graph.setSpytialSpec(spec);
 
       // The API for checking constraint errors should work
       expect(typeof graph.hasConstraintErrors).toBe('function');
@@ -347,7 +347,7 @@ describe('WebCola Constraint Validation Lifecycle', () => {
           - name: edge
             arity: 2
       `;
-      await graph.setCnDSpec(spec);
+      await graph.setSpytialSpec(spec);
 
       // After operations that satisfy constraints, error state should be null
       dataInstance.addRelationTuple('edge', {
@@ -369,7 +369,7 @@ describe('WebCola Constraint Validation Lifecycle', () => {
           - name: edge
             arity: 2
       `;
-      await graph.setCnDSpec(spec);
+      await graph.setSpytialSpec(spec);
 
       // The constraints-satisfied event should be registered
       // (it fires when previousError !== null and currentError === null)
@@ -384,7 +384,7 @@ describe('WebCola Constraint Validation Lifecycle', () => {
           - name: connection
             arity: 2
       `;
-      await graph.setCnDSpec(spec);
+      await graph.setSpytialSpec(spec);
 
       // Sequence of operations
       // 1. Add tuple
@@ -439,7 +439,7 @@ describe('WebCola Constraint Validation Lifecycle', () => {
           - name: edge
             arity: 2
       `;
-      await graph.setCnDSpec(spec);
+      await graph.setSpytialSpec(spec);
 
       // Perform multiple operations that trigger layout regeneration
       for (let i = 0; i < 3; i++) {
@@ -472,7 +472,7 @@ describe('WebCola Constraint Validation Lifecycle', () => {
                 directions: [directlyLeft]
                 selector: connection
       `;
-      await graph.setCnDSpec(spec);
+      await graph.setSpytialSpec(spec);
       
       // Clear initial events
       constraintErrorSpy.mockClear();

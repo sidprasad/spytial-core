@@ -3,7 +3,7 @@ import '@testing-library/jest-dom'
 /** THIS MAY BE A BREAKING CHANGE */
 
 /**
- * Vitest setup file for CnD Core testing
+ * Vitest setup file for Spytial Core testing
  * 
  * This setup file conditionally applies React Testing Library configuration
  * only when testing React components, ensuring zero impact on existing tests.
@@ -45,10 +45,10 @@ if (typeof window !== 'undefined') {
       sessionStorage.clear()
     }
     
-    // Clear any global window properties set by CnD components
-    delete (window as any).CnDCore
-    delete (window as any).CnDReactState
-    delete (window as any).updateFromCnDSpec
+    // Clear any global window properties set by Spytial components
+    delete (window as any).SpytialCore
+    delete (window as any).SpytialReactState
+    delete (window as any).updateFromSpytialSpec
     delete (window as any).updateFromBuilder
     delete (window as any).autoRenderGraph
     delete (window as any).showParseError

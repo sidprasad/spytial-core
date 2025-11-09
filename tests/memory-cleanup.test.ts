@@ -2,7 +2,7 @@
  * Memory Cleanup Tests
  * 
  * These tests verify that memory cleanup methods work correctly
- * and help prevent memory leaks in the CnD Core library.
+ * and help prevent memory leaks in the Spytial Core library.
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';

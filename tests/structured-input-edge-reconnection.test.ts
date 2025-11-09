@@ -3,9 +3,9 @@ import { StructuredInputGraph } from '../src/translators/webcola/structured-inpu
 import { JSONDataInstance } from '../src/data-instance/json-data-instance';
 import { vi } from 'vitest';
 
-// Mock the WebColaCnDGraph parent class
-vi.mock('../src/translators/webcola/webcola-cnd-graph', () => ({
-  WebColaCnDGraph: class {
+// Mock the WebColaSpytialGraph parent class
+vi.mock('../src/translators/webcola/webcola-spytial-graph', () => ({
+  WebColaSpytialGraph: class {
     shadowRoot = document.createElement('div').attachShadow({ mode: 'open' });
     private eventListeners: Map<string, Function[]> = new Map();
     
@@ -258,7 +258,7 @@ describe('StructuredInputGraph Edge Reconnection', () => {
                 selector: knows
       `;
 
-      await graph.setCnDSpec(spec);
+      await graph.setSpytialSpec(spec);
       await new Promise(resolve => setTimeout(resolve, 100));
 
       // Track if constraint validation happens

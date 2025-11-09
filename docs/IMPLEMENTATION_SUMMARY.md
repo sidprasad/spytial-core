@@ -22,7 +22,7 @@ Implemented automatic edge collapsing in the WebColaLayout translator that:
 - Added `collapseSymmetricEdges()` method to detect and collapse symmetric edge pairs
 - Integrated edge collapsing into the WebColaLayout constructor
 
-### 2. `src/translators/webcola/webcola-cnd-graph.ts`
+### 2. `src/translators/webcola/webcola-spytial-graph.ts`
 - Added SVG marker definitions for reverse arrows (`start-arrow`, `hand-drawn-arrow-reverse`)
 - Updated `setupLinkPaths()` to set `marker-start` attribute for bidirectional edges
 - Updated edge rendering in `updatePositions()` to include marker-start

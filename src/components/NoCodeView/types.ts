@@ -1,14 +1,14 @@
 /**
- * Constraint types supported by the CND layout system
- * Following cnd-core TypeScript strict typing guidelines
+ * Constraint types supported by the Spytial layout system
+ * Following spytial-core TypeScript strict typing guidelines
  * 
  * @public
  */
 export type ConstraintType = 'orientation' | 'cyclic' | 'align' | 'groupfield' | 'groupselector';
 
 /**
- * Directive types supported by the CND layout system
- * Following cnd-core TypeScript strict typing guidelines
+ * Directive types supported by the Spytial layout system
+ * Following spytial-core TypeScript strict typing guidelines
  * 
  * @public
  */

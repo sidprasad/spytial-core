@@ -315,7 +315,7 @@ export class PyretExpressionParser implements ICommandParser {
     }
   }
   /**
-   * Extract CnD specification from an expression by creating a faux expression and running it in the external evaluator
+   * Extract Spytial specification from an expression by creating a faux expression and running it in the external evaluator
    */
   private async extractCndSpec(pyretResult: any, originalExpression: string): Promise<string | undefined> {
     try {
@@ -329,7 +329,7 @@ export class PyretExpressionParser implements ICommandParser {
       const specResult = await this.evaluateExpression(cndSpecCode);
       
       if (specResult.success && specResult.result) {
-        // If result is a string, that's the CnD spec
+        // If result is a string, that's the Spytial spec
         if (typeof specResult.result === 'string') {
           return specResult.result;
         }
@@ -337,7 +337,7 @@ export class PyretExpressionParser implements ICommandParser {
       
 
     } catch (error) {
-      console.error('Error extracting CnD spec:', this.formatError(error));
+      console.error('Error extracting Spytial spec:', this.formatError(error));
     }
     // If error or no result, return undefined
     return undefined;
@@ -349,8 +349,8 @@ export class PyretExpressionParser implements ICommandParser {
     originalExpression: string
   ): Promise<CommandResult> {
     try {
-      // First, attempt to extract CnD specification if available
-      const extractedCndSpec = await this.extractCndSpec(pyretResult, originalExpression);
+      // First, attempt to extract Spytial specification if available
+      const extractedSpytialSpec = await this.extractCndSpec(pyretResult, originalExpression);
       
       // Use PyretDataInstance.fromExpression for cleaner, more robust handling
       if (!this.evaluator) {
@@ -373,7 +373,7 @@ export class PyretExpressionParser implements ICommandParser {
         return {
           success: false,
           message: 'Pyret expression did not produce any data structures',
-          extractedCndSpec
+          extractedSpytialSpec
         };
       }
 
@@ -382,20 +382,20 @@ export class PyretExpressionParser implements ICommandParser {
       
       if (!success) {
         // Fallback for non-PyretDataInstance targets or if method doesn't exist
-        return this.fallbackAddToInstance(tempInstance, instance, originalExpression, extractedCndSpec);
+        return this.fallbackAddToInstance(tempInstance, instance, originalExpression, extractedSpytialSpec);
       }
 
       const atomCount = tempInstance.getAtoms().length;
       const relationCount = tempInstance.getRelations().reduce((sum, rel) => sum + rel.tuples.length, 0);
 
       const message = `Evaluated Pyret expression: ${originalExpression}\nAdded ${atomCount} atoms and ${relationCount} relation tuples` +
-                     (extractedCndSpec ? '\nExtracted CnD specification from result' : '');
+                     (extractedSpytialSpec ? '\nExtracted Spytial specification from result' : '');
 
       return {
         success: true,
         message,
         action: 'add',
-        extractedCndSpec
+        extractedSpytialSpec
       };
 
     } catch (error) {
@@ -413,7 +413,7 @@ export class PyretExpressionParser implements ICommandParser {
     tempInstance: PyretDataInstance, 
     instance: IInputDataInstance, 
     originalExpression: string, 
-    extractedCndSpec?: string
+    extractedSpytialSpec?: string
   ): CommandResult {
     let atomsAdded = 0;
     let relationsAdded = 0;
@@ -452,13 +452,13 @@ export class PyretExpressionParser implements ICommandParser {
     }
 
     const message = `Evaluated Pyret expression: ${originalExpression}\nAdded ${atomsAdded} atoms and ${relationsAdded} relation tuples` +
-                   (extractedCndSpec ? '\nExtracted CnD specification from result' : '');
+                   (extractedSpytialSpec ? '\nExtracted Spytial specification from result' : '');
 
     return {
       success: true,
       message,
       action: 'add',
-      extractedCndSpec
+      extractedSpytialSpec
     };
   }
 

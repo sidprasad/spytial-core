@@ -48,12 +48,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sidprasad/cnd-core.git"
+    "url": "git+https://github.com/sidprasad/spytial-core.git"
   },
   "bugs": {
-    "url": "https://github.com/sidprasad/cnd-core/issues"
+    "url": "https://github.com/sidprasad/spytial-core/issues"
   },
-  "homepage": "https://github.com/sidprasad/cnd-core#readme",
+  "homepage": "https://github.com/sidprasad/spytial-core#readme",
   "devDependencies": {
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",

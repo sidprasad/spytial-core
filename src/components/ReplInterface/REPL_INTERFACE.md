@@ -324,7 +324,7 @@ function CompleteIntegrationApp() {
           />
         </div>
         
-        {/* CnD Layout Interface for constraint specification */}
+        {/* Spytial Layout Interface for constraint specification */}
         <div style={{ height: '300px' }}>
           <CndLayoutInterface
             value={cndSpec}
@@ -368,12 +368,12 @@ function initializeCompleteSystem() {
   
   if (hasExternalEvaluator) {
     // Enhanced mode with external evaluator
-    CnDCore.mountPyretRepl('pyret-repl-container', {
+    SpytialCore.mountPyretRepl('pyret-repl-container', {
       externalEvaluator: window.__internalRepl,
       className: 'production-repl'
     });
     
-    CnDCore.mountCndLayoutInterface('layout-container', {
+    SpytialCore.mountSpytialLayoutInterface('layout-container', {
       initialIsNoCodeView: true
     });
     
@@ -382,7 +382,7 @@ function initializeCompleteSystem() {
     
   } else {
     // Fallback mode
-    CnDCore.mountReplWithVisualization('fallback-container', {
+    SpytialCore.mountReplWithVisualization('fallback-container', {
       showLayoutInterface: true,
       replHeight: '350px',
       visualizationHeight: '450px'

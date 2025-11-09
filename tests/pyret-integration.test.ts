@@ -52,11 +52,11 @@ describe('Pyret REPL Integration', () => {
     // Check state manager
     expect(typeof integration.PyretReplStateManager).toBe('function');
     
-    // Check CnDCore object contains Pyret functions
-    expect(integration.CnDCore.mountPyretRepl).toBe(integration.mountPyretRepl);
-    expect(integration.CnDCore.mountReplWithVisualization).toBe(integration.mountReplWithVisualization);
-    expect(integration.CnDCore.PyretReplStateManager).toBe(integration.PyretReplStateManager);
-    expect(integration.CnDCore.PyretDataInstance).toBeDefined();
+    // Check SpytialCore object contains Pyret functions
+    expect(integration.SpytialCore.mountPyretRepl).toBe(integration.mountPyretRepl);
+    expect(integration.SpytialCore.mountReplWithVisualization).toBe(integration.mountReplWithVisualization);
+    expect(integration.SpytialCore.PyretReplStateManager).toBe(integration.PyretReplStateManager);
+    expect(integration.SpytialCore.PyretDataInstance).toBeDefined();
   });
 
   it('should handle missing container gracefully', async () => {
@@ -150,7 +150,7 @@ describe('Pyret REPL Integration', () => {
     const integration = await import('../webcola-demo/react-component-integration');
     
     // Get a PyretDataInstance 
-    const PyretDataInstance = integration.CnDCore.PyretDataInstance;
+    const PyretDataInstance = integration.SpytialCore.PyretDataInstance;
     
     // Create an empty instance first to test the basic functionality
     const emptyInstance = new PyretDataInstance();

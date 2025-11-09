@@ -21,7 +21,7 @@ describe('ErrorMessageModal Component', () => {
       
       // Check header
       expect(screen.getByText('Could not satisfy all constraints')).toBeInTheDocument()
-      expect(screen.getByText('Your instance cannot be visualized with the current CnD spec.')).toBeInTheDocument()
+      expect(screen.getByText('Your data causes the following visualization constraints to conflict.')).toBeInTheDocument()
 
       // Check error card header
       expect(screen.getByText('Parse Error (spec.yaml)')).toBeInTheDocument()
@@ -52,7 +52,7 @@ describe('ErrorMessageModal Component', () => {
 
       // Check headers
       expect(screen.getByText('Could not satisfy all constraints')).toBeInTheDocument()
-      expect(screen.getByText('Your instance cannot be visualized with the current CnD spec.')).toBeInTheDocument()
+      expect(screen.getByText('Your data causes the following visualization constraints to conflict.')).toBeInTheDocument()
 
       // Check constraint table instruction
       expect(screen.getByText(/Hover over the conflicting constraints/)).toBeInTheDocument()
@@ -85,7 +85,7 @@ describe('ErrorMessageModal Component', () => {
 
       // Check headers
       expect(screen.getByText('Could not satisfy all constraints')).toBeInTheDocument()
-      expect(screen.getByText('Your instance cannot be visualized with the current CnD spec.')).toBeInTheDocument()
+      expect(screen.getByText('Your data causes the following visualization constraints to conflict.')).toBeInTheDocument()
 
       // Check error card header
       expect(screen.getByText('Group Overlap Error (layout.yaml)')).toBeInTheDocument()
@@ -107,7 +107,7 @@ describe('ErrorMessageModal Component', () => {
 
       // Check headers
       expect(screen.getByText('Could not satisfy all constraints')).toBeInTheDocument()
-      expect(screen.getByText('Your instance cannot be visualized with the current CnD spec.')).toBeInTheDocument()
+      expect(screen.getByText('Your data causes the following visualization constraints to conflict.')).toBeInTheDocument()
 
       // Check error card header (should be "Error" for general-error)
       expect(screen.getByText('Error')).toBeInTheDocument()

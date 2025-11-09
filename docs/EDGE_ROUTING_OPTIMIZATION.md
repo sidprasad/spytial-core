@@ -2,11 +2,11 @@
 
 ## Overview
 
-This document describes the performance optimizations implemented in the edge routing system of `webcola-cnd-graph.ts`. These optimizations focus on reducing computational complexity while maintaining behavioral correctness.
+This document describes the performance optimizations implemented in the edge routing system of `webcola-spytial-graph.ts`. These optimizations focus on reducing computational complexity while maintaining behavioral correctness.
 
 ## Problem Statement
 
-The edge routing system in `src/translators/webcola/webcola-cnd-graph.ts` performs significant work to route edges around nodes and handle special cases like:
+The edge routing system in `src/translators/webcola/webcola-spytial-graph.ts` performs significant work to route edges around nodes and handle special cases like:
 - Self-loop edges
 - Multiple edges between the same nodes
 - Group edges
@@ -22,7 +22,7 @@ The original implementation had several performance bottlenecks:
 
 ### 1. Edge Routing Cache System
 
-**File Modified:** `src/translators/webcola/webcola-cnd-graph.ts`
+**File Modified:** `src/translators/webcola/webcola-spytial-graph.ts`
 
 **Implementation:**
 - Added `edgeRoutingCache` object with two components:

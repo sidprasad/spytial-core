@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ReplInterface } from './ReplInterface';
-import { CndLayoutInterface } from '../CndLayoutInterface';
+import { SpytialLayoutInterface } from '../SpytialLayoutInterface';
 import { IInputDataInstance } from '../../data-instance/interfaces';
 
 export interface ReplWithVisualizationProps {
@@ -8,9 +8,9 @@ export interface ReplWithVisualizationProps {
   instance: IInputDataInstance;
   /** Callback when instance changes */
   onChange?: (instance: IInputDataInstance) => void;
-  /** Initial CND layout specification */
+  /** Initial Spytial layout specification */
   initialCndSpec?: string;
-  /** Whether to show the CND layout interface */
+  /** Whether to show the Spytial layout interface */
   showLayoutInterface?: boolean;
   /** Custom styling for the container */
   style?: React.CSSProperties;
@@ -25,7 +25,7 @@ export interface ReplWithVisualizationProps {
  * 
  * This component provides an integrated solution that combines:
  * - ReplInterface for command-line style data entry
- * - CndLayoutInterface for layout specification
+ * - SpytialLayoutInterface for layout specification
  * - Real-time visualization updates
  * 
  * Perfect for demos, tutorials, and rapid prototyping.
@@ -110,7 +110,7 @@ export const ReplWithVisualization: React.FC<ReplWithVisualizationProps> = ({
         <div style={{ ...sectionStyle, height: '200px', minHeight: '150px' }}>
           <h3 style={headerStyle}>Layout Specification</h3>
           <div style={{ height: 'calc(200px - 40px)' }}>
-            <CndLayoutInterface 
+            <SpytialLayoutInterface 
               instance={currentInstance}
               value={cndSpec}
               onChange={handleCndSpecChange}
@@ -141,14 +141,14 @@ export const ReplWithVisualization: React.FC<ReplWithVisualizationProps> = ({
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: '48px', marginBottom: '16px' }}>📊</div>
             <div>
-              Visualization area ready for webcola-cnd-graph integration
+              Visualization area ready for webcola-spytial-graph integration
             </div>
             <div style={{ marginTop: '8px', fontSize: '12px' }}>
               Current data: {currentInstance.getAtoms().length} atoms, {currentInstance.getRelations().length} relations
             </div>
             {cndSpec && (
               <div style={{ marginTop: '8px', fontSize: '12px', color: '#28a745' }}>
-                CND spec: {cndSpec.length} characters
+                Spytial spec: {cndSpec.length} characters
               </div>
             )}
           </div>

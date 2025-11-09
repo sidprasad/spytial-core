@@ -6,7 +6,7 @@ export default defineConfig({
     'spytial-core-complete': 'src/index.ts'
   },
   format: ['iife'], // Immediately Invoked Function Expression for browser
-  globalName: 'CndCore', // Global variable name for the complete library
+  globalName: 'SpytialCore', // Global variable name for the complete library
   dts: false, // No TypeScript definitions for browser bundle
   splitting: false,
   sourcemap: true,
