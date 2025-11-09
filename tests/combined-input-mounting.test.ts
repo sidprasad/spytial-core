@@ -70,7 +70,7 @@ describe('CombinedInput Mounting Functions', () => {
       const testInstance = new PyretDataInstance();
       const config = {
         containerId: 'test-container',
-        cndSpec: 'nodes:\n  - { id: node, type: atom }',
+        spytialSpec: 'nodes:\n  - { id: node, type: atom }',
         dataInstance: testInstance,
         height: '800px',
         autoApplyLayout: false

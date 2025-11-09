@@ -5,7 +5,7 @@ import { ConstraintData, DirectiveData } from './NoCodeView/interfaces';
 import { CodeView, generateLayoutSpecYaml } from './NoCodeView/CodeView';
 
 /**
- * Configuration options for the CND Layout Interface component
+ * Configuration options for the Spytial Layout Interface component
  */
 export interface SpytialLayoutInterfaceProps {
   /** Current YAML value */
@@ -33,9 +33,9 @@ export interface SpytialLayoutInterfaceProps {
 }
 
 /**
- * CND Layout Interface component with toggle between Code View and No Code View
+ * Spytial Layout Interface component with toggle between Code View and No Code View
  * 
- * Provides a toggle interface for CND layout specification editing:
+ * Provides a toggle interface for Spytial layout specification editing:
  * - Code View: Text area for direct YAML editing
  * - No Code View: Visual interface for constraint/directive editing (placeholder)
  * 
@@ -62,7 +62,7 @@ const SpytialLayoutInterface: React.FC<SpytialLayoutInterfaceProps> = ({
   setDirectives,
   className = '',
   disabled = false,
-  'aria-label': ariaLabel = 'CND Layout Specification Interface',
+  'aria-label': ariaLabel = 'Spytial Layout Specification Interface',
 }) => {
   /**
    * Handle toggle switch change
@@ -119,15 +119,15 @@ const SpytialLayoutInterface: React.FC<SpytialLayoutInterfaceProps> = ({
             Code View
           </span>
           
-          <label className="spytial-layout-interface__toggle" htmlFor="cnd-layout-toggle">
+          <label className="spytial-layout-interface__toggle" htmlFor="spytial-layout-toggle">
             <input
-              id="cnd-layout-toggle"
+              id="spytial-layout-toggle"
               type="checkbox"
               checked={isNoCodeView}
               onChange={handleToggleChange}
               disabled={disabled}
               className="spytial-layout-interface__toggle-input"
-              aria-describedby="cnd-layout-toggle-description"
+              aria-describedby="spytial-layout-toggle-description"
               role='switch'
             />
             <span className="spytial-layout-interface__toggle-slider"></span>
@@ -140,8 +140,8 @@ const SpytialLayoutInterface: React.FC<SpytialLayoutInterfaceProps> = ({
       </div>
 
       {/* Hidden description for screen readers - Bootstrap sr-only utility */}
-      <div id="cnd-layout-toggle-description" className="visually-hidden">
-        Toggle between Code View (text editor) and No Code View (visual editor) for CND layout specification
+      <div id="spytial-layout-toggle-description" className="visually-hidden">
+        Toggle between Code View (text editor) and No Code View (visual editor) for Spytial layout specification
       </div>
 
       {/* Content area with Bootstrap styling */}

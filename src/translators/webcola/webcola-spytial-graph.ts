@@ -844,7 +844,7 @@ export class WebColaSpytialGraph extends  HTMLElement { //(typeof HTMLElement !=
    */
   private setupNodeDragHandlers(nodeDrag: any): void {
     nodeDrag
-      .on('start.cnd', (d: any) => {
+      .on('start.spytial', (d: any) => {
         const start = { x: d.x, y: d.y };
         this.dragStartPositions.set(d.id, start);
         this.dispatchEvent(
@@ -853,7 +853,7 @@ export class WebColaSpytialGraph extends  HTMLElement { //(typeof HTMLElement !=
           })
         );
       })
-      .on('end.cnd', (d: any) => {
+      .on('end.spytial', (d: any) => {
         const start = this.dragStartPositions.get(d.id);
         this.dragStartPositions.delete(d.id);
         const detail = {
@@ -4329,7 +4329,7 @@ export class WebColaSpytialGraph extends  HTMLElement { //(typeof HTMLElement !=
     // Clear node drag event handlers
     if (this.svgNodes) {
       this.svgNodes.on('.drag', null);
-      this.svgNodes.on('.cnd', null);
+      this.svgNodes.on('.spytial', null);
     }
     
     // Clear WebCola layout reference
@@ -4391,5 +4391,5 @@ export class WebColaSpytialGraph extends  HTMLElement { //(typeof HTMLElement !=
 
 // Register the custom element only in browser environments
 if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined') {
-  customElements.define('webcola-cnd-graph', WebColaSpytialGraph);
+  customElements.define('webcola-spytial-graph', WebColaSpytialGraph);
 }

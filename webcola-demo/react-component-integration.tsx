@@ -62,9 +62,9 @@ export interface PyretReplMountConfig {
 export interface ReplWithVisualizationMountConfig {
   /** Initial data instance to work with */
   initialInstance?: IInputDataInstance;
-  /** Initial CND layout specification */
+  /** Initial Spytial layout specification */
   initialCndSpec?: string;
-  /** Whether to show the CND layout interface */
+  /** Whether to show the Spytial layout interface */
   showLayoutInterface?: boolean;
   /** Height of the REPL interface (default: 300px) */
   replHeight?: string;
@@ -211,11 +211,11 @@ export class CndLayoutStateManager {
   }
 
   /**
-   * Get the most current CND specification
+   * Get the most current Spytial specification
    * Prioritizes manual YAML input over generated spec
-   * @returns Current CND specification string
+   * @returns Current Spytial specification string
    */
-  public getCurrentCndSpec(): string {
+  public getCurrentSpytialSpec(): string {
     // If currently in Code View, return the YAML value directly
     if (!this.isNoCodeView) {
       return this.yamlValue.trim();
@@ -495,7 +495,7 @@ const SpytialLayoutInterfaceWrapper: React.FC<{ config?: CndLayoutMountConfig }>
     setYamlValue(newValue);
     
     // Dispatch custom event for other listeners
-    window.dispatchEvent(new CustomEvent('cnd-spec-changed', { detail: newValue }));
+    window.dispatchEvent(new CustomEvent('spytial-spec-changed', { detail: newValue }));
   }, []);
 
   /**
@@ -530,7 +530,7 @@ const SpytialLayoutInterfaceWrapper: React.FC<{ config?: CndLayoutMountConfig }>
       setConstraints={handleSetConstraints}
       directives={directives}
       setDirectives={handleSetDirectives}
-      aria-label="CND Layout Specification Editor"
+      aria-label="Spytial Layout Specification Editor"
     />
   );
 }
@@ -588,7 +588,7 @@ const InstanceBuilderWrapper: React.FC = () => {
     <InstanceBuilder
       instance={instance}
       onChange={handleInstanceChange}
-      className="cnd-integrated-builder"
+      className="spytial-integrated-builder"
     />
   );
 };
@@ -749,7 +749,7 @@ const ReplWithVisualizationWrapper: React.FC<{ config?: ReplWithVisualizationMou
 /**
  * Mount SpytialLayoutInterface component into specified container
  * 
- * @param containerId - DOM element ID to mount into (default: 'webcola-cnd-container')
+ * @param containerId - DOM element ID to mount into (default: 'webcola-spytial-container')
  * @returns Boolean indicating success
  * 
  * @example
@@ -764,7 +764,7 @@ const ReplWithVisualizationWrapper: React.FC<{ config?: ReplWithVisualizationMou
  * @public
  */
 export function mountSpytialLayoutInterface(
-  containerId: string = 'webcola-cnd-container',
+  containerId: string = 'webcola-spytial-container',
   config?: CndLayoutMountConfig
 ): boolean {
   const container = document.getElementById(containerId);
@@ -860,15 +860,15 @@ export function getCurrentInstanceFromReact(): IInputDataInstance | undefined {
 }
 
 /**
- * Get current CND specification from React component state
+ * Get current Spytial specification from React component state
  * This function provides access to the most current specification
  * 
- * @returns Current CND specification string or undefined if not available
+ * @returns Current Spytial specification string or undefined if not available
  * 
  * @example
  * ```javascript
  * // In your demo page JavaScript:
- * const cndSpec = getCurrentCNDSpecFromReact();
+ * const cndSpec = getCurrentSpytialSpecFromReact();
  * if (cndSpec) {
  *   console.log('Current spec:', cndSpec);
  * }
@@ -876,7 +876,7 @@ export function getCurrentInstanceFromReact(): IInputDataInstance | undefined {
  */
 
 // FIXME: Can this be deleted? It seems to be unused.
-export function getCurrentCNDSpecFromReact(): string | undefined {
+export function getCurrentSpytialSpecFromReact(): string | undefined {
   try {
     const stateManager = CndLayoutStateManager.getInstance();
     const currentSpec = stateManager.generateCurrentYamlSpec();
@@ -886,7 +886,7 @@ export function getCurrentCNDSpecFromReact(): string | undefined {
     }
   
     // Fallback: Try to get value from the DOM
-    const reactTextarea = document.querySelector('#webcola-cnd-container textarea');
+    const reactTextarea = document.querySelector('#webcola-spytial-container textarea');
     if (reactTextarea && reactTextarea instanceof HTMLTextAreaElement) {
       return reactTextarea.value.trim();
     }
@@ -1341,20 +1341,20 @@ export const ErrorAPI = {
  */
 export const DataAPI = {
   /**
-   * Get current CND specification from React component state
-   * @returns Current CND specification string or undefined if not available
+   * Get current Spytial specification from React component state
+   * @returns Current Spytial specification string or undefined if not available
    */
-  getCurrentCndSpec: (): string | undefined => {
+  getCurrentSpytialSpec: (): string | undefined => {
     try {
       const stateManager = CndLayoutStateManager.getInstance();
-      const currentSpec = stateManager.getCurrentCndSpec();
+      const currentSpec = stateManager.getCurrentSpytialSpec();
 
       if (currentSpec.trim()) {
         return currentSpec;
       }
 
       // Fallback: Try to get value from DOM
-      const reactTextarea = document.querySelector('#webcola-cnd-container textarea');
+      const reactTextarea = document.querySelector('#webcola-spytial-container textarea');
       if (reactTextarea instanceof HTMLTextAreaElement) {
         return reactTextarea.value.trim();
       }
@@ -1362,7 +1362,7 @@ export const DataAPI = {
       console.warn('SpytialLayoutInterface not found or empty');
       return undefined;
     } catch (error) {
-      console.error('Error accessing CND specification:', error);
+      console.error('Error accessing Spytial specification:', error);
       return undefined;
     }
   },
@@ -1535,7 +1535,7 @@ if (typeof window !== 'undefined') {
   (window as any).mountCombinedInput = mountCombinedInputComponent;
 
   // Expose data functions for legacy compatibility
-  (window as any).getCurrentCNDSpecFromReact = DataAPI.getCurrentCndSpec;
+  (window as any).getCurrentSpytialSpecFromReact = DataAPI.getCurrentSpytialSpec;
   (window as any).getCurrentInstanceFromReact = DataAPI.getCurrentInstance;
   
   // Pyret-specific data functions for legacy compatibility

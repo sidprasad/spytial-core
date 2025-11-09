@@ -18,7 +18,7 @@ vi.mock(import('../../src/components/NoCodeView/CodeView'), async (importOrigina
           onChange={props.handleTextareaChange}
           disabled={props.disabled}
           role="textbox"
-          aria-label="CND Layout Specification YAML"
+          aria-label="Spytial Layout Specification YAML"
         />
       </div>
     ))
@@ -46,7 +46,7 @@ describe('SpytialLayoutInterface Component', () => {
       render(<SpytialLayoutInterface {...defaultProps} />)
       
       // Should render main container
-      expect(screen.getByRole('region', {name: 'CND Layout Specification Interface'})).toBeInTheDocument()
+      expect(screen.getByRole('region', {name: 'Spytial Layout Specification Interface'})).toBeInTheDocument()
       
       // Should render toggle component and its labels
       expect(screen.getByRole('switch')).toBeInTheDocument()
@@ -57,7 +57,7 @@ describe('SpytialLayoutInterface Component', () => {
     it('should apply custom className', () => {
       render(<SpytialLayoutInterface {...defaultProps} className="custom-class" />)
       
-      const container = screen.getByLabelText('CND Layout Specification Interface')
+      const container = screen.getByLabelText('Spytial Layout Specification Interface')
       expect(container).toHaveClass('custom-class')
     })
 

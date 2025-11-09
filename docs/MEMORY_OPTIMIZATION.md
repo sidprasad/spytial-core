@@ -196,7 +196,7 @@ If you're using Spytial Core in your application and experiencing memory issues:
 1. **Ensure Proper Cleanup:**
    ```javascript
    // When removing a graph from the DOM
-   const graphElement = document.querySelector('webcola-cnd-graph');
+   const graphElement = document.querySelector('webcola-spytial-graph');
    graphElement.dispose();  // Optional but recommended
    graphElement.remove();   // Will automatically call disconnectedCallback
    ```

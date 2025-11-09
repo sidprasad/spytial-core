@@ -105,7 +105,7 @@ const ConnectedSpytialLayoutInterface: React.FC = () => {
   const [constraints, setConstraints] = useState<any[]>([]);
   const [directives, setDirectives] = useState<any[]>([]);
 
-  // Expose CND spec getter to global scope
+  // Expose Spytial spec getter to global scope
   useEffect(() => {
     if (typeof window !== 'undefined') {
       (window as any).getCurrentCNDSpecFromReact = () => cndSpec;
@@ -113,7 +113,7 @@ const ConnectedSpytialLayoutInterface: React.FC = () => {
   }, [cndSpec]);
 
   const handleCndSpecChange = (newSpec: string) => {
-    console.log('CND spec updated:', newSpec);
+    console.log('Spytial spec updated:', newSpec);
     setCndSpec(newSpec);
     
     // Trigger graph update

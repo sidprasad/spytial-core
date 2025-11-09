@@ -7,7 +7,7 @@ import jsyaml from 'js-yaml';
 /**
  * Converts constraint and directive data objects to YAML string
  * 
- * Generates a valid CND layout specification from structured data objects.
+ * Generates a valid Spytial layout specification from structured data objects.
  * This function is the inverse of parseLayoutSpec and ensures round-trip
  * compatibility for the No Code View.
  * 
@@ -118,22 +118,22 @@ const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
     // }, []);
 
   return (
-    <div className="cnd-layout-interface__code-view" role="region" aria-label="YAML Code Editor">
+    <div className="spytial-layout-interface__code-view" role="region" aria-label="YAML Code Editor">
         <div className="mb-2">
-            <div id="cnd-layout-yaml-help" className="form-text text-muted fst-italic pb-3">
-                Enter your CND layout specification in YAML format. 
+            <div id="spytial-layout-yaml-help" className="form-text text-muted fst-italic pb-3">
+                Enter your Spytial layout specification in YAML format. 
                 Use the toggle above to switch to the visual editor.
             </div>
             <textarea
-            id="webcola-cnd"
-            className="form-control cnd-layout-interface__textarea"
+            id="webcola-spytial"
+            className="form-control spytial-layout-interface__textarea"
             value={props.yamlValue}
             onChange={props.handleTextareaChange}
             disabled={props.disabled}
             rows={12}
             spellCheck={false}
-            aria-label="CND Layout Specification YAML"
-            aria-describedby="cnd-layout-yaml-help"
+            aria-label="Spytial Layout Specification YAML"
+            aria-describedby="spytial-layout-yaml-help"
             style={{ minHeight: '400px', resize: 'vertical' }}
             />
         </div>

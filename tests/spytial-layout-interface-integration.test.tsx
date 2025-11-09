@@ -17,7 +17,7 @@ vi.mock(import('../src/components/NoCodeView/CodeView'), async (importOriginal) 
             onChange={props.handleTextareaChange}
             disabled={props.disabled}
             role="textbox"
-            aria-label="CND Layout Specification YAML"
+            aria-label="Spytial Layout Specification YAML"
           />
         </div>
       ))
@@ -138,9 +138,9 @@ directives:
     })
 
     // Confirm that the Spytial Layout Interface is mounted
-    const cndLayoutInterface = document.getElementById('test-spytial-layout-interface') as HTMLElement;
-    expect(cndLayoutInterface).toBeInTheDocument();
-    expect(cndLayoutInterface).toHaveAttribute('data-testid', 'test-spytial-layout-interface');
+    const spytialLayoutInterface = document.getElementById('test-spytial-layout-interface') as HTMLElement;
+    expect(spytialLayoutInterface).toBeInTheDocument();
+    expect(spytialLayoutInterface).toHaveAttribute('data-testid', 'test-spytial-layout-interface');
   }
 
   async function typeYaml(yaml: string) {
@@ -182,12 +182,12 @@ directives:
   
     it('should render Spytial Layout Interface correctly', () => {
       // The component is rendered correctly
-      const cndLayoutInterface = document.getElementById('test-spytial-layout-interface') as HTMLElement;
-      expect(cndLayoutInterface).toBeInTheDocument();
-      const toggle = within(cndLayoutInterface).getByRole('switch');
+      const spytialLayoutInterface = document.getElementById('test-spytial-layout-interface') as HTMLElement;
+      expect(spytialLayoutInterface).toBeInTheDocument();
+      const toggle = within(spytialLayoutInterface).getByRole('switch');
       expect(toggle).toBeInTheDocument();
-      expect(within(cndLayoutInterface).getByTestId('mock-code-view')).toBeInTheDocument();
-      expect(within(cndLayoutInterface).getByRole('textbox')).toBeInTheDocument();
+      expect(within(spytialLayoutInterface).getByTestId('mock-code-view')).toBeInTheDocument();
+      expect(within(spytialLayoutInterface).getByRole('textbox')).toBeInTheDocument();
     })
   
   })
@@ -232,16 +232,16 @@ directives:
       // Type the test YAML into the Code View
       await typeYaml(testYaml);
 
-      // Call the function to get the current CND spec in Code View
-      let currentSpec = await import('../webcola-demo/react-component-integration').then(m => m.DataAPI.getCurrentCndSpec());
+      // Call the function to get the current Spytial spec in Code View
+      let currentSpec = await import('../webcola-demo/react-component-integration').then(m => m.DataAPI.getCurrentSpytialSpec());
       expect(currentSpec?.trim()).toBe(testYaml.trim());
 
       // Switch to No Code view
       const user = userEvent.setup();
       await switchToNoCodeView(user);
   
-      // Call the function to get the current CND spec in No Code View
-      currentSpec = await import('../webcola-demo/react-component-integration').then(m => m.DataAPI.getCurrentCndSpec());
+      // Call the function to get the current Spytial spec in No Code View
+      currentSpec = await import('../webcola-demo/react-component-integration').then(m => m.DataAPI.getCurrentSpytialSpec());
       expect(currentSpec).toBe(testYaml);
     })
 
@@ -266,8 +266,8 @@ directives:
       const newConstraintElements = within(constraintsSection).getAllByTestId(/^constraint-/);
       expect(newConstraintElements).toHaveLength(1);
 
-      // Call the function to get the current CND spec in No Code View
-      const currentSpec = await import('../webcola-demo/react-component-integration').then(m => m.DataAPI.getCurrentCndSpec());
+      // Call the function to get the current Spytial spec in No Code View
+      const currentSpec = await import('../webcola-demo/react-component-integration').then(m => m.DataAPI.getCurrentSpytialSpec());
       expect(currentSpec).not.toBe(testYaml);
     })
 

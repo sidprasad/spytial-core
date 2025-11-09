@@ -59,7 +59,7 @@ Multiple performance optimizations have been implemented to improve the efficien
 - Layout quality remains high with grid alignment and convergence threshold
 
 **Files Modified:**
-- `src/translators/webcola/webcola-cnd-graph.ts`
+- `src/translators/webcola/webcola-spytial-graph.ts`
 
 ### 2. Adaptive Iteration Counts Based on Graph Size (NEW)
 
@@ -89,7 +89,7 @@ if (nodeCount > 100) {
 - Maintains good layout quality through convergence threshold
 
 **Files Modified:**
-- `src/translators/webcola/webcola-cnd-graph.ts`
+- `src/translators/webcola/webcola-spytial-graph.ts`
 
 ### 3. Enhanced Loading Indicators with Progress (NEW)
 
@@ -116,7 +116,7 @@ if (nodeCount > 100) {
 - Prevents premature browser tab closure
 
 **Files Modified:**
-- `src/translators/webcola/webcola-cnd-graph.ts`
+- `src/translators/webcola/webcola-spytial-graph.ts`
 
 ### 4. Duplicate Constraint Removal During YAML Parsing
 

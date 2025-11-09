@@ -1,6 +1,6 @@
 /**
  * @fileoverview
- * Full-featured SMT-LIB data instance implementation for CND-Core.
+ * Full-featured SMT-LIB data instance implementation for Spytial-Core.
  * Implements IDataInstance interface to provide layout processing capabilities
  * for SMT-LIB models. Designed for client-side use, fully typed, and tree-shakable.
  */

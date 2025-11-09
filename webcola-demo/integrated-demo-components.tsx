@@ -80,7 +80,7 @@ const ConnectedLayoutInterface: React.FC = () => {
   const [constraints, setConstraints] = useState<any[]>([]);
   const [directives, setDirectives] = useState<any[]>([]);
 
-  // Expose CND spec getter to global scope
+  // Expose Spytial spec getter to global scope
   useEffect(() => {
     if (typeof window !== 'undefined') {
       (window as any).getCurrentCNDSpecFromReact = () => cndSpec;
@@ -90,7 +90,7 @@ const ConnectedLayoutInterface: React.FC = () => {
   const handleCndSpecChange = (newSpec: string) => {
     setCndSpec(newSpec);
     
-    // Trigger update in the HTML demo when CND spec changes
+    // Trigger update in the HTML demo when Spytial spec changes
     if (typeof window !== 'undefined' && (window as any).updateFromSpytialSpec) {
       (window as any).updateFromSpytialSpec();
     }
@@ -165,7 +165,7 @@ export const FullIntegratedDemo: React.FC = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', padding: '20px' }}>
-      <h1>🚀 Full Integrated CND Demo</h1>
+      <h1>🚀 Full Integrated Spytial Demo</h1>
       
       {/* Tab Navigation */}
       <div style={{ display: 'flex', borderBottom: '2px solid #ddd', marginBottom: '20px' }}>

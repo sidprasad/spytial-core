@@ -30,7 +30,7 @@ export function generateId(): string {
 /**
  * Converts YAML string to structured constraint and directive data objects
  * 
- * Parses a CND layout specification YAML and extracts constraint and directive
+ * Parses a Spytial layout specification YAML and extracts constraint and directive
  * data suitable for the No Code View interface. This function complements
  * parseLayoutSpec by providing data in a format optimized for visual editing.
  * 
@@ -40,7 +40,7 @@ export function generateId(): string {
  * - Comprehensive type safety
  * - Tree-shakable export
  * 
- * @param yamlString - YAML string containing CND layout specification
+ * @param yamlString - YAML string containing Spytial layout specification
  * @returns Object containing structured constraint and directive arrays
  * @throws {Error} When YAML is invalid or contains unsupported constraint types
  * 
@@ -239,7 +239,7 @@ const NoCodeView = ({
      * the constraints and directives defined in the specification. This enables
      * bidirectional synchronization between text and visual editing modes.
      * 
-     * Following cnd-core component guidelines:
+     * Following spytial-core component guidelines:
      * - Functional state updates with proper error handling
      * - Performance optimized with batched state updates
      * - Type-safe parsing with comprehensive validation

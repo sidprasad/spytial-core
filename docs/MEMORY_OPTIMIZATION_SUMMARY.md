@@ -25,7 +25,7 @@ Through investigation, we identified several memory leaks and areas for improvem
 
 ### Files Modified
 
-1. **src/translators/webcola/webcola-cnd-graph.ts**
+1. **src/translators/webcola/webcola-spytial-graph.ts**
    - Added `disconnectedCallback()` lifecycle method
    - Added comprehensive `dispose()` method
    - Added `getMemoryStats()` for monitoring
@@ -77,7 +77,7 @@ Through investigation, we identified several memory leaks and areas for improvem
 
 ```typescript
 // Custom element automatically cleans up when removed
-const graph = document.querySelector('webcola-cnd-graph');
+const graph = document.querySelector('webcola-spytial-graph');
 graph.remove(); // Triggers disconnectedCallback() -> dispose()
 ```
 
