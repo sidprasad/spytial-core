@@ -3631,6 +3631,154 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     return true;
   }
 
+  /** Public API for accessibility */
+
+  /**
+   * Gets all nodes with their accessible descriptions.
+   * Useful for screen readers and alternative text generation.
+   * 
+   * @returns Array of node descriptions with id, label, type, and position
+   */
+  public getAccessibleNodeDescriptions(): Array<{
+    id: string;
+    label: string;
+    type: string;
+    position: { x: number; y: number };
+    connections: { incoming: number; outgoing: number };
+  }> {
+    if (!this.currentLayout?.nodes || !this.currentLayout?.links) return [];
+
+    return this.currentLayout.nodes.map((node: any) => {
+      // Count connections
+      const incoming = this.currentLayout.links.filter(
+        (link: any) => !this.isAlignmentEdge(link) && 
+        (typeof link.target === 'object' ? link.target.id : this.currentLayout.nodes[link.target]?.id) === node.id
+      ).length;
+      
+      const outgoing = this.currentLayout.links.filter(
+        (link: any) => !this.isAlignmentEdge(link) && 
+        (typeof link.source === 'object' ? link.source.id : this.currentLayout.nodes[link.source]?.id) === node.id
+      ).length;
+
+      return {
+        id: node.id || 'unknown',
+        label: node.label || node.id || 'unlabeled',
+        type: node.type || 'unknown',
+        position: {
+          x: Math.round(node.x || 0),
+          y: Math.round(node.y || 0)
+        },
+        connections: { incoming, outgoing }
+      };
+    });
+  }
+
+  /**
+   * Gets all edges with their accessible descriptions.
+   * Useful for screen readers and alternative text generation.
+   * 
+   * @returns Array of edge descriptions with source, target, and label
+   */
+  public getAccessibleEdgeDescriptions(): Array<{
+    id: string;
+    source: string;
+    target: string;
+    label: string;
+    type: 'standard' | 'inferred' | 'bidirectional';
+  }> {
+    if (!this.currentLayout?.links || !this.currentLayout?.nodes) return [];
+
+    return this.currentLayout.links
+      .filter((edge: any) => !this.isAlignmentEdge(edge))
+      .map((edge: any) => {
+        const sourceNode = typeof edge.source === 'object' ? edge.source : this.currentLayout.nodes[edge.source];
+        const targetNode = typeof edge.target === 'object' ? edge.target : this.currentLayout.nodes[edge.target];
+
+        let edgeType: 'standard' | 'inferred' | 'bidirectional' = 'standard';
+        if (this.isInferredEdge(edge)) {
+          edgeType = 'inferred';
+        } else if (edge.bidirectional) {
+          edgeType = 'bidirectional';
+        }
+
+        return {
+          id: edge.id || 'unknown',
+          source: sourceNode?.label || sourceNode?.id || 'unknown',
+          target: targetNode?.label || targetNode?.id || 'unknown',
+          label: edge.label || edge.relName || 'unlabeled',
+          type: edgeType
+        };
+      });
+  }
+
+  /**
+   * Generates a text description of the graph structure for screen readers.
+   * Follows accessibility best practices for data visualization descriptions.
+   * 
+   * @param verbosity - Level of detail: 'brief' | 'detailed' | 'full'
+   * @returns Accessible text description of the graph
+   */
+  public getAccessibleGraphDescription(verbosity: 'brief' | 'detailed' | 'full' = 'detailed'): string {
+    if (!this.currentLayout) {
+      return 'Graph not yet loaded.';
+    }
+
+    const nodes = this.currentLayout.nodes || [];
+    const links = this.currentLayout.links?.filter((e: any) => !this.isAlignmentEdge(e)) || [];
+    const groups = this.currentLayout.groups || [];
+
+    // Brief description
+    if (verbosity === 'brief') {
+      return `Graph with ${nodes.length} nodes and ${links.length} connections${groups.length > 0 ? ` organized into ${groups.length} groups` : ''}.`;
+    }
+
+    // Detailed description
+    let description = `This is an interactive graph visualization. `;
+    description += `The graph contains ${nodes.length} node${nodes.length !== 1 ? 's' : ''} `;
+    description += `connected by ${links.length} edge${links.length !== 1 ? 's' : ''}. `;
+
+    if (groups.length > 0) {
+      description += `Nodes are organized into ${groups.length} group${groups.length !== 1 ? 's' : ''}. `;
+    }
+
+    // Add relation types
+    const relations = this.getAllRelations();
+    if (relations.length > 0) {
+      description += `The graph shows ${relations.length} type${relations.length !== 1 ? 's' : ''} of relationships: ${relations.join(', ')}. `;
+    }
+
+    // Full description includes node and edge details
+    if (verbosity === 'full') {
+      const nodeDescriptions = this.getAccessibleNodeDescriptions();
+      const edgeDescriptions = this.getAccessibleEdgeDescriptions();
+
+      if (nodeDescriptions.length > 0) {
+        description += `\n\nNodes:\n`;
+        nodeDescriptions.slice(0, 10).forEach((node, index) => {
+          description += `${index + 1}. ${node.label} (type: ${node.type}), `;
+          description += `${node.connections.incoming} incoming and ${node.connections.outgoing} outgoing connections. `;
+        });
+        
+        if (nodeDescriptions.length > 10) {
+          description += `\nAnd ${nodeDescriptions.length - 10} more nodes...`;
+        }
+      }
+
+      if (edgeDescriptions.length > 0) {
+        description += `\n\nKey relationships:\n`;
+        edgeDescriptions.slice(0, 10).forEach((edge, index) => {
+          description += `${index + 1}. ${edge.source} → ${edge.target} (${edge.label}). `;
+        });
+        
+        if (edgeDescriptions.length > 10) {
+          description += `\nAnd ${edgeDescriptions.length - 10} more relationships...`;
+        }
+      }
+    }
+
+    return description;
+  }
+
   /**
    * Shows a runtime alert for edge routing errors.
    * 
