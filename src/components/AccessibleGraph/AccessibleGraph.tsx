@@ -1,6 +1,8 @@
 /// <reference path="./custom-elements.d.ts" />
 import React, { useEffect, useRef, useState } from 'react';
 import type { InstanceLayout } from '../../layout/interfaces';
+import type { ParsedCnDSpec } from '../../layout/layoutspec';
+import { generateNavigatorSchema, type NavigatorSchema } from './data-navigator-schema';
 
 /**
  * AccessibleGraph Component
@@ -10,10 +12,14 @@ import type { InstanceLayout } from '../../layout/interfaces';
  * 
  * Features:
  * - ARIA labels and descriptions for screen readers
- * - Keyboard navigation (arrow keys to navigate between nodes)
+ * - Keyboard navigation following CnD constraint relationships
  * - Live region announcements for graph changes
  * - Alternative text descriptions of spatial relationships
- * - Integration with Data Navigator best practices
+ * - Data Navigator schema generation from CnD spec
+ * 
+ * The navigation follows the declarative spatial relationships defined in the CnD spec,
+ * not just geometric positions. For example, if the CnD spec says "A is left of B",
+ * then pressing right arrow on A will navigate to B.
  * 
  * @example
  * ```tsx
@@ -21,6 +27,7 @@ import type { InstanceLayout } from '../../layout/interfaces';
  *   width={800}
  *   height={600}
  *   layoutFormat="default"
+ *   cndSpec={parsedCnDSpec}
  *   onLayoutReady={(layout) => console.log('Layout ready')}
  * />
  * ```
@@ -32,8 +39,10 @@ export interface AccessibleGraphProps {
   height?: number;
   /** Layout format: 'default' or 'grid' */
   layoutFormat?: 'default' | 'grid';
+  /** Parsed CnD specification for constraint-based navigation */
+  cndSpec?: ParsedCnDSpec;
   /** Callback when layout is ready */
-  onLayoutReady?: (layout: InstanceLayout) => void;
+  onLayoutReady?: (layout: InstanceLayout, schema?: NavigatorSchema) => void;
   /** Additional CSS classes */
   className?: string;
   /** Accessible label for the graph */
@@ -42,131 +51,120 @@ export interface AccessibleGraphProps {
   ariaDescription?: string;
   /** ID for the graph element */
   id?: string;
+  /** Enable Data Navigator integration */
+  enableDataNavigator?: boolean;
 }
 
 /**
- * Hook to manage keyboard navigation within the graph
+ * Hook to manage constraint-based keyboard navigation within the graph
+ * Navigation follows the CnD spec relationships, not just geometric positions
  */
 function useGraphKeyboardNavigation(
   graphRef: React.RefObject<any>,
-  currentLayout: InstanceLayout | null
+  currentLayout: InstanceLayout | null,
+  navigatorSchema: NavigatorSchema | null
 ) {
-  const [focusedNodeIndex, setFocusedNodeIndex] = useState<number>(0);
+  const [focusedNodeId, setFocusedNodeId] = useState<string>('');
   const [isNavigating, setIsNavigating] = useState(false);
 
   useEffect(() => {
-    if (!graphRef.current || !currentLayout) return;
+    if (!graphRef.current || !currentLayout || !navigatorSchema) return;
+
+    // Initialize with start node from schema
+    if (!focusedNodeId && navigatorSchema.startNode) {
+      setFocusedNodeId(navigatorSchema.startNode);
+    }
 
     const handleKeyDown = (event: KeyboardEvent) => {
       // Only handle navigation when the graph is focused
       if (!isNavigating) return;
 
-      const nodes = currentLayout.nodes;
-      if (!nodes || nodes.length === 0) return;
+      const currentNode = navigatorSchema.nodes.get(focusedNodeId);
+      if (!currentNode) return;
 
-      let newIndex = focusedNodeIndex;
+      let nextNodeId: string | null = null;
 
       switch (event.key) {
         case 'ArrowRight':
           event.preventDefault();
-          newIndex = (focusedNodeIndex + 1) % nodes.length;
+          // Follow "right" connections from navigator schema
+          if (currentNode.right && currentNode.right.length > 0) {
+            nextNodeId = currentNode.right[0];
+            announceToScreenReader(`Moving right to ${navigatorSchema.nodes.get(nextNodeId)?.label || nextNodeId}`);
+          } else {
+            announceToScreenReader('No nodes to the right');
+          }
           break;
+          
         case 'ArrowLeft':
           event.preventDefault();
-          newIndex = (focusedNodeIndex - 1 + nodes.length) % nodes.length;
+          // Follow "left" connections from navigator schema
+          if (currentNode.left && currentNode.left.length > 0) {
+            nextNodeId = currentNode.left[0];
+            announceToScreenReader(`Moving left to ${navigatorSchema.nodes.get(nextNodeId)?.label || nextNodeId}`);
+          } else {
+            announceToScreenReader('No nodes to the left');
+          }
           break;
+          
         case 'ArrowDown':
           event.preventDefault();
-          // Find node below current (by y-coordinate)
-          newIndex = findNodeInDirection(nodes, focusedNodeIndex, 'down');
+          // Follow "down" connections from navigator schema
+          if (currentNode.down && currentNode.down.length > 0) {
+            nextNodeId = currentNode.down[0];
+            announceToScreenReader(`Moving down to ${navigatorSchema.nodes.get(nextNodeId)?.label || nextNodeId}`);
+          } else {
+            announceToScreenReader('No nodes below');
+          }
           break;
+          
         case 'ArrowUp':
           event.preventDefault();
-          // Find node above current (by y-coordinate)
-          newIndex = findNodeInDirection(nodes, focusedNodeIndex, 'up');
+          // Follow "up" connections from navigator schema
+          if (currentNode.up && currentNode.up.length > 0) {
+            nextNodeId = currentNode.up[0];
+            announceToScreenReader(`Moving up to ${navigatorSchema.nodes.get(nextNodeId)?.label || nextNodeId}`);
+          } else {
+            announceToScreenReader('No nodes above');
+          }
           break;
+          
         case 'Enter':
         case ' ':
           event.preventDefault();
-          announceNodeDetails(nodes[focusedNodeIndex]);
+          announceNodeDetails(currentNode);
           break;
+          
         case 'Escape':
           event.preventDefault();
           setIsNavigating(false);
+          announceToScreenReader('Navigation mode deactivated');
           break;
       }
 
-      if (newIndex !== focusedNodeIndex) {
-        setFocusedNodeIndex(newIndex);
-        announceNodeFocus(nodes[newIndex]);
+      if (nextNodeId && nextNodeId !== focusedNodeId) {
+        setFocusedNodeId(nextNodeId);
+        const nextNode = navigatorSchema.nodes.get(nextNodeId);
+        if (nextNode) {
+          announceNodeFocus(nextNode);
+        }
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [graphRef, currentLayout, focusedNodeIndex, isNavigating]);
+  }, [graphRef, currentLayout, navigatorSchema, focusedNodeId, isNavigating]);
 
-  return { focusedNodeIndex, setFocusedNodeIndex, isNavigating, setIsNavigating };
-}
-
-/**
- * Finds the nearest node in a given direction
- */
-function findNodeInDirection(
-  nodes: any[],
-  currentIndex: number,
-  direction: 'up' | 'down' | 'left' | 'right'
-): number {
-  if (!nodes || nodes.length === 0) return currentIndex;
-  
-  const currentNode = nodes[currentIndex];
-  if (!currentNode || typeof currentNode.x !== 'number' || typeof currentNode.y !== 'number') {
-    return currentIndex;
-  }
-
-  let nearestIndex = currentIndex;
-  let nearestDistance = Infinity;
-
-  nodes.forEach((node, index) => {
-    if (index === currentIndex || !node || typeof node.x !== 'number' || typeof node.y !== 'number') return;
-
-    const dx = node.x - currentNode.x;
-    const dy = node.y - currentNode.y;
-
-    // Check if node is in the right direction
-    let isInDirection = false;
-    switch (direction) {
-      case 'up':
-        isInDirection = dy < 0;
-        break;
-      case 'down':
-        isInDirection = dy > 0;
-        break;
-      case 'left':
-        isInDirection = dx < 0;
-        break;
-      case 'right':
-        isInDirection = dx > 0;
-        break;
-    }
-
-    if (isInDirection) {
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      if (distance < nearestDistance) {
-        nearestDistance = distance;
-        nearestIndex = index;
-      }
-    }
-  });
-
-  return nearestIndex;
+  return { focusedNodeId, setFocusedNodeId, isNavigating, setIsNavigating };
 }
 
 /**
  * Announces node focus to screen readers
  */
 function announceNodeFocus(node: any) {
-  const announcement = `Focused on ${node.label || node.id || 'node'}. Type: ${node.type || 'unknown'}. Press Enter for details.`;
+  const label = node.label || node.id || 'node';
+  const description = node.description || '';
+  const announcement = `Focused on ${label}. ${description} Press Enter for more details.`;
   announceToScreenReader(announcement);
 }
 
@@ -174,11 +172,7 @@ function announceNodeFocus(node: any) {
  * Announces detailed node information to screen readers
  */
 function announceNodeDetails(node: any) {
-  const label = node.label || node.id || 'node';
-  const type = node.type || 'unknown';
-  const position = node.x && node.y ? `at position x: ${Math.round(node.x)}, y: ${Math.round(node.y)}` : '';
-  
-  const announcement = `Node details: ${label}, type ${type} ${position}`;
+  const announcement = node.description || `Node: ${node.label || node.id}`;
   announceToScreenReader(announcement);
 }
 
@@ -216,17 +210,22 @@ export const AccessibleGraph: React.FC<AccessibleGraphProps> = ({
   width = 800,
   height = 600,
   layoutFormat = 'default',
+  cndSpec,
   onLayoutReady,
   className = '',
   ariaLabel = 'Interactive graph visualization',
   ariaDescription,
-  id = 'accessible-graph'
+  id = 'accessible-graph',
+  enableDataNavigator = false
 }) => {
   const graphRef = useRef<any>(null);
   const [currentLayout, setCurrentLayout] = useState<InstanceLayout | null>(null);
-  const { focusedNodeIndex, isNavigating, setIsNavigating } = useGraphKeyboardNavigation(
+  const [navigatorSchema, setNavigatorSchema] = useState<NavigatorSchema | null>(null);
+  
+  const { focusedNodeId, isNavigating, setIsNavigating } = useGraphKeyboardNavigation(
     graphRef,
-    currentLayout
+    currentLayout,
+    navigatorSchema
   );
 
   useEffect(() => {
@@ -255,21 +254,28 @@ export const AccessibleGraph: React.FC<AccessibleGraphProps> = ({
 
   /**
    * Renders the graph and stores the layout
+   * Generates Data Navigator schema from CnD constraints
    */
   const renderLayout = async (layout: InstanceLayout) => {
     if (graphRef.current && graphRef.current.renderLayout) {
       await graphRef.current.renderLayout(layout);
       setCurrentLayout(layout);
       
+      // Generate navigator schema from layout and CnD spec
+      const schema = generateNavigatorSchema(layout, cndSpec);
+      setNavigatorSchema(schema);
+      
       if (onLayoutReady) {
-        onLayoutReady(layout);
+        onLayoutReady(layout, schema);
       }
 
       // Announce graph structure
       const nodeCount = layout.nodes?.length || 0;
       const edgeCount = layout.edges?.length || 0;
       announceToScreenReader(
-        `Graph rendered with ${nodeCount} nodes and ${edgeCount} edges. Press Tab to enable keyboard navigation.`
+        `Graph rendered with ${nodeCount} nodes and ${edgeCount} edges. ` +
+        `Navigation follows the spatial relationships from your layout constraints. ` +
+        `Press Tab to enable keyboard navigation.`
       );
     }
   };

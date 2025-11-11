@@ -8,7 +8,17 @@
  * - Data Navigator (https://github.com/cmudig/data-navigator)
  * - Web Content Accessibility Guidelines (WCAG)
  * - ARIA best practices for data visualizations
+ * 
+ * The navigation follows the declarative spatial relationships defined in
+ * the CnD spec, not just geometric positions. For example, if the CnD spec
+ * says "A is left of B", then pressing right arrow on A will navigate to B.
  */
 
 export { AccessibleGraph, type AccessibleGraphProps } from './AccessibleGraph';
+export { 
+  generateNavigatorSchema, 
+  toDataNavigatorFormat,
+  type NavigatorNode,
+  type NavigatorSchema 
+} from './data-navigator-schema';
 export { default } from './AccessibleGraph';
