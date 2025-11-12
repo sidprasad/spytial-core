@@ -6,3 +6,5 @@ export const ORIENTATION_DESCRIPTION = "Specify the relative positioning of elem
 export const ALIGN_DESCRIPTION = "Ensure elements are aligned horizontally or vertically."
 export const GROUPING_SELECTOR_DESCRIPTION = "Group elements based on a selector."
 export const GROUPING_FIELD_DESCRIPTION = "Group elements based on a field."
+export const SIZE_DESCRIPTION = "Set the width and height of elements matching the selector."
+export const HIDEATOM_DESCRIPTION = "Hide elements matching the selector from the visualization."
