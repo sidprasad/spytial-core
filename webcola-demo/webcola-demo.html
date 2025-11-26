@@ -11,8 +11,8 @@
     <style>
         body {
             display: flex;
+            flex-direction: column;
             font-family: Arial, sans-serif;
-            /* max-width: 1200px; */
             max-width: 90vw;
             margin: 0 auto;
             padding: 20px;
@@ -25,6 +25,37 @@
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             margin-bottom: 20px;
+        }
+        .hero {
+            background: linear-gradient(135deg, #002d72 0%, #006dbe 60%, #00a0e9 100%);
+            color: #fff;
+            padding: 24px 28px;
+            border-radius: 12px;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+        }
+        .hero h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+        .hero .badge {
+            background: rgba(255, 255, 255, 0.18);
+            border: 1px solid rgba(255, 255, 255, 0.35);
+        }
+        .onboarding-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 14px;
+        }
+        .onboarding-card {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 14px 16px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+        }
+        .onboarding-card h5 {
+            margin-bottom: 8px;
+            font-size: 1rem;
         }
         #graph-container-wrapper {
             position: relative;
@@ -132,9 +163,50 @@
     </style>
 </head>
 <body>
+    <div class="hero mb-2">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+            <div>
+                <h1 class="h2 mb-1">Spytial onboarding hub</h1>
+                <p class="mb-2">Learn the end-to-end Alloy → Spytial → WebCola workflow and ship your first visualization.</p>
+                <span class="badge rounded-pill">Guided sample included</span>
+            </div>
+            <div class="text-end">
+                <p class="mb-1 fw-bold">Fast start</p>
+                <ol class="mb-0 ps-3 small">
+                    <li>Load the guided sample.</li>
+                    <li>Press <strong>Apply Layout</strong>.</li>
+                    <li>Inspect the graph + YAML.</li>
+                    <li>Iterate on your own data.</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
     <div class="container border" id="main-panel">
-        <h1>🎯 WebCola Alloy Visualization Demo</h1>
-        <p>This demonstrates the complete Alloy XML → AlloyDataInstance → ForgeEvaluator → Layout → WebCola pipeline.</p>
+        <h1>🎯 Alloy → Spytial → WebCola demo</h1>
+        <p class="mb-1">This page is the gh-pages template for onboarding new contributors and users. It walks through the complete pipeline and gives you a safe sandbox for experimentation.</p>
+        <p class="text-muted small mb-3">Use the guided sample below if you are new, or paste your own Alloy XML and CND YAML to explore custom layouts.</p>
+        <div class="onboarding-grid mb-3">
+            <div class="onboarding-card">
+                <h5 class="mb-1">1) Understand the flow</h5>
+                <p class="mb-0 small">Alloy XML ➜ <code>AlloyDataInstance</code> ➜ <code>ForgeEvaluator</code> ➜ <code>LayoutInstance</code> ➜ WebCola rendering.</p>
+            </div>
+            <div class="onboarding-card">
+                <h5 class="mb-1">2) Try the guided sample</h5>
+                <p class="mb-0 small">Preloaded Alloy + CND YAML showcase a binary tree layout with directives and orientation constraints.</p>
+            </div>
+            <div class="onboarding-card">
+                <h5 class="mb-1">3) Tweak + rerender</h5>
+                <p class="mb-0 small">Edit YAML in the CND interface, adjust layout format, and re-run <strong>Apply Layout</strong> to see changes.</p>
+            </div>
+            <div class="onboarding-card">
+                <h5 class="mb-1">4) Graduate to real data</h5>
+                <p class="mb-0 small">Swap in your Alloy XML and bring your own directives. Use the REPL to validate constraints before rendering.</p>
+            </div>
+        </div>
+        <div class="alert alert-primary" role="alert">
+            🚀 First time here? Click <strong>Load guided sample</strong> to prefill the Alloy XML and CND YAML, then hit <strong>Apply Layout</strong>.
+        </div>
         <div>
             <!-- Editable Input Fields -->
             <div>
@@ -165,11 +237,59 @@
         </div>
     </div>
     <div id="cnd-panel" class="container d-flex flex-column col-md-4 border p-3">
-        <h5 class="h5 mb-2 text-dark">CND Layout Specification:</h5>
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+            <h5 class="h5 mb-0 text-dark">CND Layout Specification:</h5>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-primary btn-sm" onclick="loadGuidedSample(true)">Load guided sample</button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="renderGraph()">Re-render only</button>
+            </div>
+        </div>
         <button id="applyLayoutButton" class="mb-3" onclick="loadGraph()">Apply Layout</button>
         <div id="webcola-cnd-container">
             <!-- React element attached here -->
         </div>
+    </div>
+
+    <div class="container border">
+        <h3 class="h5">Onboarding playbook</h3>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="onboarding-card h-100">
+                    <h5 class="mb-2">Local development</h5>
+                    <ol class="mb-0 small ps-3">
+                        <li>Install dependencies: <code>npm install</code>.</li>
+                        <li>Build browser bundles: <code>npm run build:browser</code>.</li>
+                        <li>Open this page locally: <code>npm run dev</code> and navigate to <code>/webcola-demo/webcola-demo.html</code>.</li>
+                        <li>Use <strong>Load guided sample</strong> to validate your toolchain.</li>
+                    </ol>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="onboarding-card h-100">
+                    <h5 class="mb-2">Contribute with confidence</h5>
+                    <ul class="mb-0 small ps-3">
+                        <li>Use the REPL mount to probe constraints before rendering.</li>
+                        <li>Switch layout format (Standard/Grid) to demo different experiences.</li>
+                        <li>Share a link to this gh-pages to help others reproduce your steps.</li>
+                        <li>When ready, replace the sample Alloy XML with your dataset and iterate.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container border">
+        <h3 class="h5">What this demo actually does</h3>
+        <p class="small text-muted mb-2">Here is the exact sequence that runs when you click <strong>Apply Layout</strong>. Use it as a checklist when swapping in other <code>IEvaluator</code> implementations.</p>
+        <ol class="small ps-3 mb-0">
+            <li><strong>Parse Alloy XML</strong> → <code>AlloyInstance.parseAlloyXML</code> reads your XML and the first instance is wrapped in <code>AlloyDataInstance</code> to provide typed accessors.</li>
+            <li><strong>Select an evaluator</strong> → The demo constructs a <code>ForgeEvaluator</code> (an <code>IEvaluator</code>) and initializes it with the Alloy source so it can answer relation queries. Swap in your own <code>IEvaluator</code> here if you need alternative semantics.</li>
+            <li><strong>Compile layout spec</strong> → <code>parseLayoutSpec</code> converts the YAML from the CND interface into a <code>LayoutSpec</code> object, surfacing parse errors in the UI if anything is invalid.</li>
+            <li><strong>Create a LayoutInstance</strong> → The compiled spec and evaluator are combined into <code>LayoutInstance</code>, which is responsible for producing coordinates and alignment edges from your data.</li>
+            <li><strong>Generate a layout</strong> → <code>layoutInstance.generateLayout</code> consumes the <code>AlloyDataInstance</code> and optional projections, returning an <code>InstanceLayout</code>. Constraint conflicts or group overlaps are reported through the modal error helpers.</li>
+            <li><strong>Render with WebCola</strong> → The resulting <code>InstanceLayout</code> is passed into the <code>&lt;webcola-cnd-graph&gt;</code> custom element, which renders an SVG using WebCola. Changing the <em>Layout Format</em> dropdown re-renders with the same layout data.</li>
+            <li><strong>Inspect + iterate</strong> → The Evaluator REPL mount lets you probe relations from your evaluator, while the CND textarea reflects the active YAML. Edit either input, then rerun <strong>Apply Layout</strong> to verify the pipeline end-to-end.</li>
+        </ol>
     </div>
 
     <!-- D3 v4 and WebCola - the working combination -->
@@ -186,6 +306,16 @@
         // Variables to store data
         let currentInstanceLayout = null;
 
+        // Guided sample locations (used for onboarding)
+        const SAMPLE_PATHS = {
+            alloy: '../sample/forge/datum.xml',
+            cnd: '../sample/forge/layout.cnd'
+        };
+
+        // Minimal fallbacks so the onboarding flow still works offline
+        const SAMPLE_ALLOY_FALLBACK = '<alloy>\n  <instance><sig label="Node" ID="1" parentID="2"><atom label="Node0"/><atom label="Node1"/></sig></instance>\n</alloy>';
+        const SAMPLE_CND_FALLBACK = `constraints:\n  - orientation:\n      selector: Node\n      directions:\n        - right`;        
+
         /**
          * Get current Alloy XML from input field
          * @returns {string} Alloy XML specification
@@ -200,9 +330,50 @@
          */
         function getCurrentCNDSpec() {
             // Try to get value from React component first
-            return window.getCurrentCNDSpecFromReact ? 
-                window.getCurrentCNDSpecFromReact() : 
+            return window.getCurrentCNDSpecFromReact ?
+                window.getCurrentCNDSpecFromReact() :
                 document.getElementById('webcola-cnd')?.value?.trim();
+        }
+
+        /**
+         * Fetch helper for onboarding samples with graceful fallbacks
+         * @param {string} url - relative path to sample asset
+         * @param {string} fallback - fallback value if fetch fails
+         * @returns {Promise<string>} resolved content
+         */
+        async function loadSampleText(url, fallback) {
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                return await response.text();
+            } catch (error) {
+                console.warn(`Unable to fetch sample from ${url}:`, error);
+                return fallback;
+            }
+        }
+
+        /**
+         * Sync YAML spec into the mounted CND interface (React + DOM fallback)
+         * @param {string} yamlText - YAML specification
+         */
+        function syncCndSpecToInterface(yamlText) {
+            const trimmedSpec = yamlText.trim();
+            try {
+                if (window.CndCore?.CndLayoutStateManager) {
+                    const stateManager = window.CndCore.CndLayoutStateManager.getInstance();
+                    stateManager.setYamlValue(trimmedSpec);
+                }
+
+                const reactTextarea = document.querySelector('#webcola-cnd-container textarea');
+                if (reactTextarea instanceof HTMLTextAreaElement) {
+                    reactTextarea.value = trimmedSpec;
+                    reactTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            } catch (error) {
+                console.warn('Could not sync CND spec into the interface:', error);
+            }
         }
 
         /**
@@ -214,6 +385,31 @@
             const statusElement = document.getElementById('status');
             statusElement.textContent = message;
             statusElement.className = `status ${type}`;
+        }
+
+        /**
+         * Prefill the Alloy + CND inputs with the guided onboarding sample
+         * @param {boolean} autoRender - when true, immediately runs the pipeline
+         */
+        async function loadGuidedSample(autoRender = false) {
+            updateStatus('Loading guided sample...', 'info');
+
+            const [alloyText, cndText] = await Promise.all([
+                loadSampleText(SAMPLE_PATHS.alloy, SAMPLE_ALLOY_FALLBACK),
+                loadSampleText(SAMPLE_PATHS.cnd, SAMPLE_CND_FALLBACK)
+            ]);
+
+            // Prefill the Alloy XML input
+            document.getElementById('webcola-alloy').value = alloyText.trim();
+
+            // Sync the CND YAML into the interface
+            syncCndSpecToInterface(cndText);
+
+            updateStatus('Guided sample loaded. Press Apply Layout to render.', 'success');
+
+            if (autoRender) {
+                await loadGraph();
+            }
         }
 
         /**
@@ -494,13 +690,18 @@
             initializePipeline();
             // Mount React component if available
             if (window.mountCndLayoutInterface) {
-                window.mountCndLayoutInterface();
+                window.mountCndLayoutInterface('webcola-cnd-container', {
+                    initialYamlValue: SAMPLE_CND_FALLBACK
+                });
             }
 
             // Mount error message system
             if (window.mountErrorMessageModal) {
                 window.mountErrorMessageModal();
             }
+
+            // Prefill onboarding sample content so newcomers can click-and-run
+            loadGuidedSample(false);
         });
 
         // Expose functions globally for buttons
