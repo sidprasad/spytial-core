@@ -123,3 +123,7 @@ export type { CombinedInputMountConfig } from './components/CombinedInput/mounti
 // Export REPL parsers
 export { PyretExpressionParser } from './components/ReplInterface/parsers/PyretExpressionParser';
 export type { PyretEvaluator, PyretEvaluationResult } from './components/ReplInterface/parsers/PyretExpressionParser';
+
+// Export Accessible Graph Component
+export { AccessibleGraph } from './components/AccessibleGraph/AccessibleGraph';
+export type { AccessibleGraphProps } from './components/AccessibleGraph/AccessibleGraph';
