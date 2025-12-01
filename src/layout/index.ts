@@ -22,9 +22,9 @@ import { IDataInstance } from '../data-instance/interfaces';
  * @param instance The Alloy instance to layout
  * @param evaluator The evaluator to use for constraint evaluation
  * @param projections Optional projections to apply
- * @returns The generated layout and projection data
+ * @returns A Promise resolving to the generated layout and projection data
  */
-export function setupLayout(
+export async function setupLayout(
   spec: string | LayoutSpec,
   instance: IDataInstance,
   evaluator: IEvaluator,

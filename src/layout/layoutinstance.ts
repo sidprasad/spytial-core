@@ -199,34 +199,37 @@ export class LayoutInstance {
      * @param targetAtom - The target atom ID.
      * @returns Array of matching GroupByField constraints.
      */
-    private getConstraintsRelatedToField(fieldName: string, sourceAtom: string, targetAtom: string): GroupByField[] {
+    private async getConstraintsRelatedToField(fieldName: string, sourceAtom: string, targetAtom: string): Promise<GroupByField[]> {
         const groupByFieldConstraints = this._layoutSpec.constraints.grouping.byfield;
         
-        let fieldConstraints = groupByFieldConstraints.filter((d) => {
+        const results: GroupByField[] = [];
+        for (const d of groupByFieldConstraints) {
             if (d.field !== fieldName) {
-                return false;
+                continue;
             }
             
             if (!d.selector) {
                 // Legacy constraint without selector applies to all edges with this field
-                return true;
+                results.push(d);
+                continue;
             }
             
             try {
-                const selectorResult = this.evaluator.evaluate(d.selector, { instanceIndex: this.instanceNum });
+                const selectorResult = await this.evaluator.evaluate(d.selector, { instanceIndex: this.instanceNum });
                 const selectedAtoms = selectorResult.selectedAtoms();
                 
                 // Check if source atom is selected by the selector
-                return selectedAtoms.includes(sourceAtom);
+                if (selectedAtoms.includes(sourceAtom)) {
+                    results.push(d);
+                }
             } catch (error) {
                 console.warn(`Failed to evaluate group by field selector "${d.selector}":`, error);
-                return false;
             }
-        });
-        return fieldConstraints;
+        }
+        return results;
     }
 
-    isAttributeField(fieldId: string, sourceAtom?: string, targetAtom?: string): boolean {
+    async isAttributeField(fieldId: string, sourceAtom?: string, targetAtom?: string): Promise<boolean> {
         const matchingDirectives = this._layoutSpec.directives.attributes.filter((ad) => ad.field === fieldId);
         
         if (matchingDirectives.length === 0) {
@@ -246,7 +249,7 @@ export class LayoutInstance {
             }
             
             try {
-                const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
+                const selectorResult = await this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
                 const selectedAtoms = selectorResult.selectedAtoms();
                 
                 // Check if source atom is selected by the selector
@@ -262,7 +265,7 @@ export class LayoutInstance {
         return false;
     }
 
-    isHiddenField(fieldId: string, sourceAtom?: string, targetAtom?: string): boolean {
+    async isHiddenField(fieldId: string, sourceAtom?: string, targetAtom?: string): Promise<boolean> {
         const matchingDirectives = this._layoutSpec.directives.hiddenFields.filter((hd) => hd.field === fieldId);
         
         if (matchingDirectives.length === 0) {
@@ -282,7 +285,7 @@ export class LayoutInstance {
             }
             
             try {
-                const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
+                const selectorResult = await this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
                 const selectedAtoms = selectorResult.selectedAtoms();
                 
                 // Check if source atom is selected by the selector
@@ -305,7 +308,7 @@ export class LayoutInstance {
      * @param a - The ORIGINAL (pre-projection) Data Instance.
      * @returns A record of groups.
      */
-    private generateGroups(g: Graph, a: IDataInstance): LayoutGroup[] {
+    private async generateGroups(g: Graph, a: IDataInstance): Promise<LayoutGroup[]> {
 
         //let groupingConstraints : GroupingConstraint[] = this._layoutSpec.constraints.grouping;
 
@@ -324,7 +327,7 @@ export class LayoutInstance {
         for (var gc of groupBySelectorConstraints) {
 
             let selector = gc.selector;
-            let selectorRes = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
+            let selectorRes = await this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
 
 
             // Now, we should support both unary and binary selectors.
@@ -418,21 +421,21 @@ export class LayoutInstance {
         let graphEdges = [...g.edges()];
 
 
-        graphEdges.forEach((edge) => {
+        for (const edge of graphEdges) {
             const edgeId = edge.name;
             const relName = this.getRelationName(g, edge);
 
 
-            let relatedConstraints = this.getConstraintsRelatedToField(relName, edge.v, edge.w);
+            let relatedConstraints = await this.getConstraintsRelatedToField(relName, edge.v, edge.w);
 
             if (relatedConstraints.length === 0) {
-                return;
+                continue;
             }
 
             // let edgeLabel = this.getEdgeLabel(g, edge); // Unused for now
 
 
-            relatedConstraints.forEach((c) => {
+            for (const c of relatedConstraints) {
 
                 const groupOn = c.groupOn; // This is the part of the relation tuple that is the key.
                 const addToGroup = c.addToGroup; // This is the part of the relation tuple that is IN the group.
@@ -440,7 +443,7 @@ export class LayoutInstance {
 
                 const potentialTuples = this.getFieldTuplesForSourceAndTarget(a, relName, edge.v, edge.w);
                 if (!potentialTuples || potentialTuples.length === 0) {
-                    return;
+                    continue;
                 }
 
 
@@ -493,8 +496,8 @@ export class LayoutInstance {
                         g.setEdge(edge.v, edge.w, groupName, newId);
                     }
                 }
-            });
-        });
+            }
+        }
 
 
 
@@ -508,20 +511,20 @@ export class LayoutInstance {
      * @param g - The graph, which will be modified to remove the edges that are used to determine attributes.
      * @returns A record of attributes
      */
-    private generateAttributesAndRemoveEdges(g: Graph): Record<string, Record<string, string[]>> {
+    private async generateAttributesAndRemoveEdges(g: Graph): Promise<Record<string, Record<string, string[]>>> {
         // Node : [] of attributes
         let attributes: Record<string, Record<string, string[]>> = {};
 
         let graphEdges = [...g.edges()];
         // Go through all edge labels in the graph
 
-        graphEdges.forEach((edge) => {
+        for (const edge of graphEdges) {
             const edgeId = edge.name;
             const relName = this.getRelationName(g, edge);
             const sourceAtom = edge.v;
             const targetAtom = edge.w;
-            const isAttributeRel = this.isAttributeField(relName, sourceAtom, targetAtom);
-            const isHiddenRel = this.isHiddenField(relName, sourceAtom, targetAtom);
+            const isAttributeRel = await this.isAttributeField(relName, sourceAtom, targetAtom);
+            const isHiddenRel = await this.isHiddenField(relName, sourceAtom, targetAtom);
 
             if (isHiddenRel && isAttributeRel) {
                 throw new Error(`${relName} cannot be both an attribute and a hidden field.`);
@@ -530,7 +533,7 @@ export class LayoutInstance {
             if (isHiddenRel) {
                 // If the field is a hidden field, we should remove the edge from the graph.
                 g.removeEdge(edge.v, edge.w, edgeId);
-                return;
+                continue;
             }
 
             if (isAttributeRel) {
@@ -556,7 +559,7 @@ export class LayoutInstance {
                 // Now remove the edge from the graph
                 g.removeEdge(edge.v, edge.w, edgeId);
             }
-        });
+        }
 
         return attributes;
     }
@@ -565,12 +568,12 @@ export class LayoutInstance {
     * Modifies the graph to remove extraneous nodes (ex. those to be hidden)
     * @param g - The graph, which will be modified to remove extraneous nodes.
     */
-    private ensureNoExtraNodes(g: Graph, a: IDataInstance) {
+    private async ensureNoExtraNodes(g: Graph, a: IDataInstance): Promise<void> {
 
         let nodes = [...g.nodes()];
 
 
-        nodes.forEach((node) => {
+        for (const node of nodes) {
 
 
             // Check if builtin
@@ -591,7 +594,7 @@ export class LayoutInstance {
                 const hiddenAtomDirectives = this._layoutSpec.directives.hiddenAtoms;
                 for (const directive of hiddenAtomDirectives) {
                     try {
-                        const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
+                        const selectorResult = await this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
                         const selectedAtoms = selectorResult.selectedAtoms();
                         if (selectedAtoms.includes(node)) {
                             hideBySelector = true;
@@ -611,7 +614,7 @@ export class LayoutInstance {
             } catch (error) {
                 console.error("Failed to identify node type. Defaulting to showing node.", error);
             }
-        });
+        }
     }
 
 
@@ -704,17 +707,17 @@ export class LayoutInstance {
      * Generates the layout for the given data instance and projections.
      * @param a - The data instance to generate the layout for.
      * @param projections - ...
-     * @returns An object containing the layout, projection data, and (optionally) an error to be surfaced to the user.
+     * @returns A Promise resolving to an object containing the layout, projection data, and (optionally) an error to be surfaced to the user.
      * @throws {ConstraintError} If the layout cannot be generated due to unsatisfiable constraints and error isn't caught to be surfaced to the user.
      */
-    public generateLayout(
+    public async generateLayout(
         a: IDataInstance,
         projections: Record<string, string>
-    ): {
+    ): Promise<{
         layout: InstanceLayout,
         projectionData: { type: string, projectedAtom: string, atoms: string[] }[],
         error: ConstraintError | null
-    } {
+    }> {
 
         /** Here, we calculate some of the presentational directive choices */
         let projectionResult = this.applyLayoutProjections(a, projections);
@@ -723,18 +726,18 @@ export class LayoutInstance {
 
         let g: Graph = ai.generateGraph(this.hideDisconnected, this.hideDisconnectedBuiltIns);
 
-        const attributes = this.generateAttributesAndRemoveEdges(g);
-        let nodeIconMap = this.getNodeIconMap(g);
-        let nodeColorMap = this.getNodeColorMap(g, ai);
-        let nodeSizeMap = this.getNodeSizeMap(g);
+        const attributes = await this.generateAttributesAndRemoveEdges(g);
+        let nodeIconMap = await this.getNodeIconMap(g);
+        let nodeColorMap = await this.getNodeColorMap(g, ai);
+        let nodeSizeMap = await this.getNodeSizeMap(g);
 
         // This is where we add the inferred edges to the graph.
-        this.addinferredEdges(g);
+        await this.addinferredEdges(g);
 
 
         /// Groups have to happen here ///
-        let groups = this.generateGroups(g, a);
-        this.ensureNoExtraNodes(g, a);
+        let groups = await this.generateGroups(g, a);
+        await this.ensureNoExtraNodes(g, a);
 
         let dcN = this.getDisconnectedNodes(g);
 
@@ -784,10 +787,11 @@ export class LayoutInstance {
         ///////////// CONSTRAINTS ////////////
 
 
-        let constraints: LayoutConstraint[] = this.applyRelativeOrientationConstraints(layoutNodes, g);
+        let constraints: LayoutConstraint[] = await this.applyRelativeOrientationConstraints(layoutNodes, g);
         const orientationConstraintCount = constraints.length;
         
-        constraints = constraints.concat(this.applyAlignConstraints(layoutNodes, g));
+        const alignConstraints = await this.applyAlignConstraints(layoutNodes, g);
+        constraints = constraints.concat(alignConstraints);
         const alignConstraintCount = constraints.length - orientationConstraintCount;
         
         console.log(`Generated ${orientationConstraintCount} orientation constraints and ${alignConstraintCount} alignment constraints (deduped + transitive reduction applied)`);
@@ -799,18 +803,19 @@ export class LayoutInstance {
         constraints = removeDuplicateConstraints(constraints);
 
 
-        let layoutEdges: LayoutEdge[] = g.edges().map((edge) => {
-
+        // Build edges with colors (async since getEdgeColor is now async)
+        let layoutEdges: LayoutEdge[] = [];
+        for (const edge of g.edges()) {
             const edgeId = edge.name;
             const edgeLabel: string = g.edge(edge.v, edge.w, edgeId);
             let source = layoutNodes.find((node) => node.id === edge.v);
             let target = layoutNodes.find((node) => node.id === edge.w);
             let relName = this.getRelationName(g, edge);
-            let color = this.getEdgeColor(relName, edge.v, edge.w, edgeId);
+            let color = await this.getEdgeColor(relName, edge.v, edge.w, edgeId);
 
             // Skip edges with missing source or target nodes
             if (!source || !target || !edgeId) {
-                return null;
+                continue;
             }
 
             let e: LayoutEdge = {
@@ -821,11 +826,11 @@ export class LayoutInstance {
                 id: edgeId,
                 color: color,
             };
-            return e;
-        }).filter((edge): edge is LayoutEdge => edge !== null);
+            layoutEdges.push(e);
+        }
 
         // Build cyclic constraint disjunctions
-        const cyclicDisjunctions = this.buildCyclicDisjunctions(layoutNodes);
+        const cyclicDisjunctions = await this.buildCyclicDisjunctions(layoutNodes);
 
         // Create layout with conjunctive constraints and disjunctive constraints
         let layout: InstanceLayout = { 
@@ -982,13 +987,14 @@ export class LayoutInstance {
      * @param layoutNodes - The layout nodes to which the constraints will be applied.
      * @returns Array of DisjunctiveConstraint instances, one per cyclic fragment.
      */
-    private buildCyclicDisjunctions(layoutNodes: LayoutNode[]): DisjunctiveConstraint[] {
+    private async buildCyclicDisjunctions(layoutNodes: LayoutNode[]): Promise<DisjunctiveConstraint[]> {
         const cyclicConstraints = this._layoutSpec.constraints.orientation.cyclic;
         const disjunctions: DisjunctiveConstraint[] = [];
 
         // For each cyclic constraint, extract fragments
         for (const [, c] of cyclicConstraints.entries()) {
-            let selectedTuples: string[][] = this.evaluator.evaluate(c.selector, { instanceIndex: this.instanceNum }).selectedTwoples();
+            const selectorResult = await this.evaluator.evaluate(c.selector, { instanceIndex: this.instanceNum });
+            let selectedTuples: string[][] = selectorResult.selectedTwoples();
             let nextNodeMap: Map<LayoutNode, LayoutNode[]> = new Map<LayoutNode, LayoutNode[]>();
             
             // Build nextNodeMap from selected tuples
@@ -1180,7 +1186,7 @@ export class LayoutInstance {
      * @param layoutNodes - The layout nodes to which the constraints will be applied.
      * @returns An array of layout constraints.
      */
-    applyRelativeOrientationConstraints(layoutNodes: LayoutNode[], g: Graph): LayoutConstraint[] {
+    async applyRelativeOrientationConstraints(layoutNodes: LayoutNode[], g: Graph): Promise<LayoutConstraint[]> {
 
         let constraints: LayoutConstraint[] = [];
         let relativeOrientationConstraints = this._layoutSpec.constraints.orientation.relative;
@@ -1194,20 +1200,20 @@ export class LayoutInstance {
         const leftOfGraph = new Map<string, Set<string>>();
         const aboveGraph = new Map<string, Set<string>>();
 
-        relativeOrientationConstraints.forEach((c: RelativeOrientationConstraint) => {
+        for (const c of relativeOrientationConstraints) {
 
             let directions = c.directions;
             let selector = c.selector;
 
-            let selectorRes = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
+            let selectorRes = await this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
             let selectedTuples: string[][] = selectorRes.selectedTwoples();
 
             // For each tuple, we need to apply the constraints
-            selectedTuples.forEach((tuple) => {
+            for (const tuple of selectedTuples) {
                 let sourceNodeId = tuple[0];
                 let targetNodeId = tuple[1];
 
-                directions.forEach((direction) => {
+                for (const direction of directions) {
                     // Add alignment edge for ALL orientation constraints if enabled AND edge doesn't already exist in the graph
                     if (this.shouldAddAlignmentEdge(g, sourceNodeId, targetNodeId)) {
                         const alignmentEdgeLabel = `_alignment_${sourceNodeId}_${targetNodeId}_`;
@@ -1299,9 +1305,9 @@ export class LayoutInstance {
                             constraints.push(this.ensureSameXConstraint(targetNodeId, sourceNodeId, layoutNodes, c));
                         }
                     }
-                });
-            });
-        });
+                }
+            }
+        }
 
         return constraints;
     }
@@ -1377,7 +1383,7 @@ export class LayoutInstance {
      * @param layoutNodes - The layout nodes to which the constraints will be applied.
      * @returns An array of layout constraints.
      */
-    applyAlignConstraints(layoutNodes: LayoutNode[], g: Graph): LayoutConstraint[] {
+    async applyAlignConstraints(layoutNodes: LayoutNode[], g: Graph): Promise<LayoutConstraint[]> {
         let constraints: LayoutConstraint[] = [];
         let alignConstraints = this._layoutSpec.constraints.alignment;
         
@@ -1385,15 +1391,15 @@ export class LayoutInstance {
         // Use normalized key (sorted node IDs) since alignment is symmetric
         const generatedAlignments = new Set<string>();
 
-        alignConstraints.forEach((c: AlignConstraint) => {
+        for (const c of alignConstraints) {
             let direction = c.direction;
             let selector = c.selector;
 
-            let selectorRes = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
+            let selectorRes = await this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
             let selectedTuples: string[][] = selectorRes.selectedTwoples();
 
             // For each tuple, apply the alignment constraint
-            selectedTuples.forEach((tuple) => {
+            for (const tuple of selectedTuples) {
                 let sourceNodeId = tuple[0];
                 let targetNodeId = tuple[1];
 
@@ -1421,8 +1427,8 @@ export class LayoutInstance {
                         constraints.push(this.ensureSameXConstraint(sourceNodeId, targetNodeId, layoutNodes, c));
                     }
                 }
-            });
-        });
+            }
+        }
 
         return constraints;
     }
@@ -1653,18 +1659,19 @@ export class LayoutInstance {
 
 
 
-    private getNodeSizeMap(g: Graph): Record<string, { width: number; height: number }> {
+    private async getNodeSizeMap(g: Graph): Promise<Record<string, { width: number; height: number }>> {
         let nodeSizeMap: Record<string, { width: number; height: number }> = {};
         const DEFAULT_SIZE = { width: this.DEFAULT_NODE_WIDTH, height: this.DEFAULT_NODE_HEIGHT };
 
         // Apply size directives first
         let sizeDirectives = this._layoutSpec.directives.sizes;
-        sizeDirectives.forEach((sizeDirective) => {
-            let selectedNodes = this.evaluator.evaluate(sizeDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
+        for (const sizeDirective of sizeDirectives) {
+            const selectorResult = await this.evaluator.evaluate(sizeDirective.selector, { instanceIndex: this.instanceNum });
+            let selectedNodes = selectorResult.selectedAtoms();
             let width = sizeDirective.width;
             let height = sizeDirective.height;
 
-            selectedNodes.forEach((nodeId) => {
+            for (const nodeId of selectedNodes) {
 
                 if (nodeSizeMap[nodeId]) {
 
@@ -1677,8 +1684,8 @@ export class LayoutInstance {
                 }
 
                 nodeSizeMap[nodeId] = { width: width, height: height };
-            });
-        });
+            }
+        }
 
         // Set default sizes for nodes that do not have a size set
         let graphNodes = [...g.nodes()];
@@ -1692,7 +1699,7 @@ export class LayoutInstance {
     }
 
 
-    private getNodeColorMap(g: Graph, a: IDataInstance): Record<string, string> {
+    private async getNodeColorMap(g: Graph, a: IDataInstance): Promise<Record<string, string>> {
         let nodeColorMap: Record<string, string> = {};
 
         // Start by getting the default signature colors
@@ -1700,11 +1707,12 @@ export class LayoutInstance {
 
         // Apply color directives first
         let colorDirectives = this._layoutSpec.directives.atomColors;
-        colorDirectives.forEach((colorDirective) => {
-            let selected = this.evaluator.evaluate(colorDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
+        for (const colorDirective of colorDirectives) {
+            const selectorResult = await this.evaluator.evaluate(colorDirective.selector, { instanceIndex: this.instanceNum });
+            let selected = selectorResult.selectedAtoms();
             let color = colorDirective.color;
 
-            selected.forEach((nodeId) => {
+            for (const nodeId of selected) {
                 if (nodeColorMap[nodeId]) {
                     const existingColor = nodeColorMap[nodeId];
                     if (existingColor !== color) {
@@ -1714,8 +1722,8 @@ export class LayoutInstance {
                     }
                 }
                 nodeColorMap[nodeId] = color;
-            });
-        });
+            }
+        }
 
         // Set default colors for nodes that do not have a color set
         let graphNodes = [...g.nodes()];
@@ -1729,17 +1737,18 @@ export class LayoutInstance {
         return nodeColorMap;
     }
 
-    private getNodeIconMap(g: Graph): Record<string, { path: string, showLabels: boolean }> {
+    private async getNodeIconMap(g: Graph): Promise<Record<string, { path: string, showLabels: boolean }>> {
         let nodeIconMap: Record<string, { path: string, showLabels: boolean }> = {};
         const DEFAULT_ICON = this.DEFAULT_NODE_ICON_PATH;
 
         // Apply icon directives first
         let iconDirectives = this._layoutSpec.directives.icons;
-        iconDirectives.forEach((iconDirective) => {
-            let selected = this.evaluator.evaluate(iconDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
+        for (const iconDirective of iconDirectives) {
+            const selectorResult = await this.evaluator.evaluate(iconDirective.selector, { instanceIndex: this.instanceNum });
+            let selected = selectorResult.selectedAtoms();
             let iconPath = iconDirective.path;
 
-            selected.forEach((nodeId) => {
+            for (const nodeId of selected) {
                 if (nodeIconMap[nodeId]) {
                     const existingIcon = nodeIconMap[nodeId];
                     if (existingIcon.path !== iconPath || existingIcon.showLabels !== iconDirective.showLabels) {
@@ -1749,8 +1758,8 @@ export class LayoutInstance {
                     }
                 }
                 nodeIconMap[nodeId] = { path: iconPath, showLabels: iconDirective.showLabels };
-            });
-        });
+            }
+        }
 
         // Set default icons for nodes that do not have an icon set
         let graphNodes = [...g.nodes()];
@@ -1771,7 +1780,7 @@ export class LayoutInstance {
      * @param edgeId - The edge ID (optional, used to identify inferred edges).
      * @returns The color for the edge, or "black" as default.
      */
-    private getEdgeColor(relName: string, sourceAtom: string, targetAtom: string, edgeId?: string): string {
+    private async getEdgeColor(relName: string, sourceAtom: string, targetAtom: string, edgeId?: string): Promise<string> {
         // Check for inferred edge colors first
         const inferredEdgePrefix = "_inferred_";
         if (edgeId && edgeId.includes(inferredEdgePrefix)) {
@@ -1802,7 +1811,7 @@ export class LayoutInstance {
             }
             
             try {
-                const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
+                const selectorResult = await this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
                 const selectedAtoms = selectorResult.selectedAtoms();
                 
                 // Check if source atom is selected by the selector
@@ -1867,14 +1876,14 @@ export class LayoutInstance {
     }
 
     // g is an inout parameter. I.E. it will be modified.
-    private addinferredEdges(g: Graph) {
+    private async addinferredEdges(g: Graph): Promise<void> {
 
         const inferredEdgePrefix = "_inferred_";
         let inferredEdges = this._layoutSpec.directives.inferredEdges;
-        inferredEdges.forEach((he) => {
+        for (const he of inferredEdges) {
 
 
-            let res = this.evaluator.evaluate(he.selector, { instanceIndex: this.instanceNum });
+            let res = await this.evaluator.evaluate(he.selector, { instanceIndex: this.instanceNum });
 
             let selectedTuples: string[][] = res.selectedTuplesAll();
             let edgeIdPrefix = `${inferredEdgePrefix}<:${he.name}`;
@@ -1904,6 +1913,6 @@ export class LayoutInstance {
                 let edgeId = `${edgeIdPrefix}<:${fullTuple}`;
                 g.setEdge(sourceNodeId, targetNodeId, edgeLabel, edgeId);
             });
-        });
+        }
     }
 }

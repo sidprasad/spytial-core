@@ -21,12 +21,17 @@ export const EvaluatorRepl: React.FC<EvaluatorReplProps> = ({ evaluator, instanc
     setEvaluatorOutput([]);
   }, [evaluator, instanceNumber]);
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      // Evaluate the input expression
-      const output = evaluator.evaluate(textInput, { instanceIndex: instanceNumber });
-      setEvaluatorOutput(prev => [[textInput, output.prettyPrint()], ...prev]);
+      // Evaluate the input expression (now async)
+      try {
+        const output = await evaluator.evaluate(textInput, { instanceIndex: instanceNumber });
+        setEvaluatorOutput(prev => [[textInput, output.prettyPrint()], ...prev]);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        setEvaluatorOutput(prev => [[textInput, `Error: ${errorMessage}`], ...prev]);
+      }
       setTextInput(''); // Clear input after evaluation
     }
   }
