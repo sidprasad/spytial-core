@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react'
+import React, { useCallback } from 'react'
 import {
     AttributeSelector, 
     FlagSelector, 
@@ -12,7 +12,7 @@ import {
     ProjectionSelector 
 } from './index';
 import { useHighlight } from './hooks';
-import { DirectiveData } from './interfaces';
+import { DirectiveData, ConstraintData } from './interfaces';
 import { DirectiveType } from './types';
 
 /**
@@ -33,22 +33,49 @@ interface DirectiveCardProps {
   className?: string;
 }
 
-const DirectiveCard: React.FC<DirectiveCardProps> = (props: DirectiveCardProps) => {
-    const directiveToSelectorComponentMap: Record<DirectiveData['type'], React.JSX.Element> = {
-        "attribute": <AttributeSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>,
-        "hideField": <HideFieldSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>,
-        "hideAtom": <HideAtomSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>,
-        "icon": <IconSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>,
-        "atomColor": <ColorAtomSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>,
-        "edgeColor": <ColorEdgeSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>,
-        "size": <SizeSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>,
-        "projection": <ProjectionSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>,
-        "flag": <FlagSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>,
-        "inferredEdge": <HelperEdgeSelector directiveData={props.directiveData} onUpdate={props.onUpdate}/>,
+/**
+ * Renders the appropriate selector component based on directive type
+ * 
+ * @param type - The directive type
+ * @param directiveData - The directive data
+ * @param onUpdate - Callback for updates
+ * @returns The appropriate selector component
+ */
+const renderSelectorComponent = (
+    type: DirectiveType,
+    directiveData: DirectiveData,
+    onUpdate: (updates: Partial<Omit<DirectiveData, 'id'>>) => void
+): React.JSX.Element => {
+    // For dual-use selectors (size, hideAtom), cast the onUpdate to the expected type
+    const dualUseOnUpdate = onUpdate as (updates: Partial<Omit<ConstraintData | DirectiveData, 'id'>>) => void;
+    
+    switch (type) {
+        case 'attribute':
+            return <AttributeSelector directiveData={directiveData} onUpdate={onUpdate}/>;
+        case 'hideField':
+            return <HideFieldSelector directiveData={directiveData} onUpdate={onUpdate}/>;
+        case 'hideAtom':
+            return <HideAtomSelector directiveData={directiveData} onUpdate={dualUseOnUpdate}/>;
+        case 'icon':
+            return <IconSelector directiveData={directiveData} onUpdate={onUpdate}/>;
+        case 'atomColor':
+            return <ColorAtomSelector directiveData={directiveData} onUpdate={onUpdate}/>;
+        case 'edgeColor':
+            return <ColorEdgeSelector directiveData={directiveData} onUpdate={onUpdate}/>;
+        case 'size':
+            return <SizeSelector directiveData={directiveData} onUpdate={dualUseOnUpdate}/>;
+        case 'projection':
+            return <ProjectionSelector directiveData={directiveData} onUpdate={onUpdate}/>;
+        case 'flag':
+            return <FlagSelector directiveData={directiveData} onUpdate={onUpdate}/>;
+        case 'inferredEdge':
+            return <HelperEdgeSelector directiveData={directiveData} onUpdate={onUpdate}/>;
+        default:
+            return <FlagSelector directiveData={directiveData} onUpdate={onUpdate}/>;
     }
+};
 
-    const [cardHTML, setCardHTML] = useState<React.JSX.Element>(directiveToSelectorComponentMap[props.directiveData.type]);
-
+const DirectiveCard: React.FC<DirectiveCardProps> = (props: DirectiveCardProps) => {
     const { isHighlighted } = useHighlight(1000); // Highlight for 1 second
 
     /**
@@ -61,15 +88,10 @@ const DirectiveCard: React.FC<DirectiveCardProps> = (props: DirectiveCardProps) 
         // Access the HTMLSelectElement through event.target
         const selectElement = event.target;
         const selectedValue = selectElement.value as DirectiveType;
-
-        // Directive Fields
-        // TODO: Refactor to use a mapping object instead of if-else chain
-        // This way, the initial type can also use this mapping
-        setCardHTML(directiveToSelectorComponentMap[selectedValue]);
         
-        // Call the parent callback with the new directive type
+        // Call the parent callback with the new directive type and reset params
         props.onUpdate({ type: selectedValue, params: {} })
-    }, [props.onUpdate, props.directiveData]);
+    }, [props.onUpdate]);
 
     const classes = [
         isHighlighted && 'highlight',
@@ -99,7 +121,7 @@ const DirectiveCard: React.FC<DirectiveCardProps> = (props: DirectiveCardProps) 
             </select>
         </div>
         <div className="params">
-            { cardHTML }
+            { renderSelectorComponent(props.directiveData.type, props.directiveData, props.onUpdate) }
         </div>
     </div>
   )

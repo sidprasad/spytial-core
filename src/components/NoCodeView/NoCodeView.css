@@ -60,3 +60,47 @@
         border-color: transparent; /* End with no border */
     }
 }
+
+/* YAML syntax highlighting styles */
+.yaml-highlight-overlay .yaml-key {
+    color: #0550ae;
+    font-weight: 600;
+}
+
+.yaml-highlight-overlay .yaml-string {
+    color: #0a3069;
+}
+
+.yaml-highlight-overlay .yaml-number {
+    color: #0550ae;
+}
+
+.yaml-highlight-overlay .yaml-boolean {
+    color: #cf222e;
+    font-weight: 600;
+}
+
+.yaml-highlight-overlay .yaml-null {
+    color: #cf222e;
+    font-style: italic;
+}
+
+.yaml-highlight-overlay .yaml-comment {
+    color: #6e7781;
+    font-style: italic;
+}
+
+.yaml-highlight-overlay .yaml-list-item {
+    color: #cf222e;
+    font-weight: bold;
+}
+
+.yaml-editor-container textarea:focus {
+    outline: 2px solid #0969da;
+    outline-offset: -2px;
+}
+
+.yaml-editor-container textarea:focus + .yaml-highlight-overlay,
+.yaml-editor-container textarea:focus ~ .yaml-highlight-overlay {
+    border-color: #0969da;
+}

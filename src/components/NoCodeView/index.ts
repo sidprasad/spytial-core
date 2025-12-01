@@ -17,7 +17,7 @@ export { SizeSelector } from './Selectors/SizeSelector';
 
 // Export data functions
 export { parseLayoutSpecToData } from './NoCodeView';
-export { generateLayoutSpecYaml } from './CodeView';
+export { generateLayoutSpecYaml, validateYaml } from './CodeView';
 
 // Export constants and types
 export * from './constants';

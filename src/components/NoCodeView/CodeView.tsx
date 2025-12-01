@@ -1,6 +1,7 @@
-import React, { useEffect } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { ConstraintData, DirectiveData } from './interfaces';
 import jsyaml from 'js-yaml';
+import './NoCodeView.css';
 
 // TODO: Add unit tests for this function
 
@@ -102,6 +103,31 @@ export function generateLayoutSpecYaml(
     return yamlStr;
 }
 
+/**
+ * Validates YAML string and returns error message if invalid
+ * 
+ * @param yamlString - YAML string to validate
+ * @returns Error message if invalid, null if valid
+ */
+export function validateYaml(yamlString: string): string | null {
+    if (!yamlString || !yamlString.trim()) {
+        return null; // Empty is valid
+    }
+    
+    try {
+        jsyaml.load(yamlString);
+        return null;
+    } catch (error) {
+        if (error instanceof jsyaml.YAMLException) {
+            const line = error.mark?.line !== undefined ? error.mark.line + 1 : undefined;
+            const column = error.mark?.column !== undefined ? error.mark.column + 1 : undefined;
+            const position = line && column ? ` (line ${line}, column ${column})` : '';
+            return `YAML syntax error${position}: ${error.reason || error.message}`;
+        }
+        return `Invalid YAML: ${(error as Error).message}`;
+    }
+}
+
 interface CodeViewProps {
     constraints: ConstraintData[];
     directives: DirectiveData[];
@@ -111,17 +137,60 @@ interface CodeViewProps {
 }
 
 const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
-    // Populate the textarea on initial render if constraints/directives exist
-    // useEffect(() => {
-    //     if (props.constraints.length > 0 || props.directives.length > 0) {
-    //         const generatedYaml = generateLayoutSpecYaml(props.constraints, props.directives);
-    //         if (generatedYaml !== props.yamlValue) {
-    //             props.handleTextareaChange({
-    //                 target: { value: generatedYaml }
-    //             } as React.ChangeEvent<HTMLTextAreaElement>);
-    //         }
-    //     }
-    // }, []);
+    const [validationError, setValidationError] = useState<string | null>(null);
+
+    // Validate YAML when value changes
+    useEffect(() => {
+        const error = validateYaml(props.yamlValue);
+        setValidationError(error);
+    }, [props.yamlValue]);
+
+    // Apply basic YAML syntax highlighting to text
+    const highlightedYaml = useMemo(() => {
+        if (!props.yamlValue) return '';
+        
+        // Escape HTML entities first to prevent XSS
+        // This must happen before any other string transformations
+        let highlighted = props.yamlValue
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+        
+        // Highlight comments (lines starting with #)
+        highlighted = highlighted.replace(/^(#.*)$/gm, '<span class="yaml-comment">$1</span>');
+        
+        // Highlight keys (word followed by colon)
+        highlighted = highlighted.replace(/^(\s*)([a-zA-Z_][a-zA-Z0-9_]*)(:\s*)/gm, '$1<span class="yaml-key">$2</span>$3');
+        
+        // Highlight string values in escaped quotes
+        highlighted = highlighted.replace(/(&quot;|&#39;)([^&]*)(\1)/g, '<span class="yaml-string">$1$2$3</span>');
+        
+        // Highlight numbers
+        highlighted = highlighted.replace(/:\s+(-?\d+\.?\d*)\b/g, ': <span class="yaml-number">$1</span>');
+        
+        // Highlight boolean values
+        highlighted = highlighted.replace(/:\s+(true|false)\b/gi, ': <span class="yaml-boolean">$1</span>');
+        
+        // Highlight null values
+        highlighted = highlighted.replace(/:\s+(null|~)\b/gi, ': <span class="yaml-null">$1</span>');
+        
+        // Highlight list items (dash at start)
+        highlighted = highlighted.replace(/^(\s*)(-)(\s)/gm, '$1<span class="yaml-list-item">$2</span>$3');
+        
+        return highlighted;
+    }, [props.yamlValue]);
+
+    // Sync scroll between textarea and highlighted overlay
+    const handleScroll = useCallback((e: React.UIEvent<HTMLTextAreaElement>) => {
+        const textarea = e.currentTarget;
+        const pre = textarea.parentElement?.querySelector('.yaml-highlight-overlay') as HTMLElement;
+        if (pre) {
+            pre.scrollTop = textarea.scrollTop;
+            pre.scrollLeft = textarea.scrollLeft;
+        }
+    }, []);
 
   return (
     <div className="cnd-layout-interface__code-view" role="region" aria-label="YAML Code Editor">
@@ -130,18 +199,79 @@ const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
                 Enter your CND layout specification in YAML format. 
                 Use the toggle above to switch to the visual editor.
             </div>
-            <textarea
-            id="webcola-cnd"
-            className="form-control cnd-layout-interface__textarea"
-            value={props.yamlValue}
-            onChange={props.handleTextareaChange}
-            disabled={props.disabled}
-            rows={12}
-            spellCheck={false}
-            aria-label="CND Layout Specification YAML"
-            aria-describedby="cnd-layout-yaml-help"
-            style={{ minHeight: '400px', resize: 'vertical' }}
-            />
+            
+            {/* YAML validation error display */}
+            {validationError && (
+                <div 
+                    className="alert alert-warning py-2 mb-2" 
+                    role="alert"
+                    aria-live="polite"
+                >
+                    <small>
+                        <strong>⚠️ </strong>
+                        {validationError}
+                    </small>
+                </div>
+            )}
+            
+            {/* Container for textarea with syntax highlighting overlay */}
+            <div className="yaml-editor-container" style={{ position: 'relative' }}>
+                {/* Syntax highlighted overlay (behind textarea) */}
+                <pre 
+                    className="yaml-highlight-overlay form-control cnd-layout-interface__textarea"
+                    aria-hidden="true"
+                    style={{ 
+                        minHeight: '400px', 
+                        resize: 'none',
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        margin: 0,
+                        padding: '0.375rem 0.75rem',
+                        overflow: 'auto',
+                        whiteSpace: 'pre-wrap',
+                        wordWrap: 'break-word',
+                        fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
+                        fontSize: '0.875rem',
+                        lineHeight: '1.5',
+                        backgroundColor: '#f8f9fa',
+                        border: '1px solid #ced4da',
+                        borderRadius: '0.25rem',
+                        pointerEvents: 'none',
+                        zIndex: 0,
+                    }}
+                    dangerouslySetInnerHTML={{ __html: highlightedYaml || '&nbsp;' }}
+                />
+                
+                {/* Actual textarea (transparent, on top for editing) */}
+                <textarea
+                    id="webcola-cnd"
+                    className="form-control cnd-layout-interface__textarea"
+                    value={props.yamlValue}
+                    onChange={props.handleTextareaChange}
+                    onScroll={handleScroll}
+                    disabled={props.disabled}
+                    rows={12}
+                    spellCheck={false}
+                    aria-label="CND Layout Specification YAML"
+                    aria-describedby="cnd-layout-yaml-help"
+                    aria-invalid={validationError ? 'true' : 'false'}
+                    style={{ 
+                        minHeight: '400px', 
+                        resize: 'vertical',
+                        position: 'relative',
+                        zIndex: 1,
+                        backgroundColor: 'transparent',
+                        color: 'transparent',
+                        caretColor: '#212529',
+                        fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
+                        fontSize: '0.875rem',
+                        lineHeight: '1.5',
+                    }}
+                />
+            </div>
         </div>
     </div>
   )
