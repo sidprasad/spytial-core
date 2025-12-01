@@ -1237,7 +1237,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         // Minimize unconstrained iterations to preserve prior positions
         // Keep 1-2 iterations to allow minor adjustments
         unconstrainedIters = Math.min(2, unconstrainedIters);
-        console.log(`WebCola: Using reduced unconstrained iterations (${unconstrainedIters}) to preserve ${options!.priorPositions!.length} prior positions`);
+        
+        // Also reduce constrained iterations - these are where edge springs
+        // have the most impact on pulling nodes away from prior positions.
+        // We still need enough iterations to satisfy all constraints, but
+        // reducing them prevents excessive "optimization" that moves nodes.
+        userConstraintIters = Math.min(20, userConstraintIters);
+        allConstraintIters = Math.min(50, allConstraintIters);
+        
+        console.log(`WebCola: Using reduced iterations (unconstrained=${unconstrainedIters}, userConstraint=${userConstraintIters}, allConstraints=${allConstraintIters}) to preserve ${options!.priorPositions!.length} prior positions`);
       }
       
       if (nodeCount > 100) {
@@ -1263,10 +1271,25 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
       this.updateLoadingProgress('Applying constraints and initializing...');
 
+      // Use a more aggressive (higher) convergence threshold when prior positions exist.
+      // This stops the layout earlier, preventing edge springs from pulling nodes
+      // too far from their prior positions while still satisfying all constraints.
+      // 
+      // Default: 1e-3 (allows many iterations for full optimization)
+      // With priors: 0.1 (stops much earlier, prioritizing position preservation)
+      //
+      // Constraints are still fully respected because they are hard requirements.
+      // Only the "soft" optimization (edge lengths, overlap avoidance) is reduced.
+      const convergenceThreshold = hasPriorPositions ? 0.1 : 1e-3;
+      
+      if (hasPriorPositions) {
+        console.log(`WebCola: Using higher convergence threshold (${convergenceThreshold}) to preserve prior positions`);
+      }
+
       // Create WebCola layout using d3adaptor
       const layout: Layout = cola.d3adaptor(d3)
         .linkDistance(linkLength)
-        .convergenceThreshold(1e-3)
+        .convergenceThreshold(convergenceThreshold)
         .avoidOverlaps(true)
         .handleDisconnected(true)
         .nodes(webcolaLayout.nodes)

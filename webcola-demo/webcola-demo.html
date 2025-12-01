@@ -167,6 +167,24 @@
     <div id="cnd-panel" class="container d-flex flex-column col-md-4 border p-3">
         <h5 class="h5 mb-2 text-dark">CND Layout Specification:</h5>
         <button id="applyLayoutButton" class="mb-3" onclick="loadGraph()">Apply Layout</button>
+        
+        <!-- Temporal Explorer for multiple instances -->
+        <div id="temporal-explorer" class="mb-3" style="display: none;">
+            <h6 class="h6 text-dark">Temporal Explorer:</h6>
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <button id="prevInstanceBtn" onclick="navigateInstance(-1)" class="btn btn-sm btn-outline-primary" disabled>◀ Prev</button>
+                <span id="instanceIndicator" class="badge bg-primary">Instance 1 / 1</span>
+                <button id="nextInstanceBtn" onclick="navigateInstance(1)" class="btn btn-sm btn-outline-primary" disabled>Next ▶</button>
+            </div>
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="usePriorPositions" checked>
+                <label class="form-check-label" for="usePriorPositions">
+                    Use prior positions (temporal consistency)
+                </label>
+            </div>
+            <div id="priorPositionsInfo" class="small text-muted mt-1"></div>
+        </div>
+        
         <div id="webcola-cnd-container">
             <!-- React element attached here -->
         </div>
@@ -185,6 +203,14 @@
     <script>
         // Variables to store data
         let currentInstanceLayout = null;
+        
+        // Temporal state for multiple instances
+        let alloyInstances = [];           // Array of all parsed Alloy instances
+        let currentInstanceIndex = 0;      // Current instance being displayed
+        let priorPositions = null;         // Positions from the previous render for temporal consistency
+        let parsedAlloyDatum = null;       // Cached parsed Alloy datum
+        let cachedForgeEvaluator = null;   // Cached ForgeEvaluator
+        let cachedLayoutSpec = null;       // Cached layout specification
 
         /**
          * Get current Alloy XML from input field
@@ -243,6 +269,7 @@
 
         /**
          * Process Alloy data using the complete Alloy → ForgeEvaluator → Layout pipeline
+         * Now supports multiple temporal instances
          */
         async function loadAlloyData() {
             try {
@@ -262,45 +289,43 @@
 
                 // Step 1: Parse Alloy XML
                 updateStatus('Parsing Alloy XML...', 'info');
-                const alloyDatum = CndCore.AlloyInstance.parseAlloyXML(alloyXml);
-                console.log('Parsed Alloy Datum:', alloyDatum);
+                parsedAlloyDatum = CndCore.AlloyInstance.parseAlloyXML(alloyXml);
+                console.log('Parsed Alloy Datum:', parsedAlloyDatum);
                 
-                if (!alloyDatum.instances || alloyDatum.instances.length === 0) {
+                if (!parsedAlloyDatum.instances || parsedAlloyDatum.instances.length === 0) {
                     throw new Error('No instances found in Alloy XML');
                 }
 
-                const alloyDataInstance = new CndCore.AlloyDataInstance(alloyDatum.instances[0]);
-                // Now we need to convert thi
-
-                console.log('Using Alloy Data Instance:', alloyDataInstance);
-                console.log('Types via Alloy IDataInstance:', alloyDataInstance.getTypes().length);
-                console.log('Atoms via Alloy IDataInstance:', alloyDataInstance.getAtoms().length);
-                console.log('Relations via Alloy IDataInstance:', alloyDataInstance.getRelations().length);
+                // Store all instances for temporal exploration
+                alloyInstances = parsedAlloyDatum.instances;
+                currentInstanceIndex = 0;
+                priorPositions = null; // Reset prior positions when loading new data
+                
+                // Show temporal explorer if multiple instances
+                updateTemporalExplorer();
 
                 // Step 2: Create ForgeEvaluator with Alloy data
                 updateStatus('Creating ForgeEvaluator...', 'info');
 
-
                 let evaluationContext = {
                     sourceData: alloyXml,
-                }; //alloyDatum
-                const forgeEvaluator = new CndCore.ForgeEvaluator();
-                forgeEvaluator.initialize(evaluationContext);
+                };
+                cachedForgeEvaluator = new CndCore.ForgeEvaluator();
+                cachedForgeEvaluator.initialize(evaluationContext);
 
-                console.log('Created ForgeEvaluator:', forgeEvaluator);
+                console.log('Created ForgeEvaluator:', cachedForgeEvaluator);
 
                 // NOTE: Mount Evaluator REPL
                 if (window.mountEvaluatorRepl) {
-                    window.mountEvaluatorRepl('evaluator-repl-mount', forgeEvaluator, 0);
+                    window.mountEvaluatorRepl('evaluator-repl-mount', cachedForgeEvaluator, 0);
                 } else {
                     console.warn('Evaluator REPL mount function not available. Skipping REPL mount.');
                 }
 
                 // Step 3: Parse layout specification
                 updateStatus('Parsing layout specification...', 'info');
-                let layoutSpec = null;
                 try {
-                    layoutSpec = CndCore.parseLayoutSpec(cndSpec);
+                    cachedLayoutSpec = CndCore.parseLayoutSpec(cndSpec);
                     if (window.clearAllErrors) {
                         window.clearAllErrors();
                     }
@@ -313,80 +338,12 @@
                     }
                     return;
                 }
-                console.log('Parsed Layout Spec:', layoutSpec);
+                console.log('Parsed Layout Spec:', cachedLayoutSpec);
 
-                // Step 4: Create LayoutInstance with ForgeEvaluator
-                updateStatus('Creating layout instance with ForgeEvaluator...', 'info');
-                const ENABLE_ALIGNMENT_EDGES = true;
-                const instanceNumber = 0;
-                
-                
-                const layoutInstance = new CndCore.LayoutInstance(
-                    layoutSpec, 
-                    forgeEvaluator, 
-                    instanceNumber, 
-                    ENABLE_ALIGNMENT_EDGES
-                );
-                console.log('Created Layout Instance with ForgeEvaluator:', layoutInstance);
+                // Generate layout for current instance
+                await generateLayoutForCurrentInstance();
 
-                // Step 5: Generate layout using Alloy data instance
-                updateStatus('Generating layout with Alloy data...', 'info');
-                const projections = {};
-
-                try {
-                    const layoutResult = layoutInstance.generateLayout(alloyDataInstance, projections);
-                    currentInstanceLayout = layoutResult.layout;
-    
-                    if (layoutResult.error) {
-                        console.error('Layout generation error:', layoutResult.error);
-    
-                        // Check if this is a constraint conflict error
-                        if (layoutResult.error.errorMessages) {
-                            if (window.showPositionalError) {
-                                window.showPositionalError(layoutResult.error.errorMessages);
-                            } else {
-                                updateStatus(`Positional constraint conflict: ${layoutResult.error.message}`, 'error');
-                            }
-                        } else if (layoutResult.error.overlappingNodes) {
-                            if (window.showGroupOverlapError) {
-                                window.showGroupOverlapError(layoutResult.error.message);
-                            } else {
-                                updateStatus(`Group overlap error: ${layoutResult.error.message}`, 'error');
-                            }
-                        } else {
-                            if (window.showGeneralError) {
-                                window.showGeneralError(`Layout generation error: ${layoutResult.error.message}`);
-                            } else {
-                                updateStatus(`Layout generation error: ${layoutResult.error.message}`, 'error');
-                            }
-                        }
-
-                        // Set the webcola-cnd-graph element to indicate unsat state
-                        const webcolaGraphElement = document.getElementById('graph-container');
-                        webcolaGraphElement.setAttribute('unsat', "");
-
-                        return;
-                    }
-                } catch (error) {
-                    if (window.showGeneralError) {
-                        window.showGeneralError(`Layout generation failed: ${error.message}`);
-                    } else {
-                        updateStatus(`Layout generation failed: ${error.message}`, 'error');
-                    }
-                    return;
-                }
-
-                const webcolaGraphElement = document.getElementById('graph-container');
-                webcolaGraphElement.removeAttribute('unsat'); // Clear unsat state
-
-                // Clear errors on successful layout generation
-                if (window.clearAllErrors) {
-                    window.clearAllErrors();
-                }
-
-                console.log('Generated Instance Layout using Alloy pipeline:', currentInstanceLayout);
-
-                updateStatus('Alloy pipeline complete with ForgeEvaluator! Ready to render.', 'success');
+                updateStatus(`Alloy pipeline complete! Showing instance ${currentInstanceIndex + 1} of ${alloyInstances.length}.`, 'success');
                 
             } catch (error) {
                 console.error('Failed to load Alloy data:', error);
@@ -395,7 +352,166 @@
         }
 
         /**
+         * Generate layout for the current instance index
+         * Uses prior positions if available and enabled
+         */
+        async function generateLayoutForCurrentInstance() {
+            if (!alloyInstances.length || !cachedForgeEvaluator || !cachedLayoutSpec) {
+                throw new Error('Missing required data for layout generation');
+            }
+
+            const alloyDataInstance = new CndCore.AlloyDataInstance(alloyInstances[currentInstanceIndex]);
+            console.log(`Generating layout for instance ${currentInstanceIndex + 1}/${alloyInstances.length}`);
+            console.log('Using Alloy Data Instance:', alloyDataInstance);
+
+            // Step 4: Create LayoutInstance with ForgeEvaluator
+            updateStatus(`Creating layout for instance ${currentInstanceIndex + 1}...`, 'info');
+            const ENABLE_ALIGNMENT_EDGES = true;
+            
+            const layoutInstance = new CndCore.LayoutInstance(
+                cachedLayoutSpec, 
+                cachedForgeEvaluator, 
+                currentInstanceIndex, 
+                ENABLE_ALIGNMENT_EDGES
+            );
+            console.log('Created Layout Instance with ForgeEvaluator:', layoutInstance);
+
+            // Step 5: Generate layout using Alloy data instance
+            updateStatus('Generating layout with Alloy data...', 'info');
+            const projections = {};
+
+            try {
+                const layoutResult = layoutInstance.generateLayout(alloyDataInstance, projections);
+                currentInstanceLayout = layoutResult.layout;
+
+                if (layoutResult.error) {
+                    console.error('Layout generation error:', layoutResult.error);
+
+                    // Check if this is a constraint conflict error
+                    if (layoutResult.error.errorMessages) {
+                        if (window.showPositionalError) {
+                            window.showPositionalError(layoutResult.error.errorMessages);
+                        } else {
+                            updateStatus(`Positional constraint conflict: ${layoutResult.error.message}`, 'error');
+                        }
+                    } else if (layoutResult.error.overlappingNodes) {
+                        if (window.showGroupOverlapError) {
+                            window.showGroupOverlapError(layoutResult.error.message);
+                        } else {
+                            updateStatus(`Group overlap error: ${layoutResult.error.message}`, 'error');
+                        }
+                    } else {
+                        if (window.showGeneralError) {
+                            window.showGeneralError(`Layout generation error: ${layoutResult.error.message}`);
+                        } else {
+                            updateStatus(`Layout generation error: ${layoutResult.error.message}`, 'error');
+                        }
+                    }
+
+                    // Set the webcola-cnd-graph element to indicate unsat state
+                    const webcolaGraphElement = document.getElementById('graph-container');
+                    webcolaGraphElement.setAttribute('unsat', "");
+
+                    return;
+                }
+            } catch (error) {
+                if (window.showGeneralError) {
+                    window.showGeneralError(`Layout generation failed: ${error.message}`);
+                } else {
+                    updateStatus(`Layout generation failed: ${error.message}`, 'error');
+                }
+                return;
+            }
+
+            const webcolaGraphElement = document.getElementById('graph-container');
+            webcolaGraphElement.removeAttribute('unsat'); // Clear unsat state
+
+            // Clear errors on successful layout generation
+            if (window.clearAllErrors) {
+                window.clearAllErrors();
+            }
+
+            console.log('Generated Instance Layout:', currentInstanceLayout);
+        }
+
+        /**
+         * Update the temporal explorer UI based on current state
+         */
+        function updateTemporalExplorer() {
+            const explorerDiv = document.getElementById('temporal-explorer');
+            const prevBtn = document.getElementById('prevInstanceBtn');
+            const nextBtn = document.getElementById('nextInstanceBtn');
+            const indicator = document.getElementById('instanceIndicator');
+            const priorInfo = document.getElementById('priorPositionsInfo');
+
+            if (alloyInstances.length <= 1) {
+                explorerDiv.style.display = 'none';
+                return;
+            }
+
+            explorerDiv.style.display = 'block';
+            indicator.textContent = `Instance ${currentInstanceIndex + 1} / ${alloyInstances.length}`;
+            
+            prevBtn.disabled = currentInstanceIndex === 0;
+            nextBtn.disabled = currentInstanceIndex === alloyInstances.length - 1;
+
+            // Update prior positions info
+            if (priorPositions && priorPositions.length > 0) {
+                priorInfo.textContent = `📍 ${priorPositions.length} prior positions available`;
+            } else {
+                priorInfo.textContent = '📍 No prior positions (first render)';
+            }
+        }
+
+        /**
+         * Navigate to a different instance (for temporal exploration)
+         * @param {number} delta - Direction to navigate (-1 for prev, +1 for next)
+         */
+        async function navigateInstance(delta) {
+            const newIndex = currentInstanceIndex + delta;
+            
+            if (newIndex < 0 || newIndex >= alloyInstances.length) {
+                console.warn('Cannot navigate: index out of bounds');
+                return;
+            }
+
+            // Store current positions as prior positions for the next render
+            const graphElement = document.getElementById('graph-container');
+            const usePriorPositionsCheckbox = document.getElementById('usePriorPositions');
+            
+            if (usePriorPositionsCheckbox.checked && graphElement.getNodePositions) {
+                priorPositions = graphElement.getNodePositions();
+                console.log('Stored prior positions for temporal consistency:', priorPositions);
+                
+                // Log a few positions for debugging
+                if (priorPositions.length > 0) {
+                    console.log('Sample prior positions:');
+                    priorPositions.slice(0, 5).forEach(p => {
+                        console.log(`  ${p.id}: x=${p.x.toFixed(2)}, y=${p.y.toFixed(2)}`);
+                    });
+                }
+            } else {
+                priorPositions = null;
+                console.log('Prior positions disabled or not available');
+            }
+
+            currentInstanceIndex = newIndex;
+            updateTemporalExplorer();
+
+            try {
+                await generateLayoutForCurrentInstance();
+                await renderGraph();
+                
+                updateStatus(`Showing instance ${currentInstanceIndex + 1} of ${alloyInstances.length}`, 'success');
+            } catch (error) {
+                console.error('Error navigating to instance:', error);
+                updateStatus(`Navigation error: ${error.message}`, 'error');
+            }
+        }
+
+        /**
          * Render the graph using the webcola-cnd-graph custom element
+         * Passes prior positions for temporal consistency if available
          */
         async function renderGraph() {
             clearGraph(); // Clear existing graph first
@@ -412,10 +528,35 @@
 
                 updateStatus('Rendering Alloy graph with WebCola...', 'info');
                 
+                // Build render options with prior positions if available
+                const usePriorPositionsCheckbox = document.getElementById('usePriorPositions');
+                const shouldUsePriorPositions = usePriorPositionsCheckbox && usePriorPositionsCheckbox.checked;
+                
+                const renderOptions = {};
+                if (shouldUsePriorPositions && priorPositions && priorPositions.length > 0) {
+                    renderOptions.priorPositions = priorPositions;
+                    console.log(`Rendering with ${priorPositions.length} prior positions for temporal consistency`);
+                    
+                    // Log prior positions for debugging
+                    console.log('BEFORE (prior positions):');
+                    priorPositions.slice(0, 5).forEach(p => {
+                        console.log(`  ${p.id}: x=${p.x.toFixed(2)}, y=${p.y.toFixed(2)}`);
+                    });
+                }
+                
                 // Use the real InstanceLayout data with WebCola custom element
-                await graphElement.renderLayout(currentInstanceLayout);
+                await graphElement.renderLayout(currentInstanceLayout, renderOptions);
 
-                updateStatus('Alloy graph rendered successfully!', 'success');
+                // Log final positions for debugging
+                if (shouldUsePriorPositions && priorPositions && priorPositions.length > 0) {
+                    const finalPositions = graphElement.getNodePositions();
+                    console.log('AFTER (render result):');
+                    finalPositions.slice(0, 5).forEach(p => {
+                        console.log(`  ${p.id}: x=${p.x.toFixed(2)}, y=${p.y.toFixed(2)}`);
+                    });
+                }
+
+                updateStatus(`Instance ${currentInstanceIndex + 1}/${alloyInstances.length} rendered successfully!`, 'success');
             } catch (error) {
                 console.error('Error rendering Alloy graph:', error);
                 updateStatus(`Alloy render error: ${error.message}`, 'error');
@@ -443,10 +584,25 @@
                 }
             }
             
-            // Clear stored layout
+            // Clear stored layout (but preserve temporal state for navigation)
             currentInstanceLayout = null;
             
             updateStatus('Graph cleared.', 'info');
+        }
+
+        /**
+         * Full reset - clears everything including temporal state
+         */
+        function resetAll() {
+            clearGraph();
+            alloyInstances = [];
+            currentInstanceIndex = 0;
+            priorPositions = null;
+            parsedAlloyDatum = null;
+            cachedForgeEvaluator = null;
+            cachedLayoutSpec = null;
+            updateTemporalExplorer();
+            updateStatus('All state reset.', 'info');
         }
 
         /**
@@ -482,11 +638,60 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            // Mouont the window.mountRelationHighlighter
+            // Mount the window.mountRelationHighlighter
             const graphElement = document.getElementById('graph-container');
             if (graphElement && window.mountRelationHighlighter) {
                 window.mountRelationHighlighter('relation-highlighter-mount', 'graph-container');
             }
+
+            // Listen for node drag events to update prior positions
+            if (graphElement) {
+                graphElement.addEventListener('node-drag-end', (e) => {
+                    const detail = e.detail;
+                    console.log(`Node ${detail.id} dragged from (${detail.previous?.x?.toFixed(2)}, ${detail.previous?.y?.toFixed(2)}) to (${detail.current.x.toFixed(2)}, ${detail.current.y.toFixed(2)})`);
+                    
+                    // Update prior positions with the new dragged position
+                    // This ensures the dragged position is used for the next render
+                    if (priorPositions) {
+                        const existingIndex = priorPositions.findIndex(p => p.id === detail.id);
+                        if (existingIndex >= 0) {
+                            priorPositions[existingIndex] = {
+                                id: detail.id,
+                                x: detail.current.x,
+                                y: detail.current.y
+                            };
+                        } else {
+                            priorPositions.push({
+                                id: detail.id,
+                                x: detail.current.x,
+                                y: detail.current.y
+                            });
+                        }
+                        console.log(`Updated prior position for ${detail.id} to (${detail.current.x.toFixed(2)}, ${detail.current.y.toFixed(2)})`);
+                    }
+                });
+            }
+
+            // Add keyboard navigation for temporal explorer
+            document.addEventListener('keydown', (e) => {
+                // Only handle arrow keys when temporal explorer is visible and not typing in input
+                const temporalExplorer = document.getElementById('temporal-explorer');
+                if (temporalExplorer.style.display === 'none') return;
+                
+                const activeElement = document.activeElement;
+                const isTyping = activeElement.tagName === 'INPUT' || 
+                                 activeElement.tagName === 'TEXTAREA' || 
+                                 activeElement.isContentEditable;
+                if (isTyping) return;
+
+                if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    navigateInstance(-1);
+                } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    navigateInstance(1);
+                }
+            });
         });
 
         // Auto-initialize when page loads
@@ -508,6 +713,8 @@
         window.loadAlloyData = loadAlloyData;
         window.renderGraph = renderGraph;
         window.clearGraph = clearGraph;
+        window.navigateInstance = navigateInstance;
+        window.resetAll = resetAll;
     </script>
 </body>
 </html>
