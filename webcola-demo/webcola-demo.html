@@ -329,12 +329,13 @@
                 );
                 console.log('Created Layout Instance with ForgeEvaluator:', layoutInstance);
 
-                // Step 5: Generate layout using Alloy data instance
+                // Step 5: Generate layout using Alloy data instance (now async)
                 updateStatus('Generating layout with Alloy data...', 'info');
                 const projections = {};
 
                 try {
-                    const layoutResult = layoutInstance.generateLayout(alloyDataInstance, projections);
+                    // NOTE: generateLayout is now async and returns a Promise
+                    const layoutResult = await layoutInstance.generateLayout(alloyDataInstance, projections);
                     currentInstanceLayout = layoutResult.layout;
     
                     if (layoutResult.error) {

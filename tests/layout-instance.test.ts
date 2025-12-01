@@ -61,24 +61,24 @@ function createEvaluator(instance: JSONDataInstance) {
 }
 
 describe('LayoutInstance', () => {
-  it('generates layout from data', () => {
+  it('generates layout from data', async () => {
     const instance = new JSONDataInstance(jsonData);
     const evaluator = createEvaluator(instance);
 
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = await layoutInstance.generateLayout(instance, {});
 
     expect(layout.nodes).toHaveLength(2);
     expect(layout.edges).toHaveLength(1); // Only the original relation edge, no alignment edge because they're already connected
     expect(layout.constraints.length).toBeGreaterThan(0);
   });
 
-  it('adds alignment edges for disconnected nodes with orientation constraints', () => {
+  it('adds alignment edges for disconnected nodes with orientation constraints', async () => {
     const instance = new JSONDataInstance(jsonDataDisconnected);
     const evaluator = createEvaluator(instance);
 
     const layoutInstance = new LayoutInstance(layoutSpecDisconnectedNodes, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = await layoutInstance.generateLayout(instance, {});
 
     expect(layout.nodes).toHaveLength(3);
     expect(layout.edges).toHaveLength(2); // Original relation edge A->B + alignment edge A->C
@@ -90,7 +90,7 @@ describe('LayoutInstance', () => {
     expect(edgeLabels).toContain('_alignment_A_C_'); // Added alignment edge
   });
 
-  it('adds alignment edges for align constraints on disconnected nodes', () => {
+  it('adds alignment edges for align constraints on disconnected nodes', async () => {
     const alignConstraintData: IJsonDataInstance = {
       atoms: [
         { id: 'A', type: 'Type1', label: 'A' },
@@ -112,7 +112,7 @@ constraints:
     const alignLayoutSpec = parseLayoutSpec(alignConstraintSpec);
 
     const layoutInstance = new LayoutInstance(alignLayoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = await layoutInstance.generateLayout(instance, {});
 
     expect(layout.nodes).toHaveLength(3);
     expect(layout.edges).toHaveLength(1); // Only the alignment edge A->B
@@ -123,12 +123,12 @@ constraints:
     expect(edgeLabels).toContain('_alignment_A_B_'); // Added alignment edge
   });
 
-  it('does not add alignment edges when addAlignmentEdges is false', () => {
+  it('does not add alignment edges when addAlignmentEdges is false', async () => {
     const instance = new JSONDataInstance(jsonDataDisconnected);
     const evaluator = createEvaluator(instance);
 
     const layoutInstance = new LayoutInstance(layoutSpecDisconnectedNodes, evaluator, 0, false);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = await layoutInstance.generateLayout(instance, {});
 
     expect(layout.nodes).toHaveLength(3);
     expect(layout.edges).toHaveLength(1); // Only the original relation edge A->B
@@ -139,7 +139,7 @@ constraints:
     expect(edgeLabels).not.toContain('_alignment_A_C_');
   });
 
-  it('applies color to inferred edges when specified', () => {
+  it('applies color to inferred edges when specified', async () => {
     const dataWithTransitiveRelation: IJsonDataInstance = {
       atoms: [
         { id: 'A', type: 'Node', label: 'A' },
@@ -172,7 +172,7 @@ directives:
     const spec = parseLayoutSpec(specWithInferredEdge);
 
     const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = await layoutInstance.generateLayout(instance, {});
 
     expect(layout.nodes).toHaveLength(3);
     // Should have original edges (A->B, B->C) and inferred edge (A->C)
@@ -184,7 +184,7 @@ directives:
     expect(inferredEdge?.color).toBe('#ff0000');
   });
 
-  it('uses default black color for inferred edges when color not specified', () => {
+  it('uses default black color for inferred edges when color not specified', async () => {
     const dataWithTransitiveRelation: IJsonDataInstance = {
       atoms: [
         { id: 'A', type: 'Node', label: 'A' },
@@ -216,7 +216,7 @@ directives:
     const spec = parseLayoutSpec(specWithInferredEdge);
 
     const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = await layoutInstance.generateLayout(instance, {});
 
     expect(layout.nodes).toHaveLength(3);
     // Should have original edges (A->B, B->C) and inferred edge (A->C)

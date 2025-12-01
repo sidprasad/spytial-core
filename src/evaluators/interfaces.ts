@@ -83,6 +83,31 @@ export interface IEvaluatorResult {
 
 /**
  * Main evaluator interface that different evaluators must implement
+ * 
+ * @remarks
+ * All methods that may involve asynchronous operations (like network calls
+ * or external service communication) are async. Implementations that don't
+ * need async behavior can simply return resolved promises or use sync code
+ * wrapped in Promise.resolve().
+ * 
+ * @example
+ * ```typescript
+ * // Async evaluator implementation
+ * class AsyncEvaluator implements IEvaluator {
+ *   async evaluate(expression: string): Promise<IEvaluatorResult> {
+ *     const result = await fetchFromRemoteService(expression);
+ *     return new MyEvaluatorResult(result);
+ *   }
+ * }
+ * 
+ * // Sync evaluator implementation (still returns Promise)
+ * class SyncEvaluator implements IEvaluator {
+ *   async evaluate(expression: string): Promise<IEvaluatorResult> {
+ *     const result = evaluateLocally(expression);
+ *     return new MyEvaluatorResult(result);
+ *   }
+ * }
+ * ```
  */
 interface IEvaluator {
   /**
@@ -100,10 +125,10 @@ interface IEvaluator {
    * Evaluate an expression and return the wrapped result
    * @param _expression The expression to evaluate
    * @param _config Optional configuration for this evaluation
-   * @returns Wrapped result with convenience methods
+   * @returns Promise resolving to wrapped result with convenience methods
    * @throws Error if the evaluation fails
    */
-  evaluate(_expression: string, _config?: EvaluatorConfig): IEvaluatorResult;
+  evaluate(_expression: string, _config?: EvaluatorConfig): Promise<IEvaluatorResult>;
   
 
 }

@@ -347,7 +347,7 @@ export class ForgeEvaluator implements IEvaluator {
         return this.initialized && this.evaluator !== undefined;
     }
 
-    evaluate(expression: string, config?: EvaluatorConfig): IEvaluatorResult {
+    async evaluate(expression: string, config?: EvaluatorConfig): Promise<IEvaluatorResult> {
         if (!this.isReady()) {
             throw new Error('ForgeEvaluator is not properly initialized');
         }

@@ -241,7 +241,7 @@ export class SGraphQueryEvaluator implements IEvaluator {
     return this.ready;
   }
 
-  evaluate(expression: string, config?: EvaluatorConfig): IEvaluatorResult {
+  async evaluate(expression: string, config?: EvaluatorConfig): Promise<IEvaluatorResult> {
     if (!this.isReady()) {
       throw new Error("Evaluator not initialized");
     }

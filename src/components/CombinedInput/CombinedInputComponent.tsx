@@ -165,7 +165,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
       const layoutInstance = new LayoutInstance(layoutSpec, sgqEvaluator, 0, true);
 
       // Step 5: Generate layout
-      const layoutResult = layoutInstance.generateLayout(instance, projections);
+      const layoutResult = await layoutInstance.generateLayout(instance, projections);
       const newLayout = layoutResult.layout;
       
       setCurrentLayout(newLayout);
