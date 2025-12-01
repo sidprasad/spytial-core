@@ -448,6 +448,22 @@ export class WebColaLayout {
 
 
 
+  /**
+   * Converts a LayoutNode to a NodeWithMetadata for WebCola.
+   * 
+   * Position initialization priority:
+   * 1. Prior positions (if available via WebColaLayoutOptions.priorPositions)
+   * 2. DAGRE-computed positions (if DAGRE graph is available)
+   * 3. Default center position (DEFAULT_X, DEFAULT_Y)
+   * 
+   * Note: When using prior positions, we don't set fixed=1 because we want
+   * the layout to still optimize positions while using prior positions as
+   * initial values. This allows the layout engine to make adjustments as needed
+   * while starting from a known good position.
+   * 
+   * @param node - The LayoutNode to convert
+   * @returns NodeWithMetadata for WebCola
+   */
   private toColaNode(node: LayoutNode): NodeWithMetadata {
 
     let x = this.DEFAULT_X;
@@ -460,8 +476,6 @@ export class WebColaLayout {
     if (priorPosition) {
       x = priorPosition.x;
       y = priorPosition.y;
-      // Note: We don't set fixed=1 here as we want the layout to still 
-      // optimize positions while using prior positions as initial values
     } else if (this.dagre_graph) {
       // Priority 2: Use DAGRE-computed position for new nodes
       const dagre_node = this.dagre_graph.node(node.id);
