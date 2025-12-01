@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { ConstraintData, DirectiveData } from './interfaces';
 import jsyaml from 'js-yaml';
+import './NoCodeView.css';
 
 // TODO: Add unit tests for this function
 
@@ -148,11 +149,14 @@ const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
     const highlightedYaml = useMemo(() => {
         if (!props.yamlValue) return '';
         
-        // Escape HTML entities first
+        // Escape HTML entities first to prevent XSS
+        // This must happen before any other string transformations
         let highlighted = props.yamlValue
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;');
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
         
         // Highlight comments (lines starting with #)
         highlighted = highlighted.replace(/^(#.*)$/gm, '<span class="yaml-comment">$1</span>');
@@ -160,8 +164,8 @@ const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
         // Highlight keys (word followed by colon)
         highlighted = highlighted.replace(/^(\s*)([a-zA-Z_][a-zA-Z0-9_]*)(:\s*)/gm, '$1<span class="yaml-key">$2</span>$3');
         
-        // Highlight string values in quotes
-        highlighted = highlighted.replace(/(["'])([^"']*)\1/g, '<span class="yaml-string">$1$2$1</span>');
+        // Highlight string values in escaped quotes
+        highlighted = highlighted.replace(/(&quot;|&#39;)([^&]*)(\1)/g, '<span class="yaml-string">$1$2$3</span>');
         
         // Highlight numbers
         highlighted = highlighted.replace(/:\s+(-?\d+\.?\d*)\b/g, ': <span class="yaml-number">$1</span>');
@@ -269,44 +273,6 @@ const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
                 />
             </div>
         </div>
-        
-        {/* CSS for YAML syntax highlighting */}
-        <style>{`
-            .yaml-highlight-overlay .yaml-key {
-                color: #0550ae;
-                font-weight: 600;
-            }
-            .yaml-highlight-overlay .yaml-string {
-                color: #0a3069;
-            }
-            .yaml-highlight-overlay .yaml-number {
-                color: #0550ae;
-            }
-            .yaml-highlight-overlay .yaml-boolean {
-                color: #cf222e;
-                font-weight: 600;
-            }
-            .yaml-highlight-overlay .yaml-null {
-                color: #cf222e;
-                font-style: italic;
-            }
-            .yaml-highlight-overlay .yaml-comment {
-                color: #6e7781;
-                font-style: italic;
-            }
-            .yaml-highlight-overlay .yaml-list-item {
-                color: #cf222e;
-                font-weight: bold;
-            }
-            .yaml-editor-container textarea:focus {
-                outline: 2px solid #0969da;
-                outline-offset: -2px;
-            }
-            .yaml-editor-container textarea:focus + .yaml-highlight-overlay,
-            .yaml-editor-container textarea:focus ~ .yaml-highlight-overlay {
-                border-color: #0969da;
-            }
-        `}</style>
     </div>
   )
 }
