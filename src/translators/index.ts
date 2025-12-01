@@ -21,4 +21,9 @@ export type {
   LayoutGroup 
 } from '../layout/interfaces';
 
-export type { NodeWithMetadata, EdgeWithMetadata } from './webcola/webcolatranslator';
+export type { 
+  NodeWithMetadata, 
+  EdgeWithMetadata, 
+  NodePositionHint, 
+  WebColaLayoutOptions 
+} from './webcola/webcolatranslator';

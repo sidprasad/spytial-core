@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator } from './webcolatranslator';
+import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator, NodePositionHint, WebColaLayoutOptions } from './webcolatranslator';
 import { InstanceLayout, isAlignmentConstraint, isInstanceLayout, isLeftConstraint, isTopConstraint, LayoutNode } from '../../layout/interfaces';
 import type { GridRouter, Group, Layout, Node, Link } from 'webcola';
 import { IInputDataInstance, ITuple, IAtom } from '../../data-instance/interfaces';
@@ -1151,9 +1151,21 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   /**
    * Render layout using WebCola constraint solver
    * @param instanceLayout - The layout instance to render
-   * @param inputDataInstance - Optional input data instance for edge modifications
+   * @param options - Optional layout options including prior positions for temporal consistency
+   * 
+   * @example
+   * ```typescript
+   * // First render
+   * await graph.renderLayout(layout1);
+   * 
+   * // Get positions from first render
+   * const positions = graph.getNodePositions();
+   * 
+   * // Second render using prior positions for temporal consistency
+   * await graph.renderLayout(layout2, { priorPositions: positions });
+   * ```
    */
-  public async renderLayout(instanceLayout: InstanceLayout): Promise<void> {
+  public async renderLayout(instanceLayout: InstanceLayout, options?: WebColaLayoutOptions): Promise<void> {
 
     if (! isInstanceLayout(instanceLayout)) {
       throw new Error('Invalid instance layout provided. Expected an InstanceLayout instance.');
@@ -1203,9 +1215,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       const containerWidth = containerRect.width || 800; // fallback to default
       const containerHeight = containerRect.height || 600; // fallback to default
 
-      // Translate to WebCola format with actual container dimensions
+      // Translate to WebCola format with actual container dimensions and optional prior positions
       const translator = new WebColaTranslator();
-      const webcolaLayout = await translator.translate(instanceLayout, containerWidth, containerHeight);
+      const webcolaLayout = await translator.translate(instanceLayout, containerWidth, containerHeight, options);
 
       this.updateLoadingProgress(`Computing layout for ${webcolaLayout.nodes.length} nodes...`);
 
@@ -1216,14 +1228,26 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       let userConstraintIters = WebColaCnDGraph.INITIAL_USER_CONSTRAINT_ITERATIONS;
       let allConstraintIters = WebColaCnDGraph.INITIAL_ALL_CONSTRAINTS_ITERATIONS;
       
+      // When prior positions are provided, reduce unconstrained iterations significantly.
+      // WebCola's unconstrained phase allows nodes to move freely from their initial positions,
+      // so reducing this phase helps preserve the provided positions.
+      // This is crucial for temporal consistency across Alloy traces.
+      const hasPriorPositions = options?.priorPositions && options.priorPositions.length > 0;
+      if (hasPriorPositions) {
+        // Minimize unconstrained iterations to preserve prior positions
+        // Keep 1-2 iterations to allow minor adjustments
+        unconstrainedIters = Math.min(2, unconstrainedIters);
+        console.log(`WebCola: Using reduced unconstrained iterations (${unconstrainedIters}) to preserve ${options!.priorPositions!.length} prior positions`);
+      }
+      
       if (nodeCount > 100) {
         // For large graphs (>100 nodes), reduce iterations more aggressively
-        unconstrainedIters = Math.max(5, Math.floor(unconstrainedIters * 0.5));
+        unconstrainedIters = Math.max(hasPriorPositions ? 1 : 5, Math.floor(unconstrainedIters * 0.5));
         userConstraintIters = Math.max(25, Math.floor(userConstraintIters * 0.5));
         allConstraintIters = Math.max(100, Math.floor(allConstraintIters * 0.5));
       } else if (nodeCount > 50) {
         // For medium graphs (>50 nodes), reduce iterations moderately
-        unconstrainedIters = Math.max(8, Math.floor(unconstrainedIters * 0.8));
+        unconstrainedIters = Math.max(hasPriorPositions ? 1 : 8, Math.floor(unconstrainedIters * 0.8));
         userConstraintIters = Math.max(40, Math.floor(userConstraintIters * 0.8));
         allConstraintIters = Math.max(150, Math.floor(allConstraintIters * 0.75));
       }
