@@ -1236,7 +1236,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       if (hasPriorPositions) {
         // Minimize unconstrained iterations to preserve prior positions
         // Keep 1-2 iterations to allow minor adjustments
-        unconstrainedIters = Math.min(2, unconstrainedIters);
+        unconstrainedIters = Math.min(1, unconstrainedIters);
         
         // Also reduce constrained iterations - these are where edge springs
         // have the most impact on pulling nodes away from prior positions.
@@ -1276,11 +1276,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       // too far from their prior positions while still satisfying all constraints.
       // 
       // Default: 1e-3 (allows many iterations for full optimization)
-      // With priors: 0.1 (stops much earlier, prioritizing position preservation)
+      // With priors: 0.8 (stops much earlier, prioritizing position preservation)
       //
       // Constraints are still fully respected because they are hard requirements.
       // Only the "soft" optimization (edge lengths, overlap avoidance) is reduced.
-      const convergenceThreshold = hasPriorPositions ? 0.1 : 1e-3;
+      const convergenceThreshold = hasPriorPositions ? 0.8 : 1e-3;
       
       if (hasPriorPositions) {
         console.log(`WebCola: Using higher convergence threshold (${convergenceThreshold}) to preserve prior positions`);
