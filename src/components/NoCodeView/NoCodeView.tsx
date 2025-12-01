@@ -263,7 +263,7 @@ const NoCodeView = ({
         setDirectives((prev) => newDirectives);
     };
 
-    // Load initial state from YAML when component mounts
+    // Load state from YAML when component mounts or when yamlValue changes
     useEffect(() => {
         // If switching to No Code View and have YAML, load it
         console.log(yamlValue);
@@ -274,7 +274,7 @@ const NoCodeView = ({
                 console.error("Failed to load YAML into No Code View:", error);
             }
         }
-    }, [])
+    }, [yamlValue])
 
     return (
         <section id="noCodeViewContainer" aria-label="No Code View Container">

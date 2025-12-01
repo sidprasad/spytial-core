@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback } from 'react';
 import { ORIENTATION_DESCRIPTION, CYCLIC_DESCRIPTION, ALIGN_DESCRIPTION, GROUPING_FIELD_DESCRIPTION, GROUPING_SELECTOR_DESCRIPTION, SIZE_DESCRIPTION, HIDEATOM_DESCRIPTION } from './constants';
 import { CyclicSelector, 
     OrientationSelector, 
@@ -10,7 +10,7 @@ import { CyclicSelector,
 } from './index';
 import { useHighlight } from './hooks';
 import { ConstraintType } from './types';
-import { ConstraintData } from './interfaces';
+import { ConstraintData, DirectiveData } from './interfaces';
 
 /**
  * Configuration options for constraint card component
@@ -30,19 +30,43 @@ interface ConstraintCardProps {
   className?: string;
 }
 
-const ConstraintCard = (props: ConstraintCardProps) => {
-    const constraintsToSelectorComponentMap: Record<ConstraintType, React.JSX.Element> = {
-        cyclic: <CyclicSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>,
-        orientation: <OrientationSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>,
-        align: <AlignSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>,
-        groupfield: <GroupByFieldSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>,
-        groupselector: <GroupBySelectorSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>,
-        size: <SizeSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>,
-        hideAtom: <HideAtomSelector constraintData={props.constraintData} onUpdate={props.onUpdate}/>,
-    }
-
-    const [cardHTML, setCardHTML] = useState<React.JSX.Element>(constraintsToSelectorComponentMap[props.constraintData.type]);
+/**
+ * Renders the appropriate selector component based on constraint type
+ * 
+ * @param type - The constraint type
+ * @param constraintData - The constraint data
+ * @param onUpdate - Callback for updates
+ * @returns The appropriate selector component
+ */
+const renderSelectorComponent = (
+    type: ConstraintType,
+    constraintData: ConstraintData,
+    onUpdate: (updates: Partial<Omit<ConstraintData, 'id'>>) => void
+): React.JSX.Element => {
+    // For dual-use selectors (size, hideAtom), cast the onUpdate to the expected type
+    const dualUseOnUpdate = onUpdate as (updates: Partial<Omit<ConstraintData | DirectiveData, 'id'>>) => void;
     
+    switch (type) {
+        case 'cyclic':
+            return <CyclicSelector constraintData={constraintData} onUpdate={onUpdate}/>;
+        case 'orientation':
+            return <OrientationSelector constraintData={constraintData} onUpdate={onUpdate}/>;
+        case 'align':
+            return <AlignSelector constraintData={constraintData} onUpdate={onUpdate}/>;
+        case 'groupfield':
+            return <GroupByFieldSelector constraintData={constraintData} onUpdate={onUpdate}/>;
+        case 'groupselector':
+            return <GroupBySelectorSelector constraintData={constraintData} onUpdate={onUpdate}/>;
+        case 'size':
+            return <SizeSelector constraintData={constraintData} onUpdate={dualUseOnUpdate}/>;
+        case 'hideAtom':
+            return <HideAtomSelector constraintData={constraintData} onUpdate={dualUseOnUpdate}/>;
+        default:
+            return <OrientationSelector constraintData={constraintData} onUpdate={onUpdate}/>;
+    }
+};
+
+const ConstraintCard = (props: ConstraintCardProps) => {
     const { isHighlighted } = useHighlight(1000); // Highlight for 1 second
 
     /**
@@ -56,12 +80,9 @@ const ConstraintCard = (props: ConstraintCardProps) => {
         const selectElement = event.target;
         const selectedValue = selectElement.value as ConstraintType;
 
-        // Constraint Fields
-        setCardHTML(constraintsToSelectorComponentMap[selectedValue]);
-
-        // Update the constraint type
+        // Update the constraint type and reset params
         props.onUpdate({ type: selectedValue, params: {} });
-    }, [props.onUpdate, props.constraintData]);
+    }, [props.onUpdate]);
 
     const classes = [
         props.className ? props.className : '',
@@ -89,7 +110,7 @@ const ConstraintCard = (props: ConstraintCardProps) => {
                 </select>
             </div>
             <div className="params">
-                { cardHTML }
+                { renderSelectorComponent(props.constraintData.type, props.constraintData, props.onUpdate) }
             </div>
         </div>
     )
