@@ -1353,6 +1353,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           // Dispatch relations-available event after layout is complete
           this.dispatchRelationsAvailableEvent();
 
+          // Dispatch layout-complete event with final node positions
+          // This is useful for capturing positions for temporal consistency
+          this.dispatchEvent(new CustomEvent('layout-complete', {
+            detail: {
+              nodePositions: this.getNodePositions()
+            }
+          }));
+
           this.hideLoading();
         });
 

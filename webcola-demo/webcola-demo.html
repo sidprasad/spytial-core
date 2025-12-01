@@ -444,16 +444,24 @@
             const indicator = document.getElementById('instanceIndicator');
             const priorInfo = document.getElementById('priorPositionsInfo');
 
+            console.log(`updateTemporalExplorer: ${alloyInstances.length} instances, current=${currentInstanceIndex}`);
+
             if (alloyInstances.length <= 1) {
                 explorerDiv.style.display = 'none';
+                console.log('Temporal explorer hidden (single instance)');
                 return;
             }
 
             explorerDiv.style.display = 'block';
             indicator.textContent = `Instance ${currentInstanceIndex + 1} / ${alloyInstances.length}`;
             
-            prevBtn.disabled = currentInstanceIndex === 0;
-            nextBtn.disabled = currentInstanceIndex === alloyInstances.length - 1;
+            const prevDisabled = currentInstanceIndex === 0;
+            const nextDisabled = currentInstanceIndex === alloyInstances.length - 1;
+            
+            prevBtn.disabled = prevDisabled;
+            nextBtn.disabled = nextDisabled;
+            
+            console.log(`Temporal explorer visible: prevBtn.disabled=${prevDisabled}, nextBtn.disabled=${nextDisabled}`);
 
             // Update prior positions info
             if (priorPositions && priorPositions.length > 0) {
@@ -468,6 +476,8 @@
          * @param {number} delta - Direction to navigate (-1 for prev, +1 for next)
          */
         async function navigateInstance(delta) {
+            console.log(`navigateInstance called with delta=${delta}, currentIndex=${currentInstanceIndex}, totalInstances=${alloyInstances.length}`);
+            
             const newIndex = currentInstanceIndex + delta;
             
             if (newIndex < 0 || newIndex >= alloyInstances.length) {
@@ -475,27 +485,31 @@
                 return;
             }
 
+            console.log(`Navigating from instance ${currentInstanceIndex + 1} to instance ${newIndex + 1}`);
+
             // Store current positions as prior positions for the next render
             const graphElement = document.getElementById('graph-container');
             const usePriorPositionsCheckbox = document.getElementById('usePriorPositions');
             
             if (usePriorPositionsCheckbox.checked && graphElement.getNodePositions) {
-                priorPositions = graphElement.getNodePositions();
-                console.log('Stored prior positions for temporal consistency:', priorPositions);
-                
-                // Log a few positions for debugging
-                if (priorPositions.length > 0) {
+                const currentPositions = graphElement.getNodePositions();
+                if (currentPositions && currentPositions.length > 0) {
+                    priorPositions = currentPositions;
+                    console.log(`Stored ${priorPositions.length} prior positions for temporal consistency`);
+                    
+                    // Log a few positions for debugging
                     console.log('Sample prior positions:');
                     priorPositions.slice(0, 5).forEach(p => {
                         console.log(`  ${p.id}: x=${p.x.toFixed(2)}, y=${p.y.toFixed(2)}`);
                     });
                 }
             } else {
-                priorPositions = null;
                 console.log('Prior positions disabled or not available');
             }
 
             currentInstanceIndex = newIndex;
+            console.log(`Updated currentInstanceIndex to ${currentInstanceIndex}`);
+            
             updateTemporalExplorer();
 
             try {
@@ -519,8 +533,16 @@
             
             try {
                 if (!currentInstanceLayout) {
-                    updateStatus('No layout data available. Processing Alloy data first...', 'info');
-                    await loadAlloyData();
+                    // If we have cached data, regenerate layout for current instance
+                    // Otherwise, load fresh data (which resets to instance 0)
+                    if (alloyInstances.length > 0 && cachedForgeEvaluator && cachedLayoutSpec) {
+                        console.log('Regenerating layout for current instance (not reloading data)');
+                        await generateLayoutForCurrentInstance();
+                    } else {
+                        updateStatus('No layout data available. Processing Alloy data first...', 'info');
+                        await loadAlloyData();
+                    }
+                    
                     if (!currentInstanceLayout) {
                         throw new Error('Failed to generate layout data from Alloy');
                     }
@@ -546,15 +568,6 @@
                 
                 // Use the real InstanceLayout data with WebCola custom element
                 await graphElement.renderLayout(currentInstanceLayout, renderOptions);
-
-                // Log final positions for debugging
-                if (shouldUsePriorPositions && priorPositions && priorPositions.length > 0) {
-                    const finalPositions = graphElement.getNodePositions();
-                    console.log('AFTER (render result):');
-                    finalPositions.slice(0, 5).forEach(p => {
-                        console.log(`  ${p.id}: x=${p.x.toFixed(2)}, y=${p.y.toFixed(2)}`);
-                    });
-                }
 
                 updateStatus(`Instance ${currentInstanceIndex + 1}/${alloyInstances.length} rendered successfully!`, 'success');
             } catch (error) {
@@ -669,6 +682,26 @@
                         }
                         console.log(`Updated prior position for ${detail.id} to (${detail.current.x.toFixed(2)}, ${detail.current.y.toFixed(2)})`);
                     }
+                });
+
+                // Listen for layout-complete to capture final positions
+                graphElement.addEventListener('layout-complete', (e) => {
+                    const detail = e.detail;
+                    console.log('Layout complete! Capturing final positions for temporal consistency.');
+                    
+                    // Store the final positions from the completed layout
+                    priorPositions = detail.nodePositions;
+                    
+                    // Log positions for debugging
+                    if (priorPositions && priorPositions.length > 0) {
+                        console.log(`Captured ${priorPositions.length} node positions:`);
+                        priorPositions.slice(0, 5).forEach(p => {
+                            console.log(`  ${p.id}: x=${p.x.toFixed(2)}, y=${p.y.toFixed(2)}`);
+                        });
+                    }
+                    
+                    // Update UI to show positions are available
+                    updateTemporalExplorer();
                 });
             }
 
