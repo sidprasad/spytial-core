@@ -82,7 +82,8 @@ export interface IEvaluatorResult {
 }
 
 /**
- * Main evaluator interface that different evaluators must implement
+ * Main evaluator interface that different evaluators must implement.
+ * This is the synchronous version of the evaluator interface.
  */
 interface IEvaluator {
   /**
@@ -106,6 +107,81 @@ interface IEvaluator {
   evaluate(_expression: string, _config?: EvaluatorConfig): IEvaluatorResult;
   
 
+}
+
+/**
+ * Asynchronous evaluator interface for evaluators that rely on async backends.
+ * This extends the base evaluator concept with async methods for initialization and evaluation.
+ * 
+ * Use this interface when your evaluator:
+ * - Communicates with a remote service
+ * - Uses Web Workers
+ * - Depends on async I/O operations
+ * - Needs to await external resources
+ * 
+ * @example
+ * ```typescript
+ * class RemoteEvaluator implements IEvaluatorAsync {
+ *   async initializeAsync(context: EvaluationContext): Promise<void> {
+ *     await fetch('/api/initialize', { body: JSON.stringify(context) });
+ *   }
+ *   
+ *   isReady(): boolean {
+ *     return this.initialized;
+ *   }
+ *   
+ *   async evaluateAsync(expr: string): Promise<IEvaluatorResult> {
+ *     const response = await fetch('/api/evaluate', { body: expr });
+ *     return response.json();
+ *   }
+ * }
+ * ```
+ */
+export interface IEvaluatorAsync {
+  /**
+   * Initialize the evaluator with context data asynchronously
+   * @param _context The evaluation context containing data and metadata
+   * @returns Promise that resolves when initialization is complete
+   */
+  initializeAsync(_context: EvaluationContext): Promise<void>;
+  
+  /**
+   * Check if the evaluator is properly initialized and ready.
+   * This method is synchronous for quick status checks.
+   */
+  isReady(): boolean;
+  
+  /**
+   * Evaluate an expression asynchronously and return the wrapped result
+   * @param _expression The expression to evaluate
+   * @param _config Optional configuration for this evaluation
+   * @returns Promise resolving to wrapped result with convenience methods
+   * @throws Error if the evaluation fails
+   */
+  evaluateAsync(_expression: string, _config?: EvaluatorConfig): Promise<IEvaluatorResult>;
+}
+
+/**
+ * Union type representing any evaluator (sync or async)
+ */
+export type AnyEvaluator = IEvaluator | IEvaluatorAsync;
+
+/**
+ * Type guard to check if an evaluator is synchronous
+ * @param evaluator The evaluator to check
+ * @returns True if the evaluator is synchronous (implements IEvaluator)
+ */
+export function isEvaluatorSync(evaluator: AnyEvaluator): evaluator is IEvaluator {
+  return 'evaluate' in evaluator && typeof (evaluator as IEvaluator).evaluate === 'function';
+}
+
+/**
+ * Type guard to check if an evaluator is asynchronous
+ * @param evaluator The evaluator to check
+ * @returns True if the evaluator is asynchronous (implements IEvaluatorAsync)
+ */
+export function isEvaluatorAsync(evaluator: AnyEvaluator): evaluator is IEvaluatorAsync {
+  return 'evaluateAsync' in evaluator && typeof (evaluator as IEvaluatorAsync).evaluateAsync === 'function';
 }
 
 export default IEvaluator;

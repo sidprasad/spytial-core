@@ -18,10 +18,12 @@ export { RacketGDataInstance } from './data-instance/racket/racket-g-data-instan
 export { PyretDataInstance } from './data-instance/pyret/pyret-data-instance';
 
 // Direct exports of key classes for convenience
-export { LayoutInstance } from './layout/layoutinstance';
+export { LayoutInstance, LayoutInstanceAsync } from './layout/layoutinstance';
 export { parseLayoutSpec } from './layout/layoutspec';
-export { setupLayout } from './layout';
+export { setupLayout, setupLayoutAsync } from './layout';
 export { type default as IEvaluator } from './evaluators/interfaces';
+export type { IEvaluatorAsync, AnyEvaluator } from './evaluators/interfaces';
+export { isEvaluatorSync, isEvaluatorAsync } from './evaluators/interfaces';
 export { ForgeEvaluator, WrappedForgeEvaluator } from './evaluators/forge-evaluator';
 export { WebColaTranslator } from './translators';
 export { StructuredInputGraph } from './translators';
