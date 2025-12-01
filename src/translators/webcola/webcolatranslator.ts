@@ -48,6 +48,10 @@ export type { NodeWithMetadata, EdgeWithMetadata };
  * Position hint for a node, used to initialize node positions for temporal consistency.
  * When rendering temporal sequences, nodes should start at their previous positions
  * to maintain visual stability across frames.
+ * 
+ * WebCola uses these positions as initial values when starting the layout algorithm.
+ * The positions are respected during the constraint-solving phase, with reduced
+ * unconstrained iterations to better preserve them.
  */
 export interface NodePositionHint {
   /** Node identifier - matched by id */
@@ -65,10 +69,18 @@ export interface NodePositionHint {
 export interface WebColaLayoutOptions {
   /**
    * Position hints from a previous render.
+   * 
    * When provided, nodes with matching ids will start at these positions
-   * rather than using DAGRE-computed or default positions.
-   * This enables smooth transitions in temporal sequences where atoms
-   * remain stable but tuples change between instances.
+   * rather than using DAGRE-computed or default positions. WebCola uses
+   * these as initial positions for its descent algorithm.
+   * 
+   * Additionally, when prior positions are provided, the unconstrained
+   * iterations phase is significantly reduced to prevent WebCola from
+   * moving nodes far from their initial positions. This helps maintain
+   * visual stability in temporal sequences where atoms remain stable
+   * but tuples change between instances.
+   * 
+   * @see WebColaCnDGraph.renderLayout for iteration adjustments
    */
   priorPositions?: NodePositionHint[];
 }

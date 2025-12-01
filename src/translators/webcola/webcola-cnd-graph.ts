@@ -1228,14 +1228,26 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       let userConstraintIters = WebColaCnDGraph.INITIAL_USER_CONSTRAINT_ITERATIONS;
       let allConstraintIters = WebColaCnDGraph.INITIAL_ALL_CONSTRAINTS_ITERATIONS;
       
+      // When prior positions are provided, reduce unconstrained iterations significantly.
+      // WebCola's unconstrained phase allows nodes to move freely from their initial positions,
+      // so reducing this phase helps preserve the provided positions.
+      // This is crucial for temporal consistency across Alloy traces.
+      const hasPriorPositions = options?.priorPositions && options.priorPositions.length > 0;
+      if (hasPriorPositions) {
+        // Minimize unconstrained iterations to preserve prior positions
+        // Keep 1-2 iterations to allow minor adjustments
+        unconstrainedIters = Math.min(2, unconstrainedIters);
+        console.log(`WebCola: Using reduced unconstrained iterations (${unconstrainedIters}) to preserve ${options!.priorPositions!.length} prior positions`);
+      }
+      
       if (nodeCount > 100) {
         // For large graphs (>100 nodes), reduce iterations more aggressively
-        unconstrainedIters = Math.max(5, Math.floor(unconstrainedIters * 0.5));
+        unconstrainedIters = Math.max(hasPriorPositions ? 1 : 5, Math.floor(unconstrainedIters * 0.5));
         userConstraintIters = Math.max(25, Math.floor(userConstraintIters * 0.5));
         allConstraintIters = Math.max(100, Math.floor(allConstraintIters * 0.5));
       } else if (nodeCount > 50) {
         // For medium graphs (>50 nodes), reduce iterations moderately
-        unconstrainedIters = Math.max(8, Math.floor(unconstrainedIters * 0.8));
+        unconstrainedIters = Math.max(hasPriorPositions ? 1 : 8, Math.floor(unconstrainedIters * 0.8));
         userConstraintIters = Math.max(40, Math.floor(userConstraintIters * 0.8));
         allConstraintIters = Math.max(150, Math.floor(allConstraintIters * 0.75));
       }
