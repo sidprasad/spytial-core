@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator } from './webcolatranslator';
+import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator, NodePositionHint, WebColaLayoutOptions } from './webcolatranslator';
 import { InstanceLayout, isAlignmentConstraint, isInstanceLayout, isLeftConstraint, isTopConstraint, LayoutNode } from '../../layout/interfaces';
 import type { GridRouter, Group, Layout, Node, Link } from 'webcola';
 import { IInputDataInstance, ITuple, IAtom } from '../../data-instance/interfaces';
@@ -1151,9 +1151,21 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   /**
    * Render layout using WebCola constraint solver
    * @param instanceLayout - The layout instance to render
-   * @param inputDataInstance - Optional input data instance for edge modifications
+   * @param options - Optional layout options including prior positions for temporal consistency
+   * 
+   * @example
+   * ```typescript
+   * // First render
+   * await graph.renderLayout(layout1);
+   * 
+   * // Get positions from first render
+   * const positions = graph.getNodePositions();
+   * 
+   * // Second render using prior positions for temporal consistency
+   * await graph.renderLayout(layout2, { priorPositions: positions });
+   * ```
    */
-  public async renderLayout(instanceLayout: InstanceLayout): Promise<void> {
+  public async renderLayout(instanceLayout: InstanceLayout, options?: WebColaLayoutOptions): Promise<void> {
 
     if (! isInstanceLayout(instanceLayout)) {
       throw new Error('Invalid instance layout provided. Expected an InstanceLayout instance.');
@@ -1203,9 +1215,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       const containerWidth = containerRect.width || 800; // fallback to default
       const containerHeight = containerRect.height || 600; // fallback to default
 
-      // Translate to WebCola format with actual container dimensions
+      // Translate to WebCola format with actual container dimensions and optional prior positions
       const translator = new WebColaTranslator();
-      const webcolaLayout = await translator.translate(instanceLayout, containerWidth, containerHeight);
+      const webcolaLayout = await translator.translate(instanceLayout, containerWidth, containerHeight, options);
 
       this.updateLoadingProgress(`Computing layout for ${webcolaLayout.nodes.length} nodes...`);
 

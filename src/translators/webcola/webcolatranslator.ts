@@ -44,6 +44,35 @@ type EdgeWithMetadata = Link<NodeWithMetadata> & {
 // Export the types for use in other modules
 export type { NodeWithMetadata, EdgeWithMetadata };
 
+/**
+ * Position hint for a node, used to initialize node positions for temporal consistency.
+ * When rendering temporal sequences, nodes should start at their previous positions
+ * to maintain visual stability across frames.
+ */
+export interface NodePositionHint {
+  /** Node identifier - matched by id */
+  id: string;
+  /** X coordinate from previous render */
+  x: number;
+  /** Y coordinate from previous render */
+  y: number;
+}
+
+/**
+ * Options for WebColaLayout configuration.
+ * Allows customization of layout behavior, especially for temporal sequences.
+ */
+export interface WebColaLayoutOptions {
+  /**
+   * Position hints from a previous render.
+   * When provided, nodes with matching ids will start at these positions
+   * rather than using DAGRE-computed or default positions.
+   * This enables smooth transitions in temporal sequences where atoms
+   * remain stable but tuples change between instances.
+   */
+  priorPositions?: NodePositionHint[];
+}
+
 // WebCola constraint types
 export interface ColaConstraint {
   type: string;
@@ -96,7 +125,13 @@ export class WebColaLayout {
   public FIG_WIDTH: number;
   public FIG_HEIGHT: number;
 
-  constructor(instanceLayout: InstanceLayout, fig_height: number = 800, fig_width: number = 800) {
+  /**
+   * Map of node id to prior position hint.
+   * Used to initialize nodes at their previous positions for temporal consistency.
+   */
+  private priorPositionMap: Map<string, NodePositionHint>;
+
+  constructor(instanceLayout: InstanceLayout, fig_height: number = 800, fig_width: number = 800, options?: WebColaLayoutOptions) {
 
     this.FIG_HEIGHT = fig_height;
     this.FIG_WIDTH = fig_width;
@@ -105,6 +140,17 @@ export class WebColaLayout {
     this.DEFAULT_Y = fig_height / 2;
 
     this.instanceLayout = instanceLayout;
+
+    // Build a map of prior positions for O(1) lookup
+    this.priorPositionMap = new Map();
+    if (options?.priorPositions) {
+      for (const hint of options.priorPositions) {
+        this.priorPositionMap.set(hint.id, hint);
+      }
+      if (typeof console !== 'undefined' && console.log) {
+        console.log(`WebColaLayout: Using ${this.priorPositionMap.size} prior positions for temporal consistency`);
+      }
+    }
 
     // Can I create a DAGRE graph here.
     try {
@@ -409,12 +455,20 @@ export class WebColaLayout {
 
     let fixed = 0;
 
-    if (this.dagre_graph) {
-      // Get the corresponding node in the DAGRE graph
-      let dagre_node = this.dagre_graph.node(node.id);
-      x = dagre_node.x;
-      y = dagre_node.y;
-      //fixed = 1; // THIS REALLY IS NOT GOOD!
+    // Priority 1: Use prior position if available (for temporal consistency)
+    const priorPosition = this.priorPositionMap.get(node.id);
+    if (priorPosition) {
+      x = priorPosition.x;
+      y = priorPosition.y;
+      // Note: We don't set fixed=1 here as we want the layout to still 
+      // optimize positions while using prior positions as initial values
+    } else if (this.dagre_graph) {
+      // Priority 2: Use DAGRE-computed position for new nodes
+      const dagre_node = this.dagre_graph.node(node.id);
+      if (dagre_node) {
+        x = dagre_node.x;
+        y = dagre_node.y;
+      }
     }
 
 
@@ -863,9 +917,15 @@ export class WebColaTranslator {
    * @param instanceLayout The layout to translate
    * @param figWidth Optional figure width (default: 800)
    * @param figHeight Optional figure height (default: 800)
+   * @param options Optional layout options including prior positions for temporal consistency
    * @returns Promise<WebColaLayout> The translated layout
    */
-  async translate(instanceLayout: InstanceLayout, figWidth: number = 800, figHeight: number = 800): Promise<WebColaLayout> {
-    return new WebColaLayout(instanceLayout, figHeight, figWidth);
+  async translate(
+    instanceLayout: InstanceLayout, 
+    figWidth: number = 800, 
+    figHeight: number = 800,
+    options?: WebColaLayoutOptions
+  ): Promise<WebColaLayout> {
+    return new WebColaLayout(instanceLayout, figHeight, figWidth, options);
   }
 }
