@@ -65,7 +65,7 @@ function createEvaluator(instance: JSONDataInstance) {
 }
 
 describe('Field-based directives with selectors - Integration', () => {
-  it('should apply edge colors only to specified atoms via selector', () => {
+  it('should apply edge colors only to specified atoms via selector', async () => {
     const layoutSpecStr = `
 directives:
   - edgeColor:
@@ -83,7 +83,7 @@ directives:
     const evaluator = createEvaluator(instance);
 
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = await layoutInstance.generateLayout(instance, {});
 
     // Find edges by relation name and source type (source-only selector logic)
     const personNameEdges = layout.edges.filter(e => 
@@ -118,7 +118,7 @@ directives:
     });
   });
 
-  it('should apply attribute directive only to specified atoms via selector', () => {
+  it('should apply attribute directive only to specified atoms via selector', async () => {
     const layoutSpecStr = `
 directives:
   - attribute:
@@ -131,7 +131,7 @@ directives:
     const evaluator = createEvaluator(instance);
 
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = await layoutInstance.generateLayout(instance, {});
 
     // Find Person and Car nodes
     const personNodes = layout.nodes.filter(n => n.types.includes('Person'));
@@ -170,7 +170,7 @@ directives:
     expect(companyNameEdges.length).toBeGreaterThan(0);
   });
 
-  it('should apply hide field directive only to specified atoms via selector', () => {
+  it('should apply hide field directive only to specified atoms via selector', async () => {
     const layoutSpecStr = `
 directives:
   - hideField:
@@ -183,7 +183,7 @@ directives:
     const evaluator = createEvaluator(instance);
 
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = await layoutInstance.generateLayout(instance, {});
 
     // Car name edges should be hidden (not present in layout)
     const carNameEdges = layout.edges.filter(e => 
@@ -206,7 +206,7 @@ directives:
     expect(companyNameEdges.length).toBeGreaterThan(0);
   });
 
-  it('should maintain backward compatibility with directives without selectors', () => {
+  it('should maintain backward compatibility with directives without selectors', async () => {
     const layoutSpecStr = `
 directives:
   - edgeColor:
@@ -219,7 +219,7 @@ directives:
     const evaluator = createEvaluator(instance);
 
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = await layoutInstance.generateLayout(instance, {});
 
     // All name edges should be green (legacy behavior - applies to all)
     const allNameEdges = layout.edges.filter(e => e.relationName === 'name');

@@ -30,7 +30,7 @@ function createEvaluator(instance: JSONDataInstance) {
 }
 
 describe('Evaluator Caching', () => {
-  it('caches evaluator results for repeated selectors', () => {
+  it('caches evaluator results for repeated selectors', async () => {
     // Create a layout spec that uses the same selector multiple times
     const layoutSpecWithDuplicateSelectors = `
 constraints:
@@ -59,7 +59,7 @@ directives:
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
     
     // Generate layout - this should trigger multiple uses of the same selector
-    layoutInstance.generateLayout(instance, {});
+    await layoutInstance.generateLayout(instance, {});
     
     // Count how many times 'A->B' was actually evaluated (not cached hits)
     const aToB_Calls = evaluateSpy.mock.calls.filter(
@@ -73,7 +73,7 @@ directives:
     evaluateSpy.mockRestore();
   });
 
-  it('clears cache on reinitialization', () => {
+  it('clears cache on reinitialization', async () => {
     const layoutSpecStr = `
 constraints:
   - orientation:
@@ -91,7 +91,7 @@ constraints:
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
     
     // First layout generation
-    layoutInstance.generateLayout(instance, {});
+    await layoutInstance.generateLayout(instance, {});
     const firstCallCount = evaluateSpy.mock.calls.length;
     
     // Clean up first spy
@@ -105,7 +105,7 @@ constraints:
     evaluateSpy = vi.spyOn(internalEval, 'evaluateExpression');
     
     // Second layout generation after reinitialization
-    layoutInstance.generateLayout(instance, {});
+    await layoutInstance.generateLayout(instance, {});
     const secondCallCount = evaluateSpy.mock.calls.length;
     
     // After reinitialization, the cache should be cleared, so we should see
@@ -116,7 +116,7 @@ constraints:
     evaluateSpy.mockRestore();
   });
 
-  it('caches results for multiple directives using the same selector', () => {
+  it('caches results for multiple directives using the same selector', async () => {
     const layoutSpecWithMultipleDirectives = `
 directives:
   - atomColor:
@@ -140,7 +140,7 @@ directives:
     const layoutSpec = parseLayoutSpec(layoutSpecWithMultipleDirectives);
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
     
-    layoutInstance.generateLayout(instance, {});
+    await layoutInstance.generateLayout(instance, {});
     
     // Count actual evaluations of 'Type1' selector
     const type1Calls = evaluateSpy.mock.calls.filter(
@@ -154,7 +154,7 @@ directives:
     evaluateSpy.mockRestore();
   });
 
-  it('provides correct results when using cache', () => {
+  it('provides correct results when using cache', async () => {
     const layoutSpecStr = `
 constraints:
   - orientation:
@@ -172,7 +172,7 @@ directives:
     const layoutSpec = parseLayoutSpec(layoutSpecStr);
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
     
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = await layoutInstance.generateLayout(instance, {});
     
     // Verify the layout is correct
     expect(layout.nodes).toHaveLength(3);

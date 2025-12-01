@@ -13,7 +13,7 @@ import { SGraphQueryEvaluator } from '../src/evaluators/sgq-evaluator';
  */
 
 describe('Alignment Edge Optimization', () => {
-  it('should not add alignment edges when nodes are already directly connected', () => {
+  it('should not add alignment edges when nodes are already directly connected', async () => {
     // Create a simple graph: A -> B -> C
     const jsonData: IJsonDataInstance = {
       atoms: [
@@ -48,7 +48,7 @@ constraints:
     
     // Generate layout with alignment edges enabled
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const result = layoutInstance.generateLayout(dataInstance, {});
+    const result = await layoutInstance.generateLayout(dataInstance, {});
     
     // Count edges - should only have the original 2 edges (A->B, B->C)
     // No alignment edges should be added since A-B and B-C are already connected
@@ -56,7 +56,7 @@ constraints:
     expect(result.layout.edges.length).toBe(2);
   });
 
-  it('should add alignment edges when nodes are disconnected', () => {
+  it('should add alignment edges when nodes are disconnected', async () => {
     // Create a graph with disconnected nodes: A and B have no relation
     const jsonData: IJsonDataInstance = {
       atoms: [
@@ -80,14 +80,14 @@ constraints:
     
     // Generate layout with alignment edges enabled
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const result = layoutInstance.generateLayout(dataInstance, {});
+    const result = await layoutInstance.generateLayout(dataInstance, {});
     
     // Should have added 1 alignment edge since A and B are disconnected
     expect(result.layout.edges.length).toBe(1);
     expect(result.layout.edges[0].id).toContain('_alignment_');
   });
 
-  it('should not add alignment edges when nodes are connected via path', () => {
+  it('should not add alignment edges when nodes are connected via path', async () => {
     // Create a longer path: A -> B -> C -> D
     const jsonData: IJsonDataInstance = {
       atoms: [
@@ -124,7 +124,7 @@ constraints:
     
     // Generate layout with alignment edges enabled
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const result = layoutInstance.generateLayout(dataInstance, {});
+    const result = await layoutInstance.generateLayout(dataInstance, {});
     
     // Should only have the original 3 edges (A->B, B->C, C->D)
     // No alignment edges needed because all nodes are connected via paths:
@@ -133,7 +133,7 @@ constraints:
     expect(result.layout.edges.filter(e => e.id.includes('_alignment_')).length).toBe(0);
   });
 
-  it('should respect addAlignmentEdges=false flag', () => {
+  it('should respect addAlignmentEdges=false flag', async () => {
     // Create disconnected nodes
     const jsonData: IJsonDataInstance = {
       atoms: [
@@ -156,13 +156,13 @@ constraints:
     
     // Generate layout with alignment edges DISABLED
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, false);
-    const result = layoutInstance.generateLayout(dataInstance, {});
+    const result = await layoutInstance.generateLayout(dataInstance, {});
     
     // Should have NO edges at all since alignment edge creation is disabled
     expect(result.layout.edges.length).toBe(0);
   });
 
-  it('should optimize for large graphs with many alignment constraints', () => {
+  it('should optimize for large graphs with many alignment constraints', async () => {
     // Create a chain graph: Node0 -> Node1 -> Node2 -> ... -> Node9
     // This simulates a scenario where all nodes are connected via a path
     const nodes = Array.from({ length: 10 }, (_, i) => ({
@@ -206,7 +206,7 @@ constraints:
     evaluator.initialize({ sourceData: dataInstance });
     
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const result = layoutInstance.generateLayout(dataInstance, {});
+    const result = await layoutInstance.generateLayout(dataInstance, {});
     
     // Should only have 9 edges (the chain connections), not 9 + 45 alignment edges
     // All nodes are connected via the chain, so no alignment edges needed
@@ -219,7 +219,7 @@ constraints:
 });
 
 describe('Alignment Edge Strategy', () => {
-  it('should respect NEVER strategy', () => {
+  it('should respect NEVER strategy', async () => {
     // Create disconnected nodes
     const jsonData: IJsonDataInstance = {
       atoms: [
@@ -242,13 +242,13 @@ constraints:
     
     // Generate layout with NEVER strategy
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true, AlignmentEdgeStrategy.NEVER);
-    const result = layoutInstance.generateLayout(dataInstance, {});
+    const result = await layoutInstance.generateLayout(dataInstance, {});
     
     // Should have NO edges at all with NEVER strategy
     expect(result.layout.edges.length).toBe(0);
   });
 
-  it('should respect DIRECT strategy', () => {
+  it('should respect DIRECT strategy', async () => {
     // Create a chain: A -> B -> C
     const jsonData: IJsonDataInstance = {
       atoms: [
@@ -283,7 +283,7 @@ constraints:
     
     // Generate layout with DIRECT strategy
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true, AlignmentEdgeStrategy.DIRECT);
-    const result = layoutInstance.generateLayout(dataInstance, {});
+    const result = await layoutInstance.generateLayout(dataInstance, {});
     
     // Should have 2 data edges + 1 alignment edge for A-C (not directly connected)
     // A-B are directly connected: no alignment edge
@@ -295,7 +295,7 @@ constraints:
     expect(alignmentEdges.length).toBe(1);
   });
 
-  it('should respect CONNECTED strategy (default)', () => {
+  it('should respect CONNECTED strategy (default)', async () => {
     // Create a chain: A -> B -> C
     const jsonData: IJsonDataInstance = {
       atoms: [
@@ -330,7 +330,7 @@ constraints:
     
     // Generate layout with CONNECTED strategy (default)
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true, AlignmentEdgeStrategy.CONNECTED);
-    const result = layoutInstance.generateLayout(dataInstance, {});
+    const result = await layoutInstance.generateLayout(dataInstance, {});
     
     // Should have only 2 data edges, no alignment edges
     // All nodes are connected via paths, so no alignment edges needed
@@ -340,7 +340,7 @@ constraints:
     expect(alignmentEdges.length).toBe(0);
   });
 
-  it('should follow alignment edges when checking connectivity', () => {
+  it('should follow alignment edges when checking connectivity', async () => {
     // Create two disconnected pairs: A-B and C-D
     const jsonData: IJsonDataInstance = {
       atoms: [
@@ -375,7 +375,7 @@ constraints:
     evaluator1.initialize({ sourceData: dataInstance });
     
     const layoutInstance1 = new LayoutInstance(layoutSpec1, evaluator1, 0, true, AlignmentEdgeStrategy.CONNECTED);
-    const result1 = layoutInstance1.generateLayout(dataInstance, {});
+    const result1 = await layoutInstance1.generateLayout(dataInstance, {});
     
     // Should have 2 data edges (A-B, C-D) + 1 alignment edge (A-C)
     expect(result1.layout.edges.length).toBe(3);
@@ -394,7 +394,7 @@ constraints:
     evaluator2.initialize({ sourceData: dataInstance });
     
     const layoutInstance2 = new LayoutInstance(layoutSpec2, evaluator2, 0, true, AlignmentEdgeStrategy.CONNECTED);
-    const result2 = layoutInstance2.generateLayout(dataInstance, {});
+    const result2 = await layoutInstance2.generateLayout(dataInstance, {});
     
     // Should have 2 data edges + 1 alignment edge (A-C only)
     // B-D should NOT get alignment edge because they're connected via: B->A->C(alignment)->D
@@ -404,7 +404,7 @@ constraints:
     expect(alignmentEdges.length).toBe(1);
   });
 
-  it('should prune redundant alignment edges in cycles', () => {
+  it('should prune redundant alignment edges in cycles', async () => {
     // Create a triangle: A -> B, B -> C, C -> A (data edges forming a cycle)
     const jsonData: IJsonDataInstance = {
       atoms: [
@@ -440,7 +440,7 @@ constraints:
     evaluator.initialize({ sourceData: dataInstance });
     
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true, AlignmentEdgeStrategy.CONNECTED);
-    const result = layoutInstance.generateLayout(dataInstance, {});
+    const result = await layoutInstance.generateLayout(dataInstance, {});
     
     // Should have only 3 data edges (the triangle), no alignment edges
     // All nodes are already connected via the cycle
@@ -450,7 +450,7 @@ constraints:
     expect(alignmentEdges.length).toBe(0);
   });
 
-  it('should prune redundant alignment edges but keep necessary ones', () => {
+  it('should prune redundant alignment edges but keep necessary ones', async () => {
     // Create two disconnected components: A-B and C-D
     // Then add alignment constraints that would create a bridge
     const jsonData: IJsonDataInstance = {
@@ -487,7 +487,7 @@ constraints:
     evaluator.initialize({ sourceData: dataInstance });
     
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true, AlignmentEdgeStrategy.CONNECTED);
-    const result = layoutInstance.generateLayout(dataInstance, {});
+    const result = await layoutInstance.generateLayout(dataInstance, {});
     
     // Should have 2 data edges (A-B, C-D) + 1 alignment edge
     // One of the alignment edges (B-C or A-D) should be pruned as redundant

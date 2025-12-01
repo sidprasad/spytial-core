@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { JSONDataInstance, IJsonDataInstance } from '../src/data-instance/json-data-instance';
 import { parseLayoutSpec } from '../src/layout/layoutspec';
-import { LayoutInstanceAsync } from '../src/layout/layoutinstance';
-import { setupLayoutAsync } from '../src/layout';
+import { LayoutInstance } from '../src/layout/layoutinstance';
+import { setupLayout } from '../src/layout';
 import { 
   IEvaluatorAsync, 
   IEvaluatorResult, 
@@ -100,22 +100,22 @@ async function createAsyncEvaluator(instance: JSONDataInstance): Promise<MockAsy
 
 describe('IEvaluatorAsync Interface', () => {
   describe('Type Guards', () => {
-    it('isEvaluatorSync returns true for sync evaluators', () => {
+    it('isEvaluatorSync returns true for sync evaluators', async () => {
       const syncEvaluator = new SGraphQueryEvaluator();
       expect(isEvaluatorSync(syncEvaluator)).toBe(true);
     });
 
-    it('isEvaluatorAsync returns true for async evaluators', () => {
+    it('isEvaluatorAsync returns true for async evaluators', async () => {
       const asyncEvaluator = new MockAsyncEvaluator();
       expect(isEvaluatorAsync(asyncEvaluator)).toBe(true);
     });
 
-    it('isEvaluatorSync returns false for async evaluators', () => {
+    it('isEvaluatorSync returns false for async evaluators', async () => {
       const asyncEvaluator = new MockAsyncEvaluator();
       expect(isEvaluatorSync(asyncEvaluator)).toBe(false);
     });
 
-    it('isEvaluatorAsync returns false for sync evaluators', () => {
+    it('isEvaluatorAsync returns false for sync evaluators', async () => {
       const syncEvaluator = new SGraphQueryEvaluator();
       expect(isEvaluatorAsync(syncEvaluator)).toBe(false);
     });
@@ -142,13 +142,13 @@ describe('IEvaluatorAsync Interface', () => {
   });
 });
 
-describe('LayoutInstanceAsync', () => {
+describe('LayoutInstance', () => {
   it('generates layout from data asynchronously', async () => {
     const instance = new JSONDataInstance(jsonData);
     const evaluator = await createAsyncEvaluator(instance);
 
-    const layoutInstance = new LayoutInstanceAsync(layoutSpec, evaluator, 0, true);
-    const { layout } = await layoutInstance.generateLayoutAsync(instance, {});
+    const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
+    const { layout } = await layoutInstance.generateLayout(instance, {});
 
     expect(layout.nodes).toHaveLength(2);
     expect(layout.edges).toHaveLength(1);
@@ -159,8 +159,8 @@ describe('LayoutInstanceAsync', () => {
     const instance = new JSONDataInstance(jsonDataDisconnected);
     const evaluator = await createAsyncEvaluator(instance);
 
-    const layoutInstance = new LayoutInstanceAsync(layoutSpecDisconnectedNodes, evaluator, 0, true);
-    const { layout } = await layoutInstance.generateLayoutAsync(instance, {});
+    const layoutInstance = new LayoutInstance(layoutSpecDisconnectedNodes, evaluator, 0, true);
+    const { layout } = await layoutInstance.generateLayout(instance, {});
 
     expect(layout.nodes).toHaveLength(3);
     expect(layout.edges).toHaveLength(2);
@@ -175,8 +175,8 @@ describe('LayoutInstanceAsync', () => {
     const instance = new JSONDataInstance(jsonDataDisconnected);
     const evaluator = await createAsyncEvaluator(instance);
 
-    const layoutInstance = new LayoutInstanceAsync(layoutSpecDisconnectedNodes, evaluator, 0, false);
-    const { layout } = await layoutInstance.generateLayoutAsync(instance, {});
+    const layoutInstance = new LayoutInstance(layoutSpecDisconnectedNodes, evaluator, 0, false);
+    const { layout } = await layoutInstance.generateLayout(instance, {});
 
     expect(layout.nodes).toHaveLength(3);
     expect(layout.edges).toHaveLength(1);
@@ -218,8 +218,8 @@ directives:
     const evaluator = await createAsyncEvaluator(instance);
     const spec = parseLayoutSpec(specWithInferredEdge);
 
-    const layoutInstance = new LayoutInstanceAsync(spec, evaluator, 0, true);
-    const { layout } = await layoutInstance.generateLayoutAsync(instance, {});
+    const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
+    const { layout } = await layoutInstance.generateLayout(instance, {});
 
     expect(layout.nodes).toHaveLength(3);
     expect(layout.edges.length).toBeGreaterThanOrEqual(3);
@@ -230,12 +230,12 @@ directives:
   });
 });
 
-describe('setupLayoutAsync', () => {
+describe('setupLayout', () => {
   it('generates layout using async evaluator', async () => {
     const instance = new JSONDataInstance(jsonData);
     const evaluator = await createAsyncEvaluator(instance);
 
-    const result = await setupLayoutAsync(layoutSpecStr, instance, evaluator, {});
+    const result = await setupLayout(layoutSpecStr, instance, evaluator, {});
 
     expect(result.layout.nodes).toHaveLength(2);
     expect(result.layout.edges).toHaveLength(1);
@@ -254,7 +254,7 @@ constraints:
         - below
 `;
 
-    const result = await setupLayoutAsync(yamlSpec, instance, evaluator, {});
+    const result = await setupLayout(yamlSpec, instance, evaluator, {});
 
     expect(result.layout.nodes).toHaveLength(2);
     expect(result.layout.constraints.length).toBeGreaterThan(0);
@@ -264,7 +264,7 @@ constraints:
     const instance = new JSONDataInstance(jsonData);
     const evaluator = await createAsyncEvaluator(instance);
 
-    const result = await setupLayoutAsync(layoutSpec, instance, evaluator, {});
+    const result = await setupLayout(layoutSpec, instance, evaluator, {});
 
     expect(result.layout.nodes).toHaveLength(2);
     expect(result.layout.constraints.length).toBeGreaterThan(0);
@@ -275,17 +275,17 @@ describe('Async vs Sync Consistency', () => {
   it('async and sync layout generation produce equivalent results', async () => {
     const instance = new JSONDataInstance(jsonData);
     
-    // Sync evaluator and layout
+    // Sync evaluator and layout (now also returns Promise due to unified interface)
     const syncEvaluator = new SGraphQueryEvaluator();
     syncEvaluator.initialize({ sourceData: instance });
     const { LayoutInstance } = await import('../src/layout/layoutinstance');
     const syncLayoutInstance = new LayoutInstance(layoutSpec, syncEvaluator);
-    const syncResult = syncLayoutInstance.generateLayout(instance, {});
+    const syncResult = await syncLayoutInstance.generateLayout(instance, {});
     
     // Async evaluator and layout
     const asyncEvaluator = await createAsyncEvaluator(instance);
-    const asyncLayoutInstance = new LayoutInstanceAsync(layoutSpec, asyncEvaluator);
-    const asyncResult = await asyncLayoutInstance.generateLayoutAsync(instance, {});
+    const asyncLayoutInstance = new LayoutInstance(layoutSpec, asyncEvaluator);
+    const asyncResult = await asyncLayoutInstance.generateLayout(instance, {});
     
     // Compare results
     expect(asyncResult.layout.nodes.length).toBe(syncResult.layout.nodes.length);

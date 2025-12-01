@@ -184,4 +184,73 @@ export function isEvaluatorAsync(evaluator: AnyEvaluator): evaluator is IEvaluat
   return 'evaluateAsync' in evaluator && typeof (evaluator as IEvaluatorAsync).evaluateAsync === 'function';
 }
 
+/**
+ * Adapter that wraps either a sync or async evaluator and provides a unified async interface.
+ * This allows layout generation code to work with a single interface regardless of evaluator type.
+ * 
+ * For sync evaluators, the adapter wraps their results in immediately-resolving Promises.
+ * For async evaluators, it passes through to the underlying async methods.
+ * 
+ * @example
+ * ```typescript
+ * // Wrap a sync evaluator
+ * const syncEvaluator = new SGraphQueryEvaluator();
+ * const adapter = new EvaluatorAdapter(syncEvaluator);
+ * const result = await adapter.evaluate(expr); // Returns Promise
+ * 
+ * // Wrap an async evaluator
+ * const asyncEvaluator = new RemoteEvaluator();
+ * const adapter = new EvaluatorAdapter(asyncEvaluator);
+ * const result = await adapter.evaluate(expr); // Returns Promise
+ * ```
+ */
+export class EvaluatorAdapter {
+  private readonly syncEvaluator?: IEvaluator;
+  private readonly asyncEvaluator?: IEvaluatorAsync;
+  
+  /**
+   * Creates an adapter that wraps either a sync or async evaluator
+   * @param evaluator The evaluator to wrap (sync or async)
+   */
+  constructor(evaluator: AnyEvaluator) {
+    if (isEvaluatorSync(evaluator)) {
+      this.syncEvaluator = evaluator;
+    } else if (isEvaluatorAsync(evaluator)) {
+      this.asyncEvaluator = evaluator;
+    } else {
+      throw new Error('Evaluator must implement either IEvaluator or IEvaluatorAsync');
+    }
+  }
+  
+  /**
+   * Check if the underlying evaluator is ready
+   */
+  isReady(): boolean {
+    if (this.syncEvaluator) {
+      return this.syncEvaluator.isReady();
+    }
+    return this.asyncEvaluator!.isReady();
+  }
+  
+  /**
+   * Evaluate an expression, returning a Promise regardless of underlying evaluator type.
+   * For sync evaluators, the Promise resolves immediately.
+   * For async evaluators, the Promise resolves when the async evaluation completes.
+   */
+  async evaluate(expression: string, config?: EvaluatorConfig): Promise<IEvaluatorResult> {
+    if (this.syncEvaluator) {
+      // Wrap sync result in resolved Promise
+      return Promise.resolve(this.syncEvaluator.evaluate(expression, config));
+    }
+    return this.asyncEvaluator!.evaluateAsync(expression, config);
+  }
+  
+  /**
+   * Check if this adapter wraps a sync evaluator (useful for optimization)
+   */
+  isSyncEvaluator(): boolean {
+    return this.syncEvaluator !== undefined;
+  }
+}
+
 export default IEvaluator;

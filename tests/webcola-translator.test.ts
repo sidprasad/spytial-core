@@ -42,7 +42,7 @@ describe('WebColaTranslator', () => {
     const evaluator = createEvaluator(instance);
 
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = await layoutInstance.generateLayout(instance, {});
 
     const translator = new WebColaTranslator();
     const result = await translator.translate(layout);

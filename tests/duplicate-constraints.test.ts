@@ -30,7 +30,7 @@ function createEvaluator(instance: JSONDataInstance) {
 }
 
 describe('Duplicate Constraint Removal', () => {
-  it('removes duplicate orientation constraints from YAML', () => {
+  it('removes duplicate orientation constraints from YAML', async () => {
     // YAML with duplicate orientation constraints
     const layoutSpecWithDuplicates = `
 constraints:
@@ -62,7 +62,7 @@ constraints:
     expect(selectors.filter(s => s === 'A->B')).toHaveLength(1);
   });
 
-  it('removes duplicate align constraints from YAML', () => {
+  it('removes duplicate align constraints from YAML', async () => {
     const layoutSpecWithDuplicates = `
 constraints:
   - align:
@@ -86,7 +86,7 @@ constraints:
     expect(selectors.filter(s => s === 'A->B')).toHaveLength(1);
   });
 
-  it('removes duplicate cyclic constraints from YAML', () => {
+  it('removes duplicate cyclic constraints from YAML', async () => {
     const layoutSpecWithDuplicates = `
 constraints:
   - cyclic:
@@ -104,7 +104,7 @@ constraints:
     expect(layoutSpec.constraints.orientation.cyclic[0].selector).toBe('r');
   });
 
-  it('removes duplicate group by selector constraints from YAML', () => {
+  it('removes duplicate group by selector constraints from YAML', async () => {
     const layoutSpecWithDuplicates = `
 constraints:
   - group:
@@ -122,7 +122,7 @@ constraints:
     expect(layoutSpec.constraints.grouping.byselector[0].selector).toBe('A->B');
   });
 
-  it('keeps orientation constraints with different directions', () => {
+  it('keeps orientation constraints with different directions', async () => {
     const layoutSpecWithDifferent = `
 constraints:
   - orientation:
@@ -141,7 +141,7 @@ constraints:
     expect(layoutSpec.constraints.orientation.relative).toHaveLength(2);
   });
 
-  it('keeps align constraints with different directions', () => {
+  it('keeps align constraints with different directions', async () => {
     const layoutSpecWithDifferent = `
 constraints:
   - align:
@@ -158,7 +158,7 @@ constraints:
     expect(layoutSpec.constraints.alignment).toHaveLength(2);
   });
 
-  it('verifies duplicate removal improves performance', () => {
+  it('verifies duplicate removal improves performance', async () => {
     // Create a large YAML with many duplicates
     const duplicateCount = 100;
     let constraints = 'constraints:\n';
@@ -178,7 +178,7 @@ constraints:
     expect(layoutSpec.constraints.orientation.relative).toHaveLength(1);
     
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = await layoutInstance.generateLayout(instance, {});
     
     // The layout should have only 1 unique constraint applied
     // (the removeDuplicateConstraints function will handle final deduplication)

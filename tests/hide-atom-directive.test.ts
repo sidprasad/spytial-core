@@ -27,7 +27,7 @@ describe('Hide Atom Directive', () => {
     ]
   };
 
-  it('should hide atoms matching selector', () => {
+  it('should hide atoms matching selector', async () => {
     const layoutSpecYaml = `
 constraints: []
 directives:
@@ -41,7 +41,7 @@ directives:
     evaluator.initialize({ sourceData: dataInstance });
 
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(dataInstance, {});
+    const { layout } = await layoutInstance.generateLayout(dataInstance, {});
 
     // Type2 atoms (C, D) should be hidden, only Type1 atoms (A, B) should remain
     const nodeIds = layout.nodes.map(node => node.id);
@@ -51,7 +51,7 @@ directives:
     expect(nodeIds).not.toContain('D');
   });
 
-  it('should hide atoms matching complex selector', () => {
+  it('should hide atoms matching complex selector', async () => {
     const layoutSpecYaml = `
 constraints: []
 directives:
@@ -65,7 +65,7 @@ directives:
     evaluator.initialize({ sourceData: dataInstance });
 
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(dataInstance, {});
+    const { layout } = await layoutInstance.generateLayout(dataInstance, {});
 
     // A and B should be hidden, C and D should remain
     const nodeIds = layout.nodes.map(node => node.id);
@@ -75,7 +75,7 @@ directives:
     expect(nodeIds).toContain('D');
   });
 
-  it('should work alongside legacy hideDisconnected flags', () => {
+  it('should work alongside legacy hideDisconnected flags', async () => {
     const layoutSpecYaml = `
 constraints: []
 directives:
@@ -89,7 +89,7 @@ directives:
     evaluator.initialize({ sourceData: dataInstance });
 
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(dataInstance, {});
+    const { layout } = await layoutInstance.generateLayout(dataInstance, {});
 
     // A should be hidden by selector
     // C and D are disconnected but not flagged to hide
@@ -101,7 +101,7 @@ directives:
     expect(nodeIds).toContain('D');
   });
 
-  it('should handle multiple hideAtom directives', () => {
+  it('should handle multiple hideAtom directives', async () => {
     const layoutSpecYaml = `
 constraints: []
 directives:
@@ -117,7 +117,7 @@ directives:
     evaluator.initialize({ sourceData: dataInstance });
 
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(dataInstance, {});
+    const { layout } = await layoutInstance.generateLayout(dataInstance, {});
 
     // A and C should be hidden by selectors
     // B and D should remain
@@ -128,7 +128,7 @@ directives:
     expect(nodeIds).toContain('D');
   });
 
-  it('should handle empty selector gracefully', () => {
+  it('should handle empty selector gracefully', async () => {
     const layoutSpecYaml = `
 constraints: []
 directives:

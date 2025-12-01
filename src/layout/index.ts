@@ -10,58 +10,41 @@ export * from './colorpicker';
 export * from './constraint-validator';
 
 // Utility functions
-import { LayoutInstance, LayoutInstanceAsync } from './layoutinstance';
+import { LayoutInstance } from './layoutinstance';
 import { LayoutSpec, parseLayoutSpec } from './layoutspec';
-import IEvaluator, { IEvaluatorAsync } from '../evaluators/interfaces';
-import { AlloyInstance } from '../data-instance/alloy/alloy-instance';
+import { AnyEvaluator } from '../evaluators/interfaces';
 import { IDataInstance } from '../data-instance/interfaces';
 
 /**
- * Convenience function to set up and generate a layout using a synchronous evaluator
- * @param spec The layout specification (YAML content or LayoutSpec object)
- * @param instance The Alloy instance to layout
- * @param evaluator The evaluator to use for constraint evaluation
- * @param projections Optional projections to apply
- * @returns The generated layout and projection data
- */
-export function setupLayout(
-  spec: string | LayoutSpec,
-  instance: IDataInstance,
-  evaluator: IEvaluator,
-  projections: Record<string, string> = {}
-) {
-  const layoutSpec = typeof spec === 'string' ? parseLayoutSpec(spec) : spec;
-  const layoutInstance = new LayoutInstance(layoutSpec, evaluator);
-  return layoutInstance.generateLayout(instance, projections);
-}
-
-/**
- * Convenience function to set up and generate a layout using an asynchronous evaluator.
+ * Convenience function to set up and generate a layout.
  * 
- * Use this function when your evaluator relies on async backends such as:
- * - Remote services
- * - Web Workers
- * - Other async I/O operations
+ * This function works with both sync and async evaluators. The returned Promise
+ * resolves immediately when using a sync evaluator, or when async evaluation completes
+ * for async evaluators.
  * 
  * @param spec The layout specification (YAML content or LayoutSpec object)
  * @param instance The data instance to layout
- * @param evaluator The async evaluator to use for constraint evaluation
+ * @param evaluator The evaluator to use for constraint evaluation (sync or async)
  * @param projections Optional projections to apply
  * @returns Promise resolving to the generated layout and projection data
  * 
  * @example
  * ```typescript
- * const asyncEvaluator: IEvaluatorAsync = new RemoteEvaluator();
- * await asyncEvaluator.initializeAsync({ sourceData: myInstance });
+ * // Using a sync evaluator
+ * const syncEvaluator = new SGraphQueryEvaluator();
+ * syncEvaluator.initialize({ sourceData: instance });
+ * const result = await setupLayout(spec, instance, syncEvaluator);
  * 
- * const result = await setupLayoutAsync(spec, instance, asyncEvaluator);
- * console.log(result.layout.nodes);
+ * // Using an async evaluator
+ * const asyncEvaluator = new RemoteEvaluator();
+ * await asyncEvaluator.initializeAsync({ sourceData: instance });
+ * const result = await setupLayout(spec, instance, asyncEvaluator);
  * ```
  */
-export async function setupLayoutAsync(
+export async function setupLayout(
   spec: string | LayoutSpec,
   instance: IDataInstance,
-  evaluator: IEvaluatorAsync,
+  evaluator: AnyEvaluator,
   projections: Record<string, string> = {}
 ): Promise<{
   layout: import('./interfaces').InstanceLayout,
@@ -69,6 +52,6 @@ export async function setupLayoutAsync(
   error: import('./constraint-validator').ConstraintError | null
 }> {
   const layoutSpec = typeof spec === 'string' ? parseLayoutSpec(spec) : spec;
-  const layoutInstance = new LayoutInstanceAsync(layoutSpec, evaluator);
-  return layoutInstance.generateLayoutAsync(instance, projections);
+  const layoutInstance = new LayoutInstance(layoutSpec, evaluator);
+  return layoutInstance.generateLayout(instance, projections);
 }

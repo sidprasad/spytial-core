@@ -45,7 +45,7 @@ function createEvaluator(instance: JSONDataInstance) {
 }
 
 describe('AlignConstraint', () => {
-  it('parses horizontal align constraint correctly', () => {
+  it('parses horizontal align constraint correctly', async () => {
     const layoutSpec = parseLayoutSpec(alignSpecHorizontal);
     
     expect(layoutSpec.constraints.alignment).toBeDefined();
@@ -57,7 +57,7 @@ describe('AlignConstraint', () => {
     expect(alignConstraint.isInternallyConsistent()).toBe(true);
   });
 
-  it('parses vertical align constraint correctly', () => {
+  it('parses vertical align constraint correctly', async () => {
     const layoutSpec = parseLayoutSpec(alignSpecVertical);
     
     expect(layoutSpec.constraints.alignment).toBeDefined();
@@ -69,13 +69,13 @@ describe('AlignConstraint', () => {
     expect(alignConstraint.isInternallyConsistent()).toBe(true);
   });
 
-  it('generates layout with horizontal align constraints', () => {
+  it('generates layout with horizontal align constraints', async () => {
     const layoutSpec = parseLayoutSpec(alignSpecHorizontal);
     const dataInstance = new JSONDataInstance(jsonData);
     const evaluator = createEvaluator(dataInstance);
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
     
-    const result = layoutInstance.generateLayout(dataInstance, {});
+    const result = await layoutInstance.generateLayout(dataInstance, {});
     
     expect(result.layout).toBeDefined();
     expect(result.layout.constraints.length).toBeGreaterThan(0);
@@ -89,13 +89,13 @@ describe('AlignConstraint', () => {
     expect(yAxisConstraints.length).toBeGreaterThan(0);
   });
 
-  it('generates layout with vertical align constraints', () => {
+  it('generates layout with vertical align constraints', async () => {
     const layoutSpec = parseLayoutSpec(alignSpecVertical);
     const dataInstance = new JSONDataInstance(jsonData);
     const evaluator = createEvaluator(dataInstance);
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
     
-    const result = layoutInstance.generateLayout(dataInstance, {});
+    const result = await layoutInstance.generateLayout(dataInstance, {});
     
     expect(result.layout).toBeDefined();
     expect(result.layout.constraints.length).toBeGreaterThan(0);
@@ -109,7 +109,7 @@ describe('AlignConstraint', () => {
     expect(xAxisConstraints.length).toBeGreaterThan(0);
   });
 
-  it('rejects invalid align direction', () => {
+  it('rejects invalid align direction', async () => {
     const invalidAlignSpec = `
     constraints:
       - align:

@@ -28,7 +28,7 @@ describe('Size and HideAtom Dual Syntax', () => {
   };
 
   describe('hideAtom parsing', () => {
-    it('should parse hideAtom from directives block (original syntax)', () => {
+    it('should parse hideAtom from directives block (original syntax)', async () => {
       const layoutSpecYaml = `
 constraints: []
 directives:
@@ -46,7 +46,7 @@ directives:
       evaluator.initialize({ sourceData: dataInstance });
 
       const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-      const { layout } = layoutInstance.generateLayout(dataInstance, {});
+      const { layout } = await layoutInstance.generateLayout(dataInstance, {});
 
       const nodeIds = layout.nodes.map(node => node.id);
       expect(nodeIds).toContain('A');
@@ -55,7 +55,7 @@ directives:
       expect(nodeIds).not.toContain('D');
     });
 
-    it('should parse hideAtom from constraints block (new syntax)', () => {
+    it('should parse hideAtom from constraints block (new syntax)', async () => {
       const layoutSpecYaml = `
 constraints:
   - hideAtom:
@@ -73,7 +73,7 @@ directives: []
       evaluator.initialize({ sourceData: dataInstance });
 
       const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-      const { layout } = layoutInstance.generateLayout(dataInstance, {});
+      const { layout } = await layoutInstance.generateLayout(dataInstance, {});
 
       const nodeIds = layout.nodes.map(node => node.id);
       expect(nodeIds).toContain('A');
@@ -82,7 +82,7 @@ directives: []
       expect(nodeIds).not.toContain('D');
     });
 
-    it('should merge hideAtom from both constraints and directives blocks', () => {
+    it('should merge hideAtom from both constraints and directives blocks', async () => {
       const layoutSpecYaml = `
 constraints:
   - hideAtom:
@@ -103,7 +103,7 @@ directives:
       evaluator.initialize({ sourceData: dataInstance });
 
       const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-      const { layout } = layoutInstance.generateLayout(dataInstance, {});
+      const { layout } = await layoutInstance.generateLayout(dataInstance, {});
 
       const nodeIds = layout.nodes.map(node => node.id);
       expect(nodeIds).toContain('A');
@@ -114,7 +114,7 @@ directives:
   });
 
   describe('size parsing', () => {
-    it('should parse size from directives block (original syntax)', () => {
+    it('should parse size from directives block (original syntax)', async () => {
       const layoutSpecYaml = `
 constraints: []
 directives:
@@ -131,7 +131,7 @@ directives:
       expect(layoutSpec.directives.sizes[0].width).toBe(200);
     });
 
-    it('should parse size from constraints block (new syntax)', () => {
+    it('should parse size from constraints block (new syntax)', async () => {
       const layoutSpecYaml = `
 constraints:
   - size:
@@ -148,7 +148,7 @@ directives: []
       expect(layoutSpec.directives.sizes[0].width).toBe(200);
     });
 
-    it('should merge size from both constraints and directives blocks', () => {
+    it('should merge size from both constraints and directives blocks', async () => {
       const layoutSpecYaml = `
 constraints:
   - size:
@@ -174,7 +174,7 @@ directives:
   });
 
   describe('mixed usage', () => {
-    it('should handle both size and hideAtom in constraints block', () => {
+    it('should handle both size and hideAtom in constraints block', async () => {
       const layoutSpecYaml = `
 constraints:
   - size:
@@ -193,7 +193,7 @@ directives: []
       expect(layoutSpec.directives.hiddenAtoms[0].selector).toBe('Type2');
     });
 
-    it('should handle both size and hideAtom with actual constraints', () => {
+    it('should handle both size and hideAtom with actual constraints', async () => {
       const layoutSpecYaml = `
 constraints:
   - orientation:
