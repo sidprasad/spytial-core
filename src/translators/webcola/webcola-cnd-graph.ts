@@ -1228,34 +1228,34 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       let userConstraintIters = WebColaCnDGraph.INITIAL_USER_CONSTRAINT_ITERATIONS;
       let allConstraintIters = WebColaCnDGraph.INITIAL_ALL_CONSTRAINTS_ITERATIONS;
       
-      // When prior positions are provided, reduce unconstrained iterations significantly.
+      // When prior positions are provided, minimize iterations to preserve positions.
       // WebCola's unconstrained phase allows nodes to move freely from their initial positions,
-      // so reducing this phase helps preserve the provided positions.
+      // so minimizing this phase helps preserve the provided positions.
       // This is crucial for temporal consistency across Alloy traces.
+      //
+      // Note: We manually compute node bounds in ensureNodeBounds() before edge routing,
+      // so we don't need many iterations just for bounds computation.
       const hasPriorPositions = options?.priorPositions && options.priorPositions.length > 0;
       if (hasPriorPositions) {
-        // Minimize unconstrained iterations to preserve prior positions
-        // Keep 1-2 iterations to allow minor adjustments
-        unconstrainedIters = Math.min(1, unconstrainedIters);
+        // Use minimal iterations to preserve prior positions:
+        // - 0 unconstrained: don't let nodes drift from prior positions
+        // - 10 user constraint: apply position constraints quickly
+        // - 20 all constraints: final constraint satisfaction with overlap avoidance
+        unconstrainedIters = 0;
+        userConstraintIters = Math.min(10, userConstraintIters);
+        allConstraintIters = Math.min(20, allConstraintIters);
         
-        // Also reduce constrained iterations - these are where edge springs
-        // have the most impact on pulling nodes away from prior positions.
-        // We still need enough iterations to satisfy all constraints, but
-        // reducing them prevents excessive "optimization" that moves nodes.
-        userConstraintIters = Math.min(20, userConstraintIters);
-        allConstraintIters = Math.min(50, allConstraintIters);
-        
-        console.log(`WebCola: Using reduced iterations (unconstrained=${unconstrainedIters}, userConstraint=${userConstraintIters}, allConstraints=${allConstraintIters}) to preserve ${options!.priorPositions!.length} prior positions`);
+        console.log(`WebCola: Using minimal iterations (unconstrained=${unconstrainedIters}, userConstraint=${userConstraintIters}, allConstraints=${allConstraintIters}) to preserve ${options!.priorPositions!.length} prior positions`);
       }
       
       if (nodeCount > 100) {
         // For large graphs (>100 nodes), reduce iterations more aggressively
-        unconstrainedIters = Math.max(hasPriorPositions ? 1 : 5, Math.floor(unconstrainedIters * 0.5));
+        unconstrainedIters = Math.max(hasPriorPositions ? 0 : 5, Math.floor(unconstrainedIters * 0.5));
         userConstraintIters = Math.max(25, Math.floor(userConstraintIters * 0.5));
         allConstraintIters = Math.max(100, Math.floor(allConstraintIters * 0.5));
       } else if (nodeCount > 50) {
         // For medium graphs (>50 nodes), reduce iterations moderately
-        unconstrainedIters = Math.max(hasPriorPositions ? 1 : 8, Math.floor(unconstrainedIters * 0.8));
+        unconstrainedIters = Math.max(hasPriorPositions ? 0 : 8, Math.floor(unconstrainedIters * 0.8));
         userConstraintIters = Math.max(40, Math.floor(userConstraintIters * 0.8));
         allConstraintIters = Math.max(150, Math.floor(allConstraintIters * 0.75));
       }
@@ -1271,19 +1271,18 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
       this.updateLoadingProgress('Applying constraints and initializing...');
 
-      // Use a more aggressive (higher) convergence threshold when prior positions exist.
-      // This stops the layout earlier, preventing edge springs from pulling nodes
-      // too far from their prior positions while still satisfying all constraints.
+      // Use a higher convergence threshold when prior positions exist.
+      // This allows the layout to converge faster, preserving prior positions better.
       // 
       // Default: 1e-3 (allows many iterations for full optimization)
-      // With priors: 0.8 (stops much earlier, prioritizing position preservation)
+      // With priors: 0.1 (converges faster, prioritizing position preservation)
       //
-      // Constraints are still fully respected because they are hard requirements.
-      // Only the "soft" optimization (edge lengths, overlap avoidance) is reduced.
-      const convergenceThreshold = hasPriorPositions ? 0.8 : 1e-3;
+      // Since we manually compute bounds in ensureNodeBounds(), we don't need
+      // many iterations just for bounds computation.
+      const convergenceThreshold = hasPriorPositions ? 0.1 : 1e-3;
       
       if (hasPriorPositions) {
-        console.log(`WebCola: Using higher convergence threshold (${convergenceThreshold}) to preserve prior positions`);
+        console.log(`WebCola: Using convergence threshold ${convergenceThreshold} to preserve prior positions`);
       }
 
       // Create WebCola layout using d3adaptor
@@ -1387,6 +1386,38 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       console.error('Error rendering layout:', error);
       this.showError(`Layout rendering failed: ${(error as Error).message}`);
     }
+  }
+
+  /**
+   * Clear the current graph visualization and reset internal state.
+   * This is useful when switching between temporal states to ensure a clean slate.
+   */
+  public clear(): void {
+    // Stop any running layout
+    if (this.colaLayout) {
+      try {
+        (this.colaLayout as any).stop?.();
+      } catch (e) {
+        // Ignore errors when stopping layout
+      }
+    }
+
+    // Clear the SVG container
+    if (this.container) {
+      this.container.selectAll('*').remove();
+    }
+
+    // Reset internal state
+    this.currentLayout = null as any;
+    this.colaLayout = null as any;
+    this.svgNodes = null;
+    this.svgLinks = null;
+    this.svgGroups = null;
+
+    // Clear caches
+    this.edgeRoutingCache.edgesBetweenNodes.clear();
+    this.edgeRoutingCache.alignmentEdges.clear();
+    this.dragStartPositions.clear();
   }
 
   /**
@@ -2660,6 +2691,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private routeEdges(): void {
     try {
+      // Ensure all nodes have bounds computed before edge routing.
+      // This is critical when using prior positions with minimal iterations,
+      // as WebCola may not have had time to compute bounds internally.
+      this.ensureNodeBounds();
+
       // Prepare edge routing with margin
       if (typeof (this.colaLayout as any)?.prepareEdgeRouting === 'function') {
         (this.colaLayout as any).prepareEdgeRouting(
@@ -2681,6 +2717,37 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     } catch (error) {
       console.error('Error in edge routing:', error);
       this.showError(`Edge routing failed: ${(error as Error).message}`);
+    }
+  }
+
+  /**
+   * Ensures all nodes have bounds (Rectangle) objects computed.
+   * This is necessary for edge routing to work correctly.
+   * 
+   * When using prior positions with minimal iterations, WebCola may not
+   * have computed bounds for nodes. This method manually creates Rectangle
+   * bounds based on node x, y, width, height properties.
+   */
+  private ensureNodeBounds(): void {
+    if (!this.currentLayout?.nodes || !cola?.Rectangle) return;
+
+    for (const node of this.currentLayout.nodes) {
+      // Skip if bounds already exist and are valid
+      if (node.bounds && typeof node.bounds.rayIntersection === 'function') {
+        continue;
+      }
+
+      // Compute bounds from node position and dimensions
+      // Rectangle constructor: (x, X, y, Y) where x,y is top-left and X,Y is bottom-right
+      const halfWidth = (node.width || 50) / 2;
+      const halfHeight = (node.height || 30) / 2;
+      const x = (node.x || 0) - halfWidth;
+      const X = (node.x || 0) + halfWidth;
+      const y = (node.y || 0) - halfHeight;
+      const Y = (node.y || 0) + halfHeight;
+
+      node.bounds = new cola.Rectangle(x, X, y, Y);
+      node.innerBounds = node.bounds.inflate(-1);
     }
   }
 

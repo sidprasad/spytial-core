@@ -582,9 +582,8 @@
         function clearGraph() {
             const graphElement = document.getElementById('graph-container');
             
-            // Clear the graph
+            // Clear the graph using the component's clear method
             if (graphElement.clear) {
-                // FIXME: The graphElement needs a clear() method
                 graphElement.clear();
             } else {
                 // Fallback: remove all SVG content
