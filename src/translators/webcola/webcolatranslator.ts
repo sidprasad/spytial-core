@@ -488,6 +488,17 @@ export class WebColaLayout {
     if (priorPosition) {
       x = priorPosition.x;
       y = priorPosition.y;
+      console.log(`Node ${node.id}: Using prior position (${x.toFixed(2)}, ${y.toFixed(2)})`);
+    } else if (this.priorPositionMap.size > 0) {
+      // We have prior positions but this node wasn't found - log for debugging
+      console.log(`Node ${node.id}: No prior position found (available: ${Array.from(this.priorPositionMap.keys()).join(', ')})`);
+      if (this.dagre_graph) {
+        const dagre_node = this.dagre_graph.node(node.id);
+        if (dagre_node) {
+          x = dagre_node.x;
+          y = dagre_node.y;
+        }
+      }
     } else if (this.dagre_graph) {
       // Priority 2: Use DAGRE-computed position for new nodes
       const dagre_node = this.dagre_graph.node(node.id);
