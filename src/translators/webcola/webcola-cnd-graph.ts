@@ -2300,7 +2300,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
         // Handle labels first (e.g., Skolems) - styled in node's color
         if (hasLabels) {
-          const nodeColor = d.color || 'black';
+          // const nodeColor = d.color || 'black';
+          const nodeColor = 'black';
           
           for (const [key, values] of labelEntries) {
             // For labels like Skolems, display as comma-separated list
@@ -2310,7 +2311,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
               .append("tspan")
               .attr("x", 0)
               .attr("dy", `${secondaryFontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO}px`)
-              .style("font-size", `${secondaryFontSize}px`)
+              .style("font-size", `${secondaryFontSize*0.8}px`)
               .style("fill", nodeColor)  // Style in node's color
               .style("font-style", "italic")  // Italicize to distinguish from attributes
               .text(labelText);
