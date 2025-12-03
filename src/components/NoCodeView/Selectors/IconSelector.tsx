@@ -39,7 +39,6 @@ export const IconSelector: React.FC<IconSelectorProps> = ({
           value={selector}
           onChange={handleSelectorChange}
           required
-          placeholder="e.g., Node"
         />
       </div>
       <div className="input-group">

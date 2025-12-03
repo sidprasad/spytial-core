@@ -39,7 +39,6 @@ export const HelperEdgeSelector: React.FC<HelperEdgeSelectorProps> = ({
           value={selector}
           onChange={handleSelectorChange}
           required
-          placeholder="e.g., Node->edges"
         />
       </div>
       <div className="input-group">

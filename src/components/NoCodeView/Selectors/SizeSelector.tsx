@@ -46,7 +46,6 @@ export const SizeSelector: React.FC<SizeSelectorProps> = ({
           value={selector}
           onChange={handleSelectorChange}
           required
-          placeholder="e.g., Node"
         />
       </div>
       <div className="input-group">

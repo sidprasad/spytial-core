@@ -38,7 +38,6 @@ export const ColorAtomSelector: React.FC<ColorAtomSelectorProps> = (props: Color
           value={props.directiveData.params.selector as string || ''}
           onChange={handleInputChange}
           required
-          placeholder="e.g., Node"
         />
       </div>
       <div className="input-group">

@@ -38,7 +38,6 @@ export const GroupBySelectorSelector: React.FC<GroupBySelectorSelectorProps> = (
           value={props.constraintData.params.selector as string || ''}
           onChange={handleParamsChange}
           required
-          placeholder="e.g., Person"
         />
       </div>
       <div className="input-group">

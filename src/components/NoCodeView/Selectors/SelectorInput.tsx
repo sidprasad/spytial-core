@@ -128,7 +128,6 @@ export function highlightSelector(selector: string): string {
  *   value={selectorValue}
  *   onChange={handleChange}
  *   required
- *   placeholder="e.g., Node->edges"
  * />
  * ```
  */
@@ -137,7 +136,7 @@ export const SelectorInput: React.FC<SelectorInputProps> = ({
     name,
     onChange,
     required = false,
-    placeholder = 'e.g., Node->edges',
+    placeholder,
     className = ''
 }) => {
     // Memoize the highlighted output

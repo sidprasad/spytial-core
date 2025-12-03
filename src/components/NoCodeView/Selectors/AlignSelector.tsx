@@ -36,7 +36,6 @@ const AlignSelector: React.FC<AlignSelectorProps> = (props: AlignSelectorProps) 
                     value={props.constraintData.params.selector as string || ''}
                     onChange={handleParamsChange}
                     required
-                    placeholder="e.g., Node + Person"
                 />
             </div>
             <div className="input-group">

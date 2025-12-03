@@ -49,7 +49,6 @@ export const OrientationSelector: React.FC<OrientationSelectorProps> = (props: O
           value={props.constraintData.params.selector as string || ''}
           onChange={handleInputChange}
           required
-          placeholder="e.g., Node->edges"
         />
       </div>
       <div className="input-group">

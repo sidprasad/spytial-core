@@ -32,7 +32,6 @@ const CyclicSelector: React.FC<CyclicSelectorProps> = (props: CyclicSelectorProp
             value={props.constraintData.params.selector as string || ''} 
             onChange={handleParamsChange}
             required
-            placeholder="e.g., Node->edges"
         />
     </div>
     <div className="input-group">

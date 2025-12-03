@@ -43,7 +43,6 @@ export const HideAtomSelector: React.FC<HideAtomSelectorProps> = (props: HideAto
         value={data.params.selector as string || ''}
         onChange={handleInputChange}
         required
-        placeholder="e.g., HiddenNode"
       />
     </div>
   );
