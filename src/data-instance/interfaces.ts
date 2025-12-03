@@ -23,11 +23,12 @@ export interface IAtom  {
   label: string; // Label for the atom, used for display purposes
   
   /**
-   * Optional key-value attributes associated with this atom.
-   * Used for language-specific metadata (e.g., Skolems in Alloy, annotations in other languages).
-   * Renderers can use these attributes for display purposes.
+   * Optional key-value labels associated with this atom.
+   * Used for language-specific metadata that should be displayed prominently on nodes
+   * (e.g., Skolems in Alloy, annotations in other languages).
+   * These labels are styled differently from regular attributes - typically in the node's color.
    */
-  attributes?: Record<string, string[]>;
+  labels?: Record<string, string[]>;
 }
 
 

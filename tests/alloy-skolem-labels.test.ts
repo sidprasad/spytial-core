@@ -8,17 +8,17 @@ import {
 import { generateGraph, getAtomSkolems } from '../src/data-instance/alloy/alloy-graph';
 
 /**
- * Test suite for Alloy Skolem attribute improvements.
+ * Test suite for Alloy Skolem label improvements.
  * 
  * This tests that atoms referenced by Skolem constants have their Skolem
- * names available as an attribute (IAtom.skolems), similar to how Sterling 
+ * names available as labels (IAtom.labels), similar to how Sterling 
  * and Alloy Analyzer display them in graph visualizations.
  * 
- * The key design decision is that Skolems are stored as separate attributes
+ * The key design decision is that Skolems are stored as separate labels
  * rather than modifying the atom label, which preserves atom identification
  * for evaluators and constraint enforcement.
  */
-describe('Alloy Skolem Attributes', () => {
+describe('Alloy Skolem Labels', () => {
   // Sample Alloy XML with Skolems (from sample/unsat-grouping/datum.xml)
   const xmlWithSkolems = `
     <alloy builddate="Monday, October 28th, 2024">
@@ -196,8 +196,8 @@ describe('Alloy Skolem Attributes', () => {
     });
   });
 
-  describe('AlloyDataInstance skolems attribute', () => {
-    it('should include Skolem names in atom attributes.skolems property', () => {
+  describe('AlloyDataInstance skolems labels', () => {
+    it('should include Skolem names in atom labels.skolems property', () => {
       const datum = parseAlloyXML(xmlWithSkolems);
       const dataInstance = new AlloyDataInstance(datum.instances[0]);
       
@@ -208,10 +208,10 @@ describe('Alloy Skolem Attributes', () => {
       const cell6 = atoms.find(a => a.id === 'Cell6');
       const cell7 = atoms.find(a => a.id === 'Cell7');
       
-      // Skolems should be available as attribute
-      expect(cell8?.attributes?.skolems).toContain('$c1_some32007');
-      expect(cell6?.attributes?.skolems).toContain('$c3_some32009');
-      expect(cell7?.attributes?.skolems).toContain('$c2_some32008');
+      // Skolems should be available as labels
+      expect(cell8?.labels?.skolems).toContain('$c1_some32007');
+      expect(cell6?.labels?.skolems).toContain('$c3_some32009');
+      expect(cell7?.labels?.skolems).toContain('$c2_some32008');
     });
 
     it('should preserve atom ID and label without Skolem modification', () => {
@@ -231,18 +231,18 @@ describe('Alloy Skolem Attributes', () => {
       expect(cell6?.label).toBe('Cell6');
     });
 
-    it('should have undefined attributes for atoms without Skolem references', () => {
+    it('should have undefined labels for atoms without Skolem references', () => {
       const datum = parseAlloyXML(xmlWithSkolems);
       const dataInstance = new AlloyDataInstance(datum.instances[0]);
       
       const atoms = dataInstance.getAtoms();
       
-      // Atoms not referenced by Skolems should have undefined attributes
+      // Atoms not referenced by Skolems should have undefined labels
       const cell0 = atoms.find(a => a.id === 'Cell0');
       const cell1 = atoms.find(a => a.id === 'Cell1');
       
-      expect(cell0?.attributes).toBeUndefined();
-      expect(cell1?.attributes).toBeUndefined();
+      expect(cell0?.labels).toBeUndefined();
+      expect(cell1?.labels).toBeUndefined();
     });
 
     it('should handle instances without Skolems', () => {
@@ -251,15 +251,15 @@ describe('Alloy Skolem Attributes', () => {
       
       const atoms = dataInstance.getAtoms();
       
-      // All atoms should have undefined attributes
+      // All atoms should have undefined labels
       for (const atom of atoms) {
-        expect(atom.attributes).toBeUndefined();
+        expect(atom.labels).toBeUndefined();
       }
     });
   });
 
-  describe('getTypes atom skolems attribute', () => {
-    it('should include Skolem names in type atom attributes.skolems property', () => {
+  describe('getTypes atom skolems labels', () => {
+    it('should include Skolem names in type atom labels.skolems property', () => {
       const datum = parseAlloyXML(xmlWithSkolems);
       const dataInstance = new AlloyDataInstance(datum.instances[0]);
       
@@ -272,8 +272,8 @@ describe('Alloy Skolem Attributes', () => {
       const cell8 = cellType!.atoms.find(a => a.id === 'Cell8');
       const cell6 = cellType!.atoms.find(a => a.id === 'Cell6');
       
-      expect(cell8?.attributes?.skolems).toContain('$c1_some32007');
-      expect(cell6?.attributes?.skolems).toContain('$c3_some32009');
+      expect(cell8?.labels?.skolems).toContain('$c1_some32007');
+      expect(cell6?.labels?.skolems).toContain('$c3_some32009');
     });
   });
 
@@ -358,9 +358,9 @@ describe('Alloy Skolem Attributes', () => {
       const node0 = atoms.find(a => a.id === 'Node0');
       
       // Skolems array should include both Skolem names
-      expect(node0?.attributes?.skolems).toContain('$sk1');
-      expect(node0?.attributes?.skolems).toContain('$sk2');
-      expect(node0?.attributes?.skolems).toHaveLength(2);
+      expect(node0?.labels?.skolems).toContain('$sk1');
+      expect(node0?.labels?.skolems).toContain('$sk2');
+      expect(node0?.labels?.skolems).toHaveLength(2);
       
       // ID and label should remain unchanged
       expect(node0?.id).toBe('Node0');

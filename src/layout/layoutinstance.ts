@@ -765,6 +765,14 @@ export class LayoutInstance {
                 .map((group) => group.name);
             let nodeAttributes = attributes[nodeId] || {};
 
+            // Get labels from the data instance (e.g., Skolems in Alloy)
+            let nodeLabels: Record<string, string[]> | undefined = undefined;
+            const atoms = ai.getAtoms();
+            const atom = atoms.find(atom => atom.id === nodeId);
+            if (atom?.labels) {
+                nodeLabels = atom.labels;
+            }
+
             return {
                 id: nodeId,
                 label: label,
@@ -772,6 +780,7 @@ export class LayoutInstance {
                 color: color,
                 groups: nodeGroups,
                 attributes: nodeAttributes,
+                labels: nodeLabels,
                 icon: iconPath,
                 height: height,
                 width: width,
