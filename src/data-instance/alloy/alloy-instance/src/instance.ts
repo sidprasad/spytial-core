@@ -214,6 +214,29 @@ export function getInstanceRelationsAndSkolems(instance: AlloyInstance): AlloyRe
   return skolemsArray.concat(relationsArray)
 }
 
+/**
+ * Get the Skolem names associated with a given atom.
+ * This returns an array of Skolem names that contain the specified atom in their tuples.
+ * 
+ * @param instance The instance to search for Skolems
+ * @param atomId The ID of the atom to find Skolem associations for
+ * @returns Array of Skolem names that reference this atom
+ */
+export function getSkolemNamesForAtom(instance: AlloyInstance, atomId: string): string[] {
+  const skolemNames: string[] = [];
+  
+  for (const skolem of Object.values(instance.skolems)) {
+    for (const tuple of skolem.tuples) {
+      if (tuple.atoms.includes(atomId)) {
+        skolemNames.push(skolem.name);
+        break; // Only add each skolem name once per atom
+      }
+    }
+  }
+  
+  return skolemNames;
+}
+
 
 export function getInstanceTuples(instance: AlloyInstance): AlloyTuple[] {
   return getInstanceRelations(instance)

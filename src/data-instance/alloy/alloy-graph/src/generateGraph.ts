@@ -6,7 +6,8 @@ import {
   getInstanceAtom,
   getInstanceAtoms,
   getInstanceRelations,
-  getRelationTuples
+  getRelationTuples,
+  getSkolemNamesForAtom
 } from  '../../alloy-instance';
 
 import { generateEdgeId, generateNodeId } from './ids';
@@ -51,6 +52,17 @@ export function getRelationSTIndexes(
   // return [sourceIndex, targetIndex]
 }
 
+/**
+ * Get Skolem names for a given atom as an array.
+ * This is exposed for use by graph renderers that want to display Skolem information.
+ * 
+ * @param instance The AlloyInstance containing Skolem information
+ * @param atomId The atom's ID
+ * @returns Array of Skolem names that reference this atom
+ */
+export function getAtomSkolems(instance: AlloyInstance, atomId: string): string[] {
+  return getSkolemNamesForAtom(instance, atomId);
+}
 
 
 
@@ -85,7 +97,8 @@ export function generateGraph(
     const nodeId = generateNodeId(atom);
 
     if (nodeIds.has(nodeId))
-      // Add node to graph
+      // Add node to graph - label is the node ID
+      // Skolem information is available via IAtom.skolems property
       graph.setNode(nodeId, nodeId);
   });
 

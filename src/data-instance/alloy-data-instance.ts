@@ -5,7 +5,8 @@ import {
   getInstanceAtoms,
   getInstanceTypes,
   getInstanceRelations,
-  getInstanceAtom
+  getInstanceAtom,
+  getSkolemNamesForAtom
 } from './alloy/alloy-instance';
 import { getAtomType } from './alloy/alloy-instance/src/atom';
 import { isBuiltin } from './alloy/alloy-instance/src/type';
@@ -72,12 +73,15 @@ export class AlloyDataInstance implements IInputDataInstance {
     return {
       id: alloyType.id,
       types: alloyType.types,
-      atoms: alloyType.atoms.map((atom: AlloyAtom) => ({
-        id: atom.id,
-        label: atom.id, // Label is the same as ID in Alloy
-        type: atom.type,
-        name: atom.id // In Alloy, atoms are identified by their ID.
-      })),
+      atoms: alloyType.atoms.map((atom: AlloyAtom) => {
+        const skolemNames = getSkolemNamesForAtom(this.alloyInstance, atom.id);
+        return {
+          id: atom.id,
+          label: atom.id,
+          type: atom.type,
+          skolems: skolemNames.length > 0 ? skolemNames : undefined
+        };
+      }),
       isBuiltin: isBuiltin(alloyType)
     };
   }
@@ -93,13 +97,15 @@ export class AlloyDataInstance implements IInputDataInstance {
     return alloyTypes.map((alloyType: AlloyType) => ({
       id: alloyType.id,
       types: alloyType.types,
-      atoms: alloyType.atoms.map((atom: AlloyAtom) => ({
-        id: atom.id,
-        type: atom.type,
-        label: atom.id, // Label is the same as ID in Alloy
-        name: atom.id // In Alloy, atoms are identified by their ID.
-
-      })),
+      atoms: alloyType.atoms.map((atom: AlloyAtom) => {
+        const skolemNames = getSkolemNamesForAtom(this.alloyInstance, atom.id);
+        return {
+          id: atom.id,
+          type: atom.type,
+          label: atom.id,
+          skolems: skolemNames.length > 0 ? skolemNames : undefined
+        };
+      }),
       isBuiltin: isBuiltin(alloyType)
     }));
   }
@@ -112,11 +118,15 @@ export class AlloyDataInstance implements IInputDataInstance {
   public getAtoms(): readonly IAtom[] {
     const alloyAtoms = getInstanceAtoms(this.alloyInstance);
     
-    return alloyAtoms.map((alloyAtom: AlloyAtom) => ({
-      id: alloyAtom.id,
-      type: alloyAtom.type,
-      label: alloyAtom.id 
-    }));
+    return alloyAtoms.map((alloyAtom: AlloyAtom) => {
+      const skolemNames = getSkolemNamesForAtom(this.alloyInstance, alloyAtom.id);
+      return {
+        id: alloyAtom.id,
+        type: alloyAtom.type,
+        label: alloyAtom.id,
+        skolems: skolemNames.length > 0 ? skolemNames : undefined
+      };
+    });
   }
 
   /**
