@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { ConstraintData, DirectiveData } from './interfaces';
 import jsyaml from 'js-yaml';
+import { parseLayoutSpec } from '../../layout/layoutspec';
 import './NoCodeView.css';
 
 // TODO: Add unit tests for this function
@@ -128,6 +129,118 @@ export function validateYaml(yamlString: string): string | null {
     }
 }
 
+/**
+ * Result of Spytial spec validation
+ */
+export interface SpytialValidationResult {
+    /** Whether the spec is valid */
+    isValid: boolean;
+    /** Error message if spec has errors (will prevent parsing) */
+    error: string | null;
+    /** Warning messages for unrecognized elements (won't prevent parsing) */
+    warnings: string[];
+}
+
+/** Known constraint types in Spytial spec */
+const KNOWN_CONSTRAINT_TYPES = ['orientation', 'cyclic', 'group', 'align', 'size', 'hideAtom'];
+
+/** Known directive types in Spytial spec */
+const KNOWN_DIRECTIVE_TYPES = [
+    'atomColor', 'edgeColor', 'size', 'icon', 'projection', 
+    'attribute', 'hideField', 'inferredEdge', 'hideAtom', 'flag'
+];
+
+/** Known top-level keys in Spytial spec */
+const KNOWN_TOP_LEVEL_KEYS = ['constraints', 'directives'];
+
+/**
+ * Validates a Spytial spec YAML string and returns detailed validation results
+ * 
+ * This function performs lightweight validation of the Spytial specification:
+ * 1. First validates YAML syntax
+ * 2. Then validates the spec structure using parseLayoutSpec
+ * 3. Also checks for unrecognized constraint/directive types
+ * 
+ * @param yamlString - YAML string to validate
+ * @returns SpytialValidationResult with errors and warnings
+ */
+export function validateSpytialSpec(yamlString: string): SpytialValidationResult {
+    const result: SpytialValidationResult = {
+        isValid: true,
+        error: null,
+        warnings: []
+    };
+
+    if (!yamlString || !yamlString.trim()) {
+        return result; // Empty is valid
+    }
+
+    // First check YAML syntax
+    let parsed: any;
+    try {
+        parsed = jsyaml.load(yamlString);
+    } catch (error) {
+        if (error instanceof jsyaml.YAMLException) {
+            const line = error.mark?.line !== undefined ? error.mark.line + 1 : undefined;
+            const column = error.mark?.column !== undefined ? error.mark.column + 1 : undefined;
+            const position = line && column ? ` (line ${line}, column ${column})` : '';
+            result.isValid = false;
+            result.error = `YAML syntax error${position}: ${error.reason || error.message}`;
+        } else {
+            result.isValid = false;
+            result.error = `Invalid YAML: ${(error as Error).message}`;
+        }
+        return result;
+    }
+
+    // Check for unrecognized top-level keys
+    if (parsed && typeof parsed === 'object') {
+        const topLevelKeys = Object.keys(parsed);
+        for (const key of topLevelKeys) {
+            if (!KNOWN_TOP_LEVEL_KEYS.includes(key)) {
+                result.warnings.push(`Unrecognized top-level key: "${key}". Expected: ${KNOWN_TOP_LEVEL_KEYS.join(', ')}`);
+            }
+        }
+
+        // Check for unrecognized constraint types
+        if (Array.isArray(parsed.constraints)) {
+            for (let i = 0; i < parsed.constraints.length; i++) {
+                const constraint = parsed.constraints[i];
+                if (constraint && typeof constraint === 'object') {
+                    const constraintType = Object.keys(constraint)[0];
+                    if (constraintType && !KNOWN_CONSTRAINT_TYPES.includes(constraintType)) {
+                        result.warnings.push(`Unrecognized constraint type at index ${i}: "${constraintType}". Known types: ${KNOWN_CONSTRAINT_TYPES.join(', ')}`);
+                    }
+                }
+            }
+        }
+
+        // Check for unrecognized directive types
+        if (Array.isArray(parsed.directives)) {
+            for (let i = 0; i < parsed.directives.length; i++) {
+                const directive = parsed.directives[i];
+                if (directive && typeof directive === 'object') {
+                    const directiveType = Object.keys(directive)[0];
+                    if (directiveType && !KNOWN_DIRECTIVE_TYPES.includes(directiveType)) {
+                        result.warnings.push(`Unrecognized directive type at index ${i}: "${directiveType}". Known types: ${KNOWN_DIRECTIVE_TYPES.join(', ')}`);
+                    }
+                }
+            }
+        }
+    }
+
+    // Now try to parse using the actual Spytial parser
+    try {
+        parseLayoutSpec(yamlString);
+    } catch (error) {
+        result.isValid = false;
+        result.error = `Spytial spec error: ${(error as Error).message}`;
+        return result;
+    }
+
+    return result;
+}
+
 interface CodeViewProps {
     constraints: ConstraintData[];
     directives: DirectiveData[];
@@ -138,11 +251,13 @@ interface CodeViewProps {
 
 const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
     const [validationError, setValidationError] = useState<string | null>(null);
+    const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
 
-    // Validate YAML when value changes
+    // Validate YAML and Spytial spec when value changes
     useEffect(() => {
-        const error = validateYaml(props.yamlValue);
-        setValidationError(error);
+        const result = validateSpytialSpec(props.yamlValue);
+        setValidationError(result.error);
+        setValidationWarnings(result.warnings);
     }, [props.yamlValue]);
 
     // Apply basic YAML syntax highlighting to text
@@ -200,16 +315,34 @@ const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
                 Use the toggle above to switch to the visual editor.
             </div>
             
-            {/* YAML validation error display */}
+            {/* Spytial spec validation error display */}
             {validationError && (
+                <div 
+                    className="alert alert-danger py-2 mb-2" 
+                    role="alert"
+                    aria-live="polite"
+                >
+                    <small>
+                        <strong>❌ </strong>
+                        {validationError}
+                    </small>
+                </div>
+            )}
+            
+            {/* Spytial spec validation warnings display */}
+            {validationWarnings.length > 0 && (
                 <div 
                     className="alert alert-warning py-2 mb-2" 
                     role="alert"
                     aria-live="polite"
                 >
                     <small>
-                        <strong>⚠️ </strong>
-                        {validationError}
+                        <strong>⚠️ Warnings:</strong>
+                        <ul className="mb-0 ps-3">
+                            {validationWarnings.map((warning, index) => (
+                                <li key={index}>{warning}</li>
+                            ))}
+                        </ul>
                     </small>
                 </div>
             )}

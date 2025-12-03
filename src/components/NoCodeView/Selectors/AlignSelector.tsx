@@ -1,6 +1,7 @@
 import React from 'react';
 import { TUPLE_SELECTOR_TEXT } from '../constants';
 import { ConstraintData } from '../interfaces';
+import { SelectorInput } from './SelectorInput';
 
 interface AlignSelectorProps {
     /** Constraint data object containing type and parameters */
@@ -30,13 +31,12 @@ const AlignSelector: React.FC<AlignSelectorProps> = (props: AlignSelectorProps) 
                 <div className="input-group-prepend">
                     <span className="input-group-text infolabel" title={TUPLE_SELECTOR_TEXT}>Selector</span>
                 </div>
-                <input 
-                    type="text" 
+                <SelectorInput 
                     name="selector" 
-                    className="form-control code-input" 
-                    required 
-                    onChange={handleParamsChange} 
                     value={props.constraintData.params.selector as string || ''}
+                    onChange={handleParamsChange}
+                    required
+                    placeholder="e.g., Node + Person"
                 />
             </div>
             <div className="input-group">

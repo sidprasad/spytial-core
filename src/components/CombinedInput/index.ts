@@ -7,7 +7,8 @@
 export { CombinedInputComponent, default } from './CombinedInputComponent';
 export type { 
   CombinedInputConfig, 
-  CombinedInputProps 
+  CombinedInputProps,
+  LayoutViewMode 
 } from './CombinedInputComponent';
 
 // Export mounting function for easy integration

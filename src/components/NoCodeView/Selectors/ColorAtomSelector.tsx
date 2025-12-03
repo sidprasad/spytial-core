@@ -1,6 +1,7 @@
 import React, { useCallback } from 'react';
 import { UNARY_SELECTOR_TEXT } from '../constants';
 import { DirectiveData } from '../interfaces';
+import { SelectorInput } from './SelectorInput';
 
 interface ColorAtomSelectorProps {
   /** Directive data object containing type and parameters */
@@ -32,12 +33,12 @@ export const ColorAtomSelector: React.FC<ColorAtomSelectorProps> = (props: Color
             Selector
           </span>
         </div>
-        <input
-          type="text"
+        <SelectorInput
           name="selector"
-          className="form-control code-input"
+          value={props.directiveData.params.selector as string || ''}
           onChange={handleInputChange}
           required
+          placeholder="e.g., Node"
         />
       </div>
       <div className="input-group">

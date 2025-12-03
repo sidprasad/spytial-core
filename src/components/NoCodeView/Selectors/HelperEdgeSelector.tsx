@@ -1,6 +1,7 @@
 import React from 'react';
 import { TUPLE_SELECTOR_TEXT } from '../constants';
 import { DirectiveData } from '../interfaces';
+import { SelectorInput } from './SelectorInput';
 
 interface HelperEdgeSelectorProps {
   /** Directive data object containing type and parameters */
@@ -21,6 +22,10 @@ export const HelperEdgeSelector: React.FC<HelperEdgeSelectorProps> = ({
   const name = (directiveData.params.name as string) || '';
   const color = (directiveData.params.color as string) || '#000000';
 
+  const handleSelectorChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    onUpdate({ params: { ...directiveData.params, selector: event.target.value } });
+  };
+
   return (
     <>
       <div className="input-group">
@@ -29,13 +34,12 @@ export const HelperEdgeSelector: React.FC<HelperEdgeSelectorProps> = ({
             Selector
           </span>
         </div>
-        <input
-          type="text"
+        <SelectorInput
           name="selector"
-          className="form-control code-input"
-          defaultValue={selector}
-          onChange={(e) => onUpdate({ params: { ...directiveData.params, selector: e.target.value } })}
+          value={selector}
+          onChange={handleSelectorChange}
           required
+          placeholder="e.g., Node->edges"
         />
       </div>
       <div className="input-group">

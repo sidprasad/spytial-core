@@ -15,9 +15,13 @@ export { OrientationSelector } from './Selectors/OrientationSelector';
 export { ProjectionSelector } from './Selectors/ProjectionSelector';
 export { SizeSelector } from './Selectors/SizeSelector';
 
+// Export SelectorInput for custom use
+export { SelectorInput, highlightSelector } from './Selectors/SelectorInput';
+
 // Export data functions
 export { parseLayoutSpecToData } from './NoCodeView';
-export { generateLayoutSpecYaml, validateYaml } from './CodeView';
+export { generateLayoutSpecYaml, validateYaml, validateSpytialSpec } from './CodeView';
+export type { SpytialValidationResult } from './CodeView';
 
 // Export constants and types
 export * from './constants';

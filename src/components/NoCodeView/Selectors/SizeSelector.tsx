@@ -1,6 +1,7 @@
 import React from 'react';
 import { UNARY_SELECTOR_TEXT } from '../constants';
 import { DirectiveData, ConstraintData } from '../interfaces';
+import { SelectorInput } from './SelectorInput';
 
 interface SizeSelectorProps {
   /** Directive or Constraint data object containing type and parameters */
@@ -28,6 +29,10 @@ export const SizeSelector: React.FC<SizeSelectorProps> = ({
   const width = (data.params.width as number) || 10;
   const height = (data.params.height as number) || 10;
 
+  const handleSelectorChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    onUpdate({ params: { ...data.params, selector: event.target.value } });
+  };
+
   return (
     <>
       <div className="input-group">
@@ -36,13 +41,12 @@ export const SizeSelector: React.FC<SizeSelectorProps> = ({
             Selector
           </span>
         </div>
-        <input
-          type="text"
+        <SelectorInput
           name="selector"
-          className="form-control code-input"
-          defaultValue={selector}
-          onChange={(e) => onUpdate({ params: { ...data.params, selector: e.target.value } })}
+          value={selector}
+          onChange={handleSelectorChange}
           required
+          placeholder="e.g., Node"
         />
       </div>
       <div className="input-group">
