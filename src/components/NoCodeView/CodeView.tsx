@@ -141,10 +141,22 @@ export interface SpytialValidationResult {
     warnings: string[];
 }
 
-/** Known constraint types in Spytial spec */
+/**
+ * Known constraint types in Spytial spec.
+ * 
+ * These types are derived from parseConstraints() in layoutspec.ts.
+ * If new constraint types are added to the parser, update this list.
+ * @see src/layout/layoutspec.ts#parseConstraints
+ */
 const KNOWN_CONSTRAINT_TYPES = ['orientation', 'cyclic', 'group', 'align', 'size', 'hideAtom'];
 
-/** Known directive types in Spytial spec */
+/**
+ * Known directive types in Spytial spec.
+ * 
+ * These types are derived from parseDirectives() in layoutspec.ts.
+ * If new directive types are added to the parser, update this list.
+ * @see src/layout/layoutspec.ts#parseDirectives
+ */
 const KNOWN_DIRECTIVE_TYPES = [
     'atomColor', 'edgeColor', 'size', 'icon', 'projection', 
     'attribute', 'hideField', 'inferredEdge', 'hideAtom', 'flag'

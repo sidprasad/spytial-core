@@ -32,16 +32,27 @@ interface SelectorInputProps {
 export function highlightSelector(selector: string): string {
     if (!selector) return '';
     
-    // Tokenize the selector string with a regex that captures all relevant patterns
-    // The order of patterns matters - more specific patterns should come first
+    /**
+     * Token pattern for selector syntax highlighting.
+     * 
+     * Pattern breakdown (order matters - more specific patterns first):
+     * - \->       : Arrow operator (join)
+     * - [+&\-~*^.]: Set operators (+, &, -), unary operators (~, *, ^), and dot
+     * - [()[\]]   : Parentheses and brackets
+     * - _\b       : Wildcard underscore (word boundary to avoid matching mid-identifier)
+     * - univ\b    : Universal set keyword
+     * - none\b    : Empty set keyword  
+     * - iden\b    : Identity relation keyword
+     * - [A-Z]...  : Capitalized identifiers (sigs/atoms like Node, Person)
+     * - [a-z]...  : Lowercase identifiers (fields like edges, next)
+     * - [0-9]+    : Numeric literals
+     * - \s+       : Whitespace
+     * - .         : Any other character (fallback)
+     */
     const tokenPattern = /(\->|[+&\-~*^.]|[()[\]]|_\b|univ\b|none\b|iden\b|[A-Z][a-zA-Z0-9_]*|[a-z][a-zA-Z0-9_]*|[0-9]+|\s+|.)/g;
     
-    const tokens: string[] = [];
-    let match: RegExpExecArray | null;
-    
-    while ((match = tokenPattern.exec(selector)) !== null) {
-        tokens.push(match[0]);
-    }
+    // Use matchAll for safer iteration (returns iterator, no infinite loop risk)
+    const tokens = Array.from(selector.matchAll(tokenPattern), m => m[0]);
     
     // Map each token to highlighted HTML
     const highlighted = tokens.map(token => {

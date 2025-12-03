@@ -49,6 +49,7 @@ export const ColorAtomSelector: React.FC<ColorAtomSelectorProps> = (props: Color
           type="color"
           name="value"
           className="form-control"
+          value={props.directiveData.params.value as string || '#000000'}
           onChange={handleInputChange}
           required
         />
