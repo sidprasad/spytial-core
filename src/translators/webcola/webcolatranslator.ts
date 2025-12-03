@@ -30,7 +30,7 @@ type NodeWithMetadata = Node & {
    * These are displayed prominently on nodes, styled in the node's color.
    */
   labels?: Record<string, string[]>,
-  color: string
+  color: string,
   icon: string,
   mostSpecificType: string,
   showLabels: boolean,
