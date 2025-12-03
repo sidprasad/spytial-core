@@ -23,12 +23,11 @@ export interface IAtom  {
   label: string; // Label for the atom, used for display purposes
   
   /**
-   * Optional array of Skolem constant names that reference this atom.
-   * Skolems are existentially quantified variables that Alloy/Forge produces
-   * when solving constraints. They are displayed as attributes in visualizers
-   * like Sterling and Alloy Analyzer.
+   * Optional key-value attributes associated with this atom.
+   * Used for language-specific metadata (e.g., Skolems in Alloy, annotations in other languages).
+   * Renderers can use these attributes for display purposes.
    */
-  skolems?: string[];
+  attributes?: Record<string, string[]>;
 }
 
 

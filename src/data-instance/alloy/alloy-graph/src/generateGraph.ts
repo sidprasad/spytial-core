@@ -98,7 +98,7 @@ export function generateGraph(
 
     if (nodeIds.has(nodeId))
       // Add node to graph - label is the node ID
-      // Skolem information is available via IAtom.skolems property
+      // Skolem information is available via IAtom.attributes.skolems property
       graph.setNode(nodeId, nodeId);
   });
 

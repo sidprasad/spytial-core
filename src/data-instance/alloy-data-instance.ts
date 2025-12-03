@@ -79,7 +79,7 @@ export class AlloyDataInstance implements IInputDataInstance {
           id: atom.id,
           label: atom.id,
           type: atom.type,
-          skolems: skolemNames.length > 0 ? skolemNames : undefined
+          attributes: skolemNames.length > 0 ? { skolems: skolemNames } : undefined
         };
       }),
       isBuiltin: isBuiltin(alloyType)
@@ -103,7 +103,7 @@ export class AlloyDataInstance implements IInputDataInstance {
           id: atom.id,
           type: atom.type,
           label: atom.id,
-          skolems: skolemNames.length > 0 ? skolemNames : undefined
+          attributes: skolemNames.length > 0 ? { skolems: skolemNames } : undefined
         };
       }),
       isBuiltin: isBuiltin(alloyType)
@@ -124,7 +124,7 @@ export class AlloyDataInstance implements IInputDataInstance {
         id: alloyAtom.id,
         type: alloyAtom.type,
         label: alloyAtom.id,
-        skolems: skolemNames.length > 0 ? skolemNames : undefined
+        attributes: skolemNames.length > 0 ? { skolems: skolemNames } : undefined
       };
     });
   }
