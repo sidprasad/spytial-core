@@ -1,6 +1,7 @@
 import React, { useCallback } from 'react';
 import { UNARY_SELECTOR_TEXT } from '../constants';
 import { DirectiveData, ConstraintData } from '../interfaces';
+import { SelectorInput } from './SelectorInput';
 
 interface HideAtomSelectorProps {
   /** Directive or Constraint data object containing type and parameters */
@@ -37,11 +38,9 @@ export const HideAtomSelector: React.FC<HideAtomSelectorProps> = (props: HideAto
           Selector
         </span>
       </div>
-      <input
-        type="text"
+      <SelectorInput
         name="selector"
-        className="form-control code-input"
-        defaultValue={data.params.selector as string || ''}
+        value={data.params.selector as string || ''}
         onChange={handleInputChange}
         required
       />

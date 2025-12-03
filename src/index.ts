@@ -116,7 +116,7 @@ export type { ReplWithVisualizationProps } from './components/ReplInterface/Repl
 
 // Export Combined Input Component
 export { CombinedInputComponent } from './components/CombinedInput/CombinedInputComponent';
-export type { CombinedInputConfig, CombinedInputProps } from './components/CombinedInput/CombinedInputComponent';
+export type { CombinedInputConfig, CombinedInputProps, LayoutViewMode } from './components/CombinedInput/CombinedInputComponent';
 export { mountCombinedInput, createCombinedInputSetup, setupCombinedInput } from './components/CombinedInput/mounting';
 export type { CombinedInputMountConfig } from './components/CombinedInput/mounting';
 

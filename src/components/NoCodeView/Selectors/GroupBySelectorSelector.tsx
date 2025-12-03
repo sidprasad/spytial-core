@@ -1,6 +1,7 @@
 import React, { useCallback } from 'react';
 import { UNARY_SELECTOR_TEXT, TUPLE_SELECTOR_TEXT } from '../constants';
 import { ConstraintData } from '../interfaces';
+import { SelectorInput } from './SelectorInput';
 
 interface GroupBySelectorSelectorProps {
   /** Constraint data object containing type and parameters */
@@ -32,10 +33,8 @@ export const GroupBySelectorSelector: React.FC<GroupBySelectorSelectorProps> = (
             Selector
           </span>
         </div>
-        <input
-          type="text"
+        <SelectorInput
           name="selector"
-          className="form-control code-input"
           value={props.constraintData.params.selector as string || ''}
           onChange={handleParamsChange}
           required

@@ -18,6 +18,13 @@ import { LayoutInstance } from '../../layout/layoutinstance';
 import { parseLayoutSpec } from '../../layout/layoutspec';
 import { ConstraintData, DirectiveData } from '../NoCodeView/interfaces';
 
+/**
+ * View mode for the layout interface
+ * - 'code': Shows YAML code editor (default)
+ * - 'nocode': Shows visual editor with constraints and directives
+ */
+export type LayoutViewMode = 'code' | 'nocode';
+
 export interface CombinedInputConfig {
   /** Initial CnD specification */
   cndSpec?: string;
@@ -35,6 +42,12 @@ export interface CombinedInputConfig {
   showLayoutInterface?: boolean;
   /** Whether to auto-apply layout changes (default: true) */
   autoApplyLayout?: boolean;
+  /** 
+   * Initial view mode for the layout interface 
+   * - 'code': Shows YAML code editor (default)
+   * - 'nocode': Shows visual editor with constraints and directives
+   */
+  initialView?: LayoutViewMode;
   /** Custom styling */
   style?: React.CSSProperties;
   /** CSS class name */
@@ -80,6 +93,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
   width = '100%',
   showLayoutInterface = true,
   autoApplyLayout = true,
+  initialView = 'code',
   style,
   className,
   onInstanceChange,
@@ -95,7 +109,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
   const [extractedSpecs, setExtractedSpecs] = useState<string[]>([]); // Store extracted specs
   const [constraints, setConstraints] = useState<ConstraintData[]>([]);
   const [directives, setDirectives] = useState<DirectiveData[]>([]);
-  const [isNoCodeView, setIsNoCodeView] = useState<boolean>(false);
+  const [isNoCodeView, setIsNoCodeView] = useState<boolean>(initialView === 'nocode');
   const [layoutStale, setLayoutStale] = useState<boolean>(false);
   const [currentLayout, setCurrentLayout] = useState<any>(null);
   
