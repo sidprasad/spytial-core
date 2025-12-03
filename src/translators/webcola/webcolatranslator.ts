@@ -25,7 +25,12 @@ type NodeWithMetadata = Node & {
   label: string, // This is the label that will be displayed on the node
   id: string,
   attributes: Record<string, string[]>,
-  color: string
+  /**
+   * Labels from the data instance (e.g., Skolems in Alloy).
+   * These are displayed prominently on nodes, styled in the node's color.
+   */
+  labels?: Record<string, string[]>,
+  color: string,
   icon: string,
   mostSpecificType: string,
   showLabels: boolean,
@@ -513,6 +518,7 @@ export class WebColaLayout {
       id: node.id,
       color: node.color,
       attributes: node.attributes || {},
+      labels: node.labels,
       width: node.width,
       height: node.height,
       x: x,

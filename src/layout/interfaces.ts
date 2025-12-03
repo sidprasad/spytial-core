@@ -24,6 +24,13 @@ export interface LayoutNode {
     color : string;
     groups?: string[];
     attributes?: Record<string, string[]>;
+    /**
+     * Labels associated with this node from the data instance (e.g., Skolems).
+     * These are displayed prominently on nodes, typically styled in the node's color.
+     * Unlike attributes (which come from field relationships), labels come from
+     * metadata in the data instance.
+     */
+    labels?: Record<string, string[]>;
     icon? : string;
     width : number;
     height : number;

@@ -2252,10 +2252,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         const attributes = d.attributes || {};
         const attributeEntries = Object.entries(attributes);
         
-        // Allocate space: prioritize main label, but allow attributes to use remaining space
-        // If there are attributes, reserve some space for them
+        // Get labels (e.g., Skolems) which are displayed in node color
+        const nodeLabels = d.labels || {};
+        const labelEntries = Object.entries(nodeLabels);
+        const hasLabels = labelEntries.length > 0;
+        
+        // Allocate space: prioritize main label, then labels (Skolems), then attributes
         const hasAttributes = attributeEntries.length > 0;
-        const mainLabelMaxHeight = hasAttributes ? maxTextHeight * 0.6 : maxTextHeight;
+        const hasExtraContent = hasLabels || hasAttributes;
+        const mainLabelMaxHeight = hasExtraContent ? maxTextHeight * 0.5 : maxTextHeight;
         
         // Calculate font size based on available space (for consistency across similar-sized nodes)
         // Use a representative text length for sizing rather than the actual text
@@ -2281,18 +2286,40 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           .style("font-size", `${mainLabelFontSize}px`)
           .text(displayLabel);
 
+        // Calculate font size for secondary content (labels and attributes)
+        const totalSecondaryEntries = labelEntries.length + attributeEntries.length;
+        const remainingHeight = maxTextHeight - lineHeight;
+        const secondaryFontSize = totalSecondaryEntries > 0 
+          ? this.calculateOptimalFontSize(
+              representativeText,
+              maxTextWidth,
+              remainingHeight / totalSecondaryEntries,
+              'system-ui'
+            )
+          : mainLabelFontSize * 0.8;
+
+        // Handle labels first (e.g., Skolems) - styled in node's color
+        if (hasLabels) {
+          // const nodeColor = d.color || 'black';
+          const nodeColor = 'black';
+          
+          for (const [key, values] of labelEntries) {
+            // For labels like Skolems, display as comma-separated list
+            const labelText = Array.isArray(values) ? values.join(', ') : String(values);
+            
+            textElement
+              .append("tspan")
+              .attr("x", 0)
+              .attr("dy", `${secondaryFontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO}px`)
+              .style("font-size", `${secondaryFontSize*0.8}px`)
+              .style("fill", nodeColor)  // Style in node's color
+              .style("font-style", "italic")  // Italicize to distinguish from attributes
+              .text(labelText);
+          }
+        }
+
         // Handle attributes (show all that fit)
         if (hasAttributes) {
-          const remainingHeight = maxTextHeight - lineHeight;
-          
-          // Calculate font size based on available space for consistency
-          const attributeFontSize = this.calculateOptimalFontSize(
-            representativeText,
-            maxTextWidth,
-            remainingHeight / attributeEntries.length,
-            'system-ui'
-          );
-          
           for (let i = 0; i < attributeEntries.length; i++) {
             const [key, value] = attributeEntries[i];
             const attributeText = `${key}: ${value}`;
@@ -2300,8 +2327,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
             textElement
               .append("tspan")
               .attr("x", 0)
-              .attr("dy", `${attributeFontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO}px`)
-              .style("font-size", `${attributeFontSize}px`)
+              .attr("dy", `${secondaryFontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO}px`)
+              .style("font-size", `${secondaryFontSize}px`)
               .text(attributeText);
           }
         }
