@@ -1,6 +1,7 @@
 import React, { useCallback } from 'react';
 import { TUPLE_SELECTOR_TEXT } from '../constants';
 import { ConstraintData } from '../interfaces';
+import { SelectorInput } from './SelectorInput';
 
 interface OrientationSelectorProps {
   /** Constraint data object containing type and parameters */
@@ -43,11 +44,9 @@ export const OrientationSelector: React.FC<OrientationSelectorProps> = (props: O
             Selector
           </span>
         </div>
-        <input
-          type="text"
+        <SelectorInput
           name="selector"
-          className="form-control code-input"
-          defaultValue={props.constraintData.params.selector as string || ''}
+          value={props.constraintData.params.selector as string || ''}
           onChange={handleInputChange}
           required
         />

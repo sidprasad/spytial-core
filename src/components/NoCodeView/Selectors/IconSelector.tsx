@@ -1,6 +1,7 @@
 import React from 'react';
 import { UNARY_SELECTOR_TEXT } from '../constants';
 import { DirectiveData } from '../interfaces';
+import { SelectorInput } from './SelectorInput';
 
 interface IconSelectorProps {
   /** Directive data object containing type and parameters */
@@ -20,6 +21,11 @@ export const IconSelector: React.FC<IconSelectorProps> = ({
   const selector = (directiveData.params.selector as string) || '';
   const path = (directiveData.params.path as string) || '';
   const showLabels = (directiveData.params.showLabels as boolean) || false;
+
+  const handleSelectorChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    onUpdate({ params: { ...directiveData.params, selector: event.target.value } });
+  };
+
   return (
     <>
       <div className="input-group">
@@ -28,12 +34,10 @@ export const IconSelector: React.FC<IconSelectorProps> = ({
             Selector
           </span>
         </div>
-        <input
-          type="text"
+        <SelectorInput
           name="selector"
-          className="form-control code-input"
-          defaultValue={selector}
-          onChange={(e) => onUpdate({ params: { ...directiveData.params, selector: e.target.value } })}
+          value={selector}
+          onChange={handleSelectorChange}
           required
         />
       </div>
