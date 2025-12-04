@@ -35,8 +35,12 @@
         .main-container {
             display: flex;
             gap: 20px;
-            max-width: 1600px;
+            max-width: 1800px;
             margin: 0 auto;
+        }
+        .left-panel {
+            width: 400px;
+            flex-shrink: 0;
         }
         .graph-panel {
             flex: 1;
@@ -51,6 +55,7 @@
             border-radius: 12px;
             box-shadow: 0 2px 12px rgba(0,0,0,0.08);
             overflow: hidden;
+            margin-bottom: 20px;
         }
         .panel-header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -62,8 +67,23 @@
             font-size: 1.1rem;
             font-weight: 600;
         }
+        .panel-header.secondary {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
         .panel-body {
             padding: 20px;
+        }
+        
+        /* Alloy XML input */
+        #alloy-xml {
+            width: 100%;
+            height: 300px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 11px;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            resize: vertical;
         }
         
         /* Graph container */
@@ -107,7 +127,7 @@
         }
         #cnd-spec {
             width: 100%;
-            height: 150px;
+            height: 120px;
             font-family: 'Monaco', 'Menlo', monospace;
             font-size: 12px;
             padding: 12px;
@@ -131,6 +151,19 @@
             transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
         }
+        .btn-success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            color: white;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        .btn-success:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(17, 153, 142, 0.4);
+        }
         .btn-danger {
             background: #dc3545;
             border: none;
@@ -142,6 +175,15 @@
         }
         .btn-danger:hover {
             background: #c82333;
+        }
+        .btn-secondary {
+            background: #6c757d;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            color: white;
+            font-weight: 500;
+            cursor: pointer;
         }
         
         /* Status messages */
@@ -157,21 +199,34 @@
         
         /* Controls panel sections */
         #controls-mount {
-            min-height: 400px;
+            min-height: 300px;
         }
         
-        /* Sample data section */
-        .sample-data-section {
-            margin-top: 20px;
-            padding-top: 20px;
-            border-top: 1px solid #eee;
+        /* Schema info */
+        .schema-info {
+            background: #f8f9fa;
+            border-radius: 6px;
+            padding: 12px;
+            margin-top: 12px;
+            font-size: 13px;
         }
-        .sample-data-section h3 {
-            font-size: 14px;
+        .schema-info h4 {
+            font-size: 12px;
             font-weight: 600;
             color: #555;
-            margin-bottom: 12px;
+            margin: 0 0 8px 0;
+            text-transform: uppercase;
         }
+        .schema-info ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .schema-info li {
+            color: #666;
+            margin-bottom: 4px;
+        }
+        
+        /* Sample buttons */
         .sample-btn {
             display: block;
             width: 100%;
@@ -210,7 +265,7 @@
         }
         #output-area {
             width: 100%;
-            height: 200px;
+            height: 150px;
             font-family: 'Monaco', 'Menlo', monospace;
             font-size: 11px;
             padding: 12px;
@@ -221,11 +276,15 @@
         }
         
         /* Responsive */
-        @media (max-width: 992px) {
+        @media (max-width: 1200px) {
             .main-container {
-                flex-direction: column;
+                flex-wrap: wrap;
             }
-            .controls-panel {
+            .left-panel, .controls-panel {
+                width: 100%;
+            }
+            .graph-panel {
+                order: -1;
                 width: 100%;
             }
         }
@@ -234,10 +293,56 @@
 <body>
     <div class="page-header">
         <h1>🎯 Alloy Input Graph Demo</h1>
-        <p>Create and edit Alloy instances with type-aware validation and visual feedback</p>
+        <p>Load an Alloy XML instance to define the schema, then edit the instance with type-aware validation</p>
     </div>
 
     <div class="main-container">
+        <!-- Left Panel: Alloy XML Input -->
+        <div class="left-panel">
+            <div class="panel">
+                <div class="panel-header secondary">
+                    <h2>📄 Alloy XML Instance</h2>
+                </div>
+                <div class="panel-body">
+                    <p class="text-muted small mb-2">Paste your Alloy XML to define the schema (types & relations)</p>
+                    <textarea id="alloy-xml" placeholder="Paste Alloy XML here..."></textarea>
+                    <div class="d-flex gap-2 mt-3">
+                        <button class="btn-success flex-grow-1" onclick="loadAlloyXML()">
+                            Load Instance
+                        </button>
+                    </div>
+                    
+                    <!-- Schema Info (populated after loading) -->
+                    <div id="schema-info" class="schema-info" style="display: none;">
+                        <h4>Loaded Schema</h4>
+                        <div id="schema-types"></div>
+                        <div id="schema-relations" class="mt-2"></div>
+                    </div>
+                    
+                    <!-- Sample XML buttons -->
+                    <div class="mt-3 pt-3 border-top">
+                        <p class="small text-muted mb-2">Or load a sample:</p>
+                        <button class="sample-btn" onclick="loadSampleXML('binarytree')">
+                            <div class="title">🌳 Binary Tree</div>
+                            <div class="desc">Node with left/right/key relations</div>
+                        </button>
+                        <button class="sample-btn" onclick="loadSampleXML('friends')">
+                            <div class="title">👥 Friends Network</div>
+                            <div class="desc">Person with friend relation</div>
+                        </button>
+                        <button class="sample-btn" onclick="loadSampleXML('family')">
+                            <div class="title">👨‍👩‍👧 Family Tree</div>
+                            <div class="desc">Person with parent relation</div>
+                        </button>
+                        <button class="sample-btn" onclick="loadSampleXML('graph')">
+                            <div class="title">🔗 Directed Graph</div>
+                            <div class="desc">Node with edge relation</div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <!-- Graph Panel -->
         <div class="graph-panel">
             <div class="panel">
@@ -247,7 +352,8 @@
                 <div class="panel-body">
                     <div id="graph-container-wrapper">
                         <div id="graph-controls">
-                            <button class="btn-danger" onclick="clearGraph()" title="Clear the graph">Clear</button>
+                            <button class="btn-secondary" onclick="resetToOriginal()" title="Reset to original instance">Reset</button>
+                            <button class="btn-danger" onclick="clearInstance()" title="Clear all atoms">Clear</button>
                         </div>
                         <!-- Alloy Input Graph custom element -->
                         <alloy-input-graph 
@@ -258,7 +364,7 @@
                         </alloy-input-graph>
                     </div>
                     
-                    <div id="status" class="status info">Ready to create Alloy instances...</div>
+                    <div id="status" class="status info">Load an Alloy XML instance to begin editing...</div>
                     
                     <!-- CND Specification -->
                     <div class="cnd-spec-section">
@@ -280,29 +386,19 @@
                 </div>
                 <div class="panel-body">
                     <!-- This is where AlloyInputControlsPanel mounts -->
-                    <div id="controls-mount"></div>
-                    
-                    <!-- Sample Data -->
-                    <div class="sample-data-section">
-                        <h3>Load Sample Data</h3>
-                        <button class="sample-btn" onclick="loadSample('friends')">
-                            <div class="title">👥 Friends Network</div>
-                            <div class="desc">Person sig with friend relation</div>
-                        </button>
-                        <button class="sample-btn" onclick="loadSample('family')">
-                            <div class="title">👨‍👩‍👧 Family Tree</div>
-                            <div class="desc">Person sig with parent/child relations</div>
-                        </button>
-                        <button class="sample-btn" onclick="loadSample('graph')">
-                            <div class="title">🔗 Directed Graph</div>
-                            <div class="desc">Node sig with edge relation</div>
-                        </button>
+                    <div id="controls-mount">
+                        <div class="text-center text-muted py-4">
+                            <p>Load an Alloy XML instance first to enable editing controls.</p>
+                        </div>
                     </div>
                     
                     <!-- Output Section -->
                     <div class="output-section">
                         <h3>Reified Output (Forge INST)</h3>
                         <textarea id="output-area" readonly placeholder="Reified output will appear here..."></textarea>
+                        <button class="btn-primary mt-2 w-100" onclick="validateAndReify()">
+                            Validate & Reify
+                        </button>
                     </div>
                 </div>
             </div>
@@ -322,75 +418,114 @@
         let controlsPanel = null;
         let api = null;
         let currentDataInstance = null;
+        let originalDataInstance = null; // Store original for reset
+        let parsedAlloyData = null;
 
         /**
-         * Sample data definitions with schema and initial atoms
+         * Sample Alloy XML instances
          */
-        const SAMPLES = {
-            friends: {
-                name: 'Friends Network',
-                // Simulated Alloy-like schema
-                types: [
-                    { id: 'Person', name: 'Person', types: ['Person', 'univ'], isAbstract: false, isBuiltin: false, atoms: [] }
-                ],
-                relations: [
-                    { id: 'friend', name: 'friend', types: ['Person', 'Person'], tuples: [] }
-                ],
-                initialAtoms: [
-                    { id: 'Person0', type: 'Person', label: 'Alice' },
-                    { id: 'Person1', type: 'Person', label: 'Bob' },
-                    { id: 'Person2', type: 'Person', label: 'Carol' }
-                ],
-                initialTuples: [
-                    { relation: 'friend', atoms: ['Person0', 'Person1'] },
-                    { relation: 'friend', atoms: ['Person1', 'Person2'] }
-                ]
-            },
-            family: {
-                name: 'Family Tree',
-                types: [
-                    { id: 'Person', name: 'Person', types: ['Person', 'univ'], isAbstract: false, isBuiltin: false, atoms: [] }
-                ],
-                relations: [
-                    { id: 'parent', name: 'parent', types: ['Person', 'Person'], tuples: [] },
-                    { id: 'spouse', name: 'spouse', types: ['Person', 'Person'], tuples: [] }
-                ],
-                initialAtoms: [
-                    { id: 'Person0', type: 'Person', label: 'Grandma' },
-                    { id: 'Person1', type: 'Person', label: 'Grandpa' },
-                    { id: 'Person2', type: 'Person', label: 'Mom' },
-                    { id: 'Person3', type: 'Person', label: 'Dad' },
-                    { id: 'Person4', type: 'Person', label: 'Child' }
-                ],
-                initialTuples: [
-                    { relation: 'spouse', atoms: ['Person0', 'Person1'] },
-                    { relation: 'parent', atoms: ['Person0', 'Person2'] },
-                    { relation: 'spouse', atoms: ['Person2', 'Person3'] },
-                    { relation: 'parent', atoms: ['Person2', 'Person4'] },
-                    { relation: 'parent', atoms: ['Person3', 'Person4'] }
-                ]
-            },
-            graph: {
-                name: 'Directed Graph',
-                types: [
-                    { id: 'Node', name: 'Node', types: ['Node', 'univ'], isAbstract: false, isBuiltin: false, atoms: [] }
-                ],
-                relations: [
-                    { id: 'edge', name: 'edge', types: ['Node', 'Node'], tuples: [] }
-                ],
-                initialAtoms: [
-                    { id: 'Node0', type: 'Node', label: 'A' },
-                    { id: 'Node1', type: 'Node', label: 'B' },
-                    { id: 'Node2', type: 'Node', label: 'C' },
-                    { id: 'Node3', type: 'Node', label: 'D' }
-                ],
-                initialTuples: [
-                    { relation: 'edge', atoms: ['Node0', 'Node1'] },
-                    { relation: 'edge', atoms: ['Node1', 'Node2'] },
-                    { relation: 'edge', atoms: ['Node2', 'Node3'] },
-                    { relation: 'edge', atoms: ['Node3', 'Node0'] }
-                ]
-            }
+        const SAMPLE_XML = {
+            friends: `<?xml version="1.0"?>
+<alloy builddate="2024-01-01">
+<instance bitwidth="4" maxseq="4" command="Run Default" filename="friends.als">
+<sig label="seq/Int" ID="0" parentID="1" builtin="yes"/>
+<sig label="Int" ID="1" parentID="2" builtin="yes"/>
+<sig label="univ" ID="2" builtin="yes"/>
+<sig label="this/Person" ID="4" parentID="2">
+  <atom label="Alice"/>
+  <atom label="Bob"/>
+  <atom label="Carol"/>
+</sig>
+<field label="friend" ID="5" parentID="4">
+  <tuple><atom label="Alice"/><atom label="Bob"/></tuple>
+  <tuple><atom label="Bob"/><atom label="Carol"/></tuple>
+  <types><type ID="4"/><type ID="4"/></types>
+</field>
+</instance>
+</alloy>`,
+
+            family: `<?xml version="1.0"?>
+<alloy builddate="2024-01-01">
+<instance bitwidth="4" maxseq="4" command="Run Default" filename="family.als">
+<sig label="seq/Int" ID="0" parentID="1" builtin="yes"/>
+<sig label="Int" ID="1" parentID="2" builtin="yes"/>
+<sig label="univ" ID="2" builtin="yes"/>
+<sig label="this/Person" ID="4" parentID="2">
+  <atom label="Grandma"/>
+  <atom label="Grandpa"/>
+  <atom label="Mom"/>
+  <atom label="Dad"/>
+  <atom label="Child"/>
+</sig>
+<field label="parent" ID="5" parentID="4">
+  <tuple><atom label="Grandma"/><atom label="Mom"/></tuple>
+  <tuple><atom label="Mom"/><atom label="Child"/></tuple>
+  <tuple><atom label="Dad"/><atom label="Child"/></tuple>
+  <types><type ID="4"/><type ID="4"/></types>
+</field>
+<field label="spouse" ID="6" parentID="4">
+  <tuple><atom label="Grandma"/><atom label="Grandpa"/></tuple>
+  <tuple><atom label="Mom"/><atom label="Dad"/></tuple>
+  <types><type ID="4"/><type ID="4"/></types>
+</field>
+</instance>
+</alloy>`,
+
+            binarytree: `<?xml version="1.0"?>
+<alloy builddate="2024-01-01">
+<instance bitwidth="4" maxseq="-1" command="Run binary_tree" filename="bst.frg">
+<sig label="seq/Int" ID="0" parentID="1" builtin="yes"/>
+<sig label="Int" ID="1" parentID="2" builtin="yes"/>
+<sig label="univ" ID="2" builtin="yes"/>
+<sig label="Node" ID="4" parentID="2">
+  <atom label="Node0"/>
+  <atom label="Node1"/>
+  <atom label="Node2"/>
+  <atom label="Node3"/>
+  <atom label="Node4"/>
+</sig>
+<field label="left" ID="5" parentID="4">
+  <tuple><atom label="Node3"/><atom label="Node1"/></tuple>
+  <tuple><atom label="Node4"/><atom label="Node2"/></tuple>
+  <types><type ID="4"/><type ID="4"/></types>
+</field>
+<field label="right" ID="6" parentID="4">
+  <tuple><atom label="Node1"/><atom label="Node4"/></tuple>
+  <tuple><atom label="Node3"/><atom label="Node0"/></tuple>
+  <types><type ID="4"/><type ID="4"/></types>
+</field>
+<field label="key" ID="7" parentID="4">
+  <tuple><atom label="Node0"/><atom label="7"/></tuple>
+  <tuple><atom label="Node1"/><atom label="7"/></tuple>
+  <tuple><atom label="Node2"/><atom label="6"/></tuple>
+  <tuple><atom label="Node3"/><atom label="6"/></tuple>
+  <tuple><atom label="Node4"/><atom label="5"/></tuple>
+  <types><type ID="4"/><type ID="1"/></types>
+</field>
+</instance>
+</alloy>`,
+
+            graph: `<?xml version="1.0"?>
+<alloy builddate="2024-01-01">
+<instance bitwidth="4" maxseq="4" command="Run Default" filename="graph.als">
+<sig label="seq/Int" ID="0" parentID="1" builtin="yes"/>
+<sig label="Int" ID="1" parentID="2" builtin="yes"/>
+<sig label="univ" ID="2" builtin="yes"/>
+<sig label="this/Node" ID="4" parentID="2">
+  <atom label="A"/>
+  <atom label="B"/>
+  <atom label="C"/>
+  <atom label="D"/>
+</sig>
+<field label="edge" ID="5" parentID="4">
+  <tuple><atom label="A"/><atom label="B"/></tuple>
+  <tuple><atom label="B"/><atom label="C"/></tuple>
+  <tuple><atom label="C"/><atom label="D"/></tuple>
+  <tuple><atom label="D"/><atom label="A"/></tuple>
+  <types><type ID="4"/><type ID="4"/></types>
+</field>
+</instance>
+</alloy>`
         };
 
         /**
@@ -407,7 +542,11 @@
          */
         async function initialize() {
             try {
-                updateStatus('Initializing Alloy Input Graph...', 'info');
+                updateStatus('Initializing...', 'info');
+                
+                // Wait for the alloy-input-graph custom element to be defined
+                await customElements.whenDefined('alloy-input-graph');
+                console.log('✅ alloy-input-graph custom element is defined');
                 
                 // Get the graph element
                 graphElement = document.getElementById('graph-container');
@@ -416,27 +555,18 @@
                     throw new Error('Graph element not found');
                 }
                 
+                // Wait a tick for any upgrade to complete
+                await new Promise(r => setTimeout(r, 50));
+                
                 console.log('CndCore available:', Object.keys(CndCore));
-                console.log('AlloyInputGraph available:', !!CndCore.AlloyInputGraph);
-                console.log('AlloyInputControlsPanel available:', !!CndCore.AlloyInputControlsPanel);
+                console.log('AlloyInstance.parseAlloyXML available:', !!CndCore.AlloyInstance?.parseAlloyXML);
                 console.log('AlloyDataInstance available:', !!CndCore.AlloyDataInstance);
-                
-                // Create an empty data instance to start
-                currentDataInstance = CndCore.createEmptyAlloyDataInstance();
-                
-                // Set the data instance on the graph
-                graphElement.setDataInstance(currentDataInstance);
-                
-                // Get the API for external controls
-                api = graphElement.getInputControlsAPI();
-                
-                // Mount the controls panel
-                mountControlsPanel();
+                console.log('graphElement.setDataInstance available:', typeof graphElement.setDataInstance);
                 
                 // Listen for instance events
                 graphElement.addEventListener('atom-added', (e) => {
                     console.log('Atom added:', e.detail);
-                    updateStatus(`Added atom: ${e.detail.atom.label}`, 'success');
+                    updateStatus(`Added atom: ${e.detail.atom?.label || e.detail.atom?.id}`, 'success');
                 });
                 
                 graphElement.addEventListener('atom-removed', (e) => {
@@ -454,14 +584,7 @@
                     updateStatus(`Validation errors: ${e.detail.errors.length}`, 'error');
                 });
                 
-                graphElement.addEventListener('instance-validated', (e) => {
-                    const result = e.detail.result;
-                    if (result.valid) {
-                        updateStatus('Instance is valid ✓', 'success');
-                    }
-                });
-                
-                updateStatus('Ready! Load a sample or create atoms manually.', 'success');
+                updateStatus('Ready! Load an Alloy XML instance to begin.', 'info');
                 
             } catch (error) {
                 console.error('Initialization failed:', error);
@@ -470,95 +593,181 @@
         }
 
         /**
+         * Load sample XML into the textarea
+         */
+        function loadSampleXML(sampleId) {
+            const xml = SAMPLE_XML[sampleId];
+            if (xml) {
+                document.getElementById('alloy-xml').value = xml;
+                updateStatus(`Sample "${sampleId}" loaded. Click "Load Instance" to parse.`, 'info');
+            }
+        }
+
+        /**
+         * Load and parse the Alloy XML from the textarea
+         */
+        async function loadAlloyXML() {
+            const xmlInput = document.getElementById('alloy-xml').value.trim();
+            
+            if (!xmlInput) {
+                updateStatus('Please paste Alloy XML first', 'error');
+                return;
+            }
+            
+            try {
+                updateStatus('Parsing Alloy XML...', 'info');
+                
+                // Parse the Alloy XML using CndCore
+                parsedAlloyData = CndCore.AlloyInstance.parseAlloyXML(xmlInput);
+                console.log('Parsed Alloy data:', parsedAlloyData);
+                
+                if (!parsedAlloyData.instances || parsedAlloyData.instances.length === 0) {
+                    throw new Error('No instances found in Alloy XML');
+                }
+                
+                // Create AlloyDataInstance from the first instance
+                const firstInstance = parsedAlloyData.instances[0];
+                currentDataInstance = new CndCore.AlloyDataInstance(firstInstance);
+                
+                // Store a copy for reset functionality
+                originalDataInstance = new CndCore.AlloyDataInstance(firstInstance);
+                
+                console.log('Created AlloyDataInstance:', currentDataInstance);
+                console.log('Types:', currentDataInstance.getTypes());
+                console.log('Relations:', currentDataInstance.getRelations());
+                console.log('Atoms:', currentDataInstance.getAtoms());
+                
+                // Check that graphElement has the required methods
+                if (typeof graphElement.setDataInstance !== 'function') {
+                    throw new Error('graphElement.setDataInstance is not a function - custom element may not be upgraded');
+                }
+                
+                // Set the data instance on the graph
+                console.log('Calling setDataInstance...');
+                graphElement.setDataInstance(currentDataInstance);
+                console.log('setDataInstance called successfully');
+                
+                // Get the API for external controls
+                api = graphElement.getInputControlsAPI();
+                console.log('Got API:', api);
+                
+                // Display schema info
+                displaySchemaInfo();
+                
+                // Mount the controls panel
+                mountControlsPanel();
+                
+                const atomCount = currentDataInstance.getAtoms().length;
+                const relationCount = currentDataInstance.getRelations().filter(r => r.tuples.length > 0).length;
+                updateStatus(`Loaded instance with ${atomCount} atoms and ${relationCount} relations`, 'success');
+                
+            } catch (error) {
+                console.error('Failed to parse Alloy XML:', error);
+                updateStatus(`Parse error: ${error.message}`, 'error');
+            }
+        }
+
+        /**
+         * Display schema information from the loaded instance
+         */
+        function displaySchemaInfo() {
+            const schemaInfoDiv = document.getElementById('schema-info');
+            const typesDiv = document.getElementById('schema-types');
+            const relationsDiv = document.getElementById('schema-relations');
+            
+            if (!currentDataInstance) {
+                schemaInfoDiv.style.display = 'none';
+                return;
+            }
+            
+            // Get non-builtin types
+            const types = currentDataInstance.getTypes().filter(t => !t.isBuiltin);
+            const relations = currentDataInstance.getRelations();
+            
+            // Display types
+            if (types.length > 0) {
+                typesDiv.innerHTML = `
+                    <strong>Types:</strong>
+                    <ul>
+                        ${types.map(t => `<li><code>${t.name}</code> (${t.atoms.length} atoms)</li>`).join('')}
+                    </ul>
+                `;
+            } else {
+                typesDiv.innerHTML = '<p class="text-muted">No custom types</p>';
+            }
+            
+            // Display relations
+            if (relations.length > 0) {
+                relationsDiv.innerHTML = `
+                    <strong>Relations:</strong>
+                    <ul>
+                        ${relations.map(r => `<li><code>${r.name}</code>: ${r.types.join(' → ')} (${r.tuples.length} tuples)</li>`).join('')}
+                    </ul>
+                `;
+            } else {
+                relationsDiv.innerHTML = '<p class="text-muted">No relations</p>';
+            }
+            
+            schemaInfoDiv.style.display = 'block';
+        }
+
+        /**
          * Mount the AlloyInputControlsPanel
          */
         function mountControlsPanel() {
             const mountPoint = document.getElementById('controls-mount');
             
+            // Clear previous content
+            mountPoint.innerHTML = '';
+            
             if (!api) {
-                console.error('API not available for controls panel');
+                mountPoint.innerHTML = `
+                    <div class="text-center text-muted py-4">
+                        <p>Load an Alloy XML instance first to enable editing controls.</p>
+                    </div>
+                `;
                 return;
+            }
+            
+            // Destroy previous panel if exists
+            if (controlsPanel) {
+                try {
+                    controlsPanel.destroy();
+                } catch (e) {
+                    console.warn('Could not destroy previous panel:', e);
+                }
             }
             
             // Check if AlloyInputControlsPanel is available
             if (CndCore.AlloyInputControlsPanel) {
-                controlsPanel = new CndCore.AlloyInputControlsPanel(api, {
-                    showHeader: false, // We have our own header
-                    showExport: false, // We have our own export section
-                });
-                
-                mountPoint.appendChild(controlsPanel.getElement());
-                console.log('Controls panel mounted successfully');
+                try {
+                    controlsPanel = new CndCore.AlloyInputControlsPanel(api, {
+                        showHeader: false, // We have our own header
+                        showExport: false, // We have our own export section
+                    });
+                    
+                    mountPoint.appendChild(controlsPanel.getElement());
+                    console.log('Controls panel mounted successfully');
+                } catch (e) {
+                    console.error('Failed to create controls panel:', e);
+                    mountPoint.innerHTML = `
+                        <div class="alert alert-warning">
+                            Failed to create controls panel: ${e.message}
+                        </div>
+                    `;
+                }
             } else {
-                // Fallback: create simple controls
+                // Fallback: create simple manual controls
                 mountPoint.innerHTML = `
-                    <div class="alert alert-warning">
-                        AlloyInputControlsPanel not available in this build.
-                        Use the API programmatically instead.
+                    <div class="alert alert-info">
+                        <strong>API Available</strong><br>
+                        Use the console to interact with the instance via <code>api</code>.
                     </div>
                     <div class="mb-3">
-                        <button class="btn btn-primary w-100" onclick="validateAndReify()">
-                            Validate & Reify
-                        </button>
+                        <p class="small text-muted">Available types: ${api.getAvailableTypes().map(t => t.id).join(', ') || 'none'}</p>
+                        <p class="small text-muted">Available relations: ${api.getAvailableRelations().map(r => r.name).join(', ') || 'none'}</p>
                     </div>
                 `;
-            }
-        }
-
-        /**
-         * Load a sample dataset
-         */
-        async function loadSample(sampleId) {
-            const sample = SAMPLES[sampleId];
-            if (!sample) {
-                updateStatus(`Unknown sample: ${sampleId}`, 'error');
-                return;
-            }
-            
-            try {
-                updateStatus(`Loading ${sample.name}...`, 'info');
-                
-                // Create a new empty data instance
-                currentDataInstance = CndCore.createEmptyAlloyDataInstance();
-                
-                // Add types (this is normally done from Alloy XML parsing)
-                // For the demo, we'll add atoms directly which implicitly creates types
-                
-                // Add initial atoms
-                for (const atomDef of sample.initialAtoms) {
-                    currentDataInstance.addAtom(atomDef);
-                }
-                
-                // Add initial tuples
-                for (const tupleDef of sample.initialTuples) {
-                    const tuple = {
-                        atoms: tupleDef.atoms,
-                        types: tupleDef.atoms.map(atomId => {
-                            const atom = sample.initialAtoms.find(a => a.id === atomId);
-                            return atom ? atom.type : 'univ';
-                        })
-                    };
-                    currentDataInstance.addRelationTuple(tupleDef.relation, tuple);
-                }
-                
-                // Update the graph with new data instance
-                graphElement.setDataInstance(currentDataInstance);
-                
-                // Update API reference
-                api = graphElement.getInputControlsAPI();
-                
-                // Remount controls with new API
-                const mountPoint = document.getElementById('controls-mount');
-                if (controlsPanel) {
-                    controlsPanel.destroy();
-                }
-                mountControlsPanel();
-                
-                updateStatus(`Loaded ${sample.name} with ${sample.initialAtoms.length} atoms`, 'success');
-                
-            } catch (error) {
-                console.error('Failed to load sample:', error);
-                updateStatus(`Failed to load sample: ${error.message}`, 'error');
             }
         }
 
@@ -567,7 +776,7 @@
          */
         function validateAndReify() {
             if (!api) {
-                updateStatus('API not available', 'error');
+                updateStatus('No instance loaded', 'error');
                 return;
             }
             
@@ -604,23 +813,61 @@
         }
 
         /**
-         * Clear the graph
+         * Reset to the original loaded instance
          */
-        function clearGraph() {
-            if (confirm('Clear all atoms and relations?')) {
-                currentDataInstance = CndCore.createEmptyAlloyDataInstance();
+        function resetToOriginal() {
+            if (!originalDataInstance || !parsedAlloyData) {
+                updateStatus('No original instance to reset to', 'error');
+                return;
+            }
+            
+            try {
+                // Recreate from original parsed data
+                const firstInstance = parsedAlloyData.instances[0];
+                currentDataInstance = new CndCore.AlloyDataInstance(firstInstance);
+                
                 graphElement.setDataInstance(currentDataInstance);
                 api = graphElement.getInputControlsAPI();
                 
-                // Remount controls
-                const mountPoint = document.getElementById('controls-mount');
-                if (controlsPanel) {
-                    controlsPanel.destroy();
+                mountControlsPanel();
+                displaySchemaInfo();
+                
+                document.getElementById('output-area').value = '';
+                updateStatus('Reset to original instance', 'success');
+            } catch (error) {
+                updateStatus(`Reset failed: ${error.message}`, 'error');
+            }
+        }
+
+        /**
+         * Clear all atoms from the instance (keep schema)
+         */
+        function clearInstance() {
+            if (!currentDataInstance) {
+                updateStatus('No instance loaded', 'error');
+                return;
+            }
+            
+            if (!confirm('Remove all atoms and relations from the instance?')) {
+                return;
+            }
+            
+            try {
+                // Get all atoms and remove them
+                const atoms = [...currentDataInstance.getAtoms()];
+                for (const atom of atoms) {
+                    currentDataInstance.removeAtom(atom.id);
                 }
+                
+                // Refresh the graph
+                graphElement.setDataInstance(currentDataInstance);
+                api = graphElement.getInputControlsAPI();
                 mountControlsPanel();
                 
                 document.getElementById('output-area').value = '';
-                updateStatus('Graph cleared', 'info');
+                updateStatus('Instance cleared (schema preserved)', 'info');
+            } catch (error) {
+                updateStatus(`Clear failed: ${error.message}`, 'error');
             }
         }
 

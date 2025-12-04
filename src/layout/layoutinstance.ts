@@ -175,19 +175,38 @@ export class LayoutInstance {
         }
     }
 
+    /**
+     * Safe accessor for directives that returns defaults if undefined
+     */
+    private get safeDirectives() {
+        return this._layoutSpec.directives || {
+            atomColors: [],
+            sizes: [],
+            icons: [],
+            edgeColors: [],
+            projections: [],
+            attributes: [],
+            hiddenFields: [],
+            inferredEdges: [],
+            hiddenAtoms: [],
+            hideDisconnected: false,
+            hideDisconnectedBuiltIns: false
+        };
+    }
+
     get projectedSigs(): string[] {
-        if (!this._layoutSpec.directives.projections) {
+        if (!this.safeDirectives.projections) {
             return [];
         }
-        return this._layoutSpec.directives.projections.map((projection) => projection.sig);
+        return this.safeDirectives.projections.map((projection) => projection.sig);
     }
 
     get hideDisconnected(): boolean {
-        return this._layoutSpec.directives.hideDisconnected || false;
+        return this.safeDirectives.hideDisconnected || false;
     }
 
     get hideDisconnectedBuiltIns(): boolean {
-        return this._layoutSpec.directives.hideDisconnectedBuiltIns || false;
+        return this.safeDirectives.hideDisconnectedBuiltIns || false;
     }
 
 
@@ -227,7 +246,7 @@ export class LayoutInstance {
     }
 
     isAttributeField(fieldId: string, sourceAtom?: string, targetAtom?: string): boolean {
-        const matchingDirectives = this._layoutSpec.directives.attributes.filter((ad) => ad.field === fieldId);
+        const matchingDirectives = this.safeDirectives.attributes.filter((ad) => ad.field === fieldId);
         
         if (matchingDirectives.length === 0) {
             return false;
@@ -263,7 +282,7 @@ export class LayoutInstance {
     }
 
     isHiddenField(fieldId: string, sourceAtom?: string, targetAtom?: string): boolean {
-        const matchingDirectives = this._layoutSpec.directives.hiddenFields.filter((hd) => hd.field === fieldId);
+        const matchingDirectives = this.safeDirectives.hiddenFields.filter((hd) => hd.field === fieldId);
         
         if (matchingDirectives.length === 0) {
             return false;
@@ -588,7 +607,7 @@ export class LayoutInstance {
 
                 // New selector-based hiding logic
                 let hideBySelector = false;
-                const hiddenAtomDirectives = this._layoutSpec.directives.hiddenAtoms;
+                const hiddenAtomDirectives = this.safeDirectives.hiddenAtoms;
                 for (const directive of hiddenAtomDirectives) {
                     try {
                         const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
@@ -1667,7 +1686,7 @@ export class LayoutInstance {
         const DEFAULT_SIZE = { width: this.DEFAULT_NODE_WIDTH, height: this.DEFAULT_NODE_HEIGHT };
 
         // Apply size directives first
-        let sizeDirectives = this._layoutSpec.directives.sizes;
+        let sizeDirectives = this.safeDirectives.sizes;
         sizeDirectives.forEach((sizeDirective) => {
             let selectedNodes = this.evaluator.evaluate(sizeDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
             let width = sizeDirective.width;
@@ -1708,7 +1727,7 @@ export class LayoutInstance {
         let sigColors = this.getSigColors(a);
 
         // Apply color directives first
-        let colorDirectives = this._layoutSpec.directives.atomColors;
+        let colorDirectives = this.safeDirectives.atomColors;
         colorDirectives.forEach((colorDirective) => {
             let selected = this.evaluator.evaluate(colorDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
             let color = colorDirective.color;
@@ -1743,7 +1762,7 @@ export class LayoutInstance {
         const DEFAULT_ICON = this.DEFAULT_NODE_ICON_PATH;
 
         // Apply icon directives first
-        let iconDirectives = this._layoutSpec.directives.icons;
+        let iconDirectives = this.safeDirectives.icons;
         iconDirectives.forEach((iconDirective) => {
             let selected = this.evaluator.evaluate(iconDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
             let iconPath = iconDirective.path;
@@ -1784,7 +1803,7 @@ export class LayoutInstance {
         // Check for inferred edge colors first
         const inferredEdgePrefix = "_inferred_";
         if (edgeId && edgeId.includes(inferredEdgePrefix)) {
-            const inferredEdges = this._layoutSpec.directives.inferredEdges;
+            const inferredEdges = this.safeDirectives.inferredEdges;
             for (const directive of inferredEdges) {
                 // Check if this edge ID belongs to this inferred edge directive
                 if (edgeId.includes(`${inferredEdgePrefix}<:${directive.name}`)) {
@@ -1798,7 +1817,7 @@ export class LayoutInstance {
             }
         }
 
-        const colorDirectives = this._layoutSpec.directives.edgeColors;
+        const colorDirectives = this.safeDirectives.edgeColors;
         
         for (const directive of colorDirectives) {
             if (directive.field !== relName) {
@@ -1879,7 +1898,7 @@ export class LayoutInstance {
     private addinferredEdges(g: Graph) {
 
         const inferredEdgePrefix = "_inferred_";
-        let inferredEdges = this._layoutSpec.directives.inferredEdges;
+        let inferredEdges = this.safeDirectives.inferredEdges;
         inferredEdges.forEach((he) => {
 
 

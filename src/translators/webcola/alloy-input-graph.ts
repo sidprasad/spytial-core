@@ -681,19 +681,10 @@ export class AlloyInputGraph extends WebColaCnDGraph {
 
     try {
       this.cndSpecString = specString;
-      const layoutSpec = parseLayoutSpec(specString);
-      
-      // Create evaluator and layout instance
-      if (this.dataInstance) {
-        this.evaluator = new SGraphQueryEvaluator(this.dataInstance);
-        this.layoutInstance = new LayoutInstance(
-          this.dataInstance.generateGraph(false, true),
-          layoutSpec,
-          this.evaluator
-        );
-      }
       
       this.dispatchEvent(new CustomEvent('spec-loaded', { detail: { spec: specString } }));
+      
+      // Re-render with the new spec
       this.refreshVisualization();
     } catch (error) {
       console.error('Failed to parse CnD spec:', error);
@@ -704,21 +695,61 @@ export class AlloyInputGraph extends WebColaCnDGraph {
    * Refresh the visualization
    */
   private async refreshVisualization(): Promise<void> {
-    if (!this.dataInstance) return;
+    if (!this.dataInstance) {
+      console.warn('[AlloyInputGraph] refreshVisualization: no dataInstance');
+      return;
+    }
 
     try {
-      // Regenerate the graph
-      const graph = this.dataInstance.generateGraph(false, true);
+      console.log('[AlloyInputGraph] refreshVisualization starting...');
       
-      // Update layout instance if we have one
-      if (this.layoutInstance && this.evaluator) {
-        this.evaluator = new SGraphQueryEvaluator(this.dataInstance);
-        const layoutSpec = parseLayoutSpec(this.cndSpecString || '');
-        this.layoutInstance = new LayoutInstance(graph, layoutSpec, this.evaluator);
+      // Generate the graph from the data instance
+      const graph = this.dataInstance.generateGraph(false, true);
+      console.log('[AlloyInputGraph] Generated graph:', {
+        nodeCount: graph.nodeCount(),
+        edgeCount: graph.edgeCount(),
+        nodes: graph.nodes(),
+        edges: graph.edges()
+      });
+      
+      // Create evaluator for the current data instance
+      this.evaluator = new SGraphQueryEvaluator(this.dataInstance);
+      
+      // Parse layout spec (use empty if none provided)
+      const layoutSpec = parseLayoutSpec(this.cndSpecString || 'constraints:\n');
+      console.log('[AlloyInputGraph] Layout spec parsed');
+      
+      // Create layout instance (layoutSpec, evaluator, instanceNum)
+      this.layoutInstance = new LayoutInstance(layoutSpec, this.evaluator, 0);
+      
+      // Generate the layout
+      const layoutResult = this.layoutInstance.generateLayout(this.dataInstance, {});
+      console.log('[AlloyInputGraph] Layout result:', {
+        hasLayout: !!layoutResult.layout,
+        hasError: !!layoutResult.error,
+        error: layoutResult.error
+      });
+      
+      if (layoutResult.error) {
+        console.warn('Layout generation had errors:', layoutResult.error);
+        this.currentConstraintError = layoutResult.error;
+        this.dispatchEvent(new CustomEvent('constraint-error', { detail: { error: layoutResult.error } }));
+      } else {
+        this.currentConstraintError = null;
       }
       
-      // Update the visualization in the parent WebColaCnDGraph
-      // This will be handled by the parent class's rendering logic
+      // Render the layout using the parent class method
+      if (layoutResult.layout) {
+        console.log('[AlloyInputGraph] Calling renderLayout with:', {
+          nodes: layoutResult.layout.nodes?.length,
+          edges: layoutResult.layout.edges?.length
+        });
+        await this.renderLayout(layoutResult.layout);
+        console.log('[AlloyInputGraph] renderLayout completed');
+      } else {
+        console.warn('[AlloyInputGraph] No layout to render');
+      }
+      
       this.dispatchEvent(new CustomEvent('layout-updated', { detail: {} }));
       
     } catch (error) {

@@ -32,9 +32,12 @@ You can use the browser bundle directly from a CDN:
 
 ### AlloyInputGraph
 
-A custom element for creating and editing Alloy instances with type-aware validation. Designed for Forge/Alloy workflows where input controls need to be mounted separately from the graph visualization.
+A custom element for editing Alloy instances with type-aware validation. Designed for Forge/Alloy workflows where input controls need to be mounted separately from the graph visualization.
+
+**The schema (types and relations) comes from parsing an Alloy XML instance** - this defines the "universe" of what atoms can be created and what relations are valid.
 
 #### Features
+- **Schema from Alloy XML**: Parse Alloy XML to get types, relations, and initial atoms
 - **Mountable Controls**: Input controls can be placed anywhere (React drawer, sidebar, modal)
 - **Type Validation**: Validates atom types against the Alloy type hierarchy
 - **Arity Validation**: Ensures relation tuples have the correct number of atoms
@@ -49,15 +52,21 @@ A custom element for creating and editing Alloy instances with type-aware valida
 ```
 
 ```javascript
-// Initialize with a data instance
+// 1. Parse Alloy XML to get the schema and initial instance
+const alloyXml = '... your Alloy XML ...';
+const parsedData = CndCore.AlloyInstance.parseAlloyXML(alloyXml);
+
+// 2. Create AlloyDataInstance from parsed data
+const dataInstance = new CndCore.AlloyDataInstance(parsedData.instances[0]);
+
+// 3. Set the data instance on the graph
 const graph = document.querySelector('#my-graph');
-const dataInstance = CndCore.createEmptyAlloyDataInstance();
 graph.setDataInstance(dataInstance);
 
-// Get the API for external controls
+// 4. Get the API for external controls
 const api = graph.getInputControlsAPI();
 
-// Mount controls panel in a drawer/sidebar
+// 5. Mount controls panel in a drawer/sidebar
 const panel = new CndCore.AlloyInputControlsPanel(api);
 document.getElementById('controls-drawer').appendChild(panel.getElement());
 ```
