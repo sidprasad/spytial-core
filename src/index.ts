@@ -16,6 +16,7 @@ export { AlloyDataInstance, createEmptyAlloyDataInstance } from './data-instance
 export { DotDataInstance } from './data-instance/dot/dot-data-instance';
 export { RacketGDataInstance } from './data-instance/racket/racket-g-data-instance';
 export { PyretDataInstance } from './data-instance/pyret/pyret-data-instance';
+export { TlaDataInstance, createTlaDataInstance, isTlaDataInstance } from './data-instance/tla/tla-data-instance';
 
 // Direct exports of key classes for convenience
 export { LayoutInstance } from './layout/layoutinstance';
