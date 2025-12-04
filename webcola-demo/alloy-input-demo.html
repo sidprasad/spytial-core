@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alloy Input Graph Demo</title>
+    
+    <!-- Bootstrap CSS for component styling -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            min-height: 100vh;
+        }
+        .page-header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        .page-header h1 {
+            font-size: 1.8rem;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        .page-header p {
+            color: #666;
+            margin: 0;
+        }
+        .main-container {
+            display: flex;
+            gap: 20px;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        .graph-panel {
+            flex: 1;
+            min-width: 0;
+        }
+        .controls-panel {
+            width: 380px;
+            flex-shrink: 0;
+        }
+        .panel {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            overflow: hidden;
+        }
+        .panel-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 16px 20px;
+        }
+        .panel-header h2 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        .panel-body {
+            padding: 20px;
+        }
+        
+        /* Graph container */
+        #graph-container-wrapper {
+            position: relative;
+            width: 100%;
+            height: 500px;
+            margin-bottom: 16px;
+        }
+        #graph-container {
+            width: 100%;
+            height: 100%;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            display: block;
+            background: #fafafa;
+        }
+        #graph-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 8px 12px;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+        
+        /* CND Spec textarea */
+        .cnd-spec-section {
+            margin-top: 16px;
+        }
+        .cnd-spec-section label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+        }
+        #cnd-spec {
+            width: 100%;
+            height: 150px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            resize: vertical;
+        }
+        
+        /* Buttons */
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            color: white;
+            font-weight: 500;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        .btn-danger {
+            background: #dc3545;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            color: white;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        
+        /* Status messages */
+        .status {
+            margin: 16px 0;
+            padding: 12px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .status.info { background: #e3f2fd; color: #1976d2; }
+        .status.success { background: #e8f5e9; color: #2e7d32; }
+        .status.error { background: #ffebee; color: #c62828; }
+        
+        /* Controls panel sections */
+        #controls-mount {
+            min-height: 400px;
+        }
+        
+        /* Sample data section */
+        .sample-data-section {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+        .sample-data-section h3 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 12px;
+        }
+        .sample-btn {
+            display: block;
+            width: 100%;
+            text-align: left;
+            padding: 10px 14px;
+            margin-bottom: 8px;
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .sample-btn:hover {
+            background: #e9ecef;
+            border-color: #667eea;
+        }
+        .sample-btn .title {
+            font-weight: 500;
+            color: #333;
+        }
+        .sample-btn .desc {
+            font-size: 12px;
+            color: #666;
+            margin-top: 2px;
+        }
+        
+        /* Output panel */
+        .output-section {
+            margin-top: 20px;
+        }
+        .output-section h3 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 8px;
+        }
+        #output-area {
+            width: 100%;
+            height: 200px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 11px;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: #f8f9fa;
+            resize: vertical;
+        }
+        
+        /* Responsive */
+        @media (max-width: 992px) {
+            .main-container {
+                flex-direction: column;
+            }
+            .controls-panel {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-header">
+        <h1>🎯 Alloy Input Graph Demo</h1>
+        <p>Create and edit Alloy instances with type-aware validation and visual feedback</p>
+    </div>
+
+    <div class="main-container">
+        <!-- Graph Panel -->
+        <div class="graph-panel">
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>Instance Visualization</h2>
+                </div>
+                <div class="panel-body">
+                    <div id="graph-container-wrapper">
+                        <div id="graph-controls">
+                            <button class="btn-danger" onclick="clearGraph()" title="Clear the graph">Clear</button>
+                        </div>
+                        <!-- Alloy Input Graph custom element -->
+                        <alloy-input-graph 
+                            id="graph-container"
+                            width="800" 
+                            height="500"
+                            aria-label="Interactive Alloy instance graph">
+                        </alloy-input-graph>
+                    </div>
+                    
+                    <div id="status" class="status info">Ready to create Alloy instances...</div>
+                    
+                    <!-- CND Specification -->
+                    <div class="cnd-spec-section">
+                        <label for="cnd-spec">Layout Specification (CND):</label>
+                        <textarea id="cnd-spec" placeholder="Enter layout constraints here...">constraints:
+  # Add layout constraints here
+  # Example: align Person horizontally</textarea>
+                        <button class="btn-primary mt-2" onclick="applyLayout()">Apply Layout</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Controls Panel (Mountable) -->
+        <div class="controls-panel">
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>Instance Editor</h2>
+                </div>
+                <div class="panel-body">
+                    <!-- This is where AlloyInputControlsPanel mounts -->
+                    <div id="controls-mount"></div>
+                    
+                    <!-- Sample Data -->
+                    <div class="sample-data-section">
+                        <h3>Load Sample Data</h3>
+                        <button class="sample-btn" onclick="loadSample('friends')">
+                            <div class="title">👥 Friends Network</div>
+                            <div class="desc">Person sig with friend relation</div>
+                        </button>
+                        <button class="sample-btn" onclick="loadSample('family')">
+                            <div class="title">👨‍👩‍👧 Family Tree</div>
+                            <div class="desc">Person sig with parent/child relations</div>
+                        </button>
+                        <button class="sample-btn" onclick="loadSample('graph')">
+                            <div class="title">🔗 Directed Graph</div>
+                            <div class="desc">Node sig with edge relation</div>
+                        </button>
+                    </div>
+                    
+                    <!-- Output Section -->
+                    <div class="output-section">
+                        <h3>Reified Output (Forge INST)</h3>
+                        <textarea id="output-area" readonly placeholder="Reified output will appear here..."></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- D3 v4 and WebCola -->
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="../vendor/cola.js"></script>
+    
+    <!-- Complete CND-Core browser bundle -->
+    <script src="../dist/browser/spytial-core-complete.global.js"></script>
+    
+    <script>
+        // Global state
+        let graphElement = null;
+        let controlsPanel = null;
+        let api = null;
+        let currentDataInstance = null;
+
+        /**
+         * Sample data definitions with schema and initial atoms
+         */
+        const SAMPLES = {
+            friends: {
+                name: 'Friends Network',
+                // Simulated Alloy-like schema
+                types: [
+                    { id: 'Person', name: 'Person', types: ['Person', 'univ'], isAbstract: false, isBuiltin: false, atoms: [] }
+                ],
+                relations: [
+                    { id: 'friend', name: 'friend', types: ['Person', 'Person'], tuples: [] }
+                ],
+                initialAtoms: [
+                    { id: 'Person0', type: 'Person', label: 'Alice' },
+                    { id: 'Person1', type: 'Person', label: 'Bob' },
+                    { id: 'Person2', type: 'Person', label: 'Carol' }
+                ],
+                initialTuples: [
+                    { relation: 'friend', atoms: ['Person0', 'Person1'] },
+                    { relation: 'friend', atoms: ['Person1', 'Person2'] }
+                ]
+            },
+            family: {
+                name: 'Family Tree',
+                types: [
+                    { id: 'Person', name: 'Person', types: ['Person', 'univ'], isAbstract: false, isBuiltin: false, atoms: [] }
+                ],
+                relations: [
+                    { id: 'parent', name: 'parent', types: ['Person', 'Person'], tuples: [] },
+                    { id: 'spouse', name: 'spouse', types: ['Person', 'Person'], tuples: [] }
+                ],
+                initialAtoms: [
+                    { id: 'Person0', type: 'Person', label: 'Grandma' },
+                    { id: 'Person1', type: 'Person', label: 'Grandpa' },
+                    { id: 'Person2', type: 'Person', label: 'Mom' },
+                    { id: 'Person3', type: 'Person', label: 'Dad' },
+                    { id: 'Person4', type: 'Person', label: 'Child' }
+                ],
+                initialTuples: [
+                    { relation: 'spouse', atoms: ['Person0', 'Person1'] },
+                    { relation: 'parent', atoms: ['Person0', 'Person2'] },
+                    { relation: 'spouse', atoms: ['Person2', 'Person3'] },
+                    { relation: 'parent', atoms: ['Person2', 'Person4'] },
+                    { relation: 'parent', atoms: ['Person3', 'Person4'] }
+                ]
+            },
+            graph: {
+                name: 'Directed Graph',
+                types: [
+                    { id: 'Node', name: 'Node', types: ['Node', 'univ'], isAbstract: false, isBuiltin: false, atoms: [] }
+                ],
+                relations: [
+                    { id: 'edge', name: 'edge', types: ['Node', 'Node'], tuples: [] }
+                ],
+                initialAtoms: [
+                    { id: 'Node0', type: 'Node', label: 'A' },
+                    { id: 'Node1', type: 'Node', label: 'B' },
+                    { id: 'Node2', type: 'Node', label: 'C' },
+                    { id: 'Node3', type: 'Node', label: 'D' }
+                ],
+                initialTuples: [
+                    { relation: 'edge', atoms: ['Node0', 'Node1'] },
+                    { relation: 'edge', atoms: ['Node1', 'Node2'] },
+                    { relation: 'edge', atoms: ['Node2', 'Node3'] },
+                    { relation: 'edge', atoms: ['Node3', 'Node0'] }
+                ]
+            }
+        };
+
+        /**
+         * Update status display
+         */
+        function updateStatus(message, type = 'info') {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = message;
+            statusElement.className = `status ${type}`;
+        }
+
+        /**
+         * Initialize the demo
+         */
+        async function initialize() {
+            try {
+                updateStatus('Initializing Alloy Input Graph...', 'info');
+                
+                // Get the graph element
+                graphElement = document.getElementById('graph-container');
+                
+                if (!graphElement) {
+                    throw new Error('Graph element not found');
+                }
+                
+                console.log('CndCore available:', Object.keys(CndCore));
+                console.log('AlloyInputGraph available:', !!CndCore.AlloyInputGraph);
+                console.log('AlloyInputControlsPanel available:', !!CndCore.AlloyInputControlsPanel);
+                console.log('AlloyDataInstance available:', !!CndCore.AlloyDataInstance);
+                
+                // Create an empty data instance to start
+                currentDataInstance = CndCore.createEmptyAlloyDataInstance();
+                
+                // Set the data instance on the graph
+                graphElement.setDataInstance(currentDataInstance);
+                
+                // Get the API for external controls
+                api = graphElement.getInputControlsAPI();
+                
+                // Mount the controls panel
+                mountControlsPanel();
+                
+                // Listen for instance events
+                graphElement.addEventListener('atom-added', (e) => {
+                    console.log('Atom added:', e.detail);
+                    updateStatus(`Added atom: ${e.detail.atom.label}`, 'success');
+                });
+                
+                graphElement.addEventListener('atom-removed', (e) => {
+                    console.log('Atom removed:', e.detail);
+                    updateStatus(`Removed atom: ${e.detail.atomId}`, 'info');
+                });
+                
+                graphElement.addEventListener('relation-added', (e) => {
+                    console.log('Relation tuple added:', e.detail);
+                    updateStatus(`Added relation: ${e.detail.relationId}`, 'success');
+                });
+                
+                graphElement.addEventListener('validation-error', (e) => {
+                    console.log('Validation errors:', e.detail.errors);
+                    updateStatus(`Validation errors: ${e.detail.errors.length}`, 'error');
+                });
+                
+                graphElement.addEventListener('instance-validated', (e) => {
+                    const result = e.detail.result;
+                    if (result.valid) {
+                        updateStatus('Instance is valid ✓', 'success');
+                    }
+                });
+                
+                updateStatus('Ready! Load a sample or create atoms manually.', 'success');
+                
+            } catch (error) {
+                console.error('Initialization failed:', error);
+                updateStatus(`Initialization failed: ${error.message}`, 'error');
+            }
+        }
+
+        /**
+         * Mount the AlloyInputControlsPanel
+         */
+        function mountControlsPanel() {
+            const mountPoint = document.getElementById('controls-mount');
+            
+            if (!api) {
+                console.error('API not available for controls panel');
+                return;
+            }
+            
+            // Check if AlloyInputControlsPanel is available
+            if (CndCore.AlloyInputControlsPanel) {
+                controlsPanel = new CndCore.AlloyInputControlsPanel(api, {
+                    showHeader: false, // We have our own header
+                    showExport: false, // We have our own export section
+                });
+                
+                mountPoint.appendChild(controlsPanel.getElement());
+                console.log('Controls panel mounted successfully');
+            } else {
+                // Fallback: create simple controls
+                mountPoint.innerHTML = `
+                    <div class="alert alert-warning">
+                        AlloyInputControlsPanel not available in this build.
+                        Use the API programmatically instead.
+                    </div>
+                    <div class="mb-3">
+                        <button class="btn btn-primary w-100" onclick="validateAndReify()">
+                            Validate & Reify
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+        /**
+         * Load a sample dataset
+         */
+        async function loadSample(sampleId) {
+            const sample = SAMPLES[sampleId];
+            if (!sample) {
+                updateStatus(`Unknown sample: ${sampleId}`, 'error');
+                return;
+            }
+            
+            try {
+                updateStatus(`Loading ${sample.name}...`, 'info');
+                
+                // Create a new empty data instance
+                currentDataInstance = CndCore.createEmptyAlloyDataInstance();
+                
+                // Add types (this is normally done from Alloy XML parsing)
+                // For the demo, we'll add atoms directly which implicitly creates types
+                
+                // Add initial atoms
+                for (const atomDef of sample.initialAtoms) {
+                    currentDataInstance.addAtom(atomDef);
+                }
+                
+                // Add initial tuples
+                for (const tupleDef of sample.initialTuples) {
+                    const tuple = {
+                        atoms: tupleDef.atoms,
+                        types: tupleDef.atoms.map(atomId => {
+                            const atom = sample.initialAtoms.find(a => a.id === atomId);
+                            return atom ? atom.type : 'univ';
+                        })
+                    };
+                    currentDataInstance.addRelationTuple(tupleDef.relation, tuple);
+                }
+                
+                // Update the graph with new data instance
+                graphElement.setDataInstance(currentDataInstance);
+                
+                // Update API reference
+                api = graphElement.getInputControlsAPI();
+                
+                // Remount controls with new API
+                const mountPoint = document.getElementById('controls-mount');
+                if (controlsPanel) {
+                    controlsPanel.destroy();
+                }
+                mountControlsPanel();
+                
+                updateStatus(`Loaded ${sample.name} with ${sample.initialAtoms.length} atoms`, 'success');
+                
+            } catch (error) {
+                console.error('Failed to load sample:', error);
+                updateStatus(`Failed to load sample: ${error.message}`, 'error');
+            }
+        }
+
+        /**
+         * Validate and reify the current instance
+         */
+        function validateAndReify() {
+            if (!api) {
+                updateStatus('API not available', 'error');
+                return;
+            }
+            
+            const result = api.reifyInstance();
+            const outputArea = document.getElementById('output-area');
+            
+            if (result.success) {
+                outputArea.value = result.result || '// Empty instance';
+                updateStatus('Instance reified successfully ✓', 'success');
+            } else {
+                const errorMessages = result.errors?.map(e => `// ${e.type}: ${e.message}`).join('\n') || '// Unknown error';
+                outputArea.value = `// Validation failed:\n${errorMessages}`;
+                updateStatus(`Validation failed: ${result.errors?.length || 0} errors`, 'error');
+            }
+        }
+
+        /**
+         * Apply CND layout specification
+         */
+        function applyLayout() {
+            const cndSpec = document.getElementById('cnd-spec').value;
+            
+            if (!graphElement) {
+                updateStatus('Graph not initialized', 'error');
+                return;
+            }
+            
+            try {
+                graphElement.setAttribute('cnd-spec', cndSpec);
+                updateStatus('Layout applied', 'success');
+            } catch (error) {
+                updateStatus(`Layout error: ${error.message}`, 'error');
+            }
+        }
+
+        /**
+         * Clear the graph
+         */
+        function clearGraph() {
+            if (confirm('Clear all atoms and relations?')) {
+                currentDataInstance = CndCore.createEmptyAlloyDataInstance();
+                graphElement.setDataInstance(currentDataInstance);
+                api = graphElement.getInputControlsAPI();
+                
+                // Remount controls
+                const mountPoint = document.getElementById('controls-mount');
+                if (controlsPanel) {
+                    controlsPanel.destroy();
+                }
+                mountControlsPanel();
+                
+                document.getElementById('output-area').value = '';
+                updateStatus('Graph cleared', 'info');
+            }
+        }
+
+        // Initialize when DOM is ready
+        document.addEventListener('DOMContentLoaded', initialize);
+        
+        // Also try to initialize immediately if DOM is already ready
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            setTimeout(initialize, 100);
+        }
+    </script>
+</body>
+</html>

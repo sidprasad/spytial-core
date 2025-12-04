@@ -24,9 +24,8 @@ export { parseLayoutSpec } from './layout/layoutspec';
 export { setupLayout } from './layout';
 export { type default as IEvaluator } from './evaluators/interfaces';
 export { ForgeEvaluator, WrappedForgeEvaluator } from './evaluators/forge-evaluator';
-export { WebColaTranslator } from './translators';
-export { StructuredInputGraph } from './translators';
-export type { ParsedCnDSpec, NodePositionHint, WebColaLayoutOptions } from './translators';
+export { WebColaTranslator, StructuredInputGraph, AlloyInputGraph, AlloyInputControlsPanel, createAlloyInputControlsPanel } from './translators';
+export type { NodePositionHint, WebColaLayoutOptions, AlloyInputControlsAPI, AlloyValidationError, AlloyValidationResult, AlloyInputControlsPanelConfig } from './translators';
 export { SGraphQueryEvaluator } from "./evaluators/sgq-evaluator";
 
 // Browser-specific exports and initialization
@@ -52,6 +51,14 @@ if (typeof window !== 'undefined') {
         if (typeof customElements !== 'undefined' && !customElements.get('structured-input-graph')) {
           customElements.define('structured-input-graph', StructuredInputGraph as any);
           //console.log('✅ Structured Input Graph custom element registered');
+        }
+      }).catch(console.error);
+
+      // Register alloy input graph
+      import('./translators/webcola/alloy-input-graph').then(({ AlloyInputGraph }) => {
+        if (typeof customElements !== 'undefined' && !customElements.get('alloy-input-graph')) {
+          customElements.define('alloy-input-graph', AlloyInputGraph as any);
+          //console.log('✅ Alloy Input Graph custom element registered');
         }
       }).catch(console.error);
     }).catch(console.error);

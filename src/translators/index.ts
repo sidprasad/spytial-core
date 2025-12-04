@@ -10,7 +10,12 @@ export { WebColaCnDGraph } from './webcola/webcola-cnd-graph';
 
 // StructuredInputGraph web component for structured input
 export { StructuredInputGraph } from './webcola/structured-input-graph';
-export type { ParsedCnDSpec } from './webcola/structured-input-graph';
+
+// AlloyInputGraph web component for Alloy/Forge workflows
+export { AlloyInputGraph } from './webcola/alloy-input-graph';
+export type { AlloyInputControlsAPI, AlloyValidationError, AlloyValidationResult } from './webcola/alloy-input-graph';
+export { AlloyInputControlsPanel, createAlloyInputControlsPanel } from './webcola/alloy-input-controls-panel';
+export type { AlloyInputControlsPanelConfig } from './webcola/alloy-input-controls-panel';
 
 // Re-export types for convenience
 export type { 
