@@ -50,24 +50,19 @@ export const GroupBySelectorSelector: React.FC<GroupBySelectorSelectorProps> = (
           className="form-control"
           value={props.constraintData.params.name as string || ''}
           onChange={handleParamsChange}
+          placeholder="Enter group name"
           required
         />
       </div>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <div className="input-group-text">
-            <input
-              type="checkbox"
-              name="addEdge"
-              checked={props.constraintData.params.addEdge as boolean || false}
-              onChange={handleParamsChange}
-            />
-          </div>
-        </div>
-        <div className="form-control-static" style={{ padding: '0.375rem 0.75rem', backgroundColor: '#f8f9fa' }}>
-          Add Edge Between Groups
-        </div>
-      </div>
+      <label className="inline-checkbox">
+        <input
+          type="checkbox"
+          name="addEdge"
+          checked={props.constraintData.params.addEdge as boolean || false}
+          onChange={handleParamsChange}
+        />
+        <span>Add edge between groups</span>
+      </label>
     </>
   );
 };

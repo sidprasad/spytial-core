@@ -55,20 +55,15 @@ export const IconSelector: React.FC<IconSelectorProps> = ({
           required
         />
       </div>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text">Show Labels</span>
-        </div>
-        <div className="form-check ml-3">
-          <input
-            className="form-check-input"
-            type="checkbox"
-            name="showLabels"
-            defaultChecked={showLabels}
-            onChange={(e) => onUpdate({ params: { ...directiveData.params, showLabels: e.target.checked } })}
-          />
-        </div>
-      </div>
+      <label className="inline-checkbox">
+        <input
+          type="checkbox"
+          name="showLabels"
+          defaultChecked={showLabels}
+          onChange={(e) => onUpdate({ params: { ...directiveData.params, showLabels: e.target.checked } })}
+        />
+        <span>Show Labels</span>
+      </label>
     </>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useState } from 'react'
 import {
     AttributeSelector, 
     FlagSelector, 
@@ -31,6 +31,14 @@ interface DirectiveCardProps {
   onRemove: () => void;
   /** Additional CSS class name for styling */
   className?: string;
+  /** Drag handle props for drag and drop */
+  dragHandleProps?: {
+    draggable: boolean;
+    onDragStart: (e: React.DragEvent) => void;
+    onDragEnd: (e: React.DragEvent) => void;
+    onDragOver: (e: React.DragEvent) => void;
+    onDrop: (e: React.DragEvent) => void;
+  };
 }
 
 /**
@@ -77,6 +85,23 @@ const renderSelectorComponent = (
 
 const DirectiveCard: React.FC<DirectiveCardProps> = (props: DirectiveCardProps) => {
     const { isHighlighted } = useHighlight(1000); // Highlight for 1 second
+    const [isEditingComment, setIsEditingComment] = useState(false);
+
+    const isCollapsed = props.directiveData.collapsed ?? false;
+
+    /**
+     * Toggle collapsed state
+     */
+    const toggleCollapse = useCallback(() => {
+        props.onUpdate({ collapsed: !isCollapsed });
+    }, [isCollapsed, props.onUpdate]);
+
+    /**
+     * Handle comment change
+     */
+    const handleCommentChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        props.onUpdate({ comment: e.target.value });
+    }, [props.onUpdate]);
 
     /**
      * Handle directive type change with proper event typing
@@ -96,13 +121,32 @@ const DirectiveCard: React.FC<DirectiveCardProps> = (props: DirectiveCardProps) 
     const classes = [
         isHighlighted && 'highlight',
         'noCodeCard',
+        isCollapsed ? 'noCodeCard--collapsed' : '',
     ].filter(Boolean).join(' ');
 
   return (
-    <div className={classes}>
-        <button className="closeButton" title="Remove directive" aria-label="Remove directive" type="button" onClick= { props.onRemove }>
-            <span aria-hidden="true">&times;</span>
-        </button>
+    <div 
+        className={classes}
+        {...props.dragHandleProps}
+    >
+        <div className="cardHeader">
+            <button 
+                className="collapseButton" 
+                title={isCollapsed ? "Expand" : "Collapse"} 
+                aria-label={isCollapsed ? "Expand directive" : "Collapse directive"} 
+                aria-expanded={!isCollapsed}
+                type="button" 
+                onClick={toggleCollapse}
+            >
+                <span aria-hidden="true">{isCollapsed ? '▶' : '▼'}</span>
+            </button>
+            {props.dragHandleProps && (
+                <span className="dragHandle" title="Drag to reorder" aria-label="Drag handle">⋮⋮</span>
+            )}
+            <button className="closeButton" title="Remove directive" aria-label="Remove directive" type="button" onClick={props.onRemove}>
+                <span aria-hidden="true">&times;</span>
+            </button>
+        </div>
         <div className="input-group">
             <div className="input-group-prepend">
                 <span className="input-group-text">Directive</span>
@@ -120,9 +164,42 @@ const DirectiveCard: React.FC<DirectiveCardProps> = (props: DirectiveCardProps) 
                 <option value="inferredEdge">Inferred Edge</option>
             </select>
         </div>
-        <div className="params">
-            { renderSelectorComponent(props.directiveData.type, props.directiveData, props.onUpdate) }
-        </div>
+        {!isCollapsed && (
+            <>
+                <div className="params">
+                    { renderSelectorComponent(props.directiveData.type, props.directiveData, props.onUpdate) }
+                </div>
+                {/* Comment section */}
+                <div className="commentSection">
+                    {isEditingComment || props.directiveData.comment ? (
+                        <input
+                            type="text"
+                            className="commentInput"
+                            placeholder="Add a note..."
+                            value={props.directiveData.comment || ''}
+                            onChange={handleCommentChange}
+                            onFocus={() => setIsEditingComment(true)}
+                            onBlur={() => setIsEditingComment(false)}
+                        />
+                    ) : (
+                        <button 
+                            type="button" 
+                            className="addCommentButton"
+                            onClick={() => setIsEditingComment(true)}
+                        >
+                            + Add note
+                        </button>
+                    )}
+                </div>
+            </>
+        )}
+        {isCollapsed && props.directiveData.comment && (
+            <div className="collapsedComment" title={props.directiveData.comment}>
+                💬 {props.directiveData.comment.length > 30 
+                    ? props.directiveData.comment.slice(0, 30) + '...' 
+                    : props.directiveData.comment}
+            </div>
+        )}
     </div>
   )
 }
