@@ -173,7 +173,12 @@ export function parseLayoutSpecToData(yamlString: string): {
 
             // HACK: This means that it's flag selector
             if (typeof params === "string") {
-                params = { [type]: params};
+                params = { flag: params };
+            }
+            
+            // Ensure params is always an object
+            if (!params || typeof params !== 'object') {
+                params = {};
             }
 
             // Return structured directive data with comment if present

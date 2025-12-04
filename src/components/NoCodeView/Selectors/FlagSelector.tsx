@@ -16,14 +16,15 @@ export const FlagSelector: React.FC<FlagSelectorProps> = ({
   directiveData,
   onUpdate
 }) => {
-  const flag = directiveData.params.flag as string || '';
+  // Safely access flag with fallback to empty string
+  const flag = (directiveData.params?.flag as string) || '';
 
   return (
     <div className="input-group">
       <select
         name="flag"
         className="form-control"
-        defaultValue={flag}
+        value={flag}
         onChange={(e) => onUpdate({ params: { ...directiveData.params, flag: e.target.value } })}
       >
         <option value="">Select flag...</option>
