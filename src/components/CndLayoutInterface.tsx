@@ -30,8 +30,6 @@ export interface CndLayoutInterfaceProps {
   disabled?: boolean;
   /** ARIA label for accessibility */
   'aria-label'?: string;
-  /** Default/initial YAML value to populate the editor with */
-  defaultValue?: string;
 }
 
 /**
@@ -65,11 +63,7 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
   className = '',
   disabled = false,
   'aria-label': ariaLabel = 'CND Layout Specification Interface',
-  defaultValue,
 }) => {
-  // Track if we've applied the default value to avoid re-applying on every render
-  const hasAppliedDefault = useRef(false);
-  
   // Undo/Redo state - store the previous snapshot
   // We store the full state: yaml + constraints + directives
   interface Snapshot {
@@ -82,14 +76,6 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
   const [redoSnapshot, setRedoSnapshot] = useState<Snapshot | null>(null);
   const isUndoRedoAction = useRef(false);
   const lastSnapshotRef = useRef<string>(''); // JSON string of last snapshot for comparison
-
-  // Apply default value on mount if provided and yamlValue is empty
-  useEffect(() => {
-    if (defaultValue && !hasAppliedDefault.current && !yamlValue) {
-      hasAppliedDefault.current = true;
-      onChange(defaultValue);
-    }
-  }, [defaultValue, yamlValue, onChange]);
 
   /**
    * Get current state as a snapshot
