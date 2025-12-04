@@ -10,12 +10,24 @@ interface OrientationSelectorProps {
   onUpdate: (updates: Partial<Omit<ConstraintData, 'id'>>) => void;
 }
 
+/** Direction options with display labels and grouping */
+const DIRECTION_OPTIONS = [
+  { value: 'left', label: 'Left', group: 'relative' },
+  { value: 'right', label: 'Right', group: 'relative' },
+  { value: 'above', label: 'Above', group: 'relative' },
+  { value: 'below', label: 'Below', group: 'relative' },
+  { value: 'directlyLeft', label: 'Directly Left', group: 'direct' },
+  { value: 'directlyRight', label: 'Directly Right', group: 'direct' },
+  { value: 'directlyAbove', label: 'Directly Above', group: 'direct' },
+  { value: 'directlyBelow', label: 'Directly Below', group: 'direct' },
+];
+
 /**
  * Minimal React component for orientation/direction constraint configuration.
- * Includes selector input and multi-select direction dropdown.
+ * Uses a checkbox grid for direction selection instead of a multi-select dropdown.
  */
 export const OrientationSelector: React.FC<OrientationSelectorProps> = (props: OrientationSelectorProps) => {
-  const handleInputChange = (event) => {
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
     props.onUpdate({
       params: {
@@ -25,16 +37,23 @@ export const OrientationSelector: React.FC<OrientationSelectorProps> = (props: O
     });
   };
 
-  const handleSelectChange = (event) => {
-    const { name } = event.target;
-    const selectedValues = Array.from(event.target.selectedOptions, (option) => option.value);
+  const handleDirectionToggle = useCallback((direction: string) => {
+    const currentDirections = (props.constraintData.params.directions as string[]) || [];
+    const isSelected = currentDirections.includes(direction);
+    
+    const newDirections = isSelected
+      ? currentDirections.filter(d => d !== direction)
+      : [...currentDirections, direction];
+    
     props.onUpdate({
       params: {
         ...props.constraintData.params,
-        [name]: selectedValues
+        directions: newDirections
       }
     });
-  };
+  }, [props.constraintData.params, props.onUpdate]);
+
+  const selectedDirections = (props.constraintData.params.directions as string[]) || [];
 
   return (
     <>
@@ -51,26 +70,25 @@ export const OrientationSelector: React.FC<OrientationSelectorProps> = (props: O
           required
         />
       </div>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text stretch-height">Directions</span>
+      <div className="direction-selector">
+        <label className="direction-selector__label">Directions</label>
+        <div className="direction-selector__grid">
+          {DIRECTION_OPTIONS.map((option) => (
+            <label 
+              key={option.value} 
+              className={`direction-selector__option ${selectedDirections.includes(option.value) ? 'direction-selector__option--selected' : ''}`}
+              title={`Toggle ${option.label}`}
+            >
+              <input
+                type="checkbox"
+                checked={selectedDirections.includes(option.value)}
+                onChange={() => handleDirectionToggle(option.value)}
+                className="direction-selector__checkbox"
+              />
+              <span className="direction-selector__text">{option.label}</span>
+            </label>
+          ))}
         </div>
-        <select
-          name="directions"
-          className="form-control"
-          multiple
-          defaultValue={(props.constraintData.params.directions as string[]) || []}
-          onChange={handleSelectChange}
-        >
-          <option value="left">Left</option>
-          <option value="right">Right</option>
-          <option value="above">Above</option>
-          <option value="below">Below</option>
-          <option value="directlyLeft">Directly Left</option>
-          <option value="directlyRight">Directly Right</option>
-          <option value="directlyAbove">Directly Above</option>
-          <option value="directlyBelow">Directly Below</option>
-        </select>
       </div>
     </>
   );

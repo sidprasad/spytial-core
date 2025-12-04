@@ -22,6 +22,10 @@ export interface ConstraintData {
   type: ConstraintType;
   /** Constraint-specific parameters (directions, selector, etc.) */
   params: Record<string, unknown>;
+  /** Whether the card is collapsed in the No Code View */
+  collapsed?: boolean;
+  /** Optional comment/note for this constraint */
+  comment?: string;
 }
 
 /**
@@ -46,4 +50,8 @@ export interface DirectiveData {
   type: DirectiveType;
   /** Directive-specific parameters (color, selector, path, etc.) */
   params: Record<string, unknown>;
+  /** Whether the card is collapsed in the No Code View */
+  collapsed?: boolean;
+  /** Optional comment/note for this directive */
+  comment?: string;
 }

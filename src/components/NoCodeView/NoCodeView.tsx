@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { ConstraintCard } from "./ConstraintCard";
 import { DirectiveCard } from "./DirectiveCard";
 import { ConstraintData, DirectiveData } from "./interfaces";
@@ -69,6 +69,55 @@ export function parseLayoutSpecToData(yamlString: string): {
     const yamlConstraints = parsedYaml?.constraints;
     const yamlDirectives = parsedYaml?.directives;
 
+    // Extract comments from YAML string
+    // Comments are associated with the item that follows them
+    const extractComments = (yamlStr: string, sectionName: string): Map<number, string> => {
+        const commentMap = new Map<number, string>();
+        const lines = yamlStr.split('\n');
+        let inSection = false;
+        let currentComment = '';
+        let itemIndex = -1;
+
+        for (const line of lines) {
+            const trimmed = line.trim();
+            
+            // Check if we're entering the section
+            if (trimmed === `${sectionName}:`) {
+                inSection = true;
+                continue;
+            }
+            
+            // Check if we're leaving the section (new top-level key)
+            if (inSection && /^[a-zA-Z]/.test(trimmed) && trimmed.endsWith(':') && !trimmed.startsWith('-')) {
+                inSection = false;
+                continue;
+            }
+
+            if (!inSection) continue;
+
+            // Check for comment line
+            if (trimmed.startsWith('#')) {
+                // Accumulate comment (strip the # and leading space)
+                const commentText = trimmed.slice(1).trim();
+                currentComment = currentComment 
+                    ? currentComment + ' ' + commentText 
+                    : commentText;
+            } else if (trimmed.startsWith('-')) {
+                // This is an item line
+                itemIndex++;
+                if (currentComment) {
+                    commentMap.set(itemIndex, currentComment);
+                    currentComment = '';
+                }
+            }
+        }
+
+        return commentMap;
+    };
+
+    const constraintComments = extractComments(yamlString, 'constraints');
+    const directiveComments = extractComments(yamlString, 'directives');
+
     // Helper function to determine constraint type from YAML object
     // TODO: Make this a map??
     function get_constraint_type_from_yaml(constraint: any): string {
@@ -95,18 +144,19 @@ export function parseLayoutSpecToData(yamlString: string): {
             throw new Error("Invalid YAML: 'constraints' should be an array");
         }
 
-        constraints = yamlConstraints.map(constraint => {
+        constraints = yamlConstraints.map((constraint, index) => {
             const type = get_constraint_type_from_yaml(constraint);
             if (type === "unknown") {
                 throw new Error(`Unsupported constraint type in YAML: ${JSON.stringify(constraint)}`);
             }
             const params = constraint[Object.keys(constraint)[0]];
 
-            // Return structured constraint data
+            // Return structured constraint data with comment if present
             return {
                 id: generateId(),
                 type,
-                params
+                params,
+                comment: constraintComments.get(index),
             } as ConstraintData;
         })
     }
@@ -117,7 +167,7 @@ export function parseLayoutSpecToData(yamlString: string): {
             throw new Error("Invalid YAML: 'directives' should be an array");
         }
 
-        directives = yamlDirectives.map(directive => {
+        directives = yamlDirectives.map((directive, index) => {
             const type = Object.keys(directive)[0]; // Get the directive type
             let params = directive[type]; // Get the parameters for the directive
 
@@ -126,11 +176,12 @@ export function parseLayoutSpecToData(yamlString: string): {
                 params = { [type]: params};
             }
 
-            // Return structured directive data
+            // Return structured directive data with comment if present
             return {
                 id: generateId(),
                 type,
-                params
+                params,
+                comment: directiveComments.get(index),
             } as DirectiveData;
         })
     }
@@ -164,6 +215,9 @@ const NoCodeView = ({
     setDirectives,
     disabled = false,
 }: NoCodeViewProps) => {
+    // Drag and drop state
+    const [draggedConstraintId, setDraggedConstraintId] = useState<string | null>(null);
+    const [draggedDirectiveId, setDraggedDirectiveId] = useState<string | null>(null);
 
     const addConstraint = () => {
         const newConstraint: ConstraintData = {
@@ -189,15 +243,67 @@ const NoCodeView = ({
                 return {
                     ...constraint,
                     ...updates,
-                    params: {
-                        ...constraint.params,
-                        ...updates.params
-                    }
+                    params: updates.params !== undefined 
+                        ? { ...constraint.params, ...updates.params }
+                        : constraint.params
                 };
             }
             return constraint;
         }));
     }, [setConstraints]);
+
+    /**
+     * Collapse or expand all constraints
+     */
+    const setAllConstraintsCollapsed = useCallback((collapsed: boolean) => {
+        setConstraints((prev) => prev.map((c) => ({ ...c, collapsed })));
+    }, [setConstraints]);
+
+    /**
+     * Handle constraint drag start
+     */
+    const handleConstraintDragStart = useCallback((e: React.DragEvent, id: string) => {
+        setDraggedConstraintId(id);
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', id);
+        // Add dragging class for visual feedback
+        (e.target as HTMLElement).classList.add('dragging');
+    }, []);
+
+    /**
+     * Handle constraint drag end
+     */
+    const handleConstraintDragEnd = useCallback((e: React.DragEvent) => {
+        setDraggedConstraintId(null);
+        (e.target as HTMLElement).classList.remove('dragging');
+    }, []);
+
+    /**
+     * Handle constraint drag over
+     */
+    const handleConstraintDragOver = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+    }, []);
+
+    /**
+     * Handle constraint drop - reorder constraints
+     */
+    const handleConstraintDrop = useCallback((e: React.DragEvent, targetId: string) => {
+        e.preventDefault();
+        if (!draggedConstraintId || draggedConstraintId === targetId) return;
+
+        setConstraints((prev) => {
+            const draggedIndex = prev.findIndex((c) => c.id === draggedConstraintId);
+            const targetIndex = prev.findIndex((c) => c.id === targetId);
+            if (draggedIndex === -1 || targetIndex === -1) return prev;
+
+            const newConstraints = [...prev];
+            const [dragged] = newConstraints.splice(draggedIndex, 1);
+            newConstraints.splice(targetIndex, 0, dragged);
+            return newConstraints;
+        });
+    }, [draggedConstraintId, setConstraints]);
 
     const addDirective = () => {
         const newDirective: DirectiveData = {
@@ -223,14 +329,65 @@ const NoCodeView = ({
             ? {
                 ...directive,
                 ...updates,
-                params: {
-                    ...directive.params,
-                    ...updates.params
-                }
+                params: updates.params !== undefined
+                    ? { ...directive.params, ...updates.params }
+                    : directive.params
             }
             : directive
         ));
     }, [setDirectives]);
+
+    /**
+     * Collapse or expand all directives
+     */
+    const setAllDirectivesCollapsed = useCallback((collapsed: boolean) => {
+        setDirectives((prev) => prev.map((d) => ({ ...d, collapsed })));
+    }, [setDirectives]);
+
+    /**
+     * Handle directive drag start
+     */
+    const handleDirectiveDragStart = useCallback((e: React.DragEvent, id: string) => {
+        setDraggedDirectiveId(id);
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', id);
+        (e.target as HTMLElement).classList.add('dragging');
+    }, []);
+
+    /**
+     * Handle directive drag end
+     */
+    const handleDirectiveDragEnd = useCallback((e: React.DragEvent) => {
+        setDraggedDirectiveId(null);
+        (e.target as HTMLElement).classList.remove('dragging');
+    }, []);
+
+    /**
+     * Handle directive drag over
+     */
+    const handleDirectiveDragOver = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+    }, []);
+
+    /**
+     * Handle directive drop - reorder directives
+     */
+    const handleDirectiveDrop = useCallback((e: React.DragEvent, targetId: string) => {
+        e.preventDefault();
+        if (!draggedDirectiveId || draggedDirectiveId === targetId) return;
+
+        setDirectives((prev) => {
+            const draggedIndex = prev.findIndex((d) => d.id === draggedDirectiveId);
+            const targetIndex = prev.findIndex((d) => d.id === targetId);
+            if (draggedIndex === -1 || targetIndex === -1) return prev;
+
+            const newDirectives = [...prev];
+            const [dragged] = newDirectives.splice(draggedIndex, 1);
+            newDirectives.splice(targetIndex, 0, dragged);
+            return newDirectives;
+        });
+    }, [draggedDirectiveId, setDirectives]);
 
     /**
      * Loads constraint and directive state from YAML specification
@@ -279,7 +436,29 @@ const NoCodeView = ({
     return (
         <section id="noCodeViewContainer" aria-label="No Code View Container">
             <div>
-                <h5>Constraints  <button type="button" onClick={ addConstraint } title="Click to add a new constraint" aria-label="Click to add a new constraint" disabled={disabled}>+</button></h5>
+                <div className="sectionHeader">
+                    <h5>Constraints  <button type="button" onClick={ addConstraint } title="Click to add a new constraint" aria-label="Click to add a new constraint" disabled={disabled}>+</button></h5>
+                    {constraints.length > 0 && (
+                        <div className="collapseAllButtons">
+                            <button 
+                                type="button" 
+                                className="collapseAllButton"
+                                onClick={() => setAllConstraintsCollapsed(true)}
+                                title="Collapse all constraints"
+                            >
+                                Collapse All
+                            </button>
+                            <button 
+                                type="button" 
+                                className="collapseAllButton"
+                                onClick={() => setAllConstraintsCollapsed(false)}
+                                title="Expand all constraints"
+                            >
+                                Expand All
+                            </button>
+                        </div>
+                    )}
+                </div>
                 <section className='cardContainer' id="constraintContainer" aria-label="Constraints List">
                     {/* Constraints will be added here dynamically */ }
                     { 
@@ -290,14 +469,44 @@ const NoCodeView = ({
                                 onUpdate={(updates) => updateConstraint(cd1.id, updates)}
                                 onRemove={() => {
                                     setConstraints((prev) => prev.filter((cd2) => cd2.id !== cd1.id));
-                                }} />
+                                }}
+                                dragHandleProps={{
+                                    draggable: true,
+                                    onDragStart: (e) => handleConstraintDragStart(e, cd1.id),
+                                    onDragEnd: handleConstraintDragEnd,
+                                    onDragOver: handleConstraintDragOver,
+                                    onDrop: (e) => handleConstraintDrop(e, cd1.id),
+                                }}
+                            />
                         ))
                     }
                 </section>
             </div>
             <hr />
             <div>
-                <h5>Directives  <button type="button" onClick={ addDirective } title="Click to add a new directive" aria-label="Click to add a new directive" disabled={disabled}>+</button></h5>
+                <div className="sectionHeader">
+                    <h5>Directives  <button type="button" onClick={ addDirective } title="Click to add a new directive" aria-label="Click to add a new directive" disabled={disabled}>+</button></h5>
+                    {directives.length > 0 && (
+                        <div className="collapseAllButtons">
+                            <button 
+                                type="button" 
+                                className="collapseAllButton"
+                                onClick={() => setAllDirectivesCollapsed(true)}
+                                title="Collapse all directives"
+                            >
+                                Collapse All
+                            </button>
+                            <button 
+                                type="button" 
+                                className="collapseAllButton"
+                                onClick={() => setAllDirectivesCollapsed(false)}
+                                title="Expand all directives"
+                            >
+                                Expand All
+                            </button>
+                        </div>
+                    )}
+                </div>
                 <section className='cardContainer' id="directiveContainer" aria-label="Directives List">
                     { 
                         directives.map((dd1) => (
@@ -307,7 +516,15 @@ const NoCodeView = ({
                                 onUpdate={(updates) => updateDirective(dd1.id, updates)}
                                 onRemove={() => {
                                     setDirectives((prev) => prev.filter((dd2) => dd2.id !== dd1.id));
-                                }} />
+                                }}
+                                dragHandleProps={{
+                                    draggable: true,
+                                    onDragStart: (e) => handleDirectiveDragStart(e, dd1.id),
+                                    onDragEnd: handleDirectiveDragEnd,
+                                    onDragOver: handleDirectiveDragOver,
+                                    onDrop: (e) => handleDirectiveDrop(e, dd1.id),
+                                }}
+                            />
                         ))
                     }
                 </section>

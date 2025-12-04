@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import './CndLayoutInterface.css';
 import { NoCodeView } from './NoCodeView/NoCodeView';
 import { ConstraintData, DirectiveData } from './NoCodeView/interfaces';
@@ -64,6 +64,138 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
   disabled = false,
   'aria-label': ariaLabel = 'CND Layout Specification Interface',
 }) => {
+  // Undo/Redo state - store the previous snapshot
+  // We store the full state: yaml + constraints + directives
+  interface Snapshot {
+    yaml: string;
+    constraints: ConstraintData[];
+    directives: DirectiveData[];
+  }
+  
+  const [undoSnapshot, setUndoSnapshot] = useState<Snapshot | null>(null);
+  const [redoSnapshot, setRedoSnapshot] = useState<Snapshot | null>(null);
+  const isUndoRedoAction = useRef(false);
+  const lastSnapshotRef = useRef<string>(''); // JSON string of last snapshot for comparison
+
+  /**
+   * Get current state as a snapshot
+   */
+  const getCurrentSnapshot = useCallback((): Snapshot => {
+    // In No Code View, generate YAML from constraints/directives for consistency
+    const currentYaml = isNoCodeView 
+      ? generateLayoutSpecYaml(constraints, directives)
+      : yamlValue;
+    return {
+      yaml: currentYaml,
+      constraints: JSON.parse(JSON.stringify(constraints)), // Deep clone
+      directives: JSON.parse(JSON.stringify(directives)),   // Deep clone
+    };
+  }, [isNoCodeView, yamlValue, constraints, directives]);
+
+  /**
+   * Save current state to undo stack (called before making changes)
+   */
+  const saveToUndo = useCallback(() => {
+    if (isUndoRedoAction.current) return;
+    
+    const snapshot = getCurrentSnapshot();
+    const snapshotStr = JSON.stringify(snapshot);
+    
+    // Only save if state actually changed
+    if (snapshotStr !== lastSnapshotRef.current) {
+      setUndoSnapshot({
+        yaml: lastSnapshotRef.current ? JSON.parse(lastSnapshotRef.current).yaml : '',
+        constraints: lastSnapshotRef.current ? JSON.parse(lastSnapshotRef.current).constraints : [],
+        directives: lastSnapshotRef.current ? JSON.parse(lastSnapshotRef.current).directives : [],
+      });
+      setRedoSnapshot(null); // Clear redo when new changes are made
+      lastSnapshotRef.current = snapshotStr;
+    }
+  }, [getCurrentSnapshot]);
+
+  // Track changes and save to undo - debounced to avoid too many snapshots
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  useEffect(() => {
+    if (isUndoRedoAction.current) {
+      isUndoRedoAction.current = false;
+      // Update last snapshot after undo/redo
+      lastSnapshotRef.current = JSON.stringify(getCurrentSnapshot());
+      return;
+    }
+
+    // Debounce: wait 500ms after last change before saving snapshot
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    
+    saveTimeoutRef.current = setTimeout(() => {
+      const snapshot = getCurrentSnapshot();
+      const snapshotStr = JSON.stringify(snapshot);
+      
+      if (lastSnapshotRef.current && snapshotStr !== lastSnapshotRef.current) {
+        // Save the PREVIOUS state to undo
+        const prevSnapshot = JSON.parse(lastSnapshotRef.current) as Snapshot;
+        setUndoSnapshot(prevSnapshot);
+        setRedoSnapshot(null);
+      }
+      lastSnapshotRef.current = snapshotStr;
+    }, 500);
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [yamlValue, constraints, directives, getCurrentSnapshot]);
+
+  // Initialize lastSnapshotRef on mount
+  useEffect(() => {
+    if (!lastSnapshotRef.current) {
+      lastSnapshotRef.current = JSON.stringify(getCurrentSnapshot());
+    }
+  }, []);
+
+  /**
+   * Handle undo action - restore the previous state
+   */
+  const handleUndo = useCallback(() => {
+    if (!undoSnapshot || disabled) return;
+    
+    isUndoRedoAction.current = true;
+    
+    // Save current state to redo before undoing
+    setRedoSnapshot(getCurrentSnapshot());
+    
+    // Restore the undo snapshot
+    onChange(undoSnapshot.yaml);
+    setConstraints(() => undoSnapshot.constraints);
+    setDirectives(() => undoSnapshot.directives);
+    
+    // Clear undo
+    setUndoSnapshot(null);
+  }, [undoSnapshot, disabled, getCurrentSnapshot, onChange, setConstraints, setDirectives]);
+
+  /**
+   * Handle redo action - restore the state before undo
+   */
+  const handleRedo = useCallback(() => {
+    if (!redoSnapshot || disabled) return;
+    
+    isUndoRedoAction.current = true;
+    
+    // Save current state to undo before redoing
+    setUndoSnapshot(getCurrentSnapshot());
+    
+    // Restore the redo snapshot
+    onChange(redoSnapshot.yaml);
+    setConstraints(() => redoSnapshot.constraints);
+    setDirectives(() => redoSnapshot.directives);
+    
+    // Clear redo
+    setRedoSnapshot(null);
+  }, [redoSnapshot, disabled, getCurrentSnapshot, onChange, setConstraints, setDirectives]);
+
   /**
    * Handle toggle switch change
    * @param event - The change event from the toggle input
@@ -136,6 +268,30 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
           <span className={toggleLabelNoCodeClasses}>
             No Code View
           </span>
+        </div>
+
+        {/* Undo/Redo buttons */}
+        <div className="d-flex align-items-center gap-2">
+          <button
+            type="button"
+            className="cnd-layout-interface__undo-btn"
+            onClick={handleUndo}
+            disabled={disabled || !undoSnapshot}
+            aria-label="Undo last change"
+            title="Undo"
+          >
+            ↶
+          </button>
+          <button
+            type="button"
+            className="cnd-layout-interface__redo-btn"
+            onClick={handleRedo}
+            disabled={disabled || !redoSnapshot}
+            aria-label="Redo last change"
+            title="Redo"
+          >
+            ↷
+          </button>
         </div>
       </div>
 

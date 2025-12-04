@@ -65,43 +65,48 @@ export function generateLayoutSpecYaml(
         return "unknown";
     }
 
-    // Convert constraint type to YAML constraint type
-    const yamlConstraints = constraints.map(c => {
-        return {
-            [toYamlConstraintType(c.type)]: c.params
+    // Build YAML string manually to support comments
+    const lines: string[] = [];
+    
+    if (constraints.length > 0) {
+        lines.push('constraints:');
+        for (const c of constraints) {
+            // Add comment as YAML comment if present
+            if (c.comment) {
+                lines.push(`  # ${c.comment}`);
+            }
+            const yamlType = toYamlConstraintType(c.type);
+            // Use flow style for the entire constraint object to keep it on one line
+            const constraintObj = { [yamlType]: c.params };
+            const constraintYaml = jsyaml.dump([constraintObj], { flowLevel: 2 }).trim();
+            // Remove the leading "- " since we'll add our own formatting
+            lines.push('  ' + constraintYaml);
         }
-    });
+    }
 
-    // Convert directive type to YAML directive type
-    const yamlDirectives = directives.map(d => {
-        // HACK: Special case for flag directives
-        if (d.type === "flag") {
-            return {
-                [d.type]: d.params.flag as string
+    if (directives.length > 0) {
+        if (lines.length > 0) {
+            lines.push(''); // blank line between sections
+        }
+        lines.push('directives:');
+        for (const d of directives) {
+            // Add comment as YAML comment if present
+            if (d.comment) {
+                lines.push(`  # ${d.comment}`);
+            }
+            // HACK: Special case for flag directives
+            if (d.type === "flag") {
+                const flagValue = d.params.flag as string || '';
+                lines.push(`  - ${d.type}: ${flagValue}`);
+            } else {
+                const directiveObj = { [d.type]: d.params };
+                const directiveYaml = jsyaml.dump([directiveObj], { flowLevel: 2 }).trim();
+                lines.push('  ' + directiveYaml);
             }
         }
-        return {
-            [d.type]: d.params
-        }
-    });
-
-    // Combine constraints and directives into a single YAML object
-    let combinedSpec: any = {};
-    if (constraints.length > 0) {
-        combinedSpec.constraints = yamlConstraints;
-    }
-    if (directives.length > 0) {
-        combinedSpec.directives = yamlDirectives;
     }
 
-    // Convert combined spec object to YAML string
-    let yamlStr = "";
-
-    if (Object.keys(combinedSpec).length > 0) {
-        yamlStr = jsyaml.dump(combinedSpec);
-    }
-
-    return yamlStr;
+    return lines.join('\n') + (lines.length > 0 ? '\n' : '');
 }
 
 /**
