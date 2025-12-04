@@ -712,8 +712,11 @@ export class AlloyInputGraph extends WebColaCnDGraph {
         edges: graph.edges()
       });
       
-      // Create evaluator for the current data instance
-      this.evaluator = new SGraphQueryEvaluator(this.dataInstance);
+      // Create and initialize evaluator for the current data instance
+      this.evaluator = new SGraphQueryEvaluator();
+      this.evaluator.initialize({
+        sourceData: this.dataInstance
+      });
       
       // Parse layout spec (use empty if none provided)
       const layoutSpec = parseLayoutSpec(this.cndSpecString || 'constraints:\n');
