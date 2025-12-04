@@ -555,8 +555,19 @@
                     throw new Error('Graph element not found');
                 }
                 
-                // Wait a tick for any upgrade to complete
-                await new Promise(r => setTimeout(r, 50));
+                // Explicitly upgrade the element if needed
+                customElements.upgrade(graphElement);
+                
+                // Wait until the element has the setDataInstance method
+                let attempts = 0;
+                while (typeof graphElement.setDataInstance !== 'function' && attempts < 20) {
+                    await new Promise(r => setTimeout(r, 100));
+                    attempts++;
+                }
+                
+                if (typeof graphElement.setDataInstance !== 'function') {
+                    throw new Error('graphElement.setDataInstance is not available after waiting');
+                }
                 
                 console.log('CndCore available:', Object.keys(CndCore));
                 console.log('AlloyInstance.parseAlloyXML available:', !!CndCore.AlloyInstance?.parseAlloyXML);
