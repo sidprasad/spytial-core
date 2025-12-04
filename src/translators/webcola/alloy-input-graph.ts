@@ -702,9 +702,11 @@ export class AlloyInputGraph extends WebColaCnDGraph {
 
     try {
       console.log('[AlloyInputGraph] refreshVisualization starting...');
+      console.log('[AlloyInputGraph] Current atoms in dataInstance:', this.dataInstance.getAtoms().map(a => a.id));
       
       // Generate the graph from the data instance
-      const graph = this.dataInstance.generateGraph(false, true);
+      // Use false for hideDisconnected to ensure newly added atoms are visible
+      const graph = this.dataInstance.generateGraph(false, false);
       console.log('[AlloyInputGraph] Generated graph:', {
         nodeCount: graph.nodeCount(),
         edgeCount: graph.edgeCount(),
