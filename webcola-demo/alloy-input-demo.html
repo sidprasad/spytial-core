@@ -807,7 +807,7 @@
         /**
          * Apply CND layout specification
          */
-        function applyLayout() {
+        async function applyLayout() {
             const cndSpec = document.getElementById('cnd-spec').value;
             
             if (!graphElement) {
@@ -816,7 +816,8 @@
             }
             
             try {
-                graphElement.setAttribute('cnd-spec', cndSpec);
+                // Use setCnDSpec method which properly initializes the CnD pipeline
+                await graphElement.setCnDSpec(cndSpec);
                 updateStatus('Layout applied', 'success');
             } catch (error) {
                 updateStatus(`Layout error: ${error.message}`, 'error');

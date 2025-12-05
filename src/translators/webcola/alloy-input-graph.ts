@@ -221,10 +221,22 @@ export class AlloyInputGraph extends WebColaCnDGraph {
 
   /**
    * Add an atom with type validation
+   * In Alloy/Forge, the label IS the ID - they are the same thing
    */
   private async addAtomWithValidation(type: string, label: string): Promise<{ success: boolean; atom?: IAtom; error?: string }> {
     if (!this.dataInstance) {
       return { success: false, error: 'No data instance available' };
+    }
+
+    if (!label || label.trim() === '') {
+      return { success: false, error: 'Label is required (it will be used as the atom ID)' };
+    }
+
+    const atomId = label.trim();
+
+    // Check if atom with this ID already exists
+    if (this.getCurrentAtoms().some(a => a.id === atomId)) {
+      return { success: false, error: `Atom with ID "${atomId}" already exists` };
     }
 
     // Check if type exists in schema
@@ -236,13 +248,11 @@ export class AlloyInputGraph extends WebColaCnDGraph {
       console.warn(`Type "${type}" not found in schema. Adding anyway - will be validated at reify time.`);
     }
 
-    // Generate unique atom ID
-    const atomId = this.generateAtomId(type);
-
+    // In Alloy/Forge, the label IS the ID
     const atom: IAtom = {
       id: atomId,
       type: type,
-      label: label || atomId,
+      label: atomId,
     };
 
     try {
@@ -674,92 +684,173 @@ export class AlloyInputGraph extends WebColaCnDGraph {
   }
 
   /**
-   * Parse and apply a CnD specification
+   * Public method to set the CnD specification
+   * This is the preferred way to set the spec programmatically
    */
-  private parseCnDSpec(specString: string): void {
-    if (!specString) return;
+  public async setCnDSpec(spec: string): Promise<void> {
+    this.setAttribute('cnd-spec', spec);
+    await this.parseCnDSpec(spec);
+  }
 
+  /**
+   * Parse and apply a CnD specification
+   * This initializes the CnD pipeline (evaluator + LayoutInstance)
+   */
+  private async parseCnDSpec(specString: string): Promise<void> {
     try {
-      this.cndSpecString = specString;
+      console.log('[AlloyInputGraph] parseCnDSpec called with:', specString?.substring(0, 100));
+      this.cndSpecString = specString || '';
+      
+      // Initialize the CnD pipeline with the new spec
+      await this.initializeCnDPipeline(specString);
+      
+      // Enforce constraints and regenerate layout
+      await this.enforceConstraintsAndRegenerate();
       
       this.dispatchEvent(new CustomEvent('spec-loaded', { detail: { spec: specString } }));
-      
-      // Re-render with the new spec
-      this.refreshVisualization();
+      console.log('[AlloyInputGraph] CnD spec parsed and applied');
     } catch (error) {
-      console.error('Failed to parse CnD spec:', error);
+      console.error('[AlloyInputGraph] Failed to parse CnD spec:', error);
     }
   }
 
   /**
-   * Refresh the visualization
+   * Initialize the CnD pipeline (evaluator + LayoutInstance)
+   * This is called when the spec changes
    */
-  private async refreshVisualization(): Promise<void> {
+  private async initializeCnDPipeline(specString: string): Promise<void> {
     if (!this.dataInstance) {
-      console.warn('[AlloyInputGraph] refreshVisualization: no dataInstance');
+      console.log('[AlloyInputGraph] No data instance - pipeline not initialized');
       return;
     }
 
     try {
-      console.log('[AlloyInputGraph] refreshVisualization starting...');
-      console.log('[AlloyInputGraph] Current atoms in dataInstance:', this.dataInstance.getAtoms().map(a => a.id));
+      console.log('[AlloyInputGraph] Initializing CnD pipeline...');
       
-      // Generate the graph from the data instance
-      // Use false for hideDisconnected to ensure newly added atoms are visible
-      const graph = this.dataInstance.generateGraph(false, false);
-      console.log('[AlloyInputGraph] Generated graph:', {
-        nodeCount: graph.nodeCount(),
-        edgeCount: graph.edgeCount(),
-        nodes: graph.nodes(),
-        edges: graph.edges()
+      // Parse the layout spec
+      const layoutSpec = parseLayoutSpec(specString || 'constraints:\n');
+      console.log('[AlloyInputGraph] Layout spec parsed:', {
+        hasConstraints: !!layoutSpec.constraints,
+        orientationConstraints: layoutSpec.constraints?.orientation?.relative?.length || 0,
+        cyclicConstraints: layoutSpec.constraints?.orientation?.cyclic?.length || 0,
+        alignmentConstraints: layoutSpec.constraints?.alignment?.length || 0
       });
       
-      // Create and initialize evaluator for the current data instance
+      // Create and initialize the evaluator
       this.evaluator = new SGraphQueryEvaluator();
       this.evaluator.initialize({
         sourceData: this.dataInstance
       });
+      console.log('[AlloyInputGraph] Evaluator initialized');
       
-      // Parse layout spec (use empty if none provided)
-      const layoutSpec = parseLayoutSpec(this.cndSpecString || 'constraints:\n');
-      console.log('[AlloyInputGraph] Layout spec parsed');
-      
-      // Create layout instance (layoutSpec, evaluator, instanceNum)
+      // Create the LayoutInstance
       this.layoutInstance = new LayoutInstance(layoutSpec, this.evaluator, 0);
+      console.log('[AlloyInputGraph] LayoutInstance created');
       
-      // Generate the layout
+    } catch (error) {
+      console.error('[AlloyInputGraph] Failed to initialize CnD pipeline:', error);
+      this.evaluator = null;
+      this.layoutInstance = null;
+      throw error;
+    }
+  }
+
+  /**
+   * Enforce constraints and regenerate layout
+   * This is called on every data change and spec change
+   */
+  private async enforceConstraintsAndRegenerate(): Promise<void> {
+    if (!this.dataInstance) {
+      console.warn('[AlloyInputGraph] enforceConstraintsAndRegenerate: no dataInstance');
+      return;
+    }
+
+    try {
+      console.log('[AlloyInputGraph] enforceConstraintsAndRegenerate starting...');
+      console.log('[AlloyInputGraph] Current atoms:', this.dataInstance.getAtoms().map(a => a.id));
+      
+      // Re-initialize evaluator with current data to ensure consistency
+      if (this.evaluator) {
+        console.log('[AlloyInputGraph] Re-initializing evaluator with updated data...');
+        this.evaluator.initialize({
+          sourceData: this.dataInstance
+        });
+      } else {
+        // No evaluator - create one with empty spec
+        console.log('[AlloyInputGraph] No evaluator - initializing pipeline...');
+        await this.initializeCnDPipeline(this.cndSpecString);
+      }
+
+      if (!this.layoutInstance) {
+        console.warn('[AlloyInputGraph] No LayoutInstance - cannot enforce constraints');
+        // Fall back to basic rendering without constraints
+        await this.renderBasicLayout();
+        return;
+      }
+
+      // Generate the layout with constraint enforcement
+      console.log('[AlloyInputGraph] Generating layout with constraints...');
       const layoutResult = this.layoutInstance.generateLayout(this.dataInstance, {});
+      
       console.log('[AlloyInputGraph] Layout result:', {
         hasLayout: !!layoutResult.layout,
         hasError: !!layoutResult.error,
-        error: layoutResult.error
+        nodeCount: layoutResult.layout?.nodes?.length,
+        edgeCount: layoutResult.layout?.edges?.length
       });
-      
+
       if (layoutResult.error) {
-        console.warn('Layout generation had errors:', layoutResult.error);
+        console.warn('[AlloyInputGraph] Layout generation had errors:', layoutResult.error);
         this.currentConstraintError = layoutResult.error;
         this.dispatchEvent(new CustomEvent('constraint-error', { detail: { error: layoutResult.error } }));
       } else {
         this.currentConstraintError = null;
       }
-      
-      // Render the layout using the parent class method
+
+      // Render the layout
       if (layoutResult.layout) {
-        console.log('[AlloyInputGraph] Calling renderLayout with:', {
-          nodes: layoutResult.layout.nodes?.length,
-          edges: layoutResult.layout.edges?.length
-        });
         await this.renderLayout(layoutResult.layout);
-        console.log('[AlloyInputGraph] renderLayout completed');
+        console.log('[AlloyInputGraph] Layout rendered successfully');
       } else {
         console.warn('[AlloyInputGraph] No layout to render');
       }
-      
+
       this.dispatchEvent(new CustomEvent('layout-updated', { detail: {} }));
       
     } catch (error) {
-      console.error('Failed to refresh visualization:', error);
+      console.error('[AlloyInputGraph] Failed to enforce constraints:', error);
     }
+  }
+
+  /**
+   * Render a basic layout without constraints (fallback)
+   */
+  private async renderBasicLayout(): Promise<void> {
+    if (!this.dataInstance) return;
+
+    try {
+      // Create a temporary evaluator and layout instance
+      const tempEvaluator = new SGraphQueryEvaluator();
+      tempEvaluator.initialize({ sourceData: this.dataInstance });
+      
+      const layoutSpec = parseLayoutSpec('constraints:\n');
+      const tempLayoutInstance = new LayoutInstance(layoutSpec, tempEvaluator, 0);
+      
+      const layoutResult = tempLayoutInstance.generateLayout(this.dataInstance, {});
+      if (layoutResult.layout) {
+        await this.renderLayout(layoutResult.layout);
+      }
+    } catch (error) {
+      console.error('[AlloyInputGraph] Failed to render basic layout:', error);
+    }
+  }
+
+  /**
+   * Refresh the visualization (called when data changes)
+   * This method re-enforces constraints and regenerates the layout
+   */
+  private async refreshVisualization(): Promise<void> {
+    await this.enforceConstraintsAndRegenerate();
   }
 
   // ==================== Edge Event Handlers ====================
