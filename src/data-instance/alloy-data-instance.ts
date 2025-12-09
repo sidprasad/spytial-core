@@ -48,10 +48,13 @@ export class AlloyDataInstance implements IInputDataInstance {
    * Emit an event to all registered listeners
    */
   private emitEvent(event: DataInstanceEvent): void {
+    console.log(`[AlloyDataInstance] Emitting event: ${event.type}`, event.data);
     const listeners = this.eventListeners.get(event.type);
+    console.log(`[AlloyDataInstance] Found ${listeners?.size || 0} listeners for ${event.type}`);
     if (listeners) {
       listeners.forEach(listener => {
         try {
+          console.log(`[AlloyDataInstance] Calling listener for ${event.type}`);
           listener(event);
         } catch (error) {
           console.error('Error in data instance event listener:', error);

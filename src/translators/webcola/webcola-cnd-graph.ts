@@ -1235,7 +1235,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       //
       // Note: We manually compute node bounds in ensureNodeBounds() before edge routing,
       // so we don't need many iterations just for bounds computation.
-      const hasPriorPositions = options?.priorPositions && options.priorPositions.length > 0;
+      const hasPriorPositions = options?.priorPositions && options.priorPositions.length > 0 && !options?.forceReset;
       if (hasPriorPositions) {
         // Use minimal iterations to preserve prior positions:
         // - 0 unconstrained: don't let nodes drift from prior positions

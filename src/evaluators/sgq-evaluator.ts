@@ -229,6 +229,20 @@ export class SGraphQueryEvaluator implements IEvaluator {
 
 
     const id : IDataInstance = context.sourceData as IDataInstance;
+    
+    // Log data instance state at initialization
+    console.log('🔍 SGraphQueryEvaluator.initialize() - DataInstance state:', {
+      atoms: id.getAtoms().length,
+      atomIds: id.getAtoms().map(a => a.id),
+      relations: id.getRelations().length,
+      relationNames: id.getRelations().map(r => r.label),
+      // Sample a relation to see its tuples
+      sampleRelation: id.getRelations().length > 0 ? {
+        name: id.getRelations()[0].label,
+        tuples: id.getRelations()[0].tuples
+      } : null
+    });
+    
     this.eval = new SimpleGraphQueryEvaluator(id);
     //console.log("SimpleGraphQueryEvaluator initialized with context:", context);
     this.ready = true;

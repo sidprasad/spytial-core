@@ -88,6 +88,19 @@ export interface WebColaLayoutOptions {
    * @see WebColaCnDGraph.renderLayout for iteration adjustments
    */
   priorPositions?: NodePositionHint[];
+  
+  /**
+   * Force a complete layout reset, ignoring any existing positions.
+   * 
+   * When true, nodes will be positioned using DAGRE or random initial positions,
+   * and WebCola will use full iteration counts to satisfy all constraints.
+   * This is useful when data or constraints have changed significantly and
+   * you want to ensure a fresh layout that fully respects all constraints
+   * rather than preserving visual continuity.
+   * 
+   * This takes precedence over priorPositions if both are provided.
+   */
+  forceReset?: boolean;
 }
 
 // WebCola constraint types
@@ -159,8 +172,9 @@ export class WebColaLayout {
     this.instanceLayout = instanceLayout;
 
     // Build a map of prior positions for O(1) lookup
+    // If forceReset is true, ignore prior positions completely
     this.priorPositionMap = new Map();
-    if (options?.priorPositions) {
+    if (options?.priorPositions && !options?.forceReset) {
       for (const hint of options.priorPositions) {
         this.priorPositionMap.set(hint.id, hint);
       }

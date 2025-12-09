@@ -39,17 +39,17 @@ import { ConstraintError } from '../../layout/constraint-validator';
  *   * event.detail: { error: Error }
  */
 export class StructuredInputGraph extends WebColaCnDGraph {
-  private dataInstance!: IInputDataInstance;
-  private evaluator: SGraphQueryEvaluator | null = null;
-  private layoutInstance: LayoutInstance | null = null;
-  private cndSpecString: string = '';
-  private controlsContainer: HTMLDivElement | null = null;
-  private customTypes: Set<string> = new Set();
-  private relationAtomPositions: string[] = ['', '']; // Default to 2 positions
-  private currentConstraintError: ConstraintError | null = null; // Track current constraint validation error
+  protected dataInstance!: IInputDataInstance;
+  protected evaluator: SGraphQueryEvaluator | null = null;
+  protected layoutInstance: LayoutInstance | null = null;
+  protected cndSpecString: string = '';
+  protected controlsContainer: HTMLDivElement | null = null;
+  protected customTypes: Set<string> = new Set();
+  protected relationAtomPositions: string[] = ['', '']; // Default to 2 positions
+  protected currentConstraintError: ConstraintError | null = null; // Track current constraint validation error
   
   // Track event listeners to prevent duplicates
-  private dataInstanceEventHandlers = {
+  protected dataInstanceEventHandlers = {
     atomAdded: null as DataInstanceEventListener | null,
     atomRemoved: null as DataInstanceEventListener | null,
     relationTupleAdded: null as DataInstanceEventListener | null,
@@ -789,7 +789,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   /**
    * Parse CnD specification and initialize the full CnD pipeline
    */
-  private async parseCnDSpec(specString: string): Promise<void> {
+  protected async parseCnDSpec(specString: string): Promise<void> {
     try {
       console.log('🔄 Parsing CnD spec and initializing pipeline...');
       this.cndSpecString = specString;
@@ -818,7 +818,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   /**
    * Initialize the complete CnD pipeline with evaluator and layout instance
    */
-  private async initializeCnDPipeline(specString: string): Promise<void> {
+  protected async initializeCnDPipeline(specString: string): Promise<void> {
     if (!specString.trim()) {
       console.log('📝 Empty spec - clearing pipeline');
       this.evaluator = null;
@@ -862,8 +862,11 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * Enforce constraints and regenerate layout
    * This method validates constraints on every data update and reports UNSAT cores
    */
-  private async enforceConstraintsAndRegenerate(): Promise<void> {
+  protected async enforceConstraintsAndRegenerate(): Promise<void> {
     console.log('🔄 enforceConstraintsAndRegenerate() called');
+    console.log('🔄 this.layoutInstance:', this.layoutInstance);
+    console.log('🔄 this.evaluator:', this.evaluator);
+    console.log('🔄 this.cndSpecString:', this.cndSpecString?.substring(0, 50));
     
     try {
       if (!this.layoutInstance) {
@@ -928,7 +931,18 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       
       // Render the layout (which will include visual indicators for error nodes if present)
       console.log('🎨 Rendering layout...');
-      await this.renderLayout(layoutResult.layout);
+      console.log('🎨 Layout to render:', {
+        nodes: layoutResult.layout?.nodes?.length,
+        edges: layoutResult.layout?.edges?.length,
+        constraints: layoutResult.layout?.constraints?.length,
+        constraintDetails: layoutResult.layout?.constraints
+      });
+      
+      // Force a complete layout reset when data changes (no prior positions)
+      // This ensures constraints are fully enforced rather than preserving old positions
+      await this.renderLayout(layoutResult.layout, { 
+        forceReset: true 
+      });
       
       console.log('✅ Constraints enforced and layout regenerated successfully');
     } catch (error) {
@@ -945,14 +959,14 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   /**
    * Update the type selector based on current data instance
    */
-  private refreshTypesFromDataInstance(): void {
+  protected refreshTypesFromDataInstance(): void {
     this.updateTypeSelector();
   }
 
   /**
    * Get available atom types from the current data instance
    */
-  private getAvailableAtomTypes(): string[] {
+  protected getAvailableAtomTypes(): string[] {
     const atomTypes = new Set<string>();
 
     if (this.dataInstance) {
@@ -1064,8 +1078,9 @@ export class StructuredInputGraph extends WebColaCnDGraph {
 
   /**
    * Generate a unique atom ID
+   * Override in subclasses for different ID generation strategies
    */
-  private generateAtomId(type: string): string {
+  protected generateAtomId(type: string): string {
     if (!this.dataInstance) return `${type}-1`;
     
     const existingAtoms = this.dataInstance.getAtoms();
@@ -1084,8 +1099,9 @@ export class StructuredInputGraph extends WebColaCnDGraph {
 
   /**
    * Add an atom from the form inputs
+   * Override in subclasses for different atom creation behavior
    */
-  private async addAtomFromForm(type: string, label: string): Promise<void> {
+  protected async addAtomFromForm(type: string, label: string): Promise<void> {
     if (!type || !label) return;
 
     try {
@@ -1343,15 +1359,23 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     // ALL event handlers now trigger constraint validation to ensure constraints are
     // checked on every data change (additions, deletions, modifications)
     this.dataInstanceEventHandlers.atomAdded = async () => {
-      console.log('📍 Atom added to instance - updating UI and re-validating constraints');
-      this.handleDataChangeUIUpdate(true); // Include atom positions for atom additions
-      await this.enforceConstraintsAndRegenerate(); // Re-run constraint validation
+      try {
+        console.log('📍 Atom added to instance - updating UI and re-validating constraints');
+        this.handleDataChangeUIUpdate(true); // Include atom positions for atom additions
+        await this.enforceConstraintsAndRegenerate(); // Re-run constraint validation
+      } catch (e) {
+        console.error('❌ Error in atomAdded handler:', e);
+      }
     };
 
     this.dataInstanceEventHandlers.relationTupleAdded = async () => {
-      console.log('🔗 Relation added to instance - updating UI and re-validating constraints');
-      this.handleDataChangeUIUpdate(false); // No atom positions needed for relation additions
-      await this.enforceConstraintsAndRegenerate(); // Re-run constraint validation
+      try {
+        console.log('🔗 Relation added to instance - updating UI and re-validating constraints');
+        this.handleDataChangeUIUpdate(false); // No atom positions needed for relation additions
+        await this.enforceConstraintsAndRegenerate(); // Re-run constraint validation
+      } catch (e) {
+        console.error('❌ Error in relationTupleAdded handler:', e);
+      }
     };
 
     this.dataInstanceEventHandlers.atomRemoved = async () => {
@@ -1365,10 +1389,12 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     };
     
     // Add event listeners to the new instance
+    console.log('🔧 Adding event listeners to data instance:', instance);
     instance.addEventListener('atomAdded', this.dataInstanceEventHandlers.atomAdded);
     instance.addEventListener('relationTupleAdded', this.dataInstanceEventHandlers.relationTupleAdded);
     instance.addEventListener('atomRemoved', this.dataInstanceEventHandlers.atomRemoved);
     instance.addEventListener('relationTupleRemoved', this.dataInstanceEventHandlers.relationTupleRemoved);
+    console.log('✅ Event listeners added');
 
     // Initial update of deletion selects and atom positions
     this.updateDeletionSelects();

@@ -1229,6 +1229,8 @@ export class LayoutInstance {
 
             let selectorRes = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
             let selectedTuples: string[][] = selectorRes.selectedTwoples();
+            
+            console.log(`🔍 Constraint selector "${selector}" selected ${selectedTuples.length} tuples:`, selectedTuples);
 
             // For each tuple, we need to apply the constraints
             selectedTuples.forEach((tuple) => {
