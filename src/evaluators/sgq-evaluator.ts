@@ -235,10 +235,10 @@ export class SGraphQueryEvaluator implements IEvaluator {
       atoms: id.getAtoms().length,
       atomIds: id.getAtoms().map(a => a.id),
       relations: id.getRelations().length,
-      relationNames: id.getRelations().map(r => r.label),
+      relationNames: id.getRelations().map(r => r.name),
       // Sample a relation to see its tuples
       sampleRelation: id.getRelations().length > 0 ? {
-        name: id.getRelations()[0].label,
+        name: id.getRelations()[0].name,
         tuples: id.getRelations()[0].tuples
       } : null
     });
