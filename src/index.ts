@@ -29,6 +29,20 @@ export { StructuredInputGraph } from './translators';
 export type { ParsedCnDSpec, NodePositionHint, WebColaLayoutOptions } from './translators';
 export { SGraphQueryEvaluator } from "./evaluators/sgq-evaluator";
 
+// Selector synthesis API (requires SGraphQueryEvaluator)
+export { 
+  synthesizeAtomSelector,
+  synthesizeBinarySelector,
+  synthesizeAtomSelectorWithExplanation,
+  synthesizeBinarySelectorWithExplanation,
+  createOrientationConstraint,
+  createAlignmentConstraint,
+  createColorDirective,
+  SelectorSynthesisError,
+  isSynthesisSupported
+} from './synthesis/selector-synthesizer';
+export type { SynthesisWhy } from 'simple-graph-query';
+
 // Browser-specific exports and initialization
 if (typeof window !== 'undefined') {
   // Import and register WebCola custom element for browser environments
