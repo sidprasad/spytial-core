@@ -1790,7 +1790,26 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       return;
     }
 
-    const relationName = edgeData.label || edgeData.relName || '';
+    // Extract relation name from edge data
+    // Priority: 1) label, 2) relName, 3) parse from edge ID format "source:relationName:source->target"
+    let relationName = edgeData.label || edgeData.relName || '';
+    
+    if (!relationName && edgeData.id) {
+      // Try to parse from edge ID format: "source:relationName:source->target"
+      const parts = edgeData.id.split(':');
+      if (parts.length >= 2) {
+        relationName = parts[1]; // The relation name is the second part
+      }
+    }
+    
+    console.log('🔍 Edge deletion details:', {
+      edgeId: edgeData.id,
+      edgeLabel: edgeData.label,
+      edgeRelName: edgeData.relName,
+      extractedRelationName: relationName,
+      sourceNodeId: sourceNode.id,
+      targetNodeId: targetNode.id
+    });
     
     if (!relationName.trim()) {
       console.warn('Edge has no relation name, cannot delete from data instance');

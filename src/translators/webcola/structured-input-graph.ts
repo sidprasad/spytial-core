@@ -716,8 +716,14 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       if (!newRelationId || newRelationId.trim() === '') {
         console.log('🗑️ Deleting edge (empty new relation name)');
         if (oldRelationId && oldRelationId.trim()) {
-          this.dataInstance.removeRelationTuple(oldRelationId, tuple);
-          console.log(`✅ Removed relation tuple from ${oldRelationId}`);
+          try {
+            this.dataInstance.removeRelationTuple(oldRelationId, tuple);
+            console.log(`✅ Removed relation tuple from ${oldRelationId}`);
+          } catch (error) {
+            // Relation may not exist in data instance (e.g., constraint-generated edge)
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            console.log(`⚠️ Could not remove edge from data instance: ${errorMsg} (may be constraint-generated)`);
+          }
         }
       }
       // If the names are the same, no change needed

@@ -574,6 +574,7 @@ export class AlloyInputGraph extends StructuredInputGraph {
    * Notify all subscribers of instance changes
    */
   private notifyInstanceChange(): void {
+    console.log(`[AlloyInputGraph] notifyInstanceChange called - ${this.instanceChangeCallbacks.size} subscribers`);
     this.instanceChangeCallbacks.forEach(cb => {
       try {
         cb();

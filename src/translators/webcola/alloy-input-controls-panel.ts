@@ -516,6 +516,7 @@ export class AlloyInputControlsPanel {
    * Refresh the UI (called when instance changes)
    */
   private refreshUI(): void {
+    console.log('[AlloyInputControlsPanel] refreshUI called - updating all options');
     // Re-render sections that depend on current instance state
     this.updateAtomTypeOptions();
     this.updateAtomOptions();
