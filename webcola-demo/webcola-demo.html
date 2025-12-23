@@ -214,6 +214,9 @@
         let parsedAlloyDatum = null;       // Cached parsed Alloy datum
         let cachedForgeEvaluator = null;   // Cached ForgeEvaluator
         let cachedLayoutSpec = null;       // Cached layout specification
+        
+        // Projection state (maps type to selected atom)
+        window.currentProjections = {};
 
         /**
          * Get current Alloy XML from input field
@@ -382,6 +385,7 @@
             // Step 5: Generate layout using Alloy data instance
             updateStatus('Generating layout with Alloy data...', 'info');
             const projections = window.currentProjections || {};
+            console.log('Using projections:', projections);
 
             try {
                 const layoutResult = layoutInstance.generateLayout(alloyDataInstance, projections);
@@ -389,7 +393,10 @@
 
                 // Update projection controls with projection data
                 if (window.updateProjectionData && layoutResult.projectionData) {
+                    console.log('Updating projection data:', layoutResult.projectionData);
                     window.updateProjectionData(layoutResult.projectionData);
+                } else if (layoutResult.projectionData && layoutResult.projectionData.length > 0) {
+                    console.warn('Projection data available but updateProjectionData function not found. Projection controls may not display correctly.');
                 }
 
                 if (layoutResult.error) {
@@ -420,6 +427,8 @@
                     const webcolaGraphElement = document.getElementById('graph-container');
                     webcolaGraphElement.setAttribute('unsat', "");
 
+                    // Note: We still set currentInstanceLayout even with error, so visualization can show UNSAT state
+                    // The error is already displayed, no need to throw
                     return;
                 }
             } catch (error) {
@@ -552,7 +561,9 @@
                     }
                     
                     if (!currentInstanceLayout) {
-                        throw new Error('Failed to generate layout data from Alloy');
+                        // Layout generation failed - error already displayed by generateLayoutForCurrentInstance
+                        console.warn('No layout data available to render (likely due to constraint errors)');
+                        return;
                     }
                 }
 
@@ -779,7 +790,7 @@
             // Regenerate layout with new projections
             if (currentInstanceIndex >= 0 && currentInstanceIndex < alloyInstances.length) {
                 generateLayoutForCurrentInstance()
-                    .then(() => renderLayout())
+                    .then(() => renderGraph())
                     .catch(error => {
                         console.error('Error regenerating layout with new projection:', error);
                         updateStatus(`Layout regeneration error: ${error.message}`, 'error');
