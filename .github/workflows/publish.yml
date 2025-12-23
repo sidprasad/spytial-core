@@ -23,4 +23,4 @@ jobs:
       - run: npm run clean
       - run: npm run build:all
 
-      - run: npm publish --provenance --access public
+      - run: npm publish --access public
