@@ -6,4 +6,5 @@ export * from './src/relation';
 export * from './src/tuple';
 export * from './src/type';
 export * from './src/util';
+export * from './src/validation';
 export * from './src/xml';
