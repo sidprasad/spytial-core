@@ -13,11 +13,12 @@ import { ConstraintError } from '../../layout/constraint-validator';
  * 
  * Features:
  * - All WebColaCnDGraph functionality (edge creation, visualization, etc.)
- * - Block-based structured input interface
+ * - Modern, intuitive data editor interface with visual icons and better organization
  * - Auto-generated unique atom IDs with user-provided labels
  * - Full CnD pipeline integration (data instance, evaluator, layout instance)
  * - Constraint enforcement on data changes
- * - IDataInstance JSON export
+ * - Data export using the data instance's reify() method (supports JSON, Pyret, Alloy, etc.)
+ * - Enhanced edge endpoint markers (amber square for source, red triangle for target)
  * 
  * Attributes:
  * - cnd-spec: CnD specification string (YAML/JSON)
@@ -27,8 +28,8 @@ import { ConstraintError } from '../../layout/constraint-validator';
  * Events Fired (in addition to WebColaCnDGraph events):
  * - 'atom-added': When a new atom is added via structured input
  *   * event.detail: { atom: IAtom }
- * - 'data-exported': When data is exported
- *   * event.detail: { data: string, format: 'json' }
+ * - 'data-exported': When data is exported using reify()
+ *   * event.detail: { data: string, format: 'json' | 'text', reified: unknown }
  * - 'spec-loaded': When CnD spec is successfully loaded
  *   * event.detail: { spec: string }
  * - 'constraint-error': When constraints cannot be satisfied (UNSAT core detected)
@@ -145,73 +146,107 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     return `
       <div class="structured-input-panel">
         <div class="panel-header">
-          <h3>Structured Input</h3>
-          <button class="toggle-panel" aria-label="Toggle panel">▲</button>
+          <h3>Data Editor</h3>
+          <button class="toggle-panel" aria-label="Toggle panel">▼</button>
         </div>
         <div class="panel-content">
-          <div class="atom-creation-section">
-            <h4>Add Atoms</h4>
-            <div class="atom-form">
-              <select class="atom-type-select" aria-label="Select atom type">
-                <option value="">Select type...</option>
-              </select>
-              <textarea class="custom-type-input" placeholder="Or enter custom type name..."></textarea>
-              <input type="text" class="atom-label-input" placeholder="Enter label..." aria-label="Atom label">
-              <button class="add-atom-btn" disabled>Add Atom</button>
+          <div class="atom-creation-section section-card">
+            <div class="section-header" data-section="atoms">
+              <h4>Atoms</h4>
+              <button class="section-toggle" aria-label="Toggle section">▼</button>
             </div>
-            <div class="type-info">
-              <small>ID will be auto-generated</small>
+            <div class="section-content">
+              <div class="atom-form">
+                <div class="form-group">
+                  <label class="form-label">Type</label>
+                  <select class="atom-type-select form-control" aria-label="Select atom type">
+                    <option value="">Select type...</option>
+                  </select>
+                  <span class="label-divider">or</span>
+                  <textarea class="custom-type-input form-control" placeholder="Enter custom type..."></textarea>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Label</label>
+                  <input type="text" class="atom-label-input form-control" placeholder="Enter label..." aria-label="Atom label">
+                  <small class="form-hint">ID will be auto-generated</small>
+                </div>
+                <button class="add-atom-btn btn-primary" disabled>Add Atom</button>
+              </div>
             </div>
           </div>
           
-          <div class="relation-creation-section">
-            <h4>Create Relations</h4>
-            <div class="relation-form">
-              <input type="text" class="relation-type-input" placeholder="Relation type (e.g., friend, knows, parent)" />
-              <div class="relation-atoms">
-                <div style="font-size: 0.9em; color: #666; margin-bottom: 8px;">
-                  Atoms (arity: <span class="arity-display">2</span>):
+          <div class="relation-creation-section section-card">
+            <div class="section-header" data-section="relations">
+              <h4>Relations</h4>
+              <button class="section-toggle" aria-label="Toggle section">▼</button>
+            </div>
+            <div class="section-content">
+              <div class="relation-form">
+                <div class="form-group">
+                  <label class="form-label">Relation Name</label>
+                  <input type="text" class="relation-type-input form-control" placeholder="e.g., friend, knows, parent" />
                 </div>
-                <div class="atom-positions"></div>
-                <div class="arity-controls">
-                  <button type="button" class="add-position-btn">+ Add Position</button>
-                  <button type="button" class="remove-position-btn">- Remove Position</button>
+                <div class="relation-atoms">
+                  <label class="form-label">Atoms (Arity: <span class="arity-display">2</span>)</label>
+                  <div class="atom-positions"></div>
+                  <div class="arity-controls">
+                    <button type="button" class="add-position-btn btn-sm">+ Add Position</button>
+                    <button type="button" class="remove-position-btn btn-sm">- Remove Position</button>
+                  </div>
+                </div>
+                <button class="add-relation-btn btn-primary" disabled>Create Relation</button>
+              </div>
+            </div>
+          </div>
+          
+          <div class="deletion-section section-card">
+            <div class="section-header" data-section="delete">
+              <h4>Delete</h4>
+              <button class="section-toggle" aria-label="Toggle section">▼</button>
+            </div>
+            <div class="section-content">
+              <div class="deletion-controls">
+                <div class="form-group">
+                  <label class="form-label">Delete Atom</label>
+                  <select class="atom-delete-select form-control" aria-label="Select atom to delete">
+                    <option value="">Select atom...</option>
+                  </select>
+                  <button class="delete-atom-btn btn-danger" disabled>Delete Atom</button>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Delete Relation</label>
+                  <select class="relation-delete-select form-control" aria-label="Select relation to delete">
+                    <option value="">Select relation...</option>
+                  </select>
+                  <button class="delete-relation-btn btn-danger" disabled>Delete Relation</button>
                 </div>
               </div>
-              <button class="add-relation-btn" disabled>Add Relation</button>
+              <div class="bulk-delete">
+                <button class="clear-all-btn btn-danger-outline">Clear All Data</button>
             </div>
           </div>
           
-          <div class="deletion-section">
-            <h4>Delete Items</h4>
-            <div class="deletion-controls">
-              <select class="atom-delete-select" aria-label="Select atom to delete">
-                <option value="">Select atom to delete...</option>
-              </select>
-              <button class="delete-atom-btn" disabled>Delete Atom</button>
+          <div class="export-section section-card">
+            <div class="section-header" data-section="export">
+              <h4>Export</h4>
+              <button class="section-toggle" aria-label="Toggle section">▼</button>
             </div>
-            <div class="deletion-controls">
-              <select class="relation-delete-select" aria-label="Select relation to delete">
-                <option value="">Select relation to delete...</option>
-              </select>
-              <button class="delete-relation-btn" disabled>Delete Relation</button>
-            </div>
-            <div class="bulk-delete">
-              <button class="clear-all-btn">Clear All Items</button>
+            <div class="section-content">
+              <button class="export-json-btn btn-secondary">Export (Reify)</button>
+              <textarea class="export-output" readonly placeholder="Exported data will appear here..."></textarea>
             </div>
           </div>
           
-          <div class="export-section">
-            <h4>Export Data</h4>
-            <button class="export-json-btn">Export as JSON</button>
-            <textarea class="export-output" readonly placeholder="Exported data will appear here..."></textarea>
-          </div>
-          
-          <div class="spec-info-section">
-            <h4>Spec Information</h4>
-            <div class="spec-details">
-              <div class="spec-status">No spec loaded</div>
-              <div class="type-list"></div>
+          <div class="spec-info-section section-card">
+            <div class="section-header" data-section="spec">
+              <h4>Spec Info</h4>
+              <button class="section-toggle" aria-label="Toggle section">▼</button>
+            </div>
+            <div class="section-content">
+              <div class="spec-details">
+                <div class="spec-status">No spec loaded</div>
+                <div class="type-list"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -226,25 +261,26 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     return `
       .structured-input-controls {
         position: absolute;
-        top: 10px;
-        right: 10px;
-        width: 300px;
-        background: white;
-        border: 2px solid #007acc;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        top: 12px;
+        right: 12px;
+        width: 320px;
+        background: #ffffff;
+        border: 1px solid #d0d7de;
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         z-index: 1000;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+        overflow: hidden;
       }
 
       .panel-header {
-        background: #007acc;
+        background: #0078d4;
         color: white;
-        padding: 12px;
-        border-radius: 6px 6px 0 0;
+        padding: 10px 12px;
         display: flex;
         justify-content: space-between;
         align-items: center;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
       }
 
       .panel-header h3 {
@@ -253,143 +289,271 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         font-weight: 600;
       }
 
-      .toggle-panel {
-        background: none;
+      .toggle-panel, .section-toggle {
+        background: rgba(255,255,255,0.2);
         border: none;
         color: white;
         cursor: pointer;
         font-size: 12px;
-        padding: 4px;
+        padding: 4px 8px;
         border-radius: 3px;
+        transition: background 0.2s ease;
       }
 
-      .toggle-panel:hover {
-        background: rgba(255,255,255,0.2);
+      .toggle-panel:hover, .section-toggle:hover {
+        background: rgba(255,255,255,0.3);
       }
 
       .panel-content {
         padding: 12px;
-        max-height: 400px;
+        max-height: 600px;
         overflow-y: auto;
+        overflow-x: hidden;
+      }
+
+      .panel-content::-webkit-scrollbar {
+        width: 8px;
+      }
+
+      .panel-content::-webkit-scrollbar-track {
+        background: #f5f5f5;
+      }
+
+      .panel-content::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 4px;
+      }
+
+      .panel-content::-webkit-scrollbar-thumb:hover {
+        background: #a8a8a8;
       }
 
       .panel-content.collapsed {
         display: none;
       }
 
-      .atom-creation-section, .relation-creation-section, .deletion-section, .export-section, .spec-info-section {
-        margin-bottom: 16px;
-        padding-bottom: 12px;
-        border-bottom: 1px solid #eee;
+      .section-card {
+        background: #fafbfc;
+        border: 1px solid #d0d7de;
+        border-radius: 4px;
+        padding: 0;
+        margin-bottom: 10px;
       }
 
-      .atom-creation-section:last-child, .deletion-section:last-child, .export-section:last-child, .spec-info-section:last-child {
-        border-bottom: none;
+      .section-card:last-child {
         margin-bottom: 0;
       }
 
-      h4 {
-        margin: 0 0 8px 0;
-        font-size: 12px;
-        font-weight: 600;
-        color: #333;
+      .section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 10px;
+        background: #f6f8fa;
+        border-bottom: 1px solid #d0d7de;
+        cursor: pointer;
+        user-select: none;
       }
 
-      .atom-form {
+      .section-header:hover {
+        background: #eef2f5;
+      }
+
+      .section-toggle {
+        background: transparent;
+        color: #57606a;
+        font-size: 10px;
+        padding: 2px 6px;
+      }
+
+      .section-toggle:hover {
+        background: rgba(0,0,0,0.05);
+      }
+
+      .section-content {
+        padding: 12px;
+      }
+
+      .section-content.collapsed {
+        display: none;
+      }
+
+      h4 {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 600;
+        color: #24292e;
+      }
+
+      .atom-form, .relation-form {
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: 10px;
       }
 
-      .atom-type-select, .atom-label-input, .relation-type-input, .atom-delete-select, .relation-delete-select, .custom-type-input {
+      .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .form-label {
+        font-size: 11px;
+        font-weight: 600;
+        color: #57606a;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+      }
+
+      .label-divider {
+        text-align: center;
+        color: #8b949e;
+        font-size: 10px;
+        font-weight: 500;
+        margin: 2px 0;
+      }
+
+      .form-control {
         padding: 6px 8px;
-        border: 1px solid #ddd;
+        border: 1px solid #d0d7de;
         border-radius: 4px;
         font-size: 12px;
+        background: white;
+        transition: border-color 0.15s ease;
+      }
+
+      .form-control:focus {
+        outline: none;
+        border-color: #0078d4;
+        box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.1);
       }
 
       .custom-type-input {
         resize: vertical;
         min-height: 60px;
-        font-family: inherit;
+        font-family: 'SF Mono', Monaco, 'Consolas', 'Courier New', monospace;
+        font-size: 11px;
+        line-height: 1.4;
       }
 
-      .add-atom-btn, .add-relation-btn, .delete-atom-btn, .delete-relation-btn, .clear-all-btn, .export-json-btn {
-        padding: 6px 12px;
-        background: #007acc;
-        color: white;
+      .form-hint {
+        font-size: 10px;
+        color: #8b949e;
+        font-style: italic;
+      }
+
+      .btn-primary, .btn-secondary, .btn-danger, .btn-danger-outline {
+        padding: 7px 12px;
         border: none;
         border-radius: 4px;
         cursor: pointer;
         font-size: 12px;
         font-weight: 500;
+        transition: background-color 0.15s ease;
+        width: 100%;
       }
 
-      .delete-atom-btn, .delete-relation-btn, .clear-all-btn {
+      .btn-primary {
+        background: #0078d4;
+        color: white;
+      }
+
+      .btn-primary:hover:not(:disabled) {
+        background: #106ebe;
+      }
+
+      .btn-secondary {
+        background: #6c757d;
+        color: white;
+      }
+
+      .btn-secondary:hover {
+        background: #5a6268;
+      }
+
+      .btn-danger {
         background: #dc3545;
+        color: white;
       }
 
-      .delete-atom-btn:hover, .delete-relation-btn:hover, .clear-all-btn:hover {
+      .btn-danger:hover:not(:disabled) {
         background: #c82333;
       }
 
-      .add-atom-btn:disabled, .add-relation-btn:disabled, .delete-atom-btn:disabled, .delete-relation-btn:disabled {
-        background: #ccc;
+      .btn-danger-outline {
+        background: white;
+        color: #dc3545;
+        border: 1px solid #dc3545;
+      }
+
+      .btn-danger-outline:hover {
+        background: #dc3545;
+        color: white;
+      }
+
+      .btn-primary:disabled, .btn-danger:disabled {
+        background: #e9ecef;
+        color: #adb5bd;
         cursor: not-allowed;
       }
 
-      .add-atom-btn:hover:not(:disabled), .add-relation-btn:hover:not(:disabled), .export-json-btn:hover {
-        background: #005fa3;
+      .btn-sm {
+        padding: 5px 10px;
+        font-size: 11px;
+        border-radius: 3px;
+        border: 1px solid #d0d7de;
+        background: white;
+        cursor: pointer;
+        font-weight: 400;
+        transition: background-color 0.15s ease;
       }
 
-      .relation-form {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
+      .btn-sm:hover:not(:disabled) {
+        background: #f6f8fa;
+        border-color: #0078d4;
       }
 
       .atom-selector {
         margin-top: 8px;
       }
 
-      .atom-selector label {
-        display: block;
-        font-size: 11px;
-        font-weight: 500;
-        margin-bottom: 4px;
-        color: #555;
-      }
-
       .atom-checkboxes {
-        max-height: 100px;
+        max-height: 120px;
         overflow-y: auto;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        padding: 6px;
-        background: #fafafa;
+        border: 1px solid #d0d7de;
+        border-radius: 6px;
+        padding: 8px;
+        background: white;
       }
 
       .atom-checkbox-item {
         display: flex;
         align-items: center;
-        gap: 6px;
-        padding: 2px 0;
-        font-size: 11px;
+        gap: 8px;
+        padding: 4px 0;
+        font-size: 12px;
       }
 
       .atom-checkbox-item input[type="checkbox"] {
         margin: 0;
+        width: 16px;
+        height: 16px;
       }
 
       .relation-atoms {
-        margin-top: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
       }
 
       .atom-positions {
         display: flex;
         flex-direction: column;
         gap: 8px;
-        margin-bottom: 8px;
+        padding: 8px;
+        background: white;
+        border: 1px solid #d0d7de;
+        border-radius: 4px;
       }
 
       .atom-position {
@@ -399,79 +563,69 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       }
 
       .atom-position label {
-        font-size: 11px;
-        font-weight: 500;
-        color: #555;
+        font-size: 10px;
+        font-weight: 600;
+        color: #57606a;
       }
 
       .atom-position select {
-        padding: 4px 6px;
-        border: 1px solid #ddd;
-        border-radius: 4px;
+        padding: 5px 8px;
+        border: 1px solid #d0d7de;
+        border-radius: 3px;
         font-size: 11px;
+        background: white;
       }
 
       .arity-controls {
         display: flex;
-        gap: 8px;
-        margin-bottom: 8px;
+        gap: 6px;
       }
 
-      .add-position-btn, .remove-position-btn {
-        padding: 4px 8px;
-        font-size: 10px;
-        border: 1px solid #ddd;
-        border-radius: 3px;
-        background: #f8f9fa;
-        cursor: pointer;
-      }
-
-      .add-position-btn:hover, .remove-position-btn:hover {
-        background: #e9ecef;
-      }
-
-      .remove-position-btn:disabled {
-        background: #f8f9fa;
-        color: #6c757d;
-        cursor: not-allowed;
+      .arity-display {
+        font-weight: 700;
+        color: #0078d4;
       }
 
       .deletion-controls {
         display: flex;
         flex-direction: column;
-        gap: 8px;
-        margin-bottom: 12px;
+        gap: 10px;
       }
 
       .bulk-delete {
-        border-top: 1px solid #eee;
-        padding-top: 8px;
-      }
-
-      .type-info {
-        color: #666;
-        font-size: 10px;
+        border-top: 1px solid #d0d7de;
+        padding-top: 10px;
+        margin-top: 4px;
       }
 
       .export-output {
         width: 100%;
-        height: 60px;
+        height: 100px;
         margin-top: 8px;
-        padding: 6px;
-        border: 1px solid #ddd;
+        padding: 8px;
+        border: 1px solid #d0d7de;
         border-radius: 4px;
-        font-family: 'Courier New', monospace;
+        font-family: 'SF Mono', Monaco, 'Consolas', 'Courier New', monospace;
         font-size: 10px;
+        line-height: 1.4;
         resize: vertical;
-        background: #f8f9fa;
+        background: #f6f8fa;
+        color: #24292e;
+      }
+
+      .export-output:focus {
+        outline: none;
+        border-color: #0078d4;
+        box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.1);
       }
 
       .spec-status {
         font-size: 11px;
-        padding: 4px 8px;
+        padding: 6px 8px;
         border-radius: 3px;
-        background: #f0f0f0;
-        border: 1px solid #ddd;
+        background: #f6f8fa;
+        border: 1px solid #d0d7de;
+        font-weight: 500;
       }
 
       .spec-status.loaded {
@@ -488,16 +642,19 @@ export class StructuredInputGraph extends WebColaCnDGraph {
 
       .type-list {
         margin-top: 8px;
-        font-size: 10px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
       }
 
       .type-item {
-        display: inline-block;
-        background: #e9ecef;
-        padding: 2px 6px;
-        margin: 2px;
+        background: #e7f3ff;
+        color: #0969da;
+        padding: 3px 8px;
         border-radius: 3px;
-        border: 1px solid #ced4da;
+        font-size: 10px;
+        font-weight: 500;
+        border: 1px solid #b6d7f0;
       }
     `;
   }
@@ -516,6 +673,33 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       const isCollapsed = panelContent.classList.contains('collapsed');
       panelContent.classList.toggle('collapsed');
       toggleBtn.textContent = isCollapsed ? '▲' : '▼';
+    });
+
+    // Toggle individual sections
+    const sectionHeaders = this.controlsContainer.querySelectorAll('.section-header');
+    sectionHeaders.forEach(header => {
+      const toggleBtn = header.querySelector('.section-toggle') as HTMLButtonElement;
+      const sectionCard = header.closest('.section-card') as HTMLElement;
+      const sectionContent = sectionCard?.querySelector('.section-content') as HTMLElement;
+      
+      if (toggleBtn && sectionContent) {
+        header.addEventListener('click', (e) => {
+          // Don't toggle if clicking on the toggle button itself (it has its own handler)
+          if (e.target === toggleBtn) return;
+          
+          const isCollapsed = sectionContent.classList.contains('collapsed');
+          sectionContent.classList.toggle('collapsed');
+          toggleBtn.textContent = isCollapsed ? '▲' : '▼';
+        });
+        
+        // Also allow clicking the toggle button directly
+        toggleBtn.addEventListener('click', (e) => {
+          e.stopPropagation(); // Prevent header click
+          const isCollapsed = sectionContent.classList.contains('collapsed');
+          sectionContent.classList.toggle('collapsed');
+          toggleBtn.textContent = isCollapsed ? '▲' : '▼';
+        });
+      }
     });
 
     // Atom creation
@@ -1259,31 +1443,37 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   }
 
   /**
-   * Export current data as JSON
+   * Export current data using the data instance's reify method
    */
   private exportDataAsJSON(): void {
     try {
-      console.log('📤 Exporting data instance as JSON...');
+      console.log('📤 Exporting data instance using reify()...');
       
-      const data = {
-        atoms: this.dataInstance.getAtoms(),
-        relations: this.dataInstance.getRelations()
-      };
-
-      const jsonString = JSON.stringify(data, null, 2);
+      // Use the data instance's reify method to get the proper format
+      const reified = this.dataInstance.reify();
+      
+      // Convert to string - if it's already a string (like Pyret or Alloy), use as-is
+      // If it's an object (like JSON), stringify it
+      const exportString = typeof reified === 'string' 
+        ? reified 
+        : JSON.stringify(reified, null, 2);
       
       // Update export output
       const exportOutput = this.controlsContainer?.querySelector('.export-output') as HTMLTextAreaElement;
       if (exportOutput) {
-        exportOutput.value = jsonString;
+        exportOutput.value = exportString;
       }
 
-      // Dispatch event
+      // Dispatch event with the reified data
       this.dispatchEvent(new CustomEvent('data-exported', {
-        detail: { data: jsonString, format: 'json' }
+        detail: { 
+          data: exportString, 
+          format: typeof reified === 'string' ? 'text' : 'json',
+          reified: reified 
+        }
       }));
 
-      console.log('✅ Data exported as JSON');
+      console.log('✅ Data exported using reify()');
     } catch (error) {
       console.error('❌ Failed to export data:', error);
     }
