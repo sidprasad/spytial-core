@@ -1578,13 +1578,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private setupEdgeEndpointMarkers(
     linkGroups: d3.Selection<SVGGElement, any, any, unknown>
   ): void {
-    // Add target endpoint marker (at the arrow end) - using triangle shape pointing right
+    // Add target endpoint marker (at the arrow end)
     linkGroups
       .filter((d: any) => !this.isAlignmentEdge(d))
-      .append("path")
+      .append("circle")
       .attr("class", "edge-endpoint-marker target-marker")
-      .attr("d", "M -6,-6 L 6,0 L -6,6 Z") // Triangle pointing right
-      .attr("fill", "#dc3545") // Red for target
+      .attr("r", 8)
+      .attr("fill", "#007bff")
       .attr("stroke", "white")
       .attr("stroke-width", 2)
       .attr("opacity", 0) // Hidden by default
@@ -1597,16 +1597,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           .on('end', (d: EdgeWithMetadata) => this.endEdgeEndpointDrag(d, 'target'))
       );
 
-    // Add source endpoint marker (at the start) - using square shape
+    // Add source endpoint marker (at the start, for bidirectional edges or moving the source)
     linkGroups
       .filter((d: any) => !this.isAlignmentEdge(d))
-      .append("rect")
+      .append("circle")
       .attr("class", "edge-endpoint-marker source-marker")
-      .attr("x", -6)
-      .attr("y", -6)
-      .attr("width", 12)
-      .attr("height", 12)
-      .attr("fill", "#ffc107") // Amber/yellow for source
+      .attr("r", 8)
+      .attr("fill", "#28a745")
       .attr("stroke", "white")
       .attr("stroke-width", 2)
       .attr("opacity", 0) // Hidden by default
