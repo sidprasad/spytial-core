@@ -127,11 +127,12 @@
         <div class="demo-instructions">
             <h4>Instructions:</h4>
             <ul>
-                <li><strong>Add Atoms:</strong> Use the "Atoms" section in the data editor panel (right side) to add nodes</li>
+                <li><strong>Paste Alloy Instance:</strong> Use the textarea below to paste Forge/Alloy instance data</li>
+                <li><strong>Add Atoms:</strong> Or use the "Atoms" section in the data editor panel (right side) to add nodes manually</li>
                 <li><strong>Create Relations:</strong> Use the "Relations" section to create edges, or Cmd/Ctrl+drag between nodes</li>
                 <li><strong>Collapsible Sections:</strong> Click on any section header to collapse/expand it</li>
                 <li><strong>Export Data:</strong> Use the "Export" section to reify data in the appropriate format</li>
-                <li><strong>Load Specs:</strong> Enter a CnD specification below to define node/edge types and constraints</li>
+                <li><strong>Load Specs:</strong> Enter a CnD specification to define constraints (automatically enforced)</li>
             </ul>
         </div>
 
@@ -140,10 +141,11 @@
             <ul>
                 <li><strong>Navigable UI:</strong> Collapsible sections for better organization</li>
                 <li><strong>No Emojis:</strong> Clean, professional interface without distracting icons</li>
-                <li><strong>Constraint Validation:</strong> Real-time validation with UNSAT core reporting</li>
-                <li><strong>Smart Export:</strong> Uses data instance's <code>reify()</code> method (JSON, Pyret, Alloy, etc.)</li>
+                <li><strong>Automatic Constraint Enforcement:</strong> CnD spec is always enforced on every data change</li>
+                <li><strong>Real-time Validation:</strong> UNSAT core reporting when constraints cannot be satisfied</li>
+                <li><strong>Smart Export:</strong> Uses data instance's <code>reify()</code> method (Alloy, Pyret, JSON, etc.)</li>
                 <li><strong>Enhanced Endpoint Markers:</strong> Amber square for source, red triangle for target</li>
-                <li><strong>Auto-generated IDs:</strong> Type-based unique identifiers with user-provided labels</li>
+                <li><strong>Alloy Data Support:</strong> Paste Forge/Alloy instances directly</li>
             </ul>
         </div>
     </div>
@@ -153,31 +155,43 @@
             <h3>Demo Controls</h3>
             
             <div>
-                <h4>Load CnD Specification (Optional):</h4>
+                <h4>Paste Alloy Instance Data:</h4>
+                <textarea id="instance-input" class="spec-input" placeholder="Paste your Alloy/Forge instance here...
+
+Example:
+inst {
+  Person = {Person0, Person1}
+  name = {(Person0, &quot;Alice&quot;), (Person1, &quot;Bob&quot;)}
+  friend = {(Person0, Person1)}
+}"></textarea>
+                <div style="margin-top: 10px;">
+                    <button onclick="loadInstanceData()">Load Instance</button>
+                    <button onclick="clearGraph()">Clear Graph</button>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <h4>Load CnD Specification (Optional, but recommended):</h4>
+                <p style="font-size: 0.9em; color: #666; margin: 5px 0;">
+                    The CnD spec will be <strong>automatically enforced</strong> on all data changes (atoms, relations, etc.)
+                </p>
                 <textarea id="spec-input" class="spec-input" placeholder="Enter your CnD specification here (YAML format)...
 
 Example:
 nodes:
   - { id: 'Person', type: 'Person', color: '#FF6B35', size: 20 }
-  - { id: 'Company', type: 'Company', color: '#4CAF50', size: 18 }
 edges:
-  - { id: 'worksAt', type: 'worksAt', color: '#E91E63', width: 3 }
-  - { id: 'knows', type: 'knows', color: '#2196F3', width: 2 }
-constraints: []
-directives:
-  - type: 'hideDisconnected'
-    value: false"></textarea>
+  - { id: 'friend', type: 'friend', color: '#E91E63', width: 3 }
+constraints: []"></textarea>
                 <div style="margin-top: 10px;">
                     <button onclick="loadCustomSpec()">Load Spec</button>
-                    <button onclick="clearGraph()">Clear Graph</button>
-                    <button onclick="toggleInputMode()">Toggle Input Mode</button>
                 </div>
             </div>
 
             <div id="status" class="status" style="display: none;"></div>
             
-            <h4>Current CnD Specification:</h4>
-            <div id="spec-display" class="spec-display">No spec loaded - using empty graph</div>
+            <h4>Current Status:</h4>
+            <div id="spec-display" class="spec-display">No instance loaded - paste Alloy data above</div>
         </div>
         
         <div class="demo-section">
@@ -193,15 +207,17 @@ directives:
         </div>
     </div>
 
-    <!-- Include the built library -->
-    <script type="module">
-        import { JSONDataInstance, StructuredInputGraph } from '../dist/index.mjs';
-        
-        // Make available globally for demo functions
-        window.CndCore = { JSONDataInstance, StructuredInputGraph };
-        
+    <!-- D3 v4 and WebCola -->
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="../vendor/cola.js"></script>
+    
+    <!-- Complete CND-Core browser bundle -->
+    <script src="../dist/browser/spytial-core-complete.global.js"></script>
+    
+    <script>
         let isComponentReady = false;
         let currentGraph = null;
+        let currentInstance = null;
         
         // Wait for components to be ready
         window.addEventListener('DOMContentLoaded', () => {
@@ -219,18 +235,14 @@ directives:
                 return;
             }
 
-            // Create empty data instance
-            const emptyDataInstance = new JSONDataInstance({
-                atoms: [],
-                relations: []
-            });
-            
-            console.log('📦 Created empty data instance');
+            // Create empty Alloy data instance
+            currentInstance = new CndCore.AlloyInstance();
+            console.log('📦 Created empty Alloy data instance');
             
             // Set data instance on the graph  
             if (typeof currentGraph.setDataInstance === 'function') {
-                currentGraph.setDataInstance(emptyDataInstance);
-                console.log('✅ Empty data instance set on graph');
+                currentGraph.setDataInstance(currentInstance);
+                console.log('✅ Empty Alloy data instance set on graph');
             } else {
                 console.warn('⚠️ setDataInstance method not available');
             }
@@ -258,16 +270,22 @@ directives:
 
             currentGraph.addEventListener('constraint-error', (event) => {
                 console.warn('⚠️ Constraint error:', event.detail);
-                showStatus(`⚠️ Constraint violation detected - check console for details`, 'error');
+                showStatus(`⚠️ Constraint violation: ${event.detail.error.message}`, 'error');
+                
+                // Show which constraints failed
+                if (event.detail.error.unsatCore) {
+                    console.log('UNSAT Core:', event.detail.error.unsatCore);
+                }
             });
 
             currentGraph.addEventListener('constraints-satisfied', (event) => {
                 console.log('✅ Constraints satisfied:', event.detail);
-                showStatus('✅ All constraints satisfied', 'success');
+                showStatus('✅ All CnD constraints satisfied', 'success');
             });
 
             isComponentReady = true;
-            showStatus('✅ Structured Input Graph demo ready! Use the panel on the right to add data.', 'success');
+            showStatus('✅ Structured Input Graph demo ready! Paste Alloy instance data above to begin.', 'success');
+            updateSpecDisplay('No instance loaded - paste Alloy data above');
         }
 
         function showStatus(message, type = 'success') {
@@ -282,16 +300,51 @@ directives:
             }, 5000);
         }
 
-        function updateSpecDisplay(spec) {
+        function updateSpecDisplay(message) {
             const specDisplay = document.getElementById('spec-display');
-            const specInput = document.getElementById('spec-input');
-            specDisplay.textContent = spec || 'No spec loaded';
-            if (spec) {
-                specInput.value = spec;
+            specDisplay.textContent = message;
+        }
+
+        function loadInstanceData() {
+            if (!isComponentReady) {
+                showStatus('❌ Component not ready yet', 'error');
+                return;
+            }
+
+            const instanceInput = document.getElementById('instance-input');
+            const instanceData = instanceInput.value.trim();
+            
+            if (!instanceData) {
+                showStatus('❌ Please paste Alloy instance data', 'error');
+                return;
+            }
+
+            try {
+                // Parse the Alloy instance
+                console.log('Parsing Alloy instance...');
+                const parsedInstance = CndCore.AlloyInstance.parseAlloyXML(instanceData);
+                currentInstance = parsedInstance;
+                
+                // Set the instance on the graph
+                currentGraph.setDataInstance(currentInstance);
+                
+                const atomCount = currentInstance.getAtoms().length;
+                const relationCount = currentInstance.getRelations().length;
+                
+                updateSpecDisplay(`Loaded: ${atomCount} atoms, ${relationCount} relations`);
+                showStatus(`✅ Loaded Alloy instance with ${atomCount} atoms and ${relationCount} relations`, 'success');
+                
+                console.log('Loaded instance:', {
+                    atoms: currentInstance.getAtoms(),
+                    relations: currentInstance.getRelations()
+                });
+            } catch (error) {
+                showStatus(`❌ Error parsing Alloy instance: ${error.message}`, 'error');
+                console.error('Instance parsing error:', error);
             }
         }
 
-        window.loadCustomSpec = function() {
+        function loadCustomSpec() {
             if (!isComponentReady) {
                 showStatus('❌ Component not ready yet', 'error');
                 return;
@@ -306,45 +359,32 @@ directives:
             }
 
             try {
+                // Load the spec - this will be enforced on all future data changes
                 currentGraph.setCnDSpec(customSpec);
-                updateSpecDisplay(customSpec);
-                showStatus('✅ Custom spec loaded', 'success');
+                showStatus('✅ CnD spec loaded - will be enforced on all data changes', 'success');
+                console.log('CnD spec loaded. Constraints will be automatically enforced on every data operation.');
             } catch (error) {
                 showStatus(`❌ Error loading spec: ${error.message}`, 'error');
                 console.error('Spec loading error:', error);
             }
-        };
+        }
 
-        window.clearGraph = function() {
+        function clearGraph() {
             if (!isComponentReady) {
                 showStatus('❌ Component not ready yet', 'error');
                 return;
             }
 
-            // Create a new empty data instance
-            const emptyDataInstance = new window.CndCore.JSONDataInstance({
-                atoms: [],
-                relations: []
-            });
+            // Create a new empty Alloy data instance
+            currentInstance = new CndCore.AlloyInstance();
+            currentGraph.setDataInstance(currentInstance);
             
-            currentGraph.setDataInstance(emptyDataInstance);
+            // Clear input fields
+            document.getElementById('instance-input').value = '';
+            
+            updateSpecDisplay('Graph cleared - paste Alloy data to begin');
             showStatus('✅ Graph cleared', 'success');
-        };
-
-        window.toggleInputMode = function() {
-            if (!isComponentReady) {
-                showStatus('❌ Component not ready yet', 'error');
-                return;
-            }
-
-            if (typeof currentGraph.toggleInputMode === 'function') {
-                currentGraph.toggleInputMode();
-                const isActive = currentGraph.isInputMode?.() || false;
-                showStatus(`✅ Input mode ${isActive ? 'enabled' : 'disabled'}`, 'success');
-            } else {
-                showStatus('⚠️ Input mode toggle not available', 'error');
-            }
-        };
+        }
 
         // Error handling
         window.addEventListener('error', (event) => {
