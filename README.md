@@ -14,6 +14,7 @@ A tree-shakable TypeScript implementation of `spytial`, usable for language inte
 - **WebCola Integration**: Physics-based constraint solver with overlap avoidance
 - **Multi-format Support**: Alloy/Forge, JSON, DOT, Racket, Pyret, TLA+
 - **Interactive Input Graphs**: Built-in components for constraint-aware graph editing
+- **Projection Support**: Dynamic UI controls for Forge/Alloy projection atom selection
 
 ### Selector Synthesis 🆕
 Automatically generate selector expressions from examples without writing complex queries:
@@ -114,6 +115,35 @@ const cndSpec = `
 
 See the [full documentation](./docs/SELECTOR_SYNTHESIS.md) for advanced synthesis features.
 
+### Projection Controls
+
+For Forge/Alloy instances with projections, use the `ProjectionControls` component to let users dynamically select which atoms to project:
+
+```typescript
+import { ProjectionControls, LayoutInstance } from 'spytial-core';
+
+// Generate layout with projections
+const layoutResult = layoutInstance.generateLayout(dataInstance, projections);
+
+// Render projection controls with the projection data
+<ProjectionControls
+  projectionData={layoutResult.projectionData}
+  onProjectionChange={(type, atomId) => {
+    // Update projection for this type
+    projections[type] = atomId;
+    // Regenerate layout with new projections
+    const newLayout = layoutInstance.generateLayout(dataInstance, projections);
+  }}
+/>
+```
+
+The `projectionData` returned from `generateLayout()` includes:
+- `type`: The signature being projected
+- `projectedAtom`: The currently selected atom
+- `atoms`: All available atoms for this type
+
+See [webcola-demo/projection-controls-demo-vanilla.html](./webcola-demo/projection-controls-demo-vanilla.html) for a working example.
+
 ---
 
 ## CDN
@@ -153,6 +183,13 @@ Once loaded, use via the global `CndCore` object:
 - **`createOrientationConstraint(selector, directions)`** - Generate orientation constraint strings
 - **`createAlignmentConstraint(selector, alignment)`** - Generate alignment constraint strings
 - **`createColorDirective(selector, color)`** - Generate color directive strings
+
+### React Components
+
+- **`ProjectionControls`** - Interactive UI for selecting projection atoms (Forge/Alloy)
+- **`CombinedInputComponent`** - Complete data visualization with REPL and layout interface
+- **`InstanceBuilder`** - Visual graph editor for building data instances
+- **`ReplInterface`** / **`PyretReplInterface`** - REPL components for interactive evaluation
 
 ### Core Classes
 

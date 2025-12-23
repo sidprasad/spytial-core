@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projection Controls Demo (Vanilla JS) - SpyTial Core</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .description {
+            color: #666;
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+        
+        .demo-container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .demo-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #444;
+        }
+        
+        /* Projection Controls Styles */
+        .projection-controls {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 0.25rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .projection-controls__header {
+            margin-bottom: 1rem;
+        }
+        
+        .projection-controls__title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin: 0 0 0.25rem 0;
+            color: #212529;
+        }
+        
+        .projection-controls__description {
+            font-size: 0.875rem;
+            color: #6c757d;
+            margin: 0;
+            font-style: italic;
+        }
+        
+        .projection-controls__list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        
+        .projection-controls__item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .projection-controls__label {
+            font-weight: 500;
+            color: #495057;
+            min-width: 120px;
+            margin: 0;
+            font-size: 0.875rem;
+        }
+        
+        .projection-controls__select {
+            flex: 1;
+            padding: 0.375rem 0.75rem;
+            font-size: 0.875rem;
+            line-height: 1.5;
+            color: #495057;
+            background-color: #fff;
+            background-clip: padding-box;
+            border: 1px solid #ced4da;
+            border-radius: 0.25rem;
+            transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+        }
+        
+        .projection-controls__select:focus {
+            color: #495057;
+            background-color: #fff;
+            border-color: #80bdff;
+            outline: 0;
+            box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+        }
+        
+        .projection-controls__select:disabled {
+            background-color: #e9ecef;
+            opacity: 1;
+            cursor: not-allowed;
+        }
+        
+        .change-log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+        
+        .change-log h3 {
+            margin-top: 0;
+            font-size: 1rem;
+            color: #495057;
+        }
+        
+        .log-entry {
+            padding: 5px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+        
+        .code-block {
+            background: #282c34;
+            color: #abb2bf;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+        
+        @media (max-width: 576px) {
+            .projection-controls__item {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .projection-controls__label {
+                min-width: auto;
+            }
+            
+            .projection-controls__select {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>🎯 Projection Controls Component</h1>
+    <p class="description">
+        The ProjectionControls component provides a user-friendly interface for selecting 
+        projection atoms in Forge/Alloy instances. It dynamically examines the projected 
+        types and creates dropdown selectors for each, allowing users to choose which 
+        specific atom to project on.
+    </p>
+    
+    <div class="demo-container">
+        <div class="demo-title">Interactive Demo</div>
+        <p style="color: #666; font-size: 0.9rem; margin-bottom: 15px;">
+            This demo shows the ProjectionControls component with sample projection data.
+            Try changing the selections to see the component in action.
+        </p>
+        <div id="projection-demo"></div>
+    </div>
+    
+    <div class="demo-container">
+        <div class="demo-title">Change Log</div>
+        <p style="color: #666; font-size: 0.9rem;">
+            Changes are logged below as you interact with the component:
+        </p>
+        <div class="change-log">
+            <h3>Event Log:</h3>
+            <div id="log-output">
+                <div style="color: #6c757d; font-style: italic;">No changes yet. Try changing a projection selection above.</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="demo-container">
+        <div class="demo-title">Usage Example</div>
+        <div class="code-block">import { ProjectionControls } from 'spytial-core';
+
+// Projection data from layout generation
+const projectionData = [
+  {
+    type: 'State',
+    projectedAtom: 'State0',
+    atoms: ['State0', 'State1', 'State2']
+  },
+  {
+    type: 'Process',
+    projectedAtom: 'P1',
+    atoms: ['P1', 'P2']
+  }
+];
+
+&lt;ProjectionControls
+  projectionData={projectionData}
+  onProjectionChange={(type, atomId) => {
+    console.log(`Changed ${type} to ${atomId}`);
+    // Update projections and regenerate layout
+  }}
+/&gt;</div>
+    </div>
+    
+    <script>
+        // Sample projection data
+        const sampleProjectionData = [
+            {
+                type: 'State',
+                projectedAtom: 'State0',
+                atoms: ['State0', 'State1', 'State2', 'State3']
+            },
+            {
+                type: 'Process',
+                projectedAtom: 'P1',
+                atoms: ['P1', 'P2', 'P3']
+            },
+            {
+                type: 'Thread',
+                projectedAtom: 'Thread0',
+                atoms: ['Thread0', 'Thread1']
+            }
+        ];
+        
+        let currentProjectionData = [...sampleProjectionData];
+        let logCounter = 0;
+        
+        function createProjectionControls(projectionData, onProjectionChange) {
+            const container = document.createElement('div');
+            container.className = 'projection-controls';
+            container.setAttribute('role', 'region');
+            container.setAttribute('aria-label', 'Projection Controls');
+            
+            // Header
+            const header = document.createElement('div');
+            header.className = 'projection-controls__header';
+            
+            const title = document.createElement('h3');
+            title.className = 'projection-controls__title';
+            title.textContent = 'Projections';
+            
+            const description = document.createElement('p');
+            description.className = 'projection-controls__description';
+            description.textContent = 'Select which atom to project for each type';
+            
+            header.appendChild(title);
+            header.appendChild(description);
+            container.appendChild(header);
+            
+            // List
+            const list = document.createElement('div');
+            list.className = 'projection-controls__list';
+            
+            projectionData.forEach(projection => {
+                const item = document.createElement('div');
+                item.className = 'projection-controls__item';
+                
+                const label = document.createElement('label');
+                label.className = 'projection-controls__label';
+                label.htmlFor = `projection-${projection.type}`;
+                label.textContent = projection.type;
+                
+                const select = document.createElement('select');
+                select.id = `projection-${projection.type}`;
+                select.className = 'projection-controls__select';
+                select.value = projection.projectedAtom;
+                select.setAttribute('aria-label', `Select atom to project for ${projection.type}`);
+                
+                projection.atoms.forEach(atom => {
+                    const option = document.createElement('option');
+                    option.value = atom;
+                    option.textContent = atom;
+                    if (atom === projection.projectedAtom) {
+                        option.selected = true;
+                    }
+                    select.appendChild(option);
+                });
+                
+                select.addEventListener('change', (e) => {
+                    onProjectionChange(projection.type, e.target.value);
+                });
+                
+                item.appendChild(label);
+                item.appendChild(select);
+                list.appendChild(item);
+            });
+            
+            container.appendChild(list);
+            return container;
+        }
+        
+        function logChange(type, atomId, timestamp) {
+            const logOutput = document.getElementById('log-output');
+            
+            // Clear the "no changes" message if it exists
+            if (logCounter === 0) {
+                logOutput.innerHTML = '';
+            }
+            
+            logCounter++;
+            
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `
+                <strong style="color: #007bff;">[${timestamp}]</strong> 
+                Projection changed: <strong>${type}</strong> → <strong style="color: #28a745;">${atomId}</strong>
+            `;
+            
+            logOutput.insertBefore(entry, logOutput.firstChild);
+            
+            // Keep only last 10 entries
+            while (logOutput.children.length > 10) {
+                logOutput.removeChild(logOutput.lastChild);
+            }
+        }
+        
+        function handleProjectionChange(type, atomId) {
+            const timestamp = new Date().toLocaleTimeString();
+            
+            // Update the projection data
+            currentProjectionData = currentProjectionData.map(proj =>
+                proj.type === type ? { ...proj, projectedAtom: atomId } : proj
+            );
+            
+            // Log the change
+            logChange(type, atomId, timestamp);
+            
+            // Re-render with updated data
+            renderDemo();
+        }
+        
+        function renderDemo() {
+            const demoContainer = document.getElementById('projection-demo');
+            demoContainer.innerHTML = '';
+            const controls = createProjectionControls(currentProjectionData, handleProjectionChange);
+            demoContainer.appendChild(controls);
+        }
+        
+        // Initial render
+        renderDemo();
+    </script>
+</body>
+</html>
