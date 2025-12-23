@@ -236,7 +236,7 @@ constraints: []"></textarea>
             }
 
             // Create empty Alloy data instance
-            currentInstance = new CndCore.AlloyInstance();
+            currentInstance = CndCore.createEmptyAlloyDataInstance();
             console.log('📦 Created empty Alloy data instance');
             
             // Set data instance on the graph  
@@ -323,7 +323,8 @@ constraints: []"></textarea>
                 // Parse the Alloy instance
                 console.log('Parsing Alloy instance...');
                 const parsedInstance = CndCore.AlloyInstance.parseAlloyXML(instanceData);
-                currentInstance = parsedInstance;
+                // Use the first instance found for this demo 
+                currentInstance = new CndCore.AlloyDataInstance(parsedInstance.instances[0]);
                 
                 // Set the instance on the graph
                 currentGraph.setDataInstance(currentInstance);
@@ -339,6 +340,7 @@ constraints: []"></textarea>
                     relations: currentInstance.getRelations()
                 });
             } catch (error) {
+                console.log(currentInstance);
                 showStatus(`❌ Error parsing Alloy instance: ${error.message}`, 'error');
                 console.error('Instance parsing error:', error);
             }
@@ -376,7 +378,7 @@ constraints: []"></textarea>
             }
 
             // Create a new empty Alloy data instance
-            currentInstance = new CndCore.AlloyInstance();
+            currentInstance = CndCore.createEmptyAlloyDataInstance();
             currentGraph.setDataInstance(currentInstance);
             
             // Clear input fields
