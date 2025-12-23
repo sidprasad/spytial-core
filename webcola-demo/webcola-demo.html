@@ -168,6 +168,9 @@
         <h5 class="h5 mb-2 text-dark">CND Layout Specification:</h5>
         <button id="applyLayoutButton" class="mb-3" onclick="loadGraph()">Apply Layout</button>
         
+        <!-- Projection Controls (shows when there are projections) -->
+        <div id="projection-controls-container" class="mb-3"></div>
+        
         <!-- Temporal Explorer for multiple instances -->
         <div id="temporal-explorer" class="mb-3" style="display: none;">
             <h6 class="h6 text-dark">Temporal Explorer:</h6>
@@ -378,11 +381,16 @@
 
             // Step 5: Generate layout using Alloy data instance
             updateStatus('Generating layout with Alloy data...', 'info');
-            const projections = {};
+            const projections = window.currentProjections || {};
 
             try {
                 const layoutResult = layoutInstance.generateLayout(alloyDataInstance, projections);
                 currentInstanceLayout = layoutResult.layout;
+
+                // Update projection controls with projection data
+                if (window.updateProjectionData && layoutResult.projectionData) {
+                    window.updateProjectionData(layoutResult.projectionData);
+                }
 
                 if (layoutResult.error) {
                     console.error('Layout generation error:', layoutResult.error);
@@ -738,7 +746,46 @@
             if (window.mountErrorMessageModal) {
                 window.mountErrorMessageModal();
             }
+
+            // Mount Projection Controls
+            if (window.mountProjectionControls) {
+                window.mountProjectionControls('projection-controls-container', handleProjectionChange);
+            }
+
+            // Mount Evaluator REPL
+            if (window.mountEvaluatorRepl) {
+                window.mountEvaluatorRepl('evaluator-repl-mount', 'forge');
+            }
+
+            // Mount Relation Highlighter
+            if (window.mountRelationHighlighter) {
+                window.mountRelationHighlighter('relation-highlighter-mount');
+            }
         });
+
+        /**
+         * Handle projection selection change
+         * Updates the projections map and regenerates the layout
+         */
+        function handleProjectionChange(type, atomId) {
+            console.log(`Projection changed: ${type} -> ${atomId}`);
+            
+            // Update the projections map stored in global scope
+            if (!window.currentProjections) {
+                window.currentProjections = {};
+            }
+            window.currentProjections[type] = atomId;
+            
+            // Regenerate layout with new projections
+            if (currentInstanceIndex >= 0 && currentInstanceIndex < alloyInstances.length) {
+                generateLayoutForCurrentInstance()
+                    .then(() => renderLayout())
+                    .catch(error => {
+                        console.error('Error regenerating layout with new projection:', error);
+                        updateStatus(`Layout regeneration error: ${error.message}`, 'error');
+                    });
+            }
+        }
 
         // Expose functions globally for buttons
         window.loadGraph = loadGraph;

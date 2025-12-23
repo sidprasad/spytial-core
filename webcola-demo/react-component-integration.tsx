@@ -24,6 +24,7 @@ import { mountCombinedInput, CombinedInputMountConfig } from '../src/components/
 import { EvaluatorRepl } from '../src/components/EvaluatorRepl/EvaluatorRepl';
 import { IEvaluator } from '../src/evaluators';
 import { RelationHighlighter } from '../src/components/RelationHighlighter/RelationHighlighter';
+import { ProjectionControls, ProjectionChoice } from '../src/components/ProjectionControls';
 
 /**
  * Configuration options for mounting CndLayoutInterface
@@ -1327,6 +1328,158 @@ export const ErrorAPI = {
 
 /*******************************************************
  *                                                     *
+ *            PROJECTION CONTROLS INTEGRATION          *
+ *                                                     *
+ *******************************************************/
+
+
+/**
+ * Projection Controls State Manager
+ * Manages projection state and updates across the application
+ */
+class ProjectionStateManager {
+  private static instance: ProjectionStateManager;
+  private projectionData: ProjectionChoice[] = [];
+  private onChangeCallback: ((type: string, atomId: string) => void) | null = null;
+  private updateCallback: (() => void) | null = null;
+
+  private constructor() {}
+
+  static getInstance(): ProjectionStateManager {
+    if (!ProjectionStateManager.instance) {
+      ProjectionStateManager.instance = new ProjectionStateManager();
+    }
+    return ProjectionStateManager.instance;
+  }
+
+  setProjectionData(data: ProjectionChoice[]) {
+    this.projectionData = data;
+    if (this.updateCallback) {
+      this.updateCallback();
+    }
+  }
+
+  getProjectionData(): ProjectionChoice[] {
+    return this.projectionData;
+  }
+
+  setOnChangeCallback(callback: (type: string, atomId: string) => void) {
+    this.onChangeCallback = callback;
+  }
+
+  setUpdateCallback(callback: () => void) {
+    this.updateCallback = callback;
+  }
+
+  handleProjectionChange(type: string, atomId: string) {
+    if (this.onChangeCallback) {
+      this.onChangeCallback(type, atomId);
+    }
+  }
+}
+
+/**
+ * Wrapper component for ProjectionControls
+ */
+function ProjectionControlsWrapper() {
+  const [projectionData, setProjectionData] = useState<ProjectionChoice[]>([]);
+  
+  useEffect(() => {
+    const manager = ProjectionStateManager.getInstance();
+    
+    // Set initial data
+    setProjectionData(manager.getProjectionData());
+    
+    // Register update callback
+    manager.setUpdateCallback(() => {
+      setProjectionData([...manager.getProjectionData()]);
+    });
+  }, []);
+
+  const handleProjectionChange = useCallback((type: string, atomId: string) => {
+    ProjectionStateManager.getInstance().handleProjectionChange(type, atomId);
+  }, []);
+
+  if (!projectionData || projectionData.length === 0) {
+    return null;
+  }
+
+  return (
+    <ProjectionControls
+      projectionData={projectionData}
+      onProjectionChange={handleProjectionChange}
+    />
+  );
+}
+
+/**
+ * Mount ProjectionControls component into specified container
+ * 
+ * @param containerId - DOM element ID to mount into (default: 'projection-controls-container')
+ * @param onProjectionChange - Callback when projection selection changes
+ * @returns Boolean indicating success
+ * 
+ * @example
+ * ```javascript
+ * // Mount projection controls
+ * CnDCore.mountProjectionControls('projection-controls-container', (type, atomId) => {
+ *   console.log(`Projection changed: ${type} -> ${atomId}`);
+ *   // Regenerate layout with new projections
+ * });
+ * ```
+ * 
+ * @public
+ */
+export function mountProjectionControls(
+  containerId: string = 'projection-controls-container',
+  onProjectionChange?: (type: string, atomId: string) => void
+): boolean {
+  const container = document.getElementById(containerId);
+  
+  if (!container) {
+    console.error(`Projection Controls: Container '${containerId}' not found`);
+    return false;
+  }
+
+  try {
+    const manager = ProjectionStateManager.getInstance();
+    
+    if (onProjectionChange) {
+      manager.setOnChangeCallback(onProjectionChange);
+    }
+
+    const root = createRoot(container);
+    root.render(<ProjectionControlsWrapper />);
+    console.log(`✅ Projection Controls mounted to #${containerId}`);
+    return true;
+  } catch (error) {
+    console.error('Failed to mount Projection Controls:', error);
+    return false;
+  }
+}
+
+/**
+ * Update projection data displayed in ProjectionControls
+ * 
+ * @param projectionData - Array of projection choices
+ * 
+ * @example
+ * ```javascript
+ * const layoutResult = layoutInstance.generateLayout(dataInstance, projections);
+ * CnDCore.updateProjectionData(layoutResult.projectionData);
+ * ```
+ * 
+ * @public
+ */
+export function updateProjectionData(projectionData: ProjectionChoice[]): void {
+  ProjectionStateManager.getInstance().setProjectionData(projectionData);
+}
+
+
+
+
+/*******************************************************
+ *                                                     *
  *                    DATA API                         *
  *                                                     *
  *******************************************************/
@@ -1482,6 +1635,7 @@ export const CnDCore = {
   mountAllComponents,
   mountEvaluatorRepl,
   mountRelationHighlighter,
+  mountProjectionControls,
   // Pyret REPL mounting functions
   mountPyretRepl,
   mountReplWithVisualization,
@@ -1489,10 +1643,14 @@ export const CnDCore = {
   // Combined Input mounting functions
   mountCombinedInput: mountCombinedInputComponent,
 
+  // Projection functions
+  updateProjectionData,
+
   // State managers
   CndLayoutStateManager,
   InstanceStateManager,
   PyretReplStateManager,
+  ProjectionStateManager,
   globalErrorManager,
 
   // API namespaces
@@ -1526,6 +1684,8 @@ if (typeof window !== 'undefined') {
   (window as any).mountIntegratedComponents = mountAllComponents;
   (window as any).mountEvaluatorRepl = mountEvaluatorRepl;
   (window as any).mountRelationHighlighter = mountRelationHighlighter;
+  (window as any).mountProjectionControls = mountProjectionControls;
+  (window as any).updateProjectionData = updateProjectionData;
   
   // Pyret REPL functions for legacy compatibility
   (window as any).mountPyretRepl = mountPyretRepl;
