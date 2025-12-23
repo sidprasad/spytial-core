@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { AlloyDataInstance, createEmptyAlloyDataInstance } from '../src/data-instance/alloy-data-instance';
+import { AlloyDataInstance } from '../src/data-instance/alloy-data-instance';
 import { AlloyInstance, AlloyType, AlloyAtom, AlloyRelation, AlloyTuple } from '../src/data-instance/alloy/alloy-instance';
 import { ValidationSeverity } from '../src/data-instance/alloy/alloy-instance';
 

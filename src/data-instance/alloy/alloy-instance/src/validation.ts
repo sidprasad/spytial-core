@@ -170,10 +170,10 @@ function validateBuiltinTypes(instance: AlloyInstance): ValidationIssue[] {
     if (isBuiltin(type)) {
       // Int and seq/Int should have specific patterns
       if (type.id === 'Int') {
-        // Verify Int atoms follow integer pattern
+        // Verify Int atoms follow integer pattern (including negative integers)
         const nonIntegerAtoms = type.atoms.filter(atom => {
-          const parsed = parseInt(atom.id);
-          return isNaN(parsed) || parsed.toString() !== atom.id;
+          const num = Number(atom.id);
+          return !Number.isInteger(num) || num.toString() !== atom.id;
         });
         
         if (nonIntegerAtoms.length > 0) {

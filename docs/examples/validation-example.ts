@@ -3,13 +3,16 @@
  * 
  * This example demonstrates how to use the validation features
  * of AlloyDataInstance to detect and report issues before reification.
+ * 
+ * Note: In production, import from 'spytial-core' package:
+ * import { AlloyDataInstance, ValidationSeverity, AlloyInstance } from 'spytial-core';
  */
 
 import { 
   AlloyDataInstance, 
-  ValidationSeverity,
-  type AlloyInstance 
-} from '../../src';
+  ValidationSeverity
+} from 'spytial-core';
+import type { AlloyInstance } from 'spytial-core';
 
 // Example 1: Valid instance
 console.log('Example 1: Valid Instance');

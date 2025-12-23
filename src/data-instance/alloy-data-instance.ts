@@ -185,6 +185,16 @@ export class AlloyDataInstance implements IInputDataInstance {
 
 
   /**
+   * Helper function to add comment prefixes to validation messages
+   * @param text - The text to prefix with comments
+   * @returns Text with each line prefixed with "--"
+   */
+  private static addCommentPrefixes(text: string): string {
+    return text.split('\n').map(line => `-- ${line}`).join('\n');
+  }
+
+
+  /**
    * Reify the instance to a Forge INST.
    * Performs validation checks and includes any errors/warnings as comments.
    * 
@@ -204,7 +214,7 @@ export class AlloyDataInstance implements IInputDataInstance {
     // Add validation results as comments if there are issues
     if (validationResult.issues.length > 0) {
       inst += "-- Validation Results:\n";
-      inst += "-- " + formatValidationIssues(validationResult.issues).split('\n').join('\n-- ') + "\n";
+      inst += AlloyDataInstance.addCommentPrefixes(formatValidationIssues(validationResult.issues)) + "\n";
       if (!validationResult.isValid) {
         inst += "-- WARNING: Instance has validation errors!\n";
       }
