@@ -187,10 +187,10 @@ export class AlloyDataInstance implements IInputDataInstance {
   /**
    * Helper function to add comment prefixes to validation messages
    * @param text - The text to prefix with comments
-   * @returns Text with each line prefixed with "--"
+   * @returns Text with each line prefixed with "--", handling empty lines gracefully
    */
   private static addCommentPrefixes(text: string): string {
-    return text.split('\n').map(line => `-- ${line}`).join('\n');
+    return text.split('\n').map(line => line.trim() ? `-- ${line}` : '--').join('\n');
   }
 
 

@@ -171,10 +171,9 @@ function validateBuiltinTypes(instance: AlloyInstance): ValidationIssue[] {
       // Int and seq/Int should have specific patterns
       if (type.id === 'Int') {
         // Verify Int atoms follow integer pattern (including negative integers)
-        const nonIntegerAtoms = type.atoms.filter(atom => {
-          const num = Number(atom.id);
-          return !Number.isInteger(num) || num.toString() !== atom.id;
-        });
+        // Use regex to validate proper integer format without leading zeros
+        const integerPattern = /^-?\d+$/;
+        const nonIntegerAtoms = type.atoms.filter(atom => !integerPattern.test(atom.id));
         
         if (nonIntegerAtoms.length > 0) {
           issues.push({
