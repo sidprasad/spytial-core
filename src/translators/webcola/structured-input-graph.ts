@@ -66,7 +66,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       relations: []
     });
     
-    console.log('🔧 StructuredInputGraph initialized with data instance:', instance);
+    console.log('StructuredInputGraph initialized with data instance:', instance);
     
     // Use setDataInstance to properly set up event listeners
     this.setDataInstance(instance);

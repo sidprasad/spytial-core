@@ -122,48 +122,14 @@
 <body>
     <div class="container">
         <h1>Structured Input Graph Demo</h1>
-        <p>This demo showcases the <code>StructuredInputGraph</code> custom element - a powerful data editor with collapsible sections, constraint validation, and multi-format export.</p>
-        
-        <div class="demo-instructions">
-            <h4>Instructions:</h4>
-            <ul>
-                <li><strong>Paste Alloy Instance:</strong> Use the textarea below to paste Forge/Alloy instance data</li>
-                <li><strong>Add Atoms:</strong> Or use the "Atoms" section in the data editor panel (right side) to add nodes manually</li>
-                <li><strong>Create Relations:</strong> Use the "Relations" section to create edges, or Cmd/Ctrl+drag between nodes</li>
-                <li><strong>Collapsible Sections:</strong> Click on any section header to collapse/expand it</li>
-                <li><strong>Export Data:</strong> Use the "Export" section to reify data in the appropriate format</li>
-                <li><strong>Load Specs:</strong> Enter a CnD specification to define constraints (automatically enforced)</li>
-            </ul>
-        </div>
-
-        <div class="feature-list">
-            <h4>Key Features:</h4>
-            <ul>
-                <li><strong>Navigable UI:</strong> Collapsible sections for better organization</li>
-                <li><strong>No Emojis:</strong> Clean, professional interface without distracting icons</li>
-                <li><strong>Automatic Constraint Enforcement:</strong> CnD spec is always enforced on every data change</li>
-                <li><strong>Real-time Validation:</strong> UNSAT core reporting when constraints cannot be satisfied</li>
-                <li><strong>Smart Export:</strong> Uses data instance's <code>reify()</code> method (Alloy, Pyret, JSON, etc.)</li>
-                <li><strong>Enhanced Endpoint Markers:</strong> Amber square for source, red triangle for target</li>
-                <li><strong>Alloy Data Support:</strong> Paste Forge/Alloy instances directly</li>
-            </ul>
-        </div>
     </div>
 
     <div class="container">
         <div class="demo-section">
-            <h3>Demo Controls</h3>
             
             <div>
                 <h4>Paste Alloy Instance Data:</h4>
-                <textarea id="instance-input" class="spec-input" placeholder="Paste your Alloy/Forge instance here...
-
-Example:
-inst {
-  Person = {Person0, Person1}
-  name = {(Person0, &quot;Alice&quot;), (Person1, &quot;Bob&quot;)}
-  friend = {(Person0, Person1)}
-}"></textarea>
+                <textarea id="instance-input" class="spec-input" placeholder="Paste your Alloy/Forge instance here..."></textarea>
                 <div style="margin-top: 10px;">
                     <button onclick="loadInstanceData()">Load Instance</button>
                     <button onclick="clearGraph()">Clear Graph</button>
@@ -175,14 +141,7 @@ inst {
                 <p style="font-size: 0.9em; color: #666; margin: 5px 0;">
                     The CnD spec will be <strong>automatically enforced</strong> on all data changes (atoms, relations, etc.)
                 </p>
-                <textarea id="spec-input" class="spec-input" placeholder="Enter your CnD specification here (YAML format)...
-
-Example:
-nodes:
-  - { id: 'Person', type: 'Person', color: '#FF6B35', size: 20 }
-edges:
-  - { id: 'friend', type: 'friend', color: '#E91E63', width: 3 }
-constraints: []"></textarea>
+                <textarea id="spec-input" class="spec-input" placeholder="Enter your Spytial specification here (YAML format)"></textarea>
                 <div style="margin-top: 10px;">
                     <button onclick="loadCustomSpec()">Load Spec</button>
                 </div>
