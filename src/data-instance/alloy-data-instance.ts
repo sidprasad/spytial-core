@@ -6,7 +6,9 @@ import {
   getInstanceTypes,
   getInstanceRelations,
   getInstanceAtom,
-  getSkolemNamesForAtom
+  getSkolemNamesForAtom,
+  validateInstance,
+  formatValidationIssues
 } from './alloy/alloy-instance';
 import { getAtomType } from './alloy/alloy-instance/src/atom';
 import { isBuiltin } from './alloy/alloy-instance/src/type';
@@ -184,18 +186,30 @@ export class AlloyDataInstance implements IInputDataInstance {
 
   /**
    * Reify the instance to a Forge INST.
+   * Performs validation checks and includes any errors/warnings as comments.
    * 
-   * @returns An inst string representation of the AlloyInstance
+   * @returns An inst string representation of the AlloyInstance with validation results
    */
   public reify(): string {
+    // Perform validation before reification
+    const validationResult = validateInstance(this.alloyInstance);
+    
     let inst = "";
 
     const instName = "builtinstance"; // Generate a unique name readable name.
 
-
     const PREFIX = `inst ${instName} {`;
-
     const POSTFIX = "}";
+
+    // Add validation results as comments if there are issues
+    if (validationResult.issues.length > 0) {
+      inst += "-- Validation Results:\n";
+      inst += "-- " + formatValidationIssues(validationResult.issues).split('\n').join('\n-- ') + "\n";
+      if (!validationResult.isValid) {
+        inst += "-- WARNING: Instance has validation errors!\n";
+      }
+      inst += "\n";
+    }
 
     // First declare all the ATOMS (I think in order?)
     let instanceTypes = this.alloyInstance.types;
@@ -245,6 +259,16 @@ export class AlloyDataInstance implements IInputDataInstance {
         }
     }
     return `${PREFIX}\n${inst}\n${POSTFIX}`;
+  }
+
+  /**
+   * Validate the instance and return validation results.
+   * This allows programmatic access to validation issues without reification.
+   * 
+   * @returns ValidationResult containing validation status and any issues found
+   */
+  public validate() {
+    return validateInstance(this.alloyInstance);
   }
 
 

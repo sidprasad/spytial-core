@@ -18,6 +18,9 @@ export { RacketGDataInstance } from './data-instance/racket/racket-g-data-instan
 export { PyretDataInstance } from './data-instance/pyret/pyret-data-instance';
 export { TlaDataInstance, createTlaDataInstance, isTlaDataInstance } from './data-instance/tla/tla-data-instance';
 
+// Export validation types for Alloy instances
+export type { ValidationResult, ValidationIssue, ValidationSeverity } from './data-instance/alloy/alloy-instance';
+
 // Direct exports of key classes for convenience
 export { LayoutInstance } from './layout/layoutinstance';
 export { parseLayoutSpec } from './layout/layoutspec';
