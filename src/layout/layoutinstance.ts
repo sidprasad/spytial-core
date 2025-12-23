@@ -652,7 +652,15 @@ export class LayoutInstance {
 
         let projectedSigs: string[] = this.projectedSigs;
 
-        let projectedTypes: IType[] = projectedSigs.map((sig) => ai.getAtomType(sig));
+        // Get all types and find the ones that match projected signatures
+        const allTypes = ai.getTypes();
+        let projectedTypes: IType[] = projectedSigs.map((sig) => {
+            const type = allTypes.find(t => t.id === sig);
+            if (!type) {
+                throw new Error(`Projected type '${sig}' not found in data instance`);
+            }
+            return type;
+        });
 
 
         // Now we should have a map from each type to its atoms
