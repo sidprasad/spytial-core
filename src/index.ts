@@ -138,3 +138,7 @@ export type { CombinedInputMountConfig } from './components/CombinedInput/mounti
 // Export REPL parsers
 export { PyretExpressionParser } from './components/ReplInterface/parsers/PyretExpressionParser';
 export type { PyretEvaluator, PyretEvaluationResult } from './components/ReplInterface/parsers/PyretExpressionParser';
+
+// Projection Controls Component
+export { ProjectionControls } from './components/ProjectionControls';
+export type { ProjectionControlsProps, ProjectionChoice } from './components/ProjectionControls';
