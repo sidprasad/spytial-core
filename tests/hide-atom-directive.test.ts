@@ -148,4 +148,31 @@ directives:
       layoutInstance.generateLayout(dataInstance, {});
     }).not.toThrow();
   });
+
+  it('surfaces constraints that reference hidden atoms as constraint errors', () => {
+    const layoutSpecYaml = `
+constraints:
+  - orientation:
+      selector: r
+      directions: [right]
+directives:
+  - hideAtom:
+      selector: B
+`;
+
+    const layoutSpec = parseLayoutSpec(layoutSpecYaml);
+    const dataInstance = new JSONDataInstance(testData);
+    const evaluator = new SGraphQueryEvaluator();
+    evaluator.initialize({ sourceData: dataInstance });
+
+    const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
+    const { layout, error } = layoutInstance.generateLayout(dataInstance, {});
+
+    expect(error).not.toBeNull();
+    expect(error?.type).toBe('unknown-constraint');
+    expect(error?.message).toContain('B');
+
+    const nodeIds = layout.nodes.map(node => node.id);
+    expect(nodeIds).not.toContain('B');
+  });
 });

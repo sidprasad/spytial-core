@@ -1392,11 +1392,27 @@ function ProjectionControlsWrapper() {
     
     // Register update callback
     manager.setUpdateCallback(() => {
-      setProjectionData([...manager.getProjectionData()]);
+      const newData = manager.getProjectionData();
+      console.log('ProjectionControlsWrapper: Updating with new data:', newData);
+      setProjectionData([...newData]);
     });
   }, []);
 
   const handleProjectionChange = useCallback((type: string, atomId: string) => {
+    console.log(`ProjectionControlsWrapper: Selection changed - ${type} -> ${atomId}`);
+    
+    // Optimistically update local state for immediate UI feedback
+    setProjectionData(prev => {
+      return prev.map(p => {
+        if (p.type === type) {
+          console.log(`ProjectionControlsWrapper: Updating ${type} from ${p.projectedAtom} to ${atomId}`);
+          return { ...p, projectedAtom: atomId };
+        }
+        return p;
+      });
+    });
+    
+    // Notify the external callback
     ProjectionStateManager.getInstance().handleProjectionChange(type, atomId);
   }, []);
 
