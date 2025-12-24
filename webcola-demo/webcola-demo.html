@@ -307,6 +307,10 @@
                 currentInstanceIndex = 0;
                 priorPositions = null; // Reset prior positions when loading new data
                 
+                // IMPORTANT: Reset projections when loading new data
+                // This ensures we start fresh and allow the layout to set defaults
+                window.currentProjections = {};
+                
                 // Show temporal explorer if multiple instances
                 updateTemporalExplorer();
 
@@ -384,16 +388,24 @@
 
             // Step 5: Generate layout using Alloy data instance
             updateStatus('Generating layout with Alloy data...', 'info');
-            const projections = window.currentProjections || {};
-            console.log('Using projections:', projections);
+            
+            // Ensure window.currentProjections exists
+            if (!window.currentProjections) {
+                window.currentProjections = {};
+            }
+            
+            // IMPORTANT: Pass window.currentProjections directly (not a copy)
+            // This allows the layout to mutate it with defaults on first load
+            console.log('generateLayoutForCurrentInstance: Using projections:', JSON.stringify(window.currentProjections));
 
             try {
-                const layoutResult = layoutInstance.generateLayout(alloyDataInstance, projections);
+                const layoutResult = layoutInstance.generateLayout(alloyDataInstance, window.currentProjections);
                 currentInstanceLayout = layoutResult.layout;
 
                 // Update projection controls with projection data
                 if (window.updateProjectionData && layoutResult.projectionData) {
-                    console.log('Updating projection data:', layoutResult.projectionData);
+                    console.log('generateLayoutForCurrentInstance: Received projectionData from layout:', layoutResult.projectionData);
+                    console.log('generateLayoutForCurrentInstance: Calling updateProjectionData');
                     window.updateProjectionData(layoutResult.projectionData);
                 } else if (layoutResult.projectionData && layoutResult.projectionData.length > 0) {
                     console.warn('Projection data available but updateProjectionData function not found. Projection controls may not display correctly.');
@@ -545,15 +557,15 @@
          * Passes prior positions for temporal consistency if available
          */
         async function renderGraph() {
-            clearGraph(); // Clear existing graph first
             const graphElement = document.getElementById('graph-container');
             
             try {
+                // Check if we need to generate layout first
                 if (!currentInstanceLayout) {
                     // If we have cached data, regenerate layout for current instance
                     // Otherwise, load fresh data (which resets to instance 0)
                     if (alloyInstances.length > 0 && cachedForgeEvaluator && cachedLayoutSpec) {
-                        console.log('Regenerating layout for current instance (not reloading data)');
+                        console.log('renderGraph: No layout available, generating for current instance');
                         await generateLayoutForCurrentInstance();
                     } else {
                         updateStatus('No layout data available. Processing Alloy data first...', 'info');
@@ -564,6 +576,21 @@
                         // Layout generation failed - error already displayed by generateLayoutForCurrentInstance
                         console.warn('No layout data available to render (likely due to constraint errors)');
                         return;
+                    }
+                }
+                
+                // Clear the graph before rendering the new layout
+                console.log('renderGraph: Clearing graph before render');
+                if (graphElement.clear) {
+                    graphElement.clear();
+                } else {
+                    // Fallback: remove all SVG content
+                    const svg = graphElement.shadowRoot?.querySelector('svg');
+                    if (svg) {
+                        const container = svg.querySelector('.zoomable');
+                        if (container) {
+                            container.innerHTML = '';
+                        }
                     }
                 }
 
@@ -597,9 +624,12 @@
 
         /**
          * Clear the graph and reset state
+         * This is called by the Clear button to fully reset the visualization
          */
         function clearGraph() {
             const graphElement = document.getElementById('graph-container');
+            
+            console.log('clearGraph: Clearing visualization and resetting layout state');
             
             // Clear the graph using the component's clear method
             if (graphElement.clear) {
@@ -779,7 +809,8 @@
          * Updates the projections map and regenerates the layout
          */
         function handleProjectionChange(type, atomId) {
-            console.log(`Projection changed: ${type} -> ${atomId}`);
+            console.log(`handleProjectionChange called: ${type} -> ${atomId}`);
+            console.log('Current projections before update:', JSON.stringify(window.currentProjections));
             
             // Update the projections map stored in global scope
             if (!window.currentProjections) {
@@ -787,14 +818,22 @@
             }
             window.currentProjections[type] = atomId;
             
+            console.log('Current projections after update:', JSON.stringify(window.currentProjections));
+            
             // Regenerate layout with new projections
             if (currentInstanceIndex >= 0 && currentInstanceIndex < alloyInstances.length) {
+                console.log('Regenerating layout with projections:', window.currentProjections);
                 generateLayoutForCurrentInstance()
-                    .then(() => renderGraph())
+                    .then(() => {
+                        console.log('Layout regenerated successfully');
+                        return renderGraph();
+                    })
                     .catch(error => {
                         console.error('Error regenerating layout with new projection:', error);
                         updateStatus(`Layout regeneration error: ${error.message}`, 'error');
                     });
+            } else {
+                console.warn('Cannot regenerate layout: invalid instance index');
             }
         }
 

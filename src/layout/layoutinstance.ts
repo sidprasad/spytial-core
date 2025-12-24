@@ -21,6 +21,28 @@ import { ColorPicker } from './colorpicker';
 import { type ConstraintError, ConstraintValidator } from './constraint-validator';
 const UNIVERSAL_TYPE = "univ";
 
+type ConstraintSource = RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint;
+
+class MissingNodeConstraintError extends Error implements ConstraintError {
+    readonly type = 'unknown-constraint';
+    readonly missingNodeId: string;
+    readonly sourceConstraint?: ConstraintSource;
+
+    constructor(missingNodeId: string, sourceConstraint?: ConstraintSource) {
+        const selector = sourceConstraint && 'selector' in sourceConstraint ? sourceConstraint.selector : undefined;
+        const selectorDetails = selector ? ` Selector: ${selector}.` : '';
+        super(`Constraint references node "${missingNodeId}" that is missing from the layout (it may be hidden).${selectorDetails}`);
+        this.name = 'MissingNodeConstraintError';
+        this.missingNodeId = missingNodeId;
+        this.sourceConstraint = sourceConstraint;
+        Object.setPrototypeOf(this, MissingNodeConstraintError.prototype);
+    }
+}
+
+function isMissingNodeConstraintError(error: unknown): error is MissingNodeConstraintError {
+    return error instanceof MissingNodeConstraintError;
+}
+
 /**
  * Strategy for adding alignment edges to prevent WebCola from falling into bad local minima.
  * 
@@ -801,48 +823,47 @@ export class LayoutInstance {
         ///////////// CONSTRAINTS ////////////
 
 
-        let constraints: LayoutConstraint[] = this.applyRelativeOrientationConstraints(layoutNodes, g);
-        const orientationConstraintCount = constraints.length;
-        
-        constraints = constraints.concat(this.applyAlignConstraints(layoutNodes, g));
-        const alignConstraintCount = constraints.length - orientationConstraintCount;
-        
-        console.log(`Generated ${orientationConstraintCount} orientation constraints and ${alignConstraintCount} alignment constraints (deduped + transitive reduction applied)`);
-        
-        // Prune redundant alignment edges after all have been added
-        this.pruneRedundantAlignmentEdges(g);
-        
-        // Constraints NOW holds the conjuctive CORE of layout constraints.
-        constraints = removeDuplicateConstraints(constraints);
+        let constraints: LayoutConstraint[] = [];
+        let orientationConstraintCount = 0;
+        let alignConstraintCount = 0;
+        let layoutEdges: LayoutEdge[] = [];
+        let cyclicDisjunctions: DisjunctiveConstraint[] = [];
 
+        try {
+            constraints = this.applyRelativeOrientationConstraints(layoutNodes, g);
+            orientationConstraintCount = constraints.length;
+            
+            constraints = constraints.concat(this.applyAlignConstraints(layoutNodes, g));
+            alignConstraintCount = constraints.length - orientationConstraintCount;
+            
+            console.log(`Generated ${orientationConstraintCount} orientation constraints and ${alignConstraintCount} alignment constraints (deduped + transitive reduction applied)`);
+            
+            // Prune redundant alignment edges after all have been added
+            this.pruneRedundantAlignmentEdges(g);
+            
+            // Constraints NOW holds the conjuctive CORE of layout constraints.
+            constraints = removeDuplicateConstraints(constraints);
 
-        let layoutEdges: LayoutEdge[] = g.edges().map((edge) => {
+            layoutEdges = this.buildLayoutEdges(g, layoutNodes);
 
-            const edgeId = edge.name;
-            const edgeLabel: string = g.edge(edge.v, edge.w, edgeId);
-            let source = layoutNodes.find((node) => node.id === edge.v);
-            let target = layoutNodes.find((node) => node.id === edge.w);
-            let relName = this.getRelationName(g, edge);
-            let color = this.getEdgeColor(relName, edge.v, edge.w, edgeId);
-
-            // Skip edges with missing source or target nodes
-            if (!source || !target || !edgeId) {
-                return null;
+            // Build cyclic constraint disjunctions
+            cyclicDisjunctions = this.buildCyclicDisjunctions(layoutNodes);
+        } catch (error) {
+            if (isMissingNodeConstraintError(error)) {
+                return this.handleMissingNodeConstraintError(
+                    error,
+                    {
+                        layoutNodes,
+                        graph: g,
+                        groups,
+                        disconnectedNodes: dcN,
+                        projectionData,
+                        constraints
+                    }
+                );
             }
-
-            let e: LayoutEdge = {
-                source: source,
-                target: target,
-                label: edgeLabel,
-                relationName: relName,
-                id: edgeId,
-                color: color,
-            };
-            return e;
-        }).filter((edge): edge is LayoutEdge => edge !== null);
-
-        // Build cyclic constraint disjunctions
-        const cyclicDisjunctions = this.buildCyclicDisjunctions(layoutNodes);
+            throw error;
+        }
 
         // Create layout with conjunctive constraints and disjunctive constraints
         let layout: InstanceLayout = { 
@@ -882,7 +903,7 @@ export class LayoutInstance {
         constraints = layout.constraints;
 
         // Filter out all edges that are hidden
-        layoutEdges = layoutEdges.filter((edge) => !edge.id.startsWith(this.hideThisEdge));
+        layoutEdges = this.filterHiddenEdges(layoutEdges);
 
         // And now make sure that all the disconnected nodes (as identified)
         // have some padding around them.
@@ -899,6 +920,47 @@ export class LayoutInstance {
         layout.groups = groups;
 
         return { layout, projectionData, error: null };
+    }
+
+    /**
+     * Handles missing-node constraint errors (e.g., when a constraint references a hidden node)
+     * by surfacing them as constraint-level errors with the best-effort layout.
+     */
+    private handleMissingNodeConstraintError(
+        error: MissingNodeConstraintError,
+        context: {
+            layoutNodes: LayoutNode[],
+            graph: Graph,
+            groups: LayoutGroup[],
+            disconnectedNodes: string[],
+            projectionData: { type: string, projectedAtom: string, atoms: string[] }[],
+            constraints: LayoutConstraint[],
+        }
+    ): {
+        layout: InstanceLayout,
+        projectionData: { type: string, projectedAtom: string, atoms: string[] }[],
+        error: ConstraintError
+    } {
+        const layoutEdges = this.filterHiddenEdges(
+            this.buildLayoutEdges(context.graph, context.layoutNodes)
+        );
+        const layoutGroups = context.groups.concat(
+            context.disconnectedNodes.map(node => this.singletonGroup(node))
+        );
+
+        const layoutWithErrorMetadata: InstanceLayout = {
+            nodes: context.layoutNodes,
+            edges: layoutEdges,
+            constraints: context.constraints,
+            groups: layoutGroups,
+            disjunctiveConstraints: []
+        };
+
+        return {
+            layout: layoutWithErrorMetadata,
+            projectionData: context.projectionData,
+            error
+        };
     }
 
     /**
@@ -1614,44 +1676,75 @@ export class LayoutInstance {
         return disconnectedNodes;
     }
 
+    private buildLayoutEdges(g: Graph, layoutNodes: LayoutNode[]): LayoutEdge[] {
+        return g.edges().map((edge) => {
+
+            const edgeId = edge.name;
+            const edgeLabel: string = g.edge(edge.v, edge.w, edgeId);
+            let source = layoutNodes.find((node) => node.id === edge.v);
+            let target = layoutNodes.find((node) => node.id === edge.w);
+            let relName = this.getRelationName(g, edge);
+            let color = this.getEdgeColor(relName, edge.v, edge.w, edgeId);
+
+            // Skip edges with missing source or target nodes
+            if (!source || !target || !edgeId) {
+                return null;
+            }
+
+            let e: LayoutEdge = {
+                source: source,
+                target: target,
+                label: edgeLabel,
+                relationName: relName,
+                id: edgeId,
+                color: color,
+            };
+            return e;
+        }).filter((edge): edge is LayoutEdge => edge !== null);
+    }
+
+    private filterHiddenEdges(layoutEdges: LayoutEdge[]): LayoutEdge[] {
+        return layoutEdges.filter((edge) => !edge.id.startsWith(this.hideThisEdge));
+    }
 
 
-    private getNodeFromId(nodeId: string, layoutNodes: LayoutNode[]): LayoutNode {
+
+    private getNodeFromId(nodeId: string, layoutNodes: LayoutNode[], sourceConstraint?: ConstraintSource): LayoutNode {
         let node = layoutNodes.find((node) => node.id === nodeId);
         if (!node) {
-            throw new Error(`Node ${nodeId} not found in graph. Did you hide it? If this is a built-in type, try removing any visibility flags.`);
+            throw new MissingNodeConstraintError(nodeId, sourceConstraint);
         }
         return node;
     }
 
 
-    private leftConstraint(leftId: string, rightId: string, minDistance: number, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint): LeftConstraint {
+    private leftConstraint(leftId: string, rightId: string, minDistance: number, layoutNodes: LayoutNode[], sourceConstraint: ConstraintSource): LeftConstraint {
 
-        let left = this.getNodeFromId(leftId, layoutNodes);
-        let right = this.getNodeFromId(rightId, layoutNodes);
+        let left = this.getNodeFromId(leftId, layoutNodes, sourceConstraint);
+        let right = this.getNodeFromId(rightId, layoutNodes, sourceConstraint);
         return { left: left, right: right, minDistance: minDistance, sourceConstraint: sourceConstraint };
     }
 
-    private topConstraint(topId: string, bottomId: string, minDistance: number, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint): TopConstraint {
+    private topConstraint(topId: string, bottomId: string, minDistance: number, layoutNodes: LayoutNode[], sourceConstraint: ConstraintSource): TopConstraint {
 
-        let top = this.getNodeFromId(topId, layoutNodes);
-        let bottom = this.getNodeFromId(bottomId, layoutNodes);
+        let top = this.getNodeFromId(topId, layoutNodes, sourceConstraint);
+        let bottom = this.getNodeFromId(bottomId, layoutNodes, sourceConstraint);
 
         return { top: top, bottom: bottom, minDistance: minDistance, sourceConstraint: sourceConstraint };
     }
 
-    private ensureSameYConstraint(node1Id: string, node2Id: string, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint): AlignmentConstraint {
+    private ensureSameYConstraint(node1Id: string, node2Id: string, layoutNodes: LayoutNode[], sourceConstraint: ConstraintSource): AlignmentConstraint {
 
-        let node1 = this.getNodeFromId(node1Id, layoutNodes);
-        let node2 = this.getNodeFromId(node2Id, layoutNodes);
+        let node1 = this.getNodeFromId(node1Id, layoutNodes, sourceConstraint);
+        let node2 = this.getNodeFromId(node2Id, layoutNodes, sourceConstraint);
 
         return { axis: "y", node1: node1, node2: node2, sourceConstraint: sourceConstraint };
     }
 
-    private ensureSameXConstraint(node1Id: string, node2Id: string, layoutNodes: LayoutNode[], sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint): AlignmentConstraint {
+    private ensureSameXConstraint(node1Id: string, node2Id: string, layoutNodes: LayoutNode[], sourceConstraint: ConstraintSource): AlignmentConstraint {
 
-        let node1 = this.getNodeFromId(node1Id, layoutNodes);
-        let node2 = this.getNodeFromId(node2Id, layoutNodes);
+        let node1 = this.getNodeFromId(node1Id, layoutNodes, sourceConstraint);
+        let node2 = this.getNodeFromId(node2Id, layoutNodes, sourceConstraint);
 
         return { axis: "x", node1: node1, node2: node2, sourceConstraint: sourceConstraint };
     }
