@@ -42,28 +42,22 @@ const DEFAULT_SCALE_FACTOR = 5;
  * @field colaLayout - Holds the current layout instance used by WebCola
  * 
  * Features:
- * - Interactive edge input mode with keyboard shortcuts (Cmd/Ctrl)
- * - Visual edge creation by clicking and dragging between nodes
- * - Edge modification by clicking on existing edges in input mode
  * - Centralized state management for IInputDataInstance
  * - Automatic layout regeneration when data instance changes
- * - Self-loop edge support with confirmation
- * - Zoom/pan disable during input mode
+ * - Zoom/pan controls
  * - Comprehensive event system for external integration
  * 
  * Events Fired:
- * - 'input-mode-activated': When Cmd/Ctrl is pressed to activate input mode
- * - 'input-mode-deactivated': When Cmd/Ctrl is released to deactivate input mode  
- * - 'edge-creation-requested': When user drags between nodes to create a new edge
- *   * event.detail: { relationId: string, sourceNodeId: string, targetNodeId: string, tuple: ITuple }
- * - 'edge-modification-requested': When user clicks on existing edge to modify it
- *   * event.detail: { oldRelationId: string, newRelationId: string, sourceNodeId: string, targetNodeId: string, tuple: ITuple }
+ * - 'node-drag-start': When a node starts being dragged
+ *   * event.detail: { id: string, position: { x: number, y: number } }
+ * - 'node-drag-end': When a node stops being dragged
+ *   * event.detail: { id: string, previous: { x: number, y: number }, current: { x: number, y: number } }
+ * - 'layout-complete': When layout computation is complete
+ *   * event.detail: { nodePositions: Array<{ id: string, x: number, y: number }> }
  * 
  * External State Management:
- * React components should subscribe to these events and handle:
- * 1. Updating the IInputDataInstance with new atoms/relations
- * 2. Regenerating CnD layout constraints from the updated data
- * 3. Calling renderLayout() to apply changes and re-render the visualization
+ * React components should subscribe to these events for state changes
+ * and call renderLayout() to apply changes and re-render the visualization.
  * 
  * This ensures React components serve as the single source of truth for state
  * while the WebCola component focuses purely on visualization and user interaction.
@@ -156,35 +150,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private dragStartPositions: Map<string, { x: number; y: number }> = new Map();
 
   /**
-   * Input mode state management for edge creation and modification
-   */
-  private isInputModeActive: boolean = false;
-  private edgeCreationState: {
-    isCreating: boolean;
-    sourceNode: NodeWithMetadata | null;
-    temporaryEdge: any;
-  } = {
-    isCreating: false,
-    sourceNode: null,
-    temporaryEdge: null
-  };
-
-  /**
-   * Edge endpoint dragging state for moving edges between nodes
-   */
-  private edgeDragState: {
-    isDragging: boolean;
-    edge: EdgeWithMetadata | null;
-    endpoint: 'source' | 'target' | null;
-    dragMarker: any;
-  } = {
-    isDragging: false,
-    edge: null,
-    endpoint: null,
-    dragMarker: null
-  };
-
-  /**
    * Temporary canvas for text measurement
    */
   private textMeasurementCanvas: HTMLCanvasElement | null = null;
@@ -201,9 +166,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .x((d: any) => d.x)
       .y((d: any) => d.y)
       .curve(d3.curveBasis);
-
-    // Initialize input mode keyboard event handlers
-    this.initializeInputModeHandlers();
   }
 
   /**
@@ -656,129 +618,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
-   * Initialize keyboard event handlers for input mode activation
-   */
-  private initializeInputModeHandlers(): void {
-    // Handle keydown for Cmd/Ctrl press
-    document.addEventListener('keydown', (event) => {
-      if ((event.metaKey || event.ctrlKey) && !this.isInputModeActive) {
-        this.activateInputMode();
-      }
-    });
-
-    // Handle keyup for Cmd/Ctrl release
-    document.addEventListener('keyup', (event) => {
-      if (!event.metaKey && !event.ctrlKey && this.isInputModeActive) {
-        this.deactivateInputMode();
-      }
-    });
-
-    // Handle window blur to ensure input mode is deactivated
-    window.addEventListener('blur', () => {
-      if (this.isInputModeActive) {
-        this.deactivateInputMode();
-      }
-    });
-  }
-
-  /**
-   * Activate input mode for edge creation and modification
-   */
-  private activateInputMode(): void {
-    this.isInputModeActive = true;
-    
-    // Add input-mode class to SVG for styling
-    if (this.svg) {
-      this.svg.classed('input-mode', true);
-    }
-
-    // Disable node dragging and zoom/translate
-    this.disableNodeDragging();
-    this.disableZoom();
-
-    // Update edge endpoint markers visibility
-    this.updateEdgeEndpointMarkers();
-
-    // Dispatch event for external listeners
-    this.dispatchEvent(new CustomEvent('input-mode-activated', {
-      detail: { active: true }
-    }));
-  }
-
-  /**
-   * Deactivate input mode and restore normal behavior
-   */
-  private deactivateInputMode(): void {
-    this.isInputModeActive = false;
-    
-    // Remove input-mode class from SVG
-    if (this.svg) {
-      this.svg.classed('input-mode', false);
-    }
-
-    // Clean up any temporary edge creation state
-    this.cleanupEdgeCreation();
-
-    // Re-enable node dragging and zoom/translate
-    this.enableNodeDragging();
-    this.enableZoom();
-
-    // Update edge endpoint markers visibility
-    this.updateEdgeEndpointMarkers();
-
-    // Dispatch event for external listeners
-    this.dispatchEvent(new CustomEvent('input-mode-deactivated', {
-      detail: { active: false }
-    }));
-  }
-
-  /**
-   * Disable node dragging when in input mode
-   */
-  private disableNodeDragging(): void {
-    if (this.svgNodes && this.colaLayout) {
-      this.svgNodes.on('.drag', null);
-    }
-  }
-
-  /**
-   * Re-enable node dragging when exiting input mode
-   */
-  private enableNodeDragging(): void {
-    if (this.svgNodes && this.colaLayout && this.colaLayout.drag) {
-      const nodeDrag = this.colaLayout.drag();
-      this.setupNodeDragHandlers(nodeDrag);
-      this.svgNodes.call(nodeDrag);
-    }
-  }
-
-  /**
-   * Disable zoom/translate functionality when in input mode
-   */
-  private disableZoom(): void {
-    if (this.svg && this.zoomBehavior) {
-      // Store current transform before disabling
-      this.storedTransform = d3.zoomTransform(this.svg.node());
-      // Disable zoom events but preserve the behavior
-      this.svg.on('.zoom', null);
-    }
-  }
-
-  /**
-   * Re-enable zoom/translate functionality when exiting input mode
-   */
-  private enableZoom(): void {
-    if (this.svg && this.zoomBehavior) {
-      // Re-enable zoom behavior
-      this.svg.call(this.zoomBehavior);
-      // Restore the previous transform if we had one
-      if (this.storedTransform) {
-        this.svg.call(this.zoomBehavior.transform, this.storedTransform);
-      }
-    }
-  }
-
-  /**
    * Zoom in by a fixed scale factor
    */
   private zoomIn(): void {
@@ -823,23 +662,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
-   * Clean up temporary edge creation state
-   */
-  private cleanupEdgeCreation(): void {
-    // Remove temporary edge if it exists
-    if (this.edgeCreationState.temporaryEdge) {
-      this.edgeCreationState.temporaryEdge.remove();
-    }
-
-    // Reset edge creation state
-    this.edgeCreationState = {
-      isCreating: false,
-      sourceNode: null,
-      temporaryEdge: null
-    };
-  }
-
-  /**
    * Setup drag handlers for nodes
    */
   private setupNodeDragHandlers(nodeDrag: any): void {
@@ -863,289 +685,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         };
         this.dispatchEvent(new CustomEvent('node-drag-end', { detail }));
       });
-  }
-
-  /**
-   * Start edge creation from a source node
-   */
-  private startEdgeCreation(sourceNode: NodeWithMetadata): void {
-    if (!this.isInputModeActive) return;
-
-    // Clean up any existing edge creation
-    this.cleanupEdgeCreation();
-
-    // Set edge creation state
-    this.edgeCreationState.isCreating = true;
-    this.edgeCreationState.sourceNode = sourceNode;
-
-    // Create temporary edge line
-    this.edgeCreationState.temporaryEdge = this.container
-      .append('line')
-      .attr('class', 'temporary-edge')
-      .attr('x1', sourceNode.x)
-      .attr('y1', sourceNode.y)
-      .attr('x2', sourceNode.x)
-      .attr('y2', sourceNode.y)
-      .attr('stroke', '#007bff')
-      .attr('stroke-width', 2)
-      .attr('stroke-dasharray', '5,5')
-      .attr('opacity', 0.7);
-
-    // Add mousemove listener for temporary edge visualization
-    this.svg.on('mousemove.edgecreation', () => {
-      if (this.edgeCreationState.isCreating && this.edgeCreationState.temporaryEdge) {
-        const [mouseX, mouseY] = d3.mouse(this.container.node());
-        this.edgeCreationState.temporaryEdge
-          .attr('x2', mouseX)
-          .attr('y2', mouseY);
-      }
-    });
-  }
-
-  /**
-   * Finish edge creation by connecting to a target node
-   */
-  private async finishEdgeCreation(targetNode: NodeWithMetadata): Promise<void> {
-    if (!this.isInputModeActive || !this.edgeCreationState.isCreating || !this.edgeCreationState.sourceNode) {
-      return;
-    }
-
-    const sourceNode = this.edgeCreationState.sourceNode;
-
-    // Confirm self-loop edges
-    if (sourceNode.id === targetNode.id) {
-      const confirmSelfLoop = await this.showConfirmDialog(
-        `Are you sure you want to create a self-loop edge on "${sourceNode.label || sourceNode.id}"?`
-      );
-      if (!confirmSelfLoop) {
-        this.cleanupEdgeCreation();
-        return;
-      }
-    }
-
-    // Clean up temporary edge visualization
-    this.svg.on('mousemove.edgecreation', null);
-
-    // Show edge label input dialog
-    await this.showEdgeLabelInput(sourceNode, targetNode);
-  }
-
-  /**
-   * Show edge label input dialog and create the edge
-   */
-  private async showEdgeLabelInput(sourceNode: NodeWithMetadata, targetNode: NodeWithMetadata): Promise<void> {
-    const label = await this.showPromptDialog(
-      `Enter label for edge from "${sourceNode.label || sourceNode.id}" to "${targetNode.label || targetNode.id}":`,
-      ''
-    );
-    
-    if (label !== null) { // User didn't cancel
-      await this.createNewEdge(sourceNode, targetNode, label || '');
-    }
-
-    // Clean up edge creation state
-    this.cleanupEdgeCreation();
-  }
-
-  /**
-   * Create a new edge between two nodes
-   */
-  private async createNewEdge(sourceNode: NodeWithMetadata, targetNode: NodeWithMetadata, label: string): Promise<void> {
-    if (!this.currentLayout) return;
-
-    // Find node indices in the current layout
-    const sourceIndex = this.currentLayout.nodes.findIndex(node => node.id === sourceNode.id);
-    const targetIndex = this.currentLayout.nodes.findIndex(node => node.id === targetNode.id);
-
-    if (sourceIndex === -1 || targetIndex === -1) {
-      console.error('Could not find node indices for edge creation');
-      return;
-    }
-
-    // Generate unique edge ID
-    const edgeId = `edge_${sourceNode.id}_${targetNode.id}_${Date.now()}`;
-
-    // Create new edge object
-    const newEdge: EdgeWithMetadata = {
-      id: edgeId,
-      source: sourceIndex,
-      target: targetIndex,
-      label: label,
-      relName: label,
-      color: '#333',
-      isUserCreated: true
-    } as EdgeWithMetadata;
-
-    // Add edge to current layout
-    this.currentLayout.links.push(newEdge);
-
-    // Update external state with the new edge
-    await this.updateExternalStateForNewEdge(sourceNode, targetNode, label);
-
-    // Dispatch event for external listeners
-    this.dispatchEvent(new CustomEvent('edge-created', {
-      detail: { 
-        edge: newEdge,
-        sourceNode: sourceNode,
-        targetNode: targetNode
-      }
-    }));
-
-    // Re-render the graph to show the new edge
-    this.rerenderGraph();
-  }
-
-  /**
-   * Update external state for a new edge through the external state management system
-   * @param sourceNode - Source node of the edge
-   * @param targetNode - Target node of the edge 
-   * @param relationName - Name/label of the relation
-   */
-  private async updateExternalStateForNewEdge(sourceNode: NodeWithMetadata, targetNode: NodeWithMetadata, relationName: string): Promise<void> {
-    if (!relationName.trim()) {
-      return;
-    }
-
-    try {
-      // Create a tuple representing the edge/relation
-      const tuple: ITuple = {
-        atoms: [sourceNode.id, targetNode.id],
-        types: [sourceNode.type || 'untyped', targetNode.type || 'untyped']
-      };
-
-      console.log(`Dispatching edge creation request: ${relationName}(${sourceNode.id}, ${targetNode.id})`);
-      
-      // Dispatch edge creation event for React components to handle
-      const edgeCreationEvent = new CustomEvent('edge-creation-requested', {
-        detail: {
-          relationId: relationName,
-          sourceNodeId: sourceNode.id,
-          targetNodeId: targetNode.id,
-          tuple: tuple
-        },
-        bubbles: true
-      });
-      this.dispatchEvent(edgeCreationEvent);
-    } catch (error) {
-      console.error('Failed to update external state for new edge:', error);
-    }
-  }
-
-  /**
-   * Re-render the graph with current layout data
-   */
-  private rerenderGraph(): void {
-    if (!this.currentLayout || !this.colaLayout) return;
-
-    // Update links in the layout
-    this.colaLayout.links(this.currentLayout.links);
-
-    // Re-render links
-    this.container.selectAll('.link-group').remove();
-    this.renderLinks(this.currentLayout.links, this.colaLayout);
-
-    // Restart the layout
-    this.colaLayout.start();
-  }
-
-  /**
-   * Edit the label of an existing edge
-   */
-  private async editEdgeLabel(edgeData: EdgeWithMetadata): Promise<void> {
-    if (!this.isInputModeActive) return;
-
-    const currentLabel = edgeData.label || edgeData.relName || '';
-    const result = await this.showEdgeEditDialog(`Edit edge label:`, currentLabel);
-    
-    // Handle deletion request
-    if (result === 'DELETE') {
-      await this.deleteEdge(edgeData);
-      return;
-    }
-    
-    // Handle label change
-    if (result !== null && result !== currentLabel) {
-      const newLabel = result;
-      
-      // Get source and target nodes for data instance update
-      const sourceNode = this.getNodeFromEdge(edgeData, 'source');
-      const targetNode = this.getNodeFromEdge(edgeData, 'target');
-
-      // Update external state if available
-      await this.updateExternalStateForEdgeModification(sourceNode, targetNode, currentLabel, newLabel);
-
-      // Update edge data
-      edgeData.label = newLabel;
-      edgeData.relName = newLabel;
-
-      // Dispatch event for external listeners
-      this.dispatchEvent(new CustomEvent('edge-modified', {
-        detail: { 
-          edge: edgeData,
-          oldLabel: currentLabel,
-          newLabel: newLabel
-        }
-      }));
-
-      // Re-render to show updated label
-      this.rerenderGraph();
-    }
-  }
-
-  /**
-   * Get node from edge data based on source or target
-   * @param edgeData - Edge data
-   * @param position - 'source' or 'target'
-   * @returns Node data or null
-   */
-  private getNodeFromEdge(edgeData: EdgeWithMetadata, position: 'source' | 'target'): NodeWithMetadata | null {
-    if (!this.currentLayout) return null;
-    
-    const nodeIndex = typeof edgeData[position] === 'number' ? edgeData[position] : edgeData[position].index;
-    return this.currentLayout.nodes[nodeIndex] || null;
-  }
-
-  /**
-   * Update external state for an edge modification through the external state management system
-   * @param sourceNode - Source node of the edge
-   * @param targetNode - Target node of the edge 
-   * @param oldRelationName - Old relation name/label
-   * @param newRelationName - New relation name/label
-   */
-  private async updateExternalStateForEdgeModification(
-    sourceNode: NodeWithMetadata | null, 
-    targetNode: NodeWithMetadata | null, 
-    oldRelationName: string, 
-    newRelationName: string
-  ): Promise<void> {
-    if (!sourceNode || !targetNode) {
-      return;
-    }
-
-    try {
-      // Create tuple for the relation
-      const tuple: ITuple = {
-        atoms: [sourceNode.id, targetNode.id],
-        types: [sourceNode.type || 'untyped', targetNode.type || 'untyped']
-      };
-
-      console.log(`Dispatching edge modification request: ${oldRelationName} -> ${newRelationName}`);
-
-      // Dispatch edge modification event for React components to handle
-      const edgeModificationEvent = new CustomEvent('edge-modification-requested', {
-        detail: {
-          oldRelationId: oldRelationName,
-          newRelationId: newRelationName,
-          sourceNodeId: sourceNode.id,
-          targetNodeId: targetNode.id,
-          tuple: tuple
-        },
-        bubbles: true
-      });
-      this.dispatchEvent(edgeModificationEvent);
-    } catch (error) {
-      console.error('Failed to update external state for edge modification:', error);
-    }
   }
 
   /**
@@ -1498,9 +1037,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // Add labels to non-alignment links
     this.setupLinkLabels(linkGroups);
 
-    // Add draggable endpoint markers for input mode
-    this.setupEdgeEndpointMarkers(linkGroups);
-
     return linkGroups;
   }
 
@@ -1532,18 +1068,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         // Add marker-start for bidirectional edges
         if (this.isAlignmentEdge(d) || !d.bidirectional) return "none";
         return  "url(#start-arrow)";
-      })
-      .on('click.inputmode', (d: any) => {
-        if (this.isInputModeActive && !this.isAlignmentEdge(d)) {
-          d3.event.stopPropagation();
-          // Handle async operation without blocking the event
-          this.editEdgeLabel(d).catch(error => {
-            console.error('Error editing edge label:', error);
-          });
-        }
-      })
-      .style('cursor', () => {
-        return this.isInputModeActive ? 'pointer' : 'default';
       });
   }
 
@@ -1567,273 +1091,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       //.attr("fill", "#555")
       .attr("pointer-events", "none")
       .text((d: any) => d.label || d.relName || "");
-  }
-
-  /**
-   * Adds draggable endpoint markers to edges for input mode.
-   * These markers allow users to drag edge endpoints to reconnect edges.
-   * 
-   * @param linkGroups - D3 selection of link group elements
-   */
-  private setupEdgeEndpointMarkers(
-    linkGroups: d3.Selection<SVGGElement, any, any, unknown>
-  ): void {
-    // Add target endpoint marker (at the arrow end)
-    linkGroups
-      .filter((d: any) => !this.isAlignmentEdge(d))
-      .append("circle")
-      .attr("class", "edge-endpoint-marker target-marker")
-      .attr("r", 8)
-      .attr("fill", "#007bff")
-      .attr("stroke", "white")
-      .attr("stroke-width", 2)
-      .attr("opacity", 0) // Hidden by default
-      .attr("cursor", "move")
-      .style("pointer-events", "none") // Will be enabled in input mode
-      .call(
-        d3.drag()
-          .on('start', (d: EdgeWithMetadata) => this.startEdgeEndpointDrag(d, 'target'))
-          .on('drag', (d: EdgeWithMetadata) => this.dragEdgeEndpoint(d, 'target'))
-          .on('end', (d: EdgeWithMetadata) => this.endEdgeEndpointDrag(d, 'target'))
-      );
-
-    // Add source endpoint marker (at the start, for bidirectional edges or moving the source)
-    linkGroups
-      .filter((d: any) => !this.isAlignmentEdge(d))
-      .append("circle")
-      .attr("class", "edge-endpoint-marker source-marker")
-      .attr("r", 8)
-      .attr("fill", "#28a745")
-      .attr("stroke", "white")
-      .attr("stroke-width", 2)
-      .attr("opacity", 0) // Hidden by default
-      .attr("cursor", "move")
-      .style("pointer-events", "none") // Will be enabled in input mode
-      .call(
-        d3.drag()
-          .on('start', (d: EdgeWithMetadata) => this.startEdgeEndpointDrag(d, 'source'))
-          .on('drag', (d: EdgeWithMetadata) => this.dragEdgeEndpoint(d, 'source'))
-          .on('end', (d: EdgeWithMetadata) => this.endEdgeEndpointDrag(d, 'source'))
-      );
-  }
-
-  /**
-   * Start dragging an edge endpoint
-   */
-  private startEdgeEndpointDrag(edgeData: EdgeWithMetadata, endpoint: 'source' | 'target'): void {
-    d3.event.sourceEvent.stopPropagation();
-    
-    this.edgeDragState.isDragging = true;
-    this.edgeDragState.edge = edgeData;
-    this.edgeDragState.endpoint = endpoint;
-    
-    console.log(`🔵 Started dragging ${endpoint} endpoint of edge:`, edgeData.id);
-  }
-
-  /**
-   * Drag an edge endpoint - update visual feedback
-   */
-  private dragEdgeEndpoint(edgeData: EdgeWithMetadata, endpoint: 'source' | 'target'): void {
-    if (!this.edgeDragState.isDragging) return;
-
-    const [mouseX, mouseY] = d3.mouse(this.container.node());
-    
-    // Update the marker position
-    const markerClass = endpoint === 'target' ? '.target-marker' : '.source-marker';
-    this.container
-      .selectAll('.link-group')
-      .filter((d: any) => d.id === edgeData.id)
-      .select(markerClass)
-      .attr('cx', mouseX)
-      .attr('cy', mouseY);
-  }
-
-  /**
-   * End dragging an edge endpoint - reconnect or delete edge
-   */
-  private async endEdgeEndpointDrag(edgeData: EdgeWithMetadata, endpoint: 'source' | 'target'): Promise<void> {
-    if (!this.edgeDragState.isDragging) return;
-
-    const [mouseX, mouseY] = d3.mouse(this.container.node());
-    
-    // Find the node under the cursor
-    const targetNode = this.findNodeAtPosition(mouseX, mouseY);
-    
-    if (targetNode) {
-      console.log(`🔗 Reconnecting ${endpoint} to node:`, targetNode.id);
-      await this.reconnectEdge(edgeData, endpoint, targetNode);
-    } else {
-      console.log(`🗑️ No node found - deleting edge:`, edgeData.id);
-      await this.deleteEdge(edgeData);
-    }
-    
-    // Clean up drag state
-    this.edgeDragState = {
-      isDragging: false,
-      edge: null,
-      endpoint: null,
-      dragMarker: null
-    };
-    
-    // Re-render to show changes
-    this.rerenderGraph();
-  }
-
-  /**
-   * Find a node at the given position
-   */
-  private findNodeAtPosition(x: number, y: number): NodeWithMetadata | null {
-    if (!this.currentLayout?.nodes) return null;
-    
-    // Check each node to see if the position is within its bounds
-    for (const node of this.currentLayout.nodes) {
-      const halfWidth = (node.width || 0) / 2;
-      const halfHeight = (node.height || 0) / 2;
-      
-      if (x >= node.x - halfWidth && x <= node.x + halfWidth &&
-          y >= node.y - halfHeight && y <= node.y + halfHeight) {
-        return node;
-      }
-    }
-    
-    return null;
-  }
-
-  /**
-   * Reconnect an edge to a new node
-   */
-  private async reconnectEdge(
-    edgeData: EdgeWithMetadata,
-    endpoint: 'source' | 'target',
-    newNode: NodeWithMetadata
-  ): Promise<void> {
-    const oldSourceNode = this.getNodeFromEdge(edgeData, 'source');
-    const oldTargetNode = this.getNodeFromEdge(edgeData, 'target');
-    
-    if (!oldSourceNode || !oldTargetNode) {
-      console.error('Could not find source or target node');
-      return;
-    }
-
-    // Determine new source and target
-    let newSourceNode: NodeWithMetadata;
-    let newTargetNode: NodeWithMetadata;
-    
-    if (endpoint === 'source') {
-      newSourceNode = newNode;
-      newTargetNode = oldTargetNode;
-    } else {
-      newSourceNode = oldSourceNode;
-      newTargetNode = newNode;
-    }
-
-    // Don't allow reconnecting if it results in the same edge
-    if (newSourceNode.id === oldSourceNode.id && newTargetNode.id === oldTargetNode.id) {
-      console.log('⏭️ Edge already connected to this node, no change needed');
-      return;
-    }
-
-    const relationName = edgeData.label || edgeData.relName || '';
-    
-    if (!relationName.trim()) {
-      console.warn('Edge has no relation name, cannot reconnect');
-      return;
-    }
-
-    // Create tuples for old and new edges
-    const oldTuple: ITuple = {
-      atoms: [oldSourceNode.id, oldTargetNode.id],
-      types: [oldSourceNode.type || 'untyped', oldTargetNode.type || 'untyped']
-    };
-
-    const newTuple: ITuple = {
-      atoms: [newSourceNode.id, newTargetNode.id],
-      types: [newSourceNode.type || 'untyped', newTargetNode.type || 'untyped']
-    };
-
-    console.log(`🔄 Reconnecting edge from ${oldSourceNode.id}->${oldTargetNode.id} to ${newSourceNode.id}->${newTargetNode.id}`);
-
-    // Dispatch edge reconnection event
-    const edgeReconnectionEvent = new CustomEvent('edge-reconnection-requested', {
-      detail: {
-        relationId: relationName,
-        oldTuple: oldTuple,
-        newTuple: newTuple,
-        oldSourceNodeId: oldSourceNode.id,
-        oldTargetNodeId: oldTargetNode.id,
-        newSourceNodeId: newSourceNode.id,
-        newTargetNodeId: newTargetNode.id
-      },
-      bubbles: true
-    });
-    this.dispatchEvent(edgeReconnectionEvent);
-
-    // Update the edge data in the current layout
-    const sourceIndex = this.currentLayout.nodes.findIndex(n => n.id === newSourceNode.id);
-    const targetIndex = this.currentLayout.nodes.findIndex(n => n.id === newTargetNode.id);
-    
-    if (sourceIndex !== -1 && targetIndex !== -1) {
-      edgeData.source = sourceIndex;
-      edgeData.target = targetIndex;
-    }
-  }
-
-  /**
-   * Delete an edge from the graph
-   */
-  private async deleteEdge(edgeData: EdgeWithMetadata): Promise<void> {
-    const sourceNode = this.getNodeFromEdge(edgeData, 'source');
-    const targetNode = this.getNodeFromEdge(edgeData, 'target');
-    
-    if (!sourceNode || !targetNode) {
-      console.error('Could not find source or target node for edge deletion');
-      return;
-    }
-
-    const relationName = edgeData.label || edgeData.relName || '';
-    
-    if (!relationName.trim()) {
-      console.warn('Edge has no relation name, cannot delete from data instance');
-      // Still remove from visualization
-      this.removeEdgeFromLayout(edgeData);
-      return;
-    }
-
-    const tuple: ITuple = {
-      atoms: [sourceNode.id, targetNode.id],
-      types: [sourceNode.type || 'untyped', targetNode.type || 'untyped']
-    };
-
-    console.log(`🗑️ Deleting edge: ${relationName}(${sourceNode.id}, ${targetNode.id})`);
-
-    // Dispatch edge deletion event (using modification with empty new name)
-    const edgeDeletionEvent = new CustomEvent('edge-modification-requested', {
-      detail: {
-        oldRelationId: relationName,
-        newRelationId: '', // Empty string signals deletion
-        sourceNodeId: sourceNode.id,
-        targetNodeId: targetNode.id,
-        tuple: tuple
-      },
-      bubbles: true
-    });
-    this.dispatchEvent(edgeDeletionEvent);
-
-    // Remove from current layout
-    this.removeEdgeFromLayout(edgeData);
-  }
-
-  /**
-   * Remove an edge from the current layout
-   */
-  private removeEdgeFromLayout(edgeData: EdgeWithMetadata): void {
-    if (!this.currentLayout?.links) return;
-    
-    const index = this.currentLayout.links.findIndex(link => link.id === edgeData.id);
-    if (index !== -1) {
-      this.currentLayout.links.splice(index, 1);
-      console.log(`✅ Edge removed from layout: ${edgeData.id}`);
-    }
   }
 
   /**
@@ -1999,22 +1256,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         return baseClass;
       })
       .call(nodeDrag)
-      .on('mousedown.inputmode', (d: any) => {
-        if (this.isInputModeActive) {
-          d3.event.stopPropagation();
-          this.startEdgeCreation(d);
-        }
-      })
-      .on('mouseup.inputmode', (d: any) => {
-        if (this.isInputModeActive && this.edgeCreationState.isCreating) {
-          d3.event.stopPropagation();
-          // Handle async operation without blocking the event
-          this.finishEdgeCreation(d).catch(error => {
-            console.error('Error finishing edge creation:', error);
-          });
-        }
-      })
-    // Show tooltip with node ID only when not in input mode
+    // Show tooltip with node ID
       .on('mouseover', function(d: any) {
           d3.select(this)
             .append('title')
@@ -2560,9 +1802,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       })
       .raise();
 
-    // Update edge endpoint markers for input mode
-    this.updateEdgeEndpointMarkers();
-
     // Update group labels (center top of each group)
     this.svgGroupLabels
       .attr('x', (d: any) => {
@@ -2581,60 +1820,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     this.svgLinkGroups.selectAll('.linklabel').raise();
     this.svgGroups.selectAll('.error-group').raise();
     this.svgNodes.selectAll('.error-node').raise();
-  }
-
-  /**
-   * Update positions of edge endpoint markers
-   * Positions them at the arrow/marker positions of edges
-   */
-  private updateEdgeEndpointMarkers(): void {
-    if (!this.svgLinkGroups) return;
-
-    // Update target markers (at the arrow end)
-    this.svgLinkGroups.select('.target-marker')
-      .attr('cx', (d: EdgeWithMetadata) => {
-        const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${d.id}"]`) as SVGPathElement;
-        if (pathElement) {
-          const pathLength = pathElement.getTotalLength();
-          const point = pathElement.getPointAtLength(pathLength);
-          return point.x;
-        }
-        return d.target.x || 0;
-      })
-      .attr('cy', (d: EdgeWithMetadata) => {
-        const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${d.id}"]`) as SVGPathElement;
-        if (pathElement) {
-          const pathLength = pathElement.getTotalLength();
-          const point = pathElement.getPointAtLength(pathLength);
-          return point.y;
-        }
-        return d.target.y || 0;
-      })
-      .attr('opacity', this.isInputModeActive ? 0.8 : 0)
-      .style('pointer-events', this.isInputModeActive ? 'all' : 'none')
-      .raise(); // Always on top
-
-    // Update source markers (at the start)
-    this.svgLinkGroups.select('.source-marker')
-      .attr('cx', (d: EdgeWithMetadata) => {
-        const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${d.id}"]`) as SVGPathElement;
-        if (pathElement) {
-          const point = pathElement.getPointAtLength(0);
-          return point.x;
-        }
-        return d.source.x || 0;
-      })
-      .attr('cy', (d: EdgeWithMetadata) => {
-        const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${d.id}"]`) as SVGPathElement;
-        if (pathElement) {
-          const point = pathElement.getPointAtLength(0);
-          return point.y;
-        }
-        return d.source.y || 0;
-      })
-      .attr('opacity', this.isInputModeActive ? 0.8 : 0)
-      .style('pointer-events', this.isInputModeActive ? 'all' : 'none')
-      .raise(); // Always on top
   }
 
   private gridUpdatePositions() {
@@ -3931,32 +3116,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
       }
 
-      /* Input mode styles */
-      svg.input-mode {
-        cursor: crosshair !important;
-      }
-
-      svg.input-mode .node rect {
-        cursor: crosshair !important;
-      }
-
-      svg.input-mode:active {
-        cursor: crosshair !important;
-      }
-
-      .temporary-edge {
-        pointer-events: none;
-        z-index: 1000;
-      }
-
-      svg.input-mode .link {
-        cursor: pointer;
-      }
-
-      svg.input-mode .link:hover {
-        opacity: 0.8;
-      }
-
       /* Error icon positioning - bottom area to avoid header overlap */
       #error-icon {
         margin: 5px;
@@ -4052,103 +3211,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         border-color: #e5e7eb;
         color: #9ca3af;
         transform: none;
-      }
-
-      /* Modal Overlay and Dialog */
-      .modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.5);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 10000;
-        font-family: system-ui, -apple-system, sans-serif;
-      }
-
-      .modal-dialog {
-        background: white;
-        border-radius: 8px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        padding: 24px;
-        max-width: 500px;
-        width: 90%;
-        max-height: 90vh;
-        overflow-y: auto;
-      }
-
-      .modal-header {
-        margin-bottom: 16px;
-      }
-
-      .modal-title {
-        margin: 0;
-        font-size: 18px;
-        font-weight: 600;
-        color: #333;
-      }
-
-      .modal-body {
-        margin-bottom: 20px;
-      }
-
-      .modal-message {
-        margin: 0 0 16px 0;
-        font-size: 14px;
-        color: #555;
-        line-height: 1.5;
-      }
-
-      .modal-input {
-        width: 100%;
-        padding: 8px 12px;
-        border: 2px solid #ddd;
-        border-radius: 4px;
-        font-size: 14px;
-        box-sizing: border-box;
-      }
-
-      .modal-input:focus {
-        outline: none;
-        border-color: #007acc;
-      }
-
-      .modal-footer {
-        display: flex;
-        gap: 8px;
-        justify-content: flex-end;
-      }
-
-      .modal-button {
-        padding: 8px 16px;
-        border: none;
-        border-radius: 4px;
-        font-size: 14px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: background-color 0.2s;
-      }
-
-      .modal-button.primary {
-        background: #007acc;
-        color: white;
-      }
-
-      .modal-button.primary:hover {
-        background: #005fa3;
-      }
-
-      .modal-button.secondary {
-        background: #f8f9fa;
-        color: #666;
-        border: 1px solid #ddd;
-      }
-
-      .modal-button.secondary:hover {
-        background: #e9ecef;
       }
     `;
   }
