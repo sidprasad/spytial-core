@@ -3518,15 +3518,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * This method cleans up:
    * - D3 selections and event listeners
    * - WebCola layout references
-   * - Keyboard event handlers
-   * - Temporary UI elements (modals, overlays)
+   * - Temporary UI elements
    */
   public dispose(): void {
-    // Remove keyboard event handlers
-    // Note: We can't easily remove specific listeners without keeping references,
-    // but we can clear the component state that they depend on
-    this.deactivateInputMode();
-    
     // Clear D3 selections and remove event listeners
     if (this.svg) {
       this.svg.on('.zoom', null); // Remove zoom event handlers
@@ -3566,9 +3560,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     
     // Clear drag state
     this.dragStartPositions.clear();
-    
-    // Clear edge creation state
-    this.cleanupEdgeCreation();
     
     // Clear text measurement canvas
     if (this.textMeasurementCanvas) {
