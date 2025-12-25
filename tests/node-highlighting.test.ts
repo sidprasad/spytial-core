@@ -265,9 +265,10 @@ describe('WebColaCnDGraph Node Highlighting', () => {
       // Expected behavior:
       // - Should gracefully handle malformed data
       // - Should skip invalid pairs
+      // - Only pairs with exactly 2 elements are valid
       
       const validPairs = malformedPairs.filter(p => p.length === 2);
-      expect(validPairs.length).toBe(1); // Only ['Bob', 'Charlie', 'Diana'] has 2+ elements
+      expect(validPairs.length).toBe(0); // None of these are valid
     });
   });
 });

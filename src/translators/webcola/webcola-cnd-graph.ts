@@ -3818,6 +3818,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Highlights node pairs based on binary selector results.
    * Shows visual correspondence between first and second elements using different colors.
    * 
+   * Note: If a node appears in multiple pairs with different roles (both first and second),
+   * it will receive both 'highlighted-first' and 'highlighted-second' classes, and if badges
+   * are enabled, only the last badge will be visible (this is intentional to avoid cluttering).
+   * 
    * @param nodePairs - Array of [first, second] node ID pairs (e.g., from evaluator.selectedTwoples())
    * @param options - Optional configuration for highlighting
    * @param options.showBadges - If true, shows "1" and "2" badges on nodes (default: false)
@@ -3843,7 +3847,18 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     const firstNodeIds = new Set<string>();
     const secondNodeIds = new Set<string>();
     
-    nodePairs.forEach(([first, second]) => {
+    // Validate and process pairs
+    nodePairs.forEach((pair, index) => {
+      if (!Array.isArray(pair)) {
+        console.warn(`highlightNodePairs: Pair at index ${index} is not an array, skipping`);
+        return;
+      }
+      if (pair.length !== 2) {
+        console.warn(`highlightNodePairs: Pair at index ${index} has ${pair.length} elements (expected 2), skipping`);
+        return;
+      }
+      
+      const [first, second] = pair;
       if (first) firstNodeIds.add(first);
       if (second) secondNodeIds.add(second);
     });
@@ -3870,7 +3885,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           highlighted = true;
           
           if (showBadges) {
-            this.addHighlightBadge(nodeGroup, d, '2', '#ff3b30');
+            // For nodes that are both first and second, show a combined badge
+            if (firstNodeIds.has(d.id)) {
+              this.addHighlightBadge(nodeGroup, d, '1,2', '#9B59B6'); // Purple for dual role
+            } else {
+              this.addHighlightBadge(nodeGroup, d, '2', '#ff3b30');
+            }
           }
         }
       });

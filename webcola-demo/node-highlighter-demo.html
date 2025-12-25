@@ -402,10 +402,36 @@
 
       // Parse pairs like "Alice:Bob, Charlie:Diana"
       const pairStrings = input.split(',').map(p => p.trim()).filter(p => p);
-      const pairs = pairStrings.map(pairStr => {
-        const [first, second] = pairStr.split(':').map(id => id.trim());
-        return [first, second];
+      const pairs = [];
+      const errors = [];
+      
+      pairStrings.forEach((pairStr, index) => {
+        const parts = pairStr.split(':');
+        
+        if (parts.length !== 2) {
+          errors.push(`Pair ${index + 1} ("${pairStr}") must have exactly one colon separator`);
+          return;
+        }
+        
+        const [first, second] = parts.map(id => id.trim());
+        
+        if (!first || !second) {
+          errors.push(`Pair ${index + 1} ("${pairStr}") has empty node ID(s)`);
+          return;
+        }
+        
+        pairs.push([first, second]);
       });
+      
+      if (errors.length > 0) {
+        showStatus(`Validation errors: ${errors.join('; ')}`, 'error');
+        return;
+      }
+      
+      if (pairs.length === 0) {
+        showStatus('No valid pairs to highlight', 'error');
+        return;
+      }
       
       // Clear previous highlights
       graph.clearNodeHighlights();
