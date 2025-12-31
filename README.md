@@ -146,6 +146,55 @@ See [webcola-demo/projection-controls-demo-vanilla.html](./webcola-demo/projecti
 
 ---
 
+## Node Highlighting
+
+Visualize selector and evaluator results by highlighting nodes directly in the graph. This feature allows you to examine selector results in context without triggering a layout refresh.
+
+### Unary Selectors (Single Nodes)
+
+```typescript
+// Evaluate a unary selector
+const result = evaluator.evaluate('Student');
+const nodeIds = result.selectedAtoms();
+
+// Highlight the nodes
+const graph = document.querySelector('webcola-cnd-graph');
+graph.highlightNodes(nodeIds);
+```
+
+### Binary Selectors (Node Pairs)
+
+```typescript
+// Evaluate a binary selector
+const result = evaluator.evaluate('friend');
+const pairs = result.selectedTwoples(); // [["Alice", "Bob"], ["Charlie", "Diana"]]
+
+// Highlight with visual correspondence
+graph.highlightNodePairs(pairs);
+
+// Or with badges showing 1/2 correspondence
+graph.highlightNodePairs(pairs, { showBadges: true });
+```
+
+### Clear Highlights
+
+```typescript
+// Remove all node highlights
+graph.clearNodeHighlights();
+```
+
+### Visual Styling
+
+- **Unary selectors**: Orange border with glow effect
+- **Binary selectors**: 
+  - First elements: Blue border (e.g., the source of a relation)
+  - Second elements: Red border (e.g., the target of a relation)
+  - Optional badges: Shows "1" and "2" to indicate correspondence
+
+See [webcola-demo/node-highlighter-demo.html](./webcola-demo/node-highlighter-demo.html) for an interactive demo.
+
+---
+
 ## CDN
 
 You can use the browser bundle directly from a CDN:
@@ -196,6 +245,25 @@ Once loaded, use via the global `CndCore` object:
 - **`LayoutInstance`** - Generate layouts from CnD specs
 - **`SGraphQueryEvaluator`** - Evaluate selector expressions
 - **`AlloyDataInstance`**, **`JSONDataInstance`**, etc. - Data format adapters
+
+### WebCola Graph API
+
+The `<webcola-cnd-graph>` custom element provides methods for interacting with the rendered graph:
+
+#### Node Highlighting
+- **`highlightNodes(nodeIds: string[])`** - Highlight nodes by ID (unary selectors)
+- **`highlightNodePairs(pairs: string[][], options?)`** - Highlight node pairs with first/second correspondence (binary selectors)
+- **`clearNodeHighlights()`** - Remove all node highlights
+
+#### Relation Highlighting
+- **`getAllRelations()`** - Get all unique relation names
+- **`highlightRelation(relName: string)`** - Highlight edges by relation name
+- **`clearHighlightRelation(relName: string)`** - Clear relation highlighting
+
+#### Layout Management
+- **`renderLayout(instanceLayout, options?)`** - Render a layout with optional prior positions
+- **`clear()`** - Clear the graph and reset state
+- **`getNodePositions()`** - Get current positions of all nodes
 
 See [docs/](./docs/) for detailed documentation.
 

@@ -2965,6 +2965,183 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     return true;
   }
 
+  /** Public API for node highlighting */
+
+  /**
+   * Highlights nodes based on their IDs (for unary selector results).
+   * This is useful for visualizing the results of a selector expression.
+   * 
+   * @param nodeIds - Array of node IDs to highlight (e.g., from evaluator.selectedAtoms())
+   * @returns True if any nodes were highlighted, false otherwise
+   * 
+   * @example
+   * ```typescript
+   * const result = evaluator.evaluate('Student');
+   * const nodeIds = result.selectedAtoms();
+   * graph.highlightNodes(nodeIds);
+   * ```
+   */
+  public highlightNodes(nodeIds: string[]): boolean {
+    if (!this.currentLayout?.nodes || !this.svgNodes) return false;
+    if (!nodeIds || nodeIds.length === 0) return false;
+
+    const nodeIdSet = new Set(nodeIds);
+    let highlighted = false;
+
+    (this.svgNodes as d3.Selection<SVGGElement, any, any, unknown>)
+      .each((d: any, i: number, nodes: any[]) => {
+        if (nodeIdSet.has(d.id)) {
+          d3.select(nodes[i]).classed('highlighted', true);
+          highlighted = true;
+        }
+      });
+    
+    return highlighted;
+  }
+
+  /**
+   * Highlights node pairs based on binary selector results.
+   * Shows visual correspondence between first and second elements using different colors.
+   * 
+   * Note: If a node appears in multiple pairs with different roles (both first and second),
+   * it will receive both 'highlighted-first' and 'highlighted-second' classes, and if badges
+   * are enabled, only the last badge will be visible (this is intentional to avoid cluttering).
+   * 
+   * @param nodePairs - Array of [first, second] node ID pairs (e.g., from evaluator.selectedTwoples())
+   * @param options - Optional configuration for highlighting
+   * @param options.showBadges - If true, shows "1" and "2" badges on nodes (default: false)
+   * @returns True if any nodes were highlighted, false otherwise
+   * 
+   * @example
+   * ```typescript
+   * const result = evaluator.evaluate('friend');
+   * const pairs = result.selectedTwoples(); // [["Alice", "Bob"], ["Charlie", "Diana"]]
+   * graph.highlightNodePairs(pairs, { showBadges: true });
+   * ```
+   */
+  public highlightNodePairs(
+    nodePairs: string[][], 
+    options: { showBadges?: boolean } = {}
+  ): boolean {
+    if (!this.currentLayout?.nodes || !this.svgNodes) return false;
+    if (!nodePairs || nodePairs.length === 0) return false;
+
+    const { showBadges = false } = options;
+    
+    // Build sets of first and second node IDs
+    const firstNodeIds = new Set<string>();
+    const secondNodeIds = new Set<string>();
+    
+    // Validate and process pairs
+    nodePairs.forEach((pair, index) => {
+      if (!Array.isArray(pair)) {
+        console.warn(`highlightNodePairs: Pair at index ${index} is not an array, skipping`);
+        return;
+      }
+      if (pair.length !== 2) {
+        console.warn(`highlightNodePairs: Pair at index ${index} has ${pair.length} elements (expected 2), skipping`);
+        return;
+      }
+      
+      const [first, second] = pair;
+      if (first) firstNodeIds.add(first);
+      if (second) secondNodeIds.add(second);
+    });
+
+    let highlighted = false;
+
+    (this.svgNodes as d3.Selection<SVGGElement, any, any, unknown>)
+      .each((d: any, i: number, nodes: any[]) => {
+        const nodeGroup = d3.select(nodes[i]);
+        
+        // Check if this node is a first element
+        if (firstNodeIds.has(d.id)) {
+          nodeGroup.classed('highlighted-first', true);
+          highlighted = true;
+          
+          if (showBadges) {
+            this.addHighlightBadge(nodeGroup, d, '1', '#007aff');
+          }
+        }
+        
+        // Check if this node is a second element
+        if (secondNodeIds.has(d.id)) {
+          nodeGroup.classed('highlighted-second', true);
+          highlighted = true;
+          
+          if (showBadges) {
+            // For nodes that are both first and second, show a combined badge
+            if (firstNodeIds.has(d.id)) {
+              this.addHighlightBadge(nodeGroup, d, '1,2', '#9B59B6'); // Purple for dual role
+            } else {
+              this.addHighlightBadge(nodeGroup, d, '2', '#ff3b30');
+            }
+          }
+        }
+      });
+    
+    return highlighted;
+  }
+
+  /**
+   * Clears all node highlights (both unary and binary).
+   * 
+   * @returns True if the operation completed successfully
+   */
+  public clearNodeHighlights(): boolean {
+    if (!this.svgNodes) return false;
+
+    (this.svgNodes as d3.Selection<SVGGElement, any, any, unknown>)
+      .classed('highlighted', false)
+      .classed('highlighted-first', false)
+      .classed('highlighted-second', false)
+      .selectAll('.highlight-badge, .highlight-badge-bg')
+      .remove();
+    
+    return true;
+  }
+
+  /**
+   * Adds a visual badge to a highlighted node to show first/second correspondence.
+   * 
+   * @param nodeGroup - D3 selection of the node group
+   * @param nodeData - Node data containing position and dimensions
+   * @param label - Badge label text ('1' or '2')
+   * @param color - Badge background color
+   */
+  private addHighlightBadge(
+    nodeGroup: any, 
+    nodeData: any, 
+    label: string, 
+    color: string
+  ): void {
+    // Remove any existing badges first
+    nodeGroup.selectAll('.highlight-badge, .highlight-badge-bg').remove();
+
+    const badgeSize = 16;
+    const padding = 4;
+    
+    // Position badge at top-right corner of the node
+    const badgeX = (nodeData.width || 0) / 2 - badgeSize / 2 - padding;
+    const badgeY = -(nodeData.height || 0) / 2 + badgeSize / 2 + padding;
+
+    // Add circle background for badge
+    nodeGroup.append('circle')
+      .attr('class', 'highlight-badge-bg')
+      .attr('cx', badgeX)
+      .attr('cy', badgeY)
+      .attr('r', badgeSize / 2)
+      .attr('fill', color);
+
+    // Add text label
+    nodeGroup.append('text')
+      .attr('class', 'highlight-badge')
+      .attr('x', badgeX)
+      .attr('y', badgeY)
+      .attr('dy', '0.35em')
+      .text(label);
+  }
+
   /**
    * Shows a runtime alert for edge routing errors.
    * 
@@ -3071,6 +3248,38 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .inferredLink.highlighted {
         stroke:#666666; /* Change this to your desired highlight color */
         stroke-width: 3px; /* Change this to your desired highlight width */
+      }
+
+      /* Node highlighting styles */
+      .node.highlighted rect {
+        stroke: #ff9500;
+        stroke-width: 3px;
+        filter: drop-shadow(0 0 6px rgba(255, 149, 0, 0.6));
+      }
+
+      .node.highlighted-first rect {
+        stroke: #007aff;
+        stroke-width: 3px;
+        filter: drop-shadow(0 0 6px rgba(0, 122, 255, 0.6));
+      }
+
+      .node.highlighted-second rect {
+        stroke: #ff3b30;
+        stroke-width: 3px;
+        filter: drop-shadow(0 0 6px rgba(255, 59, 48, 0.6));
+      }
+
+      /* Add a badge indicator for first/second in binary selectors */
+      .highlight-badge {
+        font-size: 10px;
+        font-weight: bold;
+        fill: white;
+        text-anchor: middle;
+        pointer-events: none;
+      }
+
+      .highlight-badge-bg {
+        pointer-events: none;
       }
       
       .group {

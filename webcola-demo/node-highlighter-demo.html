@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Node Highlighter Demo - SpyTial Core</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f7;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    header {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    h1 {
+      color: #1d1d1f;
+      font-size: 32px;
+      margin-bottom: 10px;
+    }
+
+    .description {
+      color: #6e6e73;
+      font-size: 16px;
+      line-height: 1.5;
+    }
+
+    .main-content {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: 20px;
+    }
+
+    .controls-panel {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      height: fit-content;
+    }
+
+    .controls-section {
+      margin-bottom: 30px;
+    }
+
+    .controls-section h2 {
+      font-size: 18px;
+      margin-bottom: 15px;
+      color: #1d1d1f;
+    }
+
+    .control-group {
+      margin-bottom: 15px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 5px;
+      color: #6e6e73;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    input[type="text"],
+    select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #d2d2d7;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: border-color 0.2s;
+    }
+
+    input[type="text"]:focus,
+    select:focus {
+      outline: none;
+      border-color: #007aff;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      background: #007aff;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-top: 10px;
+    }
+
+    button:hover {
+      background: #0051d5;
+    }
+
+    button.secondary {
+      background: #f5f5f7;
+      color: #1d1d1f;
+    }
+
+    button.secondary:hover {
+      background: #e8e8ed;
+    }
+
+    .graph-container {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      height: 700px;
+    }
+
+    webcola-cnd-graph {
+      width: 100%;
+      height: 100%;
+    }
+
+    .info-box {
+      background: #f5f5f7;
+      padding: 15px;
+      border-radius: 8px;
+      margin-top: 20px;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #6e6e73;
+    }
+
+    .info-box strong {
+      color: #1d1d1f;
+    }
+
+    .legend {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+    }
+
+    .legend-color {
+      width: 40px;
+      height: 20px;
+      border-radius: 4px;
+      border: 2px solid;
+    }
+
+    .legend-unary {
+      background: white;
+      border-color: #ff9500;
+      box-shadow: 0 0 4px rgba(255, 149, 0, 0.6);
+    }
+
+    .legend-first {
+      background: white;
+      border-color: #007aff;
+      box-shadow: 0 0 4px rgba(0, 122, 255, 0.6);
+    }
+
+    .legend-second {
+      background: white;
+      border-color: #ff3b30;
+      box-shadow: 0 0 4px rgba(255, 59, 48, 0.6);
+    }
+
+    .status {
+      padding: 10px;
+      border-radius: 8px;
+      margin-top: 10px;
+      font-size: 13px;
+    }
+
+    .status.success {
+      background: #d1f4e0;
+      color: #0f5132;
+    }
+
+    .status.error {
+      background: #f8d7da;
+      color: #842029;
+    }
+
+    code {
+      background: #f5f5f7;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🎯 Node Highlighter Demo</h1>
+      <p class="description">
+        Visualize selector and evaluator results by highlighting nodes in the graph. 
+        Try both unary selectors (single nodes) and binary selectors (node pairs with first-second correspondence).
+      </p>
+    </header>
+
+    <div class="main-content">
+      <div class="controls-panel">
+        <div class="controls-section">
+          <h2>Unary Selectors</h2>
+          <div class="control-group">
+            <label>Node IDs (comma-separated)</label>
+            <input 
+              type="text" 
+              id="unary-input" 
+              placeholder="e.g., Alice, Bob, Charlie"
+              value="Alice, Bob"
+            >
+          </div>
+          <button onclick="highlightUnary()">Highlight Nodes</button>
+        </div>
+
+        <div class="controls-section">
+          <h2>Binary Selectors</h2>
+          <div class="control-group">
+            <label>Node Pairs (first:second, comma-separated)</label>
+            <input 
+              type="text" 
+              id="binary-input" 
+              placeholder="e.g., Alice:Bob, Charlie:Diana"
+              value="Alice:Bob, Charlie:Diana"
+            >
+          </div>
+          <div class="control-group">
+            <label>
+              <input type="checkbox" id="show-badges"> Show 1/2 badges
+            </label>
+          </div>
+          <button onclick="highlightBinary()">Highlight Pairs</button>
+        </div>
+
+        <div class="controls-section">
+          <button class="secondary" onclick="clearHighlights()">Clear Highlights</button>
+        </div>
+
+        <div class="legend">
+          <strong>Legend:</strong>
+          <div class="legend-item">
+            <div class="legend-color legend-unary"></div>
+            <span>Unary selector</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-color legend-first"></div>
+            <span>First element (binary)</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-color legend-second"></div>
+            <span>Second element (binary)</span>
+          </div>
+        </div>
+
+        <div class="info-box">
+          <strong>How it works:</strong><br>
+          • <strong>Unary selectors</strong> highlight individual nodes (e.g., results from <code>Student</code> selector)<br>
+          • <strong>Binary selectors</strong> show node pairs with blue (first) and red (second) colors<br>
+          • Optional badges show 1/2 correspondence<br>
+          • No layout re-trigger required!
+        </div>
+
+        <div id="status"></div>
+      </div>
+
+      <div class="graph-container">
+        <webcola-cnd-graph id="demo-graph"></webcola-cnd-graph>
+      </div>
+    </div>
+  </div>
+
+  <!-- Load D3 v4 and WebCola from vendor -->
+  <script src="../src/vendor/d3.v4.min.js"></script>
+  <script src="../src/vendor/cola.js"></script>
+  
+  <!-- Load SpyTial Core -->
+  <script src="../dist/browser/spytial-core-complete.global.js"></script>
+
+  <script>
+    // Make d3 v4 available globally for the component
+    window.d3v4 = window.d3;
+
+    // Sample data for demo
+    const sampleData = {
+      nodes: [
+        { id: 'Alice', label: 'Alice', color: '#4A90E2', mostSpecificType: 'Student', types: ['Person', 'Student'] },
+        { id: 'Bob', label: 'Bob', color: '#50E3C2', mostSpecificType: 'Student', types: ['Person', 'Student'] },
+        { id: 'Charlie', label: 'Charlie', color: '#F5A623', mostSpecificType: 'Teacher', types: ['Person', 'Teacher'] },
+        { id: 'Diana', label: 'Diana', color: '#E94B3C', mostSpecificType: 'Student', types: ['Person', 'Student'] },
+        { id: 'Eve', label: 'Eve', color: '#BD10E0', mostSpecificType: 'Teacher', types: ['Person', 'Teacher'] }
+      ],
+      edges: [
+        { source: 'Alice', target: 'Bob', label: 'friend', relationName: 'friend', color: '#333' },
+        { source: 'Charlie', target: 'Diana', label: 'teaches', relationName: 'teaches', color: '#333' },
+        { source: 'Bob', target: 'Diana', label: 'friend', relationName: 'friend', color: '#333' },
+        { source: 'Alice', target: 'Charlie', label: 'knows', relationName: 'knows', color: '#333' }
+      ],
+      constraints: [],
+      groups: []
+    };
+
+    // Initialize the graph
+    async function initializeGraph() {
+      try {
+        const graph = document.getElementById('demo-graph');
+        const { WebColaTranslator } = CndCore.Translators;
+        
+        // Create instance layout
+        const instanceLayout = {
+          nodes: sampleData.nodes.map(n => ({
+            ...n,
+            width: 100,
+            height: 60,
+            showLabels: true,
+            icon: '',
+            groups: [],
+            attributes: {}
+          })),
+          edges: sampleData.edges.map((e, idx) => ({
+            ...e,
+            id: `edge_${idx}`,
+            source: sampleData.nodes.find(n => n.id === e.source),
+            target: sampleData.nodes.find(n => n.id === e.target)
+          })),
+          constraints: [],
+          groups: []
+        };
+
+        // Render the layout
+        await graph.renderLayout(instanceLayout);
+        
+        console.log('Graph initialized successfully');
+        showStatus('Graph ready! Try highlighting some nodes.', 'success');
+      } catch (error) {
+        console.error('Error initializing graph:', error);
+        showStatus('Error initializing graph: ' + error.message, 'error');
+      }
+    }
+
+    // Highlight nodes using unary selector results
+    function highlightUnary() {
+      const graph = document.getElementById('demo-graph');
+      const input = document.getElementById('unary-input').value;
+      
+      if (!input.trim()) {
+        showStatus('Please enter node IDs', 'error');
+        return;
+      }
+
+      // Parse comma-separated node IDs
+      const nodeIds = input.split(',').map(id => id.trim()).filter(id => id);
+      
+      // Clear previous highlights
+      graph.clearNodeHighlights();
+      
+      // Highlight the nodes
+      const success = graph.highlightNodes(nodeIds);
+      
+      if (success) {
+        showStatus(`Highlighted ${nodeIds.length} node(s): ${nodeIds.join(', ')}`, 'success');
+      } else {
+        showStatus('No nodes found to highlight', 'error');
+      }
+    }
+
+    // Highlight node pairs using binary selector results
+    function highlightBinary() {
+      const graph = document.getElementById('demo-graph');
+      const input = document.getElementById('binary-input').value;
+      const showBadges = document.getElementById('show-badges').checked;
+      
+      if (!input.trim()) {
+        showStatus('Please enter node pairs', 'error');
+        return;
+      }
+
+      // Parse pairs like "Alice:Bob, Charlie:Diana"
+      const pairStrings = input.split(',').map(p => p.trim()).filter(p => p);
+      const pairs = [];
+      const errors = [];
+      
+      pairStrings.forEach((pairStr, index) => {
+        const parts = pairStr.split(':');
+        
+        if (parts.length !== 2) {
+          errors.push(`Pair ${index + 1} ("${pairStr}") must have exactly one colon separator`);
+          return;
+        }
+        
+        const [first, second] = parts.map(id => id.trim());
+        
+        if (!first || !second) {
+          errors.push(`Pair ${index + 1} ("${pairStr}") has empty node ID(s)`);
+          return;
+        }
+        
+        pairs.push([first, second]);
+      });
+      
+      if (errors.length > 0) {
+        showStatus(`Validation errors: ${errors.join('; ')}`, 'error');
+        return;
+      }
+      
+      if (pairs.length === 0) {
+        showStatus('No valid pairs to highlight', 'error');
+        return;
+      }
+      
+      // Clear previous highlights
+      graph.clearNodeHighlights();
+      
+      // Highlight the pairs
+      const success = graph.highlightNodePairs(pairs, { showBadges });
+      
+      if (success) {
+        showStatus(
+          `Highlighted ${pairs.length} pair(s): ${pairStrings.join(', ')}${showBadges ? ' with badges' : ''}`, 
+          'success'
+        );
+      } else {
+        showStatus('No node pairs found to highlight', 'error');
+      }
+    }
+
+    // Clear all highlights
+    function clearHighlights() {
+      const graph = document.getElementById('demo-graph');
+      graph.clearNodeHighlights();
+      showStatus('Highlights cleared', 'success');
+    }
+
+    // Show status message
+    function showStatus(message, type) {
+      const statusDiv = document.getElementById('status');
+      statusDiv.textContent = message;
+      statusDiv.className = `status ${type}`;
+      
+      // Auto-hide success messages after 3 seconds
+      if (type === 'success') {
+        setTimeout(() => {
+          statusDiv.textContent = '';
+          statusDiv.className = 'status';
+        }, 3000);
+      }
+    }
+
+    // Initialize when page loads
+    window.addEventListener('load', () => {
+      // Wait a bit for the custom element to be registered
+      setTimeout(initializeGraph, 500);
+    });
+  </script>
+</body>
+</html>
