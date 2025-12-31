@@ -1981,17 +1981,53 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    */
   private updateEdgeEndpointMarkers(): void {
     const svgLinkGroups = (this as any).svgLinkGroups;
-    if (!svgLinkGroups) return;
+    if (!svgLinkGroups) {
+      console.warn('⚠️ svgLinkGroups not found, cannot update edge markers');
+      return;
+    }
 
-    // Update target markers (at the arrow end)
-    svgLinkGroups.select('.target-marker')
-      .attr('opacity', this.isInputModeActive ? 0.8 : 0)
-      .style('pointer-events', this.isInputModeActive ? 'all' : 'none');
+    console.log('🎯 Updating edge endpoint markers, input mode active:', this.isInputModeActive);
+    console.log('📊 Link groups:', svgLinkGroups.size());
+    
+    // Debug: check what's in a link group
+    svgLinkGroups.each(function(this: any) {
+      const group = d3.select(this);
+      console.log('  Group children:', group.selectAll('*').size(), 'path:', group.select('path').size(), 'rect:', group.select('rect').size(), 'polygon:', group.select('polygon').size());
+    });
+    
+    // Update target markers (at the arrow end) with visibility AND position
+    const targetMarkers = svgLinkGroups.selectAll('.target-marker');
+    console.log('  Target markers found:', targetMarkers.size());
+    if (targetMarkers.size() === 0) {
+      console.error('❌ NO TARGET MARKERS FOUND IN DOM!');
+    }
+    targetMarkers
+      .attr('opacity', this.isInputModeActive ? 1 : 0)
+      .style('pointer-events', this.isInputModeActive ? 'all' : 'none')
+      .attr('transform', (d: any) => {
+        const x = d.target?.x || 0;
+        const y = d.target?.y || 0;
+        console.log('  Target marker position:', d.id, x, y);
+        return `translate(${x}, ${y})`;
+      })
+      .raise();
 
-    // Update source markers (at the start)
-    svgLinkGroups.select('.source-marker')
-      .attr('opacity', this.isInputModeActive ? 0.8 : 0)
-      .style('pointer-events', this.isInputModeActive ? 'all' : 'none');
+    // Update source markers (at the start) with visibility AND position
+    const sourceMarkers = svgLinkGroups.selectAll('.source-marker');
+    console.log('  Source markers found:', sourceMarkers.size());
+    if (sourceMarkers.size() === 0) {
+      console.error('❌ NO SOURCE MARKERS FOUND IN DOM!');
+    }
+    sourceMarkers
+      .attr('opacity', this.isInputModeActive ? 1 : 0)
+      .style('pointer-events', this.isInputModeActive ? 'all' : 'none')
+      .attr('transform', (d: any) => {
+        const x = d.source?.x || 0;
+        const y = d.source?.y || 0;
+        console.log('  Source marker position:', d.id, x, y);
+        return `translate(${x}, ${y})`;
+      })
+      .raise();
   }
 
   /**

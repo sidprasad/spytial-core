@@ -1037,6 +1037,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // Add labels to non-alignment links
     this.setupLinkLabels(linkGroups);
 
+    // Add edge endpoint markers for input mode (initially hidden)
+    this.setupEdgeEndpointMarkers(linkGroups);
+
     return linkGroups;
   }
 
@@ -1091,6 +1094,43 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       //.attr("fill", "#555")
       .attr("pointer-events", "none")
       .text((d: any) => d.label || d.relName || "");
+  }
+
+  /**
+   * Adds interactive endpoint markers to edges for input mode.
+   * These markers allow users to drag edge endpoints to reconnect edges.
+   * Initially hidden (opacity 0), they become visible when input mode is activated.
+   * 
+   * @param linkGroups - D3 selection of link group elements
+   */
+  private setupEdgeEndpointMarkers(
+    linkGroups: d3.Selection<SVGGElement, any, any, unknown>
+  ): void {
+    // Add source marker (HUGE amber circle at edge start for visibility)
+    linkGroups
+      .filter((d: any) => !this.isAlignmentEdge(d))
+      .append("circle")
+      .attr("class", "source-marker")
+      .attr("r", 20)
+      .attr("fill", "#ff9800")
+      .attr("stroke", "#000000")
+      .attr("stroke-width", 3)
+      .attr("opacity", 0)
+      .attr("cursor", "move")
+      .style("pointer-events", "none");
+
+    // Add target marker (HUGE red circle at edge end for visibility)
+    linkGroups
+      .filter((d: any) => !this.isAlignmentEdge(d))
+      .append("circle")
+      .attr("class", "target-marker")
+      .attr("r", 20)
+      .attr("fill", "#ff0000")
+      .attr("stroke", "#000000")
+      .attr("stroke-width", 3)
+      .attr("opacity", 0)
+      .attr("cursor", "move")
+      .style("pointer-events", "none");
   }
 
   /**
@@ -1801,6 +1841,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         return pathElement ? this.calculateNewPosition(pathElement, 'y') : (d.source.y + d.target.y) / 2;
       })
       .raise();
+
+    // Update edge endpoint marker positions for input mode
+    this.svgLinkGroups.select('.source-marker')
+      .attr('transform', (d: EdgeWithMetadata) => `translate(${d.source.x || 0}, ${d.source.y || 0})`);
+
+    this.svgLinkGroups.select('.target-marker')
+      .attr('transform', (d: EdgeWithMetadata) => `translate(${d.target.x || 0}, ${d.target.y || 0})`);
 
     // Update group labels (center top of each group)
     this.svgGroupLabels
@@ -3311,6 +3358,24 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         font-size: 8px;
         font-weight: bold;
         pointer-events: none;
+      }
+      
+      /* Edge endpoint markers for input mode */
+      .source-marker, .target-marker {
+        pointer-events: all !important;
+        cursor: move !important;
+      }
+      
+      .source-marker {
+        fill: #ff9800 !important;
+        stroke: #000000 !important;
+        stroke-width: 3px !important;
+      }
+      
+      .target-marker {
+        fill: #ff0000 !important;
+        stroke: #000000 !important;
+        stroke-width: 3px !important;
       }
       
       #loading, #error {
