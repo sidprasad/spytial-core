@@ -379,9 +379,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
-   * Computes adaptive link length based on actual node dimensions and graph density
+   * Computes adaptive link length based on actual node dimensions, edge labels, and graph density
    */
-  private computeAdaptiveLinkLength(nodes: any[], scaleFactor: number): number {
+  private computeAdaptiveLinkLength(nodes: any[], scaleFactor: number, links?: any[]): number {
     if (!nodes || nodes.length === 0) {
       return 150; // fallback
     }
@@ -407,9 +407,29 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     const avgHeight = totalHeight / validNodes;
     const avgNodeSize = Math.max(avgWidth, avgHeight);
 
-    // Base link length should be larger of: average node size + separation, or minimum separation
+    // Calculate maximum edge label width if links are provided
+    let maxLabelWidth = 0;
+    if (links && links.length > 0) {
+      const fontSize = 12; // Default edge label font size
+      links.forEach(link => {
+        if (link && link.label) {
+          const labelWidth = this.measureTextWidth(link.label, fontSize, 'system-ui');
+          maxLabelWidth = Math.max(maxLabelWidth, labelWidth);
+        }
+      });
+    }
+
+    // Marker size (arrowhead)
+    const markerSize = 15; // Width of the marker as defined in SVG defs
+
+    // Base link length should account for:
+    // 1. Average node size
+    // 2. Edge label text width
+    // 3. Marker (arrowhead) size
+    // 4. Additional separation buffer
     const baseSeparation = 50; // minimum separation between nodes
-    let baseLinkLength = Math.max(avgNodeSize + baseSeparation, 120);
+    const labelAndMarkerSpace = maxLabelWidth + markerSize + 20; // 20px buffer
+    let baseLinkLength = Math.max(avgNodeSize + baseSeparation + labelAndMarkerSpace, 120);
 
     // Apply density factor - more nodes = slightly tighter spacing to fit better
     const densityFactor = Math.max(0.7, 1 - Math.log10(validNodes) * 0.1);
@@ -423,7 +443,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     return Math.max(60, Math.min(scaledLinkLength, 350));
   }
 
-  private getScaledDetails(constraints: any[], scaleFactor: number = DEFAULT_SCALE_FACTOR, nodes?: any[], groups?: any[]) {
+  private getScaledDetails(constraints: any[], scaleFactor: number = DEFAULT_SCALE_FACTOR, nodes?: any[], groups?: any[], links?: any[]) {
     const adjustedScaleFactor = scaleFactor / 5;
 
     // Calculate adaptive group compactness based on graph structure
@@ -432,7 +452,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // Use adaptive link length calculation if nodes are available
     let linkLength: number;
     if (nodes && nodes.length > 0) {
-      linkLength = this.computeAdaptiveLinkLength(nodes, scaleFactor);
+      linkLength = this.computeAdaptiveLinkLength(nodes, scaleFactor, links);
     } else {
       // Fallback to original calculation
       const min_sep = 150;
@@ -577,11 +597,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       <span id="error-icon" title="This graph is depicting an error state">⚠️</span>
       <svg id="svg" viewBox="0 0 ${containerWidth} ${containerHeight}" preserveAspectRatio="xMidYMid meet">
         <defs>
-        <marker id="end-arrow" markerWidth="15" markerHeight="10" refX="12" refY="5" orient="auto">
-          <polygon points="0 0, 15 5, 0 10" />
+        <marker id="end-arrow" markerWidth="15" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+          <polygon points="0 0, 15 5, 0 10" fill="context-stroke" />
         </marker>
-        <marker id="start-arrow" markerWidth="15" markerHeight="10" refX="3" refY="5" orient="auto">
-          <polygon points="15 0, 0 5, 15 10" />
+        <marker id="start-arrow" markerWidth="15" markerHeight="10" refX="3" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+          <polygon points="15 0, 0 5, 15 10" fill="context-stroke" />
         </marker>
         </defs>
         <g class="zoomable"></g>
@@ -1266,7 +1286,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         webcolaLayout.constraints, 
         DEFAULT_SCALE_FACTOR, 
         webcolaLayout.nodes,
-        webcolaLayout.groups
+        webcolaLayout.groups,
+        webcolaLayout.links
       );
 
       this.updateLoadingProgress('Applying constraints and initializing...');
