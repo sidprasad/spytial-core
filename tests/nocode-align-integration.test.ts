@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { generateLayoutSpecYaml } from '../src/components/NoCodeView/CodeView';
 import { parseLayoutSpec } from '../src/layout/layoutspec';
+import { parseLayoutSpecToData } from '../src/components/NoCodeView/NoCodeView';
 import type { ConstraintData } from '../src/components/NoCodeView/interfaces';
 
 describe('NoCode Align Integration', () => {

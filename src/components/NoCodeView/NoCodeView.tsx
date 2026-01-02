@@ -127,6 +127,15 @@ export function parseLayoutSpecToData(yamlString: string): {
         if (type === "cyclic" || type === "orientation") {
             return type;
         }
+        if (type === "align") {
+            return "align";
+        }
+        if (type === "size") {
+            return "size";
+        }
+        if (type === "hideAtom") {
+            return "hideAtom";
+        }
         if (type === "group") {
             if (params["selector"]) {
                 return "groupselector";
