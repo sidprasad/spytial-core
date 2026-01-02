@@ -1,0 +1,6 @@
+constraints:
+  - group: {selector: parts, name: ' parts', addEdge: true}
+
+directives:
+  - hideField: {field: parts}
+  - flag: hideDisconnectedBuiltIns

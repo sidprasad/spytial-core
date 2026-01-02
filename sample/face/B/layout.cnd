@@ -1,0 +1,8 @@
+constraints:
+  - orientation: {directions: [below], selector: below}
+  - align: {selector: aligned, direction: horizontal}
+  - group: {selector: parts, name: ' parts', addEdge: true}
+
+directives:
+  - hideField: {field: parts}
+  - flag: hideDisconnectedBuiltIns

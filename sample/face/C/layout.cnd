@@ -1,0 +1,16 @@
+constraints:
+  - align: {selector: aligned, direction: horizontal}
+  - orientation: {directions: [below], selector: below}
+  - group: {selector: parts, name: ' parts', addEdge: true}
+
+directives:
+  - size: {selector: Mouth, width: 300, height: 70}
+  - icon: {selector: Chin, path: https://www.clipartmax.com/png/middle/300-3000985_chin-beard-png.png}
+  - size: {selector: Hair, width: 300, height: 100}
+  - icon: {selector: Hair, path: https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTAQMlg9AkUigRE0ff74vLZDLfLhx_66UcuxQ&s}
+  - icon: {selector: EyeBrow, path: https://w7.pngwing.com/pngs/354/472/png-transparent-eyebrow-computer-icons-bigote-face-monochrome-black-thumbnail.png}
+  - icon: {selector: Mouth, path: https://www.siddharthaprasad.com/diagrams/non-model/faces/mouth.png}
+  - icon: {selector: Nose, path: https://www.siddharthaprasad.com/diagrams/non-model/faces/nose.jpg}
+  - icon: {selector: Eye, path: https://www.siddharthaprasad.com/diagrams/non-model/faces/eye.jpg}
+  - hideField: {field: parts}
+  - flag: hideDisconnectedBuiltIns
