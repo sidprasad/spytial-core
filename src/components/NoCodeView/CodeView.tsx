@@ -327,11 +327,7 @@ const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
   return (
     <div className="cnd-layout-interface__code-view" role="region" aria-label="YAML Code Editor">
         <div className="mb-2">
-            <div id="cnd-layout-yaml-help" className="form-text text-muted fst-italic pb-3">
-                Enter your CND layout specification in YAML format. 
-                Use the toggle above to switch to the visual editor.
-            </div>
-            
+           
             {/* Spytial spec validation error display */}
             {validationError && (
                 <div 
