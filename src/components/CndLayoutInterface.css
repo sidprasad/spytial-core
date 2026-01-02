@@ -3,7 +3,7 @@
  * 
  * Optimized for cnd-core TypeScript library guidelines:
  * - Leverages Bootstrap 5 classes for consistent styling and responsive design
- * - Minimal custom CSS for unique components (toggle switch)
+ * - Minimal custom CSS for unique components
  * - Client-side performance optimized
  * - Tree-shakable CSS classes
  * - Modern browser compatibility (ES2020+)
@@ -21,67 +21,20 @@
   pointer-events: none;
 }
 
-/* Custom Toggle Switch - Not available in Bootstrap */
-.cnd-layout-interface__toggle {
-  position: relative;
-  display: inline-block;
-  width: 48px;
-  height: 24px;
+/* Tabs - Bootstrap nav-tabs with minor enhancements */
+.cnd-layout-interface__tabs {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.cnd-layout-interface__tabs .nav-link {
   cursor: pointer;
-  flex-shrink: 0; /* Prevent shrinking in flex layouts */
+  transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
 }
 
-.cnd-layout-interface__toggle-input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-  position: absolute;
-}
-
-.cnd-layout-interface__toggle-slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--bs-gray-400, #6c757d);
-  border-radius: 24px;
-  transition: background-color 0.3s ease;
-  z-index: 1;
-}
-
-.cnd-layout-interface__toggle-slider::before {
-  position: absolute;
-  content: "";
-  height: 20px;
-  width: 20px;
-  left: 2px;
-  top: 2px;
-  background-color: white;
-  border-radius: 50%;
-  transition: transform 0.3s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  will-change: transform; /* Performance optimization */
-  z-index: 2;
-}
-
-.cnd-layout-interface__toggle-input:checked + .cnd-layout-interface__toggle-slider {
-  background-color: #0d6efd; /* Fallback primary color */
-  background-color: var(--bs-primary, #0d6efd);
-}
-
-.cnd-layout-interface__toggle-input:checked + .cnd-layout-interface__toggle-slider::before {
-  transform: translateX(24px);
-}
-
-.cnd-layout-interface__toggle-input:disabled + .cnd-layout-interface__toggle-slider {
+.cnd-layout-interface__tabs .nav-link:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.cnd-layout-interface__toggle-input:focus + .cnd-layout-interface__toggle-slider {
-  box-shadow: 0 0 0 2px var(--bs-primary, #0d6efd), 0 0 0 4px rgba(13, 110, 253, 0.25);
 }
 
 /* Custom textarea styling - Extends Bootstrap form-control */

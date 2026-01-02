@@ -12,10 +12,10 @@ export interface CndLayoutInterfaceProps {
   yamlValue: string;
   /** Callback when YAML value changes */
   onChange: (value: string) => void;
-  /** Whether to show No Code View */
-  isNoCodeView: boolean;
-  /** Callback when view mode changes */
-  onViewChange: (isNoCodeView: boolean) => void;
+  /** Active editor tab: 'raw' or 'structured' */
+  activeTab: 'raw' | 'structured';
+  /** Callback when tab changes */
+  onTabChange: (tab: 'raw' | 'structured') => void;
   /** Constraints */
   constraints: ConstraintData[];
   /** Callback to update constraints */
@@ -33,11 +33,11 @@ export interface CndLayoutInterfaceProps {
 }
 
 /**
- * CND Layout Interface component with toggle between Code View and No Code View
+ * CND Layout Interface component with tabs for Raw Editor and Structured Editor
  * 
- * Provides a toggle interface for CND layout specification editing:
- * - Code View: Text area for direct YAML editing
- * - No Code View: Visual interface for constraint/directive editing (placeholder)
+ * Provides a tabbed interface for CND layout specification editing:
+ * - Raw Editor: Text area for direct YAML editing
+ * - Structured Editor: Visual interface for constraint/directive editing
  * 
  * This is a controlled component that requires parent state management.
  * 
@@ -46,16 +46,16 @@ export interface CndLayoutInterfaceProps {
  * <CndLayoutInterface
  *   value={yamlValue}
  *   onChange={setYamlValue}
- *   isNoCodeView={isVisual}
- *   onViewChange={setIsVisual}
+ *   activeTab='structured'
+ *   onTabChange={setActiveTab}
  * />
  * ```
  */
 const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
   yamlValue,
   onChange,
-  isNoCodeView,
-  onViewChange,
+  activeTab,
+  onTabChange,
   constraints,
   setConstraints,
   directives,
@@ -81,8 +81,8 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
    * Get current state as a snapshot
    */
   const getCurrentSnapshot = useCallback((): Snapshot => {
-    // In No Code View, generate YAML from constraints/directives for consistency
-    const currentYaml = isNoCodeView 
+    // In Structured Editor, generate YAML from constraints/directives for consistency
+    const currentYaml = activeTab === 'structured'
       ? generateLayoutSpecYaml(constraints, directives)
       : yamlValue;
     return {
@@ -90,7 +90,7 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
       constraints: JSON.parse(JSON.stringify(constraints)), // Deep clone
       directives: JSON.parse(JSON.stringify(directives)),   // Deep clone
     };
-  }, [isNoCodeView, yamlValue, constraints, directives]);
+  }, [activeTab, yamlValue, constraints, directives]);
 
   /**
    * Save current state to undo stack (called before making changes)
@@ -197,20 +197,20 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
   }, [redoSnapshot, disabled, getCurrentSnapshot, onChange, setConstraints, setDirectives]);
 
   /**
-   * Handle toggle switch change
-   * @param event - The change event from the toggle input
+   * Handle tab click
+   * @param tab - The tab to switch to
    */
-  const handleToggleChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    if (disabled) return;
+  const handleTabClick = useCallback((tab: 'raw' | 'structured') => {
+    if (disabled || tab === activeTab) return;
 
-    if (!event.target.checked) {
-      // If switching to Code View, generate YAML from current constraints/directives
+    if (tab === 'raw') {
+      // If switching to Raw Editor, generate YAML from current constraints/directives
       const generatedYaml = generateLayoutSpecYaml(constraints, directives);
       onChange(generatedYaml);
     }
 
-    onViewChange(event.target.checked);
-  }, [disabled, onViewChange, onChange, constraints, directives]);
+    onTabChange(tab);
+  }, [disabled, activeTab, onTabChange, onChange, constraints, directives]);
 
   /**
    * Handle textarea value change with proper event handling
@@ -231,44 +231,40 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
     className,
   ].filter(Boolean).join(' ');
 
-  const toggleLabelCodeClasses = [
-    'cnd-layout-interface__toggle-label',
-    'small', // Bootstrap small text
-    !isNoCodeView && 'text-primary fw-semibold', // Bootstrap active styling
-  ].filter(Boolean).join(' ');
-
-  const toggleLabelNoCodeClasses = [
-    'cnd-layout-interface__toggle-label',
-    'small', // Bootstrap small text
-    isNoCodeView && 'text-primary fw-semibold', // Bootstrap active styling
-  ].filter(Boolean).join(' ');
-
   return (
     <section id="cnd-layout-interface-container" className={containerClasses} aria-label={ariaLabel}>
-      <div className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
-        <div className="d-flex align-items-center gap-3">
-          <span className={toggleLabelCodeClasses}>
-            Code View
-          </span>
-          
-          <label className="cnd-layout-interface__toggle" htmlFor="cnd-layout-toggle">
-            <input
-              id="cnd-layout-toggle"
-              type="checkbox"
-              checked={isNoCodeView}
-              onChange={handleToggleChange}
+      <div className="d-flex justify-content-between align-items-center mb-3">
+        {/* Tabs */}
+        <ul className="nav nav-tabs cnd-layout-interface__tabs" role="tablist">
+          <li className="nav-item" role="presentation">
+            <button
+              className={`nav-link ${activeTab === 'raw' ? 'active' : ''}`}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'raw'}
+              aria-controls="raw-editor-panel"
+              id="raw-editor-tab"
+              onClick={() => handleTabClick('raw')}
               disabled={disabled}
-              className="cnd-layout-interface__toggle-input"
-              aria-describedby="cnd-layout-toggle-description"
-              role='switch'
-            />
-            <span className="cnd-layout-interface__toggle-slider"></span>
-          </label>
-          
-          <span className={toggleLabelNoCodeClasses}>
-            No Code View
-          </span>
-        </div>
+            >
+              Raw Editor
+            </button>
+          </li>
+          <li className="nav-item" role="presentation">
+            <button
+              className={`nav-link ${activeTab === 'structured' ? 'active' : ''}`}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'structured'}
+              aria-controls="structured-editor-panel"
+              id="structured-editor-tab"
+              onClick={() => handleTabClick('structured')}
+              disabled={disabled}
+            >
+              Structured Editor
+            </button>
+          </li>
+        </ul>
 
         {/* Undo/Redo buttons */}
         <div className="d-flex align-items-center gap-2">
@@ -295,20 +291,28 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
         </div>
       </div>
 
-      {/* Hidden description for screen readers - Bootstrap sr-only utility */}
-      <div id="cnd-layout-toggle-description" className="visually-hidden">
-        Toggle between Code View (text editor) and No Code View (visual editor) for CND layout specification
-      </div>
-
       {/* Content area with Bootstrap styling */}
-      <div className="cnd-layout-interface__content">
-        {isNoCodeView ? (
-          // No Code View - Bootstrap card layout
-          <NoCodeView yamlValue={yamlValue} constraints={constraints} setConstraints={setConstraints} directives={directives} setDirectives={setDirectives}/>
-        ) : (
-          // Code View - Bootstrap form styling
-          <CodeView constraints={constraints} directives={directives} yamlValue={yamlValue} handleTextareaChange={handleTextareaChange} disabled={disabled}/>
-        )}
+      <div className="tab-content cnd-layout-interface__content">
+        <div
+          className={`tab-pane fade ${activeTab === 'raw' ? 'show active' : ''}`}
+          id="raw-editor-panel"
+          role="tabpanel"
+          aria-labelledby="raw-editor-tab"
+        >
+          {activeTab === 'raw' && (
+            <CodeView constraints={constraints} directives={directives} yamlValue={yamlValue} handleTextareaChange={handleTextareaChange} disabled={disabled}/>
+          )}
+        </div>
+        <div
+          className={`tab-pane fade ${activeTab === 'structured' ? 'show active' : ''}`}
+          id="structured-editor-panel"
+          role="tabpanel"
+          aria-labelledby="structured-editor-tab"
+        >
+          {activeTab === 'structured' && (
+            <NoCodeView yamlValue={yamlValue} constraints={constraints} setConstraints={setConstraints} directives={directives} setDirectives={setDirectives}/>
+          )}
+        </div>
       </div>
     </section>
   );

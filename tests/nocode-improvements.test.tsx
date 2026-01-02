@@ -42,30 +42,30 @@ afterEach(() => {
 });
 
 describe('Programmatic View Selection', () => {
-    it('should default to code view when initialView is not specified', () => {
+    it('should default to raw editor when initialView is not specified', () => {
         render(<CombinedInputComponent />);
-        // Code View is the default
-        const codeViewToggle = document.querySelector('#cnd-layout-toggle');
-        if (codeViewToggle) {
-            expect((codeViewToggle as HTMLInputElement).checked).toBe(false);
+        // Raw Editor is the default
+        const rawEditorTab = document.querySelector('button[aria-controls="raw-editor-panel"]');
+        if (rawEditorTab) {
+            expect(rawEditorTab.getAttribute('aria-selected')).toBe('true');
         }
     });
 
-    it('should show no code view when initialView is "nocode"', () => {
-        render(<CombinedInputComponent initialView="nocode" />);
-        // Toggle should be checked when in no code view
-        const codeViewToggle = document.querySelector('#cnd-layout-toggle');
-        if (codeViewToggle) {
-            expect((codeViewToggle as HTMLInputElement).checked).toBe(true);
+    it('should show structured editor when initialView is "structured"', () => {
+        render(<CombinedInputComponent initialView="structured" />);
+        // Structured tab should be active
+        const structuredEditorTab = document.querySelector('button[aria-controls="structured-editor-panel"]');
+        if (structuredEditorTab) {
+            expect(structuredEditorTab.getAttribute('aria-selected')).toBe('true');
         }
     });
 
-    it('should show code view when initialView is "code"', () => {
-        render(<CombinedInputComponent initialView="code" />);
-        // Toggle should be unchecked when in code view
-        const codeViewToggle = document.querySelector('#cnd-layout-toggle');
-        if (codeViewToggle) {
-            expect((codeViewToggle as HTMLInputElement).checked).toBe(false);
+    it('should show raw editor when initialView is "raw"', () => {
+        render(<CombinedInputComponent initialView="raw" />);
+        // Raw tab should be active
+        const rawEditorTab = document.querySelector('button[aria-controls="raw-editor-panel"]');
+        if (rawEditorTab) {
+            expect(rawEditorTab.getAttribute('aria-selected')).toBe('true');
         }
     });
 });

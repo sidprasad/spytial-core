@@ -20,10 +20,10 @@ import { ConstraintData, DirectiveData } from '../NoCodeView/interfaces';
 
 /**
  * View mode for the layout interface
- * - 'code': Shows YAML code editor (default)
- * - 'nocode': Shows visual editor with constraints and directives
+ * - 'raw': Shows YAML code editor (default)
+ * - 'structured': Shows visual editor with constraints and directives
  */
-export type LayoutViewMode = 'code' | 'nocode';
+export type LayoutViewMode = 'raw' | 'structured';
 
 export interface CombinedInputConfig {
   /** Initial CnD specification */
@@ -44,8 +44,8 @@ export interface CombinedInputConfig {
   autoApplyLayout?: boolean;
   /** 
    * Initial view mode for the layout interface 
-   * - 'code': Shows YAML code editor (default)
-   * - 'nocode': Shows visual editor with constraints and directives
+   * - 'raw': Shows YAML code editor (default)
+   * - 'structured': Shows visual editor with constraints and directives
    */
   initialView?: LayoutViewMode;
   /** Custom styling */
@@ -93,7 +93,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
   width = '100%',
   showLayoutInterface = true,
   autoApplyLayout = true,
-  initialView = 'code',
+  initialView = 'raw',
   style,
   className,
   onInstanceChange,
@@ -109,7 +109,7 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
   const [extractedSpecs, setExtractedSpecs] = useState<string[]>([]); // Store extracted specs
   const [constraints, setConstraints] = useState<ConstraintData[]>([]);
   const [directives, setDirectives] = useState<DirectiveData[]>([]);
-  const [isNoCodeView, setIsNoCodeView] = useState<boolean>(initialView === 'nocode');
+  const [activeTab, setActiveTab] = useState<LayoutViewMode>(initialView);
   const [layoutStale, setLayoutStale] = useState<boolean>(false);
   const [currentLayout, setCurrentLayout] = useState<any>(null);
   
@@ -618,8 +618,8 @@ export const CombinedInputComponent: React.FC<CombinedInputProps> = ({
                 <CndLayoutInterface
                   yamlValue={currentSpec}
                   onChange={handleSpecChange}
-                  isNoCodeView={isNoCodeView}
-                  onViewChange={setIsNoCodeView}
+                  activeTab={activeTab}
+                  onTabChange={setActiveTab}
                   constraints={constraints}
                   setConstraints={setConstraints}
                   directives={directives}
