@@ -44,6 +44,31 @@ function isMissingNodeConstraintError(error: unknown): error is MissingNodeConst
 }
 
 /**
+ * Error thrown when an evaluator query fails (e.g., when trying to query a hidden element)
+ * This is treated as a constraint-level error since it's often caused by hiding constraints
+ */
+class EvaluatorConstraintError extends Error implements ConstraintError {
+    readonly type = 'unknown-constraint';
+    readonly selector: string;
+    readonly originalError: Error;
+    readonly sourceConstraint?: ConstraintSource;
+
+    constructor(selector: string, originalError: Error, sourceConstraint?: ConstraintSource) {
+        const selectorDetails = ` Selector: ${selector}.`;
+        super(`Query evaluation failed for selector "${selector}": ${originalError.message}${selectorDetails}`);
+        this.name = 'EvaluatorConstraintError';
+        this.selector = selector;
+        this.originalError = originalError;
+        this.sourceConstraint = sourceConstraint;
+        Object.setPrototypeOf(this, EvaluatorConstraintError.prototype);
+    }
+}
+
+function isEvaluatorConstraintError(error: unknown): error is EvaluatorConstraintError {
+    return error instanceof EvaluatorConstraintError;
+}
+
+/**
  * Strategy for adding alignment edges to prevent WebCola from falling into bad local minima.
  * 
  * - `never`: Never add alignment edges (maximum performance, may result in suboptimal layouts)
@@ -352,7 +377,7 @@ export class LayoutInstance {
             // Now, we should support both unary and binary selectors.
 
             // First try binary, if none are selected, then try unary.
-            let selectedTwoples: string[][] = selectorRes.selectedTwoples();
+            let selectedTwoples: string[][] = this.safeSelectedTwoples(selector, gc);
 
             if (selectedTwoples.length > 0) {
 
@@ -412,7 +437,7 @@ export class LayoutInstance {
 
             }
             else {
-                let selectedElements: string[] = selectorRes.selectedAtoms();
+                let selectedElements: string[] = this.safeSelectedAtoms(selector, gc);
 
                 // Nothing to do if there are no selected elements, or 
                 // if things are typed weirdly.
@@ -862,6 +887,19 @@ export class LayoutInstance {
                     }
                 );
             }
+            if (isEvaluatorConstraintError(error)) {
+                return this.handleEvaluatorConstraintError(
+                    error,
+                    {
+                        layoutNodes,
+                        graph: g,
+                        groups,
+                        disconnectedNodes: dcN,
+                        projectionData,
+                        constraints
+                    }
+                );
+            }
             throw error;
         }
 
@@ -928,6 +966,48 @@ export class LayoutInstance {
      */
     private handleMissingNodeConstraintError(
         error: MissingNodeConstraintError,
+        context: {
+            layoutNodes: LayoutNode[],
+            graph: Graph,
+            groups: LayoutGroup[],
+            disconnectedNodes: string[],
+            projectionData: { type: string, projectedAtom: string, atoms: string[] }[],
+            constraints: LayoutConstraint[],
+        }
+    ): {
+        layout: InstanceLayout,
+        projectionData: { type: string, projectedAtom: string, atoms: string[] }[],
+        error: ConstraintError
+    } {
+        const layoutEdges = this.filterHiddenEdges(
+            this.buildLayoutEdges(context.graph, context.layoutNodes)
+        );
+        const layoutGroups = context.groups.concat(
+            context.disconnectedNodes.map(node => this.singletonGroup(node))
+        );
+
+        const layoutWithErrorMetadata: InstanceLayout = {
+            nodes: context.layoutNodes,
+            edges: layoutEdges,
+            constraints: context.constraints,
+            groups: layoutGroups,
+            disjunctiveConstraints: []
+        };
+
+        return {
+            layout: layoutWithErrorMetadata,
+            projectionData: context.projectionData,
+            error
+        };
+    }
+
+    /**
+     * Handles evaluator constraint errors (e.g., when a selector query fails on a hidden node)
+     * by surfacing them as constraint-level errors with the best-effort layout.
+     * This is similar to handleMissingNodeConstraintError since evaluator failures often result from hiding constraints.
+     */
+    private handleEvaluatorConstraintError(
+        error: EvaluatorConstraintError,
         context: {
             layoutNodes: LayoutNode[],
             graph: Graph,
@@ -1048,6 +1128,44 @@ export class LayoutInstance {
     }
 
     /**
+     * Safely evaluates a selector and returns selected atoms, converting evaluator errors to constraint errors.
+     * @param selector - The selector expression to evaluate
+     * @param sourceConstraint - The constraint that contains this selector (for error reporting)
+     * @returns Array of selected atom IDs
+     * @throws {EvaluatorConstraintError} If the evaluator fails (e.g., querying a hidden node)
+     */
+    private safeSelectedAtoms(selector: string, sourceConstraint?: ConstraintSource): string[] {
+        try {
+            const result = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
+            return result.selectedAtoms();
+        } catch (error) {
+            if (error instanceof Error) {
+                throw new EvaluatorConstraintError(selector, error, sourceConstraint);
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * Safely evaluates a selector and returns selected twoples, converting evaluator errors to constraint errors.
+     * @param selector - The selector expression to evaluate
+     * @param sourceConstraint - The constraint that contains this selector (for error reporting)
+     * @returns Array of selected twople pairs [source, target]
+     * @throws {EvaluatorConstraintError} If the evaluator fails (e.g., querying a hidden node)
+     */
+    private safeSelectedTwoples(selector: string, sourceConstraint?: ConstraintSource): string[][] {
+        try {
+            const result = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
+            return result.selectedTwoples();
+        } catch (error) {
+            if (error instanceof Error) {
+                throw new EvaluatorConstraintError(selector, error, sourceConstraint);
+            }
+            throw error;
+        }
+    }
+
+    /**
      * Applies the cyclic orientation constraints to the layout nodes.
      * @param layoutNodes - The layout nodes to which the constraints will be applied.
      * @throws {ConstraintError} If the layout cannot be satisfied with the cyclic constraints.
@@ -1067,7 +1185,7 @@ export class LayoutInstance {
 
         // For each cyclic constraint, extract fragments
         for (const [, c] of cyclicConstraints.entries()) {
-            let selectedTuples: string[][] = this.evaluator.evaluate(c.selector, { instanceIndex: this.instanceNum }).selectedTwoples();
+            let selectedTuples: string[][] = this.safeSelectedTwoples(c.selector, c);
             let nextNodeMap: Map<LayoutNode, LayoutNode[]> = new Map<LayoutNode, LayoutNode[]>();
             
             // Build nextNodeMap from selected tuples
@@ -1278,8 +1396,7 @@ export class LayoutInstance {
             let directions = c.directions;
             let selector = c.selector;
 
-            let selectorRes = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
-            let selectedTuples: string[][] = selectorRes.selectedTwoples();
+            let selectedTuples: string[][] = this.safeSelectedTwoples(selector, c);
 
             // For each tuple, we need to apply the constraints
             selectedTuples.forEach((tuple) => {
@@ -1468,8 +1585,7 @@ export class LayoutInstance {
             let direction = c.direction;
             let selector = c.selector;
 
-            let selectorRes = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
-            let selectedTuples: string[][] = selectorRes.selectedTwoples();
+            let selectedTuples: string[][] = this.safeSelectedTwoples(selector, c);
 
             // For each tuple, apply the alignment constraint
             selectedTuples.forEach((tuple) => {
@@ -1770,7 +1886,7 @@ export class LayoutInstance {
         // Apply size directives first
         let sizeDirectives = this._layoutSpec.directives.sizes;
         sizeDirectives.forEach((sizeDirective) => {
-            let selectedNodes = this.evaluator.evaluate(sizeDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
+            let selectedNodes = this.safeSelectedAtoms(sizeDirective.selector);
             let width = sizeDirective.width;
             let height = sizeDirective.height;
 
@@ -1811,7 +1927,7 @@ export class LayoutInstance {
         // Apply color directives first
         let colorDirectives = this._layoutSpec.directives.atomColors;
         colorDirectives.forEach((colorDirective) => {
-            let selected = this.evaluator.evaluate(colorDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
+            let selected = this.safeSelectedAtoms(colorDirective.selector);
             let color = colorDirective.color;
 
             selected.forEach((nodeId) => {
@@ -1846,7 +1962,7 @@ export class LayoutInstance {
         // Apply icon directives first
         let iconDirectives = this._layoutSpec.directives.icons;
         iconDirectives.forEach((iconDirective) => {
-            let selected = this.evaluator.evaluate(iconDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
+            let selected = this.safeSelectedAtoms(iconDirective.selector);
             let iconPath = iconDirective.path;
 
             selected.forEach((nodeId) => {
