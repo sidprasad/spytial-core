@@ -57,6 +57,35 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     relationTupleRemoved: null as DataInstanceEventListener | null,
   };
 
+  /**
+   * Input mode state management for edge creation and modification
+   */
+  private isInputModeActive: boolean = false;
+  private edgeCreationState: {
+    isCreating: boolean;
+    sourceNode: any | null;
+    temporaryEdge: any;
+  } = {
+    isCreating: false,
+    sourceNode: null,
+    temporaryEdge: null
+  };
+
+  /**
+   * Edge endpoint dragging state for moving edges between nodes
+   */
+  private edgeDragState: {
+    isDragging: boolean;
+    edge: any | null;
+    endpoint: 'source' | 'target' | null;
+    dragMarker: any;
+  } = {
+    isDragging: false,
+    edge: null,
+    endpoint: null,
+    dragMarker: null
+  };
+
   constructor(dataInstance?: IInputDataInstance) {
     super();
     
@@ -73,6 +102,9 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     
     // Add structured input specific initialization
     this.initializeStructuredInput();
+    
+    // Initialize input mode keyboard event handlers
+    this.initializeInputModeHandlers();
     
     // Listen for edge creation, modification, and reconnection events from the parent WebColaCnDGraph
     this.addEventListener('edge-creation-requested', this.handleEdgeCreationRequest.bind(this) as unknown as EventListener);
@@ -1787,5 +1819,235 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    */
   getAvailableTypes(): string[] {
     return this.getAvailableAtomTypes();
+  }
+
+  // =========================================
+  // INPUT MODE FUNCTIONALITY
+  // =========================================
+
+  /**
+   * Initialize keyboard event handlers for input mode activation
+   */
+  private initializeInputModeHandlers(): void {
+    // Handle keydown for Cmd/Ctrl press
+    document.addEventListener('keydown', (event) => {
+      if ((event.metaKey || event.ctrlKey) && !this.isInputModeActive) {
+        this.activateInputMode();
+      }
+    });
+
+    // Handle keyup for Cmd/Ctrl release
+    document.addEventListener('keyup', (event) => {
+      if (!event.metaKey && !event.ctrlKey && this.isInputModeActive) {
+        this.deactivateInputMode();
+      }
+    });
+
+    // Handle window blur to ensure input mode is deactivated
+    window.addEventListener('blur', () => {
+      if (this.isInputModeActive) {
+        this.deactivateInputMode();
+      }
+    });
+  }
+
+  /**
+   * Activate input mode for edge creation and modification
+   */
+  private activateInputMode(): void {
+    this.isInputModeActive = true;
+    
+    // Add input-mode class to SVG for styling
+    const svg = (this as any).svg;
+    if (svg) {
+      svg.classed('input-mode', true);
+    }
+
+    // Disable node dragging and zoom/translate
+    this.disableNodeDragging();
+    this.disableZoom();
+
+    // Update edge endpoint markers visibility
+    this.updateEdgeEndpointMarkers();
+
+    // Dispatch event for external listeners
+    this.dispatchEvent(new CustomEvent('input-mode-activated', {
+      detail: { active: true }
+    }));
+  }
+
+  /**
+   * Deactivate input mode and restore normal behavior
+   */
+  private deactivateInputMode(): void {
+    this.isInputModeActive = false;
+    
+    // Remove input-mode class from SVG
+    const svg = (this as any).svg;
+    if (svg) {
+      svg.classed('input-mode', false);
+    }
+
+    // Clean up any temporary edge creation state
+    this.cleanupEdgeCreation();
+
+    // Re-enable node dragging and zoom/translate
+    this.enableNodeDragging();
+    this.enableZoom();
+
+    // Update edge endpoint markers visibility
+    this.updateEdgeEndpointMarkers();
+
+    // Dispatch event for external listeners
+    this.dispatchEvent(new CustomEvent('input-mode-deactivated', {
+      detail: { active: false }
+    }));
+  }
+
+  /**
+   * Disable node dragging when in input mode
+   */
+  private disableNodeDragging(): void {
+    const svgNodes = (this as any).svgNodes;
+    const colaLayout = (this as any).colaLayout;
+    if (svgNodes && colaLayout) {
+      svgNodes.on('.drag', null);
+    }
+  }
+
+  /**
+   * Re-enable node dragging when exiting input mode
+   */
+  private enableNodeDragging(): void {
+    const svgNodes = (this as any).svgNodes;
+    const colaLayout = (this as any).colaLayout;
+    if (svgNodes && colaLayout && colaLayout.drag) {
+      const nodeDrag = colaLayout.drag();
+      (this as any).setupNodeDragHandlers(nodeDrag);
+      svgNodes.call(nodeDrag);
+    }
+  }
+
+  /**
+   * Disable zoom/translate functionality when in input mode
+   */
+  private disableZoom(): void {
+    const svg = (this as any).svg;
+    const zoomBehavior = (this as any).zoomBehavior;
+    if (svg && zoomBehavior) {
+      // Store current transform before disabling
+      (this as any).storedTransform = (window as any).d3.zoomTransform(svg.node());
+      // Disable zoom events but preserve the behavior
+      svg.on('.zoom', null);
+    }
+  }
+
+  /**
+   * Re-enable zoom/translate functionality when exiting input mode
+   */
+  private enableZoom(): void {
+    const svg = (this as any).svg;
+    const zoomBehavior = (this as any).zoomBehavior;
+    const storedTransform = (this as any).storedTransform;
+    if (svg && zoomBehavior) {
+      // Re-enable zoom behavior
+      svg.call(zoomBehavior);
+      // Restore the previous transform if we had one
+      if (storedTransform) {
+        svg.call(zoomBehavior.transform, storedTransform);
+      }
+    }
+  }
+
+  /**
+   * Clean up temporary edge creation state
+   */
+  private cleanupEdgeCreation(): void {
+    // Remove temporary edge if it exists
+    if (this.edgeCreationState.temporaryEdge) {
+      this.edgeCreationState.temporaryEdge.remove();
+    }
+
+    // Reset edge creation state
+    this.edgeCreationState = {
+      isCreating: false,
+      sourceNode: null,
+      temporaryEdge: null
+    };
+  }
+
+  /**
+   * Update edge endpoint markers visibility based on input mode state
+   */
+  private updateEdgeEndpointMarkers(): void {
+    const svgLinkGroups = (this as any).svgLinkGroups;
+    if (!svgLinkGroups) {
+      console.warn('⚠️ svgLinkGroups not found, cannot update edge markers');
+      return;
+    }
+
+    console.log('🎯 Updating edge endpoint markers, input mode active:', this.isInputModeActive);
+    console.log('📊 Link groups:', svgLinkGroups.size());
+    
+    // Debug: check what's in a link group
+    svgLinkGroups.each(function(this: any) {
+      const group = d3.select(this);
+      console.log('  Group children:', group.selectAll('*').size(), 'path:', group.select('path').size(), 'rect:', group.select('rect').size(), 'polygon:', group.select('polygon').size());
+    });
+    
+    // Update target markers (at the arrow end) with visibility AND position
+    const targetMarkers = svgLinkGroups.selectAll('.target-marker');
+    console.log('  Target markers found:', targetMarkers.size());
+    if (targetMarkers.size() === 0) {
+      console.error('❌ NO TARGET MARKERS FOUND IN DOM!');
+    }
+    targetMarkers
+      .attr('opacity', this.isInputModeActive ? 1 : 0)
+      .style('pointer-events', this.isInputModeActive ? 'all' : 'none')
+      .attr('transform', (d: any) => {
+        const x = d.target?.x || 0;
+        const y = d.target?.y || 0;
+        console.log('  Target marker position:', d.id, x, y);
+        return `translate(${x}, ${y})`;
+      })
+      .raise();
+
+    // Update source markers (at the start) with visibility AND position
+    const sourceMarkers = svgLinkGroups.selectAll('.source-marker');
+    console.log('  Source markers found:', sourceMarkers.size());
+    if (sourceMarkers.size() === 0) {
+      console.error('❌ NO SOURCE MARKERS FOUND IN DOM!');
+    }
+    sourceMarkers
+      .attr('opacity', this.isInputModeActive ? 1 : 0)
+      .style('pointer-events', this.isInputModeActive ? 'all' : 'none')
+      .attr('transform', (d: any) => {
+        const x = d.source?.x || 0;
+        const y = d.source?.y || 0;
+        console.log('  Source marker position:', d.id, x, y);
+        return `translate(${x}, ${y})`;
+      })
+      .raise();
+  }
+
+  /**
+   * Check if input mode is currently active (exposed for parent class)
+   */
+  protected get inputModeActive(): boolean {
+    return this.isInputModeActive;
+  }
+
+  /**
+   * Get edge creation state (exposed for parent class)
+   */
+  protected get edgeCreating(): boolean {
+    return this.edgeCreationState.isCreating;
+  }
+
+  /**
+   * Get edge drag state (exposed for parent class)
+   */
+  protected get edgeDragging(): boolean {
+    return this.edgeDragState.isDragging;
   }
 }
