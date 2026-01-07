@@ -188,6 +188,7 @@
     justify-content: space-between;
     gap: 0.75rem;
     flex-wrap: wrap;
+    margin-bottom: 0.75rem;
 }
 
 .code-view__title {
@@ -247,9 +248,89 @@
 }
 
 .code-view__help {
-    margin: 0.35rem 0 0.75rem;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.code-view__help-trigger {
+    width: 20px;
+    height: 20px;
+    border-radius: 999px;
+    border: 1px solid #d0d7de;
+    background-color: #ffffff;
+    color: #4b5563;
     font-size: 0.75rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    cursor: pointer;
+    transition: all 0.15s ease-in-out;
+}
+
+.code-view__help-trigger:hover {
+    background-color: #eef2ff;
+    color: #3730a3;
+    border-color: #c7d2fe;
+}
+
+.code-view__help-trigger:focus-visible {
+    outline: 2px solid #0d6efd;
+    outline-offset: 2px;
+}
+
+.code-view__help-popover {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 0.5rem);
+    width: min(280px, 80vw);
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 0.65rem 0.75rem;
+    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.15);
+    z-index: 5;
+}
+
+.code-view__help-text {
+    margin: 0;
+    font-size: 0.75rem;
+    color: #4b5563;
+}
+
+.code-view__help-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.code-view__help-close,
+.code-view__help-dismiss {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+
+.code-view__help-close {
     color: #6b7280;
+}
+
+.code-view__help-close:hover {
+    color: #374151;
+}
+
+.code-view__help-dismiss {
+    color: #0d6efd;
+    font-weight: 600;
+}
+
+.code-view__help-dismiss:hover {
+    color: #0b5ed7;
 }
 
 .code-view__notice {
@@ -340,6 +421,12 @@
 
 .code-view-card .cnd-layout-interface__textarea {
     border: none;
+    box-shadow: none;
+    background-color: transparent;
+}
+
+.code-view-card .cnd-layout-interface__textarea:focus {
+    background-color: transparent;
     box-shadow: none;
 }
 

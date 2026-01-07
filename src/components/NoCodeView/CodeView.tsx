@@ -4,6 +4,10 @@ import jsyaml from 'js-yaml';
 import { parseLayoutSpec } from '../../layout/layoutspec';
 import './NoCodeView.css';
 
+const CODE_VIEW_HELP_TEXT =
+    'Syntax highlighting updates as you type. Edits here sync with the Structured Builder.';
+const CODE_VIEW_HELP_DISMISS_KEY = 'cnd-codeview-help-dismissed';
+
 // TODO: Add unit tests for this function
 
 /**
@@ -11,7 +15,7 @@ import './NoCodeView.css';
  * 
  * Generates a valid CND layout specification from structured data objects.
  * This function is the inverse of parseLayoutSpec and ensures round-trip
- * compatibility for the No Code View.
+ * compatibility for the Structured Builder.
  * 
  * Following spytial-core guidelines:
  * - Tree-shakable named export
@@ -19,8 +23,8 @@ import './NoCodeView.css';
  * - TypeScript strict typing
  * - Functional programming approach
  * 
- * @param constraints - Array of constraint data objects from No Code View
- * @param directives - Array of directive data objects from No Code View
+ * @param constraints - Array of constraint data objects from Structured Builder
+ * @param directives - Array of directive data objects from Structured Builder
  * @returns YAML string representation of the layout specification
  * 
  * @example
@@ -271,6 +275,9 @@ const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
     const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
     const highlightRef = useRef<HTMLPreElement | null>(null);
     const lineGutterRef = useRef<HTMLDivElement | null>(null);
+    const helpWrapperRef = useRef<HTMLDivElement | null>(null);
+    const [isHelpOpen, setIsHelpOpen] = useState(false);
+    const [isHelpDismissed, setIsHelpDismissed] = useState(false);
 
     // Validate YAML and Spytial spec when value changes
     useEffect(() => {
@@ -278,6 +285,48 @@ const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
         setValidationError(result.error);
         setValidationWarnings(result.warnings);
     }, [props.yamlValue]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        try {
+            const storedValue = window.localStorage.getItem(CODE_VIEW_HELP_DISMISS_KEY);
+            setIsHelpDismissed(storedValue === 'true');
+        } catch {
+            setIsHelpDismissed(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (!isHelpOpen) return;
+        const handleClickOutside = (event: MouseEvent) => {
+            if (!helpWrapperRef.current) return;
+            if (!helpWrapperRef.current.contains(event.target as Node)) {
+                setIsHelpOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isHelpOpen]);
+
+    useEffect(() => {
+        if (isHelpDismissed) {
+            setIsHelpOpen(false);
+        }
+    }, [isHelpDismissed]);
+
+    const dismissHelp = useCallback(() => {
+        setIsHelpDismissed(true);
+        setIsHelpOpen(false);
+        if (typeof window === 'undefined') return;
+        try {
+            window.localStorage.setItem(CODE_VIEW_HELP_DISMISS_KEY, 'true');
+        } catch {
+            // Ignore storage failures to avoid blocking UI.
+        }
+    }, []);
 
     const lineCount = useMemo(() => {
         if (!props.yamlValue) return 1;
@@ -358,11 +407,54 @@ const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
                 <div className="code-view__meta">
                     <span>{lineCount} lines</span>
                     <span>{charCount} chars</span>
+                    {!isHelpDismissed && (
+                        <div className="code-view__help" ref={helpWrapperRef}>
+                            <button
+                                type="button"
+                                className="code-view__help-trigger"
+                                onClick={() => setIsHelpOpen((prev) => !prev)}
+                                aria-label="Code view help"
+                                aria-expanded={isHelpOpen}
+                                aria-controls="cnd-layout-yaml-help-popover"
+                                title={CODE_VIEW_HELP_TEXT}
+                            >
+                                ?
+                            </button>
+                            {isHelpOpen && (
+                                <div
+                                    id="cnd-layout-yaml-help-popover"
+                                    className="code-view__help-popover"
+                                    role="dialog"
+                                    aria-label="Code view help"
+                                >
+                                    <p className="code-view__help-text">{CODE_VIEW_HELP_TEXT}</p>
+                                    <div className="code-view__help-actions">
+                                        <button
+                                            type="button"
+                                            className="code-view__help-close"
+                                            onClick={() => setIsHelpOpen(false)}
+                                        >
+                                            Close
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="code-view__help-dismiss"
+                                            onClick={dismissHelp}
+                                        >
+                                            Don't show again
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
-            <p className="code-view__help" id="cnd-layout-yaml-help">
-                Syntax highlighting updates as you type. Edits here sync with the No-Code view.
-            </p>
+            {!isHelpDismissed && (
+                <span id="cnd-layout-yaml-help" className="visually-hidden">
+                    {CODE_VIEW_HELP_TEXT}
+                </span>
+            )}
 
             {/* Spytial spec validation error display */}
             {validationError && (
@@ -424,7 +516,7 @@ const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
                             rows={12}
                             spellCheck={false}
                             aria-label="CND Layout Specification YAML"
-                            aria-describedby="cnd-layout-yaml-help"
+                            aria-describedby={isHelpDismissed ? undefined : 'cnd-layout-yaml-help'}
                             aria-invalid={validationError ? 'true' : 'false'}
                         />
                     </div>
