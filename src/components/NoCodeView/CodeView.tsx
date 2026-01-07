@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { ConstraintData, DirectiveData } from './interfaces';
 import jsyaml from 'js-yaml';
 import { parseLayoutSpec } from '../../layout/layoutspec';
@@ -269,6 +269,8 @@ interface CodeViewProps {
 const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
     const [validationError, setValidationError] = useState<string | null>(null);
     const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
+    const highlightRef = useRef<HTMLPreElement | null>(null);
+    const lineGutterRef = useRef<HTMLDivElement | null>(null);
 
     // Validate YAML and Spytial spec when value changes
     useEffect(() => {
@@ -276,6 +278,24 @@ const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
         setValidationError(result.error);
         setValidationWarnings(result.warnings);
     }, [props.yamlValue]);
+
+    const lineCount = useMemo(() => {
+        if (!props.yamlValue) return 1;
+        return props.yamlValue.split('\n').length;
+    }, [props.yamlValue]);
+
+    const charCount = useMemo(() => props.yamlValue.length, [props.yamlValue]);
+
+    const statusTone = validationError
+        ? 'error'
+        : validationWarnings.length > 0
+        ? 'warning'
+        : 'success';
+    const statusLabel = validationError
+        ? 'Error'
+        : validationWarnings.length > 0
+        ? `${validationWarnings.length} warning${validationWarnings.length === 1 ? '' : 's'}`
+        : 'Valid';
 
     // Apply basic YAML syntax highlighting to text
     const highlightedYaml = useMemo(() => {
@@ -317,25 +337,37 @@ const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
     // Sync scroll between textarea and highlighted overlay
     const handleScroll = useCallback((e: React.UIEvent<HTMLTextAreaElement>) => {
         const textarea = e.currentTarget;
-        const pre = textarea.parentElement?.querySelector('.yaml-highlight-overlay') as HTMLElement;
-        if (pre) {
-            pre.scrollTop = textarea.scrollTop;
-            pre.scrollLeft = textarea.scrollLeft;
+        if (highlightRef.current) {
+            highlightRef.current.scrollTop = textarea.scrollTop;
+            highlightRef.current.scrollLeft = textarea.scrollLeft;
+        }
+        if (lineGutterRef.current) {
+            lineGutterRef.current.scrollTop = textarea.scrollTop;
         }
     }, []);
 
   return (
     <div className="cnd-layout-interface__code-view" role="region" aria-label="YAML Code Editor">
-        <div className="mb-2">
-            <div id="cnd-layout-yaml-help" className="form-text text-muted fst-italic pb-3">
-                Enter your CND layout specification in YAML format. 
-                Use the toggle above to switch to the visual editor.
+        <div className="code-view-card">
+            <div className="code-view__header">
+                <div className="code-view__title">
+                    <span className="code-view__badge">Code</span>
+                    <span className="code-view__heading">CND YAML</span>
+                    <span className={`code-view__status code-view__status--${statusTone}`}>{statusLabel}</span>
+                </div>
+                <div className="code-view__meta">
+                    <span>{lineCount} lines</span>
+                    <span>{charCount} chars</span>
+                </div>
             </div>
-            
+            <p className="code-view__help" id="cnd-layout-yaml-help">
+                Syntax highlighting updates as you type. Edits here sync with the No-Code view.
+            </p>
+
             {/* Spytial spec validation error display */}
             {validationError && (
                 <div 
-                    className="alert alert-danger py-2 mb-2" 
+                    className="alert alert-danger py-2 mb-2 code-view__notice" 
                     role="alert"
                     aria-live="polite"
                 >
@@ -349,7 +381,7 @@ const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
             {/* Spytial spec validation warnings display */}
             {validationWarnings.length > 0 && (
                 <div 
-                    className="alert alert-warning py-2 mb-2" 
+                    className="alert alert-warning py-2 mb-2 code-view__notice" 
                     role="alert"
                     aria-live="polite"
                 >
@@ -365,62 +397,38 @@ const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
             )}
             
             {/* Container for textarea with syntax highlighting overlay */}
-            <div className="yaml-editor-container" style={{ position: 'relative' }}>
-                {/* Syntax highlighted overlay (behind textarea) */}
-                <pre 
-                    className="yaml-highlight-overlay form-control cnd-layout-interface__textarea"
-                    aria-hidden="true"
-                    style={{ 
-                        minHeight: '400px', 
-                        resize: 'none',
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        margin: 0,
-                        padding: '0.375rem 0.75rem',
-                        overflow: 'auto',
-                        whiteSpace: 'pre-wrap',
-                        wordWrap: 'break-word',
-                        fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
-                        fontSize: '0.875rem',
-                        lineHeight: '1.5',
-                        backgroundColor: '#f8f9fa',
-                        border: '1px solid #ced4da',
-                        borderRadius: '0.25rem',
-                        pointerEvents: 'none',
-                        zIndex: 0,
-                    }}
-                    dangerouslySetInnerHTML={{ __html: highlightedYaml || '&nbsp;' }}
-                />
-                
-                {/* Actual textarea (transparent, on top for editing) */}
-                <textarea
-                    id="webcola-cnd"
-                    className="form-control cnd-layout-interface__textarea"
-                    value={props.yamlValue}
-                    onChange={props.handleTextareaChange}
-                    onScroll={handleScroll}
-                    disabled={props.disabled}
-                    rows={12}
-                    spellCheck={false}
-                    aria-label="CND Layout Specification YAML"
-                    aria-describedby="cnd-layout-yaml-help"
-                    aria-invalid={validationError ? 'true' : 'false'}
-                    style={{ 
-                        minHeight: '400px', 
-                        resize: 'vertical',
-                        position: 'relative',
-                        zIndex: 1,
-                        backgroundColor: 'transparent',
-                        color: 'transparent',
-                        caretColor: '#212529',
-                        fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
-                        fontSize: '0.875rem',
-                        lineHeight: '1.5',
-                    }}
-                />
+            <div className="yaml-editor-container">
+                <div className="yaml-editor">
+                    <div className="yaml-line-gutter" ref={lineGutterRef} aria-hidden="true">
+                        {Array.from({ length: lineCount }, (_, index) => (
+                            <div key={index} className="yaml-line-number">{index + 1}</div>
+                        ))}
+                    </div>
+                    <div className="yaml-editor-body">
+                        {/* Syntax highlighted overlay (behind textarea) */}
+                        <pre 
+                            className="yaml-highlight-overlay form-control cnd-layout-interface__textarea"
+                            aria-hidden="true"
+                            ref={highlightRef}
+                            dangerouslySetInnerHTML={{ __html: highlightedYaml || '&nbsp;' }}
+                        />
+                        
+                        {/* Actual textarea (transparent, on top for editing) */}
+                        <textarea
+                            id="webcola-cnd"
+                            className="form-control cnd-layout-interface__textarea yaml-editor-textarea"
+                            value={props.yamlValue}
+                            onChange={props.handleTextareaChange}
+                            onScroll={handleScroll}
+                            disabled={props.disabled}
+                            rows={12}
+                            spellCheck={false}
+                            aria-label="CND Layout Specification YAML"
+                            aria-describedby="cnd-layout-yaml-help"
+                            aria-invalid={validationError ? 'true' : 'false'}
+                        />
+                    </div>
+                </div>
             </div>
         </div>
     </div>
