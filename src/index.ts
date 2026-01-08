@@ -18,6 +18,14 @@ export { RacketGDataInstance } from './data-instance/racket/racket-g-data-instan
 export { PyretDataInstance } from './data-instance/pyret/pyret-data-instance';
 export { TlaDataInstance, createTlaDataInstance, isTlaDataInstance } from './data-instance/tla/tla-data-instance';
 
+// Export schema descriptor functions for generating descriptions of data instances
+export { 
+  generateAlloySchema, 
+  generateSQLSchema, 
+  generateTextDescription 
+} from './data-instance/schema-descriptor';
+export type { SchemaDescriptorOptions } from './data-instance/schema-descriptor';
+
 // Direct exports of key classes for convenience
 export { LayoutInstance } from './layout/layoutinstance';
 export { parseLayoutSpec } from './layout/layoutspec';
