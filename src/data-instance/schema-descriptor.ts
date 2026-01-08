@@ -114,6 +114,8 @@ export function generateAlloySchema(
 
   // Generate sig declarations for each type
   for (const type of filteredTypes) {
+    // Type hierarchy: type.types[0] is the type itself, type.types[1...] are parent types
+    // in ascending order (immediate parent first)
     const parentTypes = type.types.length > 1 ? type.types.slice(1) : [];
     const extendsClause = includeTypeHierarchy && parentTypes.length > 0
       ? ` extends ${parentTypes[0]}`
@@ -130,8 +132,9 @@ export function generateAlloySchema(
       // Determine arity hint if requested
       let arityHint = '';
       if (includeArityHints) {
-        // Note: This is a best-effort guess; actual arity needs instance-level analysis
-        // For now, we use 'set' as a default (most general)
+        // Note: Precise arity requires instance-level analysis and constraints
+        // For now, use 'set' (most general) as a safe default
+        // Future enhancement: detect 'one', 'lone', 'some' based on tuple cardinality
         arityHint = 'set ';
       }
 
@@ -216,7 +219,8 @@ export function generateSQLSchema(
 
     // Add parent type reference if type hierarchy is included
     if (includeTypeHierarchy && type.types.length > 1) {
-      const parentType = type.types[1]; // First parent in hierarchy
+      // Type hierarchy: type.types[0] is the type itself, type.types[1] is immediate parent
+      const parentType = type.types[1];
       lines.push(`  -- extends ${parentType}`);
     }
 
