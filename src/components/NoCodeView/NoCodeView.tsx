@@ -31,7 +31,7 @@ export function generateId(): string {
  * Converts YAML string to structured constraint and directive data objects
  * 
  * Parses a CND layout specification YAML and extracts constraint and directive
- * data suitable for the No Code View interface. This function complements
+ * data suitable for the Structured Builder interface. This function complements
  * parseLayoutSpec by providing data in a format optimized for visual editing.
  * 
  * Following spytial-core guidelines:
@@ -397,7 +397,7 @@ const NoCodeView = ({
     /**
      * Loads constraint and directive state from YAML specification
      * 
-     * Parses a YAML string and updates the No Code View's internal state to reflect
+     * Parses a YAML string and updates the Structured Builder's internal state to reflect
      * the constraints and directives defined in the specification. This enables
      * bidirectional synchronization between text and visual editing modes.
      * 
@@ -427,19 +427,19 @@ const NoCodeView = ({
 
     // Load state from YAML when component mounts or when yamlValue changes
     useEffect(() => {
-        // If switching to No Code View and have YAML, load it
+        // If switching to Structured Builder and have YAML, load it
         console.log(yamlValue);
         if (yamlValue) {
             try {
                 loadStateFromYaml(yamlValue);
             } catch (error) {
-                console.error("Failed to load YAML into No Code View:", error);
+                console.error("Failed to load YAML into Structured Builder:", error);
             }
         }
     }, [yamlValue])
 
     return (
-        <section id="noCodeViewContainer" aria-label="No Code View Container">
+        <section id="noCodeViewContainer" aria-label="Structured Builder Container">
             <div>
                 <div className="sectionHeader">
                     <h5>Constraints  <button type="button" onClick={ addConstraint } title="Click to add a new constraint" aria-label="Click to add a new constraint" disabled={disabled}>+</button></h5>

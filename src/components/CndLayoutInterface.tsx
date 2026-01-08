@@ -12,7 +12,7 @@ export interface CndLayoutInterfaceProps {
   yamlValue: string;
   /** Callback when YAML value changes */
   onChange: (value: string) => void;
-  /** Whether to show No Code View */
+  /** Whether to show Structured Builder */
   isNoCodeView: boolean;
   /** Callback when view mode changes */
   onViewChange: (isNoCodeView: boolean) => void;
@@ -33,11 +33,11 @@ export interface CndLayoutInterfaceProps {
 }
 
 /**
- * CND Layout Interface component with toggle between Code View and No Code View
+ * CND Layout Interface component with toggle between Code View and Structured Builder
  * 
  * Provides a toggle interface for CND layout specification editing:
  * - Code View: Text area for direct YAML editing
- * - No Code View: Visual interface for constraint/directive editing (placeholder)
+ * - Structured Builder: Low-code interface for constraint/directive editing
  * 
  * This is a controlled component that requires parent state management.
  * 
@@ -81,7 +81,7 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
    * Get current state as a snapshot
    */
   const getCurrentSnapshot = useCallback((): Snapshot => {
-    // In No Code View, generate YAML from constraints/directives for consistency
+    // In Structured Builder, generate YAML from constraints/directives for consistency
     const currentYaml = isNoCodeView 
       ? generateLayoutSpecYaml(constraints, directives)
       : yamlValue;
@@ -266,7 +266,7 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
           </label>
           
           <span className={toggleLabelNoCodeClasses}>
-            No Code View
+            Structured Builder
           </span>
         </div>
 
@@ -297,13 +297,13 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
 
       {/* Hidden description for screen readers - Bootstrap sr-only utility */}
       <div id="cnd-layout-toggle-description" className="visually-hidden">
-        Toggle between Code View (text editor) and No Code View (visual editor) for CND layout specification
+        Toggle between Code View (text editor) and Structured Builder (low-code visual editor) for CND layout specification
       </div>
 
       {/* Content area with Bootstrap styling */}
       <div className="cnd-layout-interface__content">
         {isNoCodeView ? (
-          // No Code View - Bootstrap card layout
+          // Structured Builder - Bootstrap card layout
           <NoCodeView yamlValue={yamlValue} constraints={constraints} setConstraints={setConstraints} directives={directives} setDirectives={setDirectives}/>
         ) : (
           // Code View - Bootstrap form styling

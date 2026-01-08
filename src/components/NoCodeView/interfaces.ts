@@ -1,7 +1,7 @@
 import { ConstraintType, DirectiveType } from './types';
 
 /**
- * Constraint data model for No Code View state management
+ * Constraint data model for Structured Builder state management
  * 
  * Represents constraint configuration in a format optimized for visual editing.
  * This interface bridges the gap between the visual interface and the core
@@ -22,18 +22,18 @@ export interface ConstraintData {
   type: ConstraintType;
   /** Constraint-specific parameters (directions, selector, etc.) */
   params: Record<string, unknown>;
-  /** Whether the card is collapsed in the No Code View */
+  /** Whether the card is collapsed in the Structured Builder */
   collapsed?: boolean;
   /** Optional comment/note for this constraint */
   comment?: string;
 }
 
 /**
- * Directive data model for No Code View state management
+ * Directive data model for Structured Builder state management
  * 
  * Represents directive configuration in a format optimized for visual editing.
  * This interface provides a structured approach to managing visual directives
- * within the No Code View interface.
+ * within the Structured Builder interface.
  * 
  * Following cnd-core TypeScript guidelines:
  * - Comprehensive type safety
@@ -50,7 +50,7 @@ export interface DirectiveData {
   type: DirectiveType;
   /** Directive-specific parameters (color, selector, path, etc.) */
   params: Record<string, unknown>;
-  /** Whether the card is collapsed in the No Code View */
+  /** Whether the card is collapsed in the Structured Builder */
   collapsed?: boolean;
   /** Optional comment/note for this directive */
   comment?: string;

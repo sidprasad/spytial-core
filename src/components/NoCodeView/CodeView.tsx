@@ -1,8 +1,12 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { ConstraintData, DirectiveData } from './interfaces';
 import jsyaml from 'js-yaml';
 import { parseLayoutSpec } from '../../layout/layoutspec';
 import './NoCodeView.css';
+
+const CODE_VIEW_HELP_TEXT =
+    'Syntax highlighting updates as you type. Edits here sync with the Structured Builder.';
+const CODE_VIEW_HELP_DISMISS_KEY = 'cnd-codeview-help-dismissed';
 
 // TODO: Add unit tests for this function
 
@@ -11,7 +15,7 @@ import './NoCodeView.css';
  * 
  * Generates a valid CND layout specification from structured data objects.
  * This function is the inverse of parseLayoutSpec and ensures round-trip
- * compatibility for the No Code View.
+ * compatibility for the Structured Builder.
  * 
  * Following spytial-core guidelines:
  * - Tree-shakable named export
@@ -19,8 +23,8 @@ import './NoCodeView.css';
  * - TypeScript strict typing
  * - Functional programming approach
  * 
- * @param constraints - Array of constraint data objects from No Code View
- * @param directives - Array of directive data objects from No Code View
+ * @param constraints - Array of constraint data objects from Structured Builder
+ * @param directives - Array of directive data objects from Structured Builder
  * @returns YAML string representation of the layout specification
  * 
  * @example
@@ -269,6 +273,10 @@ interface CodeViewProps {
 const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
     const [validationError, setValidationError] = useState<string | null>(null);
     const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
+    const highlightRef = useRef<HTMLPreElement | null>(null);
+    const helpWrapperRef = useRef<HTMLDivElement | null>(null);
+    const [isHelpOpen, setIsHelpOpen] = useState(false);
+    const [isHelpDismissed, setIsHelpDismissed] = useState(false);
 
     // Validate YAML and Spytial spec when value changes
     useEffect(() => {
@@ -276,6 +284,48 @@ const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
         setValidationError(result.error);
         setValidationWarnings(result.warnings);
     }, [props.yamlValue]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        try {
+            const storedValue = window.localStorage.getItem(CODE_VIEW_HELP_DISMISS_KEY);
+            setIsHelpDismissed(storedValue === 'true');
+        } catch {
+            setIsHelpDismissed(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (!isHelpOpen) return;
+        const handleClickOutside = (event: MouseEvent) => {
+            if (!helpWrapperRef.current) return;
+            if (!helpWrapperRef.current.contains(event.target as Node)) {
+                setIsHelpOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isHelpOpen]);
+
+    useEffect(() => {
+        if (isHelpDismissed) {
+            setIsHelpOpen(false);
+        }
+    }, [isHelpDismissed]);
+
+    const dismissHelp = useCallback(() => {
+        setIsHelpDismissed(true);
+        setIsHelpOpen(false);
+        if (typeof window === 'undefined') return;
+        try {
+            window.localStorage.setItem(CODE_VIEW_HELP_DISMISS_KEY, 'true');
+        } catch {
+            // Ignore storage failures to avoid blocking UI.
+        }
+    }, []);
 
     // Apply basic YAML syntax highlighting to text
     const highlightedYaml = useMemo(() => {
@@ -317,25 +367,68 @@ const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
     // Sync scroll between textarea and highlighted overlay
     const handleScroll = useCallback((e: React.UIEvent<HTMLTextAreaElement>) => {
         const textarea = e.currentTarget;
-        const pre = textarea.parentElement?.querySelector('.yaml-highlight-overlay') as HTMLElement;
-        if (pre) {
-            pre.scrollTop = textarea.scrollTop;
-            pre.scrollLeft = textarea.scrollLeft;
+        if (highlightRef.current) {
+            highlightRef.current.scrollTop = textarea.scrollTop;
+            highlightRef.current.scrollLeft = textarea.scrollLeft;
         }
     }, []);
 
   return (
     <div className="cnd-layout-interface__code-view" role="region" aria-label="YAML Code Editor">
-        <div className="mb-2">
-            <div id="cnd-layout-yaml-help" className="form-text text-muted fst-italic pb-3">
-                Enter your CND layout specification in YAML format. 
-                Use the toggle above to switch to the visual editor.
-            </div>
-            
+        <div className="code-view-card">
+            {!isHelpDismissed && (
+                <div className="code-view__header">
+                    <div className="code-view__help" ref={helpWrapperRef}>
+                        <button
+                            type="button"
+                            className="code-view__help-trigger"
+                            onClick={() => setIsHelpOpen((prev) => !prev)}
+                            aria-label="Code view help"
+                            aria-expanded={isHelpOpen}
+                            aria-controls="cnd-layout-yaml-help-popover"
+                            title={CODE_VIEW_HELP_TEXT}
+                        >
+                            ?
+                        </button>
+                        {isHelpOpen && (
+                            <div
+                                id="cnd-layout-yaml-help-popover"
+                                className="code-view__help-popover"
+                                role="dialog"
+                                aria-label="Code view help"
+                            >
+                                <p className="code-view__help-text">{CODE_VIEW_HELP_TEXT}</p>
+                                <div className="code-view__help-actions">
+                                    <button
+                                        type="button"
+                                        className="code-view__help-close"
+                                        onClick={() => setIsHelpOpen(false)}
+                                    >
+                                        Close
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="code-view__help-dismiss"
+                                        onClick={dismissHelp}
+                                    >
+                                        Don't show again
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+            {!isHelpDismissed && (
+                <span id="cnd-layout-yaml-help" className="visually-hidden">
+                    {CODE_VIEW_HELP_TEXT}
+                </span>
+            )}
+
             {/* Spytial spec validation error display */}
             {validationError && (
                 <div 
-                    className="alert alert-danger py-2 mb-2" 
+                    className="alert alert-danger py-2 mb-2 code-view__notice" 
                     role="alert"
                     aria-live="polite"
                 >
@@ -349,7 +442,7 @@ const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
             {/* Spytial spec validation warnings display */}
             {validationWarnings.length > 0 && (
                 <div 
-                    className="alert alert-warning py-2 mb-2" 
+                    className="alert alert-warning py-2 mb-2 code-view__notice" 
                     role="alert"
                     aria-live="polite"
                 >
@@ -365,62 +458,33 @@ const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
             )}
             
             {/* Container for textarea with syntax highlighting overlay */}
-            <div className="yaml-editor-container" style={{ position: 'relative' }}>
-                {/* Syntax highlighted overlay (behind textarea) */}
-                <pre 
-                    className="yaml-highlight-overlay form-control cnd-layout-interface__textarea"
-                    aria-hidden="true"
-                    style={{ 
-                        minHeight: '400px', 
-                        resize: 'none',
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        margin: 0,
-                        padding: '0.375rem 0.75rem',
-                        overflow: 'auto',
-                        whiteSpace: 'pre-wrap',
-                        wordWrap: 'break-word',
-                        fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
-                        fontSize: '0.875rem',
-                        lineHeight: '1.5',
-                        backgroundColor: '#f8f9fa',
-                        border: '1px solid #ced4da',
-                        borderRadius: '0.25rem',
-                        pointerEvents: 'none',
-                        zIndex: 0,
-                    }}
-                    dangerouslySetInnerHTML={{ __html: highlightedYaml || '&nbsp;' }}
-                />
-                
-                {/* Actual textarea (transparent, on top for editing) */}
-                <textarea
-                    id="webcola-cnd"
-                    className="form-control cnd-layout-interface__textarea"
-                    value={props.yamlValue}
-                    onChange={props.handleTextareaChange}
-                    onScroll={handleScroll}
-                    disabled={props.disabled}
-                    rows={12}
-                    spellCheck={false}
-                    aria-label="CND Layout Specification YAML"
-                    aria-describedby="cnd-layout-yaml-help"
-                    aria-invalid={validationError ? 'true' : 'false'}
-                    style={{ 
-                        minHeight: '400px', 
-                        resize: 'vertical',
-                        position: 'relative',
-                        zIndex: 1,
-                        backgroundColor: 'transparent',
-                        color: 'transparent',
-                        caretColor: '#212529',
-                        fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
-                        fontSize: '0.875rem',
-                        lineHeight: '1.5',
-                    }}
-                />
+            <div className="yaml-editor-container">
+                <div className="yaml-editor">
+                    <div className="yaml-editor-body">
+                        {/* Syntax highlighted overlay (behind textarea) */}
+                        <pre 
+                            className="yaml-highlight-overlay form-control cnd-layout-interface__textarea"
+                            aria-hidden="true"
+                            ref={highlightRef}
+                            dangerouslySetInnerHTML={{ __html: highlightedYaml || '&nbsp;' }}
+                        />
+                        
+                        {/* Actual textarea (transparent, on top for editing) */}
+                        <textarea
+                            id="webcola-cnd"
+                            className="form-control cnd-layout-interface__textarea yaml-editor-textarea"
+                            value={props.yamlValue}
+                            onChange={props.handleTextareaChange}
+                            onScroll={handleScroll}
+                            disabled={props.disabled}
+                            rows={12}
+                            spellCheck={false}
+                            aria-label="CND Layout Specification YAML"
+                            aria-describedby={isHelpDismissed ? undefined : 'cnd-layout-yaml-help'}
+                            aria-invalid={validationError ? 'true' : 'false'}
+                        />
+                    </div>
+                </div>
             </div>
         </div>
     </div>
