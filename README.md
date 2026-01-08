@@ -4,10 +4,56 @@ A tree-shakable TypeScript implementation of `spytial`, usable for language inte
 - **Client-side only**: No Node.js dependencies and tree-shakable.
 - **Custom Elements** for easy embedding in web apps
 - **Selector Synthesis**: Auto-generate CnD selector expressions from examples
+- **Schema Descriptions**: Generate LLM-friendly descriptions of data structures
 
 ---
 
 ## Features
+
+### Schema Descriptions 🆕
+
+Generate schema-level descriptions of data instances in multiple formats for LLM consumption, documentation, or analysis. Describes the **shape** of the data (types, relations, arities) rather than instance-level data.
+
+```typescript
+import { generateAlloySchema, generateSQLSchema, generateTextDescription } from 'spytial-core';
+
+// Generate Alloy-style schema (sig-based)
+const alloySchema = generateAlloySchema(dataInstance);
+// Output:
+// sig Node {
+//   left: Node
+//   right: Node
+//   key: Int
+// }
+
+// Generate SQL-style schema (table-based)
+const sqlSchema = generateSQLSchema(dataInstance);
+// Output:
+// CREATE TABLE Node (
+//   id VARCHAR PRIMARY KEY
+// );
+// CREATE TABLE left (
+//   source_Node VARCHAR REFERENCES Node(id),
+//   target_Node VARCHAR REFERENCES Node(id)
+// );
+
+// Generate human-readable description
+const textSchema = generateTextDescription(dataInstance);
+// Output:
+// Types:
+// - Node (3 atoms)
+// Relations:
+// - left: Node -> Node (2 tuples)
+// - right: Node -> Node (1 tuple)
+// - key: Node -> Int (3 tuples)
+```
+
+**Use cases:**
+- **LLM Integration**: Provide context to language models for generating selectors or constraints
+- **Documentation**: Auto-generate schema documentation for data instances
+- **Analysis**: Understand the structure of complex data models
+
+See [Schema Descriptor API](#schema-descriptor-api) for full options and examples.
 
 ### Core Layout Engine
 - **CnD (Constraint & Directive) Layout System**: Declarative constraint-based graph layouts
@@ -219,6 +265,89 @@ Once loaded, use via the global `CndCore` object:
 ---
 
 ## API Reference
+
+### Schema Descriptor API
+
+Generate schema-level descriptions of data instances for LLM consumption or documentation.
+
+#### `generateAlloySchema(dataInstance, options?)`
+
+Generate an Alloy-style schema with signatures and fields.
+
+```typescript
+import { generateAlloySchema } from 'spytial-core';
+
+const schema = generateAlloySchema(dataInstance, {
+  includeBuiltInTypes: false,    // Exclude built-in types like Int, String
+  includeTypeHierarchy: true,    // Include 'extends' clauses
+  includeArityHints: false       // Add multiplicity hints (one, lone, some, set)
+});
+
+// Example output:
+// sig Node {
+//   left: Node
+//   right: Node
+//   key: Int
+// }
+```
+
+**Options:**
+- `includeBuiltInTypes` (default: `false`) - Include built-in types (Int, String, etc.)
+- `includeTypeHierarchy` (default: `true`) - Show type inheritance with `extends`
+- `includeArityHints` (default: `false`) - Add multiplicity keywords (experimental)
+
+#### `generateSQLSchema(dataInstance, options?)`
+
+Generate SQL CREATE TABLE statements for types and relations.
+
+```typescript
+import { generateSQLSchema } from 'spytial-core';
+
+const schema = generateSQLSchema(dataInstance, {
+  includeBuiltInTypes: false,
+  includeTypeHierarchy: true
+});
+
+// Example output:
+// CREATE TABLE Node (
+//   id VARCHAR PRIMARY KEY
+// );
+// 
+// CREATE TABLE left (
+//   source_Node VARCHAR REFERENCES Node(id),
+//   target_Node VARCHAR REFERENCES Node(id)
+// );
+```
+
+**Options:**
+- `includeBuiltInTypes` (default: `false`) - Include built-in types
+- `includeTypeHierarchy` (default: `true`) - Add comments showing type inheritance
+
+#### `generateTextDescription(dataInstance, options?)`
+
+Generate a human-readable plain text description.
+
+```typescript
+import { generateTextDescription } from 'spytial-core';
+
+const description = generateTextDescription(dataInstance, {
+  includeBuiltInTypes: false
+});
+
+// Example output:
+// Types:
+// - Node (5 atoms)
+// - Person (3 atoms)
+// 
+// Relations:
+// - left: Node -> Node (2 tuples)
+// - friend: Person -> Person (4 tuples)
+```
+
+**Options:**
+- `includeBuiltInTypes` (default: `false`) - Include built-in types
+
+---
 
 ### Synthesis Functions
 
