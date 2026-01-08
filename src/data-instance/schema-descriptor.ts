@@ -78,6 +78,11 @@ export interface SchemaDescriptorOptions {
  * // 
  * // sig Int {}
  * ```
+ * 
+ * @remarks
+ * When `includeArityHints` is true, arity multiplicities are currently set to 'set' (most permissive).
+ * Precise arity detection ('one', 'lone', 'some') would require analyzing tuple cardinality patterns,
+ * which is not yet implemented. This option is considered experimental.
  */
 export function generateAlloySchema(
   dataInstance: IDataInstance,
@@ -114,11 +119,12 @@ export function generateAlloySchema(
 
   // Generate sig declarations for each type
   for (const type of filteredTypes) {
-    // Type hierarchy: type.types[0] is the type itself, type.types[1...] are parent types
-    // in ascending order (immediate parent first)
+    // Type hierarchy structure: type.types[0] is the type itself,
+    // type.types[1...] are parent types from most specific to most general
+    // Example: ['Student', 'Person', 'Object'] means Student extends Person extends Object
     const parentTypes = type.types.length > 1 ? type.types.slice(1) : [];
     const extendsClause = includeTypeHierarchy && parentTypes.length > 0
-      ? ` extends ${parentTypes[0]}`
+      ? ` extends ${parentTypes[0]}`  // Use immediate parent (most specific)
       : '';
     
     lines.push(`sig ${type.id}${extendsClause} {`);
@@ -132,9 +138,9 @@ export function generateAlloySchema(
       // Determine arity hint if requested
       let arityHint = '';
       if (includeArityHints) {
-        // Note: Precise arity requires instance-level analysis and constraints
-        // For now, use 'set' (most general) as a safe default
-        // Future enhancement: detect 'one', 'lone', 'some' based on tuple cardinality
+        // EXPERIMENTAL: Arity detection requires analyzing tuple cardinality patterns
+        // Currently defaults to 'set' (most permissive multiplicity)
+        // Future: Detect 'one', 'lone', 'some' based on min/max tuple counts per source atom
         arityHint = 'set ';
       }
 
@@ -219,7 +225,8 @@ export function generateSQLSchema(
 
     // Add parent type reference if type hierarchy is included
     if (includeTypeHierarchy && type.types.length > 1) {
-      // Type hierarchy: type.types[0] is the type itself, type.types[1] is immediate parent
+      // Type hierarchy structure: type.types[0] is the type itself,
+      // type.types[1] is immediate parent (most specific parent type)
       const parentType = type.types[1];
       lines.push(`  -- extends ${parentType}`);
     }
