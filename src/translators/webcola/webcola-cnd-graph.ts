@@ -1302,9 +1302,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       // many iterations just for bounds computation.
       const convergenceThreshold = hasPriorPositions ? 0.1 : 1e-3;
       
-      if (hasPriorPositions) {
-        console.log(`WebCola: Using convergence threshold ${convergenceThreshold} to preserve prior positions`);
-      }
+      // if (hasPriorPositions) {
+      //   //console.log(`WebCola: Using convergence threshold ${convergenceThreshold} to preserve prior positions`);
+      // }
 
       // Create WebCola layout using d3adaptor
       const layout: Layout = cola.d3adaptor(d3)
