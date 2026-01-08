@@ -274,7 +274,6 @@ const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
     const [validationError, setValidationError] = useState<string | null>(null);
     const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
     const highlightRef = useRef<HTMLPreElement | null>(null);
-    const lineGutterRef = useRef<HTMLDivElement | null>(null);
     const helpWrapperRef = useRef<HTMLDivElement | null>(null);
     const [isHelpOpen, setIsHelpOpen] = useState(false);
     const [isHelpDismissed, setIsHelpDismissed] = useState(false);
@@ -328,24 +327,6 @@ const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
         }
     }, []);
 
-    const lineCount = useMemo(() => {
-        if (!props.yamlValue) return 1;
-        return props.yamlValue.split('\n').length;
-    }, [props.yamlValue]);
-
-    const charCount = useMemo(() => props.yamlValue.length, [props.yamlValue]);
-
-    const statusTone = validationError
-        ? 'error'
-        : validationWarnings.length > 0
-        ? 'warning'
-        : 'success';
-    const statusLabel = validationError
-        ? 'Error'
-        : validationWarnings.length > 0
-        ? `${validationWarnings.length} warning${validationWarnings.length === 1 ? '' : 's'}`
-        : 'Valid';
-
     // Apply basic YAML syntax highlighting to text
     const highlightedYaml = useMemo(() => {
         if (!props.yamlValue) return '';
@@ -390,66 +371,54 @@ const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
             highlightRef.current.scrollTop = textarea.scrollTop;
             highlightRef.current.scrollLeft = textarea.scrollLeft;
         }
-        if (lineGutterRef.current) {
-            lineGutterRef.current.scrollTop = textarea.scrollTop;
-        }
     }, []);
 
   return (
     <div className="cnd-layout-interface__code-view" role="region" aria-label="YAML Code Editor">
         <div className="code-view-card">
-            <div className="code-view__header">
-                <div className="code-view__title">
-                    <span className="code-view__badge">Code</span>
-                    <span className="code-view__heading">CND YAML</span>
-                    <span className={`code-view__status code-view__status--${statusTone}`}>{statusLabel}</span>
-                </div>
-                <div className="code-view__meta">
-                    <span>{lineCount} lines</span>
-                    <span>{charCount} chars</span>
-                    {!isHelpDismissed && (
-                        <div className="code-view__help" ref={helpWrapperRef}>
-                            <button
-                                type="button"
-                                className="code-view__help-trigger"
-                                onClick={() => setIsHelpOpen((prev) => !prev)}
+            {!isHelpDismissed && (
+                <div className="code-view__header">
+                    <div className="code-view__help" ref={helpWrapperRef}>
+                        <button
+                            type="button"
+                            className="code-view__help-trigger"
+                            onClick={() => setIsHelpOpen((prev) => !prev)}
+                            aria-label="Code view help"
+                            aria-expanded={isHelpOpen}
+                            aria-controls="cnd-layout-yaml-help-popover"
+                            title={CODE_VIEW_HELP_TEXT}
+                        >
+                            ?
+                        </button>
+                        {isHelpOpen && (
+                            <div
+                                id="cnd-layout-yaml-help-popover"
+                                className="code-view__help-popover"
+                                role="dialog"
                                 aria-label="Code view help"
-                                aria-expanded={isHelpOpen}
-                                aria-controls="cnd-layout-yaml-help-popover"
-                                title={CODE_VIEW_HELP_TEXT}
                             >
-                                ?
-                            </button>
-                            {isHelpOpen && (
-                                <div
-                                    id="cnd-layout-yaml-help-popover"
-                                    className="code-view__help-popover"
-                                    role="dialog"
-                                    aria-label="Code view help"
-                                >
-                                    <p className="code-view__help-text">{CODE_VIEW_HELP_TEXT}</p>
-                                    <div className="code-view__help-actions">
-                                        <button
-                                            type="button"
-                                            className="code-view__help-close"
-                                            onClick={() => setIsHelpOpen(false)}
-                                        >
-                                            Close
-                                        </button>
-                                        <button
-                                            type="button"
-                                            className="code-view__help-dismiss"
-                                            onClick={dismissHelp}
-                                        >
-                                            Don't show again
-                                        </button>
-                                    </div>
+                                <p className="code-view__help-text">{CODE_VIEW_HELP_TEXT}</p>
+                                <div className="code-view__help-actions">
+                                    <button
+                                        type="button"
+                                        className="code-view__help-close"
+                                        onClick={() => setIsHelpOpen(false)}
+                                    >
+                                        Close
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="code-view__help-dismiss"
+                                        onClick={dismissHelp}
+                                    >
+                                        Don't show again
+                                    </button>
                                 </div>
-                            )}
-                        </div>
-                    )}
+                            </div>
+                        )}
+                    </div>
                 </div>
-            </div>
+            )}
             {!isHelpDismissed && (
                 <span id="cnd-layout-yaml-help" className="visually-hidden">
                     {CODE_VIEW_HELP_TEXT}
@@ -491,11 +460,6 @@ const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
             {/* Container for textarea with syntax highlighting overlay */}
             <div className="yaml-editor-container">
                 <div className="yaml-editor">
-                    <div className="yaml-line-gutter" ref={lineGutterRef} aria-hidden="true">
-                        {Array.from({ length: lineCount }, (_, index) => (
-                            <div key={index} className="yaml-line-number">{index + 1}</div>
-                        ))}
-                    </div>
                     <div className="yaml-editor-body">
                         {/* Syntax highlighted overlay (behind textarea) */}
                         <pre 

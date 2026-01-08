@@ -185,66 +185,8 @@
 .code-view__header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    flex-wrap: wrap;
+    justify-content: flex-end;
     margin-bottom: 0.75rem;
-}
-
-.code-view__title {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    color: #1f2937;
-    font-weight: 600;
-}
-
-.code-view__badge {
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    font-size: 0.625rem;
-    font-weight: 700;
-    padding: 0.2rem 0.5rem;
-    border-radius: 999px;
-    background-color: #eef2ff;
-    color: #3730a3;
-}
-
-.code-view__heading {
-    font-size: 0.95rem;
-}
-
-.code-view__status {
-    font-size: 0.75rem;
-    font-weight: 600;
-    padding: 0.15rem 0.5rem;
-    border-radius: 999px;
-}
-
-.code-view__status--success {
-    background-color: #ecfdf3;
-    color: #047857;
-    border: 1px solid #a7f3d0;
-}
-
-.code-view__status--warning {
-    background-color: #fff7ed;
-    color: #b45309;
-    border: 1px solid #fdba74;
-}
-
-.code-view__status--error {
-    background-color: #fef2f2;
-    color: #b91c1c;
-    border: 1px solid #fecaca;
-}
-
-.code-view__meta {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    font-size: 0.75rem;
-    color: #6b7280;
 }
 
 .code-view__help {
@@ -351,31 +293,10 @@
 }
 
 .yaml-editor {
-    display: grid;
-    grid-template-columns: 48px 1fr;
     min-height: 400px;
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'Courier New', monospace;
     font-size: 0.875rem;
     line-height: 1.6;
-}
-
-.yaml-line-gutter {
-    padding: var(--yaml-editor-padding) 0.5rem;
-    text-align: right;
-    color: #94a3b8;
-    background-color: #eef2f7;
-    border-right: 1px solid #e2e8f0;
-    overflow: auto;
-    scrollbar-width: none;
-}
-
-.yaml-line-gutter::-webkit-scrollbar {
-    width: 0;
-    height: 0;
-}
-
-.yaml-line-number {
-    height: 1.6em;
 }
 
 .yaml-editor-body {
@@ -461,21 +382,6 @@
 .yaml-highlight-overlay .yaml-list-item {
     color: #cf222e;
     font-weight: bold;
-}
-
-@media (max-width: 576px) {
-    .code-view__meta {
-        width: 100%;
-        justify-content: space-between;
-    }
-
-    .yaml-editor {
-        grid-template-columns: 1fr;
-    }
-
-    .yaml-line-gutter {
-        display: none;
-    }
 }
 
 /* Direction selector - checkbox grid for orientation constraints */
