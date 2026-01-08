@@ -493,7 +493,7 @@ export class WebColaLayout {
     if (priorPosition) {
       x = priorPosition.x;
       y = priorPosition.y;
-      console.log(`Node ${node.id}: Using prior position (${x.toFixed(2)}, ${y.toFixed(2)})`);
+      //console.log(`Node ${node.id}: Using prior position (${x.toFixed(2)}, ${y.toFixed(2)})`);
     } else if (this.priorPositionMap.size > 0) {
       // We have prior positions but this node wasn't found - log for debugging
       console.log(`Node ${node.id}: No prior position found (available: ${Array.from(this.priorPositionMap.keys()).join(', ')})`);
