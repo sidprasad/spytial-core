@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Selector Synthesis Demo</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 2em;
+            font-weight: 600;
+        }
+        
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+        }
+        
+        .section {
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            margin-bottom: 20px;
+        }
+        
+        .section-title {
+            font-size: 1.3em;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e9ecef;
+        }
+        
+        textarea {
+            width: 100%;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            padding: 12px;
+            border: 2px solid #dee2e6;
+            border-radius: 6px;
+            resize: vertical;
+            box-sizing: border-box;
+            transition: border-color 0.2s;
+        }
+        
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .datum-input {
+            height: 250px;
+        }
+        
+        .selector-input {
+            height: 80px;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: transform 0.1s, box-shadow 0.2s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+            opacity: 0.6;
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+        }
+        
+        .btn-secondary {
+            background: linear-gradient(135deg, #606c88 0%, #3f4c6b 100%);
+        }
+        
+        .example-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .example-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .example-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .example-label {
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .result-box {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 6px;
+            border-left: 4px solid #28a745;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 16px;
+            font-weight: 500;
+            color: #155724;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .error-box {
+            background: #f8d7da;
+            border-left-color: #dc3545;
+            color: #721c24;
+        }
+        
+        .info-box {
+            background: #d1ecf1;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #0c5460;
+            color: #0c5460;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        
+        .atom-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        
+        .atom-chip {
+            background: #e7f3ff;
+            color: #004085;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-family: monospace;
+            border: 1px solid #b8daff;
+        }
+        
+        .synthesis-type-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .tab {
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            background: #e9ecef;
+            color: #495057;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        
+        .tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .tab:hover:not(.active) {
+            background: #dee2e6;
+        }
+        
+        .control-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #495057;
+        }
+        
+        .help-text {
+            font-size: 13px;
+            color: #6c757d;
+            margin-top: 5px;
+            font-style: italic;
+        }
+
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .status.info { background: #e3f2fd; color: #1976d2; }
+        .status.success { background: #e8f5e8; color: #2e7d32; }
+        .status.error { background: #ffebee; color: #c62828; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔍 Selector Synthesis Demo</h1>
+        <p>Generate simple-graph-query selectors from examples using Alloy XML instances</p>
+    </div>
+
+    <div id="status" class="status info">Loading synthesis pipeline...</div>
+
+    <!-- Instructions -->
+    <div class="section">
+        <div class="section-title">📖 How to Use</div>
+        <div class="info-box">
+            <strong>Step 1:</strong> Paste one or more Alloy XML instances below<br>
+            <strong>Step 2:</strong> For each instance, specify which atoms (or atom pairs) you want to select<br>
+            <strong>Step 3:</strong> Click "Synthesize Selector" to generate a selector expression that matches your examples<br>
+            <br>
+            <strong>Note:</strong> This uses the simple-graph-query synthesizer, so only works with data compatible with SGraphQueryEvaluator.
+        </div>
+    </div>
+
+    <!-- Synthesis Type Selection -->
+    <div class="section">
+        <div class="section-title">🎯 Synthesis Type</div>
+        <div class="synthesis-type-tabs">
+            <div class="tab active" data-type="unary" onclick="setSynthesisType('unary')">
+                Unary Selector (Atoms)
+            </div>
+            <div class="tab" data-type="binary" onclick="setSynthesisType('binary')">
+                Binary Selector (Pairs)
+            </div>
+        </div>
+    </div>
+
+    <!-- Example Management -->
+    <div class="section">
+        <div class="section-title">📝 Examples</div>
+        <div id="examples-container" class="example-list">
+            <!-- Examples will be added here dynamically -->
+        </div>
+        <div class="control-buttons">
+            <button onclick="addExample()">➕ Add Example</button>
+            <button class="btn-secondary" onclick="loadSampleData()">📦 Load Sample Data</button>
+        </div>
+    </div>
+
+    <!-- Synthesis Controls -->
+    <div class="section">
+        <div class="section-title">⚙️ Synthesis Options</div>
+        <label>
+            Max Depth (1-5):
+            <input type="number" id="maxDepth" min="1" max="5" value="3" style="width: 80px; padding: 8px; border: 2px solid #dee2e6; border-radius: 6px; margin-left: 10px;">
+        </label>
+        <div class="help-text">Higher depth allows more complex expressions but takes longer to compute</div>
+        
+        <div class="control-buttons">
+            <button class="btn-success" onclick="synthesize()">🔍 Synthesize Selector</button>
+            <button class="btn-danger" onclick="clearAll()">🗑️ Clear All</button>
+        </div>
+    </div>
+
+    <!-- Results -->
+    <div class="section">
+        <div class="section-title">✨ Synthesized Selector</div>
+        <div id="result" class="result-box">
+            <em style="color: #6c757d;">Results will appear here after synthesis...</em>
+        </div>
+    </div>
+
+    <!-- Load the compiled library -->
+    <script src="../dist/browser/spytial-core-complete.global.js"></script>
+    
+    <script>
+        // Global state
+        window.cndState = {
+            synthesisType: 'unary', // 'unary' or 'binary'
+            examples: []
+        };
+
+        // Sample Alloy XML data - binary tree from the attached file
+        window.sampleAlloyXml = `<alloy builddate="Wednesday, May 14th, 2025">
+<instance bitwidth="4" maxseq="-1" command="temporary-name_source_1" filename="/sample/datum.xml" version="4.1">
+<sig label="Node" ID="4" parentID="2">
+<atom label="Node0"/><atom label="Node1"/><atom label="Node2"/><atom label="Node3"/><atom label="Node4"/>
+</sig>
+<field label="right" ID="5" parentID="4">
+<tuple><atom label="Node1"/><atom label="Node4"/></tuple>
+<tuple><atom label="Node3"/><atom label="Node0"/></tuple>
+<types><type ID="4"/><type ID="4"/></types>
+</field>
+<field label="left" ID="7" parentID="4">
+<tuple><atom label="Node3"/><atom label="Node1"/></tuple>
+<tuple><atom label="Node4"/><atom label="Node2"/></tuple>
+<types><type ID="4"/><type ID="4"/></types>
+</field>
+</instance>
+</alloy>`;
+
+        /**
+         * Update status display
+         */
+        function updateStatus(message, type = 'info') {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = message;
+            statusElement.className = `status ${type}`;
+        }
+
+        /**
+         * Initialize the synthesis pipeline
+         */
+        async function initializePipeline() {
+            try {
+                console.log('CndCore loaded:', typeof CndCore !== 'undefined');
+                console.log('Available:', Object.keys(CndCore));
+                
+                if (!CndCore.synthesizeAtomSelector || !CndCore.synthesizeBinarySelector) {
+                    throw new Error('Synthesis functions not available in CndCore');
+                }
+                
+                if (!CndCore.AlloyInstance || !CndCore.AlloyInstance.parseAlloyXML) {
+                    throw new Error('Alloy parsing not available in CndCore');
+                }
+                
+                updateStatus('Synthesis pipeline ready! ✅', 'success');
+                return true;
+            } catch (error) {
+                console.error('Failed to initialize pipeline:', error);
+                updateStatus(`Pipeline init failed: ${error.message}`, 'error');
+                return false;
+            }
+        }
+
+        window.setSynthesisType = function(type) {
+            window.cndState.synthesisType = type;
+            document.querySelectorAll('.tab').forEach(tab => {
+                if (tab.dataset.type === type) {
+                    tab.classList.add('active');
+                } else {
+                    tab.classList.remove('active');
+                }
+            });
+            renderExamples();
+        };
+
+        window.addExample = function() {
+            const exampleId = Date.now();
+            window.cndState.examples.push({
+                id: exampleId,
+                datum: '',
+                selection: [] // For unary: array of atom ids, for binary: array of [atomId1, atomId2]
+            });
+            renderExamples();
+        };
+
+        window.removeExample = function(exampleId) {
+            window.cndState.examples = window.cndState.examples.filter(ex => ex.id !== exampleId);
+            renderExamples();
+        };
+
+        window.updateDatum = function(exampleId, datumText) {
+            const example = window.cndState.examples.find(ex => ex.id === exampleId);
+            if (example) {
+                example.datum = datumText;
+            }
+        };
+
+        window.updateSelection = function(exampleId, selectionText) {
+            const example = window.cndState.examples.find(ex => ex.id === exampleId);
+            if (example) {
+                try {
+                    if (window.cndState.synthesisType === 'unary') {
+                        // Parse comma-separated atom IDs
+                        example.selection = selectionText
+                            .split(',')
+                            .map(s => s.trim())
+                            .filter(s => s.length > 0);
+                    } else {
+                        // Parse pairs: "id1->id2, id3->id4"
+                        example.selection = selectionText
+                            .split(',')
+                            .map(s => s.trim())
+                            .filter(s => s.length > 0)
+                            .map(pair => {
+                                const [src, dst] = pair.split('->').map(s => s.trim());
+                                return [src, dst];
+                            });
+                    }
+                } catch (e) {
+                    console.error('Failed to parse selection:', e);
+                }
+            }
+        };
+
+        window.renderExamples = function() {
+            const container = document.getElementById('examples-container');
+            
+            if (window.cndState.examples.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: #6c757d; padding: 20px;"><em>No examples yet. Click "Add Example" to get started.</em></div>';
+                return;
+            }
+
+            container.innerHTML = window.cndState.examples.map((ex, idx) => {
+                const selectionPlaceholder = window.cndState.synthesisType === 'unary' 
+                    ? 'e.g., Node0, Node1, Node2'
+                    : 'e.g., Node1->Node4, Node3->Node0';
+                
+                const selectionLabel = window.cndState.synthesisType === 'unary'
+                    ? 'Selected Atoms (comma-separated IDs)'
+                    : 'Selected Pairs (src->dst, comma-separated)';
+
+                const selectionValue = window.cndState.synthesisType === 'unary'
+                    ? ex.selection.join(', ')
+                    : ex.selection.map(pair => pair.join('->')).join(', ');
+
+                return `
+                    <div class="example-item">
+                        <div class="example-header">
+                            <span class="example-label">Example ${idx + 1}</span>
+                            <button class="btn-danger" style="padding: 6px 12px; font-size: 12px;" onclick="removeExample(${ex.id})">
+                                ✕ Remove
+                            </button>
+                        </div>
+                        
+                        <label>Alloy XML Instance:</label>
+                        <textarea 
+                            class="datum-input" 
+                            placeholder='<alloy>...</alloy>'
+                            oninput="updateDatum(${ex.id}, this.value)"
+                        >${ex.datum}</textarea>
+                        
+                        <label style="margin-top: 15px;">${selectionLabel}:</label>
+                        <textarea 
+                            class="selector-input" 
+                            placeholder="${selectionPlaceholder}"
+                            oninput="updateSelection(${ex.id}, this.value)"
+                        >${selectionValue}</textarea>
+                        
+                        ${ex.selection.length > 0 ? `
+                            <div class="atom-chips">
+                                ${window.cndState.synthesisType === 'unary' 
+                                    ? ex.selection.map(id => `<span class="atom-chip">${id}</span>`).join('')
+                                    : ex.selection.map(pair => `<span class="atom-chip">${pair[0]} → ${pair[1]}</span>`).join('')
+                                }
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }).join('');
+        };
+
+        window.synthesize = async function() {
+            const resultBox = document.getElementById('result');
+            
+            try {
+                // Validate examples
+                if (window.cndState.examples.length === 0) {
+                    throw new Error('Please add at least one example');
+                }
+
+                updateStatus('Parsing Alloy instances...', 'info');
+
+                // Parse and validate all examples
+                const parsedExamples = [];
+                for (let i = 0; i < window.cndState.examples.length; i++) {
+                    const ex = window.cndState.examples[i];
+                    
+                    if (!ex.datum) {
+                        throw new Error(`Example ${i + 1}: Missing Alloy XML`);
+                    }
+                    if (ex.selection.length === 0) {
+                        throw new Error(`Example ${i + 1}: No atoms/pairs selected`);
+                    }
+
+                    // Parse Alloy XML
+                    let parsedAlloy;
+                    try {
+                        parsedAlloy = CndCore.AlloyInstance.parseAlloyXML(ex.datum);
+                    } catch (e) {
+                        throw new Error(`Example ${i + 1}: Invalid Alloy XML - ${e.message}`);
+                    }
+
+                    if (!parsedAlloy.instances || parsedAlloy.instances.length === 0) {
+                        throw new Error(`Example ${i + 1}: No instances found in Alloy XML`);
+                    }
+
+                    // Create AlloyDataInstance from the first instance
+                    const dataInstance = new CndCore.AlloyDataInstance(parsedAlloy.instances[0]);
+                    console.log(`Example ${i + 1} data instance:`, dataInstance);
+                    
+                    parsedExamples.push({
+                        dataInstance,
+                        selection: ex.selection
+                    });
+                }
+
+                resultBox.className = 'result-box';
+                resultBox.innerHTML = '<em style="color: #6c757d;">Synthesizing...</em>';
+                updateStatus('Running synthesis...', 'info');
+
+                // Get max depth
+                const maxDepth = parseInt(document.getElementById('maxDepth').value) || 3;
+
+                // Helper function to find atom by ID
+                const findAtomById = (dataInstance, atomId) => {
+                    const allAtoms = dataInstance.getAtoms();
+                    const atom = allAtoms.find(a => a.id === atomId);
+                    if (!atom) {
+                        throw new Error(`Atom not found: ${atomId}`);
+                    }
+                    return atom;
+                };
+
+                // Run synthesis
+                let result;
+                if (window.cndState.synthesisType === 'unary') {
+                    const examples = parsedExamples.map(ex => {
+                        const atoms = ex.selection.map(atomId => findAtomById(ex.dataInstance, atomId));
+                        return {
+                            atoms,
+                            dataInstance: ex.dataInstance
+                        };
+                    });
+                    result = CndCore.synthesizeAtomSelector(examples, maxDepth);
+                } else {
+                    const examples = parsedExamples.map(ex => {
+                        const pairs = ex.selection.map(([srcId, dstId]) => {
+                            const src = findAtomById(ex.dataInstance, srcId);
+                            const dst = findAtomById(ex.dataInstance, dstId);
+                            return [src, dst];
+                        });
+                        return {
+                            pairs,
+                            dataInstance: ex.dataInstance
+                        };
+                    });
+                    result = CndCore.synthesizeBinarySelector(examples, maxDepth);
+                }
+
+                resultBox.className = 'result-box';
+                resultBox.textContent = result;
+                updateStatus('Synthesis complete! ✅', 'success');
+            } catch (error) {
+                resultBox.className = 'result-box error-box';
+                resultBox.textContent = 'Error: ' + error.message;
+                updateStatus('Synthesis failed ❌', 'error');
+                console.error('Synthesis error:', error);
+            }
+        };
+
+        window.loadSampleData = function() {
+            if (window.cndState.examples.length === 0) {
+                addExample();
+            }
+            
+            const example = window.cndState.examples[0];
+            example.datum = window.sampleAlloyXml;
+            
+            if (window.cndState.synthesisType === 'unary') {
+                example.selection = ['Node1', 'Node3'];
+            } else {
+                example.selection = [['Node1', 'Node4'], ['Node3', 'Node0']];
+            }
+            
+            renderExamples();
+        };
+
+        window.clearAll = function() {
+            window.cndState.examples = [];
+            document.getElementById('result').className = 'result-box';
+            document.getElementById('result').innerHTML = '<em style="color: #6c757d;">Results will appear here after synthesis...</em>';
+            updateStatus('Ready for new examples', 'info');
+            renderExamples();
+        };
+
+        // Initialize on load
+        window.addEventListener('DOMContentLoaded', async () => {
+            await initializePipeline();
+            renderExamples();
+        });
+    </script>
+</body>
+</html>
