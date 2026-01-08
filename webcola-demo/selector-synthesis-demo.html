@@ -253,17 +253,7 @@
 
     <div id="status" class="status info">Loading synthesis pipeline...</div>
 
-    <!-- Instructions -->
-    <div class="section">
-        <div class="section-title">📖 How to Use</div>
-        <div class="info-box">
-            <strong>Step 1:</strong> Paste one or more Alloy XML instances below<br>
-            <strong>Step 2:</strong> For each instance, specify which atoms (or atom pairs) you want to select<br>
-            <strong>Step 3:</strong> Click "Synthesize Selector" to generate a selector expression that matches your examples<br>
-            <br>
-            <strong>Note:</strong> This uses the simple-graph-query synthesizer, so only works with data compatible with SGraphQueryEvaluator.
-        </div>
-    </div>
+
 
     <!-- Synthesis Type Selection -->
     <div class="section">
@@ -311,6 +301,15 @@
         <div id="result" class="result-box">
             <em style="color: #6c757d;">Results will appear here after synthesis...</em>
         </div>
+    </div>
+
+    <!-- Provenance/Why -->
+    <div class="section" id="provenance-section" style="display: none;">
+        <div class="section-title">🔍 Synthesis Provenance</div>
+        <div class="help-text" style="margin-bottom: 15px;">
+            Shows how the synthesizer built the expression and evaluated subexpressions on each example.
+        </div>
+        <pre id="provenance" style="background: #f8f9fa; padding: 15px; border-radius: 6px; overflow-x: auto; font-size: 12px; border: 1px solid #dee2e6;"></pre>
     </div>
 
     <!-- Load the compiled library -->
@@ -556,8 +555,8 @@
                     return atom;
                 };
 
-                // Run synthesis
-                let result;
+                // Run synthesis with provenance
+                let synthesisResult;
                 if (window.cndState.synthesisType === 'unary') {
                     const examples = parsedExamples.map(ex => {
                         const atoms = ex.selection.map(atomId => findAtomById(ex.dataInstance, atomId));
@@ -566,7 +565,7 @@
                             dataInstance: ex.dataInstance
                         };
                     });
-                    result = CndCore.synthesizeAtomSelector(examples, maxDepth);
+                    synthesisResult = CndCore.synthesizeAtomSelectorWithExplanation(examples, maxDepth);
                 } else {
                     const examples = parsedExamples.map(ex => {
                         const pairs = ex.selection.map(([srcId, dstId]) => {
@@ -579,11 +578,19 @@
                             dataInstance: ex.dataInstance
                         };
                     });
-                    result = CndCore.synthesizeBinarySelector(examples, maxDepth);
+                    synthesisResult = CndCore.synthesizeBinarySelectorWithExplanation(examples, maxDepth);
                 }
 
+                // Display the synthesized expression
                 resultBox.className = 'result-box';
-                resultBox.textContent = result;
+                resultBox.textContent = synthesisResult.expression;
+
+                // Display provenance
+                const provenanceSection = document.getElementById('provenance-section');
+                const provenanceBox = document.getElementById('provenance');
+                provenanceSection.style.display = 'block';
+                provenanceBox.textContent = JSON.stringify(synthesisResult, null, 2);
+
                 updateStatus('Synthesis complete! ✅', 'success');
             } catch (error) {
                 resultBox.className = 'result-box error-box';
@@ -606,6 +613,7 @@
             } else {
                 example.selection = [['Node1', 'Node4'], ['Node3', 'Node0']];
             }
+            document.getElementById('provenance-section').style.display = 'none';
             
             renderExamples();
         };
