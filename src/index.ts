@@ -51,6 +51,11 @@ export {
 } from './synthesis/selector-synthesizer';
 export type { SynthesisWhy } from 'simple-graph-query';
 
+// LLM-assisted Alloy selector synthesis
+export {
+  synthesizeAlloySelectorsWithLlm
+} from './synthesis/llm-selector-synthesis';
+
 // Browser-specific exports and initialization
 if (typeof window !== 'undefined') {
   // Import and register WebCola custom element for browser environments
