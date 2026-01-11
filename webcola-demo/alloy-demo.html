@@ -151,6 +151,7 @@
                         <option value="default" selected>Standard</option>
                         <option value="grid">Grid (Beta)</option>
                     </select>
+                    <button id="screenshotButton" onclick="takeScreenshot()" title="Download graph as PNG image" aria-label="Screenshot graph" style="background-color: #28a745;">📷 Screenshot</button>
                     <button id="clearGraphButton" onclick="clearGraph()" title="Clear the current graph visualization" aria-label="Clear graph">Clear</button>
                 </div>
                 <!-- Use the webcola-cnd-graph custom element -->
@@ -619,6 +620,102 @@
             } catch (error) {
                 console.error('Error rendering Alloy graph:', error);
                 updateStatus(`Alloy render error: ${error.message}`, 'error');
+            }
+        }
+
+        /**
+         * Take a screenshot of the graph and download as PNG
+         * Uses the SVG content from the webcola-cnd-graph shadow DOM
+         */
+        async function takeScreenshot() {
+            const graphElement = document.getElementById('graph-container');
+            const svg = graphElement.shadowRoot?.querySelector('svg');
+            
+            if (!svg) {
+                updateStatus('No graph to capture. Load a graph first.', 'error');
+                return;
+            }
+            
+            try {
+                updateStatus('Generating screenshot...', 'info');
+                
+                // Clone the SVG to avoid modifying the original
+                const svgClone = svg.cloneNode(true);
+                
+                // Get the viewBox or dimensions
+                const viewBox = svg.getAttribute('viewBox');
+                const width = svg.getAttribute('width') || svg.clientWidth || 800;
+                const height = svg.getAttribute('height') || svg.clientHeight || 600;
+                
+                // Set dimensions on clone
+                svgClone.setAttribute('width', width);
+                svgClone.setAttribute('height', height);
+                if (viewBox) {
+                    svgClone.setAttribute('viewBox', viewBox);
+                }
+                
+                // Add white background
+                const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                bgRect.setAttribute('width', '100%');
+                bgRect.setAttribute('height', '100%');
+                bgRect.setAttribute('fill', 'white');
+                svgClone.insertBefore(bgRect, svgClone.firstChild);
+                
+                // Serialize SVG to string
+                const serializer = new XMLSerializer();
+                const svgString = serializer.serializeToString(svgClone);
+                
+                // Create a blob and URL
+                const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+                const url = URL.createObjectURL(svgBlob);
+                
+                // Create an image to draw on canvas
+                const img = new Image();
+                img.onload = function() {
+                    // Create canvas with appropriate dimensions
+                    const canvas = document.createElement('canvas');
+                    const scale = 2; // Higher resolution
+                    canvas.width = img.width * scale;
+                    canvas.height = img.height * scale;
+                    
+                    const ctx = canvas.getContext('2d');
+                    ctx.scale(scale, scale);
+                    ctx.fillStyle = 'white';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0);
+                    
+                    // Convert to PNG and download
+                    canvas.toBlob(function(blob) {
+                        const downloadUrl = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = downloadUrl;
+                        
+                        // Generate filename with timestamp
+                        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+                        link.download = `graph-screenshot-${timestamp}.png`;
+                        
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        
+                        // Cleanup
+                        URL.revokeObjectURL(downloadUrl);
+                        URL.revokeObjectURL(url);
+                        
+                        updateStatus('Screenshot saved!', 'success');
+                    }, 'image/png');
+                };
+                
+                img.onerror = function() {
+                    updateStatus('Failed to generate screenshot.', 'error');
+                    URL.revokeObjectURL(url);
+                };
+                
+                img.src = url;
+                
+            } catch (error) {
+                console.error('Screenshot error:', error);
+                updateStatus(`Screenshot failed: ${error.message}`, 'error');
             }
         }
 
