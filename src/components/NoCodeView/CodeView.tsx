@@ -313,7 +313,7 @@ const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
                     spellCheck={false}
                     aria-label="CND Layout Specification YAML"
                     aria-invalid={validationError ? 'true' : 'false'}
-                    placeholder="Enter your CND layout specification here..."
+                    placeholder=""
                 />
             </div>
         </div>
