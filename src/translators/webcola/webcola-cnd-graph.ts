@@ -2297,20 +2297,29 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         textElement.attr("font-size", `${mainLabelFontSize}px`);
         
         // Add main name label on a single line
+        // When there's extra content, shift the label up to make room
         const lineHeight = mainLabelFontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO;
+        const totalSecondaryEntries = labelEntries.length + attributeEntries.length;
+        const verticalOffset = hasExtraContent ? -totalSecondaryEntries * lineHeight * 0.5 : 0;
+        
+        // Store the vertical offset on the data for use in updatePositions
+        d._labelVerticalOffset = verticalOffset;
+        d._labelLineHeight = lineHeight;
         
         textElement
           .append("tspan")
           .attr("x", 0)
-          .attr("dy", "0em")
+          .attr("dy", `${verticalOffset}px`)
+          .attr("class", "main-label-tspan")
           .style("font-weight", "bold")
           .style("font-size", `${mainLabelFontSize}px`)
           .text(displayLabel);
 
         // Calculate font size for secondary content (labels and attributes)
-        const totalSecondaryEntries = labelEntries.length + attributeEntries.length;
+        // Use a minimum ratio of the main label size to ensure readability
+        const minSecondaryFontSize = mainLabelFontSize * 0.65; // At least 65% of main label
         const remainingHeight = maxTextHeight - lineHeight;
-        const secondaryFontSize = totalSecondaryEntries > 0 
+        const calculatedSecondaryFontSize = totalSecondaryEntries > 0 
           ? this.calculateOptimalFontSize(
               representativeText,
               maxTextWidth,
@@ -2318,6 +2327,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
               'system-ui'
             )
           : mainLabelFontSize * 0.8;
+        // Ensure secondary font size is at least the minimum for readability
+        const secondaryFontSize = Math.max(calculatedSecondaryFontSize, minSecondaryFontSize);
 
         // Handle labels first (e.g., Skolems) - styled in node's color
         if (hasLabels) {
@@ -2332,7 +2343,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
               .append("tspan")
               .attr("x", 0)
               .attr("dy", `${secondaryFontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO}px`)
-              .style("font-size", `${secondaryFontSize*0.8}px`)
+              .style("font-size", `${secondaryFontSize}px`)
               .style("fill", nodeColor)  // Style in node's color
               .style("font-style", "italic")  // Italicize to distinguish from attributes
               .text(labelText);
@@ -2488,14 +2499,18 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     this.svgNodes.select('.label') // NOTE: Does this need `text.label`?
       .attr('x', (d: NodeWithMetadata) => d.x)
       .attr('y', (d: NodeWithMetadata) => d.y)
-      .each((d: NodeWithMetadata, i: number, nodes: Array<NodeWithMetadata>) => {
+      .each((d: any, i: number, nodes: Array<any>) => {
         let lineOffset = 0;
+        const verticalOffset = d._labelVerticalOffset || 0;
+        const lineHeight = d._labelLineHeight || 12;
         d3.select(nodes[i])
           .selectAll('tspan')
           .attr('x', d.x)
-          .attr('dy', () => {
-            lineOffset += 1;
-            return lineOffset === 1 ? '0em' : '1em';
+          .attr('dy', (tspanData: any, tspanIdx: number) => {
+            if (tspanIdx === 0) {
+              return `${verticalOffset}px`;
+            }
+            return `${lineHeight}px`;
           });
       })
       .raise();

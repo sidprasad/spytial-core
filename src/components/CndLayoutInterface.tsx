@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import './CndLayoutInterface.css';
-import { NoCodeView } from './NoCodeView/NoCodeView';
+import { NoCodeView, parseLayoutSpecToData } from './NoCodeView/NoCodeView';
 import { ConstraintData, DirectiveData } from './NoCodeView/interfaces';
 import { CodeView, generateLayoutSpecYaml } from './NoCodeView/CodeView';
 
@@ -207,10 +207,20 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
       // If switching to Code View, generate YAML from current constraints/directives
       const generatedYaml = generateLayoutSpecYaml(constraints, directives);
       onChange(generatedYaml);
+    } else {
+      // If switching to Structured Builder, parse YAML into constraints/directives
+      try {
+        const parsed = parseLayoutSpecToData(yamlValue);
+        setConstraints(() => parsed.constraints);
+        setDirectives(() => parsed.directives);
+      } catch (error) {
+        // If parsing fails, keep existing constraints/directives
+        console.warn('Failed to parse YAML when switching to Structured Builder:', error);
+      }
     }
 
     onViewChange(event.target.checked);
-  }, [disabled, onViewChange, onChange, constraints, directives]);
+  }, [disabled, onViewChange, onChange, constraints, directives, yamlValue, setConstraints, setDirectives]);
 
   /**
    * Handle textarea value change with proper event handling

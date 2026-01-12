@@ -16,3 +16,4 @@ directives:
   - icon: {selector: Eye, path: https://www.siddharthaprasad.com/diagrams/non-model/faces/eye.jpg}
   - hideField: {field: parts}
   - flag: hideDisconnectedBuiltIns
+  - hideatom: {selector: Face}
