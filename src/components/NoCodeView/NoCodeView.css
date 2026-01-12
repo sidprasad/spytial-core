@@ -173,241 +173,44 @@
     }
 }
 
-/* YAML syntax highlighting styles */
+/* Code view card styles */
 .code-view-card {
-    background: linear-gradient(180deg, #ffffff 0%, #f7f9fc 100%);
+    background: #ffffff;
     border: 1px solid #e5e9f0;
-    border-radius: 12px;
-    padding: 12px 14px 14px;
-    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
-}
-
-.code-view__header {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    margin-bottom: 0.75rem;
-}
-
-.code-view__help {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-}
-
-.code-view__help-trigger {
-    width: 20px;
-    height: 20px;
-    border-radius: 999px;
-    border: 1px solid #d0d7de;
-    background-color: #ffffff;
-    color: #4b5563;
-    font-size: 0.75rem;
-    font-weight: 700;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    cursor: pointer;
-    transition: all 0.15s ease-in-out;
-}
-
-.code-view__help-trigger:hover {
-    background-color: #eef2ff;
-    color: #3730a3;
-    border-color: #c7d2fe;
-}
-
-.code-view__help-trigger:focus-visible {
-    outline: 2px solid #0d6efd;
-    outline-offset: 2px;
-}
-
-.code-view__help-popover {
-    position: absolute;
-    right: 0;
-    top: calc(100% + 0.5rem);
-    width: min(280px, 80vw);
-    background-color: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    padding: 0.65rem 0.75rem;
-    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.15);
-    z-index: 5;
-}
-
-.code-view__help-text {
-    margin: 0;
-    font-size: 0.75rem;
-    color: #4b5563;
-}
-
-.code-view__help-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.5rem;
-    margin-top: 0.5rem;
-}
-
-.code-view__help-close,
-.code-view__help-dismiss {
-    background: none;
-    border: none;
-    padding: 0;
-    font-size: 0.75rem;
-    cursor: pointer;
-}
-
-.code-view__help-close {
-    color: #6b7280;
-}
-
-.code-view__help-close:hover {
-    color: #374151;
-}
-
-.code-view__help-dismiss {
-    color: #0d6efd;
-    font-weight: 600;
-}
-
-.code-view__help-dismiss:hover {
-    color: #0b5ed7;
-}
-
-.code-view__notice {
     border-radius: 8px;
+    padding: 12px;
 }
 
-.yaml-editor-container {
-    --yaml-editor-padding: 0.75rem;
-    border: 1px solid #d0d7de;
-    border-radius: 10px;
-    background: #f8fafc;
-    overflow: hidden;
-}
-
-.yaml-editor-container:focus-within {
-    border-color: #0d6efd;
-    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.2);
-}
-
-.yaml-editor {
-    min-height: 400px;
-    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'Courier New', monospace;
-    font-size: 0.875rem;
-    line-height: 1.6;
-}
-
-.yaml-editor-body {
-    position: relative;
-}
-
-.yaml-highlight-overlay {
-    position: absolute;
-    inset: 0;
-    margin: 0;
-    padding: var(--yaml-editor-padding);
-    overflow: auto;
-    white-space: pre-wrap;
-    word-break: break-word;
-    pointer-events: none;
-    background: transparent;
-    border: none !important;
-    box-shadow: none !important;
-    z-index: 0;
-    /* Ensure font matches textarea exactly */
-    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'Courier New', monospace;
-    font-size: 0.875rem;
-    line-height: 1.6;
-}
-
-/* Override Bootstrap form-control styles on the overlay */
-.yaml-highlight-overlay.form-control {
-    border: none !important;
-    box-shadow: none !important;
-    background: transparent !important;
-    height: auto;
-    min-height: 400px;
-}
-
-.yaml-editor-textarea {
-    position: relative;
-    z-index: 1;
+/* Simple code textarea */
+.code-view-textarea {
     width: 100%;
     min-height: 400px;
     resize: vertical;
-    background: transparent !important;
-    color: transparent !important;
-    caret-color: #111827;
-    border: none;
-    box-shadow: none;
-    padding: var(--yaml-editor-padding);
-    font-family: inherit;
-    font-size: inherit;
-    line-height: inherit;
-    /* Ensure text selection is visible but text itself is not */
-    -webkit-text-fill-color: transparent;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'Courier New', monospace;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    padding: 12px;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    background-color: #f8fafc;
+    color: #1f2937;
 }
 
-/* Ensure textarea text stays transparent even when focused or with Bootstrap overrides */
-.yaml-editor-textarea:focus,
-.yaml-editor-textarea:active,
-.code-view-card .yaml-editor-textarea,
-.code-view-card .yaml-editor-textarea.form-control {
-    color: transparent !important;
-    -webkit-text-fill-color: transparent;
-    background: transparent !important;
+.code-view-textarea:focus {
+    outline: none;
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
+    background-color: #ffffff;
 }
 
-.code-view-card .yaml-editor-textarea:disabled {
-    background-color: rgba(248, 250, 252, 0.7);
-    color: transparent;
+.code-view-textarea:disabled {
+    background-color: #f3f4f6;
+    color: #9ca3af;
     cursor: not-allowed;
 }
 
-.code-view-card .cnd-layout-interface__textarea {
-    border: none;
-    box-shadow: none;
-    background-color: transparent;
-}
-
-.code-view-card .cnd-layout-interface__textarea:focus {
-    background-color: transparent;
-    box-shadow: none;
-}
-
-.yaml-highlight-overlay .yaml-key {
-    color: #0550ae;
-    font-weight: 600;
-}
-
-.yaml-highlight-overlay .yaml-string {
-    color: #0a3069;
-}
-
-.yaml-highlight-overlay .yaml-number {
-    color: #0550ae;
-}
-
-.yaml-highlight-overlay .yaml-boolean {
-    color: #cf222e;
-    font-weight: 600;
-}
-
-.yaml-highlight-overlay .yaml-null {
-    color: #cf222e;
-    font-style: italic;
-}
-
-.yaml-highlight-overlay .yaml-comment {
-    color: #6e7781;
-    font-style: italic;
-}
-
-.yaml-highlight-overlay .yaml-list-item {
-    color: #cf222e;
-    font-weight: bold;
+.code-view-textarea::placeholder {
+    color: #9ca3af;
 }
 
 /* Direction selector - checkbox grid for orientation constraints */

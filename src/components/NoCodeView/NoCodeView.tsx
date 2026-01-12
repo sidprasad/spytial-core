@@ -119,14 +119,16 @@ export function parseLayoutSpecToData(yamlString: string): {
     const directiveComments = extractComments(yamlString, 'directives');
 
     // Helper function to determine constraint type from YAML object
-    // TODO: Make this a map??
+    // Maps YAML constraint types to internal structured types
     function get_constraint_type_from_yaml(constraint: any): string {
         const type = Object.keys(constraint)[0]; // Get the constraint type
         const params = constraint[type]; // Get the parameters for the constraint
 
-        if (type === "cyclic" || type === "orientation") {
+        // Direct mappings for simple constraint types
+        if (type === "cyclic" || type === "orientation" || type === "align" || type === "size" || type === "hideAtom") {
             return type;
         }
+        // Group constraints have two variants based on params
         if (type === "group") {
             if (params["selector"]) {
                 return "groupselector";
