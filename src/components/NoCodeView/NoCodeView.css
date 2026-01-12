@@ -313,8 +313,22 @@
     word-break: break-word;
     pointer-events: none;
     background: transparent;
-    border: none;
+    border: none !important;
+    box-shadow: none !important;
     z-index: 0;
+    /* Ensure font matches textarea exactly */
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'Courier New', monospace;
+    font-size: 0.875rem;
+    line-height: 1.6;
+}
+
+/* Override Bootstrap form-control styles on the overlay */
+.yaml-highlight-overlay.form-control {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    height: auto;
+    min-height: 400px;
 }
 
 .yaml-editor-textarea {
@@ -323,8 +337,8 @@
     width: 100%;
     min-height: 400px;
     resize: vertical;
-    background: transparent;
-    color: transparent;
+    background: transparent !important;
+    color: transparent !important;
     caret-color: #111827;
     border: none;
     box-shadow: none;
@@ -332,6 +346,18 @@
     font-family: inherit;
     font-size: inherit;
     line-height: inherit;
+    /* Ensure text selection is visible but text itself is not */
+    -webkit-text-fill-color: transparent;
+}
+
+/* Ensure textarea text stays transparent even when focused or with Bootstrap overrides */
+.yaml-editor-textarea:focus,
+.yaml-editor-textarea:active,
+.code-view-card .yaml-editor-textarea,
+.code-view-card .yaml-editor-textarea.form-control {
+    color: transparent !important;
+    -webkit-text-fill-color: transparent;
+    background: transparent !important;
 }
 
 .code-view-card .yaml-editor-textarea:disabled {

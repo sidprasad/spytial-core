@@ -463,7 +463,7 @@ const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
                     <div className="yaml-editor-body">
                         {/* Syntax highlighted overlay (behind textarea) */}
                         <pre 
-                            className="yaml-highlight-overlay form-control cnd-layout-interface__textarea"
+                            className="yaml-highlight-overlay"
                             aria-hidden="true"
                             ref={highlightRef}
                             dangerouslySetInnerHTML={{ __html: highlightedYaml || '&nbsp;' }}
@@ -472,7 +472,7 @@ const CodeView: React.FC<CodeViewProps> = (props: CodeViewProps) => {
                         {/* Actual textarea (transparent, on top for editing) */}
                         <textarea
                             id="webcola-cnd"
-                            className="form-control cnd-layout-interface__textarea yaml-editor-textarea"
+                            className="form-control yaml-editor-textarea"
                             value={props.yamlValue}
                             onChange={props.handleTextareaChange}
                             onScroll={handleScroll}
