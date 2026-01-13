@@ -604,7 +604,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         <div id="zoom-controls">
           <button id="zoom-in" title="Zoom In" aria-label="Zoom in">+</button>
           <button id="zoom-out" title="Zoom Out" aria-label="Zoom out">−</button>
-          <button id="zoom-fit" title="Fit to View" aria-label="Fit graph to view">⊡</button>
+          <button id="zoom-fit" title="Fit to View" aria-label="Fit graph to view">⤢</button>
         </div>
       </div>
       <div id="svg-container">
@@ -4325,16 +4325,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       #zoom-controls {
         display: flex;
         flex-direction: row;
-        gap: 4px;
-        align-items: center;
-      }
-      
-      /* Fit button separator */
-      #zoom-fit {
-        margin-left: 4px;
-        border-left: 1px solid #e5e7eb;
-        padding-left: 8px;
-      }
+        gap: 8px;
         align-items: center;
       }
 
