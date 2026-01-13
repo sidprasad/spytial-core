@@ -149,6 +149,19 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private svgGroupLabels: any;
   private zoomBehavior: any;
   private storedTransform: any;
+  
+  /**
+   * Tracks whether the user has manually interacted with zoom/pan.
+   * When true, we don't auto-fit the viewport to preserve user's view.
+   */
+  private userHasManuallyZoomed: boolean = false;
+  
+  /**
+   * Tracks whether this is the initial render (first layout).
+   * We always fit viewport on initial render.
+   */
+  private isInitialRender: boolean = true;
+  
   /**
    * Stores the starting coordinates when a node begins dragging so
    * drag end events can report both the previous and new positions.
@@ -591,6 +604,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         <div id="zoom-controls">
           <button id="zoom-in" title="Zoom In" aria-label="Zoom in">+</button>
           <button id="zoom-out" title="Zoom Out" aria-label="Zoom out">−</button>
+          <button id="zoom-fit" title="Fit to View" aria-label="Fit graph to view">⊡</button>
         </div>
       </div>
       <div id="svg-container">
@@ -634,6 +648,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // Set up zoom behavior (D3 v4 API - matches your working pattern)
     this.zoomBehavior = d3.zoom()
       .scaleExtent([0.01, 20])
+      .on('start', () => {
+        // Only mark as user interaction if it's from mouse/touch (not programmatic)
+        // d3.event.sourceEvent is null for programmatic zooms
+        if (d3.event.sourceEvent) {
+          this.userHasManuallyZoomed = true;
+        }
+      })
       .on('zoom', () => {
         this.container.attr('transform', d3.event.transform);
         // Update zoom control states when zoom changes
@@ -658,16 +679,25 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private initializeZoomControls(): void {
     const zoomInButton = this.shadowRoot!.querySelector('#zoom-in') as HTMLButtonElement;
     const zoomOutButton = this.shadowRoot!.querySelector('#zoom-out') as HTMLButtonElement;
+    const zoomFitButton = this.shadowRoot!.querySelector('#zoom-fit') as HTMLButtonElement;
 
     if (zoomInButton) {
       zoomInButton.addEventListener('click', () => {
+        this.userHasManuallyZoomed = true; // Mark as user interaction
         this.zoomIn();
       });
     }
 
     if (zoomOutButton) {
       zoomOutButton.addEventListener('click', () => {
+        this.userHasManuallyZoomed = true; // Mark as user interaction
         this.zoomOut();
+      });
+    }
+    
+    if (zoomFitButton) {
+      zoomFitButton.addEventListener('click', () => {
+        this.resetViewToFitContent();
       });
     }
 
@@ -865,6 +895,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private setupNodeDragHandlers(nodeDrag: any): void {
     nodeDrag
       .on('start.cnd', (d: any) => {
+        // Mark that user has interacted with the layout - prevents auto-fitting
+        this.userHasManuallyZoomed = true;
+        
         const start = { x: d.x, y: d.y };
         this.dragStartPositions.set(d.id, start);
         this.dispatchEvent(
@@ -1191,7 +1224,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       throw new Error('Invalid instance layout provided. Expected an InstanceLayout instance.');
     }
 
-    // Reset zoom transform to identity on each render for a fresh start
+    // Mark this as a new render - we'll fit viewport after layout completes
+    // Only reset if this is a completely new layout (no prior positions)
+    if (!options?.priorPositions) {
+      this.isInitialRender = true;
+      this.userHasManuallyZoomed = false;
+    }
+    
+    // Reset zoom transform to identity for a fresh start (will be adjusted by fitViewportToContent)
     if (this.svg && this.zoomBehavior && d3) {
       try {
         const identity = d3.zoomIdentity;
@@ -3528,47 +3568,81 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
-   * Fits the viewport to show all content with padding.
-   * Uses manual calculation of bounds from all nodes and edges to ensure complete coverage.
+   * Fits the viewport to show all content with appropriate zoom and pan.
+   * Uses D3 zoom transform for smooth, consistent behavior.
+   * Only performs fit if:
+   * - This is the initial render, OR
+   * - User has not manually zoomed/panned, OR
+   * - Force parameter is true (e.g., from reset button)
+   * 
+   * @param force - If true, fit regardless of user interaction state
    */
-  private fitViewportToContent(): void {
-    const svgElement = this.svg.node();
-    if (!svgElement) return;
-
-    // First try to get bounds from manual calculation of all elements
-    const manualBounds = this.calculateContentBounds();
+  private fitViewportToContent(force: boolean = false): void {
+    const svgElement = this.svg?.node();
+    if (!svgElement || !this.zoomBehavior) return;
     
-    // Fallback to SVG getBBox if manual calculation fails
-    const bbox = manualBounds || svgElement.getBBox();
-    const padding = WebColaCnDGraph.VIEWBOX_PADDING;
-    
-    // Calculate smart bottom padding based on bottom-most node
-    let extraBottomPadding = 50; // Default fallback
-    if (this.currentLayout?.nodes) {
-      const bottomNode = this.currentLayout.nodes.reduce((bottom: any, node: any) => {
-        if (typeof node.x === 'number' && typeof node.y === 'number') {
-          const nodeBottom = node.y + (node.height || 0);
-          const currentBottom = bottom ? (bottom.y + (bottom.height || 0)) : -Infinity;
-          return nodeBottom > currentBottom ? node : bottom;
-        }
-        return bottom;
-      }, null);
-      
-      if (bottomNode && bottomNode.height) {
-        extraBottomPadding = Math.min(50, bottomNode.height / 1.5);
-      }
+    // Skip if user has manually zoomed and this isn't the initial render or forced
+    if (this.userHasManuallyZoomed && !this.isInitialRender && !force) {
+      return;
     }
 
-    const viewBox = [
-      bbox.x - padding,
-      bbox.y - padding,
-      bbox.width + 2 * padding,
-      bbox.height + 2 * padding + extraBottomPadding
-    ].join(' ');
-
-
-
-    this.svg.attr('viewBox', viewBox);
+    // Calculate content bounds
+    const bounds = this.calculateContentBounds();
+    if (!bounds) return;
+    
+    // Get container dimensions
+    const containerWidth = svgElement.clientWidth || svgElement.parentElement?.clientWidth || 800;
+    const containerHeight = svgElement.clientHeight || svgElement.parentElement?.clientHeight || 600;
+    
+    // Calculate padding
+    const padding = WebColaCnDGraph.VIEWBOX_PADDING * 4; // Increase padding for comfortable view
+    
+    // Calculate scale to fit content
+    const scaleX = (containerWidth - padding * 2) / bounds.width;
+    const scaleY = (containerHeight - padding * 2) / bounds.height;
+    const scale = Math.min(scaleX, scaleY, 1); // Don't zoom in beyond 1:1
+    
+    // Clamp scale to zoom extent
+    const [minScale, maxScale] = this.zoomBehavior.scaleExtent();
+    const clampedScale = Math.max(minScale, Math.min(maxScale, scale));
+    
+    // Calculate center of content
+    const contentCenterX = bounds.x + bounds.width / 2;
+    const contentCenterY = bounds.y + bounds.height / 2;
+    
+    // Calculate translation to center content
+    const translateX = containerWidth / 2 - contentCenterX * clampedScale;
+    const translateY = containerHeight / 2 - contentCenterY * clampedScale;
+    
+    // Create the transform
+    const transform = d3.zoomIdentity
+      .translate(translateX, translateY)
+      .scale(clampedScale);
+    
+    // Apply with smooth transition (or instant on initial render)
+    if (this.isInitialRender) {
+      // Instant on first render
+      this.svg.call(this.zoomBehavior.transform, transform);
+      this.isInitialRender = false;
+    } else {
+      // Smooth transition for subsequent fits
+      this.svg.transition()
+        .duration(300)
+        .ease(d3.easeCubicOut)
+        .call(this.zoomBehavior.transform, transform);
+    }
+    
+    // Update control states after transform
+    this.updateZoomControlStates();
+  }
+  
+  /**
+   * Resets the view to fit all content, clearing user zoom state.
+   * Called when user clicks the reset/fit button.
+   */
+  public resetViewToFitContent(): void {
+    this.userHasManuallyZoomed = false;
+    this.fitViewportToContent(true);
   }
 
   /**
@@ -4252,6 +4326,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         display: flex;
         flex-direction: row;
         gap: 4px;
+        align-items: center;
+      }
+      
+      /* Fit button separator */
+      #zoom-fit {
+        margin-left: 4px;
+        border-left: 1px solid #e5e7eb;
+        padding-left: 8px;
+      }
         align-items: center;
       }
 
