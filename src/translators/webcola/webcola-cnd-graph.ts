@@ -2555,59 +2555,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       })
       .raise();
 
-    // Update link paths with advanced routing for group edges
-    this.svgLinkGroups.select('.link')
+    // Update link paths with lightweight routing during layout ticks to avoid jitter.
+    // Advanced routing (including group edges) is applied after layout converges.
+    this.svgLinkGroups.select('path')
       .attr('d', (d: EdgeWithMetadata) => {
-        // console.log('Routing link:', d.id, 'Source:', d.source, 'Target:', d.target);
-        let source = d.source;
-        let target = d.target;
+        const source = d.source;
+        const target = d.target;
 
-        // Handle group edges with special routing
-        if (d.id?.startsWith('_g_')) {
-          const { groupOnIndex, addToGroupIndex } = this.getGroupOnAndAddToGroupIndices(d.id);
-          const addSourceToGroup = groupOnIndex >= addToGroupIndex;
-          const addTargetToGroup = groupOnIndex < addToGroupIndex;
-
-          if (addTargetToGroup) {
-            const potentialGroups = this.getContainingGroups(this.currentLayout?.groups || [], target);
-            const targetGroup = potentialGroups.find(group => group.keyNode === this.getNodeIndex(source));
-            
-            if (targetGroup) {
-              target = targetGroup;
-              // NOTE: I think this is a rectangle...
-              // Just added this to the NodeWithMetadata interface
-              if(hasInnerBounds(target)) {
-                target.innerBounds = targetGroup.bounds?.inflate(-1 * (targetGroup.padding || 10));
-              }
-            } else {
-              console.log('Target group not found', potentialGroups, this.getNodeIndex(target));
-            }
-          } else if (addSourceToGroup) {
-            const potentialGroups = this.getContainingGroups(this.currentLayout?.groups || [], source);
-            const sourceGroup = potentialGroups.find(group => group.keyNode === this.getNodeIndex(target));
-            
-            if (sourceGroup) {
-              source = sourceGroup;
-              if(hasInnerBounds(source)) {
-                // Inflate inner bounds for source group
-                source.innerBounds = sourceGroup.bounds?.inflate(-1 * (sourceGroup.padding || 10));
-              }
-            } else {
-              console.log('Source group not found', potentialGroups, this.getNodeIndex(source));
-            }
-          } else {
-            console.log('This is a group edge (on tick), but neither source nor target is a group.', d);
-          }
-        }
-
-        // Use WebCola's edge routing if available and nodes have innerBounds
-        if (typeof (cola as any).makeEdgeBetween === 'function' && hasInnerBounds(source) && hasInnerBounds(target) &&
-            source.innerBounds && target.innerBounds) {
-          const route = (cola as any).makeEdgeBetween(source.innerBounds, target.innerBounds, 5);
-          return this.lineFunction([route.sourceIntersection, route.arrowStart]);
-        }
-
-        // Fallback to simple line routing
         return this.lineFunction([
           { x: source.x || 0, y: source.y || 0 },
           { x: target.x || 0, y: target.y || 0 }
