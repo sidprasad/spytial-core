@@ -2576,10 +2576,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       })
       .raise();
 
-    // Update link paths with advanced routing for group edges
+    // Update link paths with stable anchor-based routing to prevent jitter during dragging
     this.svgLinkGroups.select('.link')
       .attr('d', (d: EdgeWithMetadata) => {
-        // console.log('Routing link:', d.id, 'Source:', d.source, 'Target:', d.target);
         let source = d.source;
         let target = d.target;
 
@@ -2595,13 +2594,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
             
             if (targetGroup) {
               target = targetGroup;
-              // NOTE: I think this is a rectangle...
-              // Just added this to the NodeWithMetadata interface
-              if(hasInnerBounds(target)) {
-                target.innerBounds = targetGroup.bounds?.inflate(-1 * (targetGroup.padding || 10));
-              }
-            } else {
-              console.log('Target group not found', potentialGroups, this.getNodeIndex(target));
             }
           } else if (addSourceToGroup) {
             const potentialGroups = this.getContainingGroups(this.currentLayout?.groups || [], source);
@@ -2609,30 +2601,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
             
             if (sourceGroup) {
               source = sourceGroup;
-              if(hasInnerBounds(source)) {
-                // Inflate inner bounds for source group
-                source.innerBounds = sourceGroup.bounds?.inflate(-1 * (sourceGroup.padding || 10));
-              }
-            } else {
-              console.log('Source group not found', potentialGroups, this.getNodeIndex(source));
             }
-          } else {
-            console.log('This is a group edge (on tick), but neither source nor target is a group.', d);
           }
         }
 
-        // Use WebCola's edge routing if available and nodes have innerBounds
-        if (typeof (cola as any).makeEdgeBetween === 'function' && hasInnerBounds(source) && hasInnerBounds(target) &&
-            source.innerBounds && target.innerBounds) {
-          const route = (cola as any).makeEdgeBetween(source.innerBounds, target.innerBounds, 5);
-          return this.lineFunction([route.sourceIntersection, route.arrowStart]);
-        }
-
-        // Fallback to simple line routing
-        return this.lineFunction([
-          { x: source.x || 0, y: source.y || 0 },
-          { x: target.x || 0, y: target.y || 0 }
-        ]);
+        // Use stable anchor-based edge routing to prevent jitter during dragging
+        // This approach selects consistent edge anchor points based on dominant direction
+        // rather than computing dynamic ray intersections that can jump erratically
+        const route = this.getStableEdgePath(source, target);
+        return this.lineFunction(route);
       })
       .attr('marker-end', (d: EdgeWithMetadata) => {
         if (this.isAlignmentEdge(d)) return 'none';
@@ -3509,6 +3486,116 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     const closestY = Math.max(y, Math.min(point.y, Y));
 
     return { x: closestX, y: closestY };
+  }
+
+  /**
+   * Calculates a stable anchor point on a rectangle's perimeter for edge drawing.
+   * This method produces consistent, jitter-free anchor points by using the
+   * center of the rectangle edge that faces the target point.
+   * 
+   * Unlike intersection-based approaches that can jump erratically as rectangles
+   * move, this method selects one of four edge centers (top, bottom, left, right)
+   * based on the dominant direction to the target, producing smooth transitions.
+   * 
+   * @param bounds - Rectangle bounds with x, y, X, Y properties (or cx(), cy(), width(), height() methods)
+   * @param targetPoint - The point the edge is connecting to
+   * @returns Stable anchor point on the rectangle's perimeter
+   */
+  private getStableEdgeAnchor(bounds: any, targetPoint: { x: number; y: number }): { x: number; y: number } {
+    if (!bounds) return targetPoint;
+
+    // Get rectangle center and dimensions
+    let cx: number, cy: number, halfWidth: number, halfHeight: number;
+    
+    if (typeof bounds.cx === 'function') {
+      // WebCola Rectangle with methods
+      cx = bounds.cx();
+      cy = bounds.cy();
+      halfWidth = bounds.width() / 2;
+      halfHeight = bounds.height() / 2;
+    } else if (bounds.x !== undefined && bounds.X !== undefined) {
+      // Rectangle with x, y, X, Y properties
+      cx = (bounds.x + bounds.X) / 2;
+      cy = (bounds.y + bounds.Y) / 2;
+      halfWidth = (bounds.X - bounds.x) / 2;
+      halfHeight = (bounds.Y - bounds.y) / 2;
+    } else {
+      return targetPoint;
+    }
+
+    // Calculate direction from rectangle center to target
+    const dx = targetPoint.x - cx;
+    const dy = targetPoint.y - cy;
+
+    // Determine which edge to anchor to based on the dominant direction
+    // Use aspect-ratio-normalized comparison for accurate edge selection
+    const normalizedDx = Math.abs(dx) / halfWidth;
+    const normalizedDy = Math.abs(dy) / halfHeight;
+
+    if (normalizedDx > normalizedDy) {
+      // Horizontal edge - left or right
+      if (dx > 0) {
+        // Right edge
+        return { x: cx + halfWidth, y: cy };
+      } else {
+        // Left edge
+        return { x: cx - halfWidth, y: cy };
+      }
+    } else {
+      // Vertical edge - top or bottom
+      if (dy > 0) {
+        // Bottom edge
+        return { x: cx, y: cy + halfHeight };
+      } else {
+        // Top edge
+        return { x: cx, y: cy - halfHeight };
+      }
+    }
+  }
+
+  /**
+   * Calculates stable edge path points for drawing during tick/drag operations.
+   * This method avoids jitter by using stable anchor points instead of
+   * dynamic intersection calculations.
+   * 
+   * @param source - Source node or group with bounds
+   * @param target - Target node or group with bounds
+   * @returns Array of two points for a simple line path
+   */
+  private getStableEdgePath(
+    source: any,
+    target: any
+  ): Array<{ x: number; y: number }> {
+    // Get target point (center of target)
+    let targetCenter: { x: number; y: number };
+    if (target.bounds && typeof target.bounds.cx === 'function') {
+      targetCenter = { x: target.bounds.cx(), y: target.bounds.cy() };
+    } else if (target.bounds) {
+      targetCenter = { x: (target.bounds.x + target.bounds.X) / 2, y: (target.bounds.y + target.bounds.Y) / 2 };
+    } else {
+      targetCenter = { x: target.x || 0, y: target.y || 0 };
+    }
+
+    // Get source point (center of source)
+    let sourceCenter: { x: number; y: number };
+    if (source.bounds && typeof source.bounds.cx === 'function') {
+      sourceCenter = { x: source.bounds.cx(), y: source.bounds.cy() };
+    } else if (source.bounds) {
+      sourceCenter = { x: (source.bounds.x + source.bounds.X) / 2, y: (source.bounds.y + source.bounds.Y) / 2 };
+    } else {
+      sourceCenter = { x: source.x || 0, y: source.y || 0 };
+    }
+
+    // Calculate stable anchor points on the perimeter
+    const sourceAnchor = source.bounds || source.innerBounds
+      ? this.getStableEdgeAnchor(source.bounds || source.innerBounds, targetCenter)
+      : sourceCenter;
+    
+    const targetAnchor = target.bounds || target.innerBounds
+      ? this.getStableEdgeAnchor(target.bounds || target.innerBounds, sourceCenter)
+      : targetCenter;
+
+    return [sourceAnchor, targetAnchor];
   }
 
   /**
