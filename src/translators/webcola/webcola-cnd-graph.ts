@@ -172,6 +172,23 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Input mode state management for edge creation and modification
    */
   private isInputModeActive: boolean = false;
+  private inputModeEnabled: boolean = true;
+  private inputModeListenersAttached: boolean = false;
+  private readonly handleInputModeKeydown = (event: KeyboardEvent): void => {
+    if ((event.metaKey || event.ctrlKey) && !this.isInputModeActive) {
+      this.activateInputMode();
+    }
+  };
+  private readonly handleInputModeKeyup = (event: KeyboardEvent): void => {
+    if (!event.metaKey && !event.ctrlKey && this.isInputModeActive) {
+      this.deactivateInputMode();
+    }
+  };
+  private readonly handleInputModeBlur = (): void => {
+    if (this.isInputModeActive) {
+      this.deactivateInputMode();
+    }
+  };
   private edgeCreationState: {
     isCreating: boolean;
     sourceNode: NodeWithMetadata | null;
@@ -202,7 +219,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private textMeasurementCanvas: HTMLCanvasElement | null = null;
 
-  constructor() {
+  constructor(isInputAllowed: boolean = true) {
     super();
     
     this.attachShadow({ mode: 'open' });
@@ -216,6 +233,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .curve(d3.curveBasis);
 
     // Initialize input mode keyboard event handlers
+    this.inputModeEnabled = isInputAllowed;
     this.initializeInputModeHandlers();
   }
 
@@ -709,26 +727,29 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Initialize keyboard event handlers for input mode activation
    */
   private initializeInputModeHandlers(): void {
-    // Handle keydown for Cmd/Ctrl press
-    document.addEventListener('keydown', (event) => {
-      if ((event.metaKey || event.ctrlKey) && !this.isInputModeActive) {
-        this.activateInputMode();
-      }
-    });
+    if (this.inputModeEnabled) {
+      this.attachInputModeListeners();
+    }
+  }
 
-    // Handle keyup for Cmd/Ctrl release
-    document.addEventListener('keyup', (event) => {
-      if (!event.metaKey && !event.ctrlKey && this.isInputModeActive) {
-        this.deactivateInputMode();
-      }
-    });
+  private attachInputModeListeners(): void {
+    if (this.inputModeListenersAttached) {
+      return;
+    }
+    document.addEventListener('keydown', this.handleInputModeKeydown);
+    document.addEventListener('keyup', this.handleInputModeKeyup);
+    window.addEventListener('blur', this.handleInputModeBlur);
+    this.inputModeListenersAttached = true;
+  }
 
-    // Handle window blur to ensure input mode is deactivated
-    window.addEventListener('blur', () => {
-      if (this.isInputModeActive) {
-        this.deactivateInputMode();
-      }
-    });
+  private detachInputModeListeners(): void {
+    if (!this.inputModeListenersAttached) {
+      return;
+    }
+    document.removeEventListener('keydown', this.handleInputModeKeydown);
+    document.removeEventListener('keyup', this.handleInputModeKeyup);
+    window.removeEventListener('blur', this.handleInputModeBlur);
+    this.inputModeListenersAttached = false;
   }
 
   /**
@@ -4780,8 +4801,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   public dispose(): void {
     // Remove keyboard event handlers
-    // Note: We can't easily remove specific listeners without keeping references,
-    // but we can clear the component state that they depend on
+    this.detachInputModeListeners();
     this.deactivateInputMode();
     
     // Clear D3 selections and remove event listeners
