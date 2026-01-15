@@ -219,7 +219,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private textMeasurementCanvas: HTMLCanvasElement | null = null;
 
-  constructor(isInputAllowed: boolean = true) {
+  constructor(isInputAllowed: boolean = false) {
     super();
     
     this.attachShadow({ mode: 'open' });

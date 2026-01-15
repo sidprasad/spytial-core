@@ -154,8 +154,14 @@
                     <button id="screenshotButton" onclick="takeScreenshot()" title="Download graph as PNG image" aria-label="Screenshot graph" style="background-color: #28a745;">📷 Screenshot</button>
                     <button id="clearGraphButton" onclick="clearGraph()" title="Clear the current graph visualization" aria-label="Clear graph">Clear</button>
                 </div>
-                <!-- WebCola graph mounts here -->
-                <div id="graph-container-host"></div>
+                <!-- Use the webcola-cnd-graph custom element -->
+                <webcola-cnd-graph 
+                    id="graph-container"
+                    width="800" 
+                    height="600"
+                    layoutFormat="default"
+                    aria-label="Interactive graph visualization">
+                </webcola-cnd-graph>
             </div>
         </div>
     </div>
@@ -789,29 +795,9 @@
             }
         }
 
-        function ensureGraphElement() {
-            const existing = document.getElementById('graph-container');
-            if (existing) {
-                return existing;
-            }
-            const host = document.getElementById('graph-container-host');
-            if (!host) {
-                return null;
-            }
-            const GraphClass = customElements.get('webcola-cnd-graph');
-            const graphElement = GraphClass ? new GraphClass(false) : document.createElement('webcola-cnd-graph');
-            graphElement.id = 'graph-container';
-            graphElement.setAttribute('width', '800');
-            graphElement.setAttribute('height', '600');
-            graphElement.setAttribute('layoutFormat', 'default');
-            graphElement.setAttribute('aria-label', 'Interactive graph visualization');
-            host.appendChild(graphElement);
-            return graphElement;
-        }
-
         document.addEventListener('DOMContentLoaded', () => {
             // Mount the window.mountRelationHighlighter
-            const graphElement = ensureGraphElement();
+            const graphElement = document.getElementById('graph-container');
             if (graphElement && window.mountRelationHighlighter) {
                 window.mountRelationHighlighter('relation-highlighter-mount', 'graph-container');
             }

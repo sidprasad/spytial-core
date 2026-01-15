@@ -58,7 +58,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   };
 
   constructor(dataInstance?: IInputDataInstance) {
-    super();
+    super(true);
     
     // Require data instance - if not provided, create empty one
     const instance = dataInstance || new JSONDataInstance({
