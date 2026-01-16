@@ -363,6 +363,22 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     });
   }
 
+  /**
+   * Gets the current zoom scale factor
+   * @returns Current zoom scale (k value from transform)
+   */
+  private getCurrentZoomScale(): number {
+    if (this.svg && this.svg.node()) {
+      try {
+        const transform = d3.zoomTransform(this.svg.node());
+        return transform.k;
+      } catch (e) {
+        return 1;
+      }
+    }
+    return 1;
+  }
+
   private isErrorGroup(group: {name: string}): boolean {
     const overlappingGroups = this.currentLayout.overlappingGroups;
     if (!overlappingGroups) {
@@ -1645,8 +1661,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr("text-anchor", "middle")
       .attr("dominant-baseline", "middle")
       .attr("font-family", "system-ui")
-      //.attr("font-size", "8px")
-      //.attr("fill", "#555")
       .attr("pointer-events", "none")
       .text((d: any) => d.label || d.relName || "");
   }
@@ -2632,6 +2646,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr('y', (d: EdgeWithMetadata) => {
         const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${d.id}"]`) as SVGPathElement;
         return pathElement ? this.calculateNewPosition(pathElement, 'y') : (d.source.y + d.target.y) / 2;
+      })
+      .style('font-size', () => {
+        // Zoom-aware font sizing: scale up slightly when zoomed out
+        const zoomScale = this.getCurrentZoomScale();
+        const baseFontSize = 12;
+        // When zoomed out (scale < 1), increase font size slightly to maintain readability
+        // When zoomed in (scale > 1), keep base size
+        const adjustedSize = zoomScale < 1 ? baseFontSize / Math.sqrt(zoomScale) : baseFontSize;
+        return `${Math.min(adjustedSize, 16)}px`; // Cap at 16px
       })
       .raise();
 
@@ -4333,12 +4356,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         text-anchor: middle;
         dominant-baseline: middle;
         font-size: 12px;
-        fill: #161616ff;
+        font-weight: 500;
+        fill: #1a1a1a;
         pointer-events: none;
-        font-family: system-ui;
-        stroke: white; /* Add white shadow */
-        stroke-width: 0.2px; /* Reduced thickness of the shadow */
-        stroke-opacity: 0.7; /* Added opacity to make the shadow less intense */
+        font-family: system-ui, -apple-system, sans-serif;
+        stroke: white;
+        stroke-width: 3px;
+        stroke-linejoin: round;
+        paint-order: stroke fill;
       }
       
       .mostSpecificTypeLabel {
