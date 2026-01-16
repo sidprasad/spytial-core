@@ -2577,7 +2577,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .raise();
 
     // Update link paths with stable anchor-based routing to prevent jitter during dragging
-    this.svgLinkGroups.select('.link')
+    // Select 'path' to include all edge types: .link, .inferredLink, and .alignmentLink
+    this.svgLinkGroups.select('path')
       .attr('d', (d: EdgeWithMetadata) => {
         let source = d.source;
         let target = d.target;
