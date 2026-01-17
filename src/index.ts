@@ -36,6 +36,7 @@ export { WebColaTranslator } from './translators';
 export { StructuredInputGraph } from './translators';
 export type { ParsedCnDSpec, NodePositionHint, WebColaLayoutOptions } from './translators';
 export { SGraphQueryEvaluator } from "./evaluators/sgq-evaluator";
+export { PythonEvaluator } from "./evaluators/python-evaluator";
 
 // Selector synthesis API (requires SGraphQueryEvaluator)
 export { 

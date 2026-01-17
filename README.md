@@ -373,6 +373,7 @@ const description = generateTextDescription(dataInstance, {
 
 - **`LayoutInstance`** - Generate layouts from CnD specs
 - **`SGraphQueryEvaluator`** - Evaluate selector expressions
+- **`PythonEvaluator`** - Evaluate selector expressions via a provided Python runtime
 - **`AlloyDataInstance`**, **`JSONDataInstance`**, etc. - Data format adapters
 
 ### WebCola Graph API
