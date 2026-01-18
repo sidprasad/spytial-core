@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
 import { UNARY_SELECTOR_TEXT } from '../constants';
 import { DirectiveData, ConstraintData } from '../interfaces';
-import { SelectorInput } from './SelectorInput';
+import { SelectorInput, SelectorChangeEvent } from './SelectorInput';
 
 interface HideAtomSelectorProps {
   /** Directive or Constraint data object containing type and parameters */
@@ -21,7 +21,7 @@ export const HideAtomSelector: React.FC<HideAtomSelectorProps> = (props: HideAto
     throw new Error('HideAtomSelector requires either directiveData or constraintData');
   }
   
-  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (event: SelectorChangeEvent) => {
     const { name, value } = event.target;
     props.onUpdate({
       params: {

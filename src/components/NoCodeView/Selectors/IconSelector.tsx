@@ -1,7 +1,7 @@
 import React from 'react';
 import { UNARY_SELECTOR_TEXT } from '../constants';
 import { DirectiveData } from '../interfaces';
-import { SelectorInput } from './SelectorInput';
+import { SelectorInput, SelectorChangeEvent } from './SelectorInput';
 
 interface IconSelectorProps {
   /** Directive data object containing type and parameters */
@@ -22,7 +22,7 @@ export const IconSelector: React.FC<IconSelectorProps> = ({
   const path = (directiveData.params.path as string) || '';
   const showLabels = (directiveData.params.showLabels as boolean) || false;
 
-  const handleSelectorChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSelectorChange = (event: SelectorChangeEvent) => {
     onUpdate({ params: { ...directiveData.params, selector: event.target.value } });
   };
 

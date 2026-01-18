@@ -65,12 +65,7 @@
     font-family: monospace;
 }
 
-/* Selector input styling - Alloy-esque highlighting */
-.selector-input-container {
-    position: relative;
-    flex: 1;
-}
-
+/* Selector input styling - uses textarea for better scrolling and resizing */
 .selector-input {
     font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
     font-size: 0.9rem;
@@ -78,8 +73,21 @@
     border: 1px solid #d0d7de;
     padding: 0.375rem 0.5rem;
     width: 100%;
-    position: relative;
-    z-index: 1;
+    height: 2.25rem; /* Single line height by default */
+    min-height: 2.25rem; /* Prevent shrinking below 1 line */
+    resize: vertical; /* Allow vertical resizing only */
+    overflow-x: auto; /* Horizontal scroll for long selectors */
+    overflow-y: hidden; /* Hide vertical scroll for single line */
+    white-space: pre; /* Preserve whitespace, prevent wrapping */
+    line-height: 1.5;
+    field-sizing: content; /* Modern browsers: auto-size to content if supported */
+}
+
+/* When resized larger, show vertical scrollbar and allow full scrolling */
+.selector-input:not([rows="1"]),
+.selector-input[style*="height"] {
+    overflow-y: auto;
+    height: auto;
 }
 
 .selector-input:focus {
@@ -88,62 +96,18 @@
     background-color: #ffffff;
 }
 
-/* Selector syntax highlighting overlay */
-.selector-highlight-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
-    font-size: 0.9rem;
-    padding: 0.375rem 0.5rem;
-    pointer-events: none;
-    white-space: pre;
-    overflow: hidden;
-    z-index: 0;
-    background-color: #f6f8fa;
-    border: 1px solid transparent;
+/* Resize handle indicator */
+.selector-input::-webkit-resizer {
+    background-color: #d0d7de;
+    border-radius: 2px;
 }
 
-/* Selector syntax highlighting classes */
-.selector-highlight-overlay .selector-sig {
-    color: #8250df;
-    font-weight: 600;
-}
-
-.selector-highlight-overlay .selector-operator {
-    color: #cf222e;
-    font-weight: bold;
-}
-
-.selector-highlight-overlay .selector-field {
-    color: #0550ae;
-}
-
-.selector-highlight-overlay .selector-join {
-    color: #cf222e;
-    font-weight: bold;
-}
-
-.selector-highlight-overlay .selector-paren {
-    color: #57606a;
-    font-weight: bold;
-}
-
-.selector-highlight-overlay .selector-wildcard {
-    color: #bf8700;
-    font-weight: bold;
-}
-
-.selector-highlight-overlay .selector-keyword {
-    color: #cf222e;
-    font-weight: 600;
-}
-
-.selector-highlight-overlay .selector-atom {
-    color: #116329;
-}
+/* 
+ * NOTE: Overlay-based syntax highlighting was removed due to scrolling and 
+ * navigation issues in browsers (especially Chrome). The highlightSelector 
+ * function is preserved for potential future use (tooltips, previews, etc.)
+ * but the overlay CSS is no longer used.
+ */
 
 /** Styles for informational labels */
 .infolabel {

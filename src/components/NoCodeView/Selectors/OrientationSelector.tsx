@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
 import { TUPLE_SELECTOR_TEXT } from '../constants';
 import { ConstraintData } from '../interfaces';
-import { SelectorInput } from './SelectorInput';
+import { SelectorInput, SelectorChangeEvent } from './SelectorInput';
 
 interface OrientationSelectorProps {
   /** Constraint data object containing type and parameters */
@@ -27,7 +27,7 @@ const DIRECTION_OPTIONS = [
  * Uses a checkbox grid for direction selection instead of a multi-select dropdown.
  */
 export const OrientationSelector: React.FC<OrientationSelectorProps> = (props: OrientationSelectorProps) => {
-  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (event: SelectorChangeEvent) => {
     const { name, value } = event.target;
     props.onUpdate({
       params: {

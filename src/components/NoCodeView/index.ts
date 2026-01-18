@@ -17,6 +17,7 @@ export { SizeSelector } from './Selectors/SizeSelector';
 
 // Export SelectorInput for custom use
 export { SelectorInput, highlightSelector } from './Selectors/SelectorInput';
+export type { SelectorChangeEvent } from './Selectors/SelectorInput';
 
 // Export data functions
 export { parseLayoutSpecToData } from './NoCodeView';
