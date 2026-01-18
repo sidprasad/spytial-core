@@ -1,23 +1,32 @@
-import React, { useCallback, useMemo } from 'react';
+import React from 'react';
 import '../NoCodeView.css';
+
+/** Event type that works for both input and textarea elements */
+export type SelectorChangeEvent = React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>;
 
 interface SelectorInputProps {
     /** Current selector value */
     value: string;
     /** Name attribute for the input */
     name: string;
-    /** Callback when value changes */
-    onChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+    /** Callback when value changes - accepts both input and textarea events */
+    onChange: (event: SelectorChangeEvent) => void;
     /** Whether input is required */
     required?: boolean;
     /** Placeholder text */
     placeholder?: string;
     /** Additional CSS class */
     className?: string;
+    /** Number of rows for the textarea (default: 1) */
+    rows?: number;
 }
 
 /**
  * Highlights selector syntax with Alloy-esque coloring
+ * 
+ * NOTE: This function is kept for potential future use (e.g., tooltips, previews)
+ * but is no longer used in the SelectorInput component. The overlay-based 
+ * highlighting was removed due to scrolling and navigation issues in browsers.
  * 
  * Recognizes:
  * - Operators: ->, +, &, -, ~, *, ^, .
@@ -112,14 +121,18 @@ export function highlightSelector(selector: string): string {
 }
 
 /**
- * SelectorInput component with Alloy-esque syntax highlighting
+ * SelectorInput component - resizable textarea for selector expressions
  * 
- * Provides a text input with an overlay that highlights selector syntax
- * in real-time as the user types. Uses colors similar to Alloy IDE:
- * - Purple for sigs/atoms
- * - Blue for fields  
- * - Red for operators
- * - Yellow for wildcards
+ * Provides a monospace textarea for entering selector expressions.
+ * Uses a textarea instead of input for better handling of longer selectors:
+ * - Visible scrollbar when content overflows
+ * - Resizable (vertically) by the user
+ * - Compact by default (1 row) but expandable
+ * 
+ * Prioritizes robustness over visual features:
+ * - Standard text input behavior (scroll, arrow keys, selection all work correctly)
+ * - Monospace font for readability
+ * - Works reliably across all browsers
  * 
  * @example
  * ```tsx
@@ -128,6 +141,7 @@ export function highlightSelector(selector: string): string {
  *   value={selectorValue}
  *   onChange={handleChange}
  *   required
+ *   rows={2}
  * />
  * ```
  */
@@ -137,45 +151,18 @@ export const SelectorInput: React.FC<SelectorInputProps> = ({
     onChange,
     required = false,
     placeholder,
-    className = ''
+    className = '',
+    rows = 1
 }) => {
-    // Memoize the highlighted output
-    const highlighted = useMemo(() => highlightSelector(value), [value]);
-    
-    // Handle scroll sync between input and overlay
-    const handleScroll = useCallback((e: React.UIEvent<HTMLInputElement>) => {
-        const input = e.currentTarget;
-        const overlay = input.parentElement?.querySelector('.selector-highlight-overlay') as HTMLElement;
-        if (overlay) {
-            overlay.scrollLeft = input.scrollLeft;
-        }
-    }, []);
-    
     return (
-        <div className={`selector-input-container ${className}`}>
-            {/* Highlighted overlay (behind input) */}
-            <div 
-                className="selector-highlight-overlay"
-                aria-hidden="true"
-                dangerouslySetInnerHTML={{ __html: highlighted || '&nbsp;' }}
-            />
-            
-            {/* Actual input (transparent text, on top for editing) */}
-            <input
-                type="text"
-                name={name}
-                className="form-control selector-input code-input"
-                value={value}
-                onChange={onChange}
-                onScroll={handleScroll}
-                required={required}
-                placeholder={placeholder}
-                style={{
-                    color: 'transparent',
-                    caretColor: '#212529',
-                    backgroundColor: 'transparent',
-                }}
-            />
-        </div>
+        <textarea
+            name={name}
+            className={`form-control selector-input code-input ${className}`}
+            value={value}
+            onChange={onChange}
+            required={required}
+            placeholder={placeholder}
+            rows={rows}
+        />
     );
 };

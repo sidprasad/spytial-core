@@ -1,7 +1,7 @@
 import React from 'react';
 import { UNARY_SELECTOR_TEXT } from '../constants';
 import { DirectiveData, ConstraintData } from '../interfaces';
-import { SelectorInput } from './SelectorInput';
+import { SelectorInput, SelectorChangeEvent } from './SelectorInput';
 
 interface SizeSelectorProps {
   /** Directive or Constraint data object containing type and parameters */
@@ -29,7 +29,7 @@ export const SizeSelector: React.FC<SizeSelectorProps> = ({
   const width = (data.params.width as number) || 10;
   const height = (data.params.height as number) || 10;
 
-  const handleSelectorChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSelectorChange = (event: SelectorChangeEvent) => {
     onUpdate({ params: { ...data.params, selector: event.target.value } });
   };
 

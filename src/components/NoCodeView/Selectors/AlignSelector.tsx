@@ -1,7 +1,7 @@
 import React from 'react';
 import { TUPLE_SELECTOR_TEXT } from '../constants';
 import { ConstraintData } from '../interfaces';
-import { SelectorInput } from './SelectorInput';
+import { SelectorInput, SelectorChangeEvent } from './SelectorInput';
 
 interface AlignSelectorProps {
     /** Constraint data object containing type and parameters */
@@ -15,7 +15,7 @@ interface AlignSelectorProps {
  * Allows selection of tuple selector and alignment direction (horizontal or vertical).
  */
 const AlignSelector: React.FC<AlignSelectorProps> = (props: AlignSelectorProps) => {
-    const handleParamsChange = (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const handleParamsChange = (event: SelectorChangeEvent | React.ChangeEvent<HTMLSelectElement>) => {
         const { name, value } = event.target;
         props.onUpdate({
             params: {

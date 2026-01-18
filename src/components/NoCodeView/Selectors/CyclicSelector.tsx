@@ -1,7 +1,7 @@
 import React from 'react';
 import { TUPLE_SELECTOR_TEXT } from '../constants';
 import { ConstraintData } from '../interfaces';
-import { SelectorInput } from './SelectorInput';
+import { SelectorInput, SelectorChangeEvent } from './SelectorInput';
 
 interface CyclicSelectorProps {
     /** Constraint data object containing type and parameters */
@@ -11,7 +11,7 @@ interface CyclicSelectorProps {
 }
 
 const CyclicSelector: React.FC<CyclicSelectorProps> = (props: CyclicSelectorProps) => {
-    const handleParamsChange = (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const handleParamsChange = (event: SelectorChangeEvent | React.ChangeEvent<HTMLSelectElement>) => {
         const { name, value } = event.target;
         props.onUpdate({
             params: {

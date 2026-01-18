@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
 import { UNARY_SELECTOR_TEXT } from '../constants';
 import { DirectiveData } from '../interfaces';
-import { SelectorInput } from './SelectorInput';
+import { SelectorInput, SelectorChangeEvent } from './SelectorInput';
 
 interface ColorAtomSelectorProps {
   /** Directive data object containing type and parameters */
@@ -15,7 +15,7 @@ interface ColorAtomSelectorProps {
  * Includes selector input and color picker.
  */
 export const ColorAtomSelector: React.FC<ColorAtomSelectorProps> = (props: ColorAtomSelectorProps) => {
-  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (event: SelectorChangeEvent | React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
     props.onUpdate({
       params: {
