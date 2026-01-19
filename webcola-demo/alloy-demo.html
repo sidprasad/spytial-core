@@ -212,6 +212,7 @@
         let alloyInstances = [];           // Array of all parsed Alloy instances
         let currentInstanceIndex = 0;      // Current instance being displayed
         let priorPositions = null;         // Positions from the previous render for temporal consistency
+        let priorTransform = null;         // Zoom/pan transform from previous render for visual continuity
         let parsedAlloyDatum = null;       // Cached parsed Alloy datum
         let cachedForgeEvaluator = null;   // Cached ForgeEvaluator
         let cachedLayoutSpec = null;       // Cached layout specification
@@ -307,6 +308,7 @@
                 alloyInstances = parsedAlloyDatum.instances;
                 currentInstanceIndex = 0;
                 priorPositions = null; // Reset prior positions when loading new data
+                priorTransform = null; // Reset prior transform when loading new data
                 
                 // IMPORTANT: Reset projections when loading new data
                 // This ensures we start fresh and allow the layout to set defaults
@@ -495,7 +497,10 @@
 
             // Update prior positions info
             if (priorPositions && priorPositions.length > 0) {
-                priorInfo.textContent = `📍 ${priorPositions.length} prior positions available`;
+                const transformInfo = priorTransform 
+                    ? ` + transform (zoom ${priorTransform.k.toFixed(1)}x)` 
+                    : '';
+                priorInfo.textContent = `📍 ${priorPositions.length} prior positions${transformInfo}`;
             } else {
                 priorInfo.textContent = '📍 No prior positions (first render)';
             }
@@ -521,17 +526,27 @@
             const graphElement = document.getElementById('graph-container');
             const usePriorPositionsCheckbox = document.getElementById('usePriorPositions');
             
-            if (usePriorPositionsCheckbox.checked && graphElement.getNodePositions) {
-                const currentPositions = graphElement.getNodePositions();
-                if (currentPositions && currentPositions.length > 0) {
-                    priorPositions = currentPositions;
-                    console.log(`Stored ${priorPositions.length} prior positions for temporal consistency`);
+            if (usePriorPositionsCheckbox.checked && graphElement.getNodePositionsWithTransform) {
+                // Use the transform-aware method to capture both positions and zoom state
+                const { positions, transform } = graphElement.getNodePositionsWithTransform();
+                if (positions && positions.length > 0) {
+                    priorPositions = positions;
+                    priorTransform = transform;
+                    console.log(`Stored ${priorPositions.length} prior positions with transform (k=${transform.k.toFixed(2)}, x=${transform.x.toFixed(2)}, y=${transform.y.toFixed(2)})`);
                     
                     // Log a few positions for debugging
                     console.log('Sample prior positions:');
                     priorPositions.slice(0, 5).forEach(p => {
                         console.log(`  ${p.id}: x=${p.x.toFixed(2)}, y=${p.y.toFixed(2)}`);
                     });
+                }
+            } else if (usePriorPositionsCheckbox.checked && graphElement.getNodePositions) {
+                // Fallback to legacy method without transform
+                const currentPositions = graphElement.getNodePositions();
+                if (currentPositions && currentPositions.length > 0) {
+                    priorPositions = currentPositions;
+                    priorTransform = null;
+                    console.log(`Stored ${priorPositions.length} prior positions (no transform captured)`);
                 }
             } else {
                 console.log('Prior positions disabled or not available');
@@ -604,7 +619,14 @@
                 const renderOptions = {};
                 if (shouldUsePriorPositions && priorPositions && priorPositions.length > 0) {
                     renderOptions.priorPositions = priorPositions;
-                    console.log(`Rendering with ${priorPositions.length} prior positions for temporal consistency`);
+                    
+                    // Include the transform if we captured it, for visual continuity across zoom/pan
+                    if (priorTransform) {
+                        renderOptions.priorTransform = priorTransform;
+                        console.log(`Rendering with ${priorPositions.length} prior positions and transform (k=${priorTransform.k.toFixed(2)})`);
+                    } else {
+                        console.log(`Rendering with ${priorPositions.length} prior positions (no transform)`);
+                    }
                     
                     // Log prior positions for debugging
                     console.log('BEFORE (prior positions):');
@@ -756,6 +778,7 @@
             alloyInstances = [];
             currentInstanceIndex = 0;
             priorPositions = null;
+            priorTransform = null;
             parsedAlloyDatum = null;
             cachedForgeEvaluator = null;
             cachedLayoutSpec = null;
