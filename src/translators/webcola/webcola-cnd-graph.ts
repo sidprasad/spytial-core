@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator, NodePositionHint, WebColaLayoutOptions } from './webcolatranslator';
+import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator, NodePositionHint, TransformInfo, WebColaLayoutOptions } from './webcolatranslator';
 import { InstanceLayout, isAlignmentConstraint, isInstanceLayout, isLeftConstraint, isTopConstraint, LayoutNode } from '../../layout/interfaces';
 import type { GridRouter, Group, Layout, Node, Link } from 'webcola';
 import { IInputDataInstance, ITuple, IAtom } from '../../data-instance/interfaces';
@@ -1261,20 +1261,36 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       throw new Error('Invalid instance layout provided. Expected an InstanceLayout instance.');
     }
 
+    // Determine if we have prior positions and transform to preserve
+    const hasPriorPositions = options?.priorPositions && options.priorPositions.length > 0;
+    const hasPriorTransform = options?.priorTransform !== undefined;
+
     // Mark this as a new render - we'll fit viewport after layout completes
     // Only reset if this is a completely new layout (no prior positions)
-    if (!options?.priorPositions) {
+    if (!hasPriorPositions) {
       this.isInitialRender = true;
       this.userHasManuallyZoomed = false;
     }
     
-    // Reset zoom transform to identity for a fresh start (will be adjusted by fitViewportToContent)
+    // Handle zoom transform based on whether we have prior state to restore
     if (this.svg && this.zoomBehavior && d3) {
       try {
-        const identity = d3.zoomIdentity;
-        this.svg.call(this.zoomBehavior.transform, identity);
+        if (hasPriorPositions && hasPriorTransform) {
+          // Restore the prior transform to maintain visual continuity
+          // This ensures nodes appear in the same screen position as before
+          const priorTransform = options!.priorTransform!;
+          const transform = d3.zoomIdentity
+            .translate(priorTransform.x, priorTransform.y)
+            .scale(priorTransform.k);
+          this.svg.call(this.zoomBehavior.transform, transform);
+          console.log(`WebCola: Restored prior transform - k: ${priorTransform.k.toFixed(2)}, x: ${priorTransform.x.toFixed(2)}, y: ${priorTransform.y.toFixed(2)}`);
+        } else {
+          // Reset zoom transform to identity for a fresh start (will be adjusted by fitViewportToContent)
+          const identity = d3.zoomIdentity;
+          this.svg.call(this.zoomBehavior.transform, identity);
+        }
       } catch (error) {
-        console.warn('Failed to reset zoom transform:', error);
+        console.warn('Failed to set zoom transform:', error);
       }
     }
 
@@ -1332,7 +1348,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       //
       // Note: We manually compute node bounds in ensureNodeBounds() before edge routing,
       // so we don't need many iterations just for bounds computation.
-      const hasPriorPositions = options?.priorPositions && options.priorPositions.length > 0;
       if (hasPriorPositions) {
         // Use minimal iterations to preserve prior positions:
         // - 0 unconstrained: don't let nodes drift from prior positions
@@ -1521,6 +1536,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   /**
    * Get the current positions of all nodes in the layout.
    * Useful for reading coordinates after rendering or drag events.
+   * 
+   * Note: These positions are in the layout coordinate space, not screen space.
+   * If you need to use these positions for a subsequent render and the zoom/pan
+   * may have changed, use getNodePositionsWithTransform() instead.
    */
   public getNodePositions(): Array<{ id: string; x: number; y: number }> {
     if (!this.currentLayout?.nodes) {
@@ -1531,6 +1550,60 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       x: n.x,
       y: n.y
     }));
+  }
+
+  /**
+   * Get the current zoom/pan transform state.
+   * 
+   * @returns The current transform with k (scale), x (translateX), and y (translateY)
+   */
+  public getCurrentTransform(): TransformInfo {
+    if (this.svg && this.svg.node()) {
+      try {
+        const transform = d3.zoomTransform(this.svg.node());
+        return {
+          k: transform.k,
+          x: transform.x,
+          y: transform.y
+        };
+      } catch (e) {
+        // Return identity transform if we can't get the current one
+        return { k: 1, x: 0, y: 0 };
+      }
+    }
+    return { k: 1, x: 0, y: 0 };
+  }
+
+  /**
+   * Get the current positions of all nodes along with the current transform.
+   * 
+   * This is the recommended method for capturing positions when you need to
+   * restore them in a subsequent render that may have a different zoom/viewbox.
+   * The returned transform should be passed to renderLayout() as priorTransform
+   * when using these positions as priorPositions.
+   * 
+   * @returns Object containing node positions and the current transform
+   * 
+   * @example
+   * ```typescript
+   * // Capture positions with transform
+   * const { positions, transform } = graph.getNodePositionsWithTransform();
+   * 
+   * // Later, render with prior positions and transform
+   * await graph.renderLayout(newLayout, { 
+   *   priorPositions: positions, 
+   *   priorTransform: transform 
+   * });
+   * ```
+   */
+  public getNodePositionsWithTransform(): { 
+    positions: NodePositionHint[]; 
+    transform: TransformInfo; 
+  } {
+    return {
+      positions: this.getNodePositions(),
+      transform: this.getCurrentTransform()
+    };
   }
 
   /**

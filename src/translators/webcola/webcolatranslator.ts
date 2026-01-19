@@ -68,6 +68,19 @@ export interface NodePositionHint {
 }
 
 /**
+ * Transform information representing zoom/pan state.
+ * Used to normalize positions when the viewbox/zoom has changed between renders.
+ */
+export interface TransformInfo {
+  /** Scale factor (zoom level) */
+  k: number;
+  /** X translation (pan offset) */
+  x: number;
+  /** Y translation (pan offset) */
+  y: number;
+}
+
+/**
  * Options for WebColaLayout configuration.
  * Allows customization of layout behavior, especially for temporal sequences.
  */
@@ -88,6 +101,19 @@ export interface WebColaLayoutOptions {
    * @see WebColaCnDGraph.renderLayout for iteration adjustments
    */
   priorPositions?: NodePositionHint[];
+
+  /**
+   * The transform (zoom/pan state) that was active when priorPositions were captured.
+   * 
+   * When provided along with priorPositions, this allows the layout engine to
+   * correctly normalize positions if the viewbox/zoom has changed between renders.
+   * If the new render has a different zoom level or pan position, the prior positions
+   * will be transformed to match the new coordinate system.
+   * 
+   * If not provided, prior positions are assumed to be in the same coordinate space
+   * as the current render.
+   */
+  priorTransform?: TransformInfo;
 }
 
 // WebCola constraint types
@@ -148,6 +174,12 @@ export class WebColaLayout {
    */
   private priorPositionMap: Map<string, NodePositionHint>;
 
+  /**
+   * The transform that was active when prior positions were captured.
+   * Used to normalize positions if the viewbox/zoom has changed.
+   */
+  private priorTransform: TransformInfo | undefined;
+
   constructor(instanceLayout: InstanceLayout, fig_height: number = 800, fig_width: number = 800, options?: WebColaLayoutOptions) {
 
     this.FIG_HEIGHT = fig_height;
@@ -160,12 +192,17 @@ export class WebColaLayout {
 
     // Build a map of prior positions for O(1) lookup
     this.priorPositionMap = new Map();
+    this.priorTransform = options?.priorTransform;
+    
     if (options?.priorPositions) {
       for (const hint of options.priorPositions) {
         this.priorPositionMap.set(hint.id, hint);
       }
       if (typeof console !== 'undefined' && console.log) {
         console.log(`WebColaLayout: Using ${this.priorPositionMap.size} prior positions for temporal consistency`);
+        if (this.priorTransform) {
+          console.log(`WebColaLayout: Prior transform captured - k: ${this.priorTransform.k.toFixed(2)}, x: ${this.priorTransform.x.toFixed(2)}, y: ${this.priorTransform.y.toFixed(2)}`);
+        }
       }
     }
 
