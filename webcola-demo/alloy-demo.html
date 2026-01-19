@@ -211,8 +211,7 @@
         // Temporal state for multiple instances
         let alloyInstances = [];           // Array of all parsed Alloy instances
         let currentInstanceIndex = 0;      // Current instance being displayed
-        let priorPositions = null;         // Positions from the previous render for temporal consistency
-        let priorTransform = null;         // Zoom/pan transform from previous render for visual continuity
+        let priorState = null;             // Layout state from previous render (positions + transform)
         let parsedAlloyDatum = null;       // Cached parsed Alloy datum
         let cachedForgeEvaluator = null;   // Cached ForgeEvaluator
         let cachedLayoutSpec = null;       // Cached layout specification
@@ -307,8 +306,7 @@
                 // Store all instances for temporal exploration
                 alloyInstances = parsedAlloyDatum.instances;
                 currentInstanceIndex = 0;
-                priorPositions = null; // Reset prior positions when loading new data
-                priorTransform = null; // Reset prior transform when loading new data
+                priorState = null; // Reset prior state when loading new data
                 
                 // IMPORTANT: Reset projections when loading new data
                 // This ensures we start fresh and allow the layout to set defaults
@@ -495,14 +493,11 @@
             
             console.log(`Temporal explorer visible: prevBtn.disabled=${prevDisabled}, nextBtn.disabled=${nextDisabled}`);
 
-            // Update prior positions info
-            if (priorPositions && priorPositions.length > 0) {
-                const transformInfo = priorTransform 
-                    ? ` + transform (zoom ${priorTransform.k.toFixed(1)}x)` 
-                    : '';
-                priorInfo.textContent = `📍 ${priorPositions.length} prior positions${transformInfo}`;
+            // Update prior state info
+            if (priorState && priorState.positions.length > 0) {
+                priorInfo.textContent = `📍 ${priorState.positions.length} positions, zoom ${priorState.transform.k.toFixed(1)}x`;
             } else {
-                priorInfo.textContent = '📍 No prior positions (first render)';
+                priorInfo.textContent = '📍 No prior state (first render)';
             }
         }
 
@@ -522,34 +517,19 @@
 
             console.log(`Navigating from instance ${currentInstanceIndex + 1} to instance ${newIndex + 1}`);
 
-            // Store current positions as prior positions for the next render
+            // Capture current layout state before navigating
             const graphElement = document.getElementById('graph-container');
             const usePriorPositionsCheckbox = document.getElementById('usePriorPositions');
             
-            if (usePriorPositionsCheckbox.checked && graphElement.getNodePositionsWithTransform) {
-                // Use the transform-aware method to capture both positions and zoom state
-                const { positions, transform } = graphElement.getNodePositionsWithTransform();
-                if (positions && positions.length > 0) {
-                    priorPositions = positions;
-                    priorTransform = transform;
-                    console.log(`Stored ${priorPositions.length} prior positions with transform (k=${transform.k.toFixed(2)}, x=${transform.x.toFixed(2)}, y=${transform.y.toFixed(2)})`);
-                    
-                    // Log a few positions for debugging
-                    console.log('Sample prior positions:');
-                    priorPositions.slice(0, 5).forEach(p => {
-                        console.log(`  ${p.id}: x=${p.x.toFixed(2)}, y=${p.y.toFixed(2)}`);
-                    });
-                }
-            } else if (usePriorPositionsCheckbox.checked && graphElement.getNodePositions) {
-                // Fallback to legacy method without transform
-                const currentPositions = graphElement.getNodePositions();
-                if (currentPositions && currentPositions.length > 0) {
-                    priorPositions = currentPositions;
-                    priorTransform = null;
-                    console.log(`Stored ${priorPositions.length} prior positions (no transform captured)`);
+            if (usePriorPositionsCheckbox.checked && graphElement.getLayoutState) {
+                // Use the new cleaner API
+                const state = graphElement.getLayoutState();
+                if (state.positions && state.positions.length > 0) {
+                    priorState = state;
+                    console.log(`Captured layout state: ${state.positions.length} positions, zoom ${state.transform.k.toFixed(2)}x`);
                 }
             } else {
-                console.log('Prior positions disabled or not available');
+                console.log('Prior state disabled or not available');
             }
 
             currentInstanceIndex = newIndex;
@@ -612,27 +592,14 @@
 
                 updateStatus('Rendering Alloy graph with WebCola...', 'info');
                 
-                // Build render options with prior positions if available
+                // Build render options with prior state if available
                 const usePriorPositionsCheckbox = document.getElementById('usePriorPositions');
-                const shouldUsePriorPositions = usePriorPositionsCheckbox && usePriorPositionsCheckbox.checked;
+                const shouldUsePriorState = usePriorPositionsCheckbox && usePriorPositionsCheckbox.checked;
                 
                 const renderOptions = {};
-                if (shouldUsePriorPositions && priorPositions && priorPositions.length > 0) {
-                    renderOptions.priorPositions = priorPositions;
-                    
-                    // Include the transform if we captured it, for visual continuity across zoom/pan
-                    if (priorTransform) {
-                        renderOptions.priorTransform = priorTransform;
-                        console.log(`Rendering with ${priorPositions.length} prior positions and transform (k=${priorTransform.k.toFixed(2)})`);
-                    } else {
-                        console.log(`Rendering with ${priorPositions.length} prior positions (no transform)`);
-                    }
-                    
-                    // Log prior positions for debugging
-                    console.log('BEFORE (prior positions):');
-                    priorPositions.slice(0, 5).forEach(p => {
-                        console.log(`  ${p.id}: x=${p.x.toFixed(2)}, y=${p.y.toFixed(2)}`);
-                    });
+                if (shouldUsePriorState && priorState) {
+                    renderOptions.priorState = priorState;
+                    console.log(`Rendering with prior state: ${priorState.positions.length} positions, zoom ${priorState.transform.k.toFixed(2)}x`);
                 }
                 
                 // Use the real InstanceLayout data with WebCola custom element
@@ -777,8 +744,7 @@
             clearGraph();
             alloyInstances = [];
             currentInstanceIndex = 0;
-            priorPositions = null;
-            priorTransform = null;
+            priorState = null;
             parsedAlloyDatum = null;
             cachedForgeEvaluator = null;
             cachedLayoutSpec = null;
