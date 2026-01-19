@@ -3,6 +3,7 @@ import { ConstraintCard } from "./ConstraintCard";
 import { DirectiveCard } from "./DirectiveCard";
 import { ConstraintData, DirectiveData } from "./interfaces";
 import jsyaml from "js-yaml";
+import { normalizeConstraintParams, normalizeDirectiveParams } from "./paramDefaults";
 
 import "./NoCodeView.css";
 
@@ -152,12 +153,13 @@ export function parseLayoutSpecToData(yamlString: string): {
                 throw new Error(`Unsupported constraint type in YAML: ${JSON.stringify(constraint)}`);
             }
             const params = constraint[Object.keys(constraint)[0]];
+            const normalizedParams = normalizeConstraintParams(type, params as Record<string, unknown>);
 
             // Return structured constraint data with comment if present
             return {
                 id: generateId(),
                 type,
-                params,
+                params: normalizedParams,
                 comment: constraintComments.get(index),
             } as ConstraintData;
         })
@@ -182,12 +184,13 @@ export function parseLayoutSpecToData(yamlString: string): {
             if (!params || typeof params !== 'object') {
                 params = {};
             }
+            const normalizedParams = normalizeDirectiveParams(type, params as Record<string, unknown>);
 
             // Return structured directive data with comment if present
             return {
                 id: generateId(),
                 type,
-                params,
+                params: normalizedParams,
                 comment: directiveComments.get(index),
             } as DirectiveData;
         })
@@ -247,12 +250,17 @@ const NoCodeView = ({
     ) => {
         setConstraints((prevConstraints: ConstraintData[]) => prevConstraints.map((constraint: ConstraintData) => {
             if (constraint.id === constraintId) {
-                return {
+                const mergedParams = updates.params !== undefined 
+                    ? { ...constraint.params, ...updates.params }
+                    : constraint.params;
+                const mergedConstraint = {
                     ...constraint,
                     ...updates,
-                    params: updates.params !== undefined 
-                        ? { ...constraint.params, ...updates.params }
-                        : constraint.params
+                    params: mergedParams
+                };
+                return {
+                    ...mergedConstraint,
+                    params: normalizeConstraintParams(mergedConstraint.type, mergedConstraint.params as Record<string, unknown>)
                 };
             }
             return constraint;
@@ -331,17 +339,23 @@ const NoCodeView = ({
         directiveId: string, 
         updates: Partial<Omit<DirectiveData, 'id'>>
     ) => {
-        setDirectives((prevDirectives: DirectiveData[]) => prevDirectives.map((directive: DirectiveData) =>
-            directive.id === directiveId 
-            ? {
+        setDirectives((prevDirectives: DirectiveData[]) => prevDirectives.map((directive: DirectiveData) => {
+            if (directive.id !== directiveId) {
+                return directive;
+            }
+            const mergedParams = updates.params !== undefined
+                ? { ...directive.params, ...updates.params }
+                : directive.params;
+            const mergedDirective = {
                 ...directive,
                 ...updates,
-                params: updates.params !== undefined
-                    ? { ...directive.params, ...updates.params }
-                    : directive.params
-            }
-            : directive
-        ));
+                params: mergedParams
+            };
+            return {
+                ...mergedDirective,
+                params: normalizeDirectiveParams(mergedDirective.type, mergedDirective.params as Record<string, unknown>)
+            };
+        }));
     }, [setDirectives]);
 
     /**

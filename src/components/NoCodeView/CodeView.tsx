@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { ConstraintData, DirectiveData } from './interfaces';
 import jsyaml from 'js-yaml';
 import { parseLayoutSpec } from '../../layout/layoutspec';
+import { normalizeConstraintParams, normalizeDirectiveParams } from './paramDefaults';
 import './NoCodeView.css';
 
 /**
@@ -74,8 +75,9 @@ export function generateLayoutSpecYaml(
                 lines.push(`  # ${c.comment}`);
             }
             const yamlType = toYamlConstraintType(c.type);
+            const normalizedParams = normalizeConstraintParams(c.type, c.params as Record<string, unknown>);
             // Use flow style for the entire constraint object to keep it on one line
-            const constraintObj = { [yamlType]: c.params };
+            const constraintObj = { [yamlType]: normalizedParams };
             const constraintYaml = jsyaml.dump([constraintObj], { flowLevel: 2 }).trim();
             // Remove the leading "- " since we'll add our own formatting
             lines.push('  ' + constraintYaml);
@@ -92,12 +94,13 @@ export function generateLayoutSpecYaml(
             if (d.comment) {
                 lines.push(`  # ${d.comment}`);
             }
+            const normalizedParams = normalizeDirectiveParams(d.type, d.params as Record<string, unknown>);
             // HACK: Special case for flag directives
             if (d.type === "flag") {
-                const flagValue = d.params.flag as string || '';
+                const flagValue = normalizedParams.flag as string || '';
                 lines.push(`  - ${d.type}: ${flagValue}`);
             } else {
-                const directiveObj = { [d.type]: d.params };
+                const directiveObj = { [d.type]: normalizedParams };
                 const directiveYaml = jsyaml.dump([directiveObj], { flowLevel: 2 }).trim();
                 lines.push('  ' + directiveYaml);
             }
