@@ -282,6 +282,21 @@ interface DirectivesBlock {
     hideDisconnectedBuiltIns : boolean;
 }
 
+function assertPositiveSizeDimension(value: unknown, label: string): void {
+    if (value === undefined || value === null) {
+        return;
+    }
+
+    if (typeof value !== "number" || Number.isNaN(value) || value <= 0) {
+        throw new Error(`Size ${label} must be greater than 0`);
+    }
+}
+
+function assertValidSizeParams(size: Record<string, unknown>, context: string): void {
+    assertPositiveSizeDimension(size.width, `${context} width`);
+    assertPositiveSizeDimension(size.height, `${context} height`);
+}
+
 
 export interface LayoutSpec {
 
@@ -374,11 +389,14 @@ export function parseLayoutSpec(s: string): LayoutSpec {
           // Also extract size and hideAtom from constraints
           const typedConstraints = constraints as Record<string, any>[];
           sizesFromConstraints = typedConstraints.filter(c => c.size)
-            .map(c => ({
-                height: c.size.height,
-                width: c.size.width,
-                selector: c.size.selector
-            }));
+            .map(c => {
+                assertValidSizeParams(c.size, "constraint");
+                return {
+                    height: c.size.height,
+                    width: c.size.width,
+                    selector: c.size.selector
+                };
+            });
           
           hiddenAtomsFromConstraints = typedConstraints.filter(c => c.hideAtom)
             .map(c => ({
@@ -708,11 +726,12 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
 
     let sizes : AtomSizeDirective[] = typedDirectives.filter(d => d.size)
                 .map(d => {
+                    assertValidSizeParams(d.size, "directive");
                     return {
                         height: d.size.height,
                         width: d.size.width,
                         selector: d.size.selector
-                    }
+                    };
                 });
     
     let edgeColors : EdgeColorDirective[] = typedDirectives.filter(d => d.edgeColor)
