@@ -25,5 +25,7 @@ export type {
   NodeWithMetadata, 
   EdgeWithMetadata, 
   NodePositionHint, 
+  TransformInfo,
+  LayoutState,
   WebColaLayoutOptions 
 } from './webcola/webcolatranslator';

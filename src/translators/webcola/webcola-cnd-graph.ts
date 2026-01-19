@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator, NodePositionHint, WebColaLayoutOptions } from './webcolatranslator';
+import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator, NodePositionHint, TransformInfo, LayoutState, WebColaLayoutOptions } from './webcolatranslator';
 import { InstanceLayout, isAlignmentConstraint, isInstanceLayout, isLeftConstraint, isTopConstraint, LayoutNode } from '../../layout/interfaces';
 import type { GridRouter, Group, Layout, Node, Link } from 'webcola';
 import { IInputDataInstance, ITuple, IAtom } from '../../data-instance/interfaces';
@@ -1248,11 +1248,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * // First render
    * await graph.renderLayout(layout1);
    * 
-   * // Get positions from first render
-   * const positions = graph.getNodePositions();
+   * // Capture state before navigating
+   * const state = graph.getLayoutState();
    * 
-   * // Second render using prior positions for temporal consistency
-   * await graph.renderLayout(layout2, { priorPositions: positions });
+   * // Second render using prior state for visual continuity
+   * await graph.renderLayout(layout2, { priorState: state });
    * ```
    */
   public async renderLayout(instanceLayout: InstanceLayout, options?: WebColaLayoutOptions): Promise<void> {
@@ -1261,20 +1261,34 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       throw new Error('Invalid instance layout provided. Expected an InstanceLayout instance.');
     }
 
+    // Extract prior state if provided
+    const priorState = options?.priorState;
+    const hasPriorState = priorState && priorState.positions.length > 0;
+
     // Mark this as a new render - we'll fit viewport after layout completes
-    // Only reset if this is a completely new layout (no prior positions)
-    if (!options?.priorPositions) {
+    // Only reset if this is a completely new layout (no prior state)
+    if (!hasPriorState) {
       this.isInitialRender = true;
       this.userHasManuallyZoomed = false;
     }
     
-    // Reset zoom transform to identity for a fresh start (will be adjusted by fitViewportToContent)
+    // Handle zoom transform based on whether we have prior state to restore
     if (this.svg && this.zoomBehavior && d3) {
       try {
-        const identity = d3.zoomIdentity;
-        this.svg.call(this.zoomBehavior.transform, identity);
+        if (hasPriorState) {
+          // Restore the prior transform to maintain visual continuity
+          const transform = d3.zoomIdentity
+            .translate(priorState.transform.x, priorState.transform.y)
+            .scale(priorState.transform.k);
+          this.svg.call(this.zoomBehavior.transform, transform);
+          console.log(`WebCola: Restored prior state - ${priorState.positions.length} positions, zoom ${priorState.transform.k.toFixed(2)}x`);
+        } else {
+          // Reset zoom transform to identity for a fresh start (will be adjusted by fitViewportToContent)
+          const identity = d3.zoomIdentity;
+          this.svg.call(this.zoomBehavior.transform, identity);
+        }
       } catch (error) {
-        console.warn('Failed to reset zoom transform:', error);
+        console.warn('Failed to set zoom transform:', error);
       }
     }
 
@@ -1312,7 +1326,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       const containerWidth = containerRect.width || 800; // fallback to default
       const containerHeight = containerRect.height || 600; // fallback to default
 
-      // Translate to WebCola format with actual container dimensions and optional prior positions
+      // Translate to WebCola format with actual container dimensions and optional prior state
       const translator = new WebColaTranslator();
       const webcolaLayout = await translator.translate(instanceLayout, containerWidth, containerHeight, options);
 
@@ -1325,15 +1339,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       let userConstraintIters = WebColaCnDGraph.INITIAL_USER_CONSTRAINT_ITERATIONS;
       let allConstraintIters = WebColaCnDGraph.INITIAL_ALL_CONSTRAINTS_ITERATIONS;
       
-      // When prior positions are provided, minimize iterations to preserve positions.
+      // When prior state is provided, minimize iterations to preserve positions.
       // WebCola's unconstrained phase allows nodes to move freely from their initial positions,
       // so minimizing this phase helps preserve the provided positions.
       // This is crucial for temporal consistency across Alloy traces.
       //
       // Note: We manually compute node bounds in ensureNodeBounds() before edge routing,
       // so we don't need many iterations just for bounds computation.
-      const hasPriorPositions = options?.priorPositions && options.priorPositions.length > 0;
-      if (hasPriorPositions) {
+      if (hasPriorState) {
         // Use minimal iterations to preserve prior positions:
         // - 0 unconstrained: don't let nodes drift from prior positions
         // - 10 user constraint: apply position constraints quickly
@@ -1342,17 +1355,17 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         userConstraintIters = Math.min(10, userConstraintIters);
         allConstraintIters = Math.min(20, allConstraintIters);
         
-        console.log(`WebCola: Using minimal iterations (unconstrained=${unconstrainedIters}, userConstraint=${userConstraintIters}, allConstraints=${allConstraintIters}) to preserve ${options!.priorPositions!.length} prior positions`);
+        console.log(`WebCola: Using minimal iterations to preserve ${priorState!.positions.length} prior positions`);
       }
       
       if (nodeCount > 100) {
         // For large graphs (>100 nodes), reduce iterations more aggressively
-        unconstrainedIters = Math.max(hasPriorPositions ? 0 : 5, Math.floor(unconstrainedIters * 0.5));
+        unconstrainedIters = Math.max(hasPriorState ? 0 : 5, Math.floor(unconstrainedIters * 0.5));
         userConstraintIters = Math.max(25, Math.floor(userConstraintIters * 0.5));
         allConstraintIters = Math.max(100, Math.floor(allConstraintIters * 0.5));
       } else if (nodeCount > 50) {
         // For medium graphs (>50 nodes), reduce iterations moderately
-        unconstrainedIters = Math.max(hasPriorPositions ? 0 : 8, Math.floor(unconstrainedIters * 0.8));
+        unconstrainedIters = Math.max(hasPriorState ? 0 : 8, Math.floor(unconstrainedIters * 0.8));
         userConstraintIters = Math.max(40, Math.floor(userConstraintIters * 0.8));
         allConstraintIters = Math.max(150, Math.floor(allConstraintIters * 0.75));
       }
@@ -1369,19 +1382,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
       this.updateLoadingProgress('Applying constraints and initializing...');
 
-      // Use a higher convergence threshold when prior positions exist.
+      // Use a higher convergence threshold when prior state exists.
       // This allows the layout to converge faster, preserving prior positions better.
-      // 
-      // Default: 1e-3 (allows many iterations for full optimization)
-      // With priors: 0.1 (converges faster, prioritizing position preservation)
-      //
-      // Since we manually compute bounds in ensureNodeBounds(), we don't need
-      // many iterations just for bounds computation.
-      const convergenceThreshold = hasPriorPositions ? 0.1 : 1e-3;
-      
-      // if (hasPriorPositions) {
-      //   //console.log(`WebCola: Using convergence threshold ${convergenceThreshold} to preserve prior positions`);
-      // }
+      const convergenceThreshold = hasPriorState ? 0.1 : 1e-3;
 
       // Create WebCola layout using d3adaptor
       const layout: Layout = cola.d3adaptor(d3)
@@ -1521,6 +1524,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   /**
    * Get the current positions of all nodes in the layout.
    * Useful for reading coordinates after rendering or drag events.
+   * 
+   * Note: These positions are in the layout coordinate space, not screen space.
+   * For preserving visual continuity across renders, use `getLayoutState()` instead.
    */
   public getNodePositions(): Array<{ id: string; x: number; y: number }> {
     if (!this.currentLayout?.nodes) {
@@ -1531,6 +1537,53 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       x: n.x,
       y: n.y
     }));
+  }
+
+  /**
+   * Get the current zoom/pan transform state.
+   * 
+   * @returns The current transform with k (scale), x (translateX), and y (translateY)
+   */
+  public getCurrentTransform(): TransformInfo {
+    if (this.svg && this.svg.node()) {
+      try {
+        const transform = d3.zoomTransform(this.svg.node());
+        return {
+          k: transform.k,
+          x: transform.x,
+          y: transform.y
+        };
+      } catch (e) {
+        // Return identity transform if we can't get the current one
+        return { k: 1, x: 0, y: 0 };
+      }
+    }
+    return { k: 1, x: 0, y: 0 };
+  }
+
+  /**
+   * Get the complete layout state for preservation across renders.
+   * 
+   * This is the recommended method for capturing state when navigating between
+   * layouts (e.g., temporal sequences in Alloy). Pass the returned state to
+   * `renderLayout({ priorState: state })` to restore visual continuity.
+   * 
+   * @returns Complete layout state including positions and transform
+   * 
+   * @example
+   * ```typescript
+   * // Before navigating away, capture state
+   * const state = graph.getLayoutState();
+   * 
+   * // Later, render new layout preserving visual continuity
+   * await graph.renderLayout(newLayout, { priorState: state });
+   * ```
+   */
+  public getLayoutState(): LayoutState {
+    return {
+      positions: this.getNodePositions(),
+      transform: this.getCurrentTransform()
+    };
   }
 
   /**

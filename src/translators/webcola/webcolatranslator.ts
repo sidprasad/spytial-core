@@ -68,26 +68,59 @@ export interface NodePositionHint {
 }
 
 /**
+ * Transform information representing zoom/pan state.
+ * Used to normalize positions when the viewbox/zoom has changed between renders.
+ */
+export interface TransformInfo {
+  /** Scale factor (zoom level) */
+  k: number;
+  /** X translation (pan offset) */
+  x: number;
+  /** Y translation (pan offset) */
+  y: number;
+}
+
+/**
+ * Complete layout state snapshot that can be captured and restored.
+ * This bundles node positions with the zoom/pan transform for easy state management.
+ * 
+ * Use `graph.getLayoutState()` to capture and pass to `renderLayout({ priorState: ... })`
+ * 
+ * @example
+ * ```typescript
+ * // Capture current state before navigating
+ * const state = graph.getLayoutState();
+ * 
+ * // Later, restore it when rendering
+ * await graph.renderLayout(newLayout, { priorState: state });
+ * ```
+ */
+export interface LayoutState {
+  /** Node positions from the layout */
+  positions: NodePositionHint[];
+  /** Zoom/pan transform at time of capture */
+  transform: TransformInfo;
+}
+
+/**
  * Options for WebColaLayout configuration.
  * Allows customization of layout behavior, especially for temporal sequences.
  */
 export interface WebColaLayoutOptions {
   /**
-   * Position hints from a previous render.
+   * Layout state from a previous render.
    * 
-   * When provided, nodes with matching ids will start at these positions
-   * rather than using DAGRE-computed or default positions. WebCola uses
-   * these as initial positions for its descent algorithm.
+   * Preserves visual continuity between renders by restoring node positions
+   * and zoom/pan state. Use `graph.getLayoutState()` to capture this before
+   * navigating away, then pass it back when rendering the next layout.
    * 
-   * Additionally, when prior positions are provided, the unconstrained
-   * iterations phase is significantly reduced to prevent WebCola from
-   * moving nodes far from their initial positions. This helps maintain
-   * visual stability in temporal sequences where atoms remain stable
-   * but tuples change between instances.
-   * 
-   * @see WebColaCnDGraph.renderLayout for iteration adjustments
+   * @example
+   * ```typescript
+   * const state = graph.getLayoutState();
+   * await graph.renderLayout(newLayout, { priorState: state });
+   * ```
    */
-  priorPositions?: NodePositionHint[];
+  priorState?: LayoutState;
 }
 
 // WebCola constraint types
@@ -160,8 +193,9 @@ export class WebColaLayout {
 
     // Build a map of prior positions for O(1) lookup
     this.priorPositionMap = new Map();
-    if (options?.priorPositions) {
-      for (const hint of options.priorPositions) {
+    
+    if (options?.priorState?.positions) {
+      for (const hint of options.priorState.positions) {
         this.priorPositionMap.set(hint.id, hint);
       }
       if (typeof console !== 'undefined' && console.log) {
