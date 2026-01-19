@@ -8,3 +8,5 @@ export const GROUPING_SELECTOR_DESCRIPTION = "Group elements based on a selector
 export const GROUPING_FIELD_DESCRIPTION = "Group elements based on a field."
 export const SIZE_DESCRIPTION = "Set the width and height of elements matching the selector."
 export const HIDEATOM_DESCRIPTION = "Hide elements matching the selector from the visualization."
+export const DEFAULT_NODE_WIDTH = 100;
+export const DEFAULT_NODE_HEIGHT = 60;

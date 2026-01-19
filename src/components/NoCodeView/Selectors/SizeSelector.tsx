@@ -1,5 +1,5 @@
 import React from 'react';
-import { UNARY_SELECTOR_TEXT } from '../constants';
+import { DEFAULT_NODE_HEIGHT, DEFAULT_NODE_WIDTH, UNARY_SELECTOR_TEXT } from '../constants';
 import { DirectiveData, ConstraintData } from '../interfaces';
 import { SelectorInput, SelectorChangeEvent } from './SelectorInput';
 
@@ -26,8 +26,8 @@ export const SizeSelector: React.FC<SizeSelectorProps> = ({
   }
   
   const selector = (data.params.selector as string) || '';
-  const width = (data.params.width as number) || 10;
-  const height = (data.params.height as number) || 10;
+  const width = typeof data.params.width === 'number' ? data.params.width : DEFAULT_NODE_WIDTH;
+  const height = typeof data.params.height === 'number' ? data.params.height : DEFAULT_NODE_HEIGHT;
 
   const handleSelectorChange = (event: SelectorChangeEvent) => {
     onUpdate({ params: { ...data.params, selector: event.target.value } });
