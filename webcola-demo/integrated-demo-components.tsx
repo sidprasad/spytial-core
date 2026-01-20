@@ -130,7 +130,7 @@ export function mountIntegratedDemo() {
     layoutRoot.render(<ConnectedLayoutInterface />);
   }
 
-  console.log('✅ Integrated demo components mounted');
+  console.log('Integrated demo components mounted');
 }
 
 /**
@@ -165,14 +165,14 @@ export const FullIntegratedDemo: React.FC = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', padding: '20px' }}>
-      <h1>🚀 Full Integrated CND Demo</h1>
+      <h1>Full Integrated CND Demo</h1>
       
       {/* Tab Navigation */}
       <div style={{ display: 'flex', borderBottom: '2px solid #ddd', marginBottom: '20px' }}>
         {[
-          { key: 'builder' as const, label: '🏗️ Build Instance' },
-          { key: 'layout' as const, label: '🎨 Configure Layout' },
-          { key: 'visualization' as const, label: '📊 Visualize' }
+          { key: 'builder' as const, label: 'Build Instance' },
+          { key: 'layout' as const, label: 'Configure Layout' },
+          { key: 'visualization' as const, label: 'Visualize' }
         ].map(tab => (
           <button
             key={tab.key}
@@ -197,14 +197,14 @@ export const FullIntegratedDemo: React.FC = () => {
         {currentTab === 'builder' && (
           <>
             <div style={{ flex: 1 }}>
-              <h3>🏗️ Instance Builder</h3>
+              <h3>Instance Builder</h3>
               <InstanceBuilder
                 instance={instance}
                 onChange={handleInstanceChange}
               />
             </div>
             <div style={{ flex: 1 }}>
-              <h3>📊 Instance Summary</h3>
+              <h3>Instance Summary</h3>
               <div style={{ background: '#f8f9fa', padding: '15px', borderRadius: '4px' }}>
                 <p><strong>Atoms:</strong> {instance.getAtoms().length}</p>
                 <p><strong>Relations:</strong> {instance.getRelations().length}</p>
@@ -218,7 +218,7 @@ export const FullIntegratedDemo: React.FC = () => {
 
         {currentTab === 'layout' && (
           <div style={{ flex: 1 }}>
-            <h3>🎨 Layout Configuration</h3>
+            <h3>Layout Configuration</h3>
             <CndLayoutInterface
               yamlValue={cndSpec}
               onChange={setCndSpec}
@@ -234,7 +234,7 @@ export const FullIntegratedDemo: React.FC = () => {
 
         {currentTab === 'visualization' && (
           <div style={{ flex: 1 }}>
-            <h3>📊 Visualization</h3>
+            <h3>Visualization</h3>
             <div style={{ textAlign: 'center', padding: '40px' }}>
               <button
                 onClick={handleRenderGraph}
@@ -248,7 +248,7 @@ export const FullIntegratedDemo: React.FC = () => {
                   cursor: 'pointer'
                 }}
               >
-                🚀 Render Graph
+                Render Graph
               </button>
               <div style={{ 
                 marginTop: '20px',

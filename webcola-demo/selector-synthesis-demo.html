@@ -247,7 +247,7 @@
 </head>
 <body>
     <div class="header">
-        <h1>🔍 Selector Synthesis Demo</h1>
+        <h1>Selector Synthesis Demo</h1>
         <p>Generate simple-graph-query selectors from examples using Alloy XML instances</p>
     </div>
 
@@ -257,7 +257,7 @@
 
     <!-- Synthesis Type Selection -->
     <div class="section">
-        <div class="section-title">🎯 Synthesis Type</div>
+        <div class="section-title">Synthesis Type</div>
         <div class="synthesis-type-tabs">
             <div class="tab active" data-type="unary" onclick="setSynthesisType('unary')">
                 Unary Selector (Atoms)
@@ -270,19 +270,19 @@
 
     <!-- Example Management -->
     <div class="section">
-        <div class="section-title">📝 Examples</div>
+        <div class="section-title">Examples</div>
         <div id="examples-container" class="example-list">
             <!-- Examples will be added here dynamically -->
         </div>
         <div class="control-buttons">
-            <button onclick="addExample()">➕ Add Example</button>
-            <button class="btn-secondary" onclick="loadSampleData()">📦 Load Sample Data</button>
+            <button onclick="addExample()">Add Example</button>
+            <button class="btn-secondary" onclick="loadSampleData()">Load Sample Data</button>
         </div>
     </div>
 
     <!-- Synthesis Controls -->
     <div class="section">
-        <div class="section-title">⚙️ Synthesis Options</div>
+        <div class="section-title">Synthesis Options</div>
         <label>
             Max Depth (1-5):
             <input type="number" id="maxDepth" min="1" max="5" value="3" style="width: 80px; padding: 8px; border: 2px solid #dee2e6; border-radius: 6px; margin-left: 10px;">
@@ -290,14 +290,14 @@
         <div class="help-text">Higher depth allows more complex expressions but takes longer to compute</div>
         
         <div class="control-buttons">
-            <button class="btn-success" onclick="synthesize()">🔍 Synthesize Selector</button>
-            <button class="btn-danger" onclick="clearAll()">🗑️ Clear All</button>
+            <button class="btn-success" onclick="synthesize()">Synthesize Selector</button>
+            <button class="btn-danger" onclick="clearAll()">Clear All</button>
         </div>
     </div>
 
     <!-- Results -->
     <div class="section">
-        <div class="section-title">✨ Synthesized Selector</div>
+        <div class="section-title">Synthesized Selector</div>
         <div id="result" class="result-box">
             <em style="color: #6c757d;">Results will appear here after synthesis...</em>
         </div>
@@ -305,7 +305,7 @@
 
     <!-- Provenance/Why -->
     <div class="section" id="provenance-section" style="display: none;">
-        <div class="section-title">🔍 Synthesis Provenance</div>
+        <div class="section-title">Synthesis Provenance</div>
         <div class="help-text" style="margin-bottom: 15px;">
             Shows how the synthesizer built the expression and evaluated subexpressions on each example.
         </div>
@@ -366,7 +366,7 @@
                     throw new Error('Alloy parsing not available in CndCore');
                 }
                 
-                updateStatus('Synthesis pipeline ready! ✅', 'success');
+                updateStatus('Synthesis pipeline ready!', 'success');
                 return true;
             } catch (error) {
                 console.error('Failed to initialize pipeline:', error);
@@ -462,7 +462,7 @@
                         <div class="example-header">
                             <span class="example-label">Example ${idx + 1}</span>
                             <button class="btn-danger" style="padding: 6px 12px; font-size: 12px;" onclick="removeExample(${ex.id})">
-                                ✕ Remove
+                                Remove
                             </button>
                         </div>
                         
@@ -591,11 +591,11 @@
                 provenanceSection.style.display = 'block';
                 provenanceBox.textContent = JSON.stringify(synthesisResult, null, 2);
 
-                updateStatus('Synthesis complete! ✅', 'success');
+                updateStatus('Synthesis complete!', 'success');
             } catch (error) {
                 resultBox.className = 'result-box error-box';
                 resultBox.textContent = 'Error: ' + error.message;
-                updateStatus('Synthesis failed ❌', 'error');
+                updateStatus('Synthesis failed', 'error');
                 console.error('Synthesis error:', error);
             }
         };

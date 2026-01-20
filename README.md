@@ -103,6 +103,7 @@ npm install spytial-core
 ```
 
 - [View on npm](https://www.npmjs.com/package/spytial-core)
+- [Developer Guide](./docs/DEV_GUIDE.md)
 
 ---
 

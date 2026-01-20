@@ -133,7 +133,7 @@
 </head>
 <body>
     <div class="container border" id="main-panel">
-        <h1>🎯 WebCola Alloy Visualization Demo</h1>
+        <h1>WebCola Alloy Visualization Demo</h1>
         <p>This demonstrates the complete Alloy XML → AlloyDataInstance → ForgeEvaluator → Layout → WebCola pipeline.</p>
         <div>
             <!-- Editable Input Fields -->
@@ -151,7 +151,7 @@
                         <option value="default" selected>Standard</option>
                         <option value="grid">Grid (Beta)</option>
                     </select>
-                    <button id="screenshotButton" onclick="takeScreenshot()" title="Download graph as PNG image" aria-label="Screenshot graph" style="background-color: #28a745;">📷 Screenshot</button>
+                    <button id="screenshotButton" onclick="takeScreenshot()" title="Download graph as PNG image" aria-label="Screenshot graph" style="background-color: #28a745;">Screenshot</button>
                     <button id="clearGraphButton" onclick="clearGraph()" title="Clear the current graph visualization" aria-label="Clear graph">Clear</button>
                 </div>
                 <!-- Use the webcola-cnd-graph custom element -->
@@ -495,9 +495,9 @@
 
             // Update prior state info
             if (priorState && priorState.positions.length > 0) {
-                priorInfo.textContent = `📍 ${priorState.positions.length} positions, zoom ${priorState.transform.k.toFixed(1)}x`;
+                priorInfo.textContent = `${priorState.positions.length} positions, zoom ${priorState.transform.k.toFixed(1)}x`;
             } else {
-                priorInfo.textContent = '📍 No prior state (first render)';
+                priorInfo.textContent = 'No prior state (first render)';
             }
         }
 

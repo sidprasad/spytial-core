@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebCola JSON Visualization Demo</title>
+
+    <!-- Bootstrap CSS for component styling -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <style>
+        body {
+            display: flex;
+            font-family: Arial, sans-serif;
+            max-width: 90vw;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+            gap: 20px;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        #graph-container-wrapper {
+            position: relative;
+            width: 100%;
+            height: 600px;
+            margin: 20px 0;
+        }
+        #graph-container {
+            width: 100%;
+            height: 600px;
+            border: 2px solid #007acc;
+            border-radius: 8px;
+            display: block;
+        }
+        #graph-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 8px 12px;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+        button {
+            background-color: #007acc;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #005a9e;
+        }
+        #clearGraphButton {
+            background-color: red;
+        }
+        #clearGraphButton:hover {
+            background-color: rgb(200, 34, 34);
+        }
+        #applyLayoutButton {
+            font-size: 16px;
+        }
+        #applyLayoutButton:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        textarea {
+            width: 100%;
+            height: 200px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+        label {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 5px;
+        }
+        .status {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .status.info { background: #e3f2fd; color: #1976d2; }
+        .status.success { background: #e8f5e8; color: #2e7d32; }
+        .status.error { background: #ffebee; color: #c62828; }
+
+        @media (max-width: 768px) {
+            #graph-controls {
+                top: 5px;
+                right: 5px;
+                padding: 6px 8px;
+                gap: 6px;
+            }
+
+            #graph-controls #clearGraphButton {
+                padding: 4px 8px;
+                font-size: 12px;
+            }
+
+            #graph-controls #layoutFormat {
+                padding: 4px 6px;
+                font-size: 12px;
+                min-width: 80px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container border" id="main-panel">
+        <h1>WebCola JSON Visualization Demo</h1>
+        <p>This demonstrates the complete JSON → JSONDataInstance → SGraphQueryEvaluator → Layout → WebCola pipeline.</p>
+        <div>
+            <div>
+                <label for="webcola-json">JSON Data Instance:</label>
+                <textarea id="webcola-json" placeholder='{
+  "atoms": [
+    { "id": "p1", "label": "Alice", "type": "Person" },
+    { "id": "p2", "label": "Bob", "type": "Person" }
+  ],
+  "relations": [
+    {
+      "name": "friend",
+      "tuples": [
+        ["p1", "p2"]
+      ]
+    }
+  ]
+}'></textarea>
+            </div>
+            <div id="status" class="status info">Ready to load JSON graph...</div>
+            <div id="error-messages"></div>
+            <div id="graph-container-wrapper">
+                <div id="graph-controls">
+                    <select title="Choose the Layout Format" class="form-select form-select-sm" id="layoutFormat" name="layoutFormat" onchange="changeLayoutFormat()" aria-label="Layout format selection">
+                        <option value="default" selected>Standard</option>
+                        <option value="grid">Grid (Beta)</option>
+                    </select>
+                    <button id="screenshotButton" onclick="takeScreenshot()" title="Download graph as PNG image" aria-label="Screenshot graph" style="background-color: #28a745;">Screenshot</button>
+                    <button id="clearGraphButton" onclick="clearGraph()" title="Clear the current graph visualization" aria-label="Clear graph">Clear</button>
+                </div>
+                <webcola-cnd-graph
+                    id="graph-container"
+                    width="800"
+                    height="600"
+                    layoutFormat="default"
+                    aria-label="Interactive graph visualization">
+                </webcola-cnd-graph>
+            </div>
+        </div>
+    </div>
+    <div id="cnd-panel" class="container d-flex flex-column col-md-4 border p-3">
+        <h5 class="h5 mb-2 text-dark">CND Layout Specification:</h5>
+        <button id="applyLayoutButton" class="mb-3" onclick="loadGraph()">Apply Layout</button>
+        <div id="webcola-cnd-container">
+            <!-- React element attached here -->
+        </div>
+    </div>
+
+    <!-- D3 v4 and WebCola - the working combination -->
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="../vendor/cola.js"></script>
+
+    <!-- Complete CND-Core browser bundle -->
+    <script src="../dist/browser/spytial-core-complete.global.js"></script>
+
+    <!-- Your React component bundle (includes React runtime) -->
+    <script src="../dist/components/react-component-integration.global.js"></script>
+    <link rel="stylesheet" href="../dist/components/react-component-integration.css">
+    <script>
+        let currentInstanceLayout = null;
+        let cachedEvaluator = null;
+        let cachedLayoutSpec = null;
+        let cachedInstance = null;
+
+        function getCurrentJsonText() {
+            return document.getElementById('webcola-json').value.trim();
+        }
+
+        function getCurrentCNDSpec() {
+            return window.getCurrentCNDSpecFromReact ?
+                window.getCurrentCNDSpecFromReact() :
+                document.getElementById('webcola-cnd')?.value?.trim();
+        }
+
+        function updateStatus(message, type = 'info') {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = message;
+            statusElement.className = `status ${type}`;
+        }
+
+        async function initializePipeline() {
+            try {
+                console.log('Complete CND-Core browser bundle loaded successfully');
+                console.log('Available on global CndCore:', Object.keys(CndCore));
+
+                console.log('JSONDataInstance available:', !!CndCore.JSONDataInstance);
+                console.log('SGraphQueryEvaluator available:', !!CndCore.SGraphQueryEvaluator);
+                console.log('LayoutInstance available:', !!CndCore.LayoutInstance);
+                console.log('parseLayoutSpec available:', !!CndCore.parseLayoutSpec);
+
+                updateStatus('JSON pipeline ready! Enter JSON data and CND specifications now.', 'success');
+                return true;
+            } catch (error) {
+                console.error('Failed to initialize JSON pipeline:', error);
+                updateStatus(`Pipeline init failed: ${error.message}`, 'error');
+                return false;
+            }
+        }
+
+        async function loadJsonData() {
+            try {
+                updateStatus('Processing JSON data with SGraphQueryEvaluator...', 'info');
+
+                const jsonText = getCurrentJsonText();
+                if (!jsonText) {
+                    throw new Error('Please enter a JSON data instance');
+                }
+
+                const cndSpec = getCurrentCNDSpec() || '';
+
+                console.log('Using JSON data:', jsonText.substring(0, 200) + '...');
+                console.log('Using CND Spec:', cndSpec.substring(0, 200) + '...');
+
+                updateStatus('Parsing JSON data...', 'info');
+                cachedInstance = new CndCore.JSONDataInstance(jsonText);
+
+                updateStatus('Creating SGraphQueryEvaluator...', 'info');
+                cachedEvaluator = new CndCore.SGraphQueryEvaluator();
+                cachedEvaluator.initialize({ sourceData: cachedInstance });
+
+                updateStatus('Parsing layout specification...', 'info');
+                try {
+                    cachedLayoutSpec = CndCore.parseLayoutSpec(cndSpec);
+                    if (window.clearAllErrors) {
+                        window.clearAllErrors();
+                    }
+                } catch (error) {
+                    console.error('Layout spec parse error:', error);
+                    if (window.showParseError) {
+                        window.showParseError(error.message, 'Layout Specification');
+                    } else {
+                        updateStatus(`Layout spec parse error: ${error.message}`, 'error');
+                    }
+                    return;
+                }
+
+                await generateLayout();
+
+                updateStatus('JSON pipeline complete! Graph is ready to render.', 'success');
+            } catch (error) {
+                console.error('Failed to load JSON data:', error);
+                updateStatus(`JSON data loading failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function generateLayout() {
+            if (!cachedInstance || !cachedEvaluator || !cachedLayoutSpec) {
+                throw new Error('Missing required data for layout generation');
+            }
+
+            updateStatus('Creating layout...', 'info');
+            const ENABLE_ALIGNMENT_EDGES = true;
+
+            const layoutInstance = new CndCore.LayoutInstance(
+                cachedLayoutSpec,
+                cachedEvaluator,
+                0,
+                ENABLE_ALIGNMENT_EDGES
+            );
+
+            updateStatus('Generating layout with JSON data...', 'info');
+            const layoutResult = layoutInstance.generateLayout(cachedInstance, {});
+            currentInstanceLayout = layoutResult.layout;
+
+            if (layoutResult.error) {
+                console.error('Layout generation error:', layoutResult.error);
+                if (window.showGeneralError) {
+                    window.showGeneralError(`Layout generation error: ${layoutResult.error.message}`);
+                } else {
+                    updateStatus(`Layout generation error: ${layoutResult.error.message}`, 'error');
+                }
+
+                const webcolaGraphElement = document.getElementById('graph-container');
+                webcolaGraphElement.setAttribute('unsat', '');
+                return;
+            }
+
+            const webcolaGraphElement = document.getElementById('graph-container');
+            webcolaGraphElement.removeAttribute('unsat');
+
+            if (window.clearAllErrors) {
+                window.clearAllErrors();
+            }
+        }
+
+        async function renderGraph() {
+            const graphElement = document.getElementById('graph-container');
+
+            try {
+                if (!currentInstanceLayout) {
+                    if (cachedInstance && cachedEvaluator && cachedLayoutSpec) {
+                        await generateLayout();
+                    } else {
+                        updateStatus('No layout data available. Processing JSON data first...', 'info');
+                        await loadJsonData();
+                    }
+
+                    if (!currentInstanceLayout) {
+                        console.warn('No layout data available to render (likely due to constraint errors)');
+                        return;
+                    }
+                }
+
+                if (graphElement.clear) {
+                    graphElement.clear();
+                } else {
+                    const svg = graphElement.shadowRoot?.querySelector('svg');
+                    if (svg) {
+                        const container = svg.querySelector('.zoomable');
+                        if (container) {
+                            container.innerHTML = '';
+                        }
+                    }
+                }
+
+                updateStatus('Rendering JSON graph with WebCola...', 'info');
+                await graphElement.renderLayout(currentInstanceLayout);
+
+                updateStatus('Graph rendered successfully!', 'success');
+            } catch (error) {
+                console.error('Error rendering JSON graph:', error);
+                updateStatus(`JSON render error: ${error.message}`, 'error');
+            }
+        }
+
+        async function takeScreenshot() {
+            const graphElement = document.getElementById('graph-container');
+            const svg = graphElement.shadowRoot?.querySelector('svg');
+
+            if (!svg) {
+                updateStatus('No graph to capture. Load a graph first.', 'error');
+                return;
+            }
+
+            try {
+                updateStatus('Generating screenshot...', 'info');
+
+                const svgClone = svg.cloneNode(true);
+
+                const viewBox = svg.getAttribute('viewBox');
+                const width = svg.getAttribute('width') || svg.clientWidth || 800;
+                const height = svg.getAttribute('height') || svg.clientHeight || 600;
+
+                svgClone.setAttribute('width', width);
+                svgClone.setAttribute('height', height);
+                if (viewBox) {
+                    svgClone.setAttribute('viewBox', viewBox);
+                }
+
+                const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                bgRect.setAttribute('width', '100%');
+                bgRect.setAttribute('height', '100%');
+                bgRect.setAttribute('fill', 'white');
+                svgClone.insertBefore(bgRect, svgClone.firstChild);
+
+                const serializer = new XMLSerializer();
+                const svgString = serializer.serializeToString(svgClone);
+
+                const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+                const url = URL.createObjectURL(svgBlob);
+
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const scale = 2;
+                    canvas.width = img.width * scale;
+                    canvas.height = img.height * scale;
+
+                    const ctx = canvas.getContext('2d');
+                    ctx.scale(scale, scale);
+                    ctx.fillStyle = 'white';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0);
+
+                    canvas.toBlob(function(blob) {
+                        const downloadUrl = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = downloadUrl;
+
+                        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+                        link.download = `graph-screenshot-${timestamp}.png`;
+
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+
+                        URL.revokeObjectURL(downloadUrl);
+                        URL.revokeObjectURL(url);
+
+                        updateStatus('Screenshot saved!', 'success');
+                    }, 'image/png');
+                };
+
+                img.onerror = function() {
+                    updateStatus('Failed to generate screenshot.', 'error');
+                    URL.revokeObjectURL(url);
+                };
+
+                img.src = url;
+            } catch (error) {
+                console.error('Screenshot error:', error);
+                updateStatus(`Screenshot failed: ${error.message}`, 'error');
+            }
+        }
+
+        function clearGraph() {
+            const graphElement = document.getElementById('graph-container');
+
+            console.log('clearGraph: Clearing visualization and resetting layout state');
+
+            if (graphElement.clear) {
+                graphElement.clear();
+            } else {
+                const svg = graphElement.shadowRoot?.querySelector('svg');
+                if (svg) {
+                    const container = svg.querySelector('.zoomable');
+                    if (container) {
+                        container.innerHTML = '';
+                    }
+                }
+            }
+
+            currentInstanceLayout = null;
+            cachedInstance = null;
+            cachedEvaluator = null;
+            cachedLayoutSpec = null;
+
+            updateStatus('Graph cleared.', 'info');
+        }
+
+        async function loadGraph() {
+            try {
+                await loadJsonData();
+                await renderGraph();
+            } catch (error) {
+                console.error('Failed to load and render JSON graph:', error);
+                updateStatus(`Failed to load JSON graph: ${error.message}`, 'error');
+            }
+        }
+
+        async function changeLayoutFormat() {
+            const graphElement = document.getElementById('graph-container');
+            const layoutFormat = document.getElementById('layoutFormat').value;
+            graphElement.setAttribute('layoutFormat', layoutFormat);
+            console.log(`Layout format changed to: ${layoutFormat}`);
+
+            try {
+                if (!currentInstanceLayout) {
+                    throw new Error('No layout data available. Please load a JSON graph first.');
+                }
+                await graphElement.renderLayout(currentInstanceLayout);
+                updateStatus('Graph layout changed successfully!', 'success');
+            } catch (error) {
+                console.error('Error rendering graph:', error);
+                updateStatus(`Render error: ${error.message}`, 'error');
+            }
+        }
+
+        window.addEventListener('load', () => {
+            initializePipeline();
+            if (window.mountCndLayoutInterface) {
+                window.mountCndLayoutInterface();
+            }
+
+            if (window.mountErrorMessageModal) {
+                window.mountErrorMessageModal();
+            }
+        });
+
+        window.loadGraph = loadGraph;
+        window.loadJsonData = loadJsonData;
+        window.renderGraph = renderGraph;
+        window.clearGraph = clearGraph;
+    </script>
+</body>
+</html>
