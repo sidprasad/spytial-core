@@ -185,51 +185,51 @@
         });
 
         function initializeDemo() {
-            console.log('🔧 Initializing Structured Input Graph demo...');
+            console.log('Initializing Structured Input Graph demo...');
             
             currentGraph = document.getElementById('structured-graph');
             
             if (!currentGraph) {
-                showStatus('❌ Structured Input Graph element not found', 'error');
+                showStatus('Structured Input Graph element not found', 'error');
                 return;
             }
 
             // Create empty Alloy data instance
             currentInstance = CndCore.createEmptyAlloyDataInstance();
-            console.log('📦 Created empty Alloy data instance');
+            console.log('Created empty Alloy data instance');
             
             // Set data instance on the graph  
             if (typeof currentGraph.setDataInstance === 'function') {
                 currentGraph.setDataInstance(currentInstance);
-                console.log('✅ Empty Alloy data instance set on graph');
+                console.log('Empty Alloy data instance set on graph');
             } else {
-                console.warn('⚠️ setDataInstance method not available');
+                console.warn('setDataInstance method not available');
             }
 
             // Listen for events
             currentGraph.addEventListener('atom-added', (event) => {
-                console.log('🔵 Atom added:', event.detail);
-                showStatus(`✅ Added atom: ${event.detail.atom.label} (${event.detail.atom.type})`, 'success');
+                console.log('Atom added:', event.detail);
+                showStatus(`Added atom: ${event.detail.atom.label} (${event.detail.atom.type})`, 'success');
             });
 
             currentGraph.addEventListener('data-exported', (event) => {
-                console.log('📤 Data exported:', event.detail);
-                showStatus('✅ Data exported - check export section in panel', 'success');
+                console.log('Data exported:', event.detail);
+                showStatus('Data exported - check export section in panel', 'success');
             });
 
             currentGraph.addEventListener('spec-loaded', (event) => {
-                console.log('📋 Spec loaded:', event.detail);
-                showStatus('✅ CnD specification loaded successfully', 'success');
+                console.log('Spec loaded:', event.detail);
+                showStatus('CnD specification loaded successfully', 'success');
             });
 
             currentGraph.addEventListener('edge-creation-requested', (event) => {
-                console.log('🔗 Edge creation requested:', event.detail);
-                showStatus(`✅ Edge created: ${event.detail.relationId}`, 'success');
+                console.log('Edge creation requested:', event.detail);
+                showStatus(`Edge created: ${event.detail.relationId}`, 'success');
             });
 
             currentGraph.addEventListener('constraint-error', (event) => {
-                console.warn('⚠️ Constraint error:', event.detail);
-                showStatus(`⚠️ Constraint violation: ${event.detail.error.message}`, 'error');
+                console.warn('Constraint error:', event.detail);
+                showStatus(`Constraint violation: ${event.detail.error.message}`, 'error');
                 
                 // Show which constraints failed
                 if (event.detail.error.unsatCore) {
@@ -238,12 +238,12 @@
             });
 
             currentGraph.addEventListener('constraints-satisfied', (event) => {
-                console.log('✅ Constraints satisfied:', event.detail);
-                showStatus('✅ All CnD constraints satisfied', 'success');
+                console.log('Constraints satisfied:', event.detail);
+                showStatus('All CnD constraints satisfied', 'success');
             });
 
             isComponentReady = true;
-            showStatus('✅ Structured Input Graph demo ready! Paste Alloy instance data above to begin.', 'success');
+            showStatus('Structured Input Graph demo ready! Paste Alloy instance data above to begin.', 'success');
             updateSpecDisplay('No instance loaded - paste Alloy data above');
         }
 
@@ -266,7 +266,7 @@
 
         function loadInstanceData() {
             if (!isComponentReady) {
-                showStatus('❌ Component not ready yet', 'error');
+                showStatus('Component not ready yet', 'error');
                 return;
             }
 
@@ -274,7 +274,7 @@
             const instanceData = instanceInput.value.trim();
             
             if (!instanceData) {
-                showStatus('❌ Please paste Alloy instance data', 'error');
+                showStatus('Please paste Alloy instance data', 'error');
                 return;
             }
 
@@ -292,7 +292,7 @@
                 const relationCount = currentInstance.getRelations().length;
                 
                 updateSpecDisplay(`Loaded: ${atomCount} atoms, ${relationCount} relations`);
-                showStatus(`✅ Loaded Alloy instance with ${atomCount} atoms and ${relationCount} relations`, 'success');
+                showStatus(`Loaded Alloy instance with ${atomCount} atoms and ${relationCount} relations`, 'success');
                 
                 console.log('Loaded instance:', {
                     atoms: currentInstance.getAtoms(),
@@ -300,14 +300,14 @@
                 });
             } catch (error) {
                 console.log(currentInstance);
-                showStatus(`❌ Error parsing Alloy instance: ${error.message}`, 'error');
+                showStatus(`Error parsing Alloy instance: ${error.message}`, 'error');
                 console.error('Instance parsing error:', error);
             }
         }
 
         function loadCustomSpec() {
             if (!isComponentReady) {
-                showStatus('❌ Component not ready yet', 'error');
+                showStatus('Component not ready yet', 'error');
                 return;
             }
 
@@ -315,24 +315,24 @@
             const customSpec = specInput.value.trim();
             
             if (!customSpec) {
-                showStatus('❌ Please enter a CnD specification', 'error');
+                showStatus('Please enter a CnD specification', 'error');
                 return;
             }
 
             try {
                 // Load the spec - this will be enforced on all future data changes
                 currentGraph.setCnDSpec(customSpec);
-                showStatus('✅ CnD spec loaded - will be enforced on all data changes', 'success');
+                showStatus('CnD spec loaded - will be enforced on all data changes', 'success');
                 console.log('CnD spec loaded. Constraints will be automatically enforced on every data operation.');
             } catch (error) {
-                showStatus(`❌ Error loading spec: ${error.message}`, 'error');
+                showStatus(`Error loading spec: ${error.message}`, 'error');
                 console.error('Spec loading error:', error);
             }
         }
 
         function clearGraph() {
             if (!isComponentReady) {
-                showStatus('❌ Component not ready yet', 'error');
+                showStatus('Component not ready yet', 'error');
                 return;
             }
 
@@ -344,13 +344,13 @@
             document.getElementById('instance-input').value = '';
             
             updateSpecDisplay('Graph cleared - paste Alloy data to begin');
-            showStatus('✅ Graph cleared', 'success');
+            showStatus('Graph cleared', 'success');
         }
 
         // Error handling
         window.addEventListener('error', (event) => {
             console.error('Global error:', event.error);
-            showStatus(`❌ Error: ${event.error.message}`, 'error');
+            showStatus(`Error: ${event.error.message}`, 'error');
         });
     </script>
 </body>

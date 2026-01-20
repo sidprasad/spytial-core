@@ -790,14 +790,14 @@ export function mountCndLayoutInterface(
     root.render(<CndLayoutInterfaceWrapper config={config} />);
 
     if (config) {
-      console.log(`✅ CnD Layout Interface mounted to #${containerId} with initial config:`, {
+      console.log(`CnD Layout Interface mounted to #${containerId} with initial config:`, {
         yamlValue: config.initialYamlValue ? `${config.initialYamlValue.length} characters` : 'none',
         isNoCodeView: config.initialIsNoCodeView ?? 'default',
         constraints: config.initialConstraints?.length ?? 0,
         directives: config.initialDirectives?.length ?? 0
       });
     } else {
-      console.log(`✅ CnD Layout Interface mounted to #${containerId}`);
+      console.log(`CnD Layout Interface mounted to #${containerId}`);
     }
     return true;
   } catch (error) {
@@ -834,7 +834,7 @@ export function mountInstanceBuilder(containerId: string = 'instance-builder-con
   try {
     const root = createRoot(container);
     root.render(<InstanceBuilderWrapper />);
-    console.log(`✅ Instance Builder mounted to #${containerId}`);
+    console.log(`Instance Builder mounted to #${containerId}`);
 
     // Expose instance update function globally for legacy compatibility
     (window as any).updateBuilderInstance = (newInstance: IInputDataInstance) => {
@@ -939,14 +939,14 @@ export function mountPyretRepl(
     root.render(<PyretReplInterfaceWrapper config={config} />);
 
     if (config) {
-      console.log(`✅ Pyret REPL mounted to #${containerId} with config:`, {
+      console.log(`Pyret REPL mounted to #${containerId} with config:`, {
         hasInitialInstance: !!config.initialInstance,
         hasExternalEvaluator: !!config.externalEvaluator,
         disabled: config.disabled ?? false,
         className: config.className ?? 'default'
       });
     } else {
-      console.log(`✅ Pyret REPL mounted to #${containerId}`);
+      console.log(`Pyret REPL mounted to #${containerId}`);
     }
 
     // Expose Pyret-specific functions globally for legacy compatibility
@@ -1007,7 +1007,7 @@ export function mountReplWithVisualization(
     root.render(<ReplWithVisualizationWrapper config={config} />);
 
     if (config) {
-      console.log(`✅ REPL with Visualization mounted to #${containerId} with config:`, {
+      console.log(`REPL with Visualization mounted to #${containerId} with config:`, {
         hasInitialInstance: !!config.initialInstance,
         initialCndSpec: config.initialCndSpec ? `${config.initialCndSpec.length} characters` : 'none',
         showLayoutInterface: config.showLayoutInterface ?? true,
@@ -1015,7 +1015,7 @@ export function mountReplWithVisualization(
         visualizationHeight: config.visualizationHeight ?? '400px'
       });
     } else {
-      console.log(`✅ REPL with Visualization mounted to #${containerId}`);
+      console.log(`REPL with Visualization mounted to #${containerId}`);
     }
 
     return true;
@@ -1053,7 +1053,7 @@ export function mountErrorMessageModal(containerId: string = 'error-messages'): 
   try {
     const root = createRoot(container);
     root.render(<ErrorMessageContainer errorManager={globalErrorManager} />);
-    console.log(`✅ Error Modal mounted to #${containerId}`);
+    console.log(`Error Modal mounted to #${containerId}`);
     return true;
   } catch (error) {
     console.error('Failed to mount Error Modal:', error);
@@ -1081,7 +1081,7 @@ export function mountEvaluatorRepl(containerId: string, evaluator: IEvaluator, i
   try {
     const root = createRoot(container);
     root.render(<EvaluatorRepl evaluator={evaluator} instanceNumber={instanceNumber}/>);
-    console.log(`✅ Evaluator REPL mounted to #${containerId}`);
+    console.log(`Evaluator REPL mounted to #${containerId}`);
     return true;
   } catch (error) {
     console.error('Failed to mount Evaluator REPL:', error);
@@ -1105,7 +1105,7 @@ export function mountRelationHighlighter(containerId: string, graphElementId: st
   try {
     const root = createRoot(container);
     root.render(<RelationHighlighter graphElementId={graphElementId}/>);
-    console.log(`✅ Relation Highlighter mounted to #${containerId}`);
+    console.log(`Relation Highlighter mounted to #${containerId}`);
     return true;
   } catch (error) {
     console.error('Failed to mount Relation Highlighter:', error);
@@ -1133,7 +1133,7 @@ export function mountAllComponents(): {
   instanceBuilder: boolean;
   errorModal: boolean;
 } {
-  console.log('🚀 Mounting all CnD components...');
+  console.log('Mounting all CnD components...');
   
   const results = {
     layoutInterface: mountCndLayoutInterface(),
@@ -1142,7 +1142,7 @@ export function mountAllComponents(): {
   };
 
   const successCount = Object.values(results).filter(Boolean).length;
-  console.log(`✅ Successfully mounted ${successCount}/3 CnD components`);
+  console.log(`Successfully mounted ${successCount}/3 CnD components`);
   
   return results;
 }
@@ -1219,7 +1219,7 @@ export function mountAllComponentsWithPyret(): {
   replWithVisualization: boolean;
   combinedInput: boolean;
 } {
-  console.log('🚀 Mounting all CnD components with Pyret REPL and Combined Input...');
+  console.log('Mounting all CnD components with Pyret REPL and Combined Input...');
   
   const results = {
     layoutInterface: mountCndLayoutInterface(),
@@ -1231,7 +1231,7 @@ export function mountAllComponentsWithPyret(): {
   };
 
   const successCount = Object.values(results).filter(Boolean).length;
-  console.log(`✅ Successfully mounted ${successCount}/6 CnD components with Pyret integration and Combined Input`);
+  console.log(`Successfully mounted ${successCount}/6 CnD components with Pyret integration and Combined Input`);
   
   return results;
 }
@@ -1466,7 +1466,7 @@ export function mountProjectionControls(
 
     const root = createRoot(container);
     root.render(<ProjectionControlsWrapper />);
-    console.log(`✅ Projection Controls mounted to #${containerId}`);
+    console.log(`Projection Controls mounted to #${containerId}`);
     return true;
   } catch (error) {
     console.error('Failed to mount Projection Controls:', error);
@@ -1728,5 +1728,5 @@ if (typeof window !== 'undefined') {
   (window as any).showGeneralError = ErrorAPI.showGeneralError;
   (window as any).clearAllErrors = ErrorAPI.clearAllErrors;
 
-  console.log('🎉 CnD-Core CDN integration ready! Use window.CnDCore to access all features including Pyret REPL.');
+  console.log('CnD-Core CDN integration ready! Use window.CnDCore to access all features including Pyret REPL.');
 }
