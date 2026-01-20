@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JavaScript Evaluator Demo</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      margin: 0;
+      padding: 20px;
+    }
+    .page {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1.1fr;
+      gap: 20px;
+    }
+    .panel {
+      background: #fff;
+      padding: 16px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+    .panel h2 {
+      margin-top: 0;
+      font-size: 18px;
+    }
+    textarea {
+      width: 100%;
+      min-height: 180px;
+      font-family: "Courier New", monospace;
+      font-size: 12px;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      resize: vertical;
+      box-sizing: border-box;
+    }
+    .button-row {
+      margin: 10px 0 16px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    button {
+      background: #1f77b4;
+      color: #fff;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    button.secondary {
+      background: #6c757d;
+    }
+    .status {
+      font-size: 12px;
+      padding: 8px 10px;
+      border-radius: 4px;
+      background: #eef2f7;
+      color: #2b3a55;
+      margin-top: 10px;
+    }
+    .status.error {
+      background: #ffe9e9;
+      color: #7a1f1f;
+    }
+    .example-list {
+      background: #f7f7f7;
+      border: 1px solid #e2e2e2;
+      padding: 10px;
+      border-radius: 4px;
+      font-family: "Courier New", monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+    }
+    #graph-container {
+      width: 100%;
+      height: 540px;
+      border: 2px solid #1f77b4;
+      border-radius: 6px;
+    }
+    @media (max-width: 980px) {
+      .page {
+        grid-template-columns: 1fr;
+      }
+      #graph-container {
+        height: 420px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="panel">
+      <h2>JavaScript Evaluator</h2>
+      <p>
+        JS selectors execute with <code>context</code>, <code>data</code>, <code>instance</code>,
+        <code>atoms</code>, <code>relations</code>, <code>types</code>, and <code>config</code> in scope.
+      </p>
+      <div>
+        <label for="data-input"><strong>JSON data instance</strong></label>
+        <textarea id="data-input"></textarea>
+      </div>
+      <div class="button-row">
+        <button onclick="loadData()">Load Data</button>
+        <button class="secondary" onclick="resetDemo()">Reset Demo</button>
+      </div>
+      <div>
+        <label for="spec-input"><strong>CnD layout spec (selectors are JS expressions)</strong></label>
+        <textarea id="spec-input"></textarea>
+      </div>
+      <div class="button-row">
+        <button onclick="applyLayout()">Apply Layout</button>
+      </div>
+      <div id="status" class="status">Ready.</div>
+
+      <h3>Example selectors</h3>
+      <div class="example-list" id="example-list"></div>
+
+      <h3>Evaluator REPL</h3>
+      <div id="evaluator-repl-mount"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Graph</h2>
+      <webcola-cnd-graph id="graph-container" width="900" height="540" layoutFormat="default"></webcola-cnd-graph>
+    </div>
+  </div>
+
+  <script src="https://d3js.org/d3.v4.min.js"></script>
+  <script src="../vendor/cola.js"></script>
+  <script src="../dist/browser/spytial-core-complete.global.js"></script>
+  <script src="../dist/components/react-component-integration.global.js"></script>
+  <link rel="stylesheet" href="../dist/components/react-component-integration.css">
+  <script>
+    const defaultData = `{
+  "atoms": [
+    { "id": "Alice", "type": "Person", "label": "Alice" },
+    { "id": "Bob", "type": "Person", "label": "Bob" },
+    { "id": "Charlie", "type": "Person", "label": "Charlie" },
+    { "id": "Paris", "type": "City", "label": "Paris" }
+  ],
+  "relations": [
+    {
+      "id": "friend",
+      "name": "friend",
+      "types": ["Person", "Person"],
+      "tuples": [
+        { "atoms": ["Alice", "Bob"], "types": ["Person", "Person"] },
+        { "atoms": ["Bob", "Charlie"], "types": ["Person", "Person"] }
+      ]
+    },
+    {
+      "id": "livesIn",
+      "name": "livesIn",
+      "types": ["Person", "City"],
+      "tuples": [
+        { "atoms": ["Alice", "Paris"], "types": ["Person", "City"] },
+        { "atoms": ["Charlie", "Paris"], "types": ["Person", "City"] }
+      ]
+    }
+  ]
+}`;
+
+    const defaultSpec = `constraints:
+  - align: { direction: horizontal, selector: "atoms.filter(a => a.type === 'Person').map(a => a.id)" }
+  - orientation: { directions: [left], selector: "relations.find(r => r.id === 'friend')?.tuples.map(t => t.atoms) || []" }
+
+directives:
+  - atomColor: { value: "#2d8fdd", selector: "atoms.filter(a => a.type === 'Person').map(a => a.id)" }
+  - atomColor: { value: "#e89b2f", selector: "atoms.filter(a => a.type === 'City').map(a => a.id)" }
+  - size: { width: 120, height: 70, selector: "atoms.map(a => a.id)" }
+`;
+
+    const exampleSelectors = [
+      "atoms.filter(a => a.type === 'Person').map(a => a.id)",
+      "relations.find(r => r.id === 'friend')?.tuples.map(t => t.atoms) || []",
+      "atoms.map(a => a.id)"
+    ];
+
+    const dataInput = document.getElementById('data-input');
+    const specInput = document.getElementById('spec-input');
+    const statusEl = document.getElementById('status');
+    const graphEl = document.getElementById('graph-container');
+    const exampleList = document.getElementById('example-list');
+
+    let currentInstance = null;
+    let currentEvaluator = null;
+
+    function setStatus(message, isError) {
+      statusEl.textContent = message;
+      statusEl.classList.toggle('error', Boolean(isError));
+    }
+
+    function resetDemo() {
+      dataInput.value = defaultData;
+      specInput.value = defaultSpec;
+      exampleList.textContent = exampleSelectors.join("\n");
+      loadData();
+      applyLayout();
+    }
+
+    function loadData() {
+      try {
+        currentInstance = new CndCore.JSONDataInstance(dataInput.value);
+        currentEvaluator = new CndCore.JavaScriptEvaluator();
+        currentEvaluator.initialize({ sourceData: currentInstance });
+
+        if (window.mountEvaluatorRepl) {
+          window.mountEvaluatorRepl('evaluator-repl-mount', currentEvaluator, 0);
+        }
+
+        setStatus('Data loaded. Evaluator initialized.', false);
+        return true;
+      } catch (error) {
+        setStatus('Failed to load data: ' + (error && error.message ? error.message : String(error)), true);
+        return false;
+      }
+    }
+
+    function applyLayout() {
+      if (!currentInstance || !currentEvaluator) {
+        if (!loadData()) {
+          return;
+        }
+      }
+
+      try {
+        const layoutSpec = CndCore.parseLayoutSpec(specInput.value);
+        const layoutInstance = new CndCore.LayoutInstance(layoutSpec, currentEvaluator, 0, true);
+        const result = layoutInstance.generateLayout(currentInstance, {});
+
+        if (result.error) {
+          setStatus('Layout error: ' + result.error.message, true);
+        } else {
+          setStatus('Layout applied.', false);
+        }
+
+        if (graphEl) {
+          if (typeof graphEl.renderLayout === 'function') {
+            graphEl.renderLayout(result.layout);
+          } else if (window.customElements && window.customElements.whenDefined) {
+            window.customElements.whenDefined('webcola-cnd-graph').then(() => {
+              if (typeof graphEl.renderLayout === 'function') {
+                graphEl.renderLayout(result.layout);
+              }
+            });
+          }
+        }
+      } catch (error) {
+        setStatus('Failed to apply layout: ' + (error && error.message ? error.message : String(error)), true);
+      }
+    }
+
+    function waitForCndCore(attempts) {
+      if (window.CndCore && window.CndCore.JavaScriptEvaluator) {
+        resetDemo();
+        return;
+      }
+      if (attempts <= 0) {
+        setStatus('CndCore bundle not ready. Refresh the page after rebuilding dist.', true);
+        return;
+      }
+      setTimeout(() => waitForCndCore(attempts - 1), 50);
+    }
+
+    window.addEventListener('load', () => {
+      waitForCndCore(40);
+    });
+  </script>
+</body>
+</html>

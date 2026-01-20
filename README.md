@@ -373,7 +373,25 @@ const description = generateTextDescription(dataInstance, {
 
 - **`LayoutInstance`** - Generate layouts from CnD specs
 - **`SGraphQueryEvaluator`** - Evaluate selector expressions
+- **`JavaScriptEvaluator`** - Evaluate selectors as JavaScript expressions (trusted input only)
 - **`AlloyDataInstance`**, **`JSONDataInstance`**, etc. - Data format adapters
+
+#### JavaScriptEvaluator
+
+Use JavaScript expressions as selectors. Expressions execute with `context`, `data`, `instance`,
+`atoms`, `relations`, `types`, and `config` in scope and must return a singleton, an array of
+singletons, or an array of tuples. This evaluator is not sandboxed, so only run trusted code.
+
+```ts
+import { JavaScriptEvaluator, JSONDataInstance } from 'spytial-core';
+
+const instance = new JSONDataInstance({ atoms: [], relations: [] });
+const evaluator = new JavaScriptEvaluator();
+evaluator.initialize({ sourceData: instance });
+
+// Unary selector: array of atom ids
+evaluator.evaluate("atoms.filter(a => a.type === 'Person').map(a => a.id)");
+```
 
 ### WebCola Graph API
 

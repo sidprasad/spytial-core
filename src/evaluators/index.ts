@@ -6,6 +6,7 @@
 export * from './interfaces';
 export * from './forge-evaluator';
 export * from './sgq-evaluator';
+export * from './js-evaluator';
 
 // Type export for convenience
 export type { default as IEvaluator } from './interfaces';
