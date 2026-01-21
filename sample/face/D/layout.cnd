@@ -1,7 +1,6 @@
 constraints:
   - align: {selector: aligned, direction: horizontal}
-  - orientation: {directions: [below], selector: below}
-  - orientation: {directions: [below], selector: aligned}
+  - orientation: {directions: [directlyBelow], selector: below}
   - group: {selector: parts, name: ' parts', addEdge: true}
   
 
