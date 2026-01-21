@@ -1,6 +1,7 @@
 import { Graph, Edge } from 'graphlib';
 import { IAtom, IDataInstance, IType } from '../data-instance/interfaces';
 import { PositionalConstraintError, GroupOverlapError, isPositionalConstraintError, isGroupOverlapError } from './constraint-validator';
+import { SmtlibConstraintValidator } from './constraint-validator-smtlib';
 
 
 import {
@@ -22,6 +23,11 @@ import { type ConstraintError, ConstraintValidator } from './constraint-validato
 const UNIVERSAL_TYPE = "univ";
 
 type ConstraintSource = RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint;
+
+export interface ConstraintValidationOptions {
+    validator?: 'kiwi' | 'smtlib';
+    smtlibSolver?: (input: string) => string;
+}
 
 class MissingNodeConstraintError extends Error implements ConstraintError {
     readonly type = 'unknown-constraint';
@@ -739,7 +745,8 @@ export class LayoutInstance {
      */
     public generateLayout(
         a: IDataInstance,
-        projections: Record<string, string>
+        projections: Record<string, string>,
+        options: ConstraintValidationOptions = {}
     ): {
         layout: InstanceLayout,
         projectionData: { type: string, projectedAtom: string, atoms: string[] }[],
@@ -875,7 +882,9 @@ export class LayoutInstance {
         };
 
         // Validate all constraints (conjunctive + disjunctive) in one pass
-        const validator = new ConstraintValidator(layout);
+        const validator = options.validator === 'smtlib'
+            ? new SmtlibConstraintValidator(layout, { runSolver: options.smtlibSolver })
+            : new ConstraintValidator(layout);
         const constraintError = validator.validateConstraints();
 
         if (constraintError) {

@@ -8,9 +8,10 @@ export * from './layoutspec';
 export * from './layoutinstance';
 export * from './colorpicker';
 export * from './constraint-validator';
+export * from './constraint-validator-smtlib';
 
 // Utility functions
-import { LayoutInstance } from './layoutinstance';
+import { ConstraintValidationOptions, LayoutInstance } from './layoutinstance';
 import { LayoutSpec, parseLayoutSpec } from './layoutspec';
 import IEvaluator from '../evaluators/interfaces';
 import { AlloyInstance } from '../data-instance/alloy/alloy-instance';
@@ -28,9 +29,10 @@ export function setupLayout(
   spec: string | LayoutSpec,
   instance: IDataInstance,
   evaluator: IEvaluator,
-  projections: Record<string, string> = {}
+  projections: Record<string, string> = {},
+  options: ConstraintValidationOptions = {}
 ) {
   const layoutSpec = typeof spec === 'string' ? parseLayoutSpec(spec) : spec;
   const layoutInstance = new LayoutInstance(layoutSpec, evaluator);
-  return layoutInstance.generateLayout(instance, projections);
+  return layoutInstance.generateLayout(instance, projections, options);
 }
