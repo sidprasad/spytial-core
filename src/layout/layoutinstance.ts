@@ -1,6 +1,6 @@
 import { Graph, Edge } from 'graphlib';
 import { IAtom, IDataInstance, IType } from '../data-instance/interfaces';
-import { PositionalConstraintError, GroupOverlapError, isPositionalConstraintError, isGroupOverlapError } from './constraint-validator';
+import { PositionalConstraintError, GroupOverlapError, NodeOverlapError, isPositionalConstraintError, isGroupOverlapError, isNodeOverlapError } from './constraint-validator';
 
 
 import {
@@ -895,6 +895,14 @@ export class LayoutInstance {
                 );
             }
 
+            if (isNodeOverlapError(constraintError)) {
+                return this.handleNodeOverlapError(
+                    constraintError,
+                    layout,
+                    projectionData
+                );
+            }
+
             throw constraintError;
         }
 
@@ -1044,6 +1052,54 @@ export class LayoutInstance {
             layout: layoutWithErrorMetadata, 
             projectionData, 
             error: error 
+        };
+    }
+
+    /**
+     * Helper function to handle node overlap errors (when two nodes are both horizontally and vertically aligned).
+     * @returns An object containing the layout with error metadata, projection data, and the error itself.
+     */
+    private handleNodeOverlapError(
+        error: NodeOverlapError,
+        layout: InstanceLayout,
+        projectionData: { type: string, projectedAtom: string, atoms: string[] }[]
+    ): {
+        layout: InstanceLayout,
+        projectionData: { type: string, projectedAtom: string, atoms: string[] }[],
+        error: ConstraintError
+    } {
+        // Get the overlapping nodes
+        const overlappingNodes = [error.node1, error.node2];
+        const overlappingNodeIds = new Set(overlappingNodes.map(n => n.id));
+
+        // Find relevant nodes - the overlapping pair plus any nodes involved in the alignment chain
+        const relevantNodeIds = new Set<string>(overlappingNodeIds);
+        
+        // Add nodes from alignment constraints
+        for (const constraint of [...error.horizontalAlignmentConstraints, ...error.verticalAlignmentConstraints]) {
+            relevantNodeIds.add(constraint.node1.id);
+            relevantNodeIds.add(constraint.node2.id);
+        }
+
+        const relevantNodes = layout.nodes.filter(node => relevantNodeIds.has(node.id));
+
+        // Only edges between relevant nodes
+        const edgesWithRelevantNodes = layout.edges.filter(edge =>
+            relevantNodeIds.has(edge.source.id) && relevantNodeIds.has(edge.target.id)
+        );
+
+        const layoutWithErrorMetadata: InstanceLayout = {
+            nodes: relevantNodes,
+            edges: edgesWithRelevantNodes,
+            constraints: layout.constraints,
+            groups: layout.groups,
+            overlappingNodes: overlappingNodes,
+        };
+
+        return {
+            layout: layoutWithErrorMetadata,
+            projectionData,
+            error: error
         };
     }
 

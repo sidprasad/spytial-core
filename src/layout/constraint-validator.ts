@@ -18,7 +18,7 @@ export interface ErrorMessages {
  */
 export interface ConstraintError  extends Error {
     /** Type of constraint error */
-    readonly type: 'group-overlap' | 'positional-conflict' | 'unknown-constraint';
+    readonly type: 'group-overlap' | 'positional-conflict' | 'node-overlap' | 'unknown-constraint';
 
     /** Human-readable error message */
     readonly message: string;
@@ -31,6 +31,26 @@ export function isPositionalConstraintError(error: unknown): error is Positional
 
 export function isGroupOverlapError(error: unknown): error is GroupOverlapError {
     return (error as GroupOverlapError).type === 'group-overlap';
+}
+
+export function isNodeOverlapError(error: unknown): error is NodeOverlapError {
+    return (error as NodeOverlapError).type === 'node-overlap';
+}
+
+/**
+ * Error when two nodes are forced to occupy the same position.
+ * This occurs when nodes are both horizontally aligned (same y) AND vertically aligned (same x).
+ */
+interface NodeOverlapError extends ConstraintError {
+    type: 'node-overlap';
+    /** First overlapping node */
+    node1: LayoutNode;
+    /** Second overlapping node */
+    node2: LayoutNode;
+    /** Alignment constraints causing horizontal alignment (same y) */
+    horizontalAlignmentConstraints: AlignmentConstraint[];
+    /** Alignment constraints causing vertical alignment (same x) */
+    verticalAlignmentConstraints: AlignmentConstraint[];
 }
 
 interface PositionalConstraintError extends ConstraintError {
@@ -48,7 +68,7 @@ interface GroupOverlapError extends ConstraintError {
     overlappingNodes: LayoutNode[];
 }
 
-export { type PositionalConstraintError, type GroupOverlapError }
+export { type PositionalConstraintError, type GroupOverlapError, type NodeOverlapError }
 
 
 // Tooltip text explaining what node IDs are
@@ -203,6 +223,10 @@ class ConstraintValidator {
 
     public horizontallyAligned: LayoutNode[][] = [];
     public verticallyAligned: LayoutNode[][] = [];
+    
+    // Track alignment constraints for each node pair (for error reporting)
+    private horizontalAlignmentMap: Map<string, AlignmentConstraint[]> = new Map();
+    private verticalAlignmentMap: Map<string, AlignmentConstraint[]> = new Map();
 
     constructor(layout: InstanceLayout) {
         this.layout = layout;
@@ -220,7 +244,7 @@ class ConstraintValidator {
         return this.validateGroupConstraints() || this.validatePositionalConstraints();
     }
 
-    public validatePositionalConstraints(): PositionalConstraintError | null {
+    public validatePositionalConstraints(): PositionalConstraintError | NodeOverlapError | null {
 
         this.nodes.forEach(node => {
             let index = this.getNodeIndex(node.id);
@@ -284,6 +308,13 @@ class ConstraintValidator {
 
         // Now that the solver has solved, we can get an ALIGNMENT ORDER for the nodes.
         let and_more_constraints = this.getAlignmentOrders();
+
+        // Check for node overlaps: nodes that are both horizontally and vertically aligned
+        // This must happen after getAlignmentOrders() which normalizes the alignment groups
+        const nodeOverlapError = this.detectNodeOverlaps();
+        if (nodeOverlapError) {
+            return nodeOverlapError;
+        }
 
         // Now add THESE constraints to the layout constraints
         this.layout.constraints = this.layout.constraints.concat(and_more_constraints);
@@ -1774,11 +1805,23 @@ class ConstraintValidator {
             let node2Var = this.variables[node2Id][axis];
 
             // And register the alignment
+            // Also track the constraint for error reporting
+            const pairKey = this.getNodePairKey(node1.id, node2.id);
             if (axis === 'x') {
                 this.verticallyAligned.push([node1, node2]);
+                // Track vertical alignment constraint
+                if (!this.verticalAlignmentMap.has(pairKey)) {
+                    this.verticalAlignmentMap.set(pairKey, []);
+                }
+                this.verticalAlignmentMap.get(pairKey)!.push(ac);
             }
             else if (axis === 'y') {
                 this.horizontallyAligned.push([node1, node2]);
+                // Track horizontal alignment constraint
+                if (!this.horizontalAlignmentMap.has(pairKey)) {
+                    this.horizontalAlignmentMap.set(pairKey, []);
+                }
+                this.horizontalAlignmentMap.get(pairKey)!.push(ac);
             }
 
             // Create equality constraint: node1Var == node2Var
@@ -2055,6 +2098,128 @@ class ConstraintValidator {
         // Get elements that are in both groups
         const commonElements = g1Elements.filter(element => g2Elements.includes(element));
         return commonElements;
+    }
+
+    /**
+     * Creates a canonical key for a node pair (order-independent).
+     * Used to look up alignment constraints for any pair of nodes.
+     */
+    private getNodePairKey(nodeId1: string, nodeId2: string): string {
+        return nodeId1 < nodeId2 ? `${nodeId1}|${nodeId2}` : `${nodeId2}|${nodeId1}`;
+    }
+
+    /**
+     * Detects if any two nodes are forced to be at the exact same position.
+     * This occurs when two nodes are both:
+     * - Horizontally aligned (same y coordinate)
+     * - Vertically aligned (same x coordinate)
+     * 
+     * Uses transitive closure of alignment groups to detect overlaps.
+     * 
+     * @returns NodeOverlapError if overlap detected, null otherwise
+     */
+    private detectNodeOverlaps(): NodeOverlapError | null {
+        // Build sets of nodes that share the same x coordinate (vertically aligned)
+        // and nodes that share the same y coordinate (horizontally aligned)
+        
+        // After normalization, each group in horizontallyAligned contains nodes with the same y
+        // and each group in verticallyAligned contains nodes with the same x
+        
+        // Two nodes overlap if they are in the SAME horizontal group AND the SAME vertical group
+        
+        for (const hGroup of this.horizontallyAligned) {
+            const hGroupSet = new Set(hGroup.map(n => n.id));
+            
+            for (const vGroup of this.verticallyAligned) {
+                const vGroupSet = new Set(vGroup.map(n => n.id));
+                
+                // Find nodes that are in BOTH groups
+                const overlappingNodeIds: string[] = [];
+                for (const nodeId of hGroupSet) {
+                    if (vGroupSet.has(nodeId)) {
+                        overlappingNodeIds.push(nodeId);
+                    }
+                }
+                
+                // If there are 2+ nodes in the intersection, they all share the same (x, y)
+                if (overlappingNodeIds.length >= 2) {
+                    // Found an overlap - report the first pair
+                    const node1 = this.nodes.find(n => n.id === overlappingNodeIds[0])!;
+                    const node2 = this.nodes.find(n => n.id === overlappingNodeIds[1])!;
+                    
+                    // Find the alignment constraints that caused this
+                    const hConstraints = this.findAlignmentChain(node1, node2, this.horizontalAlignmentMap);
+                    const vConstraints = this.findAlignmentChain(node1, node2, this.verticalAlignmentMap);
+                    
+                    return {
+                        name: 'NodeOverlapError',
+                        type: 'node-overlap',
+                        message: `Nodes "${formatNodeLabel(node1)}" and "${formatNodeLabel(node2)}" are forced to occupy the same position (both horizontally and vertically aligned)`,
+                        node1,
+                        node2,
+                        horizontalAlignmentConstraints: hConstraints,
+                        verticalAlignmentConstraints: vConstraints
+                    };
+                }
+            }
+        }
+        
+        return null;
+    }
+
+    /**
+     * Finds the chain of alignment constraints connecting two nodes.
+     * Uses BFS to find a path through the alignment graph.
+     */
+    private findAlignmentChain(
+        node1: LayoutNode,
+        node2: LayoutNode,
+        alignmentMap: Map<string, AlignmentConstraint[]>
+    ): AlignmentConstraint[] {
+        // Build adjacency list from alignment map
+        const adjacency = new Map<string, Map<string, AlignmentConstraint[]>>();
+        
+        for (const [pairKey, constraints] of alignmentMap.entries()) {
+            const [id1, id2] = pairKey.split('|');
+            
+            if (!adjacency.has(id1)) adjacency.set(id1, new Map());
+            if (!adjacency.has(id2)) adjacency.set(id2, new Map());
+            
+            adjacency.get(id1)!.set(id2, constraints);
+            adjacency.get(id2)!.set(id1, constraints);
+        }
+        
+        // BFS to find path from node1 to node2
+        const visited = new Set<string>();
+        const queue: { nodeId: string; path: AlignmentConstraint[] }[] = [
+            { nodeId: node1.id, path: [] }
+        ];
+        
+        while (queue.length > 0) {
+            const { nodeId, path } = queue.shift()!;
+            
+            if (nodeId === node2.id) {
+                return path;
+            }
+            
+            if (visited.has(nodeId)) continue;
+            visited.add(nodeId);
+            
+            const neighbors = adjacency.get(nodeId);
+            if (neighbors) {
+                for (const [neighborId, constraints] of neighbors.entries()) {
+                    if (!visited.has(neighborId)) {
+                        // Take the first constraint for simplicity
+                        queue.push({
+                            nodeId: neighborId,
+                            path: [...path, constraints[0]]
+                        });
+                    }
+                }
+            }
+        }
+        
+        return []; // No path found (shouldn't happen if nodes are in same alignment group)
     }
 
     /**
