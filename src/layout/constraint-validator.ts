@@ -224,7 +224,7 @@ class ConstraintValidator {
         return this.validateGroupConstraints() || this.validatePositionalConstraints();
     }
 
-    public validatePositionalConstraints(): PositionalConstraintError | NodeOverlapError | null {
+    public validatePositionalConstraints(): PositionalConstraintError | null {
 
         this.nodes.forEach(node => {
             let index = this.getNodeIndex(node.id);
