@@ -18,7 +18,7 @@ export interface ErrorMessages {
  */
 export interface ConstraintError  extends Error {
     /** Type of constraint error */
-    readonly type: 'group-overlap' | 'positional-conflict' | 'unknown-constraint';
+    readonly type: 'group-overlap' | 'positional-conflict' | 'node-overlap' | 'unknown-constraint';
 
     /** Human-readable error message */
     readonly message: string;
@@ -31,6 +31,10 @@ export function isPositionalConstraintError(error: unknown): error is Positional
 
 export function isGroupOverlapError(error: unknown): error is GroupOverlapError {
     return (error as GroupOverlapError).type === 'group-overlap';
+}
+
+export function isNodeOverlapError(error: unknown): error is NodeOverlapError {
+    return (error as NodeOverlapError).type === 'node-overlap';
 }
 
 interface PositionalConstraintError extends ConstraintError {
@@ -48,7 +52,14 @@ interface GroupOverlapError extends ConstraintError {
     overlappingNodes: LayoutNode[];
 }
 
-export { type PositionalConstraintError, type GroupOverlapError }
+interface NodeOverlapError extends ConstraintError {
+    type: 'node-overlap';
+    node1: LayoutNode;
+    node2: LayoutNode;
+    position: { x: number; y: number };
+}
+
+export { type PositionalConstraintError, type GroupOverlapError, type NodeOverlapError }
 
 
 // Tooltip text explaining what node IDs are
@@ -259,8 +270,11 @@ class ConstraintValidator {
             this.groups = originalGroups;
         }
 
-        // Now handle disjunctive constraints using backtracking
-        const disjunctiveConstraints = this.layout.disjunctiveConstraints || [];
+        // Create smart non-overlap disjunctions only for node pairs not already separated
+        const nonOverlapDisjunctions = this.createSmartNonOverlapDisjunctions();
+        
+        // Now handle all disjunctive constraints using backtracking
+        const disjunctiveConstraints = [...nonOverlapDisjunctions, ...(this.layout.disjunctiveConstraints || [])];
         if (disjunctiveConstraints.length > 0) {
             const result = this.solveDisjunctiveConstraints(disjunctiveConstraints);
             if (!result.satisfiable) {
@@ -831,6 +845,106 @@ class ConstraintValidator {
         }
         
         return null; // No overlaps found
+    }
+
+    /**
+     * Creates smart non-overlap disjunctive constraints only for node pairs
+     * that aren't already guaranteed to be separated by existing constraints.
+     * 
+     * This is much cheaper than O(n²) because:
+     * 1. Many node pairs are already separated by left/right or top/bottom constraints
+     * 2. We only create disjunctions for the remaining "ambiguous" pairs
+     * 3. For aligned nodes, the alignment order constraints will separate them
+     * 
+     * For each unseparated pair (node1, node2), creates a disjunction:
+     *   node1 left of node2 OR node1 right of node2 OR node1 above node2 OR node1 below node2
+     * 
+     * @returns Array of disjunctive constraints for non-overlap
+     */
+    private createSmartNonOverlapDisjunctions(): DisjunctiveConstraint[] {
+        // Build a graph of which nodes are already constrained relative to each other
+        const separated = new Set<string>();
+        
+        // Helper to create a canonical key for a node pair
+        const pairKey = (id1: string, id2: string) => {
+            return id1 < id2 ? `${id1}:${id2}` : `${id2}:${id1}`;
+        };
+        
+        // Mark pairs that are already separated by existing constraints
+        for (const constraint of this.added_constraints) {
+            if (isLeftConstraint(constraint)) {
+                separated.add(pairKey(constraint.left.id, constraint.right.id));
+            } else if (isTopConstraint(constraint)) {
+                separated.add(pairKey(constraint.top.id, constraint.bottom.id));
+            }
+            // Note: Alignment constraints don't separate - aligned nodes need non-overlap
+        }
+        
+        // Create disjunctions for unseparated pairs
+        const disjunctions: DisjunctiveConstraint[] = [];
+        
+        for (let i = 0; i < this.nodes.length; i++) {
+            const node1 = this.nodes[i];
+            
+            for (let j = i + 1; j < this.nodes.length; j++) {
+                const node2 = this.nodes[j];
+                const key = pairKey(node1.id, node2.id);
+                
+                // Skip if already separated by existing constraints
+                if (separated.has(key)) {
+                    continue;
+                }
+                
+                // Create source constraint for this non-overlap disjunction
+                const sourceConstraint = new ImplicitConstraint(
+                    new RelativeOrientationConstraint(['directlyLeft'], `${node1.id},${node2.id}`),
+                    `Preventing overlap between ${node1.id} and ${node2.id}`
+                );
+                
+                // Create 4 alternatives: node1 left/right/above/below node2
+                const alternatives: LayoutConstraint[][] = [
+                    // Alternative 1: node1 left of node2
+                    [{
+                        left: node1,
+                        right: node2,
+                        minDistance: node1.width || this.minPadding,
+                        sourceConstraint
+                    } as LeftConstraint],
+                    
+                    // Alternative 2: node2 left of node1
+                    [{
+                        left: node2,
+                        right: node1,
+                        minDistance: node2.width || this.minPadding,
+                        sourceConstraint
+                    } as LeftConstraint],
+                    
+                    // Alternative 3: node1 above node2
+                    [{
+                        top: node1,
+                        bottom: node2,
+                        minDistance: node1.height || this.minPadding,
+                        sourceConstraint
+                    } as TopConstraint],
+                    
+                    // Alternative 4: node2 above node1
+                    [{
+                        top: node2,
+                        bottom: node1,
+                        minDistance: node2.height || this.minPadding,
+                        sourceConstraint
+                    } as TopConstraint]
+                ];
+                
+                disjunctions.push(new DisjunctiveConstraint(sourceConstraint, alternatives));
+            }
+        }
+        
+        // Log how many disjunctions we're creating vs the theoretical maximum
+        const maxPossible = (this.nodes.length * (this.nodes.length - 1)) / 2;
+        console.log(`Smart non-overlap: Creating ${disjunctions.length} disjunctions (${((disjunctions.length / maxPossible) * 100).toFixed(1)}% of max ${maxPossible})`);
+        
+        return disjunctions;
     }
 
     /**
