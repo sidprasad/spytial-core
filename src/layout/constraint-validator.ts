@@ -18,7 +18,7 @@ export interface ErrorMessages {
  */
 export interface ConstraintError  extends Error {
     /** Type of constraint error */
-    readonly type: 'group-overlap' | 'positional-conflict' | 'node-overlap' | 'unknown-constraint';
+    readonly type: 'group-overlap' | 'positional-conflict' | 'unknown-constraint';
 
     /** Human-readable error message */
     readonly message: string;
@@ -31,26 +31,6 @@ export function isPositionalConstraintError(error: unknown): error is Positional
 
 export function isGroupOverlapError(error: unknown): error is GroupOverlapError {
     return (error as GroupOverlapError).type === 'group-overlap';
-}
-
-export function isNodeOverlapError(error: unknown): error is NodeOverlapError {
-    return (error as NodeOverlapError).type === 'node-overlap';
-}
-
-/**
- * Error when two nodes are forced to occupy the same position.
- * This occurs when nodes are both horizontally aligned (same y) AND vertically aligned (same x).
- */
-interface NodeOverlapError extends ConstraintError {
-    type: 'node-overlap';
-    /** First overlapping node */
-    node1: LayoutNode;
-    /** Second overlapping node */
-    node2: LayoutNode;
-    /** Alignment constraints causing horizontal alignment (same y) */
-    horizontalAlignmentConstraints: AlignmentConstraint[];
-    /** Alignment constraints causing vertical alignment (same x) */
-    verticalAlignmentConstraints: AlignmentConstraint[];
 }
 
 interface PositionalConstraintError extends ConstraintError {
@@ -68,7 +48,7 @@ interface GroupOverlapError extends ConstraintError {
     overlappingNodes: LayoutNode[];
 }
 
-export { type PositionalConstraintError, type GroupOverlapError, type NodeOverlapError }
+export { type PositionalConstraintError, type GroupOverlapError }
 
 
 // Tooltip text explaining what node IDs are
@@ -2115,10 +2095,11 @@ class ConstraintValidator {
      * - Vertically aligned (same x coordinate)
      * 
      * Uses transitive closure of alignment groups to detect overlaps.
+     * Returns a PositionalConstraintError since this is fundamentally a constraint conflict.
      * 
-     * @returns NodeOverlapError if overlap detected, null otherwise
+     * @returns PositionalConstraintError if overlap detected, null otherwise
      */
-    private detectNodeOverlaps(): NodeOverlapError | null {
+    private detectNodeOverlaps(): PositionalConstraintError | null {
         // Build sets of nodes that share the same x coordinate (vertically aligned)
         // and nodes that share the same y coordinate (horizontally aligned)
         
@@ -2151,14 +2132,47 @@ class ConstraintValidator {
                     const hConstraints = this.findAlignmentChain(node1, node2, this.horizontalAlignmentMap);
                     const vConstraints = this.findAlignmentChain(node1, node2, this.verticalAlignmentMap);
                     
+                    // All conflicting constraints (both horizontal and vertical alignment chains)
+                    const allConstraints: AlignmentConstraint[] = [...hConstraints, ...vConstraints];
+                    
+                    // Build the minimalConflictingSet map (source constraint -> layout constraints)
+                    const minimalConflictingSet = new Map<SourceConstraint, LayoutConstraint[]>();
+                    for (const constraint of allConstraints) {
+                        const source = constraint.sourceConstraint;
+                        if (!minimalConflictingSet.has(source)) {
+                            minimalConflictingSet.set(source, []);
+                        }
+                        minimalConflictingSet.get(source)!.push(constraint);
+                    }
+                    
+                    // Build errorMessages for React component (HTML-formatted strings)
+                    const sourceConstraintHTMLToLayoutConstraintsHTML = new Map<string, string[]>();
+                    for (const [source, constraints] of minimalConflictingSet.entries()) {
+                        const sourceHTML = source.toHTML();
+                        if (!sourceConstraintHTMLToLayoutConstraintsHTML.has(sourceHTML)) {
+                            sourceConstraintHTMLToLayoutConstraintsHTML.set(sourceHTML, []);
+                        }
+                        for (const c of constraints) {
+                            sourceConstraintHTMLToLayoutConstraintsHTML.get(sourceHTML)!.push(orientationConstraintToString(c));
+                        }
+                    }
+                    
+                    // Use one of the vertical constraints as the "conflicting" constraint
+                    // (since removing either horizontal OR vertical alignment would fix the issue)
+                    const conflictingConstraint = vConstraints.length > 0 ? vConstraints[0] : hConstraints[0];
+                    
                     return {
-                        name: 'NodeOverlapError',
-                        type: 'node-overlap',
-                        message: `Nodes "${formatNodeLabel(node1)}" and "${formatNodeLabel(node2)}" are forced to occupy the same position (both horizontally and vertically aligned)`,
-                        node1,
-                        node2,
-                        horizontalAlignmentConstraints: hConstraints,
-                        verticalAlignmentConstraints: vConstraints
+                        name: 'PositionalConstraintError',
+                        type: 'positional-conflict',
+                        message: `Alignment constraints force ${formatNodeLabel(node1)} and ${formatNodeLabel(node2)} to occupy the same position`,
+                        conflictingConstraint: conflictingConstraint,
+                        conflictingSourceConstraint: conflictingConstraint.sourceConstraint,
+                        minimalConflictingSet: minimalConflictingSet,
+                        errorMessages: {
+                            conflictingConstraint: orientationConstraintToString(conflictingConstraint),
+                            conflictingSourceConstraint: conflictingConstraint.sourceConstraint.toHTML(),
+                            minimalConflictingConstraints: sourceConstraintHTMLToLayoutConstraintsHTML,
+                        }
                     };
                 }
             }
