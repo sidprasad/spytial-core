@@ -2,7 +2,7 @@
 
 ## Overview
 
-CnD-Core is a constraint-based graph layout system that takes a data instance (nodes and edges) and applies spatial constraints to generate valid layouts.
+Spytial-Core is a constraint-based graph layout system that takes a data instance (nodes and edges) and applies spatial constraints to generate valid layouts.
 
 ## Pipeline Flow
 
@@ -19,10 +19,10 @@ CnD-Core is a constraint-based graph layout system that takes a data instance (n
 └────────┬────────┘
          │
          v
-┌─────────────────┐
-│ Query Evaluator │  Evaluates selectors against data
-│ (SGraphQuery)   │  Returns matching node/edge pairs
-└────────┬────────┘
+┌───────────────── ┐
+│ Query Evaluator  │  Evaluates selectors against data
+│(e.g. SGraphQuery)│  Returns matching node/edge pairs
+└────────┬──────── ┘
          │
          v
 ┌─────────────────┐
