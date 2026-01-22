@@ -12,8 +12,10 @@ type CoreEntry = {
     constraints: LayoutConstraint[];
 };
 
+type SolverRunner = (input: string) => string | Promise<string>;
+
 interface ConstraintValidatorOptions {
-    runSolver?: (input: string) => string;
+    runSolver?: SolverRunner;
 }
 
 class SmtlibConstraintValidator {
@@ -22,7 +24,7 @@ class SmtlibConstraintValidator {
     private readonly groups: LayoutGroup[];
     private readonly disjunctiveConstraints: DisjunctiveConstraint[];
     private readonly minPadding = 15;
-    private readonly runSolver: (input: string) => string;
+    private readonly runSolver: SolverRunner;
 
     constructor(layout: InstanceLayout, options: ConstraintValidatorOptions = {}) {
         this.layout = layout;
@@ -47,52 +49,27 @@ class SmtlibConstraintValidator {
         }
 
         const coreOutput = this.runZ3(`${smtlib}\n(check-sat)\n(get-unsat-core)`);
-        const coreNames = this.parseUnsatCore(coreOutput);
-        const coreConstraints = coreNames
-            .map(name => coreEntries.get(name))
-            .filter((entry): entry is CoreEntry => Boolean(entry));
+        const coreConstraints = this.resolveCoreConstraints(coreOutput, coreEntries);
+        return this.buildConstraintError(coreConstraints);
+    }
 
-        if (coreConstraints.length === 0) {
-            throw new Error('Z3 reported UNSAT but no core constraints were returned.');
+    public async validateConstraintsAsync(): Promise<ConstraintError | null> {
+        this.addGroupBoundingBoxDisjunctions();
+        const { smtlib, coreEntries } = this.buildSmtlib();
+        const checkResult = await this.runSolverAsync(`${smtlib}\n(check-sat)`);
+        const status = checkResult.trim().split(/\s+/)[0];
+
+        if (status === 'sat') {
+            return null;
         }
 
-        const minimalConflictingSet = new Map<SourceConstraint, LayoutConstraint[]>();
-        const minimalConflictingMessages = new Map<string, string[]>();
-
-        for (const entry of coreConstraints) {
-            const sourceConstraint = entry.sourceConstraint;
-            if (!minimalConflictingSet.has(sourceConstraint)) {
-                minimalConflictingSet.set(sourceConstraint, []);
-            }
-            if (!minimalConflictingMessages.has(sourceConstraint.toHTML())) {
-                minimalConflictingMessages.set(sourceConstraint.toHTML(), []);
-            }
-
-            const existing = minimalConflictingSet.get(sourceConstraint)!;
-            for (const constraint of entry.constraints) {
-                existing.push(constraint);
-                minimalConflictingMessages.get(sourceConstraint.toHTML())!.push(orientationConstraintToString(constraint));
-            }
+        if (status !== 'unsat') {
+            throw new Error(`Unexpected Z3 status: ${status}`);
         }
 
-        const firstConstraint = coreConstraints[0].constraints[0];
-        const message = firstConstraint
-            ? `Constraint "${orientationConstraintToString(firstConstraint)}" conflicts with existing constraints`
-            : 'Constraint set is unsatisfiable.';
-
-        return {
-            name: 'PositionalConstraintError',
-            type: 'positional-conflict',
-            message,
-            conflictingConstraint: firstConstraint ?? this.layout.constraints[0],
-            conflictingSourceConstraint: coreConstraints[0].sourceConstraint,
-            minimalConflictingSet,
-            errorMessages: {
-                conflictingConstraint: firstConstraint ? orientationConstraintToString(firstConstraint) : 'Unsatisfiable constraint set',
-                conflictingSourceConstraint: coreConstraints[0].sourceConstraint.toHTML(),
-                minimalConflictingConstraints: minimalConflictingMessages
-            }
-        };
+        const coreOutput = await this.runSolverAsync(`${smtlib}\n(check-sat)\n(get-unsat-core)`);
+        const coreConstraints = this.resolveCoreConstraints(coreOutput, coreEntries);
+        return this.buildConstraintError(coreConstraints);
     }
 
     private addGroupBoundingBoxDisjunctions() {
@@ -363,11 +340,31 @@ class SmtlibConstraintValidator {
 
     private runZ3(input: string): string {
         try {
-            return this.runSolver(input);
+            return this.ensureSyncResult(this.runSolver(input));
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             throw new Error(`Failed to run SMT solver: ${message}`);
         }
+    }
+
+    private async runSolverAsync(input: string): Promise<string> {
+        try {
+            return await this.runSolver(input);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            throw new Error(`Failed to run SMT solver: ${message}`);
+        }
+    }
+
+    private ensureSyncResult(result: string | Promise<string>): string {
+        if (this.isPromiseLike(result)) {
+            throw new Error('Async SMT solver provided. Use validateConstraintsAsync instead.');
+        }
+        return result;
+    }
+
+    private isPromiseLike(value: string | Promise<string>): value is Promise<string> {
+        return typeof (value as Promise<string>)?.then === 'function';
     }
 
     private formatNumber(value: number): string {
@@ -382,6 +379,107 @@ class SmtlibConstraintValidator {
         const groupBNodes = new Set(groupB.nodeIds);
         return groupA.nodeIds.filter(id => groupBNodes.has(id));
     }
+
+    private resolveCoreConstraints(output: string, coreEntries: Map<string, CoreEntry>): CoreEntry[] {
+        const coreNames = this.parseUnsatCore(output);
+        const coreConstraints = coreNames
+            .map(name => coreEntries.get(name))
+            .filter((entry): entry is CoreEntry => Boolean(entry));
+
+        if (coreConstraints.length === 0) {
+            throw new Error('Z3 reported UNSAT but no core constraints were returned.');
+        }
+
+        return coreConstraints;
+    }
+
+    private buildConstraintError(coreConstraints: CoreEntry[]): ConstraintError {
+        const minimalConflictingSet = new Map<SourceConstraint, LayoutConstraint[]>();
+        const minimalConflictingMessages = new Map<string, string[]>();
+
+        for (const entry of coreConstraints) {
+            const sourceConstraint = entry.sourceConstraint;
+            if (!minimalConflictingSet.has(sourceConstraint)) {
+                minimalConflictingSet.set(sourceConstraint, []);
+            }
+            if (!minimalConflictingMessages.has(sourceConstraint.toHTML())) {
+                minimalConflictingMessages.set(sourceConstraint.toHTML(), []);
+            }
+
+            const existing = minimalConflictingSet.get(sourceConstraint)!;
+            for (const constraint of entry.constraints) {
+                existing.push(constraint);
+                minimalConflictingMessages.get(sourceConstraint.toHTML())!.push(orientationConstraintToString(constraint));
+            }
+        }
+
+        const firstConstraint = coreConstraints[0].constraints[0];
+        const message = firstConstraint
+            ? `Constraint "${orientationConstraintToString(firstConstraint)}" conflicts with existing constraints`
+            : 'Constraint set is unsatisfiable.';
+
+        return {
+            name: 'PositionalConstraintError',
+            type: 'positional-conflict',
+            message,
+            conflictingConstraint: firstConstraint ?? this.layout.constraints[0],
+            conflictingSourceConstraint: coreConstraints[0].sourceConstraint,
+            minimalConflictingSet,
+            errorMessages: {
+                conflictingConstraint: firstConstraint ? orientationConstraintToString(firstConstraint) : 'Unsatisfiable constraint set',
+                conflictingSourceConstraint: coreConstraints[0].sourceConstraint.toHTML(),
+                minimalConflictingConstraints: minimalConflictingMessages
+            }
+        };
+    }
+}
+
+const SUPPORTED_SMTLIB_PREFIXES = [
+    '(declare-const',
+    '(declare-fun',
+    '(declare-sort',
+    '(define-fun',
+    '(assert',
+    '(set-logic',
+    '(set-option'
+];
+
+export async function createZ3SolverRunner(): Promise<(input: string) => Promise<string>> {
+    const z3Module = await import('z3-solver');
+    const init = (z3Module as any).init ?? (z3Module as any).default?.init;
+    if (!init) {
+        throw new Error('z3-solver did not expose an init() function.');
+    }
+
+    const { Context } = await init();
+    const ctx = Context('main');
+    return async (input: string) => {
+        const wantsCore = input.includes('(get-unsat-core)');
+        const solver = new ctx.Solver();
+        const filtered = input
+            .split(/\r?\n/)
+            .map(line => line.trim())
+            .filter(line => SUPPORTED_SMTLIB_PREFIXES.some(prefix => line.startsWith(prefix)));
+        solver.fromString(filtered.join('\n'));
+
+        const status = solver.check();
+        const statusText = status?.toString ? status.toString() : String(status);
+
+        if (!wantsCore || statusText !== 'unsat') {
+            return statusText;
+        }
+
+        if (typeof solver.getUnsatCore !== 'function') {
+            return `${statusText}\n()`;
+        }
+
+        const core = solver.getUnsatCore();
+        const coreLine = Array.isArray(core)
+            ? `(${core.map(item => item.toString()).join(' ')})`
+            : core?.toString?.() ?? '()';
+
+        return `${statusText}\n${coreLine}`;
+    };
 }
 
 export { SmtlibConstraintValidator };
