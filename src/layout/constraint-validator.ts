@@ -2097,6 +2097,8 @@ class ConstraintValidator {
      * Uses transitive closure of alignment groups to detect overlaps.
      * Returns a PositionalConstraintError since this is fundamentally a constraint conflict.
      * 
+     * Finds ALL overlapping node pairs and reports ALL related constraints.
+     * 
      * @returns PositionalConstraintError if overlap detected, null otherwise
      */
     private detectNodeOverlaps(): PositionalConstraintError | null {
@@ -2107,6 +2109,10 @@ class ConstraintValidator {
         // and each group in verticallyAligned contains nodes with the same x
         
         // Two nodes overlap if they are in the SAME horizontal group AND the SAME vertical group
+        
+        // Collect ALL overlapping pairs and their constraints
+        const allOverlappingPairs: Array<{ node1: LayoutNode; node2: LayoutNode; overlappingNodeIds: string[] }> = [];
+        const allConflictingConstraints = new Set<AlignmentConstraint>();
         
         for (const hGroup of this.horizontallyAligned) {
             const hGroupSet = new Set(hGroup.map(n => n.id));
@@ -2124,61 +2130,79 @@ class ConstraintValidator {
                 
                 // If there are 2+ nodes in the intersection, they all share the same (x, y)
                 if (overlappingNodeIds.length >= 2) {
-                    // Found an overlap - report the first pair
-                    const node1 = this.nodes.find(n => n.id === overlappingNodeIds[0])!;
-                    const node2 = this.nodes.find(n => n.id === overlappingNodeIds[1])!;
-                    
-                    // Find the alignment constraints that caused this
-                    const hConstraints = this.findAlignmentChain(node1, node2, this.horizontalAlignmentMap);
-                    const vConstraints = this.findAlignmentChain(node1, node2, this.verticalAlignmentMap);
-                    
-                    // All conflicting constraints (both horizontal and vertical alignment chains)
-                    const allConstraints: AlignmentConstraint[] = [...hConstraints, ...vConstraints];
-                    
-                    // Build the minimalConflictingSet map (source constraint -> layout constraints)
-                    const minimalConflictingSet = new Map<SourceConstraint, LayoutConstraint[]>();
-                    for (const constraint of allConstraints) {
-                        const source = constraint.sourceConstraint;
-                        if (!minimalConflictingSet.has(source)) {
-                            minimalConflictingSet.set(source, []);
-                        }
-                        minimalConflictingSet.get(source)!.push(constraint);
-                    }
-                    
-                    // Build errorMessages for React component (HTML-formatted strings)
-                    const sourceConstraintHTMLToLayoutConstraintsHTML = new Map<string, string[]>();
-                    for (const [source, constraints] of minimalConflictingSet.entries()) {
-                        const sourceHTML = source.toHTML();
-                        if (!sourceConstraintHTMLToLayoutConstraintsHTML.has(sourceHTML)) {
-                            sourceConstraintHTMLToLayoutConstraintsHTML.set(sourceHTML, []);
-                        }
-                        for (const c of constraints) {
-                            sourceConstraintHTMLToLayoutConstraintsHTML.get(sourceHTML)!.push(orientationConstraintToString(c));
+                    // Found overlaps - collect ALL pairs in this intersection
+                    // For n nodes at the same position, we need to report all n*(n-1)/2 pairs
+                    for (let i = 0; i < overlappingNodeIds.length; i++) {
+                        for (let j = i + 1; j < overlappingNodeIds.length; j++) {
+                            const node1 = this.nodes.find(n => n.id === overlappingNodeIds[i])!;
+                            const node2 = this.nodes.find(n => n.id === overlappingNodeIds[j])!;
+                            
+                            allOverlappingPairs.push({ node1, node2, overlappingNodeIds });
+                            
+                            // Find the alignment constraints that caused this overlap
+                            const hConstraints = this.findAlignmentChain(node1, node2, this.horizontalAlignmentMap);
+                            const vConstraints = this.findAlignmentChain(node1, node2, this.verticalAlignmentMap);
+                            
+                            // Add all constraints to the set (Set automatically deduplicates)
+                            hConstraints.forEach(c => allConflictingConstraints.add(c));
+                            vConstraints.forEach(c => allConflictingConstraints.add(c));
                         }
                     }
-                    
-                    // Use one of the vertical constraints as the "conflicting" constraint
-                    // (since removing either horizontal OR vertical alignment would fix the issue)
-                    const conflictingConstraint = vConstraints.length > 0 ? vConstraints[0] : hConstraints[0];
-                    
-                    return {
-                        name: 'PositionalConstraintError',
-                        type: 'positional-conflict',
-                        message: `Alignment constraints force ${formatNodeLabel(node1)} and ${formatNodeLabel(node2)} to occupy the same position`,
-                        conflictingConstraint: conflictingConstraint,
-                        conflictingSourceConstraint: conflictingConstraint.sourceConstraint,
-                        minimalConflictingSet: minimalConflictingSet,
-                        errorMessages: {
-                            conflictingConstraint: orientationConstraintToString(conflictingConstraint),
-                            conflictingSourceConstraint: conflictingConstraint.sourceConstraint.toHTML(),
-                            minimalConflictingConstraints: sourceConstraintHTMLToLayoutConstraintsHTML,
-                        }
-                    };
                 }
             }
         }
         
-        return null;
+        // If no overlaps found, return null
+        if (allOverlappingPairs.length === 0) {
+            return null;
+        }
+        
+        // Build the minimalConflictingSet map from ALL collected constraints
+        const minimalConflictingSet = new Map<SourceConstraint, LayoutConstraint[]>();
+        for (const constraint of allConflictingConstraints) {
+            const source = constraint.sourceConstraint;
+            if (!minimalConflictingSet.has(source)) {
+                minimalConflictingSet.set(source, []);
+            }
+            minimalConflictingSet.get(source)!.push(constraint);
+        }
+        
+        // Build errorMessages for React component (HTML-formatted strings)
+        const sourceConstraintHTMLToLayoutConstraintsHTML = new Map<string, string[]>();
+        for (const [source, constraints] of minimalConflictingSet.entries()) {
+            const sourceHTML = source.toHTML();
+            if (!sourceConstraintHTMLToLayoutConstraintsHTML.has(sourceHTML)) {
+                sourceConstraintHTMLToLayoutConstraintsHTML.set(sourceHTML, []);
+            }
+            for (const c of constraints) {
+                sourceConstraintHTMLToLayoutConstraintsHTML.get(sourceHTML)!.push(orientationConstraintToString(c));
+            }
+        }
+        
+        // Build a comprehensive error message listing all overlapping pairs
+        const pairDescriptions = allOverlappingPairs.map(({ node1, node2 }) => 
+            `${formatNodeLabel(node1)} and ${formatNodeLabel(node2)}`
+        );
+        const message = allOverlappingPairs.length === 1
+            ? `Alignment constraints force ${pairDescriptions[0]} to occupy the same position`
+            : `Alignment constraints force multiple node pairs to overlap: ${pairDescriptions.join('; ')}`;
+        
+        // Use the first constraint as the "conflicting" constraint for the error structure
+        const conflictingConstraint = Array.from(allConflictingConstraints)[0];
+        
+        return {
+            name: 'PositionalConstraintError',
+            type: 'positional-conflict',
+            message: message,
+            conflictingConstraint: conflictingConstraint,
+            conflictingSourceConstraint: conflictingConstraint.sourceConstraint,
+            minimalConflictingSet: minimalConflictingSet,
+            errorMessages: {
+                conflictingConstraint: orientationConstraintToString(conflictingConstraint),
+                conflictingSourceConstraint: conflictingConstraint.sourceConstraint.toHTML(),
+                minimalConflictingConstraints: sourceConstraintHTMLToLayoutConstraintsHTML,
+            }
+        };
     }
 
     /**
