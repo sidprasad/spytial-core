@@ -18,8 +18,8 @@ const data: IJsonDataInstance = {
   ],
   relations: [
     {
-      id: 'edge',
-      name: 'connects',
+      id: 'connects',        // Unique identifier
+      name: 'connects',      // Used in selectors
       types: ['Node', 'Node'],
       tuples: [{ atoms: ['node1', 'node2'], types: ['Node', 'Node'] }]
     }
@@ -153,21 +153,27 @@ if (error) {
 ```typescript
 interface IJsonDataInstance {
   atoms: Array<{
-    id: string;
-    type: string;
-    label?: string;
-    attributes?: Record<string, string[]>;
-    labels?: Record<string, string[]>;
+    id: string;                              // Required: Unique identifier
+    type: string;                            // Required: Type name
+    label: string;                           // Required: Display label
+    labels?: Record<string, string[]>;       // Optional: Special metadata (e.g., Skolems)
   }>;
   
   relations: Array<{
-    id: string;
-    name: string;
-    types: string[];
+    id: string;                              // Required: Unique relation identifier
+    name: string;                            // Required: Name used in selectors
+    types: string[];                         // Required: Type signature
     tuples: Array<{
-      atoms: string[];
-      types: string[];
+      atoms: string[];                       // Required: Ordered atom IDs
+      types: string[];                       // Required: Corresponding types
     }>;
+  }>;
+  
+  types?: Array<{                            // Optional: Auto-inferred if not provided
+    id: string;
+    types: string[];
+    atoms: IAtom[];
+    isBuiltin: boolean;
   }>;
 }
 ```

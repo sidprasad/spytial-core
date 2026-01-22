@@ -53,9 +53,29 @@ Spytial-Core is a constraint-based graph layout system that takes a data instanc
 **Structure:**
 ```typescript
 {
-  atoms: [{ id, type, label, attributes }],
-  relations: [{ name, tuples: [[atomId1, atomId2]] }],
-  types: [{ id, atoms, isBuiltin }]
+  atoms: [{
+    id: string,           // Unique identifier
+    type: string,         // Type name
+    label: string,        // Display label
+    labels?: {            // Optional metadata (e.g., Skolems, annotations)
+      [key: string]: string[]
+    }
+  }],
+  relations: [{
+    id: string,           // Unique relation identifier
+    name: string,         // Name used in selectors (e.g., "friends")
+    types: string[],      // Type signature (e.g., ["Person", "Person"])
+    tuples: [{
+      atoms: string[],    // Ordered atom IDs
+      types: string[]     // Corresponding types
+    }]
+  }],
+  types?: [{              // Optional: Auto-inferred if not provided
+    id: string,
+    types: string[],      // Type hierarchy
+    atoms: IAtom[],       // Atoms of this type
+    isBuiltin: boolean
+  }]
 }
 ```
 
@@ -129,12 +149,17 @@ GroupBoundaryConstraint // group-to-group separation
 // 1. Create data instance
 const data = new JSONDataInstance({
   atoms: [
-    { id: 'A', type: 'Node' },
-    { id: 'B', type: 'Node' }
+    { id: 'A', type: 'Node', label: 'Node A' },
+    { id: 'B', type: 'Node', label: 'Node B' }
   ],
   relations: [{
+    id: 'edge',
     name: 'edge',
-    tuples: [['A', 'B']]
+    types: ['Node', 'Node'],
+    tuples: [{
+      atoms: ['A', 'B'],
+      types: ['Node', 'Node']
+    }]
   }]
 });
 

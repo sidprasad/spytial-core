@@ -6,21 +6,24 @@ This directory contains documentation optimized for LLM consumption to help AI a
 
 When working with this codebase:
 
-1. **Read** [architecture.md](./architecture.md) to understand the system structure
-2. **Reference** [constraint-syntax.md](./constraint-syntax.md) for constraint writing
-3. **Check** [common-patterns.md](./common-patterns.md) for typical use cases
-4. **Use** [api-reference.md](./api-reference.md) for specific API calls
-5. **Debug** with [troubleshooting.md](./troubleshooting.md) when issues arise
+1. **Integrate** [integration-guide.md](./integration-guide.md) - Extract your language's data (START HERE)
+2. **Understand** [architecture.md](./architecture.md) - System structure and pipeline
+3. **Write** [constraint-syntax.md](./constraint-syntax.md) - Define spatial constraints
+4. **Style** [directive-syntax.md](./directive-syntax.md) - Apply visual directives
+5. **Reference** [api-reference.md](./api-reference.md) - TypeScript API details
+6. **Pattern** [common-patterns.md](./common-patterns.md) - Use proven layouts
+7. **Debug** [troubleshooting.md](./troubleshooting.md) - Fix errors
 
 ## File Overview
 
+- **integration-guide.md** - **START HERE**: Extract your language data and integrate with pipeline
+- **examples.md** - Complete working examples from simple to advanced
 - **architecture.md** - System architecture, pipeline, and data flow
-- **constraint-syntax.md** - Complete constraint language reference with examples
+- **constraint-syntax.md** - Complete constraint language reference
 - **directive-syntax.md** - Visual styling directives reference
-- **common-patterns.md** - Frequently used patterns and recipes
+- **common-patterns.md** - Frequently used layout patterns and recipes
 - **api-reference.md** - TypeScript API for programmatic usage
-- **troubleshooting.md** - Common errors and how to fix them
-- **examples.md** - Real-world examples with explanations
+- **troubleshooting.md** - Common errors and debugging guide
 
 ## Key Concepts
 
