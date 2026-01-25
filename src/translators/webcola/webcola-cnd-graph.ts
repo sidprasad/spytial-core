@@ -2976,24 +2976,31 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     return sourceId < targetId ? `${sourceId}:${targetId}` : `${targetId}:${sourceId}`;
   }
 
-  private route(nodes: any, groups: any, margin: number, groupMargin: number): GridRouter<any> {
+  private route(nodes: any[] = [], groups: any[] = [], margin: number, groupMargin: number): GridRouter<any> {
     nodes.forEach((d: any) => {
-        d.routerNode = {
-            name: d.name,
-            bounds: d.bounds || d.innerBounds
-        };
+      const bounds = d.bounds || d.innerBounds || this.createFallbackBounds(d);
+      d.routerNode = {
+        name: d.name,
+        bounds
+      };
     });
     groups.forEach((d: any) => {
-        d.routerNode = {
-            bounds: d.bounds.inflate(-groupMargin),
-            children: (typeof d.groups !== 'undefined' ? d.groups.map((c: any) => nodes.length + c.id) : [])
-            .concat(typeof d.leaves !== 'undefined' ? d.leaves.map((c: any) => c.index) : [])
-        };
+      if (!d.bounds) {
+        console.warn("Grid routing group missing bounds; routing may be degraded.", d);
+      }
+      d.routerNode = {
+        bounds: d.bounds?.inflate(-groupMargin) ?? d.bounds,
+        children: (typeof d.groups !== 'undefined' ? d.groups.map((c: any) => nodes.length + c.id) : [])
+          .concat(typeof d.leaves !== 'undefined' ? d.leaves.map((c: any) => c.index) : [])
+      };
     });
     let gridRouterNodes = nodes.concat(groups).map((d: any, i: number) => {
-        d.routerNode.id = i;
-        return d.routerNode;
-    });
+      if (!d.routerNode) {
+        return null;
+      }
+      d.routerNode.id = i;
+      return d.routerNode;
+    }).filter(Boolean);
     // NOTE: Router nodes are nodes needed for grid routing, which include both nodes and groups
     return new cola.GridRouter(gridRouterNodes, {
         getChildren: (v: any) => v.children,
@@ -3003,66 +3010,62 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
   private gridify(nudgeGap: number, margin: number, groupMargin: number): void {
     try {
+      const nodes = this.currentLayout?.nodes ?? [];
+      const groups = this.currentLayout?.groups ?? [];
+      const edges = this.currentLayout?.links ?? [];
+
+      if (nodes.length === 0) {
+        console.warn("No nodes available for GridRouter; skipping gridify.");
+        return;
+      }
+
+      if (edges.length === 0) {
+        console.warn("No edges to route in GridRouter");
+        return;
+      }
+
+      this.ensureNodeBounds();
 
       // Create the grid router
-      const gridrouter = this.route(this.currentLayout?.nodes, this.currentLayout?.groups, margin, groupMargin);
+      const gridrouter = this.route(nodes, groups, margin, groupMargin);
 
       // Route all edges using the GridRouter
       let routes: any[] = [];
-      const edges = this.currentLayout?.links || [];
-
-      if (!edges || edges.length === 0) {
-          console.warn("No edges to route in GridRouter");
-          return;
-      }
       
       // Route edges using the GridRouter
-      routes = gridrouter.routeEdges(edges, nudgeGap, function (e: any) { return e.source.routerNode.id; }, function (e: any) { return e.target.routerNode.id; });
+      const routableEdges = edges.filter((edge: any) => edge?.source?.routerNode && edge?.target?.routerNode);
+      routes = gridrouter.routeEdges(
+        routableEdges,
+        nudgeGap,
+        function (e: any) { return e.source.routerNode.id; },
+        function (e: any) { return e.target.routerNode.id; }
+      );
 
+      const routesByEdgeId = new Map<string, any>();
+      routableEdges.forEach((edge: any, index: number) => {
+        const route = routes[index];
+        if (edge?.id && route) {
+          routesByEdgeId.set(edge.id, route);
+        }
+      });
 
+      const linkGroups = this.container.selectAll(".link-group").data(edges, (d: any) => d.id ?? d);
 
-      // Clear existing paths; 
-      // NOTE: This is crucial to avoid node explosion when re-routing
-      this.container.selectAll('.link-group').remove();
-
-      // Create paths from GridRouter routes
-      routes.forEach((route, index) => {
+      linkGroups.select("path")
+        .attr("d", (edgeData: any) => {
+          const route = routesByEdgeId.get(edgeData.id);
+          if (!route) {
+            return this.lineFunction([
+              { x: edgeData.source?.x ?? 0, y: edgeData.source?.y ?? 0 },
+              { x: edgeData.target?.x ?? 0, y: edgeData.target?.y ?? 0 }
+            ]);
+          }
           const cornerradius = 5;
           const arrowwidth = 3; // Abitrary value (see note below)
           const arrowheight = 7; // Abitrary value (see note below)
-
-          // Get the corresponding edge data
-          // Assumption: edges are in the same order as routes
-          const edgeData = edges[index];
-
-          // Calculate the route path using the GridRouter
-          // NOTE: Arrow width/height not used in our implementation
           const p = cola.GridRouter.getRoutePath(route, cornerradius, arrowwidth, arrowheight);
-
-          // Create the link groups
-          const linkGroup = this.container.append('g')
-              .attr("class", "link-group")
-              .datum(edgeData);
-
-          // Create the link
-          linkGroup.append('path')
-              .attr("class", () => {
-                  if (this.isAlignmentEdge(edgeData)) return "alignmentLink";
-                  if (this.isInferredEdge(edgeData)) return "inferredLink";
-                  return "link";
-              })
-              .attr('data-link-id', edgeData.id)
-              .attr('stroke', (d: any) => d.color)
-              .attr('d', p.routepath)
-              .lower();
-          
-          // Create the link labels
-          linkGroup
-              .filter((d: any) => !this.isAlignmentEdge(d))
-              .append("text")
-              .attr("class", "linklabel")
-              .text((d: any) => d.label);
-      });
+          return p.routepath;
+        });
 
       // Update node positions
       // NOTE: `transition()` gives the snap-to-grid effect
@@ -3089,7 +3092,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           .attr("y", function (d: any) { return d.bounds.cy(); });
       
       // Position link labels at route midpoints
-      this.gridUpdateLinkLabels(routes, edges);
+      this.gridUpdateLinkLabels(edges, routesByEdgeId);
 
       this.fitViewportToContent();
 
@@ -3120,38 +3123,63 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     }
   }
 
-  private gridUpdateLinkLabels(routes: any[], edges: any[]) {
+  private gridUpdateLinkLabels(edges: any[], routesByEdgeId: Map<string, any>) {
+    const linkGroups = this.container.selectAll(".link-group");
 
-    routes.forEach((route: any, index: number) => {
-        var edgeData = edges[index];
-        
-        // Calculate midpoint of the route
-        let combinedSegment: any[] = [];
-        let direction = []; // 'L' for left, 'R' for right, 'U' for up, 'D' for down
-        route.forEach((segment: any) => {
-            combinedSegment = combinedSegment.concat(segment);
-        });
-        // console.log("Combined segment", combinedSegment);
-        const midpointIndex = Math.floor(combinedSegment.length / 2); // NOTE: Length should be even
-        const midpoint = {
-            x: (combinedSegment[midpointIndex - 1].x + combinedSegment[midpointIndex].x) / 2,
-            y: (combinedSegment[midpointIndex - 1].y + combinedSegment[midpointIndex].y) / 2
-        };
+    linkGroups
+      .filter((d: any) => !this.isAlignmentEdge(d))
+      .select("text.linklabel")
+      .attr("x", (edgeData: any) => {
+        const midpoint = this.getGridRouteMidpoint(edgeData, routesByEdgeId);
+        return midpoint?.x ?? (edgeData.source?.x ?? 0);
+      })
+      .attr("y", (edgeData: any) => {
+        const midpoint = this.getGridRouteMidpoint(edgeData, routesByEdgeId);
+        return midpoint?.y ?? (edgeData.source?.y ?? 0);
+      })
+      .attr("text-anchor", "middle");
+  }
 
-        // TODO: Compute the direction of the angle
-        // This is useful for determining where to place padding around the label
-        // Currently, the label is directly on the line, which can be hard to read
+  private getGridRouteMidpoint(edgeData: any, routesByEdgeId: Map<string, any>) {
+    const route = routesByEdgeId.get(edgeData.id);
+    if (!route) {
+      const sourceX = edgeData.source?.x ?? 0;
+      const sourceY = edgeData.source?.y ?? 0;
+      const targetX = edgeData.target?.x ?? 0;
+      const targetY = edgeData.target?.y ?? 0;
+      return {
+        x: (sourceX + targetX) / 2,
+        y: (sourceY + targetY) / 2
+      };
+    }
 
-        // console.log(`Midpoint for edge ${edgeData.id}:`, midpoint);
-        
-        // Update corresponding label
-        const linkGroups = this.container.selectAll(".link-group");
-        linkGroups.filter(function(d: any) { return d.id === edgeData.id; })
-            .select("text.linklabel")
-            .attr("x", midpoint.x)
-            .attr("y", midpoint.y)
-            .attr("text-anchor", "middle");
+    let combinedSegment: any[] = [];
+    route.forEach((segment: any) => {
+      combinedSegment = combinedSegment.concat(segment);
     });
+
+    if (combinedSegment.length < 2) {
+      return null;
+    }
+
+    const midpointIndex = Math.floor(combinedSegment.length / 2);
+    return {
+      x: (combinedSegment[midpointIndex - 1].x + combinedSegment[midpointIndex].x) / 2,
+      y: (combinedSegment[midpointIndex - 1].y + combinedSegment[midpointIndex].y) / 2
+    };
+  }
+
+  private createFallbackBounds(node: any) {
+    if (!cola?.Rectangle) {
+      return null;
+    }
+    const halfWidth = (node.width || 50) / 2;
+    const halfHeight = (node.height || 30) / 2;
+    const x = (node.x || 0) - halfWidth;
+    const X = (node.x || 0) + halfWidth;
+    const y = (node.y || 0) - halfHeight;
+    const Y = (node.y || 0) + halfHeight;
+    return new cola.Rectangle(x, X, y, Y);
   }
 
   /**
