@@ -3045,7 +3045,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       routableEdges.forEach((edge: any, index: number) => {
         const route = routes[index];
         if (edge?.id && route) {
-          routesByEdgeId.set(edge.id, route);
+          routesByEdgeId.set(edge.id, this.adjustGridRouteForEdge(edge, route));
         }
       });
 
@@ -3167,6 +3167,39 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       x: (combinedSegment[midpointIndex - 1].x + combinedSegment[midpointIndex].x) / 2,
       y: (combinedSegment[midpointIndex - 1].y + combinedSegment[midpointIndex].y) / 2
     };
+  }
+
+  private adjustGridRouteForEdge(edgeData: any, route: any[]) {
+    if (!edgeData?.id?.startsWith('_g_')) {
+      return route;
+    }
+
+    const points = this.gridRouteToPoints(route);
+    if (points.length < 2) {
+      return route;
+    }
+
+    const adjustedPoints = this.routeGroupEdge(edgeData, points);
+    return this.pointsToGridRoute(adjustedPoints);
+  }
+
+  private gridRouteToPoints(route: any[]) {
+    const points: Array<{ x: number; y: number }> = [];
+    route.forEach((segment: any, index: number) => {
+      if (index === 0) {
+        points.push({ x: segment[0].x, y: segment[0].y });
+      }
+      points.push({ x: segment[1].x, y: segment[1].y });
+    });
+    return points;
+  }
+
+  private pointsToGridRoute(points: Array<{ x: number; y: number }>) {
+    const segments: Array<Array<{ x: number; y: number }>> = [];
+    for (let i = 0; i < points.length - 1; i += 1) {
+      segments.push([points[i], points[i + 1]]);
+    }
+    return segments;
   }
 
   private createFallbackBounds(node: any) {
