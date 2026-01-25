@@ -640,6 +640,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           <button id="zoom-out" title="Zoom Out" aria-label="Zoom out">−</button>
           <button id="zoom-fit" title="Fit to View" aria-label="Fit graph to view">⤢</button>
         </div>
+        <div id="routing-control">
+          <label for="routing-mode">Routing:</label>
+          <select id="routing-mode" title="Edge routing mode">
+            <option value="default">Default</option>
+            <option value="grid">Grid</option>
+          </select>
+        </div>
       </div>
       <div id="svg-container">
       <span id="error-icon" title="This graph is depicting an error state">⚠️</span>
@@ -735,8 +742,55 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       });
     }
 
+    // Set up routing mode dropdown
+    const routingModeSelect = this.shadowRoot!.querySelector('#routing-mode') as HTMLSelectElement;
+    if (routingModeSelect) {
+      // Set initial value from attribute
+      const currentFormat = this.layoutFormat || 'default';
+      routingModeSelect.value = currentFormat;
+      
+      routingModeSelect.addEventListener('change', () => {
+        this.handleRoutingModeChange(routingModeSelect.value);
+      });
+    }
+
     // Initial state update
     this.updateZoomControlStates();
+  }
+
+  /**
+   * Handle routing mode change from dropdown
+   */
+  private handleRoutingModeChange(mode: string): void {
+    // Update the layoutFormat attribute
+    this.setAttribute('layoutFormat', mode);
+    
+    // Trigger re-routing if layout is already rendered
+    if (this.currentLayout && this.colaLayout) {
+      if (mode === 'grid') {
+        // Apply grid routing
+        this.gridify(10, 25, 10);
+      } else {
+        // Apply default routing
+        this.routeEdges();
+      }
+      
+      // Dispatch event for external listeners
+      this.dispatchEvent(new CustomEvent('routing-mode-changed', {
+        detail: { mode }
+      }));
+    }
+  }
+
+  /**
+   * Update the routing mode dropdown to match current layoutFormat attribute
+   */
+  private updateRoutingModeDropdown(): void {
+    const routingModeSelect = this.shadowRoot?.querySelector('#routing-mode') as HTMLSelectElement;
+    if (routingModeSelect) {
+      const currentFormat = this.layoutFormat || 'default';
+      routingModeSelect.value = currentFormat;
+    }
   }
 
   /**
@@ -1460,6 +1514,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
               nodePositions: this.getNodePositions()
             }
           }));
+
+          // Update routing dropdown to match current layout format
+          this.updateRoutingModeDropdown();
 
           this.hideLoading();
         });
@@ -4785,6 +4842,45 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         border-color: #e5e7eb;
         color: #9ca3af;
         transform: none;
+      }
+
+      /* Routing control styling */
+      #routing-control {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-left: 16px;
+        padding-left: 16px;
+        border-left: 1px solid #e5e7eb;
+      }
+
+      #routing-control label {
+        font-size: 12px;
+        font-weight: 500;
+        color: #6b7280;
+        user-select: none;
+      }
+
+      #routing-mode {
+        padding: 4px 8px;
+        border: 1px solid #d1d5db;
+        background: #f9fafb;
+        color: #374151;
+        border-radius: 4px;
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        outline: none;
+      }
+
+      #routing-mode:hover {
+        background: #f3f4f6;
+        border-color: #9ca3af;
+      }
+
+      #routing-mode:focus {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
       }
 
       /* Modal Overlay and Dialog */
