@@ -2858,8 +2858,32 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         .attr("text-anchor", "middle") // Center the text on its position
         .raise();
 
-    const linkGroups = this.container.selectAll(".linkGroup");
-    linkGroups.select("text.linklabel").raise(); // Ensure link labels are raised
+    // UPDATE EDGES - Draw simple straight lines during drag for performance
+    // Grid routing will be recalculated when drag ends
+    const linkGroups = this.container.selectAll(".link-group");
+    linkGroups.select("path")
+        .attr("d", (d: any) => {
+            // Use simple straight line routing during drag for better performance
+            const sourceX = d.source?.bounds?.cx() ?? d.source?.x ?? 0;
+            const sourceY = d.source?.bounds?.cy() ?? d.source?.y ?? 0;
+            const targetX = d.target?.bounds?.cx() ?? d.target?.x ?? 0;
+            const targetY = d.target?.bounds?.cy() ?? d.target?.y ?? 0;
+            return this.lineFunction([{ x: sourceX, y: sourceY }, { x: targetX, y: targetY }]);
+        });
+    
+    // Update link labels to follow edges
+    linkGroups.select("text.linklabel")
+        .attr("x", (d: any) => {
+            const sourceX = d.source?.bounds?.cx() ?? d.source?.x ?? 0;
+            const targetX = d.target?.bounds?.cx() ?? d.target?.x ?? 0;
+            return (sourceX + targetX) / 2;
+        })
+        .attr("y", (d: any) => {
+            const sourceY = d.source?.bounds?.cy() ?? d.source?.y ?? 0;
+            const targetY = d.target?.bounds?.cy() ?? d.target?.y ?? 0;
+            return (sourceY + targetY) / 2;
+        })
+        .raise();
   }
 
   /**
@@ -3056,15 +3080,21 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           const route = routesByEdgeId.get(edgeData.id);
           if (!route) {
             return this.lineFunction([
-              { x: edgeData.source?.x ?? 0, y: edgeData.source?.y ?? 0 },
-              { x: edgeData.target?.x ?? 0, y: edgeData.target?.y ?? 0 }
+              { x: edgeData.source?.bounds?.cx() ?? edgeData.source?.x ?? 0, y: edgeData.source?.bounds?.cy() ?? edgeData.source?.y ?? 0 },
+              { x: edgeData.target?.bounds?.cx() ?? edgeData.target?.x ?? 0, y: edgeData.target?.bounds?.cy() ?? edgeData.target?.y ?? 0 }
             ]);
           }
           const cornerradius = 5;
-          const arrowwidth = 3; // Abitrary value (see note below)
-          const arrowheight = 7; // Abitrary value (see note below)
+          const arrowwidth = 3;
+          const arrowheight = 7;
+          
+          // Get the route path from GridRouter
           const p = cola.GridRouter.getRoutePath(route, cornerradius, arrowwidth, arrowheight);
-          return p.routepath;
+          
+          // Adjust the route to properly terminate at node boundaries for arrow positioning
+          // The GridRouter path may extend beyond the visual node bounds
+          const adjustedPath = this.adjustGridRouteForArrowPositioning(edgeData, p.routepath, route);
+          return adjustedPath || p.routepath;
         });
 
       // Update node positions
@@ -3183,6 +3213,75 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     return this.pointsToGridRoute(adjustedPoints);
   }
 
+  /**
+   * Adjust grid route path for proper arrow positioning at node boundaries.
+   * Ensures the path terminates at the node boundary rather than center.
+   */
+  private adjustGridRouteForArrowPositioning(edgeData: any, routePath: string, route: any[]): string | null {
+    if (!routePath || !edgeData.source || !edgeData.target) {
+      return null;
+    }
+
+    try {
+      // Extract points from the route
+      const points = this.gridRouteToPoints(route);
+      if (points.length < 2) {
+        return null;
+      }
+
+      const source = edgeData.source;
+      const target = edgeData.target;
+
+      // Get node bounds
+      const sourceBounds = source.bounds || { 
+        x: source.x - (source.width || 0) / 2, 
+        y: source.y - (source.height || 0) / 2,
+        width: () => source.width || 0,
+        height: () => source.height || 0
+      };
+      const targetBounds = target.bounds || {
+        x: target.x - (target.width || 0) / 2,
+        y: target.y - (target.height || 0) / 2,
+        width: () => target.width || 0,
+        height: () => target.height || 0
+      };
+
+      // Adjust first point to source node boundary
+      const firstPoint = points[0];
+      const secondPoint = points.length > 1 ? points[1] : points[0];
+      const sourceIntersection = this.getRectangleIntersection(
+        sourceBounds.x + sourceBounds.width() / 2,
+        sourceBounds.y + sourceBounds.height() / 2,
+        secondPoint.x,
+        secondPoint.y,
+        sourceBounds
+      );
+      if (sourceIntersection) {
+        points[0] = sourceIntersection;
+      }
+
+      // Adjust last point to target node boundary
+      const lastPoint = points[points.length - 1];
+      const secondLastPoint = points.length > 1 ? points[points.length - 2] : lastPoint;
+      const targetIntersection = this.getRectangleIntersection(
+        targetBounds.x + targetBounds.width() / 2,
+        targetBounds.y + targetBounds.height() / 2,
+        secondLastPoint.x,
+        secondLastPoint.y,
+        targetBounds
+      );
+      if (targetIntersection) {
+        points[points.length - 1] = targetIntersection;
+      }
+
+      // Convert points back to SVG path
+      return this.lineFunction(points);
+    } catch (error) {
+      console.warn('Error adjusting grid route for arrow positioning:', error);
+      return null;
+    }
+  }
+
   private gridRouteToPoints(route: any[]) {
     const points: Array<{ x: number; y: number }> = [];
     route.forEach((segment: any, index: number) => {
@@ -3213,6 +3312,73 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     const y = (node.y || 0) - halfHeight;
     const Y = (node.y || 0) + halfHeight;
     return new cola.Rectangle(x, X, y, Y);
+  }
+
+  /**
+   * Calculate the intersection point between a line and a rectangle.
+   * Used for positioning arrow heads at node boundaries in grid mode.
+   * 
+   * @param x1 - Start x coordinate (usually center of node)
+   * @param y1 - Start y coordinate (usually center of node)
+   * @param x2 - End x coordinate (next point in path)
+   * @param y2 - End y coordinate (next point in path)
+   * @param bounds - Rectangle bounds with x, y, width(), height()
+   * @returns Intersection point or null if no intersection
+   */
+  private getRectangleIntersection(
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    bounds: any
+  ): { x: number; y: number } | null {
+    // Get rectangle boundaries
+    const rectLeft = bounds.x;
+    const rectRight = bounds.x + bounds.width();
+    const rectTop = bounds.y;
+    const rectBottom = bounds.y + bounds.height();
+
+    // Calculate line direction
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+
+    // If line has no direction, return center point
+    if (dx === 0 && dy === 0) {
+      return { x: x1, y: y1 };
+    }
+
+    // Find intersection with each rectangle edge
+    let tMin = 0;
+    let tMax = 1;
+
+    // Check intersection with vertical edges (left and right)
+    if (dx !== 0) {
+      const t1 = (rectLeft - x1) / dx;
+      const t2 = (rectRight - x1) / dx;
+      tMin = Math.max(tMin, Math.min(t1, t2));
+      tMax = Math.min(tMax, Math.max(t1, t2));
+    }
+
+    // Check intersection with horizontal edges (top and bottom)
+    if (dy !== 0) {
+      const t1 = (rectTop - y1) / dy;
+      const t2 = (rectBottom - y1) / dy;
+      tMin = Math.max(tMin, Math.min(t1, t2));
+      tMax = Math.min(tMax, Math.max(t1, t2));
+    }
+
+    // If tMin > tMax, there's no intersection
+    if (tMin > tMax) {
+      return null;
+    }
+
+    // Return the intersection point at the rectangle boundary
+    // Use tMin if starting inside, tMax if starting outside
+    const t = tMin > 0 ? tMin : tMax;
+    return {
+      x: x1 + t * dx,
+      y: y1 + t * dy
+    };
   }
 
   /**
