@@ -9,6 +9,14 @@ directives:
       field: 'name'
       value: 'red'
       selector: 'Person'
+      style: 'dashed'
+      weight: 2
+  - inferredEdge:
+      name: 'transitive'
+      selector: 'Person->Person'
+      color: 'gray'
+      style: 'dotted'
+      weight: 1.5
   - attribute:
       field: 'age'
       selector: 'Person'
@@ -30,6 +38,14 @@ constraints:
     expect(layoutSpec.directives.edgeColors[0].field).toBe('name');
     expect(layoutSpec.directives.edgeColors[0].color).toBe('red');
     expect(layoutSpec.directives.edgeColors[0].selector).toBe('Person');
+    expect(layoutSpec.directives.edgeColors[0].style).toBe('dashed');
+    expect(layoutSpec.directives.edgeColors[0].weight).toBe(2);
+
+    expect(layoutSpec.directives.inferredEdges).toHaveLength(1);
+    expect(layoutSpec.directives.inferredEdges[0].name).toBe('transitive');
+    expect(layoutSpec.directives.inferredEdges[0].color).toBe('gray');
+    expect(layoutSpec.directives.inferredEdges[0].style).toBe('dotted');
+    expect(layoutSpec.directives.inferredEdges[0].weight).toBe(1.5);
     
     // Test attribute directive with selector
     expect(layoutSpec.directives.attributes).toHaveLength(1);

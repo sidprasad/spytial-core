@@ -1,5 +1,6 @@
 import { Node, Group, Link, Rectangle } from 'webcola';
 import { InstanceLayout, LayoutNode, LayoutEdge, LayoutConstraint, LayoutGroup, LeftConstraint, TopConstraint, AlignmentConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, isBoundingBoxConstraint, isGroupBoundaryConstraint } from '../../layout/interfaces';
+import { EdgeStyle } from '../../layout/edge-style';
 import { LayoutInstance } from '../../layout/layoutinstance';
 import * as dagre from 'dagre';
 
@@ -43,6 +44,8 @@ type EdgeWithMetadata = Link<NodeWithMetadata> & {
   id: string, // Unique identifier for the edge
   label: string, // This is what is displayed on the edge
   color: string,
+  style?: EdgeStyle,
+  weight?: number,
   bidirectional?: boolean // Flag to indicate if this edge represents a bidirectional relationship
 };
 
@@ -579,6 +582,8 @@ export class WebColaLayout {
       id: edge.id,
       label: edge.label,
       color: edge.color,
+      style: edge.style,
+      weight: edge.weight,
     }
   }
 

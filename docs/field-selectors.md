@@ -27,6 +27,8 @@ directives:
       field: 'name'
       value: 'red'
       selector: 'Person'
+      style: 'dashed'
+      weight: 2
       
   # Color name relations blue, but only for Car atoms
   - edgeColor:
@@ -35,6 +37,18 @@ directives:
       selector: 'Car'
       
   # Company name relations will remain default color (black)
+```
+
+You can also apply the same style/weight options to inferred edges:
+
+```yaml
+directives:
+  - inferredEdge:
+      name: 'transitive'
+      selector: 'Person->Person'
+      color: 'gray'
+      style: 'dotted'
+      weight: 1.5
 ```
 
 ### Attributes with Selectors

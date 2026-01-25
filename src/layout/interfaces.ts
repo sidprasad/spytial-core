@@ -1,5 +1,6 @@
 import { Group } from "webcola";
 import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint, GroupByField, GroupBySelector } from "./layoutspec";
+import { EdgeStyle } from "./edge-style";
 
 export interface LayoutGroup {
     // The name of the group
@@ -47,6 +48,8 @@ export interface LayoutEdge {
     relationName : string;
     id : string;
     color: string;
+    style?: EdgeStyle;
+    weight?: number;
 }
 
 export class ImplicitConstraint {
