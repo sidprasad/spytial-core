@@ -15,7 +15,7 @@ export default defineConfig({
   splitting: false,
   sourcemap: true,  // Enable sourcemaps for debugging
   clean: true,
-  minify: false,
+  minify: true,
   target: 'es2020',
   outDir: 'dist',
   external: ['react', 'react-dom'],

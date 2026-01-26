@@ -10,7 +10,7 @@ export default defineConfig({
   globalName: 'IntegratedDemo',
   outDir: 'dist/components',
   clean: true,
-  minify: false, // Set to true for production
+  minify: true, // Minify for production bundle size
   sourcemap: true,
   // external: ['react', 'react-dom'], // Remove this line to bundle React
   target: 'es2020',
