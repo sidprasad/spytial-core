@@ -1742,7 +1742,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr("data-link-id", (d: any) => d.id || "")
       .attr("stroke", (d: any) => d.color)
       .attr("fill", "none")
-      .attr("stroke-width", (d: any) => d.weight ?? null)
+      // Use .style() for stroke-width so inline styles override CSS class rules (.link, .inferredLink)
+      .style("stroke-width", (d: any) => d.weight != null ? `${d.weight}px` : null)
       .attr("stroke-dasharray", (d: any) => this.getEdgeDasharray(d.style))
       .attr("marker-end", (d: any) => {
         if (this.isAlignmentEdge(d)) return "none";
