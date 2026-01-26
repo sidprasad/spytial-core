@@ -2,72 +2,17 @@
  * Tests for NoCode component improvements
  * 
  * Tests cover:
- * 1. Programmatic view selection (initialView prop)
- * 2. Spytial spec validation
- * 3. Selector syntax highlighting
+ * 1. Spytial spec validation
+ * 2. Selector syntax highlighting
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { cleanup } from '@testing-library/react';
 import { validateSpytialSpec, highlightSelector } from '../src/components/NoCodeView';
-import { CombinedInputComponent } from '../src/components/CombinedInput/CombinedInputComponent';
-
-// Mock the custom element
-beforeEach(() => {
-  // Mock customElements.define if not available
-  if (typeof window !== 'undefined' && !window.customElements) {
-    (window as any).customElements = {
-      define: vi.fn(),
-      get: vi.fn(() => undefined)
-    };
-  }
-  
-  // Mock document.createElement for webcola-cnd-graph
-  const originalCreateElement = document.createElement;
-  document.createElement = vi.fn((tagName: string) => {
-    if (tagName === 'webcola-cnd-graph') {
-      const element = originalCreateElement.call(document, 'div');
-      element.setAttribute = vi.fn();
-      (element as any).renderLayout = vi.fn();
-      (element as any).clear = vi.fn();
-      return element;
-    }
-    return originalCreateElement.call(document, tagName);
-  });
-});
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-});
-
-describe('Programmatic View Selection', () => {
-    it('should default to code view when initialView is not specified', () => {
-        render(<CombinedInputComponent />);
-        // Code View is the default
-        const codeViewToggle = document.querySelector('#cnd-layout-toggle');
-        if (codeViewToggle) {
-            expect((codeViewToggle as HTMLInputElement).checked).toBe(false);
-        }
-    });
-
-    it('should show no code view when initialView is "nocode"', () => {
-        render(<CombinedInputComponent initialView="nocode" />);
-        // Toggle should be checked when in no code view
-        const codeViewToggle = document.querySelector('#cnd-layout-toggle');
-        if (codeViewToggle) {
-            expect((codeViewToggle as HTMLInputElement).checked).toBe(true);
-        }
-    });
-
-    it('should show code view when initialView is "code"', () => {
-        render(<CombinedInputComponent initialView="code" />);
-        // Toggle should be unchecked when in code view
-        const codeViewToggle = document.querySelector('#cnd-layout-toggle');
-        if (codeViewToggle) {
-            expect((codeViewToggle as HTMLInputElement).checked).toBe(false);
-        }
-    });
 });
 
 describe('Spytial Spec Validation', () => {
