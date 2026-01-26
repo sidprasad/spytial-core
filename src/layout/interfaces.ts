@@ -50,6 +50,7 @@ export interface LayoutEdge {
     color: string;
     style?: EdgeStyle;
     weight?: number;
+    showLabel?: boolean;
 }
 
 export class ImplicitConstraint {

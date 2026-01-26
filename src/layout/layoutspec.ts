@@ -229,6 +229,7 @@ export interface InferredEdgeDirective extends VisualManipulation {
     color?: string;
     style?: EdgeStyle;
     weight?: number;
+    showLabel?: boolean;
 }
 
 export interface AtomHidingDirective extends VisualManipulation {
@@ -246,11 +247,21 @@ export interface AttributeDirective extends FieldDirective {}
 
 export interface FieldHidingDirective extends FieldDirective {}
 
-export interface EdgeColorDirective extends FieldDirective {
+/**
+ * EdgeStyleDirective is the canonical interface for edge styling.
+ * It allows customization of color, line style, weight, and label visibility.
+ */
+export interface EdgeStyleDirective extends FieldDirective {
     color: string;
     style?: EdgeStyle;
     weight?: number;
+    showLabel?: boolean;
 }
+
+/**
+ * @deprecated Use EdgeStyleDirective instead. EdgeColorDirective is retained for backwards compatibility.
+ */
+export type EdgeColorDirective = EdgeStyleDirective;
 
 
 export interface ProjectionDirective extends DirectiveOperation {
@@ -746,7 +757,8 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
                         field: d.edgeColor.field,
                         selector: d.edgeColor.selector,
                         style: d.edgeColor.style,
-                        weight: d.edgeColor.weight
+                        weight: d.edgeColor.weight,
+                        showLabel: d.edgeColor.showLabel
                     }
                 });
 
@@ -781,7 +793,8 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
             selector: d.inferredEdge.selector,
             color: d.inferredEdge.color,
             style: d.inferredEdge.style,
-            weight: d.inferredEdge.weight
+            weight: d.inferredEdge.weight,
+            showLabel: d.inferredEdge.showLabel
         }
     });
 

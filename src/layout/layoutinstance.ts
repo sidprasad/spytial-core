@@ -1689,6 +1689,7 @@ export class LayoutInstance {
             let color = this.getEdgeColor(relName, edge.v, edge.w, edgeId);
             let style = this.getEdgeStyle(relName, edge.v, edge.w, edgeId);
             let weight = this.getEdgeWeight(relName, edge.v, edge.w, edgeId);
+            let showLabel = this.getEdgeShowLabel(relName, edge.v, edge.w, edgeId);
 
             // Skip edges with missing source or target nodes
             if (!source || !target || !edgeId) {
@@ -1704,6 +1705,7 @@ export class LayoutInstance {
                 color: color,
                 style: style,
                 weight: weight,
+                showLabel: showLabel,
             };
             return e;
         }).filter((edge): edge is LayoutEdge => edge !== null);
@@ -1921,6 +1923,24 @@ export class LayoutInstance {
 
         const directive = this.findEdgeDirective(relName, sourceAtom);
         return this.normalizeEdgeWeight(directive?.weight, "edge");
+    }
+
+    /**
+     * Gets whether the label should be shown for a specific edge based on directives.
+     * @param relName - The relation name of the edge.
+     * @param sourceAtom - The source atom ID.
+     * @param targetAtom - The target atom ID.
+     * @param edgeId - The edge ID (optional, used to identify inferred edges).
+     * @returns true if the label should be shown, false if hidden, undefined to use default.
+     */
+    private getEdgeShowLabel(relName: string, sourceAtom: string, targetAtom: string, edgeId?: string): boolean | undefined {
+        const inferredDirective = this.getInferredEdgeDirective(edgeId);
+        if (inferredDirective?.showLabel !== undefined) {
+            return inferredDirective.showLabel;
+        }
+
+        const directive = this.findEdgeDirective(relName, sourceAtom);
+        return directive?.showLabel;
     }
 
     private getInferredEdgeDirective(edgeId?: string): InferredEdgeDirective | undefined {
