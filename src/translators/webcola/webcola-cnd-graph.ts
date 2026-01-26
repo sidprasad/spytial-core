@@ -1789,6 +1789,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Adds text labels to link groups for non-alignment edges.
    * Labels are positioned at the midpoint of each link path.
    * Respects the showLabel property - if explicitly set to false, no label is rendered.
+   * Inferred edges always show their labels.
    * 
    * @param linkGroups - D3 selection of link group elements
    */
@@ -1796,7 +1797,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     linkGroups: d3.Selection<SVGGElement, any, any, unknown>
   ): void {
     linkGroups
-      .filter((d: any) => !this.isAlignmentEdge(d) && d.showLabel !== false)
+      .filter((d: any) => !this.isAlignmentEdge(d) && (this.isInferredEdge(d) || d.showLabel !== false))
       .append("text")
       .attr("class", "linklabel")
       .attr("text-anchor", "middle")

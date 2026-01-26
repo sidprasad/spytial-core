@@ -1932,13 +1932,10 @@ export class LayoutInstance {
      * @param targetAtom - The target atom ID.
      * @param edgeId - The edge ID (optional, used to identify inferred edges).
      * @returns true if the label should be shown, false if hidden, undefined to use default.
+     *          Note: Inferred edges always show labels, so this only applies to regular edges.
      */
     private getEdgeShowLabel(relName: string, sourceAtom: string, targetAtom: string, edgeId?: string): boolean | undefined {
-        const inferredDirective = this.getInferredEdgeDirective(edgeId);
-        if (inferredDirective?.showLabel !== undefined) {
-            return inferredDirective.showLabel;
-        }
-
+        // Inferred edges always show labels - no showLabel check needed
         const directive = this.findEdgeDirective(relName, sourceAtom);
         return directive?.showLabel;
     }

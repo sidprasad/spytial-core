@@ -229,7 +229,6 @@ export interface InferredEdgeDirective extends VisualManipulation {
     color?: string;
     style?: EdgeStyle;
     weight?: number;
-    showLabel?: boolean;
 }
 
 export interface AtomHidingDirective extends VisualManipulation {
@@ -793,8 +792,7 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
             selector: d.inferredEdge.selector,
             color: d.inferredEdge.color,
             style: d.inferredEdge.style,
-            weight: d.inferredEdge.weight,
-            showLabel: d.inferredEdge.showLabel
+            weight: d.inferredEdge.weight
         }
     });
 
