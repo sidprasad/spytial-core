@@ -2,6 +2,7 @@ import { Graph, Edge } from 'graphlib';
 import { IAtom, IDataInstance, IType } from '../data-instance/interfaces';
 import { PositionalConstraintError, GroupOverlapError, isPositionalConstraintError, isGroupOverlapError } from './constraint-validator';
 import { EdgeStyle, normalizeEdgeStyle } from './edge-style';
+import { resolveIconPath } from './icon-registry';
 
 
 import {
@@ -1867,15 +1868,17 @@ export class LayoutInstance {
             let iconPath = iconDirective.path;
 
             selected.forEach((nodeId) => {
+                // Resolve icon path (handles bundled icons, icon packs, and URLs)
+                const resolvedPath = resolveIconPath(iconPath);
                 if (nodeIconMap[nodeId]) {
                     const existingIcon = nodeIconMap[nodeId];
-                    if (existingIcon.path !== iconPath || existingIcon.showLabels !== iconDirective.showLabels) {
+                    if (existingIcon.path !== resolvedPath || existingIcon.showLabels !== iconDirective.showLabels) {
                         throw new Error(
-                            `Icon Conflict: "${nodeId}" cannot have multiple icons: ${JSON.stringify(existingIcon)}, ${JSON.stringify({ path: iconPath, showLabels: iconDirective.showLabels })}.`
+                            `Icon Conflict: "${nodeId}" cannot have multiple icons: ${JSON.stringify(existingIcon)}, ${JSON.stringify({ path: resolvedPath, showLabels: iconDirective.showLabels })}.`
                         );
                     }
                 }
-                nodeIconMap[nodeId] = { path: iconPath, showLabels: iconDirective.showLabels };
+                nodeIconMap[nodeId] = { path: resolvedPath, showLabels: iconDirective.showLabels };
             });
         });
 
