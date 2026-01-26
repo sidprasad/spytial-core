@@ -29,7 +29,8 @@ describe('CodeView Component Tests', () => {
   })
 
   describe('Interactions', () => {
-    
+    // TODO: Add interaction tests for CodeView component
+    it.skip('placeholder for future interaction tests', () => {})
   })
 
   describe('Accessibility', () => {
