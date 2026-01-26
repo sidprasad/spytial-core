@@ -246,11 +246,22 @@ export interface AttributeDirective extends FieldDirective {}
 
 export interface FieldHidingDirective extends FieldDirective {}
 
-export interface EdgeColorDirective extends FieldDirective {
+/**
+ * EdgeStyleDirective is the canonical interface for edge styling.
+ * It allows customization of color, line style, weight, label visibility, and edge visibility.
+ */
+export interface EdgeStyleDirective extends FieldDirective {
     color: string;
     style?: EdgeStyle;
     weight?: number;
+    showLabel?: boolean;
+    hidden?: boolean;
 }
+
+/**
+ * @deprecated Use EdgeStyleDirective instead. EdgeColorDirective is retained for backwards compatibility.
+ */
+export type EdgeColorDirective = EdgeStyleDirective;
 
 
 export interface ProjectionDirective extends DirectiveOperation {
@@ -746,7 +757,9 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
                         field: d.edgeColor.field,
                         selector: d.edgeColor.selector,
                         style: d.edgeColor.style,
-                        weight: d.edgeColor.weight
+                        weight: d.edgeColor.weight,
+                        showLabel: d.edgeColor.showLabel,
+                        hidden: d.edgeColor.hidden
                     }
                 });
 

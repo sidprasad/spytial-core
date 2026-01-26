@@ -46,6 +46,7 @@ type EdgeWithMetadata = Link<NodeWithMetadata> & {
   color: string,
   style?: EdgeStyle,
   weight?: number,
+  showLabel?: boolean, // Whether to show the edge label (default: true)
   bidirectional?: boolean // Flag to indicate if this edge represents a bidirectional relationship
 };
 
@@ -584,6 +585,7 @@ export class WebColaLayout {
       color: edge.color,
       style: edge.style,
       weight: edge.weight,
+      showLabel: edge.showLabel,
     }
   }
 

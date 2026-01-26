@@ -287,35 +287,44 @@ export class LayoutInstance {
     }
 
     isHiddenField(fieldId: string, sourceAtom?: string, targetAtom?: string): boolean {
+        // First check legacy hiddenFields directives
         const matchingDirectives = this._layoutSpec.directives.hiddenFields.filter((hd) => hd.field === fieldId);
         
-        if (matchingDirectives.length === 0) {
-            return false;
-        }
-        
-        // If no atoms provided or no selector-based directives, use legacy behavior
-        if (!sourceAtom || !targetAtom) {
-            return matchingDirectives.some(hd => !hd.selector);
-        }
-        
-        // Check selector-based directives
-        for (const directive of matchingDirectives) {
-            if (!directive.selector) {
-                // Legacy directive without selector matches any atoms
-                return true;
-            }
-            
-            try {
-                const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
-                const selectedAtoms = selectorResult.selectedAtoms();
-                
-                // Check if source atom is selected by the selector
-                if (selectedAtoms.includes(sourceAtom)) {
+        if (matchingDirectives.length > 0) {
+            // If no atoms provided or no selector-based directives, use legacy behavior
+            if (!sourceAtom || !targetAtom) {
+                if (matchingDirectives.some(hd => !hd.selector)) {
                     return true;
                 }
-            } catch (error) {
-                console.warn(`Failed to evaluate hidden field selector "${directive.selector}":`, error);
-                // Continue to next directive on error
+            } else {
+                // Check selector-based directives
+                for (const directive of matchingDirectives) {
+                    if (!directive.selector) {
+                        // Legacy directive without selector matches any atoms
+                        return true;
+                    }
+                    
+                    try {
+                        const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
+                        const selectedAtoms = selectorResult.selectedAtoms();
+                        
+                        // Check if source atom is selected by the selector
+                        if (selectedAtoms.includes(sourceAtom)) {
+                            return true;
+                        }
+                    } catch (error) {
+                        console.warn(`Failed to evaluate hidden field selector "${directive.selector}":`, error);
+                        // Continue to next directive on error
+                    }
+                }
+            }
+        }
+        
+        // Also check EdgeStyle directives with hidden: true
+        if (sourceAtom) {
+            const edgeDirective = this.findEdgeDirective(fieldId, sourceAtom);
+            if (edgeDirective?.hidden === true) {
+                return true;
             }
         }
         
@@ -1689,6 +1698,7 @@ export class LayoutInstance {
             let color = this.getEdgeColor(relName, edge.v, edge.w, edgeId);
             let style = this.getEdgeStyle(relName, edge.v, edge.w, edgeId);
             let weight = this.getEdgeWeight(relName, edge.v, edge.w, edgeId);
+            let showLabel = this.getEdgeShowLabel(relName, edge.v, edge.w, edgeId);
 
             // Skip edges with missing source or target nodes
             if (!source || !target || !edgeId) {
@@ -1704,6 +1714,7 @@ export class LayoutInstance {
                 color: color,
                 style: style,
                 weight: weight,
+                showLabel: showLabel,
             };
             return e;
         }).filter((edge): edge is LayoutEdge => edge !== null);
@@ -1921,6 +1932,21 @@ export class LayoutInstance {
 
         const directive = this.findEdgeDirective(relName, sourceAtom);
         return this.normalizeEdgeWeight(directive?.weight, "edge");
+    }
+
+    /**
+     * Gets whether the label should be shown for a specific edge based on directives.
+     * @param relName - The relation name of the edge.
+     * @param sourceAtom - The source atom ID.
+     * @param targetAtom - The target atom ID.
+     * @param edgeId - The edge ID (optional, used to identify inferred edges).
+     * @returns true if the label should be shown, false if hidden, undefined to use default.
+     *          Note: Inferred edges always show labels, so this only applies to regular edges.
+     */
+    private getEdgeShowLabel(relName: string, sourceAtom: string, targetAtom: string, edgeId?: string): boolean | undefined {
+        // Inferred edges always show labels - no showLabel check needed
+        const directive = this.findEdgeDirective(relName, sourceAtom);
+        return directive?.showLabel;
     }
 
     private getInferredEdgeDirective(edgeId?: string): InferredEdgeDirective | undefined {
