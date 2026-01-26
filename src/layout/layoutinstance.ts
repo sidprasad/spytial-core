@@ -1,6 +1,7 @@
 import { Graph, Edge } from 'graphlib';
 import { IAtom, IDataInstance, IType } from '../data-instance/interfaces';
 import { PositionalConstraintError, GroupOverlapError, isPositionalConstraintError, isGroupOverlapError } from './constraint-validator';
+import { EdgeStyle, normalizeEdgeStyle } from './edge-style';
 
 
 import {
@@ -12,7 +13,8 @@ import {
 import {
     LayoutSpec,
     RelativeOrientationConstraint, CyclicOrientationConstraint,
-    GroupByField, GroupBySelector, AlignConstraint
+    GroupByField, GroupBySelector, AlignConstraint,
+    EdgeColorDirective, InferredEdgeDirective
 } from './layoutspec';
 
 
@@ -1685,6 +1687,8 @@ export class LayoutInstance {
             let target = layoutNodes.find((node) => node.id === edge.w);
             let relName = this.getRelationName(g, edge);
             let color = this.getEdgeColor(relName, edge.v, edge.w, edgeId);
+            let style = this.getEdgeStyle(relName, edge.v, edge.w, edgeId);
+            let weight = this.getEdgeWeight(relName, edge.v, edge.w, edgeId);
 
             // Skip edges with missing source or target nodes
             if (!source || !target || !edgeId) {
@@ -1698,6 +1702,8 @@ export class LayoutInstance {
                 relationName: relName,
                 id: edgeId,
                 color: color,
+                style: style,
+                weight: weight,
             };
             return e;
         }).filter((edge): edge is LayoutEdge => edge !== null);
@@ -1882,23 +1888,52 @@ export class LayoutInstance {
      * @returns The color for the edge, or "black" as default.
      */
     private getEdgeColor(relName: string, sourceAtom: string, targetAtom: string, edgeId?: string): string {
-        // Check for inferred edge colors first
-        const inferredEdgePrefix = "_inferred_";
-        if (edgeId && edgeId.includes(inferredEdgePrefix)) {
-            const inferredEdges = this._layoutSpec.directives.inferredEdges;
-            for (const directive of inferredEdges) {
-                // Check if this edge ID belongs to this inferred edge directive
-                if (edgeId.includes(`${inferredEdgePrefix}<:${directive.name}`)) {
-                    // If a color is specified, use it
-                    if (directive.color) {
-                        return directive.color;
-                    }
-                    // Otherwise, fall through to use default color
-                    break;
-                }
-            }
+        const inferredDirective = this.getInferredEdgeDirective(edgeId);
+        if (inferredDirective?.color) {
+            return inferredDirective.color;
         }
 
+        const directive = this.findEdgeDirective(relName, sourceAtom);
+        if (directive?.color) {
+            return directive.color;
+        }
+
+        return "black"; // Default color
+    }
+
+    private getEdgeStyle(relName: string, sourceAtom: string, targetAtom: string, edgeId?: string): EdgeStyle | undefined {
+        const inferredDirective = this.getInferredEdgeDirective(edgeId);
+        const inferredStyle = normalizeEdgeStyle(inferredDirective?.style);
+        if (inferredStyle) {
+            return inferredStyle;
+        }
+
+        const directive = this.findEdgeDirective(relName, sourceAtom);
+        return normalizeEdgeStyle(directive?.style);
+    }
+
+    private getEdgeWeight(relName: string, sourceAtom: string, targetAtom: string, edgeId?: string): number | undefined {
+        const inferredDirective = this.getInferredEdgeDirective(edgeId);
+        const inferredWeight = this.normalizeEdgeWeight(inferredDirective?.weight, "inferred edge");
+        if (inferredWeight !== undefined) {
+            return inferredWeight;
+        }
+
+        const directive = this.findEdgeDirective(relName, sourceAtom);
+        return this.normalizeEdgeWeight(directive?.weight, "edge");
+    }
+
+    private getInferredEdgeDirective(edgeId?: string): InferredEdgeDirective | undefined {
+        const inferredEdgePrefix = "_inferred_";
+        if (!edgeId || !edgeId.includes(inferredEdgePrefix)) {
+            return undefined;
+        }
+
+        const inferredEdges = this._layoutSpec.directives.inferredEdges;
+        return inferredEdges.find((directive) => edgeId.includes(`${inferredEdgePrefix}<:${directive.name}`));
+    }
+
+    private findEdgeDirective(relName: string, sourceAtom: string): EdgeColorDirective | undefined {
         const colorDirectives = this._layoutSpec.directives.edgeColors;
         
         for (const directive of colorDirectives) {
@@ -1908,7 +1943,7 @@ export class LayoutInstance {
             
             if (!directive.selector) {
                 // Legacy directive without selector applies to all edges with this field
-                return directive.color;
+                return directive;
             }
             
             try {
@@ -1917,15 +1952,28 @@ export class LayoutInstance {
                 
                 // Check if source atom is selected by the selector
                 if (selectedAtoms.includes(sourceAtom)) {
-                    return directive.color;
+                    return directive;
                 }
             } catch (error) {
-                console.warn(`Failed to evaluate edge color selector "${directive.selector}":`, error);
+                console.warn(`Failed to evaluate edge selector "${directive.selector}":`, error);
                 // Continue to next directive on error
             }
         }
-        
-        return "black"; // Default color
+
+        return undefined;
+    }
+
+    private normalizeEdgeWeight(weight: unknown, context: string): number | undefined {
+        if (weight === undefined || weight === null) {
+            return undefined;
+        }
+
+        if (typeof weight !== "number" || Number.isNaN(weight) || weight <= 0) {
+            console.warn(`Ignoring ${context} weight because it is not a positive number: ${weight}`);
+            return undefined;
+        }
+
+        return weight;
     }
 
     /**

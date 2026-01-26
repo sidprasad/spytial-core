@@ -19,6 +19,8 @@ export const ColorEdgeSelector: React.FC<ColorEdgeSelectorProps> = ({
   const field = (directiveData.params.field as string) || '';
   const value = (directiveData.params.value as string) || '#000000';
   const selector = (directiveData.params.selector as string) || '';
+  const style = (directiveData.params.style as string) || '';
+  const weight = directiveData.params.weight as number | undefined;
 
   return (
     <>
@@ -59,6 +61,41 @@ export const ColorEdgeSelector: React.FC<ColorEdgeSelectorProps> = ({
           defaultValue={value}
           onChange={(e) => onUpdate({ params: { ...directiveData.params, value: e.target.value } })}
           required
+        />
+      </div>
+      <div className="input-group">
+        <div className="input-group-prepend">
+          <span className="input-group-text">Style</span>
+        </div>
+        <select
+          name="style"
+          className="form-control"
+          value={style}
+          onChange={(e) => onUpdate({ params: { ...directiveData.params, style: e.target.value || undefined } })}
+        >
+          <option value="">Default</option>
+          <option value="solid">Solid</option>
+          <option value="dashed">Dashed</option>
+          <option value="dotted">Dotted</option>
+        </select>
+      </div>
+      <div className="input-group">
+        <div className="input-group-prepend">
+          <span className="input-group-text">Weight</span>
+        </div>
+        <input
+          type="number"
+          name="weight"
+          className="form-control"
+          min="0"
+          step="0.5"
+          value={weight ?? ''}
+          placeholder="Default"
+          onChange={(e) => {
+            const rawValue = e.target.value;
+            const parsed = rawValue === '' ? undefined : Number(rawValue);
+            onUpdate({ params: { ...directiveData.params, weight: parsed } });
+          }}
         />
       </div>
     </>

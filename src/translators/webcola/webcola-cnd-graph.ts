@@ -1742,7 +1742,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr("data-link-id", (d: any) => d.id || "")
       .attr("stroke", (d: any) => d.color)
       .attr("fill", "none")
-      .attr("stroke-width", 1)
+      // Use .style() for stroke-width so inline styles override CSS class rules (.link, .inferredLink)
+      .style("stroke-width", (d: any) => d.weight != null ? `${d.weight}px` : null)
+      .attr("stroke-dasharray", (d: any) => this.getEdgeDasharray(d.style))
       .attr("marker-end", (d: any) => {
         if (this.isAlignmentEdge(d)) return "none";
         return "url(#end-arrow)";
@@ -1764,6 +1766,23 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .style('cursor', () => {
         return this.isInputModeActive ? 'pointer' : 'default';
       });
+  }
+
+  private getEdgeDasharray(style?: string): string | null {
+    if (!style) {
+      return null;
+    }
+
+    switch (style.toLowerCase()) {
+      case 'dotted':
+        return '1,4';
+      case 'dashed':
+        return '6,4';
+      case 'solid':
+        return null;
+      default:
+        return null;
+    }
   }
 
   /**

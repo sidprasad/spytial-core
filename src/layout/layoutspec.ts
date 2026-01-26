@@ -1,4 +1,5 @@
 import * as yaml from 'js-yaml';
+import { EdgeStyle } from './edge-style';
 
 export type RelativeDirection = "above" | "below" | "left" | "right" | "directlyAbove" | "directlyBelow" | "directlyLeft" | "directlyRight";
 export type RotationDirection = "clockwise" | "counterclockwise";
@@ -226,6 +227,8 @@ export interface AtomIconDirective extends VisualManipulation {
 export interface InferredEdgeDirective extends VisualManipulation {
     name : string;
     color?: string;
+    style?: EdgeStyle;
+    weight?: number;
 }
 
 export interface AtomHidingDirective extends VisualManipulation {
@@ -245,6 +248,8 @@ export interface FieldHidingDirective extends FieldDirective {}
 
 export interface EdgeColorDirective extends FieldDirective {
     color: string;
+    style?: EdgeStyle;
+    weight?: number;
 }
 
 
@@ -739,7 +744,9 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
                     return {
                         color: d.edgeColor.value,
                         field: d.edgeColor.field,
-                        selector: d.edgeColor.selector
+                        selector: d.edgeColor.selector,
+                        style: d.edgeColor.style,
+                        weight: d.edgeColor.weight
                     }
                 });
 
@@ -772,7 +779,9 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
         return {
             name: d.inferredEdge.name,
             selector: d.inferredEdge.selector,
-            color: d.inferredEdge.color
+            color: d.inferredEdge.color,
+            style: d.inferredEdge.style,
+            weight: d.inferredEdge.weight
         }
     });
 
