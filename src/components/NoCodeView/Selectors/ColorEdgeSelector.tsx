@@ -9,8 +9,8 @@ interface ColorEdgeSelectorProps {
 }
 
 /**
- * Minimal React component for edge color directive.
- * Includes field input and color picker.
+ * Minimal React component for edge style directive.
+ * Includes field input, color picker, line style, weight, and label visibility.
  */
 export const ColorEdgeSelector: React.FC<ColorEdgeSelectorProps> = ({
   directiveData,
@@ -21,6 +21,7 @@ export const ColorEdgeSelector: React.FC<ColorEdgeSelectorProps> = ({
   const selector = (directiveData.params.selector as string) || '';
   const style = (directiveData.params.style as string) || '';
   const weight = directiveData.params.weight as number | undefined;
+  const showLabel = directiveData.params.showLabel as boolean | undefined;
 
   return (
     <>
@@ -97,6 +98,21 @@ export const ColorEdgeSelector: React.FC<ColorEdgeSelectorProps> = ({
             onUpdate({ params: { ...directiveData.params, weight: parsed } });
           }}
         />
+      </div>
+      <div className="input-group">
+        <div className="form-check">
+          <input
+            type="checkbox"
+            name="showLabel"
+            className="form-check-input"
+            id="showLabel-checkbox"
+            checked={showLabel !== false}
+            onChange={(e) => onUpdate({ params: { ...directiveData.params, showLabel: e.target.checked ? undefined : false } })}
+          />
+          <label className="form-check-label" htmlFor="showLabel-checkbox">
+            Show Edge Label
+          </label>
+        </div>
       </div>
     </>
   );
