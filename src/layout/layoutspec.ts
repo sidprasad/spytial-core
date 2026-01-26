@@ -248,13 +248,14 @@ export interface FieldHidingDirective extends FieldDirective {}
 
 /**
  * EdgeStyleDirective is the canonical interface for edge styling.
- * It allows customization of color, line style, weight, and label visibility.
+ * It allows customization of color, line style, weight, label visibility, and edge visibility.
  */
 export interface EdgeStyleDirective extends FieldDirective {
     color: string;
     style?: EdgeStyle;
     weight?: number;
     showLabel?: boolean;
+    hidden?: boolean;
 }
 
 /**
@@ -757,7 +758,8 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
                         selector: d.edgeColor.selector,
                         style: d.edgeColor.style,
                         weight: d.edgeColor.weight,
-                        showLabel: d.edgeColor.showLabel
+                        showLabel: d.edgeColor.showLabel,
+                        hidden: d.edgeColor.hidden
                     }
                 });
 

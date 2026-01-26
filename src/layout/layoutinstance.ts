@@ -287,35 +287,44 @@ export class LayoutInstance {
     }
 
     isHiddenField(fieldId: string, sourceAtom?: string, targetAtom?: string): boolean {
+        // First check legacy hiddenFields directives
         const matchingDirectives = this._layoutSpec.directives.hiddenFields.filter((hd) => hd.field === fieldId);
         
-        if (matchingDirectives.length === 0) {
-            return false;
-        }
-        
-        // If no atoms provided or no selector-based directives, use legacy behavior
-        if (!sourceAtom || !targetAtom) {
-            return matchingDirectives.some(hd => !hd.selector);
-        }
-        
-        // Check selector-based directives
-        for (const directive of matchingDirectives) {
-            if (!directive.selector) {
-                // Legacy directive without selector matches any atoms
-                return true;
-            }
-            
-            try {
-                const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
-                const selectedAtoms = selectorResult.selectedAtoms();
-                
-                // Check if source atom is selected by the selector
-                if (selectedAtoms.includes(sourceAtom)) {
+        if (matchingDirectives.length > 0) {
+            // If no atoms provided or no selector-based directives, use legacy behavior
+            if (!sourceAtom || !targetAtom) {
+                if (matchingDirectives.some(hd => !hd.selector)) {
                     return true;
                 }
-            } catch (error) {
-                console.warn(`Failed to evaluate hidden field selector "${directive.selector}":`, error);
-                // Continue to next directive on error
+            } else {
+                // Check selector-based directives
+                for (const directive of matchingDirectives) {
+                    if (!directive.selector) {
+                        // Legacy directive without selector matches any atoms
+                        return true;
+                    }
+                    
+                    try {
+                        const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
+                        const selectedAtoms = selectorResult.selectedAtoms();
+                        
+                        // Check if source atom is selected by the selector
+                        if (selectedAtoms.includes(sourceAtom)) {
+                            return true;
+                        }
+                    } catch (error) {
+                        console.warn(`Failed to evaluate hidden field selector "${directive.selector}":`, error);
+                        // Continue to next directive on error
+                    }
+                }
+            }
+        }
+        
+        // Also check EdgeStyle directives with hidden: true
+        if (sourceAtom) {
+            const edgeDirective = this.findEdgeDirective(fieldId, sourceAtom);
+            if (edgeDirective?.hidden === true) {
+                return true;
             }
         }
         
