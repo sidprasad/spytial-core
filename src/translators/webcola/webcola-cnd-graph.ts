@@ -2500,12 +2500,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         const hasExtraContent = hasLabels || hasAttributes;
         const mainLabelMaxHeight = hasExtraContent ? maxTextHeight * 0.5 : maxTextHeight;
         
-        // Calculate font size based on available space (for consistency across similar-sized nodes)
-        // Use a representative text length for sizing rather than the actual text
-        // This ensures nodes of similar size have consistent font sizes
-        const representativeText = "SampleText"; // Standard length for sizing
+        // Calculate font size based on available space
+        // Use the actual display label to ensure text fits within node bounds
         const mainLabelFontSize = this.calculateOptimalFontSize(
-          representativeText,
+          displayLabel,
           maxTextWidth,
           mainLabelMaxHeight,
           'system-ui'
@@ -2533,12 +2531,27 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           .text(displayLabel);
 
         // Calculate font size for secondary content (labels and attributes)
+        // Find the longest secondary text to ensure all content fits
+        let longestSecondaryText = "";
+        for (const [key, values] of labelEntries) {
+          const labelText = Array.isArray(values) ? values.join(', ') : String(values);
+          if (labelText.length > longestSecondaryText.length) {
+            longestSecondaryText = labelText;
+          }
+        }
+        for (const [key, value] of attributeEntries) {
+          const attributeText = `${key}: ${value}`;
+          if (attributeText.length > longestSecondaryText.length) {
+            longestSecondaryText = attributeText;
+          }
+        }
+        
         // Use a minimum ratio of the main label size to ensure readability
         const minSecondaryFontSize = mainLabelFontSize * 0.65; // At least 65% of main label
         const remainingHeight = maxTextHeight - lineHeight;
         const calculatedSecondaryFontSize = totalSecondaryEntries > 0 
           ? this.calculateOptimalFontSize(
-              representativeText,
+              longestSecondaryText || "SampleText",
               maxTextWidth,
               remainingHeight / totalSecondaryEntries,
               'system-ui'
