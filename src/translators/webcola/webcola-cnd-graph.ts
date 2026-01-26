@@ -2935,10 +2935,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     linkGroups.select("path")
         .attr("d", (d: any) => {
             // Create orthogonal (Manhattan) path for grid mode
-            const sourceX = d.source?.bounds?.cx() ?? d.source?.x ?? 0;
-            const sourceY = d.source?.bounds?.cy() ?? d.source?.y ?? 0;
-            const targetX = d.target?.bounds?.cx() ?? d.target?.x ?? 0;
-            const targetY = d.target?.bounds?.cy() ?? d.target?.y ?? 0;
+            // Use node.x/y as primary source (same as default mode) with bounds as fallback
+            const sourceX = d.source?.x ?? d.source?.bounds?.cx() ?? 0;
+            const sourceY = d.source?.y ?? d.source?.bounds?.cy() ?? 0;
+            const targetX = d.target?.x ?? d.target?.bounds?.cx() ?? 0;
+            const targetY = d.target?.y ?? d.target?.bounds?.cy() ?? 0;
             
             // Create simple orthogonal path (horizontal then vertical, or vice versa)
             const dx = targetX - sourceX;
@@ -2975,8 +2976,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
                 const midpoint = pathElement.getPointAtLength(pathLength / 2);
                 return midpoint.x;
             }
-            const sourceX = d.source?.bounds?.cx() ?? d.source?.x ?? 0;
-            const targetX = d.target?.bounds?.cx() ?? d.target?.x ?? 0;
+            // Use node.x/y as primary source (same as default mode)
+            const sourceX = d.source?.x ?? d.source?.bounds?.cx() ?? 0;
+            const targetX = d.target?.x ?? d.target?.bounds?.cx() ?? 0;
             return (sourceX + targetX) / 2;
         })
         .attr("y", (d: any) => {
@@ -2986,8 +2988,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
                 const midpoint = pathElement.getPointAtLength(pathLength / 2);
                 return midpoint.y;
             }
-            const sourceY = d.source?.bounds?.cy() ?? d.source?.y ?? 0;
-            const targetY = d.target?.bounds?.cy() ?? d.target?.y ?? 0;
+            // Use node.x/y as primary source (same as default mode)
+            const sourceY = d.source?.y ?? d.source?.bounds?.cy() ?? 0;
+            const targetY = d.target?.y ?? d.target?.bounds?.cy() ?? 0;
             return (sourceY + targetY) / 2;
         })
         .raise();
@@ -3164,9 +3167,21 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         return;
       }
 
+      // Debug: log node positions BEFORE ensureNodeBounds
+      console.log('[gridify] Node positions BEFORE ensureNodeBounds:');
+      nodes.slice(0, 3).forEach((n: any) => {
+        console.log(`  ${n.id}: x=${n.x?.toFixed(2)}, y=${n.y?.toFixed(2)}, bounds.cx=${n.bounds?.cx?.()?.toFixed(2)}, bounds.x=${n.bounds?.x?.toFixed(2)}`);
+      });
+
       // Force recompute all node bounds from current positions
       // This ensures bounds are always in sync with node x/y coordinates
       this.ensureNodeBounds(true);
+
+      // Debug: log node positions AFTER ensureNodeBounds  
+      console.log('[gridify] Node positions AFTER ensureNodeBounds:');
+      nodes.slice(0, 3).forEach((n: any) => {
+        console.log(`  ${n.id}: x=${n.x?.toFixed(2)}, y=${n.y?.toFixed(2)}, bounds.cx=${n.bounds?.cx?.()?.toFixed(2)}, bounds.x=${n.bounds?.x?.toFixed(2)}`);
+      });
 
       // Create the grid router
       const gridrouter = this.route(nodes, groups, margin, groupMargin);
@@ -3176,6 +3191,20 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       
       // Route edges using the GridRouter
       const routableEdges = edges.filter((edge: any) => edge?.source?.routerNode && edge?.target?.routerNode);
+      
+      // Debug: log routing info
+      console.log('[gridify] Total edges:', edges.length, 'Routable:', routableEdges.length);
+      if (routableEdges.length !== edges.length) {
+        const unroutableEdges = edges.filter((edge: any) => !edge?.source?.routerNode || !edge?.target?.routerNode);
+        unroutableEdges.forEach((e: any) => {
+          console.warn('[gridify] Unroutable edge:', e.id, 
+            'source routerNode:', !!e?.source?.routerNode,
+            'target routerNode:', !!e?.target?.routerNode,
+            'source:', e?.source?.id, 'x:', e?.source?.x, 'y:', e?.source?.y,
+            'target:', e?.target?.id, 'x:', e?.target?.x, 'y:', e?.target?.y);
+        });
+      }
+      
       routes = gridrouter.routeEdges(
         routableEdges,
         nudgeGap,
@@ -3191,6 +3220,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         }
       });
 
+      console.log('[gridify] Routes generated:', routesByEdgeId.size, 'out of', routableEdges.length);
+
       const linkGroups = this.container.selectAll(".link-group").data(edges, (d: any) => d.id ?? d);
 
       linkGroups.select("path")
@@ -3198,10 +3229,16 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           const route = routesByEdgeId.get(edgeData.id);
           if (!route) {
             // Create orthogonal fallback path for unroutable edges
-            const sourceX = edgeData.source?.bounds?.cx() ?? edgeData.source?.x ?? 0;
-            const sourceY = edgeData.source?.bounds?.cy() ?? edgeData.source?.y ?? 0;
-            const targetX = edgeData.target?.bounds?.cx() ?? edgeData.target?.x ?? 0;
-            const targetY = edgeData.target?.bounds?.cy() ?? edgeData.target?.y ?? 0;
+            // Use node.x/y as primary source (same as default mode) with bounds as fallback
+            const sourceX = edgeData.source?.x ?? edgeData.source?.bounds?.cx() ?? 0;
+            const sourceY = edgeData.source?.y ?? edgeData.source?.bounds?.cy() ?? 0;
+            const targetX = edgeData.target?.x ?? edgeData.target?.bounds?.cx() ?? 0;
+            const targetY = edgeData.target?.y ?? edgeData.target?.bounds?.cy() ?? 0;
+            
+            console.log('[gridify] Fallback path for edge:', edgeData.id, 
+              'from', edgeData.source?.id, '(', sourceX, ',', sourceY, ')',
+              'to', edgeData.target?.id, '(', targetX, ',', targetY, ')');
+            
             const dx = targetX - sourceX;
             const dy = targetY - sourceY;
             
@@ -3237,29 +3274,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           return adjustedPath || p.routepath;
         });
 
-      // Update node positions
-      // NOTE: `transition()` gives the snap-to-grid effect
-      // NOTE: Uses absolute positioning to be compatible with pre-existing code (also easier to reason)
-      // NOTE: Use `d.bounds` to get the bounds of the node, `d.bounds.cx()` and `d.bounds.cy()` for center coordinates
-      this.container.selectAll(".node").transition()
-          .attr("x", function (d: any) { return d.bounds.x; })
-          .attr("y", function (d: any) { return d.bounds.y; })
-          .attr("width", function (d: any) { return d.bounds.width(); })
-          .attr("height", function (d: any) { return d.bounds.height(); });
+      // NOTE: Do NOT update node positions here!
+      // gridify() should only reroute edges, not move nodes.
+      // Node positions are set by the layout algorithm (cola) and should not change when switching routing modes.
+      // The edges use the same node.x/y coordinates as default mode, ensuring consistency.
       
-      // Update group positions
-      // var groupPadding = margin - groupMargin;
-      // console.log("Group padding", groupPadding);
-      this.container.selectAll(".group").transition()
-          .attr("x", function (d: any) { return d.bounds.x; })
-          .attr('y', function (d: any) { return d.bounds.y; })
-          .attr('width', function (d: any) { return d.bounds.width(); })
-          .attr('height', function (d: any) { return d.bounds.height(); });
-      
-      // Update label positions
-      this.container.selectAll(".label").transition()
-          .attr("x", function (d: any) { return d.bounds.cx(); })
-          .attr("y", function (d: any) { return d.bounds.cy(); });
+      // NOTE: Do NOT update group or label positions either - keep them consistent with default mode.
       
       // Position link labels at route midpoints
       this.gridUpdateLinkLabels(edges, routesByEdgeId);
@@ -3312,7 +3332,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           }
         }
         const midpoint = this.getGridRouteMidpoint(edgeData, routesByEdgeId);
-        return midpoint?.x ?? (edgeData.source?.bounds?.cx() ?? edgeData.source?.x ?? 0);
+        // Use node.x/y as primary source (same as default mode)
+        return midpoint?.x ?? (edgeData.source?.x ?? edgeData.source?.bounds?.cx() ?? 0);
       })
       .attr("y", (edgeData: any) => {
         // Use the actual rendered path element to find the true midpoint
@@ -3327,7 +3348,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           }
         }
         const midpoint = this.getGridRouteMidpoint(edgeData, routesByEdgeId);
-        return midpoint?.y ?? (edgeData.source?.bounds?.cy() ?? edgeData.source?.y ?? 0);
+        // Use node.x/y as primary source (same as default mode)
+        return midpoint?.y ?? (edgeData.source?.y ?? edgeData.source?.bounds?.cy() ?? 0);
       })
       .attr("text-anchor", "middle")
       .attr("dominant-baseline", "middle");
@@ -3336,10 +3358,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private getGridRouteMidpoint(edgeData: any, routesByEdgeId: Map<string, any>) {
     const route = routesByEdgeId.get(edgeData.id);
     if (!route) {
-      const sourceX = edgeData.source?.bounds?.cx() ?? edgeData.source?.x ?? 0;
-      const sourceY = edgeData.source?.bounds?.cy() ?? edgeData.source?.y ?? 0;
-      const targetX = edgeData.target?.bounds?.cx() ?? edgeData.target?.x ?? 0;
-      const targetY = edgeData.target?.bounds?.cy() ?? edgeData.target?.y ?? 0;
+      // Use node.x/y as primary source (same as default mode) with bounds as fallback
+      const sourceX = edgeData.source?.x ?? edgeData.source?.bounds?.cx() ?? 0;
+      const sourceY = edgeData.source?.y ?? edgeData.source?.bounds?.cy() ?? 0;
+      const targetX = edgeData.target?.x ?? edgeData.target?.bounds?.cx() ?? 0;
+      const targetY = edgeData.target?.y ?? edgeData.target?.bounds?.cy() ?? 0;
       return {
         x: (sourceX + targetX) / 2,
         y: (sourceY + targetY) / 2
