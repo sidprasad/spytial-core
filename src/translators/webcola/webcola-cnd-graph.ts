@@ -151,6 +151,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private storedTransform: any;
   
   /**
+   * Line function for grid edges (sharp right angles, no curves)
+   */
+  private readonly gridLineFunction: d3.Line<{ x: number; y: number }>;
+  
+  /**
    * Tracks whether the user has manually interacted with zoom/pan.
    * When true, we don't auto-fit the viewport to preserve user's view.
    */
@@ -231,6 +236,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .x((d: any) => d.x)
       .y((d: any) => d.y)
       .curve(d3.curveBasis);
+
+    // Grid line function uses linear interpolation for sharp right-angle turns
+    this.gridLineFunction = d3.line()
+      .x((d: any) => d.x)
+      .y((d: any) => d.y)
+      .curve(d3.curveLinear);
 
     // Initialize input mode keyboard event handlers
     this.inputModeEnabled = isInputAllowed;
@@ -2847,6 +2858,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
   private gridUpdatePositions() {
 
+    // Force recompute node bounds from current positions
+    // This is critical for grid mode to work correctly with all node types
+    this.ensureNodeBounds(true);
     
     const node = this.container.selectAll(".node");
     const mostSpecificTypeLabel = this.container.selectAll(".mostSpecificTypeLabel");
@@ -2915,27 +2929,63 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         .attr("text-anchor", "middle") // Center the text on its position
         .raise();
 
-    // UPDATE EDGES - Draw simple straight lines during drag for performance
-    // Grid routing will be recalculated when drag ends
+    // UPDATE EDGES - Use orthogonal routing for grid mode
+    // Maintain grid-like paths during drag for better visual consistency
     const linkGroups = this.container.selectAll(".link-group");
     linkGroups.select("path")
         .attr("d", (d: any) => {
-            // Use simple straight line routing during drag for better performance
+            // Create orthogonal (Manhattan) path for grid mode
             const sourceX = d.source?.bounds?.cx() ?? d.source?.x ?? 0;
             const sourceY = d.source?.bounds?.cy() ?? d.source?.y ?? 0;
             const targetX = d.target?.bounds?.cx() ?? d.target?.x ?? 0;
             const targetY = d.target?.bounds?.cy() ?? d.target?.y ?? 0;
-            return this.lineFunction([{ x: sourceX, y: sourceY }, { x: targetX, y: targetY }]);
+            
+            // Create simple orthogonal path (horizontal then vertical, or vice versa)
+            const dx = targetX - sourceX;
+            const dy = targetY - sourceY;
+            
+            // Choose routing based on which direction is dominant
+            if (Math.abs(dx) > Math.abs(dy)) {
+                // Horizontal first, then vertical
+                const midX = sourceX + dx / 2;
+                return this.gridLineFunction([
+                    { x: sourceX, y: sourceY },
+                    { x: midX, y: sourceY },
+                    { x: midX, y: targetY },
+                    { x: targetX, y: targetY }
+                ]);
+            } else {
+                // Vertical first, then horizontal
+                const midY = sourceY + dy / 2;
+                return this.gridLineFunction([
+                    { x: sourceX, y: sourceY },
+                    { x: sourceX, y: midY },
+                    { x: targetX, y: midY },
+                    { x: targetX, y: targetY }
+                ]);
+            }
         });
     
-    // Update link labels to follow edges
+    // Update link labels to follow edges using path midpoint
     linkGroups.select("text.linklabel")
         .attr("x", (d: any) => {
+            const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${d.id}"]`) as SVGPathElement;
+            if (pathElement) {
+                const pathLength = pathElement.getTotalLength();
+                const midpoint = pathElement.getPointAtLength(pathLength / 2);
+                return midpoint.x;
+            }
             const sourceX = d.source?.bounds?.cx() ?? d.source?.x ?? 0;
             const targetX = d.target?.bounds?.cx() ?? d.target?.x ?? 0;
             return (sourceX + targetX) / 2;
         })
         .attr("y", (d: any) => {
+            const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${d.id}"]`) as SVGPathElement;
+            if (pathElement) {
+                const pathLength = pathElement.getTotalLength();
+                const midpoint = pathElement.getPointAtLength(pathLength / 2);
+                return midpoint.y;
+            }
             const sourceY = d.source?.bounds?.cy() ?? d.source?.y ?? 0;
             const targetY = d.target?.bounds?.cy() ?? d.target?.y ?? 0;
             return (sourceY + targetY) / 2;
@@ -2986,14 +3036,23 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * When using prior positions with minimal iterations, WebCola may not
    * have computed bounds for nodes. This method manually creates Rectangle
    * bounds based on node x, y, width, height properties.
+   * 
+   * @param forceRecompute - If true, always recompute bounds even if they exist
    */
-  private ensureNodeBounds(): void {
+  private ensureNodeBounds(forceRecompute: boolean = false): void {
     if (!this.currentLayout?.nodes || !cola?.Rectangle) return;
 
     for (const node of this.currentLayout.nodes) {
-      // Skip if bounds already exist and are valid
-      if (node.bounds && typeof node.bounds.rayIntersection === 'function') {
-        continue;
+      // Skip if bounds already exist and are valid, unless forceRecompute is true
+      if (!forceRecompute && node.bounds && typeof node.bounds.rayIntersection === 'function') {
+        // Check if bounds are still in sync with position
+        const currentCx = node.bounds.cx();
+        const currentCy = node.bounds.cy();
+        const tolerance = 1; // Allow small floating point differences
+        if (Math.abs(currentCx - (node.x || 0)) < tolerance && 
+            Math.abs(currentCy - (node.y || 0)) < tolerance) {
+          continue;
+        }
       }
 
       // Compute bounds from node position and dimensions
@@ -3105,7 +3164,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         return;
       }
 
-      this.ensureNodeBounds();
+      // Force recompute all node bounds from current positions
+      // This ensures bounds are always in sync with node x/y coordinates
+      this.ensureNodeBounds(true);
 
       // Create the grid router
       const gridrouter = this.route(nodes, groups, margin, groupMargin);
@@ -3136,10 +3197,32 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         .attr("d", (edgeData: any) => {
           const route = routesByEdgeId.get(edgeData.id);
           if (!route) {
-            return this.lineFunction([
-              { x: edgeData.source?.bounds?.cx() ?? edgeData.source?.x ?? 0, y: edgeData.source?.bounds?.cy() ?? edgeData.source?.y ?? 0 },
-              { x: edgeData.target?.bounds?.cx() ?? edgeData.target?.x ?? 0, y: edgeData.target?.bounds?.cy() ?? edgeData.target?.y ?? 0 }
-            ]);
+            // Create orthogonal fallback path for unroutable edges
+            const sourceX = edgeData.source?.bounds?.cx() ?? edgeData.source?.x ?? 0;
+            const sourceY = edgeData.source?.bounds?.cy() ?? edgeData.source?.y ?? 0;
+            const targetX = edgeData.target?.bounds?.cx() ?? edgeData.target?.x ?? 0;
+            const targetY = edgeData.target?.bounds?.cy() ?? edgeData.target?.y ?? 0;
+            const dx = targetX - sourceX;
+            const dy = targetY - sourceY;
+            
+            // Choose routing based on dominant direction
+            if (Math.abs(dx) > Math.abs(dy)) {
+              const midX = sourceX + dx / 2;
+              return this.gridLineFunction([
+                { x: sourceX, y: sourceY },
+                { x: midX, y: sourceY },
+                { x: midX, y: targetY },
+                { x: targetX, y: targetY }
+              ]);
+            } else {
+              const midY = sourceY + dy / 2;
+              return this.gridLineFunction([
+                { x: sourceX, y: sourceY },
+                { x: sourceX, y: midY },
+                { x: targetX, y: midY },
+                { x: targetX, y: targetY }
+              ]);
+            }
           }
           const cornerradius = 5;
           const arrowwidth = 3;
@@ -3217,43 +3300,98 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .filter((d: any) => !this.isAlignmentEdge(d))
       .select("text.linklabel")
       .attr("x", (edgeData: any) => {
+        // Use the actual rendered path element to find the true midpoint
+        const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${edgeData.id}"]`) as SVGPathElement;
+        if (pathElement) {
+          try {
+            const pathLength = pathElement.getTotalLength();
+            const midpoint = pathElement.getPointAtLength(pathLength / 2);
+            return midpoint.x;
+          } catch (e) {
+            // Fallback if path is not yet rendered
+          }
+        }
         const midpoint = this.getGridRouteMidpoint(edgeData, routesByEdgeId);
-        return midpoint?.x ?? (edgeData.source?.x ?? 0);
+        return midpoint?.x ?? (edgeData.source?.bounds?.cx() ?? edgeData.source?.x ?? 0);
       })
       .attr("y", (edgeData: any) => {
+        // Use the actual rendered path element to find the true midpoint
+        const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${edgeData.id}"]`) as SVGPathElement;
+        if (pathElement) {
+          try {
+            const pathLength = pathElement.getTotalLength();
+            const midpoint = pathElement.getPointAtLength(pathLength / 2);
+            return midpoint.y;
+          } catch (e) {
+            // Fallback if path is not yet rendered
+          }
+        }
         const midpoint = this.getGridRouteMidpoint(edgeData, routesByEdgeId);
-        return midpoint?.y ?? (edgeData.source?.y ?? 0);
+        return midpoint?.y ?? (edgeData.source?.bounds?.cy() ?? edgeData.source?.y ?? 0);
       })
-      .attr("text-anchor", "middle");
+      .attr("text-anchor", "middle")
+      .attr("dominant-baseline", "middle");
   }
 
   private getGridRouteMidpoint(edgeData: any, routesByEdgeId: Map<string, any>) {
     const route = routesByEdgeId.get(edgeData.id);
     if (!route) {
-      const sourceX = edgeData.source?.x ?? 0;
-      const sourceY = edgeData.source?.y ?? 0;
-      const targetX = edgeData.target?.x ?? 0;
-      const targetY = edgeData.target?.y ?? 0;
+      const sourceX = edgeData.source?.bounds?.cx() ?? edgeData.source?.x ?? 0;
+      const sourceY = edgeData.source?.bounds?.cy() ?? edgeData.source?.y ?? 0;
+      const targetX = edgeData.target?.bounds?.cx() ?? edgeData.target?.x ?? 0;
+      const targetY = edgeData.target?.bounds?.cy() ?? edgeData.target?.y ?? 0;
       return {
         x: (sourceX + targetX) / 2,
         y: (sourceY + targetY) / 2
       };
     }
 
-    let combinedSegment: any[] = [];
+    // Build array of all points in the route
+    const points: Array<{ x: number; y: number }> = [];
     route.forEach((segment: any) => {
-      combinedSegment = combinedSegment.concat(segment);
+      if (points.length === 0 && segment.length > 0) {
+        points.push(segment[0]);
+      }
+      if (segment.length > 1) {
+        points.push(segment[1]);
+      }
     });
 
-    if (combinedSegment.length < 2) {
+    if (points.length < 2) {
       return null;
     }
 
-    const midpointIndex = Math.floor(combinedSegment.length / 2);
-    return {
-      x: (combinedSegment[midpointIndex - 1].x + combinedSegment[midpointIndex].x) / 2,
-      y: (combinedSegment[midpointIndex - 1].y + combinedSegment[midpointIndex].y) / 2
-    };
+    // Calculate total path length
+    let totalLength = 0;
+    const segmentLengths: number[] = [];
+    for (let i = 0; i < points.length - 1; i++) {
+      const dx = points[i + 1].x - points[i].x;
+      const dy = points[i + 1].y - points[i].y;
+      const length = Math.sqrt(dx * dx + dy * dy);
+      segmentLengths.push(length);
+      totalLength += length;
+    }
+
+    // Find the segment containing the midpoint
+    const targetLength = totalLength / 2;
+    let accumulatedLength = 0;
+    for (let i = 0; i < segmentLengths.length; i++) {
+      const segmentLength = segmentLengths[i];
+      if (accumulatedLength + segmentLength >= targetLength) {
+        // Midpoint is in this segment
+        const remainingLength = targetLength - accumulatedLength;
+        const t = segmentLength > 0 ? remainingLength / segmentLength : 0;
+        return {
+          x: points[i].x + t * (points[i + 1].x - points[i].x),
+          y: points[i].y + t * (points[i + 1].y - points[i].y)
+        };
+      }
+      accumulatedLength += segmentLength;
+    }
+
+    // Fallback to geometric midpoint of all points
+    const midIndex = Math.floor(points.length / 2);
+    return points[midIndex];
   }
 
   private adjustGridRouteForEdge(edgeData: any, route: any[]) {
@@ -3331,8 +3469,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         points[points.length - 1] = targetIntersection;
       }
 
-      // Convert points back to SVG path
-      return this.lineFunction(points);
+      // Convert points back to SVG path using grid line function for sharp turns
+      return this.gridLineFunction(points);
     } catch (error) {
       console.warn('Error adjusting grid route for arrow positioning:', error);
       return null;
