@@ -27,6 +27,7 @@ import {
 } from 'simple-graph-query';
 import type { IAtom, IDataInstance } from '../data-instance/interfaces';
 import type IEvaluator from '../evaluators/interfaces';
+import { SGraphQueryEvaluator } from '../evaluators/sgq-evaluator';
 
 /**
  * Check if synthesis is supported for a given evaluator instance.
@@ -48,8 +49,8 @@ import type IEvaluator from '../evaluators/interfaces';
  * ```
  */
 export function isSynthesisSupported(evaluator: IEvaluator): boolean {
-  // Check constructor name for SGraphQueryEvaluator
-  return evaluator.constructor.name === 'SGraphQueryEvaluator';
+  // Use instanceof for minification-safe type checking
+  return evaluator instanceof SGraphQueryEvaluator;
 }
 
 /**

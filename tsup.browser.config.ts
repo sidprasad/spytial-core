@@ -11,7 +11,7 @@ export default defineConfig({
   splitting: false,
   sourcemap: true,
   clean: false, // Don't clean dist folder (preserve other builds)
-  minify: false, // Keep readable for debugging
+  minify: true,
   target: 'es2020',
   outDir: 'dist/browser',
   external: ['react', 'react-dom'], // Bundle everything, except React
