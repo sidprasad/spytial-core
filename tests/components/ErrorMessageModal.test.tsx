@@ -116,6 +116,98 @@ describe('ErrorMessageModal Component', () => {
       expect(screen.getByText('An unexpected error occurred while processing the layout')).toBeInTheDocument()
     })
 
+    it('should render query-error with hidden-element reason correctly', () => {
+      const queryError: SystemError = {
+        type: 'query-error',
+        message: 'Selector references element that has been hidden',
+        details: {
+          selector: 'Person.friend',
+          reason: 'hidden-element',
+          missingElement: 'Person1',
+          sourceConstraint: 'left(Person.friend)'
+        }
+      }
+
+      render(<ErrorMessageModal systemError={queryError} />)
+
+      // Check main modal container
+      expect(document.getElementById('error-message-modal')).toBeInTheDocument()
+
+      // Check error card header
+      expect(screen.getByText('Query Error (Hidden Element)')).toBeInTheDocument()
+
+      // Check selector is displayed
+      expect(screen.getByText('Selector:')).toBeInTheDocument()
+      expect(screen.getByText('Person.friend')).toBeInTheDocument()
+
+      // Check referenced element is displayed
+      expect(screen.getByText('Referenced Element:')).toBeInTheDocument()
+      expect(screen.getByText('Person1')).toBeInTheDocument()
+
+      // Check source constraint is displayed
+      expect(screen.getByText('Source Constraint:')).toBeInTheDocument()
+      expect(screen.getByText('left(Person.friend)')).toBeInTheDocument()
+
+      // Check error message is displayed
+      expect(screen.getByText('Error Message:')).toBeInTheDocument()
+    })
+
+    it('should render query-error with syntax-error reason correctly', () => {
+      const queryError: SystemError = {
+        type: 'query-error',
+        message: 'Selector has a syntax error: Unexpected token',
+        details: {
+          selector: 'Person..invalid',
+          reason: 'syntax-error'
+        }
+      }
+
+      render(<ErrorMessageModal systemError={queryError} />)
+
+      // Check error card header
+      expect(screen.getByText('Query Error (Syntax)')).toBeInTheDocument()
+
+      // Check selector is displayed
+      expect(screen.getByText('Person..invalid')).toBeInTheDocument()
+    })
+
+    it('should render query-error with missing-element reason correctly', () => {
+      const queryError: SystemError = {
+        type: 'query-error',
+        message: 'Element does not exist in the data',
+        details: {
+          selector: 'NonExistentType',
+          reason: 'missing-element',
+          missingElement: 'NonExistentType'
+        }
+      }
+
+      render(<ErrorMessageModal systemError={queryError} />)
+
+      // Check error card header
+      expect(screen.getByText('Query Error (Missing Element)')).toBeInTheDocument()
+
+      // Check selector is displayed (appears twice since selector and missingElement are the same)
+      const nonExistentElements = screen.getAllByText('NonExistentType')
+      expect(nonExistentElements.length).toBe(2)
+    })
+
+    it('should render query-error with unknown reason correctly', () => {
+      const queryError: SystemError = {
+        type: 'query-error',
+        message: 'Unknown error during evaluation',
+        details: {
+          selector: 'SomeSelector',
+          reason: 'unknown'
+        }
+      }
+
+      render(<ErrorMessageModal systemError={queryError} />)
+
+      // Check error card header (should be just "Query Error" for unknown)
+      expect(screen.getByText('Query Error')).toBeInTheDocument()
+    })
+
     it('should return null and log error for invalid SystemError', () => {
       // Mock console.error to capture the log
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})

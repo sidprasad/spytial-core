@@ -34,7 +34,7 @@ export function isGroupOverlapError(error: unknown): error is GroupOverlapError 
 }
 
 export function isEvaluatorError(error: unknown): error is EvaluatorConstraintError {
-    return (error as EvaluatorConstraintError).type === 'evaluator-error';
+    return error != null && (error as EvaluatorConstraintError).type === 'evaluator-error';
 }
 
 interface PositionalConstraintError extends ConstraintError {
