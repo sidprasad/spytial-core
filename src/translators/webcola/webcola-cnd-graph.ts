@@ -2299,9 +2299,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr("fill", (d: any) => {
         const isHidden = this.isHiddenNode(d);
         const hasIcon = !! d.icon;
+        const showLabels = d.showLabels;
         
-        const fill = isHidden || hasIcon ? "transparent" : "white";
-        //console.log(`Node ${d.id} - isHidden: ${isHidden}, hasIcon: ${hasIcon} ${d.icon}, fill: ${fill}`);
+        // Only make transparent if hidden OR (has icon AND not showing labels)
+        // When showLabels is true, keep white background even with icons
+        const fill = isHidden || (hasIcon && !showLabels) ? "transparent" : "white";
 
         return fill;
       });
