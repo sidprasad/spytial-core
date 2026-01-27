@@ -168,6 +168,15 @@
     <div id="cnd-panel" class="container d-flex flex-column col-md-4 border p-3">
         <h5 class="h5 mb-2 text-dark">CND Layout Specification:</h5>
         <button id="applyLayoutButton" class="mb-3" onclick="loadGraph()">Apply Layout</button>
+
+        <div class="mb-3">
+            <h6 class="h6 text-dark">Export Instance Views:</h6>
+            <div class="d-flex flex-wrap gap-2 mb-2">
+                <button class="btn btn-sm btn-outline-primary" onclick="exportInstanceView('alloy')">Export Alloy View</button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="exportInstanceView('sql')">Export SQL View</button>
+            </div>
+            <textarea id="instance-export-output" readonly placeholder="Exported view will appear here..."></textarea>
+        </div>
         
         <!-- Projection Controls (shows when there are projections) -->
         <div id="projection-controls-container" class="mb-3"></div>
@@ -238,6 +247,23 @@
                 document.getElementById('webcola-cnd')?.value?.trim();
         }
 
+        function getCurrentExportInstance() {
+            if (!alloyInstances.length) {
+                return null;
+            }
+
+            const baseInstance = new CndCore.AlloyDataInstance(alloyInstances[currentInstanceIndex]);
+            const projectionAtoms = window.currentProjections
+                ? Object.values(window.currentProjections).filter(Boolean)
+                : [];
+
+            if (projectionAtoms.length > 0) {
+                return baseInstance.applyProjections(projectionAtoms);
+            }
+
+            return baseInstance;
+        }
+
         /**
          * Update status display with proper styling
          * @param {string} message - Status message to display
@@ -247,6 +273,47 @@
             const statusElement = document.getElementById('status');
             statusElement.textContent = message;
             statusElement.className = `status ${type}`;
+        }
+
+        function exportInstanceView(format) {
+            try {
+                const instance = getCurrentExportInstance();
+                if (!instance) {
+                    throw new Error('No Alloy instance available. Load data first.');
+                }
+
+                let output = '';
+                let fileName = '';
+
+                if (format === 'alloy') {
+                    output = CndCore.generateAlloySchema(instance);
+                    fileName = 'instance-schema.alloy';
+                } else if (format === 'sql') {
+                    output = CndCore.generateSQLSchema(instance);
+                    fileName = 'instance-schema.sql';
+                } else {
+                    throw new Error('Unknown export format.');
+                }
+
+                const outputArea = document.getElementById('instance-export-output');
+                outputArea.value = output;
+                outputArea.scrollTop = 0;
+
+                const blob = new Blob([output], { type: 'text/plain;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+
+                updateStatus(`Exported ${format.toUpperCase()} view.`, 'success');
+            } catch (error) {
+                console.error('Export error:', error);
+                updateStatus(`Export failed: ${error.message}`, 'error');
+            }
         }
 
         /**
