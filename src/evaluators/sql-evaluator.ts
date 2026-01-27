@@ -256,7 +256,8 @@ interface TableSchema {
 export class SQLEvaluator implements IEvaluator {
   private context: EvaluationContext | undefined;
   private ready: boolean = false;
-  private db: typeof alasql;
+  // Use a dedicated database instance to avoid cross-talk between evaluators
+  private db: InstanceType<typeof alasql.Database>;
   private tableSchemas: TableSchema[] = [];
   
   // Cache for evaluator results
@@ -264,8 +265,9 @@ export class SQLEvaluator implements IEvaluator {
   private readonly MAX_CACHE_SIZE = 1000;
 
   constructor() {
-    // Create a new AlaSQL database instance
-    this.db = alasql;
+    // Create a new isolated AlaSQL database instance for this evaluator
+    // This prevents cross-talk between multiple evaluator instances
+    this.db = new alasql.Database();
   }
 
   /**
@@ -298,11 +300,11 @@ export class SQLEvaluator implements IEvaluator {
   private clearTables(): void {
     // Drop tables that we might have created
     try {
-      this.db('DROP TABLE IF EXISTS atoms');
-      this.db('DROP TABLE IF EXISTS types');
+      this.db.exec('DROP TABLE IF EXISTS atoms');
+      this.db.exec('DROP TABLE IF EXISTS types');
       // Drop any relation tables
       for (const schema of this.tableSchemas) {
-        this.db(`DROP TABLE IF EXISTS ${this.sanitizeTableName(schema.name)}`);
+        this.db.exec(`DROP TABLE IF EXISTS ${this.sanitizeTableName(schema.name)}`);
       }
     } catch {
       // Ignore errors when dropping tables
@@ -357,7 +359,7 @@ export class SQLEvaluator implements IEvaluator {
    */
   private createTablesFromDataInstance(dataInstance: IDataInstance): void {
     // Create atoms table
-    this.db('CREATE TABLE atoms (id STRING, type STRING, label STRING)');
+    this.db.exec('CREATE TABLE atoms (id STRING, type STRING, label STRING)');
     this.tableSchemas.push({
       name: 'atoms',
       columns: ['id', 'type', 'label'],
@@ -366,11 +368,11 @@ export class SQLEvaluator implements IEvaluator {
 
     const atoms: IAtom[] = [...dataInstance.getAtoms()];
     for (const atom of atoms) {
-      this.db('INSERT INTO atoms VALUES (?, ?, ?)', [atom.id, atom.type, atom.label]);
+      this.db.exec('INSERT INTO atoms VALUES (?, ?, ?)', [atom.id, atom.type, atom.label]);
     }
 
     // Create types table
-    this.db('CREATE TABLE types (id STRING, isBuiltin BOOLEAN, hierarchy STRING)');
+    this.db.exec('CREATE TABLE types (id STRING, isBuiltin BOOLEAN, hierarchy STRING)');
     this.tableSchemas.push({
       name: 'types',
       columns: ['id', 'isBuiltin', 'hierarchy'],
@@ -379,7 +381,7 @@ export class SQLEvaluator implements IEvaluator {
 
     const types = dataInstance.getTypes();
     for (const type of types) {
-      this.db('INSERT INTO types VALUES (?, ?, ?)', [
+      this.db.exec('INSERT INTO types VALUES (?, ?, ?)', [
         type.id, 
         type.isBuiltin, 
         JSON.stringify(type.types)
@@ -416,7 +418,7 @@ export class SQLEvaluator implements IEvaluator {
 
     // Create the table
     const columnDefs = columns.map(col => `${col} STRING`).join(', ');
-    this.db(`CREATE TABLE ${tableName} (${columnDefs})`);
+    this.db.exec(`CREATE TABLE ${tableName} (${columnDefs})`);
     
     this.tableSchemas.push({
       name: tableName,
@@ -427,7 +429,7 @@ export class SQLEvaluator implements IEvaluator {
     // Insert tuples
     const placeholders = columns.map(() => '?').join(', ');
     for (const tuple of relation.tuples) {
-      this.db(`INSERT INTO ${tableName} VALUES (${placeholders})`, tuple.atoms);
+      this.db.exec(`INSERT INTO ${tableName} VALUES (${placeholders})`, tuple.atoms);
     }
   }
 
@@ -471,7 +473,7 @@ export class SQLEvaluator implements IEvaluator {
     }
 
     try {
-      const rawResult = this.db(expression);
+      const rawResult = this.db.exec(expression);
       const result = this.convertResult(rawResult);
       const wrappedResult = new SQLEvaluatorResult(result, expression);
 

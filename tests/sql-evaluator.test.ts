@@ -425,6 +425,120 @@ describe('SQLEvaluator', () => {
     });
   });
 
+  describe('Database Isolation', () => {
+    it('should isolate data between multiple evaluator instances', () => {
+      // Create two separate data instances with different data
+      const jsonData1: IJsonDataInstance = {
+        atoms: [
+          { id: 'Instance1_Alice', type: 'Person', label: 'Alice from Instance 1' }
+        ],
+        relations: []
+      };
+      
+      const jsonData2: IJsonDataInstance = {
+        atoms: [
+          { id: 'Instance2_Bob', type: 'Person', label: 'Bob from Instance 2' }
+        ],
+        relations: []
+      };
+      
+      const instance1 = new JSONDataInstance(jsonData1);
+      const instance2 = new JSONDataInstance(jsonData2);
+      
+      // Create two evaluators
+      const evaluator1 = new SQLEvaluator();
+      const evaluator2 = new SQLEvaluator();
+      
+      // Initialize both
+      evaluator1.initialize({ sourceData: instance1 });
+      evaluator2.initialize({ sourceData: instance2 });
+      
+      // Query each evaluator - they should return their own data
+      const result1 = evaluator1.evaluate('SELECT id FROM atoms');
+      const result2 = evaluator2.evaluate('SELECT id FROM atoms');
+      
+      const atoms1 = result1.selectedAtoms();
+      const atoms2 = result2.selectedAtoms();
+      
+      // Verify isolation
+      expect(atoms1).toHaveLength(1);
+      expect(atoms1[0]).toBe('Instance1_Alice');
+      expect(atoms2).toHaveLength(1);
+      expect(atoms2[0]).toBe('Instance2_Bob');
+      
+      // Cleanup
+      evaluator1.dispose();
+      evaluator2.dispose();
+    });
+
+    it('should not affect other evaluators when one is disposed', () => {
+      const jsonData1: IJsonDataInstance = {
+        atoms: [{ id: 'Alice', type: 'Person', label: 'Alice' }],
+        relations: []
+      };
+      
+      const jsonData2: IJsonDataInstance = {
+        atoms: [{ id: 'Bob', type: 'Person', label: 'Bob' }],
+        relations: []
+      };
+      
+      const evaluator1 = new SQLEvaluator();
+      const evaluator2 = new SQLEvaluator();
+      
+      evaluator1.initialize({ sourceData: new JSONDataInstance(jsonData1) });
+      evaluator2.initialize({ sourceData: new JSONDataInstance(jsonData2) });
+      
+      // Dispose evaluator1
+      evaluator1.dispose();
+      
+      // Evaluator2 should still work
+      const result = evaluator2.evaluate('SELECT id FROM atoms');
+      expect(result.isError()).toBe(false);
+      const atoms = result.selectedAtoms();
+      expect(atoms).toHaveLength(1);
+      expect(atoms[0]).toBe('Bob');
+      
+      evaluator2.dispose();
+    });
+
+    it('should not affect other evaluators when one is reinitialized', () => {
+      const jsonData1: IJsonDataInstance = {
+        atoms: [{ id: 'Alice', type: 'Person', label: 'Alice' }],
+        relations: []
+      };
+      
+      const jsonData2: IJsonDataInstance = {
+        atoms: [{ id: 'Bob', type: 'Person', label: 'Bob' }],
+        relations: []
+      };
+      
+      const jsonData3: IJsonDataInstance = {
+        atoms: [{ id: 'Charlie', type: 'Person', label: 'Charlie' }],
+        relations: []
+      };
+      
+      const evaluator1 = new SQLEvaluator();
+      const evaluator2 = new SQLEvaluator();
+      
+      evaluator1.initialize({ sourceData: new JSONDataInstance(jsonData1) });
+      evaluator2.initialize({ sourceData: new JSONDataInstance(jsonData2) });
+      
+      // Reinitialize evaluator1 with different data
+      evaluator1.initialize({ sourceData: new JSONDataInstance(jsonData3) });
+      
+      // Evaluator2 should still have its original data
+      const result2 = evaluator2.evaluate('SELECT id FROM atoms');
+      expect(result2.selectedAtoms()[0]).toBe('Bob');
+      
+      // Evaluator1 should have the new data
+      const result1 = evaluator1.evaluate('SELECT id FROM atoms');
+      expect(result1.selectedAtoms()[0]).toBe('Charlie');
+      
+      evaluator1.dispose();
+      evaluator2.dispose();
+    });
+  });
+
   describe('Special Characters in Table Names', () => {
     it('should sanitize relation names with special characters', () => {
       const jsonData: IJsonDataInstance = {
