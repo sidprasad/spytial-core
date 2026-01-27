@@ -150,14 +150,14 @@
             <div id="status" class="status info">Ready to load JSON graph...</div>
             <div id="error-messages"></div>
             <div id="graph-container-wrapper">
-                <div id="graph-controls">
+                <!-- <div id="graph-controls">
                     <select title="Choose the Layout Format" class="form-select form-select-sm" id="layoutFormat" name="layoutFormat" onchange="changeLayoutFormat()" aria-label="Layout format selection">
                         <option value="default" selected>Standard</option>
                         <option value="grid">Grid (Beta)</option>
                     </select>
                     <button id="screenshotButton" onclick="takeScreenshot()" title="Download graph as PNG image" aria-label="Screenshot graph" style="background-color: #28a745;">Screenshot</button>
                     <button id="clearGraphButton" onclick="clearGraph()" title="Clear the current graph visualization" aria-label="Clear graph">Clear</button>
-                </div>
+                </div> -->
                 <webcola-cnd-graph
                     id="graph-container"
                     width="800"
@@ -253,15 +253,15 @@
                 outputArea.value = output;
                 outputArea.scrollTop = 0;
 
-                const blob = new Blob([output], { type: 'text/plain;charset=utf-8' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = fileName;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                URL.revokeObjectURL(url);
+                // const blob = new Blob([output], { type: 'text/plain;charset=utf-8' });
+                // const url = URL.createObjectURL(blob);
+                // const link = document.createElement('a');
+                // link.href = url;
+                // link.download = fileName;
+                // document.body.appendChild(link);
+                // link.click();
+                // document.body.removeChild(link);
+                // URL.revokeObjectURL(url);
 
                 updateStatus(`Exported ${format.toUpperCase()} view.`, 'success');
             } catch (error) {
