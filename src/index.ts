@@ -144,3 +144,31 @@ export type { PyretEvaluator, PyretEvaluationResult } from './components/ReplInt
 // Projection Controls Component
 export { ProjectionControls } from './components/ProjectionControls';
 export type { ProjectionControlsProps, ProjectionChoice } from './components/ProjectionControls';
+
+// Error handling and constraint validation
+export { 
+  isPositionalConstraintError, 
+  isGroupOverlapError, 
+  isEvaluatorError 
+} from './layout/constraint-validator';
+export type { 
+  ConstraintError,
+  PositionalConstraintError, 
+  GroupOverlapError, 
+  EvaluatorConstraintError,
+  EvaluatorErrorReason,
+  ErrorMessages 
+} from './layout/constraint-validator';
+
+// Error state management for UI components
+export { 
+  ErrorMessageModal, 
+  ErrorMessageContainer, 
+  ErrorStateManager 
+} from './components/ErrorMessageModal';
+export type { 
+  SystemError, 
+  QueryErrorDetails, 
+  QueryErrorReason,
+  ErrorMessageContainerProps 
+} from './components/ErrorMessageModal';

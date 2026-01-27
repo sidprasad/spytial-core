@@ -1,6 +1,6 @@
 import { Graph, Edge } from 'graphlib';
 import { IAtom, IDataInstance, IType } from '../data-instance/interfaces';
-import { PositionalConstraintError, GroupOverlapError, isPositionalConstraintError, isGroupOverlapError } from './constraint-validator';
+import { PositionalConstraintError, GroupOverlapError, isPositionalConstraintError, isGroupOverlapError, EvaluatorConstraintError, EvaluatorErrorReason, isEvaluatorError } from './constraint-validator';
 import { EdgeStyle, normalizeEdgeStyle } from './edge-style';
 import { resolveIconPath } from './icon-registry';
 
@@ -19,7 +19,7 @@ import {
 } from './layoutspec';
 
 
-import IEvaluator from '../evaluators/interfaces';
+import IEvaluator, { IEvaluatorResult } from '../evaluators/interfaces';
 import { ColorPicker } from './colorpicker';
 import { type ConstraintError, ConstraintValidator } from './constraint-validator';
 const UNIVERSAL_TYPE = "univ";
@@ -44,6 +44,104 @@ class MissingNodeConstraintError extends Error implements ConstraintError {
 
 function isMissingNodeConstraintError(error: unknown): error is MissingNodeConstraintError {
     return error instanceof MissingNodeConstraintError;
+}
+
+/**
+ * Error class for evaluator/query errors that occur during constraint processing.
+ * This is used when a selector fails to evaluate, which can happen due to:
+ * - Hidden elements being referenced (constraint-level error)
+ * - Syntax errors in the selector
+ * - References to non-existent elements
+ */
+class EvaluatorQueryError extends Error implements EvaluatorConstraintError {
+    readonly type = 'evaluator-error' as const;
+    readonly selector: string;
+    readonly reason: EvaluatorErrorReason;
+    readonly originalError: string;
+    readonly sourceConstraint?: ConstraintSource;
+    readonly missingElement?: string;
+
+    constructor(
+        selector: string,
+        originalError: string,
+        reason: EvaluatorErrorReason = 'unknown',
+        sourceConstraint?: ConstraintSource,
+        missingElement?: string
+    ) {
+        // Create a user-friendly message based on the reason
+        let message: string;
+        switch (reason) {
+            case 'hidden-element':
+                message = `Selector "${selector}" references element "${missingElement || 'unknown'}" that has been hidden. ` +
+                    `This may be due to a "hide" constraint that removed this element from the visualization.`;
+                break;
+            case 'syntax-error':
+                message = `Selector "${selector}" has a syntax error: ${originalError}`;
+                break;
+            case 'missing-element':
+                message = `Selector "${selector}" references element "${missingElement || 'unknown'}" that does not exist in the data.`;
+                break;
+            default:
+                message = `Error evaluating selector "${selector}": ${originalError}`;
+        }
+        
+        super(message);
+        this.name = 'EvaluatorQueryError';
+        this.selector = selector;
+        this.reason = reason;
+        this.originalError = originalError;
+        this.sourceConstraint = sourceConstraint;
+        this.missingElement = missingElement;
+        Object.setPrototypeOf(this, EvaluatorQueryError.prototype);
+    }
+
+    /**
+     * Determines if this error is related to hiding constraints (constraint-level error)
+     * vs other query errors (like syntax errors).
+     */
+    isHidingRelated(): boolean {
+        return this.reason === 'hidden-element';
+    }
+}
+
+function isEvaluatorQueryError(error: unknown): error is EvaluatorQueryError {
+    return error instanceof EvaluatorQueryError;
+}
+
+/**
+ * Classifies an evaluator error to determine its reason.
+ * Examines the error message to determine if it's a hidden element issue,
+ * syntax error, missing element, etc.
+ */
+function classifyEvaluatorError(errorMessage: string, selector: string): EvaluatorErrorReason {
+    const lowerError = errorMessage.toLowerCase();
+    
+    // Check for patterns indicating hidden elements
+    if (lowerError.includes('hidden') || 
+        lowerError.includes('not visible') ||
+        lowerError.includes('was hidden')) {
+        return 'hidden-element';
+    }
+    
+    // Check for syntax error patterns
+    if (lowerError.includes('syntax') || 
+        lowerError.includes('parse') ||
+        lowerError.includes('unexpected token') ||
+        lowerError.includes('invalid expression')) {
+        return 'syntax-error';
+    }
+    
+    // Check for missing element patterns
+    if (lowerError.includes('not found') ||
+        lowerError.includes('does not exist') ||
+        lowerError.includes('no such') ||
+        lowerError.includes('unknown identifier') ||
+        lowerError.includes('undefined') ||
+        lowerError.includes('missing')) {
+        return 'missing-element';
+    }
+    
+    return 'unknown';
 }
 
 /**
@@ -215,6 +313,70 @@ export class LayoutInstance {
         return this._layoutSpec.directives.hideDisconnectedBuiltIns || false;
     }
 
+    /**
+     * Safely evaluates a selector expression and handles errors appropriately.
+     * 
+     * For critical evaluations (in constraint processing), this will throw an EvaluatorQueryError
+     * that gets surfaced to the user. For non-critical evaluations (in helper methods),
+     * set throwOnError to false to continue with graceful degradation.
+     * 
+     * @param selector - The selector expression to evaluate
+     * @param sourceConstraint - Optional source constraint for error context
+     * @param throwOnError - If true (default), throws EvaluatorQueryError on error. If false, returns null.
+     * @returns The evaluation result, or null if evaluation failed and throwOnError is false
+     * @throws EvaluatorQueryError if evaluation fails and throwOnError is true
+     */
+    private safeEvaluate(
+        selector: string,
+        sourceConstraint?: ConstraintSource,
+        throwOnError: boolean = true
+    ): IEvaluatorResult | null {
+        try {
+            const result = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
+            
+            // Check if the result is an error
+            if (result.isError()) {
+                const errorMessage = result.prettyPrint();
+                const reason = classifyEvaluatorError(errorMessage, selector);
+                
+                if (throwOnError) {
+                    throw new EvaluatorQueryError(
+                        selector,
+                        errorMessage,
+                        reason,
+                        sourceConstraint
+                    );
+                }
+                
+                console.warn(`Evaluator returned error for selector "${selector}": ${errorMessage}`);
+                return null;
+            }
+            
+            return result;
+        } catch (error) {
+            // If it's already our error type, rethrow
+            if (isEvaluatorQueryError(error)) {
+                throw error;
+            }
+            
+            // Wrap other errors
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            const reason = classifyEvaluatorError(errorMessage, selector);
+            
+            if (throwOnError) {
+                throw new EvaluatorQueryError(
+                    selector,
+                    errorMessage,
+                    reason,
+                    sourceConstraint
+                );
+            }
+            
+            console.warn(`Failed to evaluate selector "${selector}": ${errorMessage}`);
+            return null;
+        }
+    }
+
 
 
     /**
@@ -358,7 +520,12 @@ export class LayoutInstance {
         for (var gc of groupBySelectorConstraints) {
 
             let selector = gc.selector;
-            let selectorRes = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
+            // Use safe evaluation with error throwing for constraint processing
+            const selectorRes = this.safeEvaluate(selector, gc as unknown as ConstraintSource, true);
+            if (!selectorRes) {
+                // This shouldn't happen since throwOnError is true, but handle it gracefully
+                continue;
+            }
 
 
             // Now, we should support both unary and binary selectors.
@@ -874,6 +1041,19 @@ export class LayoutInstance {
                     }
                 );
             }
+            if (isEvaluatorQueryError(error)) {
+                return this.handleEvaluatorQueryError(
+                    error,
+                    {
+                        layoutNodes,
+                        graph: g,
+                        groups,
+                        disconnectedNodes: dcN,
+                        projectionData,
+                        constraints
+                    }
+                );
+            }
             throw error;
         }
 
@@ -940,6 +1120,50 @@ export class LayoutInstance {
      */
     private handleMissingNodeConstraintError(
         error: MissingNodeConstraintError,
+        context: {
+            layoutNodes: LayoutNode[],
+            graph: Graph,
+            groups: LayoutGroup[],
+            disconnectedNodes: string[],
+            projectionData: { type: string, projectedAtom: string, atoms: string[] }[],
+            constraints: LayoutConstraint[],
+        }
+    ): {
+        layout: InstanceLayout,
+        projectionData: { type: string, projectedAtom: string, atoms: string[] }[],
+        error: ConstraintError
+    } {
+        const layoutEdges = this.filterHiddenEdges(
+            this.buildLayoutEdges(context.graph, context.layoutNodes)
+        );
+        const layoutGroups = context.groups.concat(
+            context.disconnectedNodes.map(node => this.singletonGroup(node))
+        );
+
+        const layoutWithErrorMetadata: InstanceLayout = {
+            nodes: context.layoutNodes,
+            edges: layoutEdges,
+            constraints: context.constraints,
+            groups: layoutGroups,
+            disjunctiveConstraints: []
+        };
+
+        return {
+            layout: layoutWithErrorMetadata,
+            projectionData: context.projectionData,
+            error
+        };
+    }
+
+    /**
+     * Handles evaluator query errors (e.g., when a selector references a hidden/missing element)
+     * by surfacing them as constraint-level errors with the best-effort layout.
+     * 
+     * Hidden-element errors are particularly important because they indicate that a
+     * hide constraint has caused another constraint to become invalid.
+     */
+    private handleEvaluatorQueryError(
+        error: EvaluatorQueryError,
         context: {
             layoutNodes: LayoutNode[],
             graph: Graph,
@@ -1079,7 +1303,13 @@ export class LayoutInstance {
 
         // For each cyclic constraint, extract fragments
         for (const [, c] of cyclicConstraints.entries()) {
-            let selectedTuples: string[][] = this.evaluator.evaluate(c.selector, { instanceIndex: this.instanceNum }).selectedTwoples();
+            // Use safe evaluation with error throwing for constraint processing
+            const selectorRes = this.safeEvaluate(c.selector, c, true);
+            if (!selectorRes) {
+                // This shouldn't happen since throwOnError is true, but handle it gracefully
+                continue;
+            }
+            let selectedTuples: string[][] = selectorRes.selectedTwoples();
             let nextNodeMap: Map<LayoutNode, LayoutNode[]> = new Map<LayoutNode, LayoutNode[]>();
             
             // Build nextNodeMap from selected tuples
@@ -1290,7 +1520,12 @@ export class LayoutInstance {
             let directions = c.directions;
             let selector = c.selector;
 
-            let selectorRes = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
+            // Use safe evaluation with error throwing for constraint processing
+            const selectorRes = this.safeEvaluate(selector, c, true);
+            if (!selectorRes) {
+                // This shouldn't happen since throwOnError is true, but handle it gracefully
+                return;
+            }
             let selectedTuples: string[][] = selectorRes.selectedTwoples();
 
             // For each tuple, we need to apply the constraints
@@ -1480,7 +1715,12 @@ export class LayoutInstance {
             let direction = c.direction;
             let selector = c.selector;
 
-            let selectorRes = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
+            // Use safe evaluation with error throwing for constraint processing
+            const selectorRes = this.safeEvaluate(selector, c, true);
+            if (!selectorRes) {
+                // This shouldn't happen since throwOnError is true, but handle it gracefully
+                return;
+            }
             let selectedTuples: string[][] = selectorRes.selectedTwoples();
 
             // For each tuple, apply the alignment constraint

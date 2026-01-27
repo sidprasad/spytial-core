@@ -103,6 +103,48 @@ describe('ErrorStateManager', () => {
       errorStateManager.setError(generalError);
       expect(errorStateManager.getCurrentError()).toEqual(generalError);
       expect(callback).toHaveBeenCalledWith(generalError);
+
+      // Test query-error type with hidden-element reason
+      const queryErrorHidden: SystemError = {
+        type: 'query-error',
+        message: 'Selector references hidden element',
+        details: {
+          selector: 'Person.friend',
+          reason: 'hidden-element',
+          missingElement: 'Person1',
+          sourceConstraint: 'left constraint'
+        }
+      };
+      errorStateManager.setError(queryErrorHidden);
+      expect(errorStateManager.getCurrentError()).toEqual(queryErrorHidden);
+      expect(callback).toHaveBeenCalledWith(queryErrorHidden);
+
+      // Test query-error type with syntax-error reason
+      const queryErrorSyntax: SystemError = {
+        type: 'query-error',
+        message: 'Syntax error in selector',
+        details: {
+          selector: 'Person.invalid..syntax',
+          reason: 'syntax-error'
+        }
+      };
+      errorStateManager.setError(queryErrorSyntax);
+      expect(errorStateManager.getCurrentError()).toEqual(queryErrorSyntax);
+      expect(callback).toHaveBeenCalledWith(queryErrorSyntax);
+
+      // Test query-error type with missing-element reason
+      const queryErrorMissing: SystemError = {
+        type: 'query-error',
+        message: 'Element does not exist',
+        details: {
+          selector: 'NonExistentType',
+          reason: 'missing-element',
+          missingElement: 'NonExistentType'
+        }
+      };
+      errorStateManager.setError(queryErrorMissing);
+      expect(errorStateManager.getCurrentError()).toEqual(queryErrorMissing);
+      expect(callback).toHaveBeenCalledWith(queryErrorMissing);
     });
   });
 

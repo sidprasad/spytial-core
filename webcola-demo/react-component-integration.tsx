@@ -1233,6 +1233,24 @@ export const ErrorAPI = {
   },
 
   /**
+   * Display a query/evaluator error
+   * @param message - Error message
+   * @param details - Query error details including selector, reason, etc.
+   */
+  showQueryError: (message: string, details: {
+    selector: string;
+    reason: 'hidden-element' | 'syntax-error' | 'missing-element' | 'unknown';
+    missingElement?: string;
+    sourceConstraint?: string;
+  }): void => {
+    globalErrorManager.setError({
+      type: 'query-error',
+      message,
+      details
+    });
+  },
+
+  /**
    * Display constraint conflict errors
    * @param errorMessages - Detailed constraint conflict information
    */

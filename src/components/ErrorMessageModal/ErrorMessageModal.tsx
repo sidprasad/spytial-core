@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import './ErrorMessageModal.css';
-import { ErrorMessages, SystemError } from './index';
+import { ErrorMessages, SystemError, QueryErrorDetails } from './index';
 
 /**
  * Props for ErrorMessageModal component
@@ -57,9 +57,10 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
       || systemError.type === 'group-overlap-error'
     );
   const isPositionalError = systemError && systemError.type === 'positional-error' && systemError.messages;
+  const isQueryError = systemError && systemError.type === 'query-error';
   
   // If not a valid error, log error and return null
-  if (!isOtherError && !isPositionalError) {
+  if (!isOtherError && !isPositionalError && !isQueryError) {
     console.error('Cannot display the following error:', systemError);
     return null;
   }
@@ -71,10 +72,37 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
       return `Parse Error ${systemError.source ? `(${systemError.source})` : ''}`;
     } else if (errorType === 'group-overlap-error') {
       return `Group Overlap Error ${systemError.source ? `(${systemError.source})` : ''}`;
+    } else if (errorType === 'query-error') {
+      const reason = systemError.details?.reason || 'unknown';
+      switch (reason) {
+        case 'hidden-element':
+          return 'Query Error (Hidden Element)';
+        case 'syntax-error':
+          return 'Query Error (Syntax)';
+        case 'missing-element':
+          return 'Query Error (Missing Element)';
+        default:
+          return 'Query Error';
+      }
     } else {
       return 'Error';
     }
   }, [systemError]);
+
+  /** Helper function to get query error explanation */
+  const getQueryErrorExplanation = (details: QueryErrorDetails): string => {
+    switch (details.reason) {
+      case 'hidden-element':
+        return 'This error occurred because a selector references an element that has been hidden by a "hide" constraint. ' +
+          'The hiding constraint is conflicting with another constraint that needs this element.';
+      case 'syntax-error':
+        return 'This error occurred due to a syntax error in the selector expression. Please check the selector syntax.';
+      case 'missing-element':
+        return 'This error occurred because a selector references an element that does not exist in the current data.';
+      default:
+        return 'An error occurred while evaluating a selector expression.';
+    }
+  };
 
   
   /** 
@@ -201,6 +229,44 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
                 </tr>
               </tbody>
             </table>
+          </div>
+        </>
+      )}
+
+      {/* Query Error Card */}
+      {isQueryError && (
+        <>
+          <div className="card error-card query-error-card">
+            <div className="card-header bg-light">
+              <strong>
+                { errorHeader }
+              </strong>
+            </div>
+            <div className="card-body">
+              <p className="text-muted mb-2">
+                {getQueryErrorExplanation(systemError.details)}
+              </p>
+              <div className="mb-2">
+                <strong>Selector:</strong>{' '}
+                <code>{systemError.details.selector}</code>
+              </div>
+              {systemError.details.missingElement && (
+                <div className="mb-2">
+                  <strong>Referenced Element:</strong>{' '}
+                  <code>{systemError.details.missingElement}</code>
+                </div>
+              )}
+              {systemError.details.sourceConstraint && (
+                <div className="mb-2">
+                  <strong>Source Constraint:</strong>{' '}
+                  <code>{systemError.details.sourceConstraint}</code>
+                </div>
+              )}
+              <div className="mt-3 p-2 bg-light rounded">
+                <strong>Error Message:</strong>
+                <code className="d-block mt-1" dangerouslySetInnerHTML={{ __html: systemError.message }}></code>
+              </div>
+            </div>
           </div>
         </>
       )}

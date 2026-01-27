@@ -18,7 +18,7 @@ export interface ErrorMessages {
  */
 export interface ConstraintError  extends Error {
     /** Type of constraint error */
-    readonly type: 'group-overlap' | 'positional-conflict' | 'unknown-constraint';
+    readonly type: 'group-overlap' | 'positional-conflict' | 'unknown-constraint' | 'evaluator-error';
 
     /** Human-readable error message */
     readonly message: string;
@@ -31,6 +31,10 @@ export function isPositionalConstraintError(error: unknown): error is Positional
 
 export function isGroupOverlapError(error: unknown): error is GroupOverlapError {
     return (error as GroupOverlapError).type === 'group-overlap';
+}
+
+export function isEvaluatorError(error: unknown): error is EvaluatorConstraintError {
+    return (error as EvaluatorConstraintError).type === 'evaluator-error';
 }
 
 interface PositionalConstraintError extends ConstraintError {
@@ -48,7 +52,42 @@ interface GroupOverlapError extends ConstraintError {
     overlappingNodes: LayoutNode[];
 }
 
-export { type PositionalConstraintError, type GroupOverlapError }
+/**
+ * Categorizes the reason why an evaluator query failed.
+ * This helps determine how to present the error to the user.
+ */
+export type EvaluatorErrorReason = 
+    /** The query references an element that was hidden by a hide constraint */
+    | 'hidden-element'
+    /** The query has a syntax error */
+    | 'syntax-error'
+    /** The query references an element that doesn't exist (not due to hiding) */
+    | 'missing-element'
+    /** Unknown or general query error */
+    | 'unknown';
+
+/**
+ * Error that occurs when evaluating a selector/expression during constraint processing.
+ * This can happen when:
+ * - A selector references an element that has been hidden (constraint-level error)
+ * - A selector has a syntax error
+ * - A selector references a non-existent element
+ */
+interface EvaluatorConstraintError extends ConstraintError {
+    type: 'evaluator-error';
+    /** The selector/expression that failed */
+    selector: string;
+    /** The categorized reason for the error */
+    reason: EvaluatorErrorReason;
+    /** The original error message from the evaluator */
+    originalError: string;
+    /** Optional: the source constraint that triggered this evaluation */
+    sourceConstraint?: SourceConstraint;
+    /** Optional: the element that was referenced but not found/hidden */
+    missingElement?: string;
+}
+
+export { type PositionalConstraintError, type GroupOverlapError, type EvaluatorConstraintError }
 
 
 // Tooltip text explaining what node IDs are
