@@ -190,19 +190,6 @@ export function generateAlloySchema(
     lines.push('');
   }
 
-  // Handle standalone relations (not associated with a specific type)
-  const standaloneRelations = relations.filter(r => r.types.length === 0);
-
-  if (standaloneRelations.length > 0) {
-    lines.push('// Standalone relations');
-    for (const relation of standaloneRelations) {
-      const typeStr = relation.types.length > 0 
-        ? relation.types.join(' -> ') 
-        : 'univ -> univ';
-      lines.push(`// ${relation.name}: ${typeStr}`);
-    }
-  }
-
   return lines.join('\n').trim();
 }
 
