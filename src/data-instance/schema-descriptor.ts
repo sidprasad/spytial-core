@@ -102,6 +102,39 @@ export function generateAlloySchema(
     ? types 
     : types.filter(t => !t.isBuiltin);
 
+  const typeById = new Map(types.map(type => [type.id, type]));
+  const filteredTypeIds = new Set(filteredTypes.map(type => type.id));
+  const relationSourceTypeIds = new Set<string>();
+
+  for (const relation of relations) {
+    if (relation.types.length > 0) {
+      relationSourceTypeIds.add(relation.types[0]);
+    }
+  }
+
+  const typeIdsToRender = new Set<string>([
+    ...filteredTypeIds,
+    ...relationSourceTypeIds
+  ]);
+
+  const typesToRender: IType[] = [];
+  for (const type of types) {
+    if (typeIdsToRender.has(type.id)) {
+      typesToRender.push(type);
+    }
+  }
+
+  for (const typeId of typeIdsToRender) {
+    if (!typeById.has(typeId)) {
+      typesToRender.push({
+        id: typeId,
+        types: [typeId],
+        atoms: [],
+        isBuiltin: false
+      });
+    }
+  }
+
   // Build a map of type -> relations that start from that type
   const typeToRelations = new Map<string, IRelation[]>();
   
@@ -118,7 +151,7 @@ export function generateAlloySchema(
   const lines: string[] = [];
 
   // Generate sig declarations for each type
-  for (const type of filteredTypes) {
+  for (const type of typesToRender) {
     // Type hierarchy structure: type.types[0] is the type itself,
     // type.types[1...] are parent types from most specific to most general
     // Example: ['Student', 'Person', 'Object'] means Student extends Person extends Object
@@ -155,21 +188,6 @@ export function generateAlloySchema(
 
     lines.push('}');
     lines.push('');
-  }
-
-  // Handle standalone relations (not associated with a specific type)
-  const standaloneRelations = relations.filter(r => 
-    r.types.length === 0 || !filteredTypes.some(t => t.id === r.types[0])
-  );
-
-  if (standaloneRelations.length > 0) {
-    lines.push('// Standalone relations');
-    for (const relation of standaloneRelations) {
-      const typeStr = relation.types.length > 0 
-        ? relation.types.join(' -> ') 
-        : 'univ -> univ';
-      lines.push(`// ${relation.name}: ${typeStr}`);
-    }
   }
 
   return lines.join('\n').trim();
