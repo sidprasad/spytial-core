@@ -151,11 +151,15 @@ The SQLEvaluator creates tables from your data instance:
 
 #### Built-in Tables
 
+Built-in tables are prefixed with `_` to avoid collision with user-defined relations:
+
 | Table | Columns | Description |
 |-------|---------|-------------|
-| `atoms` | `id`, `type`, `label` | All atoms (type = most specific type) |
-| `atom_types` | `atom_id`, `type` | Junction table: all types per atom (includes inherited) |
-| `types` | `id`, `isBuiltin`, `hierarchy` | Type definitions |
+| `_atoms` | `id`, `type`, `label` | All atoms (type = most specific type) |
+| `_atom_types` | `atom_id`, `type` | Junction table: all types per atom (includes inherited) |
+| `_types` | `id`, `isBuiltin`, `hierarchy` | Type definitions |
+
+> **Note:** The underscore prefix ensures that if your data has a relation named `atoms`, `types`, or `atom_types`, it won't conflict with the built-in tables.
 
 #### Relation Tables
 
@@ -176,7 +180,7 @@ For each relation in your data, a table is created:
 SELECT * FROM Person
 
 -- ✅ This works - query atoms table with type filter
-SELECT id FROM atoms WHERE type = 'Person'
+SELECT id FROM _atoms WHERE type = 'Person'
 ```
 
 **Relations ARE tables:**
@@ -209,14 +213,14 @@ And atoms: `Person0` (type: Person), `Student0` (type: Student)
 
 ```sql
 -- atoms table: type = most specific only
-SELECT id FROM atoms WHERE type = 'Person'
+SELECT id FROM _atoms WHERE type = 'Person'
 -- Returns: Person0 (NOT Student0!)
 
-SELECT id FROM atoms WHERE type = 'Student'
+SELECT id FROM _atoms WHERE type = 'Student'
 -- Returns: Student0
 
 -- atom_types table: includes inherited types
-SELECT DISTINCT atom_id FROM atom_types WHERE type = 'Person'
+SELECT DISTINCT atom_id FROM _atom_types WHERE type = 'Person'
 -- Returns: Person0, Student0 ✅ (includes Student because Student extends Person)
 ```
 
@@ -224,12 +228,12 @@ SELECT DISTINCT atom_id FROM atom_types WHERE type = 'Person'
 
 ```sql
 -- Get all atoms that ARE or EXTEND a type
-SELECT DISTINCT atom_id FROM atom_types WHERE type = 'Person'
+SELECT DISTINCT atom_id FROM _atom_types WHERE type = 'Person'
 
 -- With full atom info (join with atoms table)
 SELECT DISTINCT a.id, a.label 
-FROM atoms a 
-JOIN atom_types at ON a.id = at.atom_id 
+FROM _atoms a 
+JOIN _atom_types at ON a.id = at.atom_id 
 WHERE at.type = 'Person'
 ```
 
@@ -240,8 +244,8 @@ Use `getTableSchemas()` to see what tables exist:
 ```typescript
 const schemas = evaluator.getTableSchemas();
 // [
-//   { name: 'atoms', columns: ['id', 'type', 'label'] },
-//   { name: 'types', columns: ['id', 'isBuiltin', 'hierarchy'] },
+//   { name: '_atoms', columns: ['id', 'type', 'label'] },
+//   { name: '_types', columns: ['id', 'isBuiltin', 'hierarchy'] },
 //   { name: 'friends', columns: ['src', 'tgt'] },
 //   { name: 'worksAt', columns: ['src', 'tgt'] }
 // ]
@@ -253,24 +257,24 @@ Standard SQL with some notes:
 
 ```sql
 -- Select all atoms of a type
-SELECT id FROM atoms WHERE type = 'Person'
+SELECT id FROM _atoms WHERE type = 'Person'
 
 -- Select from a relation
 SELECT src, tgt FROM friends
 
 -- Join atoms with relations
 SELECT a.id, a.label, f.tgt 
-FROM atoms a 
+FROM _atoms a 
 JOIN friends f ON a.id = f.src
 
 -- Aggregations
 SELECT type, COUNT(*) as count 
-FROM atoms 
+FROM _atoms 
 GROUP BY type
 
 -- Complex filtering
 SELECT DISTINCT a.id 
-FROM atoms a 
+FROM _atoms a 
 JOIN friends f ON a.id = f.src 
 WHERE a.type = 'Person'
 ```
@@ -286,19 +290,19 @@ Atoms have both an `id` (unique identifier) and a `label` (display name). These 
 
 ```sql
 -- Find atom by exact ID
-SELECT * FROM atoms WHERE id = 'Person0'
+SELECT * FROM _atoms WHERE id = 'Person0'
 
 -- Find atom by label (display name)
-SELECT * FROM atoms WHERE label = 'Alice'
+SELECT * FROM _atoms WHERE label = 'Alice'
 
 -- Find atoms where label contains a substring
-SELECT * FROM atoms WHERE label LIKE '%Manager%'
+SELECT * FROM _atoms WHERE label LIKE '%Manager%'
 
 -- Compare: get all friend pairs with their labels
 SELECT a1.label AS person, a2.label AS friend
 FROM friends f
-JOIN atoms a1 ON f.src = a1.id
-JOIN atoms a2 ON f.tgt = a2.id
+JOIN _atoms a1 ON f.src = a1.id
+JOIN _atoms a2 ON f.tgt = a2.id
 ```
 
 ### Building Binary Selectors (Edge Selection)
@@ -317,14 +321,14 @@ SELECT src, tgt FROM relation_name
 -- Friends where source is a Person (equivalent to SGQ: Person->friends)
 SELECT f.src, f.tgt 
 FROM friends f 
-JOIN atom_types at ON f.src = at.atom_id 
+JOIN _atom_types at ON f.src = at.atom_id 
 WHERE at.type = 'Person'
 
 -- Friends between Persons only (equivalent to Forge: friends & (Person -> Person))
 SELECT f.src, f.tgt 
 FROM friends f
-JOIN atom_types src_types ON f.src = src_types.atom_id
-JOIN atom_types tgt_types ON f.tgt = tgt_types.atom_id
+JOIN _atom_types src_types ON f.src = src_types.atom_id
+JOIN _atom_types tgt_types ON f.tgt = tgt_types.atom_id
 WHERE src_types.type = 'Person' AND tgt_types.type = 'Person'
 
 -- Self-loops only (where source equals target)
@@ -347,7 +351,7 @@ JOIN locatedIn l ON w.tgt = l.src
 SELECT w.src, l.tgt
 FROM worksAt w
 JOIN locatedIn l ON w.tgt = l.src
-JOIN atom_types at ON w.src = at.atom_id
+JOIN _atom_types at ON w.src = at.atom_id
 WHERE at.type = 'Employee'
 ```
 
@@ -356,13 +360,13 @@ WHERE at.type = 'Employee'
 ```sql
 -- Create edges between atoms that share the same type
 SELECT a1.id AS src, a2.id AS tgt
-FROM atoms a1
-JOIN atoms a2 ON a1.type = a2.type AND a1.id < a2.id
+FROM _atoms a1
+JOIN _atoms a2 ON a1.type = a2.type AND a1.id < a2.id
 
 -- Edges between atoms with same label prefix
 SELECT a1.id, a2.id
-FROM atoms a1
-JOIN atoms a2 ON SUBSTR(a1.label, 1, 3) = SUBSTR(a2.label, 1, 3)
+FROM _atoms a1
+JOIN _atoms a2 ON SUBSTR(a1.label, 1, 3) = SUBSTR(a2.label, 1, 3)
 WHERE a1.id != a2.id
 ```
 
@@ -370,7 +374,7 @@ WHERE a1.id != a2.id
 
 ```typescript
 // Get all Person atoms
-const result = evaluator.evaluate("SELECT id FROM atoms WHERE type = 'Person'");
+const result = evaluator.evaluate("SELECT id FROM _atoms WHERE type = 'Person'");
 result.selectedAtoms();
 // → ['Alice', 'Bob', 'Charlie']
 
@@ -380,7 +384,7 @@ result.selectedTwoples();
 // → [['Alice', 'Bob'], ['Bob', 'Charlie']]
 
 // Count atoms by type
-const result = evaluator.evaluate("SELECT type, COUNT(*) FROM atoms GROUP BY type");
+const result = evaluator.evaluate("SELECT type, COUNT(*) FROM _atoms GROUP BY type");
 result.getRawResult();
 // → [{ type: 'Person', 'COUNT(*)': 3 }, { type: 'Company', 'COUNT(*)': 1 }]
 ```
@@ -405,7 +409,7 @@ SQL reserved words are automatically prefixed to avoid conflicts:
 |-----------|-------|
 | SGQ | `Person` |
 | Forge | `Person` |
-| SQL | `SELECT id FROM atoms WHERE type = 'Person'` |
+| SQL | `SELECT id FROM _atoms WHERE type = 'Person'` |
 
 **Goal: Get all friend relationships**
 
