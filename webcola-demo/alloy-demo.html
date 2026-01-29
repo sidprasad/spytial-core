@@ -146,21 +146,20 @@
                 <select id="evaluator-select" class="form-select form-select-sm" onchange="handleEvaluatorChange()" aria-label="Evaluator selection">
                     <option value="sgq" selected>Sgq (SGraphQueryEvaluator)</option>
                     <option value="forge">Forge</option>
+                    <option value="sql">SQL</option>
                 </select>
             </div>
             <div id="evaluator-repl-mount"></div>
+            <div id="sql-schemas-container" style="display: none;" class="mb-3">
+                <details>
+                    <summary class="text-muted small">📊 Available SQL Tables</summary>
+                    <div id="sql-schemas" class="small mt-2" style="max-height: 200px; overflow-y: auto; font-family: monospace; background: #f8f9fa; padding: 8px; border-radius: 4px;"></div>
+                </details>
+            </div>
             <div id="status" class="status info">Ready to load Alloy graph...</div>
             <div id="error-messages"></div>
             <div id="relation-highlighter-mount"></div>
             <div id="graph-container-wrapper">
-                <!-- <div id="graph-controls">
-                    <select title="Choose the Layout Format" class="form-select form-select-sm" id="layoutFormat" name="layoutFormat" onchange="changeLayoutFormat()" aria-label="Layout format selection">
-                        <option value="default" selected>Standard</option>
-                        <option value="grid">Grid (Beta)</option>
-                    </select>
-                    <button id="screenshotButton" onclick="takeScreenshot()" title="Download graph as PNG image" aria-label="Screenshot graph" style="background-color: #28a745;">Screenshot</button>
-                    <button id="clearGraphButton" onclick="clearGraph()" title="Clear the current graph visualization" aria-label="Clear graph">Clear</button>
-                </div> -->
                 <!-- Use the webcola-cnd-graph custom element -->
                 <webcola-cnd-graph 
                     id="graph-container"
@@ -350,6 +349,7 @@
                 console.log('parseAlloyXML available:', !!CndCore.AlloyInstance.parseAlloyXML);
                 console.log('ForgeEvaluator available:', !!CndCore.ForgeEvaluator);
                 console.log('SGraphQueryEvaluator available:', !!CndCore.SGraphQueryEvaluator);
+                console.log('SQLEvaluator available:', !!CndCore.SQLEvaluator);
                 console.log('LayoutInstance available:', !!CndCore.LayoutInstance);
                 console.log('parseLayoutSpec available:', !!CndCore.parseLayoutSpec);
                 
@@ -458,7 +458,7 @@
             console.log(`Generating layout for instance ${currentInstanceIndex + 1}/${alloyInstances.length}`);
             console.log('Using Alloy Data Instance:', alloyDataInstance);
 
-            if (getSelectedEvaluatorType() === 'sgq' && cachedEvaluatorInstanceIndex !== currentInstanceIndex) {
+            if ((getSelectedEvaluatorType() === 'sgq' || getSelectedEvaluatorType() === 'sql') && cachedEvaluatorInstanceIndex !== currentInstanceIndex) {
                 await createEvaluatorForCurrentInstance();
             }
 
@@ -987,6 +987,13 @@
                 cachedEvaluator.initialize(evaluationContext);
                 cachedEvaluatorInstanceIndex = null;
                 console.log('Created ForgeEvaluator:', cachedEvaluator);
+            } else if (evaluatorType === 'sql') {
+                updateStatus('Creating SQLEvaluator...', 'info');
+                const instance = new CndCore.AlloyDataInstance(alloyInstances[currentInstanceIndex]);
+                cachedEvaluator = new CndCore.SQLEvaluator();
+                cachedEvaluator.initialize({ sourceData: instance });
+                cachedEvaluatorInstanceIndex = currentInstanceIndex;
+                console.log('Created SQLEvaluator:', cachedEvaluator);
             } else {
                 updateStatus('Creating SGraphQueryEvaluator...', 'info');
                 const instance = new CndCore.AlloyDataInstance(alloyInstances[currentInstanceIndex]);
@@ -998,6 +1005,19 @@
 
             if (window.mountEvaluatorRepl && cachedEvaluator) {
                 window.mountEvaluatorRepl('evaluator-repl-mount', cachedEvaluator, 0);
+            }
+
+            // Show/hide SQL schemas based on evaluator type
+            const schemasContainer = document.getElementById('sql-schemas-container');
+            const schemasDiv = document.getElementById('sql-schemas');
+            if (evaluatorType === 'sql' && cachedEvaluator.getTableSchemas) {
+                const schemas = cachedEvaluator.getTableSchemas();
+                schemasDiv.innerHTML = schemas.map(s => 
+                    `<div><strong>${s.name}</strong> (${s.columns.join(', ')})</div>`
+                ).join('');
+                schemasContainer.style.display = 'block';
+            } else {
+                schemasContainer.style.display = 'none';
             }
         }
 

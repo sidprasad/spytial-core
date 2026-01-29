@@ -294,14 +294,20 @@ export class SQLEvaluator implements IEvaluator {
     this.ready = true;
   }
 
+  // Internal table names are prefixed with '_' to avoid collision with user relation names
+  private static readonly ATOMS_TABLE = '_atoms';
+  private static readonly ATOM_TYPES_TABLE = '_atom_types';
+  private static readonly TYPES_TABLE = '_types';
+
   /**
    * Clear all tables created by this evaluator
    */
   private clearTables(): void {
     // Drop tables that we might have created
     try {
-      this.db.exec('DROP TABLE IF EXISTS atoms');
-      this.db.exec('DROP TABLE IF EXISTS types');
+      this.db.exec(`DROP TABLE IF EXISTS ${SQLEvaluator.ATOMS_TABLE}`);
+      this.db.exec(`DROP TABLE IF EXISTS ${SQLEvaluator.ATOM_TYPES_TABLE}`);
+      this.db.exec(`DROP TABLE IF EXISTS ${SQLEvaluator.TYPES_TABLE}`);
       // Drop any relation tables
       for (const schema of this.tableSchemas) {
         this.db.exec(`DROP TABLE IF EXISTS ${this.sanitizeTableName(schema.name)}`);
@@ -358,30 +364,57 @@ export class SQLEvaluator implements IEvaluator {
    * Create SQL tables from an IDataInstance
    */
   private createTablesFromDataInstance(dataInstance: IDataInstance): void {
-    // Create atoms table
-    this.db.exec('CREATE TABLE atoms (id STRING, type STRING, label STRING)');
+    // Create _atoms table (stores most specific type)
+    // Prefixed with '_' to avoid collision with user relations named 'atoms'
+    this.db.exec(`CREATE TABLE ${SQLEvaluator.ATOMS_TABLE} (id STRING, type STRING, label STRING)`);
     this.tableSchemas.push({
-      name: 'atoms',
+      name: SQLEvaluator.ATOMS_TABLE,
       columns: ['id', 'type', 'label'],
-      description: 'All atoms in the instance'
+      description: 'All atoms in the instance (type = most specific type)'
+    });
+
+    // Create _atom_types junction table (stores ALL types including inherited)
+    this.db.exec(`CREATE TABLE ${SQLEvaluator.ATOM_TYPES_TABLE} (atom_id STRING, type STRING)`);
+    this.tableSchemas.push({
+      name: SQLEvaluator.ATOM_TYPES_TABLE,
+      columns: ['atom_id', 'type'],
+      description: 'Junction table: all types for each atom (includes inherited types)'
     });
 
     const atoms: IAtom[] = [...dataInstance.getAtoms()];
     for (const atom of atoms) {
-      this.db.exec('INSERT INTO atoms VALUES (?, ?, ?)', [atom.id, atom.type, atom.label]);
+      // Insert into _atoms table with most specific type
+      this.db.exec(`INSERT INTO ${SQLEvaluator.ATOMS_TABLE} VALUES (?, ?, ?)`, [atom.id, atom.type, atom.label]);
+      
+      // Get full type hierarchy and insert into _atom_types
+      try {
+        const atomType = dataInstance.getAtomType(atom.id);
+        if (atomType && atomType.types) {
+          // Insert a row for each type in the hierarchy
+          for (const type of atomType.types) {
+            this.db.exec(`INSERT INTO ${SQLEvaluator.ATOM_TYPES_TABLE} VALUES (?, ?)`, [atom.id, type]);
+          }
+        } else {
+          // Fallback: just use the atom's declared type
+          this.db.exec(`INSERT INTO ${SQLEvaluator.ATOM_TYPES_TABLE} VALUES (?, ?)`, [atom.id, atom.type]);
+        }
+      } catch {
+        // Fallback: just use the atom's declared type
+        this.db.exec(`INSERT INTO ${SQLEvaluator.ATOM_TYPES_TABLE} VALUES (?, ?)`, [atom.id, atom.type]);
+      }
     }
 
-    // Create types table
-    this.db.exec('CREATE TABLE types (id STRING, isBuiltin BOOLEAN, hierarchy STRING)');
+    // Create _types table
+    this.db.exec(`CREATE TABLE ${SQLEvaluator.TYPES_TABLE} (id STRING, isBuiltin BOOLEAN, hierarchy STRING)`);
     this.tableSchemas.push({
-      name: 'types',
+      name: SQLEvaluator.TYPES_TABLE,
       columns: ['id', 'isBuiltin', 'hierarchy'],
       description: 'All types in the instance'
     });
 
     const types = dataInstance.getTypes();
     for (const type of types) {
-      this.db.exec('INSERT INTO types VALUES (?, ?, ?)', [
+      this.db.exec(`INSERT INTO ${SQLEvaluator.TYPES_TABLE} VALUES (?, ?, ?)`, [
         type.id, 
         type.isBuiltin, 
         JSON.stringify(type.types)

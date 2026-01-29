@@ -130,8 +130,8 @@ describe('SQLEvaluator', () => {
       expect(schemas.length).toBeGreaterThan(0);
       
       // Should have atoms and types tables
-      expect(schemas.some(s => s.name === 'atoms')).toBe(true);
-      expect(schemas.some(s => s.name === 'types')).toBe(true);
+      expect(schemas.some(s => s.name === '_atoms')).toBe(true);
+      expect(schemas.some(s => s.name === '_types')).toBe(true);
       
       // Should have relation tables
       expect(schemas.some(s => s.name === 'friends')).toBe(true);
@@ -146,7 +146,7 @@ describe('SQLEvaluator', () => {
     });
 
     it('should query all atoms', () => {
-      const result = evaluator.evaluate('SELECT * FROM atoms');
+      const result = evaluator.evaluate('SELECT * FROM _atoms');
       expect(result.isError()).toBe(false);
       expect(result.noResult()).toBe(false);
       
@@ -156,7 +156,7 @@ describe('SQLEvaluator', () => {
     });
 
     it('should query atoms by type', () => {
-      const result = evaluator.evaluate("SELECT id FROM atoms WHERE type = 'Person'");
+      const result = evaluator.evaluate("SELECT id FROM _atoms WHERE type = 'Person'");
       expect(result.isError()).toBe(false);
       
       const atoms = result.selectedAtoms();
@@ -167,7 +167,7 @@ describe('SQLEvaluator', () => {
     });
 
     it('should query atoms by id', () => {
-      const result = evaluator.evaluate("SELECT id FROM atoms WHERE id = 'Alice'");
+      const result = evaluator.evaluate("SELECT id FROM _atoms WHERE id = 'Alice'");
       expect(result.isError()).toBe(false);
       
       const atoms = result.selectedAtoms();
@@ -186,7 +186,7 @@ describe('SQLEvaluator', () => {
     });
 
     it('should support COUNT aggregate', () => {
-      const result = evaluator.evaluate('SELECT COUNT(*) as cnt FROM atoms');
+      const result = evaluator.evaluate('SELECT COUNT(*) as cnt FROM _atoms');
       expect(result.isError()).toBe(false);
       
       const raw = result.getRawResult();
@@ -195,7 +195,7 @@ describe('SQLEvaluator', () => {
     });
 
     it('should support GROUP BY', () => {
-      const result = evaluator.evaluate('SELECT type, COUNT(*) as cnt FROM atoms GROUP BY type');
+      const result = evaluator.evaluate('SELECT type, COUNT(*) as cnt FROM _atoms GROUP BY type');
       expect(result.isError()).toBe(false);
       
       const raw = result.getRawResult() as any[];
@@ -213,8 +213,8 @@ describe('SQLEvaluator', () => {
       const result = evaluator.evaluate(`
         SELECT a.label, b.label 
         FROM friends f 
-        JOIN atoms a ON f.src = a.id 
-        JOIN atoms b ON f.tgt = b.id
+        JOIN _atoms a ON f.src = a.id 
+        JOIN _atoms b ON f.tgt = b.id
       `);
       expect(result.isError()).toBe(false);
       
@@ -226,7 +226,7 @@ describe('SQLEvaluator', () => {
     it('should support self-joins on atoms', () => {
       const result = evaluator.evaluate(`
         SELECT a.id, b.id 
-        FROM atoms a, atoms b 
+        FROM _atoms a, _atoms b 
         WHERE a.type = b.type AND a.id < b.id
       `);
       expect(result.isError()).toBe(false);
@@ -308,7 +308,7 @@ describe('SQLEvaluator', () => {
     it('should throw error when evaluating before initialization', () => {
       const uninitializedEvaluator = new SQLEvaluator();
       expect(() => {
-        uninitializedEvaluator.evaluate('SELECT * FROM atoms');
+        uninitializedEvaluator.evaluate('SELECT * FROM _atoms');
       }).toThrow('Evaluator not initialized');
     });
   });
@@ -320,7 +320,7 @@ describe('SQLEvaluator', () => {
     });
 
     it('should cache query results', () => {
-      const query = 'SELECT * FROM atoms';
+      const query = 'SELECT * FROM _atoms';
       
       const result1 = evaluator.evaluate(query);
       const result2 = evaluator.evaluate(query);
@@ -329,7 +329,7 @@ describe('SQLEvaluator', () => {
     });
 
     it('should track cache size in memory stats', () => {
-      evaluator.evaluate('SELECT * FROM atoms');
+      evaluator.evaluate('SELECT * FROM _atoms');
       evaluator.evaluate('SELECT * FROM friends');
       
       const stats = evaluator.getMemoryStats();
@@ -337,7 +337,7 @@ describe('SQLEvaluator', () => {
     });
 
     it('should clear cache on re-initialization', () => {
-      evaluator.evaluate('SELECT * FROM atoms');
+      evaluator.evaluate('SELECT * FROM _atoms');
       
       const stats1 = evaluator.getMemoryStats();
       expect(stats1.cacheSize).toBe(1);
@@ -365,17 +365,17 @@ describe('SQLEvaluator', () => {
     });
 
     it('noResult should return true for empty results', () => {
-      const result = evaluator.evaluate("SELECT * FROM atoms WHERE id = 'NonExistent'");
+      const result = evaluator.evaluate("SELECT * FROM _atoms WHERE id = 'NonExistent'");
       expect(result.noResult()).toBe(true);
     });
 
     it('noResult should return false for non-empty results', () => {
-      const result = evaluator.evaluate('SELECT * FROM atoms');
+      const result = evaluator.evaluate('SELECT * FROM _atoms');
       expect(result.noResult()).toBe(false);
     });
 
     it('getExpression should return the original query', () => {
-      const query = 'SELECT * FROM atoms';
+      const query = 'SELECT * FROM _atoms';
       const result = evaluator.evaluate(query);
       expect(result.getExpression()).toBe(query);
     });
@@ -388,7 +388,7 @@ describe('SQLEvaluator', () => {
     });
 
     it('should query types table', () => {
-      const result = evaluator.evaluate('SELECT id FROM types');
+      const result = evaluator.evaluate('SELECT id FROM _types');
       expect(result.isError()).toBe(false);
       
       const raw = result.getRawResult();
@@ -396,7 +396,7 @@ describe('SQLEvaluator', () => {
     });
 
     it('should include isBuiltin column', () => {
-      const result = evaluator.evaluate('SELECT id, isBuiltin FROM types');
+      const result = evaluator.evaluate('SELECT id, isBuiltin FROM _types');
       expect(result.isError()).toBe(false);
     });
   });
@@ -405,7 +405,7 @@ describe('SQLEvaluator', () => {
     it('should dispose correctly', () => {
       const dataInstance = createSimpleDataInstance();
       evaluator.initialize({ sourceData: dataInstance });
-      evaluator.evaluate('SELECT * FROM atoms');
+      evaluator.evaluate('SELECT * FROM _atoms');
       
       evaluator.dispose();
       
@@ -454,8 +454,8 @@ describe('SQLEvaluator', () => {
       evaluator2.initialize({ sourceData: instance2 });
       
       // Query each evaluator - they should return their own data
-      const result1 = evaluator1.evaluate('SELECT id FROM atoms');
-      const result2 = evaluator2.evaluate('SELECT id FROM atoms');
+      const result1 = evaluator1.evaluate('SELECT id FROM _atoms');
+      const result2 = evaluator2.evaluate('SELECT id FROM _atoms');
       
       const atoms1 = result1.selectedAtoms();
       const atoms2 = result2.selectedAtoms();
@@ -492,7 +492,7 @@ describe('SQLEvaluator', () => {
       evaluator1.dispose();
       
       // Evaluator2 should still work
-      const result = evaluator2.evaluate('SELECT id FROM atoms');
+      const result = evaluator2.evaluate('SELECT id FROM _atoms');
       expect(result.isError()).toBe(false);
       const atoms = result.selectedAtoms();
       expect(atoms).toHaveLength(1);
@@ -527,11 +527,11 @@ describe('SQLEvaluator', () => {
       evaluator1.initialize({ sourceData: new JSONDataInstance(jsonData3) });
       
       // Evaluator2 should still have its original data
-      const result2 = evaluator2.evaluate('SELECT id FROM atoms');
+      const result2 = evaluator2.evaluate('SELECT id FROM _atoms');
       expect(result2.selectedAtoms()[0]).toBe('Bob');
       
       // Evaluator1 should have the new data
-      const result1 = evaluator1.evaluate('SELECT id FROM atoms');
+      const result1 = evaluator1.evaluate('SELECT id FROM _atoms');
       expect(result1.selectedAtoms()[0]).toBe('Charlie');
       
       evaluator1.dispose();
@@ -606,7 +606,7 @@ describe('SQLEvaluator', () => {
     });
 
     it('should support LIKE operator', () => {
-      const result = evaluator.evaluate("SELECT id FROM atoms WHERE id LIKE 'A%'");
+      const result = evaluator.evaluate("SELECT id FROM _atoms WHERE id LIKE 'A%'");
       expect(result.isError()).toBe(false);
       
       const atoms = result.selectedAtoms();
@@ -614,7 +614,7 @@ describe('SQLEvaluator', () => {
     });
 
     it('should support ORDER BY', () => {
-      const result = evaluator.evaluate('SELECT id FROM atoms ORDER BY id ASC');
+      const result = evaluator.evaluate('SELECT id FROM _atoms ORDER BY id ASC');
       expect(result.isError()).toBe(false);
       
       const atoms = result.selectedAtoms();
@@ -622,7 +622,7 @@ describe('SQLEvaluator', () => {
     });
 
     it('should support DISTINCT', () => {
-      const result = evaluator.evaluate('SELECT DISTINCT type FROM atoms');
+      const result = evaluator.evaluate('SELECT DISTINCT type FROM _atoms');
       expect(result.isError()).toBe(false);
       
       const raw = result.getRawResult() as any[];
@@ -631,7 +631,7 @@ describe('SQLEvaluator', () => {
 
     it('should support subqueries', () => {
       const result = evaluator.evaluate(`
-        SELECT id FROM atoms 
+        SELECT id FROM _atoms 
         WHERE id IN (SELECT src FROM friends)
       `);
       expect(result.isError()).toBe(false);
@@ -693,5 +693,112 @@ describe('SQLEvaluatorResult', () => {
   it('should throw when calling selectedAtoms on singleton', () => {
     const result = new SQLEvaluatorResult(42, 'SELECT');
     expect(() => result.selectedAtoms()).toThrow();
+  });
+});
+
+describe('Type Inheritance via atom_types table', () => {
+  let evaluator: SQLEvaluator;
+
+  beforeEach(() => {
+    evaluator = new SQLEvaluator();
+  });
+
+  afterEach(() => {
+    evaluator.dispose();
+  });
+
+  /**
+   * Create a data instance with type inheritance (Student extends Person)
+   * We simulate this by creating atoms with different types and 
+   * setting up the type hierarchy properly
+   */
+  function createInheritanceDataInstance(): JSONDataInstance {
+    const jsonData: IJsonDataInstance = {
+      atoms: [
+        { id: 'Person0', type: 'Person', label: 'Person 0' },
+        { id: 'Student0', type: 'Student', label: 'Student 0' },
+        { id: 'Student1', type: 'Student', label: 'Student 1' },
+        { id: 'Company0', type: 'Company', label: 'Company 0' }
+      ],
+      types: [
+        { id: 'Person', isBuiltin: false, types: ['Person'] },
+        { id: 'Student', isBuiltin: false, types: ['Student', 'Person'] }, // Student extends Person
+        { id: 'Company', isBuiltin: false, types: ['Company'] }
+      ],
+      relations: []
+    };
+    return new JSONDataInstance(jsonData);
+  }
+
+  it('should create atom_types table', () => {
+    const dataInstance = createInheritanceDataInstance();
+    evaluator.initialize({ sourceData: dataInstance });
+    
+    const schemas = evaluator.getTableSchemas();
+    expect(schemas.some(s => s.name === '_atom_types')).toBe(true);
+  });
+
+  it('should populate atom_types with inherited types', () => {
+    const dataInstance = createInheritanceDataInstance();
+    evaluator.initialize({ sourceData: dataInstance });
+    
+    // Student0 should have both 'Student' and 'Person' in atom_types
+    const result = evaluator.evaluate("SELECT type FROM _atom_types WHERE atom_id = 'Student0' ORDER BY type");
+    expect(result.isError()).toBe(false);
+    
+    const types = result.selectedAtoms();
+    expect(types).toContain('Student');
+    expect(types).toContain('Person');
+  });
+
+  it('should allow querying all Person atoms including subtypes via atom_types', () => {
+    const dataInstance = createInheritanceDataInstance();
+    evaluator.initialize({ sourceData: dataInstance });
+    
+    // Using atom_types, we can get ALL atoms that are Person (including Students)
+    const result = evaluator.evaluate("SELECT DISTINCT atom_id FROM _atom_types WHERE type = 'Person'");
+    expect(result.isError()).toBe(false);
+    
+    const atoms = result.selectedAtoms();
+    expect(atoms).toContain('Person0');
+    expect(atoms).toContain('Student0');
+    expect(atoms).toContain('Student1');
+    expect(atoms).not.toContain('Company0');
+  });
+
+  it('should still allow querying specific type via atoms table', () => {
+    const dataInstance = createInheritanceDataInstance();
+    evaluator.initialize({ sourceData: dataInstance });
+    
+    // atoms.type gives only the most specific type
+    const result = evaluator.evaluate("SELECT id FROM _atoms WHERE type = 'Student'");
+    expect(result.isError()).toBe(false);
+    
+    const atoms = result.selectedAtoms();
+    expect(atoms).toContain('Student0');
+    expect(atoms).toContain('Student1');
+    expect(atoms).not.toContain('Person0'); // Person0 has type='Person', not 'Student'
+  });
+
+  it('should support joining atoms with atom_types for full info', () => {
+    const dataInstance = createInheritanceDataInstance();
+    evaluator.initialize({ sourceData: dataInstance });
+    
+    // Get all Person atoms (including subtypes) with their labels
+    const result = evaluator.evaluate(`
+      SELECT DISTINCT a.id, a.label 
+      FROM _atoms a 
+      JOIN _atom_types at ON a.id = at.atom_id 
+      WHERE at.type = 'Person'
+    `);
+    expect(result.isError()).toBe(false);
+    
+    const raw = result.getRawResult() as any[];
+    expect(raw.length).toBe(3); // Person0, Student0, Student1
+    
+    const ids = raw.map(r => r.id || r[0]);
+    expect(ids).toContain('Person0');
+    expect(ids).toContain('Student0');
+    expect(ids).toContain('Student1');
   });
 });
