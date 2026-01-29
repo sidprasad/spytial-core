@@ -127,6 +127,28 @@ describe('Schema Descriptor', () => {
       expect(schema).toContain('left: Node');
       expect(schema).toContain('right: Node');
     });
+
+    it('should attach relations to source signatures even when the source type has no atoms', () => {
+      const jsonData: IJsonDataInstance = {
+        atoms: [
+          { id: 'b1', type: 'B', label: 'Bee' },
+        ],
+        relations: [
+          {
+            id: 'rel',
+            name: 'rel',
+            types: ['A', 'B'],
+            tuples: [{ atoms: ['a1', 'b1'], types: ['A', 'B'] }],
+          },
+        ],
+      };
+
+      const instance = new JSONDataInstance(jsonData, { validateReferences: false });
+      const schema = generateAlloySchema(instance);
+
+      expect(schema).toContain('sig A {');
+      expect(schema).toContain('rel: B');
+    });
   });
 
   describe('generateSQLSchema', () => {
