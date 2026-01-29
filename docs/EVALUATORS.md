@@ -275,6 +275,97 @@ JOIN friends f ON a.id = f.src
 WHERE a.type = 'Person'
 ```
 
+### Querying by ID vs Label
+
+Atoms have both an `id` (unique identifier) and a `label` (display name). These may differ:
+
+| Field | Purpose | Example |
+|-------|---------|---------|
+| `id` | Unique identifier, used in relations | `Person0`, `Node$1` |
+| `label` | Human-readable display name | `Alice`, `Root Node` |
+
+```sql
+-- Find atom by exact ID
+SELECT * FROM atoms WHERE id = 'Person0'
+
+-- Find atom by label (display name)
+SELECT * FROM atoms WHERE label = 'Alice'
+
+-- Find atoms where label contains a substring
+SELECT * FROM atoms WHERE label LIKE '%Manager%'
+
+-- Compare: get all friend pairs with their labels
+SELECT a1.label AS person, a2.label AS friend
+FROM friends f
+JOIN atoms a1 ON f.src = a1.id
+JOIN atoms a2 ON f.tgt = a2.id
+```
+
+### Building Binary Selectors (Edge Selection)
+
+Binary selectors return pairs of atoms (for edges/arrows). In SQL, this means returning two columns.
+
+**Basic pattern:**
+```sql
+-- Return (source, target) pairs - the two columns become the binary selector
+SELECT src, tgt FROM relation_name
+```
+
+**Filtered binary selectors:**
+
+```sql
+-- Friends where source is a Person (equivalent to SGQ: Person->friends)
+SELECT f.src, f.tgt 
+FROM friends f 
+JOIN atom_types at ON f.src = at.atom_id 
+WHERE at.type = 'Person'
+
+-- Friends between Persons only (equivalent to Forge: friends & (Person -> Person))
+SELECT f.src, f.tgt 
+FROM friends f
+JOIN atom_types src_types ON f.src = src_types.atom_id
+JOIN atom_types tgt_types ON f.tgt = tgt_types.atom_id
+WHERE src_types.type = 'Person' AND tgt_types.type = 'Person'
+
+-- Self-loops only (where source equals target)
+SELECT src, tgt FROM edges WHERE src = tgt
+
+-- Edges from a specific atom
+SELECT src, tgt FROM friends WHERE src = 'Alice'
+```
+
+**Joining multiple relations:**
+
+```sql
+-- Path through two relations: Person -> worksAt -> Company -> locatedIn -> City
+-- Returns (person, city) pairs
+SELECT w.src AS person, l.tgt AS city
+FROM worksAt w
+JOIN locatedIn l ON w.tgt = l.src
+
+-- With type filtering
+SELECT w.src, l.tgt
+FROM worksAt w
+JOIN locatedIn l ON w.tgt = l.src
+JOIN atom_types at ON w.src = at.atom_id
+WHERE at.type = 'Employee'
+```
+
+**Creating edges from atom properties:**
+
+```sql
+-- Create edges between atoms that share the same type
+SELECT a1.id AS src, a2.id AS tgt
+FROM atoms a1
+JOIN atoms a2 ON a1.type = a2.type AND a1.id < a2.id
+
+-- Edges between atoms with same label prefix
+SELECT a1.id, a2.id
+FROM atoms a1
+JOIN atoms a2 ON SUBSTR(a1.label, 1, 3) = SUBSTR(a2.label, 1, 3)
+WHERE a1.id != a2.id
+```
+
 ### Example Queries
 
 ```typescript
