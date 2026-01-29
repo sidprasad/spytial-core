@@ -3,8 +3,14 @@ import { Graph } from 'graphlib';
 /**
  * JSON representation of a data instance for easy serialization/deserialization.
  * This is the format expected from VS Code extensions, web APIs, and other external tools.
- * 
- * @example
+ *
+ * Shape:
+ * - atoms: Array of { id, type, label, labels? }
+ * - relations: Array of { id, name, types, tuples: [{ atoms, types }] }
+ * - types (optional): Array of { id, types, atoms, isBuiltin } where `types` is the
+ *   type hierarchy from most-specific to most-general (self first).
+ *
+ * @example Minimal instance
  * ```typescript
  * const jsonData: IJsonDataInstance = {
  *   atoms: [
@@ -13,14 +19,16 @@ import { Graph } from 'graphlib';
  *   ],
  *   relations: [
  *     {
- *       id: "friendship", 
- *       name: "friends", 
+ *       id: "friendship",
+ *       name: "friends",
  *       types: ["Person", "Person"],
  *       tuples: [{ atoms: ["person1", "person2"], types: ["Person", "Person"] }]
  *     }
  *   ]
  * };
  * ```
+ *
+ * For a full, real-world example with explicit type hierarchy, see docs/JSON_DATA_INSTANCE.md.
  */
 export interface IJsonDataInstance {
   /** Array of atoms/nodes in the graph */
