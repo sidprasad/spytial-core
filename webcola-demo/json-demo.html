@@ -151,7 +151,7 @@
                 <label for="evaluator-select">Evaluator:</label>
                 <select id="evaluator-select" class="form-select form-select-sm" onchange="handleEvaluatorChange()" aria-label="Evaluator selection">
                     <option value="sgq" selected>Sgq (SGraphQueryEvaluator)</option>
-                    <option value="forge">Forge (Alloy XML only)</option>
+                    <option value="forge">Forge</option>
                 </select>
             </div>
             <div id="status" class="status info">Ready to load JSON graph...</div>
@@ -319,11 +319,6 @@
                     throw new Error('Please enter a JSON data instance');
                 }
 
-                if (evaluatorType === 'forge') {
-                    updateStatus('Forge evaluator requires Alloy XML. Switch to Sgq or use the Alloy demo.', 'error');
-                    return;
-                }
-
                 const cndSpec = getCurrentCNDSpec() || '';
 
                 console.log('Using JSON data:', jsonText.substring(0, 200) + '...');
@@ -332,9 +327,15 @@
                 updateStatus('Parsing JSON data...', 'info');
                 cachedInstance = new CndCore.JSONDataInstance(jsonText);
 
-                updateStatus('Creating SGraphQueryEvaluator...', 'info');
-                cachedEvaluator = new CndCore.SGraphQueryEvaluator();
-                cachedEvaluator.initialize({ sourceData: cachedInstance });
+                if (evaluatorType === 'forge') {
+                    updateStatus('Creating ForgeEvaluator...', 'info');
+                    cachedEvaluator = new CndCore.ForgeEvaluator();
+                    cachedEvaluator.initialize({ sourceData: cachedInstance });
+                } else {
+                    updateStatus('Creating SGraphQueryEvaluator...', 'info');
+                    cachedEvaluator = new CndCore.SGraphQueryEvaluator();
+                    cachedEvaluator.initialize({ sourceData: cachedInstance });
+                }
 
                 updateStatus('Parsing layout specification...', 'info');
                 try {
