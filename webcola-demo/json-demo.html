@@ -152,6 +152,7 @@
                 <select id="evaluator-select" class="form-select form-select-sm" onchange="handleEvaluatorChange()" aria-label="Evaluator selection">
                     <option value="sgq" selected>Sgq (SGraphQueryEvaluator)</option>
                     <option value="forge">Forge</option>
+                    <option value="sql">SQL</option>
                 </select>
             </div>
             <div id="status" class="status info">Ready to load JSON graph...</div>
@@ -330,6 +331,10 @@
                 if (evaluatorType === 'forge') {
                     updateStatus('Creating ForgeEvaluator...', 'info');
                     cachedEvaluator = new CndCore.ForgeEvaluator();
+                    cachedEvaluator.initialize({ sourceData: cachedInstance });
+                } else if (evaluatorType === 'sql') {
+                    updateStatus('Creating SQLEvaluator...', 'info');
+                    cachedEvaluator = new CndCore.SQLEvaluator();
                     cachedEvaluator.initialize({ sourceData: cachedInstance });
                 } else {
                     updateStatus('Creating SGraphQueryEvaluator...', 'info');

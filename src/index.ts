@@ -32,6 +32,7 @@ export { parseLayoutSpec } from './layout/layoutspec';
 export { setupLayout } from './layout';
 export { type default as IEvaluator } from './evaluators/interfaces';
 export { ForgeEvaluator, WrappedForgeEvaluator } from './evaluators/forge-evaluator';
+export { SQLEvaluator } from './evaluators/sql-evaluator';
 export { WebColaTranslator } from './translators';
 export { StructuredInputGraph } from './translators';
 export type { ParsedCnDSpec, NodePositionHint, TransformInfo, LayoutState, WebColaLayoutOptions } from './translators';
