@@ -155,6 +155,12 @@
                     <option value="sql">SQL</option>
                 </select>
             </div>
+            <div id="sql-schemas-container" style="display: none;" class="mb-3">
+                <details>
+                    <summary class="text-muted small">📊 Available SQL Tables</summary>
+                    <div id="sql-schemas" class="small mt-2" style="max-height: 200px; overflow-y: auto; font-family: monospace; background: #f8f9fa; padding: 8px; border-radius: 4px;"></div>
+                </details>
+            </div>
             <div id="status" class="status info">Ready to load JSON graph...</div>
             <div id="error-messages"></div>
             <div id="graph-container-wrapper">
@@ -340,6 +346,19 @@
                     updateStatus('Creating SGraphQueryEvaluator...', 'info');
                     cachedEvaluator = new CndCore.SGraphQueryEvaluator();
                     cachedEvaluator.initialize({ sourceData: cachedInstance });
+                }
+
+                // Show/hide SQL schemas based on evaluator type
+                const schemasContainer = document.getElementById('sql-schemas-container');
+                const schemasDiv = document.getElementById('sql-schemas');
+                if (evaluatorType === 'sql' && cachedEvaluator.getTableSchemas) {
+                    const schemas = cachedEvaluator.getTableSchemas();
+                    schemasDiv.innerHTML = schemas.map(s => 
+                        `<div><strong>${s.name}</strong> (${s.columns.join(', ')})</div>`
+                    ).join('');
+                    schemasContainer.style.display = 'block';
+                } else {
+                    schemasContainer.style.display = 'none';
                 }
 
                 updateStatus('Parsing layout specification...', 'info');

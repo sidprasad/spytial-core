@@ -695,3 +695,110 @@ describe('SQLEvaluatorResult', () => {
     expect(() => result.selectedAtoms()).toThrow();
   });
 });
+
+describe('Type Inheritance via atom_types table', () => {
+  let evaluator: SQLEvaluator;
+
+  beforeEach(() => {
+    evaluator = new SQLEvaluator();
+  });
+
+  afterEach(() => {
+    evaluator.dispose();
+  });
+
+  /**
+   * Create a data instance with type inheritance (Student extends Person)
+   * We simulate this by creating atoms with different types and 
+   * setting up the type hierarchy properly
+   */
+  function createInheritanceDataInstance(): JSONDataInstance {
+    const jsonData: IJsonDataInstance = {
+      atoms: [
+        { id: 'Person0', type: 'Person', label: 'Person 0' },
+        { id: 'Student0', type: 'Student', label: 'Student 0' },
+        { id: 'Student1', type: 'Student', label: 'Student 1' },
+        { id: 'Company0', type: 'Company', label: 'Company 0' }
+      ],
+      types: [
+        { id: 'Person', isBuiltin: false, types: ['Person'] },
+        { id: 'Student', isBuiltin: false, types: ['Student', 'Person'] }, // Student extends Person
+        { id: 'Company', isBuiltin: false, types: ['Company'] }
+      ],
+      relations: []
+    };
+    return new JSONDataInstance(jsonData);
+  }
+
+  it('should create atom_types table', () => {
+    const dataInstance = createInheritanceDataInstance();
+    evaluator.initialize({ sourceData: dataInstance });
+    
+    const schemas = evaluator.getTableSchemas();
+    expect(schemas.some(s => s.name === 'atom_types')).toBe(true);
+  });
+
+  it('should populate atom_types with inherited types', () => {
+    const dataInstance = createInheritanceDataInstance();
+    evaluator.initialize({ sourceData: dataInstance });
+    
+    // Student0 should have both 'Student' and 'Person' in atom_types
+    const result = evaluator.evaluate("SELECT type FROM atom_types WHERE atom_id = 'Student0' ORDER BY type");
+    expect(result.isError()).toBe(false);
+    
+    const types = result.selectedAtoms();
+    expect(types).toContain('Student');
+    expect(types).toContain('Person');
+  });
+
+  it('should allow querying all Person atoms including subtypes via atom_types', () => {
+    const dataInstance = createInheritanceDataInstance();
+    evaluator.initialize({ sourceData: dataInstance });
+    
+    // Using atom_types, we can get ALL atoms that are Person (including Students)
+    const result = evaluator.evaluate("SELECT DISTINCT atom_id FROM atom_types WHERE type = 'Person'");
+    expect(result.isError()).toBe(false);
+    
+    const atoms = result.selectedAtoms();
+    expect(atoms).toContain('Person0');
+    expect(atoms).toContain('Student0');
+    expect(atoms).toContain('Student1');
+    expect(atoms).not.toContain('Company0');
+  });
+
+  it('should still allow querying specific type via atoms table', () => {
+    const dataInstance = createInheritanceDataInstance();
+    evaluator.initialize({ sourceData: dataInstance });
+    
+    // atoms.type gives only the most specific type
+    const result = evaluator.evaluate("SELECT id FROM atoms WHERE type = 'Student'");
+    expect(result.isError()).toBe(false);
+    
+    const atoms = result.selectedAtoms();
+    expect(atoms).toContain('Student0');
+    expect(atoms).toContain('Student1');
+    expect(atoms).not.toContain('Person0'); // Person0 has type='Person', not 'Student'
+  });
+
+  it('should support joining atoms with atom_types for full info', () => {
+    const dataInstance = createInheritanceDataInstance();
+    evaluator.initialize({ sourceData: dataInstance });
+    
+    // Get all Person atoms (including subtypes) with their labels
+    const result = evaluator.evaluate(`
+      SELECT DISTINCT a.id, a.label 
+      FROM atoms a 
+      JOIN atom_types at ON a.id = at.atom_id 
+      WHERE at.type = 'Person'
+    `);
+    expect(result.isError()).toBe(false);
+    
+    const raw = result.getRawResult() as any[];
+    expect(raw.length).toBe(3); // Person0, Student0, Student1
+    
+    const ids = raw.map(r => r.id || r[0]);
+    expect(ids).toContain('Person0');
+    expect(ids).toContain('Student0');
+    expect(ids).toContain('Student1');
+  });
+});

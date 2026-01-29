@@ -301,6 +301,7 @@ export class SQLEvaluator implements IEvaluator {
     // Drop tables that we might have created
     try {
       this.db.exec('DROP TABLE IF EXISTS atoms');
+      this.db.exec('DROP TABLE IF EXISTS atom_types');
       this.db.exec('DROP TABLE IF EXISTS types');
       // Drop any relation tables
       for (const schema of this.tableSchemas) {
@@ -358,17 +359,43 @@ export class SQLEvaluator implements IEvaluator {
    * Create SQL tables from an IDataInstance
    */
   private createTablesFromDataInstance(dataInstance: IDataInstance): void {
-    // Create atoms table
+    // Create atoms table (stores most specific type)
     this.db.exec('CREATE TABLE atoms (id STRING, type STRING, label STRING)');
     this.tableSchemas.push({
       name: 'atoms',
       columns: ['id', 'type', 'label'],
-      description: 'All atoms in the instance'
+      description: 'All atoms in the instance (type = most specific type)'
+    });
+
+    // Create atom_types junction table (stores ALL types including inherited)
+    this.db.exec('CREATE TABLE atom_types (atom_id STRING, type STRING)');
+    this.tableSchemas.push({
+      name: 'atom_types',
+      columns: ['atom_id', 'type'],
+      description: 'Junction table: all types for each atom (includes inherited types)'
     });
 
     const atoms: IAtom[] = [...dataInstance.getAtoms()];
     for (const atom of atoms) {
+      // Insert into atoms table with most specific type
       this.db.exec('INSERT INTO atoms VALUES (?, ?, ?)', [atom.id, atom.type, atom.label]);
+      
+      // Get full type hierarchy and insert into atom_types
+      try {
+        const atomType = dataInstance.getAtomType(atom.id);
+        if (atomType && atomType.types) {
+          // Insert a row for each type in the hierarchy
+          for (const type of atomType.types) {
+            this.db.exec('INSERT INTO atom_types VALUES (?, ?)', [atom.id, type]);
+          }
+        } else {
+          // Fallback: just use the atom's declared type
+          this.db.exec('INSERT INTO atom_types VALUES (?, ?)', [atom.id, atom.type]);
+        }
+      } catch {
+        // Fallback: just use the atom's declared type
+        this.db.exec('INSERT INTO atom_types VALUES (?, ?)', [atom.id, atom.type]);
+      }
     }
 
     // Create types table
