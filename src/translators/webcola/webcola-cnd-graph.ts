@@ -3263,20 +3263,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         return;
       }
 
-      // Safety check: ensure all nodes have valid numeric positions
-      // Invalid positions (NaN, Infinity) can cause GridRouter to hang
-      const invalidNodes = nodes.filter((n: any) => 
-        !Number.isFinite(n.x) || !Number.isFinite(n.y) ||
-        !Number.isFinite(n.width) || !Number.isFinite(n.height)
-      );
-      if (invalidNodes.length > 0) {
-        console.warn('[gridify] Found nodes with invalid positions, falling back to default routing:', 
-          invalidNodes.map((n: any) => ({ id: n.id, x: n.x, y: n.y, width: n.width, height: n.height })));
-        // Fall back to simple orthogonal routing without GridRouter
-        this.fallbackGridRouting(edges);
-        return;
-      }
-
       // Debug: log node positions BEFORE ensureNodeBounds
       console.log('[gridify] Node positions BEFORE ensureNodeBounds:');
       nodes.slice(0, 3).forEach((n: any) => {
@@ -3285,7 +3271,22 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
       // Force recompute all node bounds from current positions
       // This ensures bounds are always in sync with node x/y coordinates
+      // Note: ensureNodeBounds provides default width/height (50/30) for nodes without explicit dimensions
       this.ensureNodeBounds(true);
+
+      // Safety check: ensure all nodes have valid numeric positions AFTER bounds setup
+      // Only check x/y positions - width/height are now guaranteed by ensureNodeBounds defaults
+      // Invalid positions (NaN, Infinity) can cause GridRouter to hang
+      const invalidNodes = nodes.filter((n: any) => 
+        !Number.isFinite(n.x) || !Number.isFinite(n.y)
+      );
+      if (invalidNodes.length > 0) {
+        console.warn('[gridify] Found nodes with invalid positions, falling back to default routing:', 
+          invalidNodes.map((n: any) => ({ id: n.id, x: n.x, y: n.y })));
+        // Fall back to simple orthogonal routing without GridRouter
+        this.fallbackGridRouting(edges);
+        return;
+      }
 
       // Debug: log node positions AFTER ensureNodeBounds  
       console.log('[gridify] Node positions AFTER ensureNodeBounds:');
