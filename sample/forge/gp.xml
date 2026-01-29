@@ -1,0 +1,95 @@
+<alloy builddate="Thursday, January 29th, 2026">
+<instance bitwidth="4" maxseq="-1" command="temporary-name_grandpa_1" filename="/Users/siddharthaprasad/Desktop/TAing/1710/lfs_dev/2026/modeling_intro/stencil/grandpa.frg" version="4.2.1"  >
+
+<sig label="seq/Int" ID="0" parentID="1" builtin="yes">
+</sig>
+
+<sig label="Int" ID="1" parentID="2" builtin="yes">
+
+</sig>
+
+<sig label="univ" ID="2" builtin="yes">
+</sig>
+
+<field label="no-field-guard" ID="3" parentID="2">
+<types> <type ID="2"/><type ID="2"/> </types>
+</field>
+
+<sig label="Person" ID="4" parentID="2">
+<atom label="Person0"/><atom label="Person1"/><atom label="Person2"/><atom label="Person3"/>
+</sig>
+
+<field label="spouse" ID="5" parentID="4">
+<tuple><atom label="Person0"/><atom label="Person1"/></tuple>
+<tuple><atom label="Person1"/><atom label="Person2"/></tuple>
+<tuple><atom label="Person2"/><atom label="Person2"/></tuple>
+<tuple><atom label="Person3"/><atom label="Person1"/></tuple>
+<types><type ID="4"/><type ID="4"/></types>
+
+</field>
+
+<field label="parent1" ID="6" parentID="4">
+<tuple><atom label="Person0"/><atom label="Person3"/></tuple>
+<tuple><atom label="Person1"/><atom label="Person2"/></tuple>
+<tuple><atom label="Person2"/><atom label="Person0"/></tuple>
+<tuple><atom label="Person3"/><atom label="Person2"/></tuple>
+<types><type ID="4"/><type ID="4"/></types>
+
+</field>
+
+<field label="parent2" ID="7" parentID="4">
+<tuple><atom label="Person0"/><atom label="Person3"/></tuple>
+<tuple><atom label="Person1"/><atom label="Person2"/></tuple>
+<tuple><atom label="Person2"/><atom label="Person3"/></tuple>
+<tuple><atom label="Person3"/><atom label="Person3"/></tuple>
+<types><type ID="4"/><type ID="4"/></types>
+
+</field>
+
+
+</instance>
+
+<source filename="/Users/siddharthaprasad/Desktop/TAing/1710/lfs_dev/2026/modeling_intro/stencil/grandpa.frg" content="#lang forge/froglet
+&#xA;
+&#xA;// Uncomment this line to have
+&#xA;// the visualizer apply
+&#xA;// a custom layout (defined in grandpa.cnd) 
+&#xA;// when displaying the solution. 
+&#xA;// option run_sterling &amp;quot;grandpa.cnd&amp;quot;
+&#xA;
+&#xA;sig Person {
+&#xA;    parent1 : lone Person,
+&#xA;    parent2 : lone Person,
+&#xA;    spouse  : lone Person
+&#xA;}
+&#xA;// DO NOT EDIT above this line  
+&#xA;// Note that in the instructions below, a person X is an ancestor to person Y if 
+&#xA;// X is reachable from Y by chaining `.parent1`s or `.parent2`s in any order, any number of times, on Y.
+&#xA;
+&#xA;// You will find the &amp;quot;reachable&amp;quot; built-in predicate useful. See the docs linked in the handout.
+&#xA;
+&#xA;pred FamilyFact {
+&#xA;    // No person should be their own spouse
+&#xA;
+&#xA;    // You cannot be an ancestor of yourself
+&#xA;   
+&#xA;    // You are your spouse's spouse
+&#xA;
+&#xA;    // You cannot be an ancestor of your spouse
+&#xA;
+&#xA;    // For any person :
+&#xA;    //  - Your ancestors on parent1's side cannot be your ancestors on parent2's side 
+&#xA;    //  - If someone is an ancestor to you they cannot be an ancestor to your spouse
+&#xA;
+&#xA;}
+&#xA;
+&#xA;pred ownGrandparent {
+&#xA;    // Fill in a constraint that requires there to be a case where someone is their own grandpa. 
+&#xA;    // (Properly expressing what it means to be your own grandpa is crucial!)
+&#xA;}
+&#xA;
+&#xA;// While it can be fun to test this for more people your solution should
+&#xA;// be valid for exactly 4 Person
+&#xA;run {FamilyFact ownGrandparent} for exactly 4 Person
+&#xA;"></source>
+</alloy>

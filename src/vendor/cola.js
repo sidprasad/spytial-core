@@ -1232,32 +1232,58 @@
                 }
             });
         }
-        GridRouter.prototype.avg = function (a) { return a.reduce(function (x, y) { return x + y; }) / a.length; };
+        GridRouter.prototype.avg = function (a) { 
+            if (!a || a.length === 0) return 0;
+            return a.reduce(function (x, y) { return x + y; }) / a.length; 
+        };
         GridRouter.prototype.getGridLines = function (axis) {
             var columns = [];
             var ls = this.leaves.slice(0, this.leaves.length);
-            while (ls.length > 0) {
+            var maxIterations = ls.length * 2 + 100; // Safety limit to prevent infinite loops
+            var iterations = 0;
+            while (ls.length > 0 && iterations < maxIterations) {
+                iterations++;
                 var overlapping = ls.filter(function (v) { return v.rect['overlap' + axis.toUpperCase()](ls[0].rect); });
+                // Safety check: if no overlapping nodes found (shouldn't happen), add just the first node
+                if (overlapping.length === 0) {
+                    overlapping = [ls[0]];
+                }
                 var col = {
                     nodes: overlapping,
                     pos: this.avg(overlapping.map(function (v) { return v.rect['c' + axis](); }))
                 };
                 columns.push(col);
-                col.nodes.forEach(function (v) { return ls.splice(ls.indexOf(v), 1); });
+                // Fix: use a Set for O(1) lookups and proper removal
+                var toRemove = new Set(overlapping);
+                ls = ls.filter(function (v) { return !toRemove.has(v); });
+            }
+            if (iterations >= maxIterations) {
+                console.warn('[GridRouter.getGridLines] Hit max iterations limit, possible infinite loop prevented');
             }
             columns.sort(function (a, b) { return a.pos - b.pos; });
             return columns;
         };
         GridRouter.prototype.getDepth = function (v) {
             var depth = 0;
-            while (v.parent !== this.root) {
+            var maxDepth = 1000; // Safety limit
+            while (v.parent !== this.root && depth < maxDepth) {
                 depth++;
                 v = v.parent;
+                // Safety check: if parent is undefined, break to prevent infinite loop
+                if (typeof v === 'undefined' || v === null) {
+                    console.warn('[GridRouter.getDepth] Encountered node with undefined parent');
+                    break;
+                }
             }
             return depth;
         };
         GridRouter.prototype.midPoints = function (a) {
+            // Safety check: handle edge cases with empty or single-element arrays
+            if (!a || a.length === 0) return [0];
+            if (a.length === 1) return [a[0] - 10, a[0] + 10]; // Default gap of 20
             var gap = a[1] - a[0];
+            // Safety check: ensure gap is a valid number
+            if (!Number.isFinite(gap) || gap === 0) gap = 20;
             var mids = [a[0] - gap / 2];
             for (var i = 1; i < a.length; i++) {
                 mids.push((a[i] + a[i - 1]) / 2);
@@ -1267,15 +1293,23 @@
         };
         GridRouter.prototype.findLineage = function (v) {
             var lineage = [v];
+            var maxDepth = 1000; // Safety limit
+            var depth = 0;
             do {
                 v = v.parent;
+                // Safety check: if parent is undefined, break to prevent infinite loop
+                if (typeof v === 'undefined' || v === null) {
+                    console.warn('[GridRouter.findLineage] Encountered node with undefined parent');
+                    break;
+                }
                 lineage.push(v);
-            } while (v !== this.root);
+                depth++;
+            } while (v !== this.root && depth < maxDepth);
             return lineage.reverse();
         };
         GridRouter.prototype.findAncestorPathBetween = function (a, b) {
             var aa = this.findLineage(a), ba = this.findLineage(b), i = 0;
-            while (aa[i] === ba[i])
+            while (aa[i] === ba[i] && i < aa.length && i < ba.length)
                 i++;
             return { commonAncestor: aa[i - 1], lineages: aa.slice(i).concat(ba.slice(i)) };
         };
@@ -1494,6 +1528,18 @@
         GridRouter.prototype.route = function (s, t) {
             var _this = this;
             var source = this.nodes[s], target = this.nodes[t];
+            
+            // Safety check: ensure source and target exist and have ports
+            if (!source || !target) {
+                console.warn('[GridRouter.route] Source or target node not found:', s, t);
+                return [];
+            }
+            if (!source.ports || source.ports.length === 0 || !target.ports || target.ports.length === 0) {
+                console.warn('[GridRouter.route] Source or target has no ports, cannot route:', 
+                    'source ports:', source.ports?.length, 'target ports:', target.ports?.length);
+                return [];
+            }
+            
             this.obstacles = this.siblingObstacles(source, target);
             var obstacleLookup = {};
             this.obstacles.forEach(function (o) { return obstacleLookup[o.id] = o; });
@@ -1524,6 +1570,8 @@
             var shortestPathCalculator = new shortestpaths_1.Calculator(this.verts.length, this.passableEdges, getSource, getTarget, getLength);
             var bendPenalty = function (u, v, w) {
                 var a = _this.verts[u], b = _this.verts[v], c = _this.verts[w];
+                // Safety check for undefined verts
+                if (!a || !b || !c) return 0;
                 var dx = Math.abs(c.x - a.x), dy = Math.abs(c.y - a.y);
                 if (a.node === source && a.node === b.node || b.node === target && b.node === c.node)
                     return 0;
@@ -1531,10 +1579,14 @@
             };
             var shortestPath = shortestPathCalculator.PathFromNodeToNodeWithPrevCost(source.ports[0].id, target.ports[0].id, bendPenalty);
             var pathPoints = shortestPath.reverse().map(function (vi) { return _this.verts[vi]; });
-            pathPoints.push(this.nodes[target.id].ports[0]);
+            // Safety check: ensure target node has ports before accessing
+            if (this.nodes[target.id] && this.nodes[target.id].ports && this.nodes[target.id].ports.length > 0) {
+                pathPoints.push(this.nodes[target.id].ports[0]);
+            }
             return pathPoints.filter(function (v, i) {
-                return !(i < pathPoints.length - 1 && pathPoints[i + 1].node === source && v.node === source
-                    || i > 0 && v.node === target && pathPoints[i - 1].node === target);
+                if (!v) return false; // Filter out undefined points
+                return !(i < pathPoints.length - 1 && pathPoints[i + 1] && pathPoints[i + 1].node === source && v.node === source
+                    || i > 0 && v.node === target && pathPoints[i - 1] && pathPoints[i - 1].node === target);
             });
         };
         GridRouter.getRoutePath = function (route, cornerradius, arrowwidth, arrowheight) {
@@ -4020,8 +4072,19 @@
         };
         Calculator.prototype.PathFromNodeToNodeWithPrevCost = function (start, end, prevCost) {
             var q = new pqueue_1.PriorityQueue(function (a, b) { return a.d <= b.d; }), u = this.neighbours[start], qu = new QueueEntry(u, null, 0), visitedFrom = {};
+            
+            // Safety check: ensure start node exists
+            if (!u) {
+                console.warn('[Calculator.PathFromNodeToNodeWithPrevCost] Start node not found:', start);
+                return [];
+            }
+            
             q.push(qu);
-            while (!q.empty()) {
+            // Safety limit to prevent infinite loops
+            var maxIterations = this.n * this.n + 10000;
+            var iterations = 0;
+            while (!q.empty() && iterations < maxIterations) {
+                iterations++;
                 qu = q.pop();
                 u = qu.node;
                 if (u.id === end) {
@@ -4030,6 +4093,8 @@
                 var i = u.neighbours.length;
                 while (i--) {
                     var neighbour = u.neighbours[i], v = this.neighbours[neighbour.id];
+                    // Safety check: ensure neighbour exists
+                    if (!v) continue;
                     if (qu.prev && v.id === qu.prev.node.id)
                         continue;
                     var viduid = v.id + ',' + u.id;
@@ -4040,8 +4105,15 @@
                     q.push(new QueueEntry(v, qu, t));
                 }
             }
+            if (iterations >= maxIterations) {
+                console.warn('[Calculator.PathFromNodeToNodeWithPrevCost] Hit max iterations limit, possible infinite loop prevented');
+            }
             var path = [];
-            while (qu.prev) {
+            // Safety limit for path reconstruction
+            var maxPathLength = this.n + 100;
+            var pathLength = 0;
+            while (qu.prev && pathLength < maxPathLength) {
+                pathLength++;
                 qu = qu.prev;
                 path.push(qu.node.id);
             }
