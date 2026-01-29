@@ -134,12 +134,19 @@
 <body>
     <div class="container border" id="main-panel">
         <h1>WebCola Alloy Visualization Demo</h1>
-        <p>This demonstrates the complete Alloy XML → AlloyDataInstance → ForgeEvaluator → Layout → WebCola pipeline.</p>
+        <p>This demonstrates the complete Alloy XML → AlloyDataInstance → Evaluator → Layout → WebCola pipeline.</p>
         <div>
             <!-- Editable Input Fields -->
             <div>
                 <label for="webcola-alloy">Alloy XML Instance:</label>
                 <textarea id="webcola-alloy" placeholder="Paste your Alloy XML instance here..."></textarea>
+            </div>
+            <div class="mb-3">
+                <label for="evaluator-select">Evaluator:</label>
+                <select id="evaluator-select" class="form-select form-select-sm" onchange="handleEvaluatorChange()" aria-label="Evaluator selection">
+                    <option value="sgq" selected>Sgq (SGraphQueryEvaluator)</option>
+                    <option value="forge">Forge</option>
+                </select>
             </div>
             <div id="evaluator-repl-mount"></div>
             <div id="status" class="status info">Ready to load Alloy graph...</div>
@@ -222,7 +229,9 @@
         let currentInstanceIndex = 0;      // Current instance being displayed
         let priorState = null;             // Layout state from previous render (positions + transform)
         let parsedAlloyDatum = null;       // Cached parsed Alloy datum
-        let cachedForgeEvaluator = null;   // Cached ForgeEvaluator
+        let cachedEvaluator = null;        // Cached evaluator
+        let cachedEvaluatorType = 'sgq';
+        let cachedEvaluatorInstanceIndex = null;
         let cachedLayoutSpec = null;       // Cached layout specification
         
         // Projection state (maps type to selected atom)
@@ -273,6 +282,18 @@
             const statusElement = document.getElementById('status');
             statusElement.textContent = message;
             statusElement.className = `status ${type}`;
+        }
+
+        function getSelectedEvaluatorType() {
+            return document.getElementById('evaluator-select')?.value || 'sgq';
+        }
+
+        function handleEvaluatorChange() {
+            cachedEvaluator = null;
+            cachedEvaluatorInstanceIndex = null;
+            cachedEvaluatorType = getSelectedEvaluatorType();
+            currentInstanceLayout = null;
+            updateStatus(`Evaluator set to ${cachedEvaluatorType.toUpperCase()}. Reload to apply.`, 'info');
         }
 
         function exportInstanceView(format) {
@@ -328,6 +349,7 @@
                 // Check for Alloy-specific components
                 console.log('parseAlloyXML available:', !!CndCore.AlloyInstance.parseAlloyXML);
                 console.log('ForgeEvaluator available:', !!CndCore.ForgeEvaluator);
+                console.log('SGraphQueryEvaluator available:', !!CndCore.SGraphQueryEvaluator);
                 console.log('LayoutInstance available:', !!CndCore.LayoutInstance);
                 console.log('parseLayoutSpec available:', !!CndCore.parseLayoutSpec);
                 
@@ -342,12 +364,14 @@
         }
 
         /**
-         * Process Alloy data using the complete Alloy → ForgeEvaluator → Layout pipeline
+         * Process Alloy data using the complete Alloy → Evaluator → Layout pipeline
          * Now supports multiple temporal instances
          */
         async function loadAlloyData() {
             try {
-                updateStatus('Processing Alloy data with ForgeEvaluator...', 'info');
+                const evaluatorType = getSelectedEvaluatorType();
+                cachedEvaluatorType = evaluatorType;
+                updateStatus(`Processing Alloy data with ${evaluatorType.toUpperCase()} evaluator...`, 'info');
 
                 // Get Alloy XML from input field
                 const alloyXml = getCurrentAlloyXml();
@@ -382,21 +406,13 @@
                 // Show temporal explorer if multiple instances
                 updateTemporalExplorer();
 
-                // Step 2: Create ForgeEvaluator with Alloy data
-                updateStatus('Creating ForgeEvaluator...', 'info');
-
-                let evaluationContext = {
-                    sourceData: alloyXml,
-                };
-                cachedForgeEvaluator = new CndCore.ForgeEvaluator();
-                cachedForgeEvaluator.initialize(evaluationContext);
-
-                console.log('Created ForgeEvaluator:', cachedForgeEvaluator);
+                // Step 2: Create evaluator with Alloy data
+                await createEvaluatorForCurrentInstance(alloyXml);
 
                 // NOTE: Mount Evaluator REPL
-                if (window.mountEvaluatorRepl) {
-                    window.mountEvaluatorRepl('evaluator-repl-mount', cachedForgeEvaluator, 0);
-                } else {
+                if (window.mountEvaluatorRepl && cachedEvaluator) {
+                    window.mountEvaluatorRepl('evaluator-repl-mount', cachedEvaluator, 0);
+                } else if (!window.mountEvaluatorRepl) {
                     console.warn('Evaluator REPL mount function not available. Skipping REPL mount.');
                 }
 
@@ -434,7 +450,7 @@
          * Uses prior positions if available and enabled
          */
         async function generateLayoutForCurrentInstance() {
-            if (!alloyInstances.length || !cachedForgeEvaluator || !cachedLayoutSpec) {
+            if (!alloyInstances.length || !cachedEvaluator || !cachedLayoutSpec) {
                 throw new Error('Missing required data for layout generation');
             }
 
@@ -442,17 +458,21 @@
             console.log(`Generating layout for instance ${currentInstanceIndex + 1}/${alloyInstances.length}`);
             console.log('Using Alloy Data Instance:', alloyDataInstance);
 
-            // Step 4: Create LayoutInstance with ForgeEvaluator
+            if (getSelectedEvaluatorType() === 'sgq' && cachedEvaluatorInstanceIndex !== currentInstanceIndex) {
+                await createEvaluatorForCurrentInstance();
+            }
+
+            // Step 4: Create LayoutInstance with evaluator
             updateStatus(`Creating layout for instance ${currentInstanceIndex + 1}...`, 'info');
             const ENABLE_ALIGNMENT_EDGES = true;
             
             const layoutInstance = new CndCore.LayoutInstance(
                 cachedLayoutSpec, 
-                cachedForgeEvaluator, 
+                cachedEvaluator, 
                 currentInstanceIndex, 
                 ENABLE_ALIGNMENT_EDGES
             );
-            console.log('Created Layout Instance with ForgeEvaluator:', layoutInstance);
+            console.log('Created Layout Instance with evaluator:', layoutInstance);
 
             // Step 5: Generate layout using Alloy data instance
             updateStatus('Generating layout with Alloy data...', 'info');
@@ -627,7 +647,7 @@
                 if (!currentInstanceLayout) {
                     // If we have cached data, regenerate layout for current instance
                     // Otherwise, load fresh data (which resets to instance 0)
-                    if (alloyInstances.length > 0 && cachedForgeEvaluator && cachedLayoutSpec) {
+                    if (alloyInstances.length > 0 && cachedEvaluator && cachedLayoutSpec) {
                         console.log('renderGraph: No layout available, generating for current instance');
                         await generateLayoutForCurrentInstance();
                     } else {
@@ -813,8 +833,10 @@
             currentInstanceIndex = 0;
             priorState = null;
             parsedAlloyDatum = null;
-            cachedForgeEvaluator = null;
+            cachedEvaluator = null;
             cachedLayoutSpec = null;
+            cachedEvaluatorType = getSelectedEvaluatorType();
+            cachedEvaluatorInstanceIndex = null;
             updateTemporalExplorer();
             updateStatus('All state reset.', 'info');
         }
@@ -947,15 +969,37 @@
             }
 
             // Mount Evaluator REPL
-            if (window.mountEvaluatorRepl) {
-                window.mountEvaluatorRepl('evaluator-repl-mount', 'forge');
-            }
-
             // Mount Relation Highlighter
             if (window.mountRelationHighlighter) {
                 window.mountRelationHighlighter('relation-highlighter-mount');
             }
         });
+
+        async function createEvaluatorForCurrentInstance(alloyXmlOverride) {
+            const evaluatorType = getSelectedEvaluatorType();
+            cachedEvaluatorType = evaluatorType;
+            if (evaluatorType === 'forge') {
+                const evaluationContext = {
+                    sourceData: alloyXmlOverride || getCurrentAlloyXml(),
+                };
+                updateStatus('Creating ForgeEvaluator...', 'info');
+                cachedEvaluator = new CndCore.ForgeEvaluator();
+                cachedEvaluator.initialize(evaluationContext);
+                cachedEvaluatorInstanceIndex = null;
+                console.log('Created ForgeEvaluator:', cachedEvaluator);
+            } else {
+                updateStatus('Creating SGraphQueryEvaluator...', 'info');
+                const instance = new CndCore.AlloyDataInstance(alloyInstances[currentInstanceIndex]);
+                cachedEvaluator = new CndCore.SGraphQueryEvaluator();
+                cachedEvaluator.initialize({ sourceData: instance });
+                cachedEvaluatorInstanceIndex = currentInstanceIndex;
+                console.log('Created SGraphQueryEvaluator:', cachedEvaluator);
+            }
+
+            if (window.mountEvaluatorRepl && cachedEvaluator) {
+                window.mountEvaluatorRepl('evaluator-repl-mount', cachedEvaluator, 0);
+            }
+        }
 
         /**
          * Handle projection selection change

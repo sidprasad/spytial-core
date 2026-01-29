@@ -128,7 +128,7 @@
 <body>
     <div class="container border" id="main-panel">
         <h1>WebCola JSON Visualization Demo</h1>
-        <p>This demonstrates the complete JSON → JSONDataInstance → SGraphQueryEvaluator → Layout → WebCola pipeline.</p>
+        <p>This demonstrates the complete JSON → JSONDataInstance → Evaluator → Layout → WebCola pipeline.</p>
         <div>
             <div>
                 <label for="webcola-json">JSON Data Instance:</label>
@@ -146,6 +146,13 @@
     }
   ]
 }'></textarea>
+            </div>
+            <div class="mb-3">
+                <label for="evaluator-select">Evaluator:</label>
+                <select id="evaluator-select" class="form-select form-select-sm" onchange="handleEvaluatorChange()" aria-label="Evaluator selection">
+                    <option value="sgq" selected>Sgq (SGraphQueryEvaluator)</option>
+                    <option value="forge">Forge</option>
+                </select>
             </div>
             <div id="status" class="status info">Ready to load JSON graph...</div>
             <div id="error-messages"></div>
@@ -199,6 +206,7 @@
         let cachedEvaluator = null;
         let cachedLayoutSpec = null;
         let cachedInstance = null;
+        let cachedEvaluatorType = 'sgq';
 
         function getCurrentJsonText() {
             return document.getElementById('webcola-json').value.trim();
@@ -214,6 +222,17 @@
             const statusElement = document.getElementById('status');
             statusElement.textContent = message;
             statusElement.className = `status ${type}`;
+        }
+
+        function getSelectedEvaluatorType() {
+            return document.getElementById('evaluator-select')?.value || 'sgq';
+        }
+
+        function handleEvaluatorChange() {
+            cachedEvaluator = null;
+            cachedEvaluatorType = getSelectedEvaluatorType();
+            currentInstanceLayout = null;
+            updateStatus(`Evaluator set to ${cachedEvaluatorType.toUpperCase()}. Reload to apply.`, 'info');
         }
 
         function getCurrentExportInstance() {
@@ -291,7 +310,9 @@
 
         async function loadJsonData() {
             try {
-                updateStatus('Processing JSON data with SGraphQueryEvaluator...', 'info');
+                const evaluatorType = getSelectedEvaluatorType();
+                cachedEvaluatorType = evaluatorType;
+                updateStatus(`Processing JSON data with ${evaluatorType.toUpperCase()} evaluator...`, 'info');
 
                 const jsonText = getCurrentJsonText();
                 if (!jsonText) {
@@ -306,9 +327,15 @@
                 updateStatus('Parsing JSON data...', 'info');
                 cachedInstance = new CndCore.JSONDataInstance(jsonText);
 
-                updateStatus('Creating SGraphQueryEvaluator...', 'info');
-                cachedEvaluator = new CndCore.SGraphQueryEvaluator();
-                cachedEvaluator.initialize({ sourceData: cachedInstance });
+                if (evaluatorType === 'forge') {
+                    updateStatus('Creating ForgeEvaluator...', 'info');
+                    cachedEvaluator = new CndCore.ForgeEvaluator();
+                    cachedEvaluator.initialize({ sourceData: cachedInstance });
+                } else {
+                    updateStatus('Creating SGraphQueryEvaluator...', 'info');
+                    cachedEvaluator = new CndCore.SGraphQueryEvaluator();
+                    cachedEvaluator.initialize({ sourceData: cachedInstance });
+                }
 
                 updateStatus('Parsing layout specification...', 'info');
                 try {
@@ -516,6 +543,7 @@
             cachedInstance = null;
             cachedEvaluator = null;
             cachedLayoutSpec = null;
+            cachedEvaluatorType = getSelectedEvaluatorType();
 
             updateStatus('Graph cleared.', 'info');
         }
