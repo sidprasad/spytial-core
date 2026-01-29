@@ -142,6 +142,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     alignmentEdges: new Set()
   };
 
+  /**
+   * Guard flag to prevent re-entrance during grid routing operations.
+   * This prevents infinite loops when gridify is called while already in progress.
+   */
+  private isGridifyingInProgress: boolean = false;
+
   // We use these to store state and references.
   private svgNodes : any;
   private svgLinkGroups : any;
@@ -2970,6 +2976,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     const linkGroups = this.container.selectAll(".link-group");
     linkGroups.select("path")
         .attr("d", (d: any) => {
+            // Handle self-loops specially - they can't use orthogonal routing
+            if (d.source?.id === d.target?.id) {
+                const route = this.createSelfLoopRoute(d);
+                return this.lineFunction(route);
+            }
+            
             // Create orthogonal (Manhattan) path for grid mode
             // Use node.x/y as primary source (same as default mode) with bounds as fallback
             const sourceX = d.source?.x ?? d.source?.bounds?.cx() ?? 0;
@@ -3188,7 +3200,55 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   private gridify(nudgeGap: number, margin: number, groupMargin: number): void {
+    // Guard against re-entrance - prevents infinite loops when gridify is called
+    // while already in progress (e.g., from event handlers or callbacks)
+    if (this.isGridifyingInProgress) {
+      console.warn('[gridify] Already in progress, skipping re-entrant call');
+      return;
+    }
+
+    this.isGridifyingInProgress = true;
+
     try {
+      this.gridifyInternal(nudgeGap, margin, groupMargin);
+    } catch (e) {
+      console.log("Error routing edges in GridRouter");
+      console.error(e);
+
+      // Fall back to simple orthogonal routing on error
+      try {
+        this.fallbackGridRouting(this.currentLayout?.links ?? []);
+      } catch (fallbackError) {
+        console.error("Fallback grid routing also failed:", fallbackError);
+      }
+
+      let runtimeMessages = document.getElementById("runtime_messages") as HTMLElement;
+      if (runtimeMessages) {
+        let dismissableAlert = document.createElement("div");
+        dismissableAlert.className = "alert alert-danger alert-dismissible fade show";
+        dismissableAlert.setAttribute("role", "alert");
+        dismissableAlert.innerHTML = `Runtime (WebCola) error when gridifying edges. You may have to click and drag these nodes slightly to un-stick layout.`;
+
+        // Make sure we don't have duplicate alerts
+        let existingAlerts = runtimeMessages.querySelectorAll(".alert");
+        existingAlerts.forEach(alert => {
+            if (alert.innerHTML === dismissableAlert.innerHTML) {
+                alert.remove();
+            }
+        });
+
+        runtimeMessages.appendChild(dismissableAlert);
+      }
+    } finally {
+      // Always reset the guard flag, even if an error occurred
+      this.isGridifyingInProgress = false;
+    }
+  }
+
+  /**
+   * Internal implementation of gridify, separated to ensure proper cleanup in finally block.
+   */
+  private gridifyInternal(nudgeGap: number, margin: number, groupMargin: number): void {
       const nodes = this.currentLayout?.nodes ?? [];
       const groups = this.currentLayout?.groups ?? [];
       const edges = this.currentLayout?.links ?? [];
@@ -3211,7 +3271,22 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
       // Force recompute all node bounds from current positions
       // This ensures bounds are always in sync with node x/y coordinates
+      // Note: ensureNodeBounds provides default width/height (50/30) for nodes without explicit dimensions
       this.ensureNodeBounds(true);
+
+      // Safety check: ensure all nodes have valid numeric positions AFTER bounds setup
+      // Only check x/y positions - width/height are now guaranteed by ensureNodeBounds defaults
+      // Invalid positions (NaN, Infinity) can cause GridRouter to hang
+      const invalidNodes = nodes.filter((n: any) => 
+        !Number.isFinite(n.x) || !Number.isFinite(n.y)
+      );
+      if (invalidNodes.length > 0) {
+        console.warn('[gridify] Found nodes with invalid positions, falling back to default routing:', 
+          invalidNodes.map((n: any) => ({ id: n.id, x: n.x, y: n.y })));
+        // Fall back to simple orthogonal routing without GridRouter
+        this.fallbackGridRouting(edges);
+        return;
+      }
 
       // Debug: log node positions AFTER ensureNodeBounds  
       console.log('[gridify] Node positions AFTER ensureNodeBounds:');
@@ -3225,13 +3300,25 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       // Route all edges using the GridRouter
       let routes: any[] = [];
       
-      // Route edges using the GridRouter
-      const routableEdges = edges.filter((edge: any) => edge?.source?.routerNode && edge?.target?.routerNode);
+      // Filter edges for GridRouter:
+      // 1. Must have routerNode on both source and target
+      // 2. Must NOT be self-loops (source === target) - GridRouter can't handle these
+      const routableEdges = edges.filter((edge: any) => {
+        const hasRouterNodes = edge?.source?.routerNode && edge?.target?.routerNode;
+        const isSelfLoop = edge?.source?.id === edge?.target?.id;
+        return hasRouterNodes && !isSelfLoop;
+      });
+      
+      // Identify self-loop edges for special handling
+      const selfLoopEdges = edges.filter((edge: any) => edge?.source?.id === edge?.target?.id);
       
       // Debug: log routing info
-      console.log('[gridify] Total edges:', edges.length, 'Routable:', routableEdges.length);
-      if (routableEdges.length !== edges.length) {
-        const unroutableEdges = edges.filter((edge: any) => !edge?.source?.routerNode || !edge?.target?.routerNode);
+      console.log('[gridify] Total edges:', edges.length, 'Routable:', routableEdges.length, 'Self-loops:', selfLoopEdges.length);
+      if (routableEdges.length + selfLoopEdges.length !== edges.length) {
+        const unroutableEdges = edges.filter((edge: any) => 
+          (!edge?.source?.routerNode || !edge?.target?.routerNode) && 
+          edge?.source?.id !== edge?.target?.id
+        );
         unroutableEdges.forEach((e: any) => {
           console.warn('[gridify] Unroutable edge:', e.id, 
             'source routerNode:', !!e?.source?.routerNode,
@@ -3262,6 +3349,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
       linkGroups.select("path")
         .attr("d", (edgeData: any) => {
+          // Handle self-loops specially - GridRouter can't route these
+          if (edgeData.source?.id === edgeData.target?.id) {
+            // Use the existing self-loop routing logic but with grid-style path
+            const route = this.createSelfLoopRoute(edgeData);
+            return this.lineFunction(route);
+          }
+          
           const route = routesByEdgeId.get(edgeData.id);
           if (!route) {
             // Create orthogonal fallback path for unroutable edges
@@ -3324,29 +3418,53 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
       // Dispatch event that relations are available
       this.dispatchEvent(new Event('relationsAvailable', ));
+  }
 
-    } catch (e) {
-      console.log("Error routing edges in GridRouter");
-      console.error(e);
+  /**
+   * Fallback grid routing that uses simple orthogonal paths without the GridRouter.
+   * This is used when GridRouter fails or when nodes have invalid positions.
+   */
+  private fallbackGridRouting(edges: any[]): void {
+    const linkGroups = this.container.selectAll(".link-group").data(edges, (d: any) => d.id ?? d);
 
-
-      let runtimeMessages = document.getElementById("runtime_messages") as HTMLElement;
-      let dismissableAlert = document.createElement("div");
-      dismissableAlert.className = "alert alert-danger alert-dismissible fade show";
-      dismissableAlert.setAttribute("role", "alert");
-      dismissableAlert.innerHTML = `Runtime (WebCola) error when gridifying edges. You may have to click and drag these nodes slightly to un-stick layout.`;
-
-      // Make sure we don't have duplicate alerts
-      let existingAlerts = runtimeMessages.querySelectorAll(".alert");
-      existingAlerts.forEach(alert => {
-          if (alert.innerHTML === dismissableAlert.innerHTML) {
-              alert.remove();
-          }
+    linkGroups.select("path")
+      .attr("d", (edgeData: any) => {
+        // Handle self-loops specially
+        if (edgeData.source?.id === edgeData.target?.id) {
+          const route = this.createSelfLoopRoute(edgeData);
+          return this.lineFunction(route);
+        }
+        
+        // Create orthogonal fallback path
+        const sourceX = edgeData.source?.x ?? edgeData.source?.bounds?.cx() ?? 0;
+        const sourceY = edgeData.source?.y ?? edgeData.source?.bounds?.cy() ?? 0;
+        const targetX = edgeData.target?.x ?? edgeData.target?.bounds?.cx() ?? 0;
+        const targetY = edgeData.target?.y ?? edgeData.target?.bounds?.cy() ?? 0;
+        
+        const dx = targetX - sourceX;
+        const dy = targetY - sourceY;
+        
+        // Choose routing based on dominant direction
+        if (Math.abs(dx) > Math.abs(dy)) {
+          const midX = sourceX + dx / 2;
+          return this.gridLineFunction([
+            { x: sourceX, y: sourceY },
+            { x: midX, y: sourceY },
+            { x: midX, y: targetY },
+            { x: targetX, y: targetY }
+          ]);
+        } else {
+          const midY = sourceY + dy / 2;
+          return this.gridLineFunction([
+            { x: sourceX, y: sourceY },
+            { x: sourceX, y: midY },
+            { x: targetX, y: midY },
+            { x: targetX, y: targetY }
+          ]);
+        }
       });
 
-      runtimeMessages.appendChild(dismissableAlert);
-      return;
-    }
+    this.fitViewportToContent();
   }
 
   private gridUpdateLinkLabels(edges: any[], routesByEdgeId: Map<string, any>) {
