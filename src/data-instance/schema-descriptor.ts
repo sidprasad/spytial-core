@@ -102,16 +102,46 @@ export function generateAlloySchema(
     ? types 
     : types.filter(t => !t.isBuiltin);
 
-  // Build a map of type -> relations that start from that type
+  const typeById = new Map(types.map(t => [t.id, t]));
+  const filteredTypeIds = new Set(filteredTypes.map(t => t.id));
+
+  const parseOwnerFromRelationId = (relation: IRelation): string | undefined => {
+    const marker = '<:';
+    const idx = relation.id.indexOf(marker);
+    if (idx <= 0) return undefined;
+    const owner = relation.id.slice(0, idx);
+    const expected = `${owner}${marker}${relation.name}`;
+    return relation.id === expected ? owner : undefined;
+  };
+
+  // Build a map of type -> field relations, plus a list of top-level relations
   const typeToRelations = new Map<string, IRelation[]>();
-  
+  const topLevelRelations: IRelation[] = [];
+
   for (const relation of relations) {
-    if (relation.types.length > 0) {
-      const sourceType = relation.types[0];
-      if (!typeToRelations.has(sourceType)) {
-        typeToRelations.set(sourceType, []);
+    if (relation.types.length === 0) {
+      topLevelRelations.push(relation);
+      continue;
+    }
+
+    const explicitOwner = parseOwnerFromRelationId(relation);
+    const owner = explicitOwner ?? relation.types[0];
+    const ownerType = owner ? typeById.get(owner) : undefined;
+    const ownerIsBuiltin = ownerType?.isBuiltin ?? false;
+    const ownerMatchesTypes0 = owner === relation.types[0];
+
+    const isField = owner !== undefined
+      && ownerMatchesTypes0
+      && !ownerIsBuiltin
+      && filteredTypeIds.has(owner);
+
+    if (isField) {
+      if (!typeToRelations.has(owner)) {
+        typeToRelations.set(owner, []);
       }
-      typeToRelations.get(sourceType)!.push(relation);
+      typeToRelations.get(owner)!.push(relation);
+    } else {
+      topLevelRelations.push(relation);
     }
   }
 
@@ -157,18 +187,21 @@ export function generateAlloySchema(
     lines.push('');
   }
 
-  // Handle standalone relations (not associated with a specific type)
-  const standaloneRelations = relations.filter(r => 
-    r.types.length === 0 || !filteredTypes.some(t => t.id === r.types[0])
-  );
-
-  if (standaloneRelations.length > 0) {
-    lines.push('// Standalone relations');
-    for (const relation of standaloneRelations) {
+  // Handle top-level relations (not scoped to a specific sig)
+  if (topLevelRelations.length > 0) {
+    if (lines.length > 0) {
+      lines.push('');
+    }
+    lines.push('// Top-level relations');
+    for (const relation of topLevelRelations) {
+      let arityHint = '';
+      if (includeArityHints) {
+        arityHint = 'set ';
+      }
       const typeStr = relation.types.length > 0 
         ? relation.types.join(' -> ') 
         : 'univ -> univ';
-      lines.push(`// ${relation.name}: ${typeStr}`);
+      lines.push(`rel ${relation.name}: ${arityHint}${typeStr}`);
     }
   }
 
