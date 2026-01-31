@@ -113,6 +113,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private static readonly EDGE_ROUTE_MARGIN_DIVISOR = 3;
   private static readonly CURVATURE_BASE_MULTIPLIER = 0.15;
   private static readonly MIN_EDGE_DISTANCE = 10;
+  private static readonly MAX_EDGE_OFFSET_RATIO = 0.35;
+  private static readonly MAX_EDGE_CURVATURE_RATIO = 0.6;
   private static readonly SELF_LOOP_CURVATURE_SCALE = 0.2;
   private static readonly VIEWBOX_PADDING = 10;
 
@@ -3959,16 +3961,17 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     const dx = route[1].x - route[0].x;
     const dy = route[1].y - route[0].y;
     const angle = Math.atan2(dy, dx);
-    const distance = Math.sqrt(dx * dx + dy * dy);
+    const distance = this.getRouteLength(route);
 
     // Find edge index once and reuse for both offset and curvature
     const edgeIndex = allEdgesBetweenNodes.findIndex(edge => edge.id === edgeData.id);
     
     // Apply offset and curvature only if we found the edge
     if (edgeIndex !== -1) {
-      route = this.applyEdgeOffsetWithIndex(edgeData, route, allEdgesBetweenNodes, angle, edgeIndex);
+      route = this.applyEdgeOffsetWithIndex(edgeData, route, allEdgesBetweenNodes, angle, edgeIndex, distance);
       const curvature = this.calculateCurvatureWithIndex(allEdgesBetweenNodes, edgeData.id, edgeIndex);
-      route = this.applyCurvatureToRoute(route, curvature, angle, distance);
+      const cappedCurvature = this.clampCurvature(curvature);
+      route = this.applyCurvatureToRoute(route, cappedCurvature, angle, distance);
     }
 
     return route;
@@ -4059,7 +4062,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private applyEdgeOffset(edgeData: any, route: Array<{ x: number; y: number }>, allEdges: any[], angle: number): Array<{ x: number; y: number }> {
     const edgeIndex = allEdges.findIndex(edge => edge.id === edgeData.id);
-    return this.applyEdgeOffsetWithIndex(edgeData, route, allEdges, angle, edgeIndex);
+    const distance = this.getRouteLength(route);
+    return this.applyEdgeOffsetWithIndex(edgeData, route, allEdges, angle, edgeIndex, distance);
   }
 
   /**
@@ -4073,19 +4077,20 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * @param edgeIndex - Pre-computed index of edge in allEdges array
    * @returns Modified route with offset applied
    */
-  private applyEdgeOffsetWithIndex(edgeData: any, route: Array<{ x: number; y: number }>, allEdges: any[], angle: number, edgeIndex: number): Array<{ x: number; y: number }> {
+  private applyEdgeOffsetWithIndex(edgeData: any, route: Array<{ x: number; y: number }>, allEdges: any[], angle: number, edgeIndex: number, distance: number): Array<{ x: number; y: number }> {
     const offset = (edgeIndex % 2 === 0 ? 1 : -1) * 
                     (Math.floor(edgeIndex / 2) + 1) * 
                     WebColaCnDGraph.MIN_EDGE_DISTANCE;
+    const cappedOffset = this.clampOffset(offset, distance);
 
     const direction = this.getDominantDirection(angle);
     
     if (direction === 'right' || direction === 'left') {
-      route[0].y += offset;
-      route[route.length - 1].y += offset;
+      route[0].y += cappedOffset;
+      route[route.length - 1].y += cappedOffset;
     } else if (direction === 'up' || direction === 'down') {
-      route[0].x += offset;
-      route[route.length - 1].x += offset;
+      route[0].x += cappedOffset;
+      route[route.length - 1].x += cappedOffset;
     }
 
     // Ensure points stay on rectangle perimeter
@@ -4097,6 +4102,37 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     }
 
     return route;
+  }
+
+  /**
+   * Clamp edge offset so dense edge bundles don't explode outward.
+   */
+  private clampOffset(offset: number, distance: number): number {
+    const maxOffset = Math.max(WebColaCnDGraph.MIN_EDGE_DISTANCE, distance * WebColaCnDGraph.MAX_EDGE_OFFSET_RATIO);
+    return Math.max(-maxOffset, Math.min(maxOffset, offset));
+  }
+
+  /**
+   * Calculates total route length to avoid clamping based on a short first segment.
+   */
+  private getRouteLength(route: Array<{ x: number; y: number }>): number {
+    if (route.length < 2) {
+      return 0;
+    }
+
+    return route.slice(1).reduce((total, point, index) => {
+      const prev = route[index];
+      const dx = point.x - prev.x;
+      const dy = point.y - prev.y;
+      return total + Math.sqrt(dx * dx + dy * dy);
+    }, 0);
+  }
+
+  /**
+   * Clamp curvature to avoid excessive bulging for many parallel edges.
+   */
+  private clampCurvature(curvature: number): number {
+    return Math.max(-WebColaCnDGraph.MAX_EDGE_CURVATURE_RATIO, Math.min(WebColaCnDGraph.MAX_EDGE_CURVATURE_RATIO, curvature));
   }
 
   /**
