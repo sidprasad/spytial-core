@@ -1,5 +1,7 @@
 import React from 'react';
+import { TUPLE_SELECTOR_TEXT, UNARY_SELECTOR_TEXT } from '../constants';
 import { DirectiveData } from '../interfaces';
+import { SelectorInput, SelectorChangeEvent } from './SelectorInput';
 
 interface ColorEdgeSelectorProps {
   /** Directive data object containing type and parameters */
@@ -19,10 +21,16 @@ export const ColorEdgeSelector: React.FC<ColorEdgeSelectorProps> = ({
   const field = (directiveData.params.field as string) || '';
   const value = (directiveData.params.value as string) || '#000000';
   const selector = (directiveData.params.selector as string) || '';
+  const filter = (directiveData.params.filter as string) || '';
   const style = (directiveData.params.style as string) || '';
   const weight = directiveData.params.weight as number | undefined;
   const showLabel = directiveData.params.showLabel as boolean | undefined;
   const hidden = directiveData.params.hidden as boolean | undefined;
+
+  const handleSelectorChange = (event: SelectorChangeEvent) => {
+    const { name, value } = event.target;
+    onUpdate({ params: { ...directiveData.params, [name]: value || undefined } });
+  };
 
   return (
     <>
@@ -41,15 +49,28 @@ export const ColorEdgeSelector: React.FC<ColorEdgeSelectorProps> = ({
       </div>
       <div className="input-group">
         <div className="input-group-prepend">
-          <span className="input-group-text">Selector</span>
+          <span className="input-group-text infolabel" title={UNARY_SELECTOR_TEXT}>
+            Selector
+          </span>
         </div>
-        <input
-          type="text"
+        <SelectorInput
           name="selector"
-          className="form-control code-input"
-          defaultValue={selector}
-          placeholder="Optional: target specific atoms (e.g., Person)"
-          onChange={(e) => onUpdate({ params: { ...directiveData.params, selector: e.target.value || undefined } })}
+          value={selector}
+          onChange={handleSelectorChange}
+          placeholder="Optional: target specific source atoms (e.g., Person)"
+        />
+      </div>
+      <div className="input-group">
+        <div className="input-group-prepend">
+          <span className="input-group-text infolabel" title={TUPLE_SELECTOR_TEXT}>
+            Filter
+          </span>
+        </div>
+        <SelectorInput
+          name="filter"
+          value={filter}
+          onChange={handleSelectorChange}
+          placeholder="Optional: filter which tuples to style (e.g., rel & (univ -> True))"
         />
       </div>
       <div className="input-group">
