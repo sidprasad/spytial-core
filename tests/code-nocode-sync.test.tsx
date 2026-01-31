@@ -162,6 +162,19 @@ directives:
     expect(result.directives[0].params.flag).toBe('hideDisconnectedBuiltIns');
   });
 
+  it('should parse attribute directive with filter', () => {
+    const yaml = `
+directives:
+  - attribute: {field: 'active', selector: 'Person', filter: 'active & (univ -> True)'}
+`;
+    const result = parseLayoutSpecToData(yaml);
+    expect(result.directives).toHaveLength(1);
+    expect(result.directives[0].type).toBe('attribute');
+    expect(result.directives[0].params.field).toBe('active');
+    expect(result.directives[0].params.selector).toBe('Person');
+    expect(result.directives[0].params.filter).toBe('active & (univ -> True)');
+  });
+
   it('should parse multiple constraints and directives', () => {
     const yaml = `
 constraints:

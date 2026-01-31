@@ -63,6 +63,28 @@ directives:
   # Car and Company name relations remain as edges
 ```
 
+### Attributes with Value Filters
+
+For relations with arity > 2 (e.g., `rel: X -> Y -> Bool`), you can filter which attribute values to show using the `filter` parameter:
+
+```yaml
+directives:
+  # Show 'likes' as an attribute, but only for tuples where the value is True
+  - attribute:
+      field: 'likes'
+      filter: 'likes & (univ -> univ -> True)'
+      
+  # Show 'active' only for atoms where active=True
+  - attribute:
+      field: 'active'
+      selector: 'Student'              # Only for Student atoms (source filter)
+      filter: 'active & (univ -> True)' # Only show where value is True
+```
+
+The `selector` and `filter` parameters work together:
+- **selector**: Unary selector that filters which source atoms show the attribute
+- **filter**: Tuple selector that filters which specific attribute tuples to display
+
 ### Hide Fields with Selectors
 
 ```yaml
@@ -105,7 +127,9 @@ When evaluating field-based directives:
 
 1. The system first filters by field name (as before)
 2. If a selector is specified, it evaluates the selector to get a set of matching atoms
-3. The directive only applies to relations where at least one atom (source or target) is in the selected set
-4. If no selector is specified, the directive applies to all relations with that field name (legacy behavior)
+3. The directive only applies to relations where the source atom is in the selected set
+4. If a filter is specified (for attribute directives), it evaluates the filter to get matching tuples
+5. The attribute only applies to tuples that match both the selector (source) and filter (tuple)
+6. If no selector or filter is specified, the directive applies to all relations with that field name (legacy behavior)
 
 This allows precise control over which relations are affected by field-based rules while maintaining full backward compatibility.

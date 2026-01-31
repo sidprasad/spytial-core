@@ -85,4 +85,37 @@ directives:
     expect(layoutSpec.directives.attributes[0].field).toBe('age');
     expect(layoutSpec.directives.attributes[0].selector).toBeUndefined();
   });
+
+  it('should parse attribute directive with filter', () => {
+    const layoutSpecStr = `
+directives:
+  - attribute:
+      field: 'likes'
+      selector: 'Person'
+      filter: 'likes & (univ -> univ -> True)'
+`;
+
+    const layoutSpec = parseLayoutSpec(layoutSpecStr);
+    
+    expect(layoutSpec.directives.attributes).toHaveLength(1);
+    expect(layoutSpec.directives.attributes[0].field).toBe('likes');
+    expect(layoutSpec.directives.attributes[0].selector).toBe('Person');
+    expect(layoutSpec.directives.attributes[0].filter).toBe('likes & (univ -> univ -> True)');
+  });
+
+  it('should parse attribute directive with filter but no selector', () => {
+    const layoutSpecStr = `
+directives:
+  - attribute:
+      field: 'score'
+      filter: 'score & (univ -> 5)'
+`;
+
+    const layoutSpec = parseLayoutSpec(layoutSpecStr);
+    
+    expect(layoutSpec.directives.attributes).toHaveLength(1);
+    expect(layoutSpec.directives.attributes[0].field).toBe('score');
+    expect(layoutSpec.directives.attributes[0].selector).toBeUndefined();
+    expect(layoutSpec.directives.attributes[0].filter).toBe('score & (univ -> 5)');
+  });
 });
