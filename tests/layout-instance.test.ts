@@ -227,5 +227,81 @@ directives:
     expect(inferredEdge).toBeDefined();
     expect(inferredEdge?.color).toBe('black'); // Default color
   });
+
+  it('preserves builtin nodes that become connected via inferred edges even when hideDisconnectedBuiltIns flag is set', () => {
+    const dataWithBuiltin: IJsonDataInstance = {
+      atoms: [
+        { id: 'A', type: 'Node', label: 'A' },
+        { id: 'I', type: 'Int', label: '1' }
+      ],
+      relations: []
+    };
+
+    const specWithFlagAndInferredEdge = `
+directives:
+  - flag: hideDisconnectedBuiltIns
+  - inferredEdge:
+      name: connects
+      selector: dummy
+`;
+
+    const instance = new JSONDataInstance(dataWithBuiltin);
+    const dummyEvaluator: any = {
+      initialize: () => {},
+      evaluate: (_selector: string, _opts?: any) => {
+        return {
+          selectedTuplesAll: () => [['I','A']],
+          selectedAtoms: () => [] as string[],
+          selectedTwoples: () => [] as string[][]
+        };
+      }
+    };
+
+    const spec = parseLayoutSpec(specWithFlagAndInferredEdge);
+    const layoutInstance = new LayoutInstance(spec, dummyEvaluator, 0, true);
+    const { layout } = layoutInstance.generateLayout(instance, {});
+
+    expect(layout.nodes).toHaveLength(2);
+    const inferredEdge2 = layout.edges.find(e => e.id.includes('_inferred_') && e.id.includes('connects'));
+    expect(inferredEdge2).toBeDefined();
+  });
+
+  it('preserves nodes added by inferred edges when hideDisconnected flag is set', () => {
+    const data: IJsonDataInstance = {
+      atoms: [
+        { id: 'A', type: 'Node', label: 'A' },
+        { id: 'B', type: 'Node', label: 'B' }
+      ],
+      relations: []
+    };
+
+    const specStr = `
+directives:
+  - flag: hideDisconnected
+  - inferredEdge:
+      name: conn
+      selector: dummy
+`;
+
+    const instance = new JSONDataInstance(data);
+    const dummyEvaluator: any = {
+      initialize: () => {},
+      evaluate: (_selector: string, _opts?: any) => {
+        return {
+          selectedTuplesAll: () => [['A','B']],
+          selectedAtoms: () => [] as string[],
+          selectedTwoples: () => [] as string[][]
+        };
+      }
+    };
+
+    const spec = parseLayoutSpec(specStr);
+    const layoutInstance = new LayoutInstance(spec, dummyEvaluator, 0, true);
+    const { layout } = layoutInstance.generateLayout(instance, {});
+
+    expect(layout.nodes).toHaveLength(2);
+    const inferred = layout.edges.find(e => e.id.includes('_inferred_') && e.id.includes('conn'));
+    expect(inferred).toBeDefined();
+  });
 });
 
