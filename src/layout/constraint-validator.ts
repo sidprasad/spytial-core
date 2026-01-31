@@ -83,7 +83,7 @@ function formatNodeLabel(node: LayoutNode): string {
     if (hasAttributes) {
         // Show attributes (truncated if needed) instead of ID
         const attrs = node.attributes || {};
-        const attrEntries = Object.entries(attrs);
+        const attrEntries = Object.entries(attrs).sort(([a], [b]) => a.localeCompare(b));
         
         // Format: label with key attributes shown
         // For single attribute with single value: "label (key: value)"
