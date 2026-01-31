@@ -258,29 +258,48 @@ export class LayoutInstance {
             return false;
         }
         
-        // If no atoms provided or no selector-based directives, use legacy behavior
+        // If no atoms provided, use legacy behavior for directives without selector/filter
         if (!sourceAtom || !targetAtom) {
-            return matchingDirectives.some(ad => !ad.selector);
+            return matchingDirectives.some(ad => !ad.selector && !ad.filter);
         }
         
-        // Check selector-based directives
+        // Check selector-based and filter-based directives
         for (const directive of matchingDirectives) {
-            if (!directive.selector) {
-                // Legacy directive without selector matches any atoms
-                return true;
+            // Check if selector matches (or no selector means match all sources)
+            let selectorMatches = true;
+            if (directive.selector) {
+                try {
+                    const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
+                    const selectedAtoms = selectorResult.selectedAtoms();
+                    selectorMatches = selectedAtoms.includes(sourceAtom);
+                } catch (error) {
+                    console.warn(`Failed to evaluate attribute selector "${directive.selector}":`, error);
+                    selectorMatches = false;
+                }
             }
             
-            try {
-                const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
-                const selectedAtoms = selectorResult.selectedAtoms();
-                
-                // Check if source atom is selected by the selector
-                if (selectedAtoms.includes(sourceAtom)) {
-                    return true;
+            if (!selectorMatches) {
+                continue;
+            }
+            
+            // Check if filter matches (or no filter means match all tuples)
+            let filterMatches = true;
+            if (directive.filter) {
+                try {
+                    const filterResult = this.evaluator.evaluate(directive.filter, { instanceIndex: this.instanceNum });
+                    const selectedTuples = filterResult.selectedTwoples();
+                    // Check if the (source, target) pair is in the filtered set
+                    filterMatches = selectedTuples.some(
+                        tuple => tuple[0] === sourceAtom && tuple[1] === targetAtom
+                    );
+                } catch (error) {
+                    console.warn(`Failed to evaluate attribute filter "${directive.filter}":`, error);
+                    filterMatches = false;
                 }
-            } catch (error) {
-                console.warn(`Failed to evaluate attribute selector "${directive.selector}":`, error);
-                // Continue to next directive on error
+            }
+            
+            if (selectorMatches && filterMatches) {
+                return true;
             }
         }
         

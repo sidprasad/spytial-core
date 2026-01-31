@@ -242,7 +242,15 @@ export interface FieldDirective extends Operation {
 }
 
 
-export interface AttributeDirective extends FieldDirective {}
+export interface AttributeDirective extends FieldDirective {
+    /**
+     * Optional filter to specify which attribute values to show.
+     * For relations like rel:x->y->Bool, this allows filtering to only show
+     * attributes where the filter evaluates to true (e.g., only show where value is True).
+     * This is a binary/n-ary selector that should match tuples (not just atoms).
+     */
+    filter?: string;
+}
 
 export interface FieldHidingDirective extends FieldDirective {}
 
@@ -766,7 +774,8 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
     let attributes : AttributeDirective[]  = typedDirectives.filter(d => d.attribute).map(d => {
         return {
             field: d.attribute.field,
-            selector: d.attribute.selector
+            selector: d.attribute.selector,
+            filter: d.attribute.filter
         }
     });
 

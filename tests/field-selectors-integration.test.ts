@@ -229,3 +229,118 @@ directives:
     });
   });
 });
+
+// Test data with binary relations for filter testing
+// For the filter use case, we use a simpler binary relation model
+// where the target IS the filtered value (e.g., Person -> Bool directly)
+const filterTestJsonData: IJsonDataInstance = {
+  atoms: [
+    { id: 'alice', type: 'Person', label: 'Alice' },
+    { id: 'bob', type: 'Person', label: 'Bob' },
+    { id: 'charlie', type: 'Person', label: 'Charlie' },
+    { id: 'True', type: 'Bool', label: 'True' },
+    { id: 'False', type: 'Bool', label: 'False' }
+  ],
+  relations: [
+    {
+      id: 'active',
+      name: 'active',
+      types: ['Person', 'Bool'],
+      tuples: [
+        { atoms: ['alice', 'True'], types: ['Person', 'Bool'] },
+        { atoms: ['bob', 'False'], types: ['Person', 'Bool'] },
+        { atoms: ['charlie', 'True'], types: ['Person', 'Bool'] }
+      ]
+    }
+  ]
+};
+
+describe('Attribute directive with filter - Integration', () => {
+  it('should apply attribute directive with filter to only show matching tuples', () => {
+    const layoutSpecStr = `
+directives:
+  - attribute:
+      field: 'active'
+      filter: 'active & (univ -> True)'
+`;
+
+    const layoutSpec = parseLayoutSpec(layoutSpecStr);
+    const instance = new JSONDataInstance(filterTestJsonData);
+    const evaluator = createEvaluator(instance);
+
+    const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
+    const { layout } = layoutInstance.generateLayout(instance, {});
+
+    // Find alice node - should have active attribute (active=True)
+    const aliceNode = layout.nodes.find(n => n.id === 'alice');
+    expect(aliceNode).toBeDefined();
+    const aliceAttrs = aliceNode?.attributes || {};
+    expect(aliceAttrs['active']).toBeDefined();
+    expect(aliceAttrs['active']).toContain('True');
+
+    // Find bob node - should NOT have active attribute (active=False, filtered out)
+    const bobNode = layout.nodes.find(n => n.id === 'bob');
+    expect(bobNode).toBeDefined();
+    const bobAttrs = bobNode?.attributes || {};
+    expect(bobAttrs['active']).toBeUndefined();
+
+    // Find charlie node - should have active attribute (active=True)
+    const charlieNode = layout.nodes.find(n => n.id === 'charlie');
+    expect(charlieNode).toBeDefined();
+    const charlieAttrs = charlieNode?.attributes || {};
+    expect(charlieAttrs['active']).toBeDefined();
+    expect(charlieAttrs['active']).toContain('True');
+  });
+
+  it('should apply attribute directive with both selector and filter', () => {
+    const layoutSpecStr = `
+directives:
+  - attribute:
+      field: 'active'
+      selector: 'alice + charlie'
+      filter: 'active & (univ -> True)'
+`;
+
+    const layoutSpec = parseLayoutSpec(layoutSpecStr);
+    const instance = new JSONDataInstance(filterTestJsonData);
+    const evaluator = createEvaluator(instance);
+
+    const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
+    const { layout } = layoutInstance.generateLayout(instance, {});
+
+    // Alice and charlie should have attributes (both in selector and both have True)
+    const aliceNode = layout.nodes.find(n => n.id === 'alice');
+    const charlieNode = layout.nodes.find(n => n.id === 'charlie');
+    
+    expect(aliceNode?.attributes?.['active']).toBeDefined();
+    expect(charlieNode?.attributes?.['active']).toBeDefined();
+    
+    // Bob is not in the selector, so should not have attribute
+    const bobNode = layout.nodes.find(n => n.id === 'bob');
+    expect(bobNode?.attributes?.['active']).toBeUndefined();
+  });
+
+  it('should show all tuples when no filter is specified', () => {
+    const layoutSpecStr = `
+directives:
+  - attribute:
+      field: 'active'
+`;
+
+    const layoutSpec = parseLayoutSpec(layoutSpecStr);
+    const instance = new JSONDataInstance(filterTestJsonData);
+    const evaluator = createEvaluator(instance);
+
+    const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
+    const { layout } = layoutInstance.generateLayout(instance, {});
+
+    // All nodes should have active attribute (no filter)
+    const aliceNode = layout.nodes.find(n => n.id === 'alice');
+    const bobNode = layout.nodes.find(n => n.id === 'bob');
+    const charlieNode = layout.nodes.find(n => n.id === 'charlie');
+    
+    expect(aliceNode?.attributes?.['active']).toBeDefined();
+    expect(bobNode?.attributes?.['active']).toBeDefined();
+    expect(charlieNode?.attributes?.['active']).toBeDefined();
+  });
+});
