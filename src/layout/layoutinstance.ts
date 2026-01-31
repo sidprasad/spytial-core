@@ -1949,7 +1949,7 @@ export class LayoutInstance {
             return inferredDirective.color;
         }
 
-        const directive = this.findEdgeDirective(relName, sourceAtom);
+        const directive = this.findEdgeDirective(relName, sourceAtom, targetAtom);
         if (directive?.color) {
             return directive.color;
         }
@@ -1964,7 +1964,7 @@ export class LayoutInstance {
             return inferredStyle;
         }
 
-        const directive = this.findEdgeDirective(relName, sourceAtom);
+        const directive = this.findEdgeDirective(relName, sourceAtom, targetAtom);
         return normalizeEdgeStyle(directive?.style);
     }
 
@@ -1975,7 +1975,7 @@ export class LayoutInstance {
             return inferredWeight;
         }
 
-        const directive = this.findEdgeDirective(relName, sourceAtom);
+        const directive = this.findEdgeDirective(relName, sourceAtom, targetAtom);
         return this.normalizeEdgeWeight(directive?.weight, "edge");
     }
 
@@ -1990,7 +1990,7 @@ export class LayoutInstance {
      */
     private getEdgeShowLabel(relName: string, sourceAtom: string, targetAtom: string, edgeId?: string): boolean | undefined {
         // Inferred edges always show labels - no showLabel check needed
-        const directive = this.findEdgeDirective(relName, sourceAtom);
+        const directive = this.findEdgeDirective(relName, sourceAtom, targetAtom);
         return directive?.showLabel;
     }
 
