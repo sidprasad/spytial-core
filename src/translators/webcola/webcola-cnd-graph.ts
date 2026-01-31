@@ -2498,7 +2498,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         
         const displayLabel = d.label || d.name || d.id || "Node";
         const attributes = d.attributes || {};
-        const attributeEntries = Object.entries(attributes);
+        const attributeEntries = Object.entries(attributes).sort(([a], [b]) => a.localeCompare(b));
         
         // Get labels (e.g., Skolems) which are displayed in node color
         const nodeLabels = d.labels || {};
