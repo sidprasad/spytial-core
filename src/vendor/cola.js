@@ -1428,10 +1428,20 @@
                 });
             }
         };
-        GridRouter.prototype.routeEdges = function (edges, nudgeGap, source, target) {
+        /**
+         * Route edges through the grid.
+         * @param {Array} edges - Array of edges to route
+         * @param {number} nudgeGap - Gap for nudging parallel segments
+         * @param {Function} source - Function to get source node id from edge
+         * @param {Function} target - Function to get target node id from edge
+         * @param {number} [timeoutMs=2000] - Maximum time in milliseconds for ordering edges
+         * @returns {Array} Array of route segments for each edge
+         */
+        GridRouter.prototype.routeEdges = function (edges, nudgeGap, source, target, timeoutMs) {
             var _this = this;
+            if (timeoutMs === void 0) { timeoutMs = 2000; }
             var routePaths = edges.map(function (e) { return _this.route(source(e), target(e)); });
-            var order = GridRouter.orderEdges(routePaths);
+            var order = GridRouter.orderEdges(routePaths, timeoutMs);
             var routes = routePaths.map(function (e) { return GridRouter.makeSegments(e); });
             GridRouter.nudgeSegments(routes, 'x', 'y', order, nudgeGap);
             GridRouter.nudgeSegments(routes, 'y', 'x', order, nudgeGap);
@@ -1471,10 +1481,37 @@
             }
             return function (l, r) { return typeof outgoing[l] !== 'undefined' && outgoing[l][r]; };
         };
-        GridRouter.orderEdges = function (edges) {
+        /**
+         * Order edges based on their paths to determine nudging order.
+         * This function has O(n²) complexity where n is the number of edges.
+         * @param {Array} edges - Array of edge paths
+         * @param {number} [timeoutMs=2000] - Maximum time in milliseconds before aborting
+         * @returns {Function} Order comparison function, or null if timed out
+         */
+        GridRouter.orderEdges = function (edges, timeoutMs) {
+            if (timeoutMs === void 0) { timeoutMs = 2000; }
+            var startTime = Date.now();
             var edgeOrder = [];
+            var timedOut = false;
+            
+            // Check timeout periodically (every 100 iterations) to avoid overhead
+            var checkInterval = 100;
+            var iterationCount = 0;
+            
+            outerLoop:
             for (var i = 0; i < edges.length - 1; i++) {
                 for (var j = i + 1; j < edges.length; j++) {
+                    iterationCount++;
+                    
+                    // Periodic timeout check
+                    if (iterationCount % checkInterval === 0) {
+                        if (Date.now() - startTime > timeoutMs) {
+                            console.warn('[GridRouter.orderEdges] Timed out after ' + timeoutMs + 'ms at iteration ' + iterationCount);
+                            timedOut = true;
+                            break outerLoop;
+                        }
+                    }
+                    
                     var e = edges[i], f = edges[j], lcs = new LongestCommonSubsequence(e, f);
                     var u, vi, vj;
                     if (lcs.length === 0)
@@ -1507,6 +1544,12 @@
                     }
                 }
             }
+            
+            // If timed out, return a simple default order function
+            if (timedOut) {
+                return function (l, r) { return l < r; };
+            }
+            
             return GridRouter.getOrder(edgeOrder);
         };
         GridRouter.makeSegments = function (path) {

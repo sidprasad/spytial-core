@@ -119,6 +119,16 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private static readonly VIEWBOX_PADDING = 10;
 
   /**
+   * Configuration constants for GridRouter performance limits.
+   * GridRouter's orderEdges function has O(n²) complexity, so we limit
+   * the number of edges to prevent the browser from hanging.
+   * - MAX_GRIDIFY_EDGES: Maximum edges before falling back to simple routing
+   * - GRIDIFY_TIMEOUT_MS: Maximum time allowed for GridRouter operations
+   */
+  private static readonly MAX_GRIDIFY_EDGES = 100;
+  private static readonly GRIDIFY_TIMEOUT_MS = 2000; // 2 seconds
+
+  /**
    * Configuration constants for WebCola layout iterations
    * Reduced from previous values (10, 100, 1000, 5) to improve performance
    * and prevent browser timeouts on large graphs
@@ -3316,6 +3326,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       
       // Debug: log routing info
       console.log('[gridify] Total edges:', edges.length, 'Routable:', routableEdges.length, 'Self-loops:', selfLoopEdges.length);
+
+      // Performance guard: GridRouter's orderEdges has O(n²) complexity.
+      // When there are too many edges, fall back to simple orthogonal routing
+      // to prevent the browser from hanging.
+      if (routableEdges.length > WebcolaCndGraph.MAX_GRIDIFY_EDGES) {
+        console.warn(`[gridify] Too many edges (${routableEdges.length} > ${WebcolaCndGraph.MAX_GRIDIFY_EDGES}), using fallback routing`);
+        this.fallbackGridRouting(edges);
+        return;
+      }
       if (routableEdges.length + selfLoopEdges.length !== edges.length) {
         const unroutableEdges = edges.filter((edge: any) => 
           (!edge?.source?.routerNode || !edge?.target?.routerNode) && 
@@ -3334,7 +3353,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         routableEdges,
         nudgeGap,
         function (e: any) { return e.source.routerNode.id; },
-        function (e: any) { return e.target.routerNode.id; }
+        function (e: any) { return e.target.routerNode.id; },
+        WebcolaCndGraph.GRIDIFY_TIMEOUT_MS
       );
 
       const routesByEdgeId = new Map<string, any>();
