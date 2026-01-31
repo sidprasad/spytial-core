@@ -763,12 +763,11 @@ export class LayoutInstance {
         let ai = projectionResult.projectedInstance;
         let projectionData = projectionResult.finalProjectionChoices;
 
-        let g: Graph = ai.generateGraph(this.hideDisconnected, this.hideDisconnectedBuiltIns);
+        // Do not apply hideDisconnectedBuiltIns here — inferred edges may connect built-in atoms.
+        // We apply built-in hiding afterwards in `ensureNoExtraNodes` so inferred edges can reconnect them.
+        let g: Graph = ai.generateGraph(this.hideDisconnected, false);
 
         const attributes = this.generateAttributesAndRemoveEdges(g);
-        let nodeIconMap = this.getNodeIconMap(g);
-        let nodeColorMap = this.getNodeColorMap(g, ai);
-        let nodeSizeMap = this.getNodeSizeMap(g);
 
         // This is where we add the inferred edges to the graph.
         this.addinferredEdges(g);
@@ -777,6 +776,11 @@ export class LayoutInstance {
         /// Groups have to happen here ///
         let groups = this.generateGroups(g, a);
         this.ensureNoExtraNodes(g, a);
+
+        // Recompute visual maps after graph mutations (inferred edges / node removal)
+        let nodeIconMap = this.getNodeIconMap(g);
+        let nodeColorMap = this.getNodeColorMap(g, ai);
+        let nodeSizeMap = this.getNodeSizeMap(g);
 
         let dcN = this.getDisconnectedNodes(g);
 

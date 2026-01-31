@@ -127,6 +127,29 @@ describe('Schema Descriptor', () => {
       expect(schema).toContain('left: Node');
       expect(schema).toContain('right: Node');
     });
+
+    it('should render top-level relations as rel declarations', () => {
+      const jsonData: IJsonDataInstance = {
+        atoms: [
+          { id: 'p1', type: 'Person', label: 'Alice' },
+          { id: 'p2', type: 'Person', label: 'Bob' },
+        ],
+        relations: [
+          {
+            id: 'univ<:knows',
+            name: 'knows',
+            types: ['Person', 'Person'],
+            tuples: [{ atoms: ['p1', 'p2'], types: ['Person', 'Person'] }],
+          },
+        ],
+      };
+
+      const instance = new JSONDataInstance(jsonData);
+      const schema = generateAlloySchema(instance);
+
+      expect(schema).toContain('rel knows: Person -> Person');
+      expect(schema).not.toContain('\n  knows:');
+    });
   });
 
   describe('generateSQLSchema', () => {

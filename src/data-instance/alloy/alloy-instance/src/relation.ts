@@ -25,7 +25,9 @@ export function relationFromElement(
   if (!label) throw new Error('No label found for field element');
   const types = typesFromTypesElement(typeNames, element);
   if (types.length === 0) throw new Error('No types found for field element');
-  const parent = types[0];
+  const parentId = element.getAttribute('parentID');
+  const parentFromId = parentId ? typeNames[parentId] : undefined;
+  const parent = parentFromId ?? types[0];
   const tuples = tuplesFromElements(types, element.querySelectorAll('tuple'));
   return {
     _: 'relation',
