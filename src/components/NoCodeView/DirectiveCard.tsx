@@ -9,7 +9,8 @@ import {
     HideFieldSelector, 
     HideAtomSelector, 
     HelperEdgeSelector, 
-    ProjectionSelector 
+    ProjectionSelector,
+    TagSelector
 } from './index';
 import { useHighlight } from './hooks';
 import { DirectiveData, ConstraintData } from './interfaces';
@@ -78,6 +79,8 @@ const renderSelectorComponent = (
             return <FlagSelector directiveData={directiveData} onUpdate={onUpdate}/>;
         case 'inferredEdge':
             return <HelperEdgeSelector directiveData={directiveData} onUpdate={onUpdate}/>;
+        case 'tag':
+            return <TagSelector directiveData={directiveData} onUpdate={onUpdate}/>;
         default:
             return <FlagSelector directiveData={directiveData} onUpdate={onUpdate}/>;
     }
@@ -155,6 +158,7 @@ const DirectiveCard: React.FC<DirectiveCardProps> = (props: DirectiveCardProps) 
                 <option value="flag">Visibility Flag</option>
                 <option value="hideAtom">Hide Atom</option>
                 <option value="attribute">Attribute</option>
+                <option value="tag">Tag</option>
                 <option value="hideField">Hide Field</option>
                 <option value="icon">Icon</option>
                 <option value="atomColor">Color (Atom)</option>

@@ -15,7 +15,7 @@ import {
     LayoutSpec,
     RelativeOrientationConstraint, CyclicOrientationConstraint,
     GroupByField, GroupBySelector, AlignConstraint,
-    EdgeColorDirective, InferredEdgeDirective
+    EdgeColorDirective, InferredEdgeDirective, TagDirective
 } from './layoutspec';
 
 
@@ -634,6 +634,126 @@ export class LayoutInstance {
     }
 
     /**
+     * Generates tag-based attributes for nodes based on TagDirectives.
+     * Unlike attributes which come from edges, tags are computed from n-ary selectors
+     * and added to nodes selected by the toTag selector.
+     * 
+     * For n-ary selector results (e.g., x1->y1->z1, x2->y2->z2), the format is:
+     *   name[x1][y1]: z1
+     *   name[x2][y2]: z2
+     * 
+     * For unary selector results (single atom), it's just:
+     *   name: value
+     * 
+     * @param g - The graph to get node information from.
+     * @param existingAttributes - Existing attributes to merge tags into.
+     * @returns Updated attributes record with tags merged in.
+     */
+    private generateTagsForNodes(
+        g: Graph,
+        existingAttributes: Record<string, Record<string, string[]>>
+    ): Record<string, Record<string, string[]>> {
+        const tagDirectives = this._layoutSpec.directives.tags;
+        
+        if (!tagDirectives || tagDirectives.length === 0) {
+            return existingAttributes;
+        }
+
+        const attributes = { ...existingAttributes };
+        const graphNodes = new Set(g.nodes());
+
+        for (const directive of tagDirectives) {
+            try {
+                // First, evaluate the toTag selector to get which nodes receive this tag
+                const toTagResult = this.evaluator.evaluate(directive.toTag, { instanceIndex: this.instanceNum });
+                const selectedAtoms = toTagResult.selectedAtoms();
+                
+                // Then, evaluate the value selector to get the n-ary result
+                const valueResult = this.evaluator.evaluate(directive.value, { instanceIndex: this.instanceNum });
+                const allTuples = valueResult.selectedTuplesAll();
+                
+                // For each node that should receive this tag
+                for (const atomId of selectedAtoms) {
+                    // Only add tags to nodes that exist in the graph
+                    if (!graphNodes.has(atomId)) {
+                        continue;
+                    }
+                    
+                    // Ensure the node has an attributes object
+                    if (!attributes[atomId]) {
+                        attributes[atomId] = {};
+                    }
+                    
+                    // Find tuples where the first element matches this atom
+                    const matchingTuples = allTuples.filter(tuple => tuple[0] === atomId);
+                    
+                    if (matchingTuples.length === 0) {
+                        // No matching tuples for this atom, skip
+                        continue;
+                    }
+                    
+                    for (const tuple of matchingTuples) {
+                        if (tuple.length === 1) {
+                            // Unary tuple: just name: value (the atom itself)
+                            const attrKey = directive.name;
+                            if (!attributes[atomId][attrKey]) {
+                                attributes[atomId][attrKey] = [];
+                            }
+                            // For unary, the value is the atom label itself
+                            const nodeLabel = g.node(atomId)?.label || atomId;
+                            attributes[atomId][attrKey].push(String(nodeLabel));
+                        } else if (tuple.length === 2) {
+                            // Binary tuple: name: lastValue
+                            const attrKey = directive.name;
+                            if (!attributes[atomId][attrKey]) {
+                                attributes[atomId][attrKey] = [];
+                            }
+                            const lastValue = tuple[tuple.length - 1];
+                            // Get the label for the last element if it's a node
+                            const valueLabel = graphNodes.has(String(lastValue)) 
+                                ? (g.node(String(lastValue))?.label || String(lastValue))
+                                : String(lastValue);
+                            attributes[atomId][attrKey].push(valueLabel);
+                        } else {
+                            // N-ary tuple (n > 2): name[mid1][mid2]...: lastValue
+                            // The key includes all middle elements
+                            const middleElements = tuple.slice(1, -1);
+                            const lastValue = tuple[tuple.length - 1];
+                            
+                            // Format middle elements with brackets
+                            const middlePart = middleElements
+                                .map(el => {
+                                    const elStr = String(el);
+                                    // Use node label if it's a graph node
+                                    const label = graphNodes.has(elStr)
+                                        ? (g.node(elStr)?.label || elStr)
+                                        : elStr;
+                                    return `[${label}]`;
+                                })
+                                .join('');
+                            
+                            const attrKey = `${directive.name}${middlePart}`;
+                            if (!attributes[atomId][attrKey]) {
+                                attributes[atomId][attrKey] = [];
+                            }
+                            
+                            // Get the label for the last element if it's a node
+                            const valueLabel = graphNodes.has(String(lastValue))
+                                ? (g.node(String(lastValue))?.label || String(lastValue))
+                                : String(lastValue);
+                            attributes[atomId][attrKey].push(valueLabel);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.warn(`Failed to evaluate tag directive (name: "${directive.name}", toTag: "${directive.toTag}", value: "${directive.value}"):`, error);
+            }
+        }
+
+        return attributes;
+    }
+
+    /**
     * Modifies the graph to remove extraneous nodes (ex. those to be hidden)
     * @param g - The graph, which will be modified to remove extraneous nodes.
     */
@@ -805,7 +925,10 @@ export class LayoutInstance {
         // We apply built-in hiding afterwards in `ensureNoExtraNodes` so inferred edges can reconnect them.
         let g: Graph = ai.generateGraph(this.hideDisconnected, false);
 
-        const attributes = this.generateAttributesAndRemoveEdges(g);
+        let attributes = this.generateAttributesAndRemoveEdges(g);
+        
+        // Generate and merge tags into attributes
+        attributes = this.generateTagsForNodes(g, attributes);
 
         // This is where we add the inferred edges to the graph.
         this.addinferredEdges(g);

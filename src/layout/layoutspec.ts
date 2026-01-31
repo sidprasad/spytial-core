@@ -252,6 +252,26 @@ export interface FieldDirective extends Operation {
 
 export interface AttributeDirective extends FieldDirective {}
 
+/**
+ * TagDirective adds computed attributes to nodes based on n-ary selector evaluation.
+ * Unlike AttributeDirective which works with edges/fields, TagDirective is purely selector-based
+ * and doesn't remove edges or modify the graph structure.
+ * 
+ * The value selector is evaluated and for each tuple returned:
+ * - For unary results (single atom), the tag appears as: name: value
+ * - For n-ary results (x1->y1->z1, x2->y2->z2), tags appear as:
+ *   name[x1][y1]: z1
+ *   name[x2][y2]: z2
+ */
+export interface TagDirective extends Operation {
+    /** Selector to determine which atoms get this tag */
+    toTag: string;
+    /** The attribute name to display */
+    name: string;
+    /** N-ary selector whose result becomes the attribute value */
+    value: string;
+}
+
 export interface FieldHidingDirective extends FieldDirective {}
 
 /**
@@ -299,6 +319,7 @@ interface DirectivesBlock {
     edgeColors: EdgeColorDirective[];
     projections: ProjectionDirective[];
     attributes: AttributeDirective[];
+    tags: TagDirective[];
     hiddenFields: FieldHidingDirective[];
     inferredEdges: InferredEdgeDirective[];
     hiddenAtoms: AtomHidingDirective[];
@@ -351,6 +372,7 @@ function DEFAULT_LAYOUT() : LayoutSpec
             edgeColors: [],
             projections: [],
             attributes: [],
+            tags: [],
             hiddenFields: [],
             inferredEdges: [],
             hiddenAtoms: [],
@@ -815,6 +837,14 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
         }
     });
 
+    let tags : TagDirective[] = typedDirectives.filter(d => d.tag).map(d => {
+        return {
+            toTag: d.tag.toTag,
+            name: d.tag.name,
+            value: d.tag.value
+        }
+    });
+
     return {
         atomColors,
         sizes,
@@ -822,6 +852,7 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
         edgeColors,
         projections,
         attributes,
+        tags,
         hiddenFields,
         inferredEdges,
         hiddenAtoms,

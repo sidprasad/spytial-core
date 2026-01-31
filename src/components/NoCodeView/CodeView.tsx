@@ -165,7 +165,7 @@ const KNOWN_CONSTRAINT_TYPES = ['orientation', 'cyclic', 'group', 'align', 'size
  */
 const KNOWN_DIRECTIVE_TYPES = [
     'atomColor', 'edgeColor', 'size', 'icon', 'projection', 
-    'attribute', 'hideField', 'inferredEdge', 'hideAtom', 'flag'
+    'attribute', 'hideField', 'inferredEdge', 'hideAtom', 'flag', 'tag'
 ];
 
 /** Known top-level keys in Spytial spec */

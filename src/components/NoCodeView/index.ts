@@ -14,6 +14,7 @@ export { IconSelector } from './Selectors/IconSelector';
 export { OrientationSelector } from './Selectors/OrientationSelector';
 export { ProjectionSelector } from './Selectors/ProjectionSelector';
 export { SizeSelector } from './Selectors/SizeSelector';
+export { TagSelector } from './Selectors/TagSelector';
 
 // Export SelectorInput for custom use
 export { SelectorInput, highlightSelector } from './Selectors/SelectorInput';

@@ -175,6 +175,19 @@ directives:
     expect(result.directives[0].params.filter).toBe('active & (univ -> True)');
   });
 
+  it('should parse tag directive', () => {
+    const yaml = `
+directives:
+  - tag: {toTag: 'Person', name: 'age', value: 'age'}
+`;
+    const result = parseLayoutSpecToData(yaml);
+    expect(result.directives).toHaveLength(1);
+    expect(result.directives[0].type).toBe('tag');
+    expect(result.directives[0].params.toTag).toBe('Person');
+    expect(result.directives[0].params.name).toBe('age');
+    expect(result.directives[0].params.value).toBe('age');
+  });
+
   it('should parse multiple constraints and directives', () => {
     const yaml = `
 constraints:
