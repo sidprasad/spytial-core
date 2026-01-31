@@ -238,19 +238,19 @@ export interface AtomHidingDirective extends VisualManipulation {
 
 export interface FieldDirective extends Operation {
     field: string;
-    selector?: string; // Optional selector to specify which atoms this directive applies to
-}
-
-
-export interface AttributeDirective extends FieldDirective {
+    /** Optional unary selector to specify which source atoms this directive applies to */
+    selector?: string;
     /**
-     * Optional filter to specify which attribute values to show.
-     * For relations like rel:x->y->Bool, this allows filtering to only show
-     * attributes where the filter evaluates to true (e.g., only show where value is True).
+     * Optional filter to specify which tuples this directive applies to.
+     * For relations like rel:x->y->Bool, this allows filtering to only apply
+     * to tuples where the filter evaluates to true (e.g., only where value is True).
      * This is a binary/n-ary selector that should match tuples (not just atoms).
      */
     filter?: string;
 }
+
+
+export interface AttributeDirective extends FieldDirective {}
 
 export interface FieldHidingDirective extends FieldDirective {}
 
@@ -764,6 +764,7 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
                         color: d.edgeColor.value,
                         field: d.edgeColor.field,
                         selector: d.edgeColor.selector,
+                        filter: d.edgeColor.filter,
                         style: d.edgeColor.style,
                         weight: d.edgeColor.weight,
                         showLabel: d.edgeColor.showLabel,
@@ -782,7 +783,8 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
     let hiddenFields : FieldHidingDirective[] = typedDirectives.filter(d => d.hideField).map(d => {
         return {
             field: d.hideField.field,
-            selector: d.hideField.selector
+            selector: d.hideField.selector,
+            filter: d.hideField.filter
         }
     });
 

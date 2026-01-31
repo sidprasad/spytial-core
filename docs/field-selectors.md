@@ -97,6 +97,37 @@ directives:
   # Person and Company name relations remain visible
 ```
 
+### Hide Fields with Value Filters
+
+You can also use the `filter` parameter to hide only specific tuples:
+
+```yaml
+directives:
+  # Hide 'active' edges only where the value is False
+  - hideField:
+      field: 'active'
+      filter: 'active & (univ -> False)'
+```
+
+### Edge Color with Value Filters
+
+The `filter` parameter works on edge color directives too:
+
+```yaml
+directives:
+  # Color 'active' edges green only where value is True
+  - edgeColor:
+      field: 'active'
+      value: 'green'
+      filter: 'active & (univ -> True)'
+  
+  # Color 'active' edges red only where value is False  
+  - edgeColor:
+      field: 'active'
+      value: 'red'
+      filter: 'active & (univ -> False)'
+```
+
 ### Group By Field with Selectors
 
 ```yaml
@@ -128,8 +159,13 @@ When evaluating field-based directives:
 1. The system first filters by field name (as before)
 2. If a selector is specified, it evaluates the selector to get a set of matching atoms
 3. The directive only applies to relations where the source atom is in the selected set
-4. If a filter is specified (for attribute directives), it evaluates the filter to get matching tuples
-5. The attribute only applies to tuples that match both the selector (source) and filter (tuple)
+4. If a filter is specified, it evaluates the filter to get matching tuples
+5. The directive only applies to tuples that match both the selector (source) and filter (tuple)
 6. If no selector or filter is specified, the directive applies to all relations with that field name (legacy behavior)
+
+The `filter` parameter is available on all field-based directives:
+- `attribute` - Show as attribute only for matching tuples
+- `hideField` - Hide edges only for matching tuples
+- `edgeColor` - Apply styling only for matching tuples
 
 This allows precise control over which relations are affected by field-based rules while maintaining full backward compatibility.

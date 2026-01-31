@@ -307,42 +307,61 @@ export class LayoutInstance {
     }
 
     isHiddenField(fieldId: string, sourceAtom?: string, targetAtom?: string): boolean {
-        // First check legacy hiddenFields directives
+        // First check hiddenFields directives
         const matchingDirectives = this._layoutSpec.directives.hiddenFields.filter((hd) => hd.field === fieldId);
         
         if (matchingDirectives.length > 0) {
-            // If no atoms provided or no selector-based directives, use legacy behavior
+            // If no atoms provided, use legacy behavior for directives without selector/filter
             if (!sourceAtom || !targetAtom) {
-                if (matchingDirectives.some(hd => !hd.selector)) {
+                if (matchingDirectives.some(hd => !hd.selector && !hd.filter)) {
                     return true;
                 }
             } else {
-                // Check selector-based directives
+                // Check selector-based and filter-based directives
                 for (const directive of matchingDirectives) {
-                    if (!directive.selector) {
-                        // Legacy directive without selector matches any atoms
-                        return true;
+                    // Check if selector matches (or no selector means match all sources)
+                    let selectorMatches = true;
+                    if (directive.selector) {
+                        try {
+                            const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
+                            const selectedAtoms = selectorResult.selectedAtoms();
+                            selectorMatches = selectedAtoms.includes(sourceAtom);
+                        } catch (error) {
+                            console.warn(`Failed to evaluate hidden field selector "${directive.selector}":`, error);
+                            selectorMatches = false;
+                        }
                     }
                     
-                    try {
-                        const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
-                        const selectedAtoms = selectorResult.selectedAtoms();
-                        
-                        // Check if source atom is selected by the selector
-                        if (selectedAtoms.includes(sourceAtom)) {
-                            return true;
+                    if (!selectorMatches) {
+                        continue;
+                    }
+                    
+                    // Check if filter matches (or no filter means match all tuples)
+                    let filterMatches = true;
+                    if (directive.filter) {
+                        try {
+                            const filterResult = this.evaluator.evaluate(directive.filter, { instanceIndex: this.instanceNum });
+                            const selectedTuples = filterResult.selectedTwoples();
+                            // Check if the (source, target) pair is in the filtered set
+                            filterMatches = selectedTuples.some(
+                                tuple => tuple[0] === sourceAtom && tuple[1] === targetAtom
+                            );
+                        } catch (error) {
+                            console.warn(`Failed to evaluate hidden field filter "${directive.filter}":`, error);
+                            filterMatches = false;
                         }
-                    } catch (error) {
-                        console.warn(`Failed to evaluate hidden field selector "${directive.selector}":`, error);
-                        // Continue to next directive on error
+                    }
+                    
+                    if (selectorMatches && filterMatches) {
+                        return true;
                     }
                 }
             }
         }
         
         // Also check EdgeStyle directives with hidden: true
-        if (sourceAtom) {
-            const edgeDirective = this.findEdgeDirective(fieldId, sourceAtom);
+        if (sourceAtom && targetAtom) {
+            const edgeDirective = this.findEdgeDirective(fieldId, sourceAtom, targetAtom);
             if (edgeDirective?.hidden === true) {
                 return true;
             }
@@ -1985,7 +2004,7 @@ export class LayoutInstance {
         return inferredEdges.find((directive) => edgeId.includes(`${inferredEdgePrefix}<:${directive.name}`));
     }
 
-    private findEdgeDirective(relName: string, sourceAtom: string): EdgeColorDirective | undefined {
+    private findEdgeDirective(relName: string, sourceAtom: string, targetAtom?: string): EdgeColorDirective | undefined {
         const colorDirectives = this._layoutSpec.directives.edgeColors;
         
         for (const directive of colorDirectives) {
@@ -1993,22 +2012,41 @@ export class LayoutInstance {
                 continue;
             }
             
-            if (!directive.selector) {
-                // Legacy directive without selector applies to all edges with this field
-                return directive;
+            // Check if selector matches (or no selector means match all sources)
+            let selectorMatches = true;
+            if (directive.selector) {
+                try {
+                    const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
+                    const selectedAtoms = selectorResult.selectedAtoms();
+                    selectorMatches = selectedAtoms.includes(sourceAtom);
+                } catch (error) {
+                    console.warn(`Failed to evaluate edge selector "${directive.selector}":`, error);
+                    selectorMatches = false;
+                }
             }
             
-            try {
-                const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
-                const selectedAtoms = selectorResult.selectedAtoms();
-                
-                // Check if source atom is selected by the selector
-                if (selectedAtoms.includes(sourceAtom)) {
-                    return directive;
+            if (!selectorMatches) {
+                continue;
+            }
+            
+            // Check if filter matches (or no filter means match all tuples)
+            let filterMatches = true;
+            if (directive.filter && targetAtom) {
+                try {
+                    const filterResult = this.evaluator.evaluate(directive.filter, { instanceIndex: this.instanceNum });
+                    const selectedTuples = filterResult.selectedTwoples();
+                    // Check if the (source, target) pair is in the filtered set
+                    filterMatches = selectedTuples.some(
+                        tuple => tuple[0] === sourceAtom && tuple[1] === targetAtom
+                    );
+                } catch (error) {
+                    console.warn(`Failed to evaluate edge filter "${directive.filter}":`, error);
+                    filterMatches = false;
                 }
-            } catch (error) {
-                console.warn(`Failed to evaluate edge selector "${directive.selector}":`, error);
-                // Continue to next directive on error
+            }
+            
+            if (selectorMatches && filterMatches) {
+                return directive;
             }
         }
 
