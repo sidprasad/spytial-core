@@ -3961,7 +3961,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     const dx = route[1].x - route[0].x;
     const dy = route[1].y - route[0].y;
     const angle = Math.atan2(dy, dx);
-    const distance = Math.sqrt(dx * dx + dy * dy);
+    const distance = this.getRouteLength(route);
 
     // Find edge index once and reuse for both offset and curvature
     const edgeIndex = allEdgesBetweenNodes.findIndex(edge => edge.id === edgeData.id);
@@ -4062,9 +4062,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private applyEdgeOffset(edgeData: any, route: Array<{ x: number; y: number }>, allEdges: any[], angle: number): Array<{ x: number; y: number }> {
     const edgeIndex = allEdges.findIndex(edge => edge.id === edgeData.id);
-    const dx = route[route.length - 1].x - route[0].x;
-    const dy = route[route.length - 1].y - route[0].y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
+    const distance = this.getRouteLength(route);
     return this.applyEdgeOffsetWithIndex(edgeData, route, allEdges, angle, edgeIndex, distance);
   }
 
@@ -4112,6 +4110,22 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private clampOffset(offset: number, distance: number): number {
     const maxOffset = Math.max(WebColaCnDGraph.MIN_EDGE_DISTANCE, distance * WebColaCnDGraph.MAX_EDGE_OFFSET_RATIO);
     return Math.max(-maxOffset, Math.min(maxOffset, offset));
+  }
+
+  /**
+   * Calculates total route length to avoid clamping based on a short first segment.
+   */
+  private getRouteLength(route: Array<{ x: number; y: number }>): number {
+    if (route.length < 2) {
+      return 0;
+    }
+
+    return route.slice(1).reduce((total, point, index) => {
+      const prev = route[index];
+      const dx = point.x - prev.x;
+      const dy = point.y - prev.y;
+      return total + Math.sqrt(dx * dx + dy * dy);
+    }, 0);
   }
 
   /**
