@@ -104,6 +104,7 @@ npm install spytial-core
 
 - [View on npm](https://www.npmjs.com/package/spytial-core)
 - [Developer Guide](./docs/DEV_GUIDE.md)
+- [YAML Specification (CDN)](https://cdn.jsdelivr.net/gh/sidprasad/cnd-core@main/docs/YAML_SPECIFICATION.md) — Stable CDN-hosted copy of `docs/YAML_SPECIFICATION.md`. For immutability pin to a tag or commit (e.g., `@v1.8.0` or `@<commit-sha>`). Agents can fetch it with a simple GET (e.g., `fetch(url).then(r => r.text())`).
 
 ---
 

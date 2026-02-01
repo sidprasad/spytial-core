@@ -1,0 +1,9 @@
+{
+  "name": "YAML_SPECIFICATION",
+  "description": "Canonical YAML specification for CnD layout",
+  "file": "docs/YAML_SPECIFICATION.md",
+  "cdn_url": "https://cdn.jsdelivr.net/gh/sidprasad/cnd-core@main/docs/YAML_SPECIFICATION.md",
+  "pinned_example": "https://cdn.jsdelivr.net/gh/sidprasad/cnd-core@v1.8.0/docs/YAML_SPECIFICATION.md",
+  "content_type": "text/markdown",
+  "version": "1.8.0"
+}
