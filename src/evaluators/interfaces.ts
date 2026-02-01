@@ -109,3 +109,88 @@ interface IEvaluator {
 }
 
 export default IEvaluator;
+
+/**
+ * Evaluator types supported by the system
+ */
+export enum EvaluatorType {
+  /** Simple Graph Query evaluator (default) */
+  SGQ = 'sgq',
+  /** SQL-based evaluator using AlaSQL */
+  SQL = 'sql',
+  /** Forge expression evaluator */
+  FORGE = 'forge'
+}
+
+/**
+ * Registry for managing multiple evaluators
+ */
+export interface IEvaluatorRegistry {
+  /**
+   * Register an evaluator with a specific type
+   * @param type The evaluator type
+   * @param evaluator The evaluator instance
+   */
+  register(type: EvaluatorType, evaluator: IEvaluator): void;
+  
+  /**
+   * Get an evaluator by type
+   * @param type The evaluator type
+   * @returns The evaluator instance, or undefined if not registered
+   */
+  get(type: EvaluatorType): IEvaluator | undefined;
+  
+  /**
+   * Get the default evaluator
+   * @returns The default evaluator instance
+   */
+  getDefault(): IEvaluator;
+  
+  /**
+   * Set the default evaluator type
+   * @param type The evaluator type to use as default
+   */
+  setDefault(type: EvaluatorType): void;
+  
+  /**
+   * Check if an evaluator is registered for a type
+   * @param type The evaluator type
+   * @returns True if an evaluator is registered for this type
+   */
+  has(type: EvaluatorType): boolean;
+}
+
+/**
+ * Default implementation of IEvaluatorRegistry
+ */
+export class EvaluatorRegistry implements IEvaluatorRegistry {
+  private evaluators: Map<EvaluatorType, IEvaluator> = new Map();
+  private defaultType: EvaluatorType = EvaluatorType.SGQ;
+  
+  register(type: EvaluatorType, evaluator: IEvaluator): void {
+    this.evaluators.set(type, evaluator);
+  }
+  
+  get(type: EvaluatorType): IEvaluator | undefined {
+    return this.evaluators.get(type);
+  }
+  
+  getDefault(): IEvaluator {
+    const defaultEvaluator = this.evaluators.get(this.defaultType);
+    if (!defaultEvaluator) {
+      throw new Error(`Default evaluator type '${this.defaultType}' is not registered`);
+    }
+    return defaultEvaluator;
+  }
+  
+  setDefault(type: EvaluatorType): void {
+    if (!this.has(type)) {
+      throw new Error(`Cannot set default to unregistered evaluator type '${type}'`);
+    }
+    this.defaultType = type;
+  }
+  
+  has(type: EvaluatorType): boolean {
+    return this.evaluators.has(type);
+  }
+}

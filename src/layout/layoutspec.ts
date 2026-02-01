@@ -1,5 +1,6 @@
 import * as yaml from 'js-yaml';
 import { EdgeStyle } from './edge-style';
+import { EvaluatorType } from '../evaluators/interfaces';
 
 export type RelativeDirection = "above" | "below" | "left" | "right" | "directlyAbove" | "directlyBelow" | "directlyLeft" | "directlyRight";
 export type RotationDirection = "clockwise" | "counterclockwise";
@@ -16,8 +17,11 @@ export interface Operation {}
 
 class ConstraintOperation implements Operation {
     selector: string;
-    constructor(selector: string) {
+    evaluatorType?: EvaluatorType;
+    
+    constructor(selector: string, evaluatorType?: EvaluatorType) {
         this.selector = selector;
+        this.evaluatorType = evaluatorType;
     }
     isInternallyConsistent(): boolean {
         // Default implementation, can be overridden by subclasses
@@ -40,8 +44,8 @@ class ConstraintOperation implements Operation {
 export class RelativeOrientationConstraint extends ConstraintOperation {
     directions : RelativeDirection[];
 
-    constructor(directions: RelativeDirection[], selector: string) {
-        super(selector);
+    constructor(directions: RelativeDirection[], selector: string, evaluatorType?: EvaluatorType) {
+        super(selector, evaluatorType);
         this.directions = directions;
     }
     
@@ -107,8 +111,8 @@ export class RelativeOrientationConstraint extends ConstraintOperation {
 export class AlignConstraint extends ConstraintOperation {
     direction: AlignDirection;
 
-    constructor(direction: AlignDirection, selector: string) {
-        super(selector);
+    constructor(direction: AlignDirection, selector: string, evaluatorType?: EvaluatorType) {
+        super(selector, evaluatorType);
         this.direction = direction;
     }
     
@@ -133,8 +137,8 @@ export class GroupBySelector extends ConstraintOperation{
     name: string;
     addEdge: boolean;
 
-    constructor(selector : string, name: string, addEdge: boolean = false) {
-        super(selector);
+    constructor(selector : string, name: string, addEdge: boolean = false, evaluatorType?: EvaluatorType) {
+        super(selector, evaluatorType);
         this.name = name;
         this.addEdge = addEdge;
     }
@@ -158,17 +162,21 @@ export class GroupByField  {
 
     // Optional selector to specify which atoms this grouping applies to
     selector? : string;
+    
+    // Optional evaluator type for the selector
+    evaluatorType?: EvaluatorType;
 
     // And this is the element upon WHICH to group (ie. the key)
     groupOn : number;
 
     // And this is what gets grouped
     addToGroup : number;
-    constructor(field: string, groupOn: number, addToGroup: number, selector?: string) {
+    constructor(field: string, groupOn: number, addToGroup: number, selector?: string, evaluatorType?: EvaluatorType) {
         this.field = field;
         this.groupOn = groupOn;
         this.addToGroup = addToGroup;
         this.selector = selector;
+        this.evaluatorType = evaluatorType;
     }
 
     toHTML(): string {
@@ -187,8 +195,8 @@ export class GroupByField  {
 export class CyclicOrientationConstraint extends ConstraintOperation {
     direction : RotationDirection;
 
-    constructor(direction: RotationDirection, selector: string) {
-        super(selector);
+    constructor(direction: RotationDirection, selector: string, evaluatorType?: EvaluatorType) {
+        super(selector, evaluatorType);
         this.direction = direction;
     }
 
@@ -208,6 +216,7 @@ export interface DirectiveOperation extends Operation {}
 
 export interface VisualManipulation extends Operation {
     selector : string;
+    evaluatorType?: EvaluatorType;
 }
 
 export interface AtomColorDirective extends VisualManipulation {
@@ -240,6 +249,8 @@ export interface FieldDirective extends Operation {
     field: string;
     /** Optional unary selector to specify which source atoms this directive applies to */
     selector?: string;
+    /** Optional evaluator type to use for the selector */
+    evaluatorType?: EvaluatorType;
     /**
      * Optional filter to specify which tuples this directive applies to.
      * For relations like rel:x->y->Bool, this allows filtering to only apply
@@ -247,6 +258,8 @@ export interface FieldDirective extends Operation {
      * This is a binary/n-ary selector that should match tuples (not just atoms).
      */
     filter?: string;
+    /** Optional evaluator type to use for the filter */
+    filterEvaluatorType?: EvaluatorType;
 }
 
 
@@ -266,10 +279,14 @@ export interface AttributeDirective extends FieldDirective {}
 export interface TagDirective extends Operation {
     /** Selector to determine which atoms get this tag */
     toTag: string;
+    /** Optional evaluator type to use for toTag selector */
+    toTagEvaluatorType?: EvaluatorType;
     /** The attribute name to display */
     name: string;
     /** N-ary selector whose result becomes the attribute value */
     value: string;
+    /** Optional evaluator type to use for value selector */
+    valueEvaluatorType?: EvaluatorType;
 }
 
 export interface FieldHidingDirective extends FieldDirective {}
@@ -578,6 +595,30 @@ function removeDuplicateGroupByFieldConstraints(constraints: GroupByField[]): Gr
 }
 
 /**
+ * Helper function to parse evaluator type from a string
+ * @param evaluatorTypeStr String representation of evaluator type
+ * @returns EvaluatorType enum value or undefined
+ */
+function parseEvaluatorType(evaluatorTypeStr?: string): EvaluatorType | undefined {
+    if (!evaluatorTypeStr) {
+        return undefined;
+    }
+    
+    const normalized = evaluatorTypeStr.toLowerCase();
+    switch (normalized) {
+        case 'sgq':
+        case 'simplegraphquery':
+            return EvaluatorType.SGQ;
+        case 'sql':
+            return EvaluatorType.SQL;
+        case 'forge':
+            return EvaluatorType.FORGE;
+        default:
+            return undefined;
+    }
+}
+
+/**
  * Parses the constraints from the YAML specification.
  * @param constraints List of constraints from the YAML specification.
  * @returns List of CnD constraints
@@ -596,9 +637,12 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
                 throw new Error("Cyclic constraint must have a selector");
             }
 
+            const evaluatorType = parseEvaluatorType(c.cyclic.evaluatorType);
+
             return new CyclicOrientationConstraint(
                 c.cyclic.direction || "clockwise",
-                c.cyclic.selector
+                c.cyclic.selector,
+                evaluatorType
             );
         });
 
@@ -637,9 +681,12 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
                 throw new Error("Orientation constraint must have directions field");
             }
 
+            const evaluatorType = parseEvaluatorType(c.orientation.evaluatorType);
+
             let roc = new RelativeOrientationConstraint(
                 constr.directions,
-                constr.selector
+                constr.selector,
+                evaluatorType
             );
             isInternallyConsistent = roc.isInternallyConsistent();
             if(!isInternallyConsistent) {
@@ -669,12 +716,14 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
                 throw new Error("Grouping constraint must specify addToGroup");
             }
 
+            const evaluatorType = parseEvaluatorType(c.group.evaluatorType);
 
             return new GroupByField(
                 c.group.field,
                 c.group.groupOn,
                 c.group.addToGroup,
-                c.group.selector
+                c.group.selector,
+                evaluatorType
             );
 
             // return {
@@ -696,7 +745,8 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
             if(!c.group.name) {
                 throw new Error("Grouping constraint must have a name.");
             }
-            return new GroupBySelector(c.group.selector, c.group.name, c.group.addEdge);
+            const evaluatorType = parseEvaluatorType(c.group.evaluatorType);
+            return new GroupBySelector(c.group.selector, c.group.name, c.group.addEdge, evaluatorType);
         });
 
     // Remove duplicate group by selector constraints
@@ -712,9 +762,12 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
                 throw new Error("Align constraint must have a direction");
             }
 
+            const evaluatorType = parseEvaluatorType(c.align.evaluatorType);
+
             let alignConstraint = new AlignConstraint(
                 c.align.direction,
-                c.align.selector
+                c.align.selector,
+                evaluatorType
             );
             
             if(!alignConstraint.isInternallyConsistent()) {
@@ -755,33 +808,40 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
 
     let icons : AtomIconDirective[] = typedDirectives.filter(d => d.icon)
                 .map(d => {
-
+                    const evaluatorType = parseEvaluatorType(d.icon.evaluatorType);
                     return {
                         path: d.icon.path,
                         selector: d.icon.selector,
-                        showLabels: d.icon.showLabels || false 
+                        showLabels: d.icon.showLabels || false,
+                        evaluatorType
                     }
                 });
     let atomColors : AtomColorDirective[] = typedDirectives.filter(d => d.atomColor)
                 .map(d => {
+                    const evaluatorType = parseEvaluatorType(d.atomColor.evaluatorType);
                     return {
                         color: d.atomColor.value,
-                        selector: d.atomColor.selector
+                        selector: d.atomColor.selector,
+                        evaluatorType
                     }
                 });
 
     let sizes : AtomSizeDirective[] = typedDirectives.filter(d => d.size)
                 .map(d => {
                     assertValidSizeParams(d.size, "directive");
+                    const evaluatorType = parseEvaluatorType(d.size.evaluatorType);
                     return {
                         height: d.size.height,
                         width: d.size.width,
-                        selector: d.size.selector
+                        selector: d.size.selector,
+                        evaluatorType
                     };
                 });
     
     let edgeColors : EdgeColorDirective[] = typedDirectives.filter(d => d.edgeColor)
                 .map(d => {
+                    const evaluatorType = parseEvaluatorType(d.edgeColor.evaluatorType);
+                    const filterEvaluatorType = parseEvaluatorType(d.edgeColor.filterEvaluatorType);
                     return {
                         color: d.edgeColor.value,
                         field: d.edgeColor.field,
@@ -790,23 +850,33 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
                         style: d.edgeColor.style,
                         weight: d.edgeColor.weight,
                         showLabel: d.edgeColor.showLabel,
-                        hidden: d.edgeColor.hidden
+                        hidden: d.edgeColor.hidden,
+                        evaluatorType,
+                        filterEvaluatorType
                     }
                 });
 
     let attributes : AttributeDirective[]  = typedDirectives.filter(d => d.attribute).map(d => {
+        const evaluatorType = parseEvaluatorType(d.attribute.evaluatorType);
+        const filterEvaluatorType = parseEvaluatorType(d.attribute.filterEvaluatorType);
         return {
             field: d.attribute.field,
             selector: d.attribute.selector,
-            filter: d.attribute.filter
+            filter: d.attribute.filter,
+            evaluatorType,
+            filterEvaluatorType
         }
     });
 
     let hiddenFields : FieldHidingDirective[] = typedDirectives.filter(d => d.hideField).map(d => {
+        const evaluatorType = parseEvaluatorType(d.hideField.evaluatorType);
+        const filterEvaluatorType = parseEvaluatorType(d.hideField.filterEvaluatorType);
         return {
             field: d.hideField.field,
             selector: d.hideField.selector,
-            filter: d.hideField.filter
+            filter: d.hideField.filter,
+            evaluatorType,
+            filterEvaluatorType
         }
     });
 
@@ -822,26 +892,34 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
     let hideDisconnectedBuiltIns = flags.includes("hideDisconnectedBuiltIns");
 
     let inferredEdges : InferredEdgeDirective[] = typedDirectives.filter(d => d.inferredEdge).map(d => {
+        const evaluatorType = parseEvaluatorType(d.inferredEdge.evaluatorType);
         return {
             name: d.inferredEdge.name,
             selector: d.inferredEdge.selector,
             color: d.inferredEdge.color,
             style: d.inferredEdge.style,
-            weight: d.inferredEdge.weight
+            weight: d.inferredEdge.weight,
+            evaluatorType
         }
     });
 
     let hiddenAtoms : AtomHidingDirective[] = typedDirectives.filter(d => d.hideAtom).map(d => {
+        const evaluatorType = parseEvaluatorType(d.hideAtom.evaluatorType);
         return {
-            selector: d.hideAtom.selector
+            selector: d.hideAtom.selector,
+            evaluatorType
         }
     });
 
     let tags : TagDirective[] = typedDirectives.filter(d => d.tag).map(d => {
+        const toTagEvaluatorType = parseEvaluatorType(d.tag.toTagEvaluatorType);
+        const valueEvaluatorType = parseEvaluatorType(d.tag.valueEvaluatorType);
         return {
             toTag: d.tag.toTag,
             name: d.tag.name,
-            value: d.tag.value
+            value: d.tag.value,
+            toTagEvaluatorType,
+            valueEvaluatorType
         }
     });
 

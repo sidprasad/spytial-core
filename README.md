@@ -59,6 +59,7 @@ See [Schema Descriptor API](#schema-descriptor-api) for full options and example
 - **CnD (Constraint & Directive) Layout System**: Declarative constraint-based graph layouts
 - **WebCola Integration**: Physics-based constraint solver with overlap avoidance
 - **Multi-format Support**: Alloy/Forge, JSON, DOT, Racket, Pyret, TLA+
+- **Multiple Evaluators** 🆕: Mix SGQ, SQL, and Forge evaluators in a single layout spec
 - **Interactive Input Graphs**: Built-in components for constraint-aware graph editing
 - **Projection Support**: Dynamic UI controls for Forge/Alloy projection atom selection
 
@@ -93,6 +94,49 @@ const pairSelector = synthesizeBinarySelector([{
 ```
 
 Use synthesis to build authoring tools where users select nodes visually and constraints are generated automatically. See [Selector Synthesis Documentation](./docs/SELECTOR_SYNTHESIS.md) for details.
+
+### Multiple Evaluators 🆕
+Use different evaluator syntaxes (SGQ, SQL, Forge) in the same layout specification:
+
+```typescript
+import { 
+  EvaluatorRegistry, 
+  EvaluatorType,
+  SGraphQueryEvaluator,
+  SQLEvaluator 
+} from 'spytial-core';
+
+// Create evaluator registry
+const registry = new EvaluatorRegistry();
+
+// Register multiple evaluators
+const sgqEval = new SGraphQueryEvaluator();
+sgqEval.initialize({ sourceData: myInstance });
+registry.register(EvaluatorType.SGQ, sgqEval);
+registry.setDefault(EvaluatorType.SGQ);
+
+const sqlEval = new SQLEvaluator();
+sqlEval.initialize({ sourceData: myInstance });
+registry.register(EvaluatorType.SQL, sqlEval);
+
+// Mix evaluators in layout spec
+const spec = `
+constraints:
+  - orientation:
+      selector: friend  # Uses SGQ (default)
+      directions: [right]
+
+directives:
+  - atomColor:
+      selector: "SELECT id FROM _atoms WHERE type = 'Person'"
+      evaluatorType: sql  # Uses SQL evaluator
+      value: "#FF0000"
+`;
+
+const layoutInstance = new LayoutInstance(parseLayoutSpec(spec), registry);
+```
+
+Use SQL for complex queries, SGQ for graph traversal, and mix them as needed. See [Multiple Evaluators Documentation](./docs/MULTIPLE_EVALUATORS.md) for full details.
 
 ---
 
