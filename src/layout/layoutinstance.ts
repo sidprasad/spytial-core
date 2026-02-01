@@ -19,7 +19,7 @@ import {
 } from './layoutspec';
 
 
-import IEvaluator from '../evaluators/interfaces';
+import IEvaluator, { IEvaluatorRegistry, EvaluatorType, EvaluatorRegistry } from '../evaluators/interfaces';
 import { ColorPicker } from './colorpicker';
 import { type ConstraintError, ConstraintValidator } from './constraint-validator';
 const UNIVERSAL_TYPE = "univ";
@@ -160,7 +160,7 @@ export class LayoutInstance {
     public readonly minSepHeight = 15;
     public readonly minSepWidth = 15;
 
-    private evaluator: IEvaluator;
+    private evaluatorRegistry: IEvaluatorRegistry;
     private instanceNum: number;
 
     private readonly alignmentEdgeStrategy: AlignmentEdgeStrategy;
@@ -170,7 +170,7 @@ export class LayoutInstance {
      * Constructs a new `LayoutInstance` object.
      *
      * @param layoutSpec - The layout specification that defines constraints, directives, and other layout-related configurations.
-     * @param evaluator - An evaluator instance used to evaluate selectors and constraints within the layout specification.
+     * @param evaluatorOrRegistry - An evaluator instance (for backward compatibility) or an evaluator registry for multiple evaluators.
      * @param instNum - The instance number (default is 0), used to differentiate between multiple instances of the same layout.
      * @param addAlignmentEdges - Deprecated. Use alignmentEdgeStrategy instead. A boolean flag indicating whether alignment edges should be added (default is `true`, equivalent to 'connected' strategy).
      * @param alignmentEdgeStrategy - Strategy for adding alignment edges (default is `AlignmentEdgeStrategy.CONNECTED`). Takes precedence over addAlignmentEdges if provided.
@@ -180,13 +180,24 @@ export class LayoutInstance {
      */
     constructor(
         layoutSpec: LayoutSpec, 
-        evaluator: IEvaluator, 
+        evaluatorOrRegistry: IEvaluator | IEvaluatorRegistry, 
         instNum: number = 0, 
         addAlignmentEdges: boolean = true,
         alignmentEdgeStrategy?: AlignmentEdgeStrategy
     ) {
         this.instanceNum = instNum;
-        this.evaluator = evaluator;
+        
+        // Support both single evaluator (backward compatibility) and registry
+        if (this.isEvaluatorRegistry(evaluatorOrRegistry)) {
+            this.evaluatorRegistry = evaluatorOrRegistry;
+        } else {
+            // Create a registry with the single evaluator as default
+            const registry = new EvaluatorRegistry();
+            registry.register(EvaluatorType.SGQ, evaluatorOrRegistry);
+            registry.setDefault(EvaluatorType.SGQ);
+            this.evaluatorRegistry = registry;
+        }
+        
         this._layoutSpec = layoutSpec;
         
         // Handle backward compatibility: if alignmentEdgeStrategy is provided, use it
@@ -198,6 +209,29 @@ export class LayoutInstance {
                 ? AlignmentEdgeStrategy.CONNECTED 
                 : AlignmentEdgeStrategy.NEVER;
         }
+    }
+    
+    /**
+     * Type guard to check if the parameter is an evaluator registry
+     */
+    private isEvaluatorRegistry(obj: IEvaluator | IEvaluatorRegistry): obj is IEvaluatorRegistry {
+        return (obj as IEvaluatorRegistry).register !== undefined &&
+               (obj as IEvaluatorRegistry).get !== undefined &&
+               (obj as IEvaluatorRegistry).getDefault !== undefined;
+    }
+    
+    /**
+     * Get the appropriate evaluator for a given evaluator type, falling back to default
+     */
+    private getEvaluator(evaluatorType?: EvaluatorType): IEvaluator {
+        if (evaluatorType !== undefined) {
+            const evaluator = this.evaluatorRegistry.get(evaluatorType);
+            if (evaluator) {
+                return evaluator;
+            }
+            // Fall through to default if specified evaluator is not found
+        }
+        return this.evaluatorRegistry.getDefault();
     }
 
     get projectedSigs(): string[] {
@@ -238,7 +272,8 @@ export class LayoutInstance {
             }
             
             try {
-                const selectorResult = this.evaluator.evaluate(d.selector, { instanceIndex: this.instanceNum });
+                const evaluator = this.getEvaluator(d.evaluatorType);
+                const selectorResult = evaluator.evaluate(d.selector, { instanceIndex: this.instanceNum });
                 const selectedAtoms = selectorResult.selectedAtoms();
                 
                 // Check if source atom is selected by the selector
@@ -269,7 +304,8 @@ export class LayoutInstance {
             let selectorMatches = true;
             if (directive.selector) {
                 try {
-                    const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
+                    const evaluator = this.getEvaluator(directive.evaluatorType);
+                    const selectorResult = evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
                     const selectedAtoms = selectorResult.selectedAtoms();
                     selectorMatches = selectedAtoms.includes(sourceAtom);
                 } catch (error) {
@@ -286,7 +322,8 @@ export class LayoutInstance {
             let filterMatches = true;
             if (directive.filter) {
                 try {
-                    const filterResult = this.evaluator.evaluate(directive.filter, { instanceIndex: this.instanceNum });
+                    const evaluator = this.getEvaluator(directive.filterEvaluatorType);
+                    const filterResult = evaluator.evaluate(directive.filter, { instanceIndex: this.instanceNum });
                     const selectedTuples = filterResult.selectedTwoples();
                     // Check if the (source, target) pair is in the filtered set
                     filterMatches = selectedTuples.some(
@@ -323,7 +360,8 @@ export class LayoutInstance {
                     let selectorMatches = true;
                     if (directive.selector) {
                         try {
-                            const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
+                            const evaluator = this.getEvaluator(directive.evaluatorType);
+                            const selectorResult = evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
                             const selectedAtoms = selectorResult.selectedAtoms();
                             selectorMatches = selectedAtoms.includes(sourceAtom);
                         } catch (error) {
@@ -340,7 +378,8 @@ export class LayoutInstance {
                     let filterMatches = true;
                     if (directive.filter) {
                         try {
-                            const filterResult = this.evaluator.evaluate(directive.filter, { instanceIndex: this.instanceNum });
+                            const evaluator = this.getEvaluator(directive.filterEvaluatorType);
+                            const filterResult = evaluator.evaluate(directive.filter, { instanceIndex: this.instanceNum });
                             const selectedTuples = filterResult.selectedTwoples();
                             // Check if the (source, target) pair is in the filtered set
                             filterMatches = selectedTuples.some(
@@ -396,7 +435,8 @@ export class LayoutInstance {
         for (var gc of groupBySelectorConstraints) {
 
             let selector = gc.selector;
-            let selectorRes = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
+            const evaluator = this.getEvaluator(gc.evaluatorType);
+            let selectorRes = evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
 
 
             // Now, we should support both unary and binary selectors.
@@ -665,11 +705,13 @@ export class LayoutInstance {
         for (const directive of tagDirectives) {
             try {
                 // First, evaluate the toTag selector to get which nodes receive this tag
-                const toTagResult = this.evaluator.evaluate(directive.toTag, { instanceIndex: this.instanceNum });
+                const toTagEvaluator = this.getEvaluator(directive.toTagEvaluatorType);
+                const toTagResult = toTagEvaluator.evaluate(directive.toTag, { instanceIndex: this.instanceNum });
                 const selectedAtoms = toTagResult.selectedAtoms();
                 
                 // Then, evaluate the value selector to get the n-ary result
-                const valueResult = this.evaluator.evaluate(directive.value, { instanceIndex: this.instanceNum });
+                const valueEvaluator = this.getEvaluator(directive.valueEvaluatorType);
+                const valueResult = valueEvaluator.evaluate(directive.value, { instanceIndex: this.instanceNum });
                 const allTuples = valueResult.selectedTuplesAll();
                 
                 // For each node that should receive this tag
@@ -783,7 +825,8 @@ export class LayoutInstance {
                 const hiddenAtomDirectives = this._layoutSpec.directives.hiddenAtoms;
                 for (const directive of hiddenAtomDirectives) {
                     try {
-                        const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
+                        const evaluator = this.getEvaluator(directive.evaluatorType);
+                        const selectorResult = evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
                         const selectedAtoms = selectorResult.selectedAtoms();
                         if (selectedAtoms.includes(node)) {
                             hideBySelector = true;
@@ -1244,7 +1287,8 @@ export class LayoutInstance {
 
         // For each cyclic constraint, extract fragments
         for (const [, c] of cyclicConstraints.entries()) {
-            let selectedTuples: string[][] = this.evaluator.evaluate(c.selector, { instanceIndex: this.instanceNum }).selectedTwoples();
+            const evaluator = this.getEvaluator(c.evaluatorType);
+            let selectedTuples: string[][] = evaluator.evaluate(c.selector, { instanceIndex: this.instanceNum }).selectedTwoples();
             let nextNodeMap: Map<LayoutNode, LayoutNode[]> = new Map<LayoutNode, LayoutNode[]>();
             
             // Build nextNodeMap from selected tuples
@@ -1455,7 +1499,8 @@ export class LayoutInstance {
             let directions = c.directions;
             let selector = c.selector;
 
-            let selectorRes = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
+            const evaluator = this.getEvaluator(c.evaluatorType);
+            let selectorRes = evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
             let selectedTuples: string[][] = selectorRes.selectedTwoples();
 
             // For each tuple, we need to apply the constraints
@@ -1645,7 +1690,8 @@ export class LayoutInstance {
             let direction = c.direction;
             let selector = c.selector;
 
-            let selectorRes = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
+            const evaluator = this.getEvaluator(c.evaluatorType);
+            let selectorRes = evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
             let selectedTuples: string[][] = selectorRes.selectedTwoples();
 
             // For each tuple, apply the alignment constraint
@@ -1953,7 +1999,8 @@ export class LayoutInstance {
         // Apply size directives first
         let sizeDirectives = this._layoutSpec.directives.sizes;
         sizeDirectives.forEach((sizeDirective) => {
-            let selectedNodes = this.evaluator.evaluate(sizeDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
+            const evaluator = this.getEvaluator(sizeDirective.evaluatorType);
+            let selectedNodes = evaluator.evaluate(sizeDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
             let width = sizeDirective.width;
             let height = sizeDirective.height;
 
@@ -1994,7 +2041,8 @@ export class LayoutInstance {
         // Apply color directives first
         let colorDirectives = this._layoutSpec.directives.atomColors;
         colorDirectives.forEach((colorDirective) => {
-            let selected = this.evaluator.evaluate(colorDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
+            const evaluator = this.getEvaluator(colorDirective.evaluatorType);
+            let selected = evaluator.evaluate(colorDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
             let color = colorDirective.color;
 
             selected.forEach((nodeId) => {
@@ -2029,7 +2077,8 @@ export class LayoutInstance {
         // Apply icon directives first
         let iconDirectives = this._layoutSpec.directives.icons;
         iconDirectives.forEach((iconDirective) => {
-            let selected = this.evaluator.evaluate(iconDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
+            const evaluator = this.getEvaluator(iconDirective.evaluatorType);
+            let selected = evaluator.evaluate(iconDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
             let iconPath = iconDirective.path;
 
             selected.forEach((nodeId) => {
@@ -2139,7 +2188,8 @@ export class LayoutInstance {
             let selectorMatches = true;
             if (directive.selector) {
                 try {
-                    const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
+                    const evaluator = this.getEvaluator(directive.evaluatorType);
+                    const selectorResult = evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
                     const selectedAtoms = selectorResult.selectedAtoms();
                     selectorMatches = selectedAtoms.includes(sourceAtom);
                 } catch (error) {
@@ -2156,7 +2206,8 @@ export class LayoutInstance {
             let filterMatches = true;
             if (directive.filter && targetAtom) {
                 try {
-                    const filterResult = this.evaluator.evaluate(directive.filter, { instanceIndex: this.instanceNum });
+                    const evaluator = this.getEvaluator(directive.filterEvaluatorType);
+                    const filterResult = evaluator.evaluate(directive.filter, { instanceIndex: this.instanceNum });
                     const selectedTuples = filterResult.selectedTwoples();
                     // Check if the (source, target) pair is in the filtered set
                     filterMatches = selectedTuples.some(
@@ -2244,8 +2295,8 @@ export class LayoutInstance {
         let inferredEdges = this._layoutSpec.directives.inferredEdges;
         inferredEdges.forEach((he) => {
 
-
-            let res = this.evaluator.evaluate(he.selector, { instanceIndex: this.instanceNum });
+            const evaluator = this.getEvaluator(he.evaluatorType);
+            let res = evaluator.evaluate(he.selector, { instanceIndex: this.instanceNum });
 
             let selectedTuples: string[][] = res.selectedTuplesAll();
             let edgeIdPrefix = `${inferredEdgePrefix}<:${he.name}`;
