@@ -3606,7 +3606,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       const source = edgeData.source;
       const target = edgeData.target;
 
-      // Get node bounds
+      // Get node bounds (fallback to simple bounds if not provided)
       const sourceBounds = source.bounds || { 
         x: source.x - (source.width || 0) / 2, 
         y: source.y - (source.height || 0) / 2,
@@ -3620,16 +3620,31 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         height: () => target.height || 0
       };
 
+      // Quickly detect near-touching nodes (within ~5px)
+      const NEAR_TOUCH_THRESHOLD = 5;
+      const nearTouching = this.areBoundsNear(sourceBounds, targetBounds, NEAR_TOUCH_THRESHOLD);
+
       // Adjust first point to source node boundary
       const firstPoint = points[0];
       const secondPoint = points.length > 1 ? points[1] : points[0];
-      const sourceIntersection = this.getRectangleIntersection(
+      let sourceIntersection = this.getRectangleIntersection(
         sourceBounds.x + sourceBounds.width() / 2,
         sourceBounds.y + sourceBounds.height() / 2,
         secondPoint.x,
         secondPoint.y,
         sourceBounds
       );
+
+      // If the router returns nothing or nodes are near-touching, choose an alternate boundary point
+      if (!sourceIntersection || nearTouching) {
+        sourceIntersection = this.chooseBoundaryPoint(
+          sourceBounds.x + sourceBounds.width() / 2,
+          sourceBounds.y + sourceBounds.height() / 2,
+          sourceBounds,
+          secondPoint
+        );
+      }
+
       if (sourceIntersection) {
         points[0] = sourceIntersection;
       }
@@ -3637,13 +3652,23 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       // Adjust last point to target node boundary
       const lastPoint = points[points.length - 1];
       const secondLastPoint = points.length > 1 ? points[points.length - 2] : lastPoint;
-      const targetIntersection = this.getRectangleIntersection(
+      let targetIntersection = this.getRectangleIntersection(
         targetBounds.x + targetBounds.width() / 2,
         targetBounds.y + targetBounds.height() / 2,
         secondLastPoint.x,
         secondLastPoint.y,
         targetBounds
       );
+
+      if (!targetIntersection || nearTouching) {
+        targetIntersection = this.chooseBoundaryPoint(
+          targetBounds.x + targetBounds.width() / 2,
+          targetBounds.y + targetBounds.height() / 2,
+          targetBounds,
+          secondLastPoint
+        );
+      }
+
       if (targetIntersection) {
         points[points.length - 1] = targetIntersection;
       }
@@ -3654,6 +3679,54 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       console.warn('Error adjusting grid route for arrow positioning:', error);
       return null;
     }
+  }
+
+  /**
+   * Returns true if two axis-aligned rectangles are within `threshold` pixels of each other.
+   */
+  private areBoundsNear(a: any, b: any, threshold: number): boolean {
+    const aLeft = a.x;
+    const aRight = a.x + a.width();
+    const aTop = a.y;
+    const aBottom = a.y + a.height();
+
+    const bLeft = b.x;
+    const bRight = b.x + b.width();
+    const bTop = b.y;
+    const bBottom = b.y + b.height();
+
+    const xGap = Math.max(0, Math.max(bLeft - aRight, aLeft - bRight));
+    const yGap = Math.max(0, Math.max(bTop - aBottom, aTop - bBottom));
+
+    const dist = Math.sqrt(xGap * xGap + yGap * yGap);
+    return dist <= threshold;
+  }
+
+  /**
+   * Chooses a boundary point (midpoint of left/right/top/bottom) on `bounds` that is farthest from `other` point.
+   */
+  private chooseBoundaryPoint(cx: number, cy: number, bounds: any, other: { x: number; y: number }): { x: number; y: number } {
+    const w = Math.max(1, bounds.width());
+    const h = Math.max(1, bounds.height());
+    const candidates = [
+      { x: bounds.x, y: bounds.y + h / 2 }, // left
+      { x: bounds.x + w, y: bounds.y + h / 2 }, // right
+      { x: bounds.x + w / 2, y: bounds.y }, // top
+      { x: bounds.x + w / 2, y: bounds.y + h } // bottom
+    ];
+
+    let best = candidates[0];
+    let bestDist = -Infinity;
+    for (const c of candidates) {
+      const dx = c.x - other.x;
+      const dy = c.y - other.y;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d > bestDist) {
+        bestDist = d;
+        best = c;
+      }
+    }
+    return best;
   }
 
   private gridRouteToPoints(route: any[]) {
