@@ -3841,12 +3841,238 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
-   * Checks if two nodes are near-touching and returns a perpendicular route if so.
+   * Normalizes node bounds to a consistent format with x, y and width/height as functions.
+   */
+  private normalizeNodeBounds(node: any): { x: number; y: number; width: () => number; height: () => number } {
+    const bounds = node.bounds || {
+      x: node.x - (node.width || 50) / 2,
+      y: node.y - (node.height || 30) / 2,
+      width: () => node.width || 50,
+      height: () => node.height || 30
+    };
+    
+    return {
+      x: typeof bounds.x === 'number' ? bounds.x : (bounds.X !== undefined ? bounds.x : node.x - (node.width || 50) / 2),
+      y: typeof bounds.y === 'number' ? bounds.y : node.y - (node.height || 30) / 2,
+      width: () => typeof bounds.width === 'function' ? bounds.width() : (bounds.X !== undefined ? bounds.X - bounds.x : node.width || 50),
+      height: () => typeof bounds.height === 'function' ? bounds.height() : (bounds.Y !== undefined ? bounds.Y - bounds.y : node.height || 30)
+    };
+  }
+
+  /**
+   * Checks if a line segment from p1 to p2 intersects with a rectangle.
+   * Used to detect if an edge would pass through an intermediate node.
+   */
+  private lineIntersectsRect(
+    p1: { x: number; y: number },
+    p2: { x: number; y: number },
+    rect: { x: number; y: number; width: () => number; height: () => number }
+  ): boolean {
+    const left = rect.x;
+    const right = rect.x + rect.width();
+    const top = rect.y;
+    const bottom = rect.y + rect.height();
+
+    // Check if line segment from p1 to p2 intersects the rectangle
+    // Using Cohen-Sutherland style approach
+
+    // First, check if the segment's bounding box doesn't intersect rect at all
+    const minX = Math.min(p1.x, p2.x);
+    const maxX = Math.max(p1.x, p2.x);
+    const minY = Math.min(p1.y, p2.y);
+    const maxY = Math.max(p1.y, p2.y);
+
+    if (maxX < left || minX > right || maxY < top || minY > bottom) {
+      return false;
+    }
+
+    // Check if either endpoint is inside the rectangle
+    const p1Inside = p1.x >= left && p1.x <= right && p1.y >= top && p1.y <= bottom;
+    const p2Inside = p2.x >= left && p2.x <= right && p2.y >= top && p2.y <= bottom;
+    if (p1Inside || p2Inside) {
+      return true;
+    }
+
+    // Check intersection with each edge of the rectangle
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+
+    // Helper to check line-segment intersection
+    const intersectsHorizontal = (y: number, xMin: number, xMax: number): boolean => {
+      if (dy === 0) return false;
+      const t = (y - p1.y) / dy;
+      if (t < 0 || t > 1) return false;
+      const x = p1.x + t * dx;
+      return x >= xMin && x <= xMax;
+    };
+
+    const intersectsVertical = (x: number, yMin: number, yMax: number): boolean => {
+      if (dx === 0) return false;
+      const t = (x - p1.x) / dx;
+      if (t < 0 || t > 1) return false;
+      const y = p1.y + t * dy;
+      return y >= yMin && y <= yMax;
+    };
+
+    return (
+      intersectsHorizontal(top, left, right) ||
+      intersectsHorizontal(bottom, left, right) ||
+      intersectsVertical(left, top, bottom) ||
+      intersectsVertical(right, top, bottom)
+    );
+  }
+
+  /**
+   * Finds all nodes that lie between source and target and would block a direct edge.
+   * Returns them sorted by position along the source→target axis.
+   */
+  private findBlockingNodes(
+    source: any,
+    target: any,
+    sourceId: string,
+    targetId: string
+  ): Array<{ node: any; bounds: { x: number; y: number; width: () => number; height: () => number } }> {
+    if (!this.currentLayout?.nodes) {
+      return [];
+    }
+
+    const sourceBounds = this.normalizeNodeBounds(source);
+    const targetBounds = this.normalizeNodeBounds(target);
+
+    // Compute centers
+    const sourceCenter = {
+      x: sourceBounds.x + sourceBounds.width() / 2,
+      y: sourceBounds.y + sourceBounds.height() / 2
+    };
+    const targetCenter = {
+      x: targetBounds.x + targetBounds.width() / 2,
+      y: targetBounds.y + targetBounds.height() / 2
+    };
+
+    const blocking: Array<{ node: any; bounds: any; distance: number }> = [];
+
+    for (const node of this.currentLayout.nodes) {
+      // Skip source and target
+      if (node.id === sourceId || node.id === targetId) {
+        continue;
+      }
+
+      const nodeBounds = this.normalizeNodeBounds(node);
+
+      // Check if a straight line from source center to target center would pass through this node
+      if (this.lineIntersectsRect(sourceCenter, targetCenter, nodeBounds)) {
+        // Calculate distance from source for sorting
+        const nodeCenter = {
+          x: nodeBounds.x + nodeBounds.width() / 2,
+          y: nodeBounds.y + nodeBounds.height() / 2
+        };
+        const distance = Math.sqrt(
+          Math.pow(nodeCenter.x - sourceCenter.x, 2) +
+          Math.pow(nodeCenter.y - sourceCenter.y, 2)
+        );
+        blocking.push({ node, bounds: nodeBounds, distance });
+      }
+    }
+
+    // Sort by distance from source
+    blocking.sort((a, b) => a.distance - b.distance);
+    return blocking.map(b => ({ node: b.node, bounds: b.bounds }));
+  }
+
+  /**
+   * Computes a route that goes around blocking intermediate nodes.
+   * Used when there are nodes between source and target that would hide the edge.
+   */
+  private computeRouteAroundBlockingNodes(
+    sourceBounds: { x: number; y: number; width: () => number; height: () => number },
+    targetBounds: { x: number; y: number; width: () => number; height: () => number },
+    blockingNodes: Array<{ node: any; bounds: { x: number; y: number; width: () => number; height: () => number } }>
+  ): { sourcePoint: { x: number; y: number }; targetPoint: { x: number; y: number }; middlePoints: Array<{ x: number; y: number }> } {
+    const ROUTE_OFFSET = 15;
+
+    // Compute the bounding box that contains source, target, and all blocking nodes
+    let minX = Math.min(sourceBounds.x, targetBounds.x);
+    let maxX = Math.max(sourceBounds.x + sourceBounds.width(), targetBounds.x + targetBounds.width());
+    let minY = Math.min(sourceBounds.y, targetBounds.y);
+    let maxY = Math.max(sourceBounds.y + sourceBounds.height(), targetBounds.y + targetBounds.height());
+
+    for (const { bounds } of blockingNodes) {
+      minX = Math.min(minX, bounds.x);
+      maxX = Math.max(maxX, bounds.x + bounds.width());
+      minY = Math.min(minY, bounds.y);
+      maxY = Math.max(maxY, bounds.y + bounds.height());
+    }
+
+    const sCenterX = sourceBounds.x + sourceBounds.width() / 2;
+    const sCenterY = sourceBounds.y + sourceBounds.height() / 2;
+    const tCenterX = targetBounds.x + targetBounds.width() / 2;
+    const tCenterY = targetBounds.y + targetBounds.height() / 2;
+
+    // Determine if nodes are primarily stacked vertically or horizontally
+    const dx = Math.abs(tCenterX - sCenterX);
+    const dy = Math.abs(tCenterY - sCenterY);
+
+    if (dy > dx) {
+      // Primarily vertical arrangement - route to the left or right
+      const goLeft = sCenterX <= tCenterX;
+
+      if (goLeft) {
+        const routeX = minX - ROUTE_OFFSET;
+        return {
+          sourcePoint: { x: sourceBounds.x, y: sCenterY },
+          targetPoint: { x: targetBounds.x, y: tCenterY },
+          middlePoints: [
+            { x: routeX, y: sCenterY },
+            { x: routeX, y: tCenterY }
+          ]
+        };
+      } else {
+        const routeX = maxX + ROUTE_OFFSET;
+        return {
+          sourcePoint: { x: sourceBounds.x + sourceBounds.width(), y: sCenterY },
+          targetPoint: { x: targetBounds.x + targetBounds.width(), y: tCenterY },
+          middlePoints: [
+            { x: routeX, y: sCenterY },
+            { x: routeX, y: tCenterY }
+          ]
+        };
+      }
+    } else {
+      // Primarily horizontal arrangement - route above or below
+      const goTop = sCenterY <= tCenterY;
+
+      if (goTop) {
+        const routeY = minY - ROUTE_OFFSET;
+        return {
+          sourcePoint: { x: sCenterX, y: sourceBounds.y },
+          targetPoint: { x: tCenterX, y: targetBounds.y },
+          middlePoints: [
+            { x: sCenterX, y: routeY },
+            { x: tCenterX, y: routeY }
+          ]
+        };
+      } else {
+        const routeY = maxY + ROUTE_OFFSET;
+        return {
+          sourcePoint: { x: sCenterX, y: sourceBounds.y + sourceBounds.height() },
+          targetPoint: { x: tCenterX, y: targetBounds.y + targetBounds.height() },
+          middlePoints: [
+            { x: sCenterX, y: routeY },
+            { x: tCenterX, y: routeY }
+          ]
+        };
+      }
+    }
+  }
+
+  /**
+   * Checks if two nodes are near-touching (directly or transitively via intermediate nodes)
+   * and returns a perpendicular route if so.
    * Used by both default and grid routing modes to ensure edges are visible
-   * when nodes are close together or touching.
+   * when nodes are close together or touching, or when intermediate nodes would block the edge.
    * 
    * @param edgeData - The edge data with source and target nodes
-   * @returns Array of route points if near-touching, null otherwise
+   * @returns Array of route points if rerouting needed, null otherwise
    */
   private getNearTouchPerpendicularRoute(edgeData: any): Array<{ x: number; y: number }> | null {
     if (!edgeData.source || !edgeData.target) {
@@ -3861,47 +4087,32 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     const source = edgeData.source;
     const target = edgeData.target;
 
-    // Build bounds objects with width/height as functions
-    const sourceBounds = source.bounds || {
-      x: source.x - (source.width || 50) / 2,
-      y: source.y - (source.height || 30) / 2,
-      width: () => source.width || 50,
-      height: () => source.height || 30
-    };
-    const targetBounds = target.bounds || {
-      x: target.x - (target.width || 50) / 2,
-      y: target.y - (target.height || 30) / 2,
-      width: () => target.width || 50,
-      height: () => target.height || 30
-    };
-
-    // Normalize bounds to have width/height as functions
-    const normSourceBounds = {
-      x: typeof sourceBounds.x === 'number' ? sourceBounds.x : (sourceBounds.X !== undefined ? sourceBounds.x : source.x - (source.width || 50) / 2),
-      y: typeof sourceBounds.y === 'number' ? sourceBounds.y : source.y - (source.height || 30) / 2,
-      width: () => typeof sourceBounds.width === 'function' ? sourceBounds.width() : (sourceBounds.X !== undefined ? sourceBounds.X - sourceBounds.x : source.width || 50),
-      height: () => typeof sourceBounds.height === 'function' ? sourceBounds.height() : (sourceBounds.Y !== undefined ? sourceBounds.Y - sourceBounds.y : source.height || 30)
-    };
-    const normTargetBounds = {
-      x: typeof targetBounds.x === 'number' ? targetBounds.x : (targetBounds.X !== undefined ? targetBounds.x : target.x - (target.width || 50) / 2),
-      y: typeof targetBounds.y === 'number' ? targetBounds.y : target.y - (target.height || 30) / 2,
-      width: () => typeof targetBounds.width === 'function' ? targetBounds.width() : (targetBounds.X !== undefined ? targetBounds.X - targetBounds.x : target.width || 50),
-      height: () => typeof targetBounds.height === 'function' ? targetBounds.height() : (targetBounds.Y !== undefined ? targetBounds.Y - targetBounds.y : target.height || 30)
-    };
+    const normSourceBounds = this.normalizeNodeBounds(source);
+    const normTargetBounds = this.normalizeNodeBounds(target);
 
     const NEAR_TOUCH_THRESHOLD = 5;
     const touchDirection = this.getTouchDirection(normSourceBounds, normTargetBounds, NEAR_TOUCH_THRESHOLD);
 
-    if (touchDirection === 'none') {
-      return null;
+    // Case 1: Direct near-touching - use existing logic
+    if (touchDirection !== 'none') {
+      const { sourcePoint, targetPoint, middlePoints } = this.computePerpendicularRoute(
+        normSourceBounds, normTargetBounds, touchDirection
+      );
+      return [sourcePoint, ...middlePoints, targetPoint];
     }
 
-    // Nodes are near-touching, compute perpendicular route
-    const { sourcePoint, targetPoint, middlePoints } = this.computePerpendicularRoute(
-      normSourceBounds, normTargetBounds, touchDirection
-    );
+    // Case 2: Check for intermediate blocking nodes (transitive touching)
+    const blockingNodes = this.findBlockingNodes(source, target, source.id, target.id);
 
-    return [sourcePoint, ...middlePoints, targetPoint];
+    if (blockingNodes.length > 0) {
+      // Route around the blocking nodes
+      const { sourcePoint, targetPoint, middlePoints } = this.computeRouteAroundBlockingNodes(
+        normSourceBounds, normTargetBounds, blockingNodes
+      );
+      return [sourcePoint, ...middlePoints, targetPoint];
+    }
+
+    return null;
   }
 
   private gridRouteToPoints(route: any[]) {
