@@ -3620,12 +3620,22 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         height: () => target.height || 0
       };
 
-      // Quickly detect near-touching nodes (within ~5px)
+      // Check if nodes are near-touching and determine which direction
       const NEAR_TOUCH_THRESHOLD = 5;
-      const nearTouching = this.areBoundsNear(sourceBounds, targetBounds, NEAR_TOUCH_THRESHOLD);
+      const touchDirection = this.getTouchDirection(sourceBounds, targetBounds, NEAR_TOUCH_THRESHOLD);
 
-      // Adjust first point to source node boundary
-      const firstPoint = points[0];
+      if (touchDirection !== 'none') {
+        // Nodes are near-touching, route edge from perpendicular sides
+        const { sourcePoint, targetPoint, middlePoints } = this.computePerpendicularRoute(
+          sourceBounds, targetBounds, touchDirection
+        );
+        
+        // Build new path: source anchor -> middle waypoints -> target anchor
+        const newPoints = [sourcePoint, ...middlePoints, targetPoint];
+        return this.gridLineFunction(newPoints);
+      }
+
+      // Standard case: adjust endpoints to node boundaries
       const secondPoint = points.length > 1 ? points[1] : points[0];
       let sourceIntersection = this.getRectangleIntersection(
         sourceBounds.x + sourceBounds.width() / 2,
@@ -3635,23 +3645,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         sourceBounds
       );
 
-      // If the router returns nothing or nodes are near-touching, choose an alternate boundary point
-      if (!sourceIntersection || nearTouching) {
-        sourceIntersection = this.chooseBoundaryPoint(
-          sourceBounds.x + sourceBounds.width() / 2,
-          sourceBounds.y + sourceBounds.height() / 2,
-          sourceBounds,
-          secondPoint
-        );
-      }
-
       if (sourceIntersection) {
         points[0] = sourceIntersection;
       }
 
       // Adjust last point to target node boundary
-      const lastPoint = points[points.length - 1];
-      const secondLastPoint = points.length > 1 ? points[points.length - 2] : lastPoint;
+      const secondLastPoint = points.length > 1 ? points[points.length - 2] : points[points.length - 1];
       let targetIntersection = this.getRectangleIntersection(
         targetBounds.x + targetBounds.width() / 2,
         targetBounds.y + targetBounds.height() / 2,
@@ -3659,15 +3658,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         secondLastPoint.y,
         targetBounds
       );
-
-      if (!targetIntersection || nearTouching) {
-        targetIntersection = this.chooseBoundaryPoint(
-          targetBounds.x + targetBounds.width() / 2,
-          targetBounds.y + targetBounds.height() / 2,
-          targetBounds,
-          secondLastPoint
-        );
-      }
 
       if (targetIntersection) {
         points[points.length - 1] = targetIntersection;
@@ -3678,6 +3668,127 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     } catch (error) {
       console.warn('Error adjusting grid route for arrow positioning:', error);
       return null;
+    }
+  }
+
+  /**
+   * Determines which direction nodes are touching/near.
+   * Returns 'horizontal' if touching left-right, 'vertical' if touching top-bottom, 'none' otherwise.
+   */
+  private getTouchDirection(a: any, b: any, threshold: number): 'horizontal' | 'vertical' | 'none' {
+    const aLeft = a.x;
+    const aRight = a.x + a.width();
+    const aTop = a.y;
+    const aBottom = a.y + a.height();
+
+    const bLeft = b.x;
+    const bRight = b.x + b.width();
+    const bTop = b.y;
+    const bBottom = b.y + b.height();
+
+    // Check horizontal gap (left-right touching)
+    const xGap = Math.max(0, Math.max(bLeft - aRight, aLeft - bRight));
+    // Check vertical gap (top-bottom touching)
+    const yGap = Math.max(0, Math.max(bTop - aBottom, aTop - bBottom));
+
+    // Check if there's vertical overlap (needed for horizontal adjacency)
+    const verticalOverlap = !(aBottom < bTop || bBottom < aTop);
+    // Check if there's horizontal overlap (needed for vertical adjacency)
+    const horizontalOverlap = !(aRight < bLeft || bRight < aLeft);
+
+    // Nodes are horizontally adjacent (touching left-right) if:
+    // - Small horizontal gap AND vertical overlap
+    if (xGap <= threshold && verticalOverlap) {
+      return 'horizontal';
+    }
+
+    // Nodes are vertically adjacent (touching top-bottom) if:
+    // - Small vertical gap AND horizontal overlap
+    if (yGap <= threshold && horizontalOverlap) {
+      return 'vertical';
+    }
+
+    return 'none';
+  }
+
+  /**
+   * Computes anchor points and waypoints for edges between near-touching nodes.
+   * Routes the edge from perpendicular sides to avoid being hidden.
+   */
+  private computePerpendicularRoute(
+    sourceBounds: any,
+    targetBounds: any,
+    touchDirection: 'horizontal' | 'vertical'
+  ): { sourcePoint: { x: number; y: number }; targetPoint: { x: number; y: number }; middlePoints: Array<{ x: number; y: number }> } {
+    const sw = sourceBounds.width();
+    const sh = sourceBounds.height();
+    const tw = targetBounds.width();
+    const th = targetBounds.height();
+
+    const sCenterX = sourceBounds.x + sw / 2;
+    const sCenterY = sourceBounds.y + sh / 2;
+    const tCenterX = targetBounds.x + tw / 2;
+    const tCenterY = targetBounds.y + th / 2;
+
+    // Offset for the routing bend (go around the touching area)
+    const ROUTE_OFFSET = 15;
+
+    if (touchDirection === 'horizontal') {
+      // Nodes are side-by-side (left-right), route from top or bottom
+      // Determine whether to go above or below based on available space
+      const goTop = sCenterY <= tCenterY;
+      
+      if (goTop) {
+        // Route above both nodes
+        const routeY = Math.min(sourceBounds.y, targetBounds.y) - ROUTE_OFFSET;
+        return {
+          sourcePoint: { x: sCenterX, y: sourceBounds.y }, // top of source
+          targetPoint: { x: tCenterX, y: targetBounds.y }, // top of target
+          middlePoints: [
+            { x: sCenterX, y: routeY },
+            { x: tCenterX, y: routeY }
+          ]
+        };
+      } else {
+        // Route below both nodes
+        const routeY = Math.max(sourceBounds.y + sh, targetBounds.y + th) + ROUTE_OFFSET;
+        return {
+          sourcePoint: { x: sCenterX, y: sourceBounds.y + sh }, // bottom of source
+          targetPoint: { x: tCenterX, y: targetBounds.y + th }, // bottom of target
+          middlePoints: [
+            { x: sCenterX, y: routeY },
+            { x: tCenterX, y: routeY }
+          ]
+        };
+      }
+    } else {
+      // Nodes are stacked (top-bottom), route from left or right
+      // Determine whether to go left or right based on available space
+      const goLeft = sCenterX <= tCenterX;
+
+      if (goLeft) {
+        // Route to the left of both nodes
+        const routeX = Math.min(sourceBounds.x, targetBounds.x) - ROUTE_OFFSET;
+        return {
+          sourcePoint: { x: sourceBounds.x, y: sCenterY }, // left of source
+          targetPoint: { x: targetBounds.x, y: tCenterY }, // left of target
+          middlePoints: [
+            { x: routeX, y: sCenterY },
+            { x: routeX, y: tCenterY }
+          ]
+        };
+      } else {
+        // Route to the right of both nodes
+        const routeX = Math.max(sourceBounds.x + sw, targetBounds.x + tw) + ROUTE_OFFSET;
+        return {
+          sourcePoint: { x: sourceBounds.x + sw, y: sCenterY }, // right of source
+          targetPoint: { x: targetBounds.x + tw, y: tCenterY }, // right of target
+          middlePoints: [
+            { x: routeX, y: sCenterY },
+            { x: routeX, y: tCenterY }
+          ]
+        };
+      }
     }
   }
 
