@@ -3840,6 +3840,70 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     return best;
   }
 
+  /**
+   * Checks if two nodes are near-touching and returns a perpendicular route if so.
+   * Used by both default and grid routing modes to ensure edges are visible
+   * when nodes are close together or touching.
+   * 
+   * @param edgeData - The edge data with source and target nodes
+   * @returns Array of route points if near-touching, null otherwise
+   */
+  private getNearTouchPerpendicularRoute(edgeData: any): Array<{ x: number; y: number }> | null {
+    if (!edgeData.source || !edgeData.target) {
+      return null;
+    }
+
+    // Skip self-loops - they're handled separately
+    if (edgeData.source.id === edgeData.target.id) {
+      return null;
+    }
+
+    const source = edgeData.source;
+    const target = edgeData.target;
+
+    // Build bounds objects with width/height as functions
+    const sourceBounds = source.bounds || {
+      x: source.x - (source.width || 50) / 2,
+      y: source.y - (source.height || 30) / 2,
+      width: () => source.width || 50,
+      height: () => source.height || 30
+    };
+    const targetBounds = target.bounds || {
+      x: target.x - (target.width || 50) / 2,
+      y: target.y - (target.height || 30) / 2,
+      width: () => target.width || 50,
+      height: () => target.height || 30
+    };
+
+    // Normalize bounds to have width/height as functions
+    const normSourceBounds = {
+      x: typeof sourceBounds.x === 'number' ? sourceBounds.x : (sourceBounds.X !== undefined ? sourceBounds.x : source.x - (source.width || 50) / 2),
+      y: typeof sourceBounds.y === 'number' ? sourceBounds.y : source.y - (source.height || 30) / 2,
+      width: () => typeof sourceBounds.width === 'function' ? sourceBounds.width() : (sourceBounds.X !== undefined ? sourceBounds.X - sourceBounds.x : source.width || 50),
+      height: () => typeof sourceBounds.height === 'function' ? sourceBounds.height() : (sourceBounds.Y !== undefined ? sourceBounds.Y - sourceBounds.y : source.height || 30)
+    };
+    const normTargetBounds = {
+      x: typeof targetBounds.x === 'number' ? targetBounds.x : (targetBounds.X !== undefined ? targetBounds.x : target.x - (target.width || 50) / 2),
+      y: typeof targetBounds.y === 'number' ? targetBounds.y : target.y - (target.height || 30) / 2,
+      width: () => typeof targetBounds.width === 'function' ? targetBounds.width() : (targetBounds.X !== undefined ? targetBounds.X - targetBounds.x : target.width || 50),
+      height: () => typeof targetBounds.height === 'function' ? targetBounds.height() : (targetBounds.Y !== undefined ? targetBounds.Y - targetBounds.y : target.height || 30)
+    };
+
+    const NEAR_TOUCH_THRESHOLD = 5;
+    const touchDirection = this.getTouchDirection(normSourceBounds, normTargetBounds, NEAR_TOUCH_THRESHOLD);
+
+    if (touchDirection === 'none') {
+      return null;
+    }
+
+    // Nodes are near-touching, compute perpendicular route
+    const { sourcePoint, targetPoint, middlePoints } = this.computePerpendicularRoute(
+      normSourceBounds, normTargetBounds, touchDirection
+    );
+
+    return [sourcePoint, ...middlePoints, targetPoint];
+  }
+
   private gridRouteToPoints(route: any[]) {
     const points: Array<{ x: number; y: number }> = [];
     route.forEach((segment: any, index: number) => {
@@ -4018,6 +4082,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // Handle multiple edges between same nodes (only if not already handled above)
     else {
       route = this.handleMultipleEdgeRouting(edgeData, route);
+    }
+
+    // Check for near-touching nodes and reroute via perpendicular sides if needed
+    const nearTouchRoute = this.getNearTouchPerpendicularRoute(edgeData);
+    if (nearTouchRoute) {
+      return this.lineFunction(nearTouchRoute);
     }
 
     return this.lineFunction(route);
