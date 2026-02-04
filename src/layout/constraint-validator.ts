@@ -479,6 +479,9 @@ class ConstraintValidator {
         let bestAlternativeIndex = 0;
         let bestConstraintsAdded = 0;
         let bestRecursionDepth = 0;
+        // Track the best error from recursive calls - this is critical for cyclic constraint conflicts
+        // When two disjunctions conflict with each other, the deeper recursive error has more complete information
+        let bestRecursiveError: PositionalConstraintError | undefined = undefined;
 
         // Try each alternative for this disjunction
         for (let altIndex = 0; altIndex < alternatives.length; altIndex++) {
@@ -511,6 +514,7 @@ class ConstraintValidator {
 
             // Track progress for this alternative
             let recursionDepth = 0;
+            let recursiveError: PositionalConstraintError | undefined = undefined;
 
             // If this alternative is satisfiable, try to satisfy remaining disjunctions
             if (!alternativeError) {
@@ -527,6 +531,9 @@ class ConstraintValidator {
                 // Calculate immediately after recursive call, before backtracking modifies added_constraints
                 recursionDepth = this.added_constraints.length - savedConstraintsLength;
                 
+                // Capture the error from the recursive call - it may have more complete IIS information
+                recursiveError = result.error;
+                
                 // Otherwise, this alternative led to failure in later disjunctions
                 // Fall through to backtracking below
             }
@@ -541,6 +548,10 @@ class ConstraintValidator {
                 bestAlternativeIndex = altIndex;
                 bestConstraintsAdded = constraintsAdded;
                 bestRecursionDepth = recursionDepth;
+                // If this alternative went deeper and has an error, capture it
+                if (recursiveError) {
+                    bestRecursiveError = recursiveError;
+                }
             }
 
             // Backtrack: restore solver state and try next alternative
@@ -557,6 +568,13 @@ class ConstraintValidator {
 
         // All alternatives exhausted for this disjunction
         // Return failure to trigger backtracking at previous disjunction level
+        
+        // IMPORTANT: If we have a recursive error that went deeper, use that error instead
+        // This ensures that when two disjunctions conflict with each other, we report the IIS
+        // from the deeper level which contains constraints from BOTH disjunctions
+        if (bestRecursiveError && bestRecursionDepth > 0) {
+            return { satisfiable: false, error: bestRecursiveError };
+        }
 
         // Find the minimal set of existing constraints that conflict with this disjunction
         // Use the alternative that made the most progress (went deepest) for better IIS extraction
