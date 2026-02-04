@@ -418,7 +418,13 @@ export class LayoutInstance {
         for (var gc of groupBySelectorConstraints) {
 
             let selector = gc.selector;
-            let selectorRes = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
+            let selectorRes;
+            try {
+                selectorRes = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
+            } catch (error) {
+                this.recordSelectorError(selector, 'groupBySelector selector', error);
+                continue; // Skip this group constraint
+            }
 
 
             // Now, we should support both unary and binary selectors.
@@ -1279,7 +1285,13 @@ export class LayoutInstance {
 
         // For each cyclic constraint, extract fragments
         for (const [, c] of cyclicConstraints.entries()) {
-            let selectedTuples: string[][] = this.evaluator.evaluate(c.selector, { instanceIndex: this.instanceNum }).selectedTwoples();
+            let selectedTuples: string[][];
+            try {
+                selectedTuples = this.evaluator.evaluate(c.selector, { instanceIndex: this.instanceNum }).selectedTwoples();
+            } catch (error) {
+                this.recordSelectorError(c.selector, 'cyclic orientation selector', error);
+                continue; // Skip this cyclic constraint
+            }
             let nextNodeMap: Map<LayoutNode, LayoutNode[]> = new Map<LayoutNode, LayoutNode[]>();
             
             // Build nextNodeMap from selected tuples
@@ -1490,7 +1502,13 @@ export class LayoutInstance {
             let directions = c.directions;
             let selector = c.selector;
 
-            let selectorRes = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
+            let selectorRes;
+            try {
+                selectorRes = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
+            } catch (error) {
+                this.recordSelectorError(selector, 'orientation selector', error);
+                return; // Skip this orientation constraint
+            }
             let selectedTuples: string[][] = selectorRes.selectedTwoples();
 
             // For each tuple, we need to apply the constraints
@@ -1680,7 +1698,13 @@ export class LayoutInstance {
             let direction = c.direction;
             let selector = c.selector;
 
-            let selectorRes = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
+            let selectorRes;
+            try {
+                selectorRes = this.evaluator.evaluate(selector, { instanceIndex: this.instanceNum });
+            } catch (error) {
+                this.recordSelectorError(selector, 'align selector', error);
+                return; // Skip this align constraint
+            }
             let selectedTuples: string[][] = selectorRes.selectedTwoples();
 
             // For each tuple, apply the alignment constraint
@@ -2035,7 +2059,13 @@ export class LayoutInstance {
         // Apply color directives first
         let colorDirectives = this._layoutSpec.directives.atomColors;
         colorDirectives.forEach((colorDirective) => {
-            let selected = this.evaluator.evaluate(colorDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
+            let selected: string[];
+            try {
+                selected = this.evaluator.evaluate(colorDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
+            } catch (error) {
+                this.recordSelectorError(colorDirective.selector, 'color selector', error);
+                return; // Skip this color directive
+            }
             let color = colorDirective.color;
 
             selected.forEach((nodeId) => {
@@ -2070,7 +2100,13 @@ export class LayoutInstance {
         // Apply icon directives first
         let iconDirectives = this._layoutSpec.directives.icons;
         iconDirectives.forEach((iconDirective) => {
-            let selected = this.evaluator.evaluate(iconDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
+            let selected: string[];
+            try {
+                selected = this.evaluator.evaluate(iconDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
+            } catch (error) {
+                this.recordSelectorError(iconDirective.selector, 'icon selector', error);
+                return; // Skip this icon directive
+            }
             let iconPath = iconDirective.path;
 
             selected.forEach((nodeId) => {
@@ -2285,8 +2321,13 @@ export class LayoutInstance {
         let inferredEdges = this._layoutSpec.directives.inferredEdges;
         inferredEdges.forEach((he) => {
 
-
-            let res = this.evaluator.evaluate(he.selector, { instanceIndex: this.instanceNum });
+            let res;
+            try {
+                res = this.evaluator.evaluate(he.selector, { instanceIndex: this.instanceNum });
+            } catch (error) {
+                this.recordSelectorError(he.selector, 'inferredEdge selector', error);
+                return; // Skip this inferred edge
+            }
 
             let selectedTuples: string[][] = res.selectedTuplesAll();
             let edgeIdPrefix = `${inferredEdgePrefix}<:${he.name}`;
