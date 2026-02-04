@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import './ErrorMessageModal.css';
-import { ErrorMessages, SystemError } from './index';
+import { ErrorMessages, SystemError, SelectorErrorDetail } from './index';
 
 /**
  * Props for ErrorMessageModal component
@@ -57,9 +57,10 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
       || systemError.type === 'group-overlap-error'
     );
   const isPositionalError = systemError && systemError.type === 'positional-error' && systemError.messages;
+  const isSelectorError = systemError && systemError.type === 'selector-error' && systemError.errors?.length > 0;
   
   // If not a valid error, log error and return null
-  if (!isOtherError && !isPositionalError) {
+  if (!isOtherError && !isPositionalError && !isSelectorError) {
     console.error('Cannot display the following error:', systemError);
     return null;
   }
@@ -71,6 +72,8 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
       return `Parse Error ${systemError.source ? `(${systemError.source})` : ''}`;
     } else if (errorType === 'group-overlap-error') {
       return `Group Overlap Error ${systemError.source ? `(${systemError.source})` : ''}`;
+    } else if (errorType === 'selector-error') {
+      return `Selector Error${systemError.errors.length > 1 ? 's' : ''} (${systemError.errors.length})`;
     } else {
       return 'Error';
     }
@@ -136,10 +139,23 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
 
   const { sourceConstraints, diagramConstraints } = constraintData;
 
+  // Compute header and description based on error type
+  const headerText = useMemo(() => {
+    if (isSelectorError) return 'Selector Evaluation Error';
+    if (isOtherError) return 'Error';
+    return 'Could not satisfy all constraints';
+  }, [isSelectorError, isOtherError]);
+
+  const descriptionText = useMemo(() => {
+    if (isSelectorError) return 'One or more selectors in your layout specification could not be evaluated.';
+    if (isOtherError) return 'An error occurred while processing your data.';
+    return 'Your data causes the following visualization constraints to conflict.';
+  }, [isSelectorError, isOtherError]);
+
   return (
     <div id="error-message-modal" className="mt-3 d-flex flex-column overflow-x-auto p-3 rounded border border-danger border-2">
-      <h4 style={{color: 'var(--bs-danger)'}}>Could not satisfy all constraints</h4>
-      <p>Your data causes the following visualization constraints to conflict.</p>
+      <h4 style={{color: 'var(--bs-danger)'}}>{headerText}</h4>
+      <p>{descriptionText}</p>
       {/* Parse/Generic/Group Error Card */}
       {isOtherError && (
         <>
@@ -201,6 +217,29 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
                 </tr>
               </tbody>
             </table>
+          </div>
+        </>
+      )}
+
+      {/* Selector Error Cards */}
+      {isSelectorError && (
+        <>
+          <div className="card error-card">
+            <div className="card-header bg-light">
+              <strong>{errorHeader}</strong>
+            </div>
+            <div className="card-body">
+              <p className="mb-2">The following selectors failed to evaluate. Check your selector syntax.</p>
+              <ul className="list-unstyled mb-0">
+                {systemError.errors.map((selectorError: SelectorErrorDetail, idx: number) => (
+                  <li key={idx} className="mb-2 p-2 bg-light rounded">
+                    <div><strong>Selector:</strong> <code>{selectorError.selector}</code></div>
+                    <div><strong>Context:</strong> {selectorError.context}</div>
+                    <div className="text-danger"><strong>Error:</strong> {selectorError.errorMessage}</div>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </>
       )}

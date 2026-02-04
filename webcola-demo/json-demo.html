@@ -405,12 +405,42 @@
             const layoutResult = layoutInstance.generateLayout(cachedInstance, {});
             currentInstanceLayout = layoutResult.layout;
 
+            // 1. Check for selector errors first - early out if present
+            if (layoutResult.selectorErrors && layoutResult.selectorErrors.length > 0) {
+                console.warn('Selector errors:', layoutResult.selectorErrors);
+                if (window.showSelectorErrors) {
+                    window.showSelectorErrors(layoutResult.selectorErrors);
+                }
+                const webcolaGraphElement = document.getElementById('graph-container');
+                webcolaGraphElement.setAttribute('unsat', '');
+                return;
+            }
+
+            // 2. Standard IIS/constraint error handling
             if (layoutResult.error) {
                 console.error('Layout generation error:', layoutResult.error);
-                if (window.showGeneralError) {
-                    window.showGeneralError(`Layout generation error: ${layoutResult.error.message}`);
+                
+                if (layoutResult.error.errorMessages) {
+                    // Positional constraint conflict with IIS info
+                    if (window.showPositionalError) {
+                        window.showPositionalError(layoutResult.error.errorMessages);
+                    } else {
+                        updateStatus(`Positional constraint conflict: ${layoutResult.error.message}`, 'error');
+                    }
+                } else if (layoutResult.error.overlappingNodes) {
+                    // Group overlap error
+                    if (window.showGroupOverlapError) {
+                        window.showGroupOverlapError(layoutResult.error.message);
+                    } else {
+                        updateStatus(`Group overlap error: ${layoutResult.error.message}`, 'error');
+                    }
                 } else {
-                    updateStatus(`Layout generation error: ${layoutResult.error.message}`, 'error');
+                    // General error
+                    if (window.showGeneralError) {
+                        window.showGeneralError(`Layout generation error: ${layoutResult.error.message}`);
+                    } else {
+                        updateStatus(`Layout generation error: ${layoutResult.error.message}`, 'error');
+                    }
                 }
 
                 const webcolaGraphElement = document.getElementById('graph-container');
@@ -421,6 +451,7 @@
             const webcolaGraphElement = document.getElementById('graph-container');
             webcolaGraphElement.removeAttribute('unsat');
 
+            // Clear any previous errors on successful layout
             if (window.clearAllErrors) {
                 window.clearAllErrors();
             }
