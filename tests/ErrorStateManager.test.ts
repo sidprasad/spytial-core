@@ -103,6 +103,44 @@ describe('ErrorStateManager', () => {
       errorStateManager.setError(generalError);
       expect(errorStateManager.getCurrentError()).toEqual(generalError);
       expect(callback).toHaveBeenCalledWith(generalError);
+
+      // Test selector-error type
+      const selectorError: SystemError = {
+        type: 'selector-error',
+        errors: [
+          { selector: 'invalidSelector', context: 'hideAtom selector', errorMessage: 'Parse error' }
+        ]
+      };
+      errorStateManager.setError(selectorError);
+      expect(errorStateManager.getCurrentError()).toEqual(selectorError);
+      expect(callback).toHaveBeenCalledWith(selectorError);
+    });
+
+    it('should handle selector-error type with multiple errors', () => {
+      const callback = vi.fn();
+      errorStateManager.onErrorChange(callback);
+
+      const selectorError: SystemError = {
+        type: 'selector-error',
+        errors: [
+          { selector: 'set', context: 'hideAtom selector', errorMessage: 'Error parsing expression "set"' },
+          { selector: 'badFilter', context: 'attribute filter', errorMessage: 'Unknown identifier "badFilter"' },
+          { selector: 'broken.path', context: 'edge selector', errorMessage: 'Invalid path expression' }
+        ]
+      };
+      
+      errorStateManager.setError(selectorError);
+      
+      expect(errorStateManager.getCurrentError()).toEqual(selectorError);
+      expect(errorStateManager.hasError()).toBe(true);
+      expect(callback).toHaveBeenCalledWith(selectorError);
+      
+      // Verify the errors array structure
+      const currentError = errorStateManager.getCurrentError() as { type: 'selector-error', errors: { selector: string, context: string, errorMessage: string }[] };
+      expect(currentError.errors).toHaveLength(3);
+      expect(currentError.errors[0].selector).toBe('set');
+      expect(currentError.errors[1].context).toBe('attribute filter');
+      expect(currentError.errors[2].errorMessage).toBe('Invalid path expression');
     });
   });
 
@@ -274,7 +312,8 @@ describe('ErrorStateManager', () => {
         { type: 'parse-error', message: 'Parse error' },
         { type: 'positional-error', messages: { atoms: [], constraints: [] } },
         { type: 'group-overlap-error', message: 'Overlap error' },
-        { type: 'general-error', message: 'General error' }
+        { type: 'general-error', message: 'General error' },
+        { type: 'selector-error', errors: [{ selector: 'test', context: 'test context', errorMessage: 'error' }] }
       ];
 
       errors.forEach(error => {

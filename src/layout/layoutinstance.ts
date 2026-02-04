@@ -3,6 +3,7 @@ import { IAtom, IDataInstance, IType } from '../data-instance/interfaces';
 import { PositionalConstraintError, GroupOverlapError, isPositionalConstraintError, isGroupOverlapError } from './constraint-validator';
 import { EdgeStyle, normalizeEdgeStyle } from './edge-style';
 import { resolveIconPath } from './icon-registry';
+import type { SelectorErrorDetail } from '../components/ErrorMessageModal/ErrorStateManager';
 
 
 import {
@@ -165,6 +166,27 @@ export class LayoutInstance {
 
     private readonly alignmentEdgeStrategy: AlignmentEdgeStrategy;
 
+    /**
+     * Collector for selector errors encountered during layout generation.
+     * Reset at the start of each generateLayout() call.
+     */
+    private selectorErrors: SelectorErrorDetail[] = [];
+
+    /**
+     * Records a selector evaluation error for later reporting.
+     * @param selector - The selector expression that failed
+     * @param context - Description of where/why the selector was being evaluated
+     * @param error - The original error that was caught
+     */
+    private recordSelectorError(selector: string, context: string, error: unknown): void {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        this.selectorErrors.push({
+            selector,
+            context,
+            errorMessage
+        });
+    }
+
 
     /**
      * Constructs a new `LayoutInstance` object.
@@ -244,7 +266,7 @@ export class LayoutInstance {
                 // Check if source atom is selected by the selector
                 return selectedAtoms.includes(sourceAtom);
             } catch (error) {
-                console.warn(`Failed to evaluate group by field selector "${d.selector}":`, error);
+                this.recordSelectorError(d.selector, 'group by field selector', error);
                 return false;
             }
         });
@@ -273,7 +295,7 @@ export class LayoutInstance {
                     const selectedAtoms = selectorResult.selectedAtoms();
                     selectorMatches = selectedAtoms.includes(sourceAtom);
                 } catch (error) {
-                    console.warn(`Failed to evaluate attribute selector "${directive.selector}":`, error);
+                    this.recordSelectorError(directive.selector, 'attribute selector', error);
                     selectorMatches = false;
                 }
             }
@@ -293,7 +315,7 @@ export class LayoutInstance {
                         tuple => tuple[0] === sourceAtom && tuple[1] === targetAtom
                     );
                 } catch (error) {
-                    console.warn(`Failed to evaluate attribute filter "${directive.filter}":`, error);
+                    this.recordSelectorError(directive.filter, 'attribute filter', error);
                     filterMatches = false;
                 }
             }
@@ -327,7 +349,7 @@ export class LayoutInstance {
                             const selectedAtoms = selectorResult.selectedAtoms();
                             selectorMatches = selectedAtoms.includes(sourceAtom);
                         } catch (error) {
-                            console.warn(`Failed to evaluate hidden field selector "${directive.selector}":`, error);
+                            this.recordSelectorError(directive.selector, 'hidden field selector', error);
                             selectorMatches = false;
                         }
                     }
@@ -347,7 +369,7 @@ export class LayoutInstance {
                                 tuple => tuple[0] === sourceAtom && tuple[1] === targetAtom
                             );
                         } catch (error) {
-                            console.warn(`Failed to evaluate hidden field filter "${directive.filter}":`, error);
+                            this.recordSelectorError(directive.filter, 'hidden field filter', error);
                             filterMatches = false;
                         }
                     }
@@ -746,7 +768,11 @@ export class LayoutInstance {
                     }
                 }
             } catch (error) {
-                console.warn(`Failed to evaluate tag directive (name: "${directive.name}", toTag: "${directive.toTag}", value: "${directive.value}"):`, error);
+                this.recordSelectorError(
+                    `name: ${directive.name}, toTag: ${directive.toTag}, value: ${directive.value}`,
+                    'tag directive',
+                    error
+                );
             }
         }
 
@@ -790,7 +816,7 @@ export class LayoutInstance {
                             break;
                         }
                     } catch (error) {
-                        console.error(`Failed to evaluate hideAtom selector "${directive.selector}":`, error);
+                        this.recordSelectorError(directive.selector, 'hideAtom selector', error);
                     }
                 }
 
@@ -904,7 +930,7 @@ export class LayoutInstance {
      * Generates the layout for the given data instance and projections.
      * @param a - The data instance to generate the layout for.
      * @param projections - ...
-     * @returns An object containing the layout, projection data, and (optionally) an error to be surfaced to the user.
+     * @returns An object containing the layout, projection data, constraint error (if any), and any selector errors encountered.
      * @throws {ConstraintError} If the layout cannot be generated due to unsatisfiable constraints and error isn't caught to be surfaced to the user.
      */
     public generateLayout(
@@ -913,8 +939,11 @@ export class LayoutInstance {
     ): {
         layout: InstanceLayout,
         projectionData: { type: string, projectedAtom: string, atoms: string[] }[],
-        error: ConstraintError | null
+        error: ConstraintError | null,
+        selectorErrors: SelectorErrorDetail[]
     } {
+        // Reset selector errors at the start of each layout generation
+        this.selectorErrors = [];
 
         /** Here, we calculate some of the presentational directive choices */
         let projectionResult = this.applyLayoutProjections(a, projections);
@@ -1096,7 +1125,7 @@ export class LayoutInstance {
         layout.constraints = constraints;
         layout.groups = groups;
 
-        return { layout, projectionData, error: null };
+        return { layout, projectionData, error: null, selectorErrors: this.selectorErrors };
     }
 
     /**
@@ -1116,7 +1145,8 @@ export class LayoutInstance {
     ): {
         layout: InstanceLayout,
         projectionData: { type: string, projectedAtom: string, atoms: string[] }[],
-        error: ConstraintError
+        error: ConstraintError,
+        selectorErrors: SelectorErrorDetail[]
     } {
         const layoutEdges = this.filterHiddenEdges(
             this.buildLayoutEdges(context.graph, context.layoutNodes)
@@ -1136,7 +1166,8 @@ export class LayoutInstance {
         return {
             layout: layoutWithErrorMetadata,
             projectionData: context.projectionData,
-            error
+            error,
+            selectorErrors: this.selectorErrors
         };
     }
 
@@ -1151,7 +1182,8 @@ export class LayoutInstance {
     ): {
         layout: InstanceLayout,
         projectionData: { type: string, projectedAtom: string, atoms: string[] }[],
-        error: ConstraintError
+        error: ConstraintError,
+        selectorErrors: SelectorErrorDetail[]
     } {
         const minimalConflictingSet = error.minimalConflictingSet;
         // If the error is a positional constraint error, we can try to return the last known good layout by removing all conflicting constraints.
@@ -1169,7 +1201,8 @@ export class LayoutInstance {
         return {
             layout: layoutWithErrorMetadata,
             projectionData,
-            error: error
+            error: error,
+            selectorErrors: this.selectorErrors
         };
     }
 
@@ -1184,7 +1217,8 @@ export class LayoutInstance {
     ): {
         layout: InstanceLayout,
         projectionData: { type: string, projectedAtom: string, atoms: string[] }[],
-        error: ConstraintError
+        error: ConstraintError,
+        selectorErrors: SelectorErrorDetail[]
     } {
         // If the error is a group overlap error, we can return the error as is.
         // const layoutWithErrorMetadata: InstanceLayout = {
@@ -1220,7 +1254,8 @@ export class LayoutInstance {
         return { 
             layout: layoutWithErrorMetadata, 
             projectionData, 
-            error: error 
+            error: error,
+            selectorErrors: this.selectorErrors
         };
     }
 
@@ -1953,7 +1988,13 @@ export class LayoutInstance {
         // Apply size directives first
         let sizeDirectives = this._layoutSpec.directives.sizes;
         sizeDirectives.forEach((sizeDirective) => {
-            let selectedNodes = this.evaluator.evaluate(sizeDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
+            let selectedNodes: string[];
+            try {
+                selectedNodes = this.evaluator.evaluate(sizeDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
+            } catch (error) {
+                this.recordSelectorError(sizeDirective.selector, 'size selector', error);
+                return; // Skip this size directive
+            }
             let width = sizeDirective.width;
             let height = sizeDirective.height;
 
@@ -2143,7 +2184,7 @@ export class LayoutInstance {
                     const selectedAtoms = selectorResult.selectedAtoms();
                     selectorMatches = selectedAtoms.includes(sourceAtom);
                 } catch (error) {
-                    console.warn(`Failed to evaluate edge selector "${directive.selector}":`, error);
+                    this.recordSelectorError(directive.selector, 'edge selector', error);
                     selectorMatches = false;
                 }
             }
@@ -2163,7 +2204,7 @@ export class LayoutInstance {
                         tuple => tuple[0] === sourceAtom && tuple[1] === targetAtom
                     );
                 } catch (error) {
-                    console.warn(`Failed to evaluate edge filter "${directive.filter}":`, error);
+                    this.recordSelectorError(directive.filter, 'edge filter', error);
                     filterMatches = false;
                 }
             }

@@ -13,7 +13,7 @@ import { ConstraintData, DirectiveData } from '../src/components/NoCodeView/inte
 import { generateLayoutSpecYaml } from '../src/components/NoCodeView/CodeView';
 import { createEmptyAlloyDataInstance } from '../src/data-instance/alloy-data-instance';
 import { IInputDataInstance } from '../src/data-instance/interfaces';
-import { ErrorMessageContainer, ErrorStateManager } from '../src/components/ErrorMessageModal/index'
+import { ErrorMessageContainer, ErrorStateManager, SelectorErrorDetail } from '../src/components/ErrorMessageModal/index'
 import { ErrorMessages } from '../src/layout/constraint-validator';
 import { PyretReplInterface, PyretReplInterfaceProps } from '../src/components/ReplInterface/PyretReplInterface';
 import { ReplWithVisualization, ReplWithVisualizationProps } from '../src/components/ReplInterface/ReplWithVisualization';
@@ -1255,6 +1255,33 @@ export const ErrorAPI = {
   },
 
   /**
+   * Display selector evaluation errors
+   * @param errors - Array of selector error details
+   */
+  showSelectorErrors: (errors: SelectorErrorDetail[]): void => {
+    console.log('showSelectorErrors called with', errors.length, 'errors');
+    if (errors.length === 0) return;
+    
+    // Deduplicate errors based on selector + context + errorMessage
+    const seen = new Set<string>();
+    const dedupedErrors = errors.filter(err => {
+      const key = `${err.selector}|${err.context}|${err.errorMessage}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    console.log('After dedup:', dedupedErrors.length, 'unique errors');
+    
+    const errorObj = {
+      type: 'selector-error' as const,
+      errors: dedupedErrors
+    };
+    console.log('Setting error:', errorObj);
+    globalErrorManager.setError(errorObj);
+    console.log('Error set, current error:', globalErrorManager.getCurrentError());
+  },
+
+  /**
    * Clear all error messages
    */
   clearAllErrors: (): void => {
@@ -1669,6 +1696,7 @@ if (typeof window !== 'undefined') {
   (window as any).showGroupOverlapError = ErrorAPI.showGroupOverlapError;
   (window as any).showPositionalError = ErrorAPI.showConstraintError;
   (window as any).showGeneralError = ErrorAPI.showGeneralError;
+  (window as any).showSelectorErrors = ErrorAPI.showSelectorErrors;
   (window as any).clearAllErrors = ErrorAPI.clearAllErrors;
 
   console.log('CnD-Core CDN integration ready! Use window.CnDCore to access all features including Pyret REPL.');

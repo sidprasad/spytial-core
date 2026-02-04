@@ -26,8 +26,15 @@ export const ErrorMessageContainer: React.FC<ErrorMessageContainerProps> = ({
 
   useEffect(() => {
     // Subscribe to error state changes
-    errorManager.onErrorChange(setCurrentError);
+    const handleErrorChange = (error: SystemError | null) => {
+      console.log('ErrorMessageContainer received error change:', error);
+      setCurrentError(error);
+    };
+    errorManager.onErrorChange(handleErrorChange);
+    console.log('ErrorMessageContainer subscribed to error changes');
   }, [errorManager]);
+
+  console.log('ErrorMessageContainer rendering, currentError:', currentError);
 
   // Don't render anything if no error
   if (!currentError) {
