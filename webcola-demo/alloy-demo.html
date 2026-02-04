@@ -499,7 +499,7 @@
                     console.warn('Projection data available but updateProjectionData function not found. Projection controls may not display correctly.');
                 }
 
-                // Check for selector errors (non-blocking warnings)
+                // Check for selector errors - these are now blocking errors
                 if (layoutResult.selectorErrors && layoutResult.selectorErrors.length > 0) {
                     console.warn('Selector errors encountered during layout:', layoutResult.selectorErrors);
                     if (window.showSelectorErrors) {
@@ -511,6 +511,11 @@
                         ).join('\n');
                         updateStatus(`Selector errors:\n${errorMessages}`, 'error');
                     }
+                    
+                    // Selector errors are now blocking - mark as unsat and return
+                    const webcolaGraphElement = document.getElementById('graph-container');
+                    webcolaGraphElement.setAttribute('unsat', '');
+                    return;
                 }
 
                 if (layoutResult.error) {
@@ -557,8 +562,8 @@
             const webcolaGraphElement = document.getElementById('graph-container');
             webcolaGraphElement.removeAttribute('unsat'); // Clear unsat state
 
-            // Clear errors on successful layout generation (but not if there were selector errors)
-            if (window.clearAllErrors && (!layoutResult.selectorErrors || layoutResult.selectorErrors.length === 0)) {
+            // Clear any previous errors on successful layout
+            if (window.clearAllErrors) {
                 window.clearAllErrors();
             }
 
