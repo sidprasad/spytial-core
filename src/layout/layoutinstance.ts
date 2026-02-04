@@ -1131,22 +1131,8 @@ export class LayoutInstance {
         layout.constraints = constraints;
         layout.groups = groups;
 
-        // If there were selector errors, return them as a blocking error
-        // This ensures callers can't silently ignore invalid selectors
-        if (this.selectorErrors.length > 0) {
-            const errorCount = this.selectorErrors.length;
-            const uniqueSelectors = [...new Set(this.selectorErrors.map(e => e.selector))];
-            return { 
-                layout, 
-                projectionData, 
-                error: {
-                    message: `${errorCount} selector error(s) in: ${uniqueSelectors.join(', ')}`,
-                    selectorErrors: this.selectorErrors
-                },
-                selectorErrors: this.selectorErrors 
-            };
-        }
-
+        // Return layout with selectorErrors (if any) - these don't block the layout
+        // but callers should check and display them to the user
         return { layout, projectionData, error: null, selectorErrors: this.selectorErrors };
     }
 

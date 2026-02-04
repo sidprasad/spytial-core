@@ -405,31 +405,42 @@
             const layoutResult = layoutInstance.generateLayout(cachedInstance, {});
             currentInstanceLayout = layoutResult.layout;
 
-            // Check for selector errors - these are now blocking errors
+            // 1. Check for selector errors first - early out if present
             if (layoutResult.selectorErrors && layoutResult.selectorErrors.length > 0) {
-                console.warn('Selector errors encountered during layout:', layoutResult.selectorErrors);
+                console.warn('Selector errors:', layoutResult.selectorErrors);
                 if (window.showSelectorErrors) {
                     window.showSelectorErrors(layoutResult.selectorErrors);
-                } else {
-                    // Fallback: show as general error with combined message
-                    const errorMessages = layoutResult.selectorErrors.map(
-                        e => `${e.context}: "${e.selector}" - ${e.errorMessage}`
-                    ).join('\n');
-                    updateStatus(`Selector errors:\n${errorMessages}`, 'error');
                 }
-                
-                // Selector errors are now blocking - mark as unsat and return
                 const webcolaGraphElement = document.getElementById('graph-container');
                 webcolaGraphElement.setAttribute('unsat', '');
                 return;
             }
 
+            // 2. Standard IIS/constraint error handling
             if (layoutResult.error) {
                 console.error('Layout generation error:', layoutResult.error);
-                if (window.showGeneralError) {
-                    window.showGeneralError(`Layout generation error: ${layoutResult.error.message}`);
+                
+                if (layoutResult.error.errorMessages) {
+                    // Positional constraint conflict with IIS info
+                    if (window.showPositionalError) {
+                        window.showPositionalError(layoutResult.error.errorMessages);
+                    } else {
+                        updateStatus(`Positional constraint conflict: ${layoutResult.error.message}`, 'error');
+                    }
+                } else if (layoutResult.error.overlappingNodes) {
+                    // Group overlap error
+                    if (window.showGroupOverlapError) {
+                        window.showGroupOverlapError(layoutResult.error.message);
+                    } else {
+                        updateStatus(`Group overlap error: ${layoutResult.error.message}`, 'error');
+                    }
                 } else {
-                    updateStatus(`Layout generation error: ${layoutResult.error.message}`, 'error');
+                    // General error
+                    if (window.showGeneralError) {
+                        window.showGeneralError(`Layout generation error: ${layoutResult.error.message}`);
+                    } else {
+                        updateStatus(`Layout generation error: ${layoutResult.error.message}`, 'error');
+                    }
                 }
 
                 const webcolaGraphElement = document.getElementById('graph-container');
