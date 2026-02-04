@@ -7,5 +7,5 @@ export { ErrorMessageModal } from './ErrorMessageModal';
 export { ErrorMessageContainer } from './ErrorMessageContainer';
 export { ErrorStateManager } from './ErrorStateManager';
 export type { ErrorMessageContainerProps } from './ErrorMessageContainer';
-export type { SystemError } from './ErrorStateManager';
+export type { SystemError, SelectorErrorDetail } from './ErrorStateManager';
 export type { ErrorMessages, GroupOverlapError } from '../../layout/constraint-validator';

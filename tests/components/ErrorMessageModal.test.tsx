@@ -19,9 +19,9 @@ describe('ErrorMessageModal Component', () => {
       // Check main modal container
       expect(document.getElementById('error-message-modal')).toBeInTheDocument()
       
-      // Check header
-      expect(screen.getByText('Could not satisfy all constraints')).toBeInTheDocument()
-      expect(screen.getByText('Your data causes the following visualization constraints to conflict.')).toBeInTheDocument()
+      // Check header - parse-error shows generic error header
+      expect(screen.getByText('Error')).toBeInTheDocument()
+      expect(screen.getByText('An error occurred while processing your data.')).toBeInTheDocument()
 
       // Check error card header
       expect(screen.getByText('Parse Error (spec.yaml)')).toBeInTheDocument()
@@ -83,9 +83,9 @@ describe('ErrorMessageModal Component', () => {
       // Check main modal container
       expect(document.getElementById('error-message-modal')).toBeInTheDocument()
 
-      // Check headers
-      expect(screen.getByText('Could not satisfy all constraints')).toBeInTheDocument()
-      expect(screen.getByText('Your data causes the following visualization constraints to conflict.')).toBeInTheDocument()
+      // Check headers - group-overlap-error shows generic error header
+      expect(screen.getByText('Error')).toBeInTheDocument()
+      expect(screen.getByText('An error occurred while processing your data.')).toBeInTheDocument()
 
       // Check error card header
       expect(screen.getByText('Group Overlap Error (layout.yaml)')).toBeInTheDocument()
@@ -105,12 +105,11 @@ describe('ErrorMessageModal Component', () => {
       // Check main modal container
       expect(document.getElementById('error-message-modal')).toBeInTheDocument()
 
-      // Check headers
-      expect(screen.getByText('Could not satisfy all constraints')).toBeInTheDocument()
-      expect(screen.getByText('Your data causes the following visualization constraints to conflict.')).toBeInTheDocument()
-
-      // Check error card header (should be "Error" for general-error)
-      expect(screen.getByText('Error')).toBeInTheDocument()
+      // Check headers - general-error shows generic error header  
+      // Both h4 and card header say "Error", so use getAllByText
+      const errorElements = screen.getAllByText('Error')
+      expect(errorElements.length).toBe(2) // header + card header
+      expect(screen.getByText('An error occurred while processing your data.')).toBeInTheDocument()
 
       // Check error message
       expect(screen.getByText('An unexpected error occurred while processing the layout')).toBeInTheDocument()

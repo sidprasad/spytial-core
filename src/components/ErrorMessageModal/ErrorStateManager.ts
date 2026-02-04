@@ -1,6 +1,19 @@
 import type { ErrorMessages, GroupOverlapError } from './index';
 
 /**
+ * Represents a single selector evaluation error.
+ * Captures context about which selector failed and why.
+ */
+export interface SelectorErrorDetail {
+  /** The selector expression that failed */
+  selector: string;
+  /** Context about where/why the selector was being evaluated (e.g., "hideAtom selector", "attribute filter") */
+  context: string;
+  /** The error message from the evaluation */
+  errorMessage: string;
+}
+
+/**
  * Represents different types of errors that can occur in the system
  */
 export type SystemError = {
@@ -17,6 +30,10 @@ export type SystemError = {
 } | {
   type: 'general-error';
   message: string;
+} | {
+  type: 'selector-error';
+  /** List of selector errors encountered during layout evaluation */
+  errors: SelectorErrorDetail[];
 };
 
 /**

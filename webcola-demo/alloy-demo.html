@@ -499,6 +499,18 @@
                     console.warn('Projection data available but updateProjectionData function not found. Projection controls may not display correctly.');
                 }
 
+                // 1. Check for selector errors first - early out if present
+                if (layoutResult.selectorErrors && layoutResult.selectorErrors.length > 0) {
+                    console.warn('Selector errors:', layoutResult.selectorErrors);
+                    if (window.showSelectorErrors) {
+                        window.showSelectorErrors(layoutResult.selectorErrors);
+                    }
+                    const webcolaGraphElement = document.getElementById('graph-container');
+                    webcolaGraphElement.setAttribute('unsat', '');
+                    return;
+                }
+
+                // 2. Standard IIS/constraint error handling
                 if (layoutResult.error) {
                     console.error('Layout generation error:', layoutResult.error);
 
@@ -543,7 +555,7 @@
             const webcolaGraphElement = document.getElementById('graph-container');
             webcolaGraphElement.removeAttribute('unsat'); // Clear unsat state
 
-            // Clear errors on successful layout generation
+            // Clear any previous errors on successful layout
             if (window.clearAllErrors) {
                 window.clearAllErrors();
             }
