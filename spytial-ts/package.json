@@ -1,0 +1,22 @@
+{
+  "name": "spytial-ts",
+  "version": "0.0.1",
+  "description": "Decorator-first TypeScript helpers for Spytial",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "spytial-core": "^1.8.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}
