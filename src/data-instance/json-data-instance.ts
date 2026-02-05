@@ -241,39 +241,146 @@ export class JSONDataInstance implements IInputDataInstance {
   }
 
   /**
-   * Create a new instance containing only the specified atoms and their related tuples.
-   * This is useful for creating focused views or subgraphs.
+   * Get the top-level type ID for a given type.
+   * The top-level type is the most general type in the hierarchy (last element in types array).
    * 
-   * // TODO: This is a very different view of projections compared to Alloy right?
+   * @param typeId - The type ID to look up
+   * @returns The top-level type ID
+   */
+  private getTopLevelTypeId(typeId: string): string {
+    const type = this.types.find(t => t.id === typeId);
+    if (type && type.types.length > 0) {
+      // types array is in ascending order (specific to general), so last is top-level
+      return type.types[type.types.length - 1];
+    }
+    // If no type hierarchy found, the type is its own top-level
+    return typeId;
+  }
+
+  /**
+   * Check if a type is of another type (i.e., is a subtype or the same type).
    * 
+   * @param typeId - The type ID to check
+   * @param potentialAncestor - The potential ancestor type ID
+   * @returns True if typeId is of type potentialAncestor
+   */
+  private typeIsOfType(typeId: string, potentialAncestor: string): boolean {
+    const type = this.types.find(t => t.id === typeId);
+    if (!type) {
+      // No type definition found - check direct equality
+      return typeId === potentialAncestor;
+    }
+    // Check if potentialAncestor is in the type hierarchy
+    return type.types.includes(potentialAncestor);
+  }
+
+  /**
+   * Apply Alloy-style projections to create a new data instance.
    * 
-   * @param atomIds - Array of atom IDs to include in the projection
-   * @returns A new JSONDataInstance containing only the projected data
+   * Projection "projects over" specific atoms, removing their types from relation
+   * signatures while filtering tuples to only those containing the projected atoms.
+   * The projected atoms themselves are removed from the instance (they become implicit).
+   * 
+   * For example, if you have a relation `access: Person -> File -> Time` and project
+   * over `Time0`, the resulting relation becomes `access: Person -> File` containing
+   * only tuples where the Time was `Time0`.
+   * 
+   * @param atomIds - Array of atom IDs to project over. Each atom's top-level type
+   *                  must be unique (cannot project over two atoms of the same type).
+   * @returns A new JSONDataInstance with projections applied
+   * @throws {Error} If multiple atoms of the same top-level type are provided
    */
   applyProjections(atomIds: string[]): IInputDataInstance {
-
-
-
     if (atomIds.length === 0) {
       return this.clone();
     }
 
-    const atomIdSet = new Set(atomIds);
-    
-    // Filter atoms
-    const filteredAtoms = this.atoms.filter(a => atomIdSet.has(a.id));
-    
-    // Filter relation tuples to only include those with all atoms in the projection
-    const filteredRelations = this.relations.map(r => ({
-      ...r,
-      tuples: r.tuples.filter(t => t.atoms.every(atomId => atomIdSet.has(atomId)))
-    })).filter(r => r.tuples.length > 0); // Remove relations with no remaining tuples
-    
-    // Keep all types (they might be referenced by the remaining atoms)
+    // Build projections map: topLevelType -> atomId
+    const projections: Record<string, string> = {};
+    for (const atomId of atomIds) {
+      const atom = this.atoms.find(a => a.id === atomId);
+      if (!atom) {
+        throw new Error(`Cannot project over atom '${atomId}': atom not found`);
+      }
+      const topType = this.getTopLevelTypeId(atom.type);
+      if (projections[topType]) {
+        throw new Error(
+          `Cannot project over '${atomId}' and '${projections[topType]}'. Both are of type '${topType}'`
+        );
+      }
+      projections[topType] = atomId;
+    }
+
+    const projectedTypes = Object.keys(projections);
+    const projectedAtoms = Object.values(projections);
+    const projectedAtomSet = new Set(projectedAtoms);
+
+    // Project types: remove atoms from projected types
+    const newTypes: IType[] = this.types.map(type => {
+      const isProjected = projectedTypes.some(projectedType =>
+        this.typeIsOfType(type.id, projectedType)
+      );
+      return {
+        ...type,
+        atoms: isProjected ? [] : type.atoms.filter(a => !projectedAtomSet.has(a.id))
+      };
+    });
+
+    // Project relations: filter and modify tuples
+    const newRelations: IRelation[] = this.relations.map(relation => {
+      // Check if any type in this relation is being projected
+      const isProjected = relation.types.some(relationType =>
+        projectedTypes.some(projectedType =>
+          this.typeIsOfType(relationType, projectedType)
+        )
+      );
+
+      if (!isProjected) {
+        // No projection affects this relation, keep as is
+        return relation;
+      }
+
+      // Find indices of types that are being projected away
+      const projectedIndices: number[] = [];
+      relation.types.forEach((type, index) => {
+        if (projectedTypes.some(projectedType => this.typeIsOfType(type, projectedType))) {
+          projectedIndices.push(index);
+        }
+      });
+
+      // Filter tuples to only those containing a projected atom, then remove projected columns
+      const newTuples: ITuple[] = relation.tuples
+        .filter(tuple =>
+          // Tuple must contain at least one of the projected atoms
+          tuple.atoms.some(atomId => projectedAtomSet.has(atomId))
+        )
+        .map(tuple => ({
+          atoms: tuple.atoms.filter((_, index) => !projectedIndices.includes(index)),
+          types: tuple.types.filter((_, index) => !projectedIndices.includes(index))
+        }))
+        // Only keep tuples with arity > 1 after projection (or any remaining atoms)
+        .filter(tuple => tuple.atoms.length > 0);
+
+      // Remove projected type indices from relation's types
+      const newRelationTypes = relation.types.filter((_, index) => !projectedIndices.includes(index));
+
+      return {
+        ...relation,
+        types: newRelationTypes,
+        tuples: newTuples
+      };
+    }).filter(r => r.tuples.length > 0 || r.types.length > 0); // Keep relations that still have meaning
+
+    // Filter atoms: remove all atoms of projected types (not just the specific projected atoms)
+    const newAtoms = this.atoms.filter(a => {
+      const atomTopType = this.getTopLevelTypeId(a.type);
+      return !projectedTypes.includes(atomTopType);
+    });
+
     return new JSONDataInstance({
-      atoms: filteredAtoms,
-      relations: filteredRelations,
-      types: this.types
+      atoms: newAtoms,
+      relations: newRelations,
+      types: newTypes
     });
   }
 
