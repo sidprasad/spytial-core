@@ -1,5 +1,5 @@
 import { Graph, Edge } from 'graphlib';
-import { IAtom, IDataInstance, IType } from '../data-instance/interfaces';
+import { IAtom, IDataInstance } from '../data-instance/interfaces';
 import { PositionalConstraintError, GroupOverlapError, isPositionalConstraintError, isGroupOverlapError } from './constraint-validator';
 import { EdgeStyle, normalizeEdgeStyle } from './edge-style';
 import { resolveIconPath } from './icon-registry';
@@ -876,22 +876,36 @@ export class LayoutInstance {
 
         let projectedSigs: string[] = this.projectedSigs;
 
-        // Get all types and find the ones that match projected signatures
+        // Get all types
         const allTypes = ai.getTypes();
-        let projectedTypes: IType[] = projectedSigs.map((sig) => {
-            const type = allTypes.find(t => t.id === sig);
-            if (!type) {
+        
+        // For each projected sig, collect atoms from all types that have this sig in their type hierarchy
+        // This handles abstract sigs - e.g., if projecting over "State", collect atoms from 
+        // "Initial extends State", "Changed extends State", etc.
+        let atomsPerProjectedType: Record<string, string[]> = {};
+        
+        for (const sig of projectedSigs) {
+            // Check if this sig exists in the type hierarchy
+            const sigExists = allTypes.some(t => t.types.includes(sig));
+            if (!sigExists) {
                 throw new Error(`Projected type '${sig}' not found in data instance`);
             }
-            return type;
-        });
-
-
-        // Now we should have a map from each type to its atoms
-        let atomsPerProjectedType: Record<string, string[]> = {};
-        projectedTypes.forEach((type) => {
-            atomsPerProjectedType[type.id] = type.atoms.map((atom) => atom.id);
-        });
+            
+            // Find all types that include this sig in their hierarchy (i.e., subtypes/descendants)
+            const matchingTypes = allTypes.filter(t => t.types.includes(sig));
+            
+            // Collect all atoms from matching types, using a Set to deduplicate
+            // (In Alloy, parent sigs may include atoms from subsigs, so the same atom
+            // could appear in multiple type entries)
+            const atomSet = new Set<string>();
+            for (const type of matchingTypes) {
+                for (const atom of type.atoms) {
+                    atomSet.add(atom.id);
+                }
+            }
+            
+            atomsPerProjectedType[sig] = [...atomSet];
+        }
 
 
 
