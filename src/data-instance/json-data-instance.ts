@@ -348,17 +348,25 @@ export class JSONDataInstance implements IInputDataInstance {
         }
       });
 
-      // Filter tuples to only those containing a projected atom, then remove projected columns
+      // Filter tuples: keep only those where EVERY projected column matches its expected projected atom
       const newTuples: ITuple[] = relation.tuples
-        .filter(tuple =>
-          // Tuple must contain at least one of the projected atoms
-          tuple.atoms.some(atomId => projectedAtomSet.has(atomId))
-        )
+        .filter(tuple => {
+          // For each projected index, the tuple's atom must match the expected projected atom for that column's type
+          return projectedIndices.every(index => {
+            const tupleAtom = tuple.atoms[index];
+            const columnType = relation.types[index];
+            // Find which projected type this column belongs to
+            const matchingProjectedType = projectedTypes.find(pt => this.typeIsOfType(columnType, pt));
+            if (!matchingProjectedType) return true; // Shouldn't happen, but be safe
+            const expectedAtom = projections[matchingProjectedType];
+            return tupleAtom === expectedAtom;
+          });
+        })
         .map(tuple => ({
           atoms: tuple.atoms.filter((_, index) => !projectedIndices.includes(index)),
           types: tuple.types.filter((_, index) => !projectedIndices.includes(index))
         }))
-        // Only keep tuples with arity > 1 after projection (or any remaining atoms)
+        // Only keep tuples with remaining atoms after projection
         .filter(tuple => tuple.atoms.length > 0);
 
       // Remove projected type indices from relation's types

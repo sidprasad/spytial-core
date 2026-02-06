@@ -199,6 +199,58 @@ describe('JSONDataInstance.applyProjections', () => {
         expect(accessRel!.tuples[0].atoms).toEqual(['alice', 'file1']);
     });
 
+    it('should only keep tuples matching ALL projected atoms in multi-type projection', () => {
+        // This test verifies that multi-type projection requires ALL projected columns to match,
+        // not just ANY projected atom appearing somewhere in the tuple.
+        const jsonData: IJsonDataInstance = {
+            atoms: [
+                { id: 'alice', type: 'Person', label: 'Alice' },
+                { id: 'bob', type: 'Person', label: 'Bob' },
+                { id: 'file1', type: 'File', label: 'Document.pdf' },
+                { id: 'time0', type: 'Time', label: 'Time 0' },
+                { id: 'time1', type: 'Time', label: 'Time 1' },
+                { id: 'loc1', type: 'Location', label: 'Office' },
+                { id: 'loc2', type: 'Location', label: 'Home' },
+            ],
+            relations: [
+                {
+                    id: 'access',
+                    name: 'access',
+                    types: ['Person', 'File', 'Time', 'Location'],
+                    tuples: [
+                        // Should be KEPT: matches both time0 AND loc1
+                        { atoms: ['alice', 'file1', 'time0', 'loc1'], types: ['Person', 'File', 'Time', 'Location'] },
+                        // Should be FILTERED: has time0 but wrong location (loc2 != loc1)
+                        { atoms: ['alice', 'file1', 'time0', 'loc2'], types: ['Person', 'File', 'Time', 'Location'] },
+                        // Should be FILTERED: has loc1 but wrong time (time1 != time0)
+                        { atoms: ['bob', 'file1', 'time1', 'loc1'], types: ['Person', 'File', 'Time', 'Location'] },
+                        // Should be FILTERED: wrong time AND wrong location
+                        { atoms: ['bob', 'file1', 'time1', 'loc2'], types: ['Person', 'File', 'Time', 'Location'] },
+                    ],
+                },
+            ],
+            types: [
+                { id: 'Person', types: ['Person'], atoms: [], isBuiltin: false },
+                { id: 'File', types: ['File'], atoms: [], isBuiltin: false },
+                { id: 'Time', types: ['Time'], atoms: [], isBuiltin: false },
+                { id: 'Location', types: ['Location'], atoms: [], isBuiltin: false },
+            ],
+        };
+
+        const instance = new JSONDataInstance(jsonData);
+        
+        // Project over time0 AND loc1 - should only keep tuples matching BOTH
+        const projected = instance.applyProjections(['time0', 'loc1']);
+        
+        const accessRel = projected.getRelations().find(r => r.name === 'access');
+        expect(accessRel).toBeDefined();
+        expect(accessRel!.types).toEqual(['Person', 'File']);
+        
+        // Only one tuple should remain: alice accessing file1 at time0 and loc1
+        expect(accessRel!.tuples).toHaveLength(1);
+        expect(accessRel!.tuples[0].atoms).toEqual(['alice', 'file1']);
+    });
+
     it('should filter tuples to only those containing projected atom', () => {
         const jsonData: IJsonDataInstance = {
             atoms: [
