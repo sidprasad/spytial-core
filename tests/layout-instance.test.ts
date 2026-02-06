@@ -303,5 +303,133 @@ directives:
     const inferred = layout.edges.find(e => e.id.includes('_inferred_') && e.id.includes('conn'));
     expect(inferred).toBeDefined();
   });
-});
 
+  it('supports projection over abstract sigs by collecting atoms from subtypes', () => {
+    // This test simulates the garbage collection example from the user:
+    // abstract sig State { allocated: set HeapCell }
+    // one sig Initial extends State {}
+    // one sig Changed extends State {}
+    // one sig Marked extends State { marked: set HeapCell }
+    // one sig Swept extends State {}
+    //
+    // When projecting over "State", we should get atoms from Initial, Changed, Marked, Swept
+    
+    const abstractSigData: IJsonDataInstance = {
+      atoms: [
+        // HeapCell atoms
+        { id: 'HeapCell0', type: 'HeapCell', label: 'HeapCell0' },
+        { id: 'HeapCell1', type: 'HeapCell', label: 'HeapCell1' },
+        // State atoms (one of each concrete subtype)
+        { id: 'Initial0', type: 'Initial', label: 'Initial0' },
+        { id: 'Changed0', type: 'Changed', label: 'Changed0' },
+        { id: 'Marked0', type: 'Marked', label: 'Marked0' },
+        { id: 'Swept0', type: 'Swept', label: 'Swept0' },
+      ],
+      relations: [
+        {
+          id: 'allocated',
+          name: 'allocated',
+          types: ['State', 'HeapCell'],
+          tuples: [
+            { atoms: ['Initial0', 'HeapCell0'], types: ['Initial', 'HeapCell'] },
+            { atoms: ['Changed0', 'HeapCell0'], types: ['Changed', 'HeapCell'] },
+            { atoms: ['Changed0', 'HeapCell1'], types: ['Changed', 'HeapCell'] },
+            { atoms: ['Marked0', 'HeapCell0'], types: ['Marked', 'HeapCell'] },
+          ]
+        }
+      ],
+      types: [
+        { id: 'HeapCell', types: ['HeapCell'], atoms: [], isBuiltin: false },
+        // Abstract sig State - has no atoms directly
+        { id: 'State', types: ['State'], atoms: [], isBuiltin: false },
+        // Concrete subtypes - each has one atom
+        { id: 'Initial', types: ['Initial', 'State'], atoms: [{ id: 'Initial0', type: 'Initial', label: 'Initial0' }], isBuiltin: false },
+        { id: 'Changed', types: ['Changed', 'State'], atoms: [{ id: 'Changed0', type: 'Changed', label: 'Changed0' }], isBuiltin: false },
+        { id: 'Marked', types: ['Marked', 'State'], atoms: [{ id: 'Marked0', type: 'Marked', label: 'Marked0' }], isBuiltin: false },
+        { id: 'Swept', types: ['Swept', 'State'], atoms: [{ id: 'Swept0', type: 'Swept', label: 'Swept0' }], isBuiltin: false },
+      ]
+    };
+
+    const specWithProjection = `
+directives:
+  - projection:
+      sig: State
+`;
+
+    const instance = new JSONDataInstance(abstractSigData);
+    const evaluator = createEvaluator(instance);
+    const spec = parseLayoutSpec(specWithProjection);
+    const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
+    
+    const { layout, projectionData } = layoutInstance.generateLayout(instance, {});
+
+    // Projection data should include the abstract sig with all descendant atoms
+    expect(projectionData).toHaveLength(1);
+    expect(projectionData[0].type).toBe('State');
+    expect(projectionData[0].atoms).toHaveLength(4);
+    expect(projectionData[0].atoms).toContain('Initial0');
+    expect(projectionData[0].atoms).toContain('Changed0');
+    expect(projectionData[0].atoms).toContain('Marked0');
+    expect(projectionData[0].atoms).toContain('Swept0');
+    
+    // The projected atom should be one of the available atoms (defaults to first)
+    expect(projectionData[0].atoms).toContain(projectionData[0].projectedAtom);
+  });
+
+  it('supports switching projection between atoms of abstract sig subtypes', () => {
+    const abstractSigData: IJsonDataInstance = {
+      atoms: [
+        { id: 'HeapCell0', type: 'HeapCell', label: 'HeapCell0' },
+        { id: 'HeapCell1', type: 'HeapCell', label: 'HeapCell1' },
+        { id: 'Initial0', type: 'Initial', label: 'Initial0' },
+        { id: 'Changed0', type: 'Changed', label: 'Changed0' },
+      ],
+      relations: [
+        {
+          id: 'allocated',
+          name: 'allocated',
+          types: ['State', 'HeapCell'],
+          tuples: [
+            { atoms: ['Initial0', 'HeapCell0'], types: ['Initial', 'HeapCell'] },
+            { atoms: ['Changed0', 'HeapCell0'], types: ['Changed', 'HeapCell'] },
+            { atoms: ['Changed0', 'HeapCell1'], types: ['Changed', 'HeapCell'] },
+          ]
+        }
+      ],
+      types: [
+        { id: 'HeapCell', types: ['HeapCell'], atoms: [
+          { id: 'HeapCell0', type: 'HeapCell', label: 'HeapCell0' },
+          { id: 'HeapCell1', type: 'HeapCell', label: 'HeapCell1' }
+        ], isBuiltin: false },
+        { id: 'State', types: ['State'], atoms: [], isBuiltin: false },
+        { id: 'Initial', types: ['Initial', 'State'], atoms: [{ id: 'Initial0', type: 'Initial', label: 'Initial0' }], isBuiltin: false },
+        { id: 'Changed', types: ['Changed', 'State'], atoms: [{ id: 'Changed0', type: 'Changed', label: 'Changed0' }], isBuiltin: false },
+      ]
+    };
+
+    const specWithProjection = `
+directives:
+  - projection:
+      sig: State
+`;
+
+    const instance = new JSONDataInstance(abstractSigData);
+    const evaluator = createEvaluator(instance);
+    const spec = parseLayoutSpec(specWithProjection);
+    const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
+    
+    // First layout with explicit projection on Changed0
+    const result1 = layoutInstance.generateLayout(instance, { 'State': 'Changed0' });
+    expect(result1.projectionData[0].projectedAtom).toBe('Changed0');
+    
+    // The layout should show edges for Changed0's allocated tuples
+    // Changed0 has HeapCell0 and HeapCell1 allocated
+    
+    // Second layout with projection on Initial0
+    const result2 = layoutInstance.generateLayout(instance, { 'State': 'Initial0' });
+    expect(result2.projectionData[0].projectedAtom).toBe('Initial0');
+    
+    // Both should have the same available atoms
+    expect(result1.projectionData[0].atoms).toEqual(result2.projectionData[0].atoms);
+  });
+});
