@@ -894,15 +894,17 @@ export class LayoutInstance {
             // Find all types that include this sig in their hierarchy (i.e., subtypes/descendants)
             const matchingTypes = allTypes.filter(t => t.types.includes(sig));
             
-            // Collect all atoms from matching types
-            const allAtoms: string[] = [];
+            // Collect all atoms from matching types, using a Set to deduplicate
+            // (In Alloy, parent sigs may include atoms from subsigs, so the same atom
+            // could appear in multiple type entries)
+            const atomSet = new Set<string>();
             for (const type of matchingTypes) {
                 for (const atom of type.atoms) {
-                    allAtoms.push(atom.id);
+                    atomSet.add(atom.id);
                 }
             }
             
-            atomsPerProjectedType[sig] = allAtoms;
+            atomsPerProjectedType[sig] = [...atomSet];
         }
 
 
