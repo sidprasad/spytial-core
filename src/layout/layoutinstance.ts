@@ -871,10 +871,89 @@ export class LayoutInstance {
         return g.edge(edge.v, edge.w, edge.name);
     }
 
+    /**
+     * Performs a topological sort on atoms based on a partial order defined by tuples.
+     * If (a, b) is in the tuples, then a comes before b in the result.
+     * Handles cycles by breaking them (choosing lexicographically smallest node to continue).
+     * Atoms not mentioned in any tuple are placed at the end, sorted lexicographically.
+     * 
+     * @param atoms - The atoms to sort
+     * @param tuples - Pairs [a, b] meaning a should come before b
+     * @returns Sorted array of atoms
+     */
+    private topologicalSortWithCycleBreaking(atoms: string[], tuples: string[][]): string[] {
+        const atomSet = new Set(atoms);
+        
+        // Build adjacency list and in-degree count (only for atoms we care about)
+        const adjacency = new Map<string, Set<string>>();
+        const inDegree = new Map<string, number>();
+        
+        // Initialize all atoms
+        for (const atom of atoms) {
+            adjacency.set(atom, new Set());
+            inDegree.set(atom, 0);
+        }
+        
+        // Build the graph from tuples
+        for (const tuple of tuples) {
+            if (tuple.length >= 2) {
+                const from = tuple[0];
+                const to = tuple[1];
+                
+                // Only consider edges between atoms in our set
+                if (atomSet.has(from) && atomSet.has(to) && from !== to) {
+                    const neighbors = adjacency.get(from)!;
+                    if (!neighbors.has(to)) {
+                        neighbors.add(to);
+                        inDegree.set(to, (inDegree.get(to) || 0) + 1);
+                    }
+                }
+            }
+        }
+        
+        // Kahn's algorithm with cycle breaking
+        const result: string[] = [];
+        const remaining = new Set(atoms);
+        
+        while (remaining.size > 0) {
+            // Find all nodes with in-degree 0
+            const ready: string[] = [];
+            for (const atom of remaining) {
+                if ((inDegree.get(atom) || 0) === 0) {
+                    ready.push(atom);
+                }
+            }
+            
+            if (ready.length === 0) {
+                // Cycle detected - break it by picking the lexicographically smallest remaining node
+                const sorted = [...remaining].sort((a, b) => a.localeCompare(b));
+                ready.push(sorted[0]);
+            }
+            
+            // Sort ready nodes lexicographically for deterministic output
+            ready.sort((a, b) => a.localeCompare(b));
+            
+            // Process the first ready node
+            const node = ready[0];
+            result.push(node);
+            remaining.delete(node);
+            
+            // Decrease in-degree of neighbors
+            const neighbors = adjacency.get(node) || new Set();
+            for (const neighbor of neighbors) {
+                if (remaining.has(neighbor)) {
+                    inDegree.set(neighbor, (inDegree.get(neighbor) || 1) - 1);
+                }
+            }
+        }
+        
+        return result;
+    }
 
     private applyLayoutProjections(ai: IDataInstance, projections: Record<string, string>): { projectedInstance: IDataInstance, finalProjectionChoices: { type: string, projectedAtom: string, atoms: string[] }[] } {
 
         let projectedSigs: string[] = this.projectedSigs;
+        const projectionDirectives = this._layoutSpec.directives.projections || [];
 
         // Get all types
         const allTypes = ai.getTypes();
@@ -904,7 +983,31 @@ export class LayoutInstance {
                 }
             }
             
-            atomsPerProjectedType[sig] = [...atomSet];
+            let atoms = [...atomSet];
+            
+            // Check if there's an orderBy selector for this projection
+            const projectionDirective = projectionDirectives.find(p => p.sig === sig);
+            if (projectionDirective?.orderBy) {
+                try {
+                    // Evaluate the orderBy selector to get (atom, sortKey) tuples
+                    const orderResult = this.evaluator.evaluate(projectionDirective.orderBy, { instanceIndex: this.instanceNum });
+                    const orderTuples = orderResult.selectedTwoples();
+                    
+                    // Perform topological sort on the partial order defined by the tuples
+                    // If (a, b) is in the relation, then a should come before b
+                    atoms = this.topologicalSortWithCycleBreaking(atoms, orderTuples);
+                } catch (error) {
+                    // Record the error but continue with default ordering
+                    this.recordSelectorError(projectionDirective.orderBy, 'projection orderBy selector', error);
+                    // Fallback to lexicographic sort
+                    atoms.sort((a, b) => a.localeCompare(b));
+                }
+            } else {
+                // Default: sort lexicographically by atom ID
+                atoms.sort((a, b) => a.localeCompare(b));
+            }
+            
+            atomsPerProjectedType[sig] = atoms;
         }
 
 
