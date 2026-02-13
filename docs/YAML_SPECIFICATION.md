@@ -1,17 +1,17 @@
-# CnD Layout Specification - YAML Reference
+# Spytial Layout Specification - YAML Reference
 
-> Note: This file is available via CDN at https://cdn.jsdelivr.net/gh/sidprasad/cnd-core@main/docs/YAML_SPECIFICATION.md. For immutability, pin to a tag or commit, e.g., `@v1.8.0` or `@<commit-sha>`. Agents can fetch it directly, for example:
+> Note: This file is available via CDN at https://cdn.jsdelivr.net/gh/sidprasad/Spytial-core@main/docs/YAML_SPECIFICATION.md. For immutability, pin to a tag or commit, e.g., `@v1.8.0` or `@<commit-sha>`. Agents can fetch it directly, for example:
 >
 > ```js
-> const url = 'https://cdn.jsdelivr.net/gh/sidprasad/cnd-core@v1.8.0/docs/YAML_SPECIFICATION.md';
+> const url = 'https://cdn.jsdelivr.net/gh/sidprasad/Spytial-core@v1.8.0/docs/YAML_SPECIFICATION.md';
 > const text = await fetch(url).then(r => r.text());
 > ```
 >
-This document describes the YAML structure for defining layout constraints and directives in the CnD (Cope and Drag) layout system.
+This document describes the YAML structure for defining layout constraints and directives in the Spytial layout system.
 
 ## Overview
 
-A CnD layout specification consists of two main sections:
+A Spytial layout specification consists of two main sections:
 
 ```yaml
 constraints:
