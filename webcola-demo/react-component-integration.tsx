@@ -1244,6 +1244,17 @@ export const ErrorAPI = {
   },
 
   /**
+   * Display hidden-node conflict errors (hideAtom vs constraint references)
+   * @param errorMessages - Detailed conflict information in IIS-like format
+   */
+  showHiddenNodeConflict: (errorMessages: ErrorMessages): void => {
+    globalErrorManager.setError({
+      type: 'hidden-node-conflict',
+      messages: errorMessages
+    });
+  },
+
+  /**
    * Display general error message
    * @param message - Error message
    */
@@ -1695,6 +1706,7 @@ if (typeof window !== 'undefined') {
   (window as any).showParseError = ErrorAPI.showParseError;
   (window as any).showGroupOverlapError = ErrorAPI.showGroupOverlapError;
   (window as any).showPositionalError = ErrorAPI.showConstraintError;
+  (window as any).showHiddenNodeConflict = ErrorAPI.showHiddenNodeConflict;
   (window as any).showGeneralError = ErrorAPI.showGeneralError;
   (window as any).showSelectorErrors = ErrorAPI.showSelectorErrors;
   (window as any).clearAllErrors = ErrorAPI.clearAllErrors;

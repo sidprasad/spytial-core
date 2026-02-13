@@ -8,4 +8,5 @@ export { ErrorMessageContainer } from './ErrorMessageContainer';
 export { ErrorStateManager } from './ErrorStateManager';
 export type { ErrorMessageContainerProps } from './ErrorMessageContainer';
 export type { SystemError, SelectorErrorDetail } from './ErrorStateManager';
-export type { ErrorMessages, GroupOverlapError } from '../../layout/constraint-validator';
+export type { ErrorMessages, GroupOverlapError, HiddenNodeConflictError } from '../../layout/constraint-validator';
+export { isHiddenNodeConflictError } from '../../layout/constraint-validator';

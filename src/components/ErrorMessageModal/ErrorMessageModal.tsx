@@ -56,7 +56,8 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
       || systemError.type === 'general-error' 
       || systemError.type === 'group-overlap-error'
     );
-  const isPositionalError = systemError && systemError.type === 'positional-error' && systemError.messages;
+  const isPositionalError = systemError && (systemError.type === 'positional-error' || systemError.type === 'hidden-node-conflict') && systemError.messages;
+  const isHiddenNodeError = systemError && systemError.type === 'hidden-node-conflict';
   const isSelectorError = systemError && systemError.type === 'selector-error' && systemError.errors?.length > 0;
   
   // If not a valid error, log error and return null
@@ -143,14 +144,16 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
   const headerText = useMemo(() => {
     if (isSelectorError) return 'Selector Evaluation Error';
     if (isOtherError) return 'Error';
+    if (isHiddenNodeError) return 'Hidden Node Conflict';
     return 'Could not satisfy all constraints';
-  }, [isSelectorError, isOtherError]);
+  }, [isSelectorError, isOtherError, isHiddenNodeError]);
 
   const descriptionText = useMemo(() => {
     if (isSelectorError) return 'One or more selectors in your layout specification could not be evaluated.';
     if (isOtherError) return 'An error occurred while processing your data.';
+    if (isHiddenNodeError) return 'Some constraints reference nodes that are hidden by a hideAtom directive. The conflicting constraints have been dropped from the layout.';
     return 'Your data causes the following visualization constraints to conflict.';
-  }, [isSelectorError, isOtherError]);
+  }, [isSelectorError, isOtherError, isHiddenNodeError]);
 
   return (
     <div id="error-message-modal" className="mt-3 d-flex flex-column overflow-x-auto p-3 rounded border border-danger border-2">

@@ -149,7 +149,7 @@ directives:
     }).not.toThrow();
   });
 
-  it('surfaces constraints that reference hidden atoms as constraint errors', () => {
+  it('surfaces constraints that reference hidden atoms as hidden-node-conflict errors', () => {
     const layoutSpecYaml = `
 constraints:
   - orientation:
@@ -169,7 +169,7 @@ directives:
     const { layout, error } = layoutInstance.generateLayout(dataInstance, {});
 
     expect(error).not.toBeNull();
-    expect(error?.type).toBe('unknown-constraint');
+    expect(error?.type).toBe('hidden-node-conflict');
     expect(error?.message).toContain('B');
 
     const nodeIds = layout.nodes.map(node => node.id);

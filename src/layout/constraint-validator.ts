@@ -18,7 +18,7 @@ export interface ErrorMessages {
  */
 export interface ConstraintError  extends Error {
     /** Type of constraint error */
-    readonly type: 'group-overlap' | 'positional-conflict' | 'unknown-constraint';
+    readonly type: 'group-overlap' | 'positional-conflict' | 'unknown-constraint' | 'hidden-node-conflict';
 
     /** Human-readable error message */
     readonly message: string;
@@ -48,7 +48,25 @@ interface GroupOverlapError extends ConstraintError {
     overlappingNodes: LayoutNode[];
 }
 
-export { type PositionalConstraintError, type GroupOverlapError }
+/**
+ * Error for when a hideAtom directive hides a node that is also referenced by layout constraints.
+ * Reported in a table format similar to IIS conflicts.
+ */
+interface HiddenNodeConflictError extends ConstraintError {
+    type: 'hidden-node-conflict';
+    /** Map of hidden node ID → the hideAtom selector that hid it */
+    hiddenNodes: Map<string, string>;
+    /** Map of source constraint → list of pairwise descriptions that were dropped */
+    droppedConstraints: Map<string, string[]>;
+    /** Structured error messages for UI rendering (same format as positional errors) */
+    errorMessages: ErrorMessages;
+}
+
+export function isHiddenNodeConflictError(error: unknown): error is HiddenNodeConflictError {
+    return (error as HiddenNodeConflictError)?.type === 'hidden-node-conflict';
+}
+
+export { type PositionalConstraintError, type GroupOverlapError, type HiddenNodeConflictError }
 
 
 // Tooltip text explaining what node IDs are
