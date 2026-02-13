@@ -59,11 +59,3 @@ selector: parent
 # Transitive closure — all ancestors
 selector: "^parent"
 ```
-
-## Next Steps
-
-- [**Quick Start**](quickstart.md) — Write your first spec in 2 minutes
-- [**Constraints**](constraints.md) — Learn about layout constraints
-- [**Directives**](directives.md) — Learn about visual directives
-- [**Selector Syntax**](selectors.md) — Master the selector language
-- [**Examples**](examples.md) — Full worked examples

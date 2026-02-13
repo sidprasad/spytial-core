@@ -87,4 +87,4 @@ The power of Spytial is that you can keep adding constraints and directives to r
 - [**Constraints**](constraints.md) — Full reference for all constraint types
 - [**Directives**](directives.md) — Full reference for all directive types
 - [**Selector Syntax**](selectors.md) — How to write selectors
-- [**Examples**](examples.md) — More complete worked examples
+

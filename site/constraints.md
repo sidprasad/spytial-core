@@ -143,9 +143,9 @@ Draws a visual bounding box around nodes matched by a selector.
 
 | Field | Required | Type | Default | Description |
 |-------|----------|------|---------|-------------|
-| `selector` | Yes | string | — | Selector returning atoms to include in the group |
+| `selector` | Yes | string | — | Selector returning atoms to include in the group. This could be a unary or binary selector. If a binary selector, the first element is a group key, while the second element is added to groups associated with that key. |
 | `name` | Yes | string | — | Display name shown on the group box |
-| `addEdge` | No | boolean | `false` | Whether to add visual edges between group members |
+| `addEdge` | No | boolean | `false` | Whether to add visual edges between group members and the group key |
 
 ### Examples
 
