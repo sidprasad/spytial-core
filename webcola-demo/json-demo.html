@@ -421,8 +421,11 @@
                 console.error('Layout generation error:', layoutResult.error);
                 
                 if (layoutResult.error.errorMessages) {
-                    // Positional constraint conflict with IIS info
-                    if (window.showPositionalError) {
+                    // Check if it's a hidden-node conflict (hideAtom vs constraint reference)
+                    if (layoutResult.error.type === 'hidden-node-conflict' && window.showHiddenNodeConflict) {
+                        window.showHiddenNodeConflict(layoutResult.error.errorMessages);
+                    } else if (window.showPositionalError) {
+                        // Positional constraint conflict with IIS info
                         window.showPositionalError(layoutResult.error.errorMessages);
                     } else {
                         updateStatus(`Positional constraint conflict: ${layoutResult.error.message}`, 'error');

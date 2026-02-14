@@ -24,6 +24,9 @@ export type SystemError = {
   type: 'positional-error';
   messages: ErrorMessages;
 } | {
+  type: 'hidden-node-conflict';
+  messages: ErrorMessages;
+} | {
   type: 'group-overlap-error';  // New type
   message: string;
   source?: string;
