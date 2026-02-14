@@ -97,6 +97,33 @@ function removeDuplicateConstraints(constraints: LayoutConstraint[]): LayoutCons
     return uniqueConstraints;
 }
 
+/**
+ * Produces a natural-language description for a dropped orientation constraint
+ * involving a hidden node, matching the style of `orientationConstraintToString`.
+ */
+function describeDroppedOrientationConstraint(sourceNodeId: string, targetNodeId: string, direction: string): string {
+    switch (direction) {
+        case 'left':
+            return `${sourceNodeId} must be to the left of ${targetNodeId}`;
+        case 'right':
+            return `${sourceNodeId} must be to the right of ${targetNodeId}`;
+        case 'above':
+            return `${sourceNodeId} must be above ${targetNodeId}`;
+        case 'below':
+            return `${sourceNodeId} must be below ${targetNodeId}`;
+        case 'directlyLeft':
+            return `${sourceNodeId} must be directly to the left of ${targetNodeId}`;
+        case 'directlyRight':
+            return `${sourceNodeId} must be directly to the right of ${targetNodeId}`;
+        case 'directlyAbove':
+            return `${sourceNodeId} must be directly above ${targetNodeId}`;
+        case 'directlyBelow':
+            return `${sourceNodeId} must be directly below ${targetNodeId}`;
+        default:
+            return `${sourceNodeId} is constrained relative to ${targetNodeId} (${direction})`;
+    }
+}
+
 class LayoutNodePath {
     constructor(
         public Path: LayoutNode[],
@@ -189,6 +216,14 @@ export class LayoutInstance {
     private hiddenNodeConflicts: Map<string, string[]> = new Map();
 
     /**
+     * Set of hidden node IDs that are actually involved in conflicts (i.e., referenced
+     * by at least one dropped constraint). Used to build hideAtom table entries without
+     * parsing description strings.
+     * Reset at the start of each generateLayout() call.
+     */
+    private conflictedHiddenNodes: Set<string> = new Set();
+
+    /**
      * Records a selector evaluation error for later reporting.
      * @param selector - The selector expression that failed
      * @param context - Description of where/why the selector was being evaluated
@@ -224,10 +259,10 @@ export class LayoutInstance {
         if (!this.hiddenNodeConflicts.has(sourceHTML)) {
             this.hiddenNodeConflicts.set(sourceHTML, []);
         }
-        const hidingSelector = this.hiddenNodeSelectors.get(hiddenNodeId) || 'unknown';
-        this.hiddenNodeConflicts.get(sourceHTML)!.push(
-            `${pairwiseDescription} <em>(${hiddenNodeId} is hidden by <code>${hidingSelector}</code>)</em>`
-        );
+        this.hiddenNodeConflicts.get(sourceHTML)!.push(pairwiseDescription);
+
+        // Track which hidden nodes are involved in conflicts (for building hideAtom table entries)
+        this.conflictedHiddenNodes.add(hiddenNodeId);
     }
 
 
@@ -1120,6 +1155,7 @@ export class LayoutInstance {
         // Reset hidden-node tracking at the start of each layout generation
         this.hiddenNodeSelectors = new Map();
         this.hiddenNodeConflicts = new Map();
+        this.conflictedHiddenNodes = new Set();
 
         /** Here, we calculate some of the presentational directive choices */
         let projectionResult = this.applyLayoutProjections(a, projections);
@@ -1380,18 +1416,19 @@ export class LayoutInstance {
 
         for (const [sourceHTML, descriptions] of this.hiddenNodeConflicts.entries()) {
             sourceConstraintHTMLToLayoutConstraintsHTML.set(sourceHTML, descriptions);
-            // Extract the hiding selectors from the descriptions
-            for (const desc of descriptions) {
-                const match = desc.match(/hidden by <code>(.+?)<\/code>/);
-                if (match) {
-                    involvedHideSelectors.add(match[1]);
-                }
+        }
+
+        // Derive involved hideAtom selectors from conflictedHiddenNodes
+        for (const nodeId of this.conflictedHiddenNodes) {
+            const selector = this.hiddenNodeSelectors.get(nodeId);
+            if (selector) {
+                involvedHideSelectors.add(selector);
             }
         }
 
         // Add hideAtom directives as source constraints in the table
         for (const hideSelector of involvedHideSelectors) {
-            const hideHTML = `hideAtom directive with selector <code>${hideSelector}</code>`;
+            const hideHTML = `hideAtom with selector <code>${hideSelector}</code>`;
             // Collect which nodes this selector hid that are involved in conflicts
             const hiddenNodeDescriptions: string[] = [];
             for (const [nodeId, selector] of this.hiddenNodeSelectors.entries()) {
@@ -1778,9 +1815,11 @@ export class LayoutInstance {
                 const targetHidden = this.isNodeHiddenByDirective(targetNodeId);
                 if (sourceHidden || targetHidden) {
                     const hiddenId = sourceHidden ? sourceNodeId : targetNodeId;
-                    const directionStr = directions.join(', ');
-                    const description = `${sourceNodeId} → ${targetNodeId} [${directionStr}]`;
-                    this.recordHiddenNodeConflict(c, description, hiddenId);
+                    // Record one description per direction in natural language
+                    for (const dir of directions) {
+                        const description = describeDroppedOrientationConstraint(sourceNodeId, targetNodeId, dir);
+                        this.recordHiddenNodeConflict(c, description, hiddenId);
+                    }
                     return; // Skip this tuple
                 }
 
