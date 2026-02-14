@@ -1463,8 +1463,14 @@ export class LayoutInstance {
 
         // The layout already has the conflicting constraints dropped (they were skipped
         // during generation), so it serves as the counterfactual diagram.
+        // Apply the same edge-visibility post-processing that the normal path performs.
+        const filteredLayout: InstanceLayout = {
+            ...layout,
+            edges: this.filterHiddenEdges(layout.edges)
+        };
+
         return {
-            layout,
+            layout: filteredLayout,
             projectionData,
             error,
             selectorErrors: this.selectorErrors
