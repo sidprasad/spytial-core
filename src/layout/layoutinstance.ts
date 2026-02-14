@@ -1463,6 +1463,8 @@ export class LayoutInstance {
 
         // The layout already has the conflicting constraints dropped (they were skipped
         // during generation), so it serves as the counterfactual diagram.
+        // Apply edge-visibility filtering that would normally run later in generateLayout.
+        layout.edges = this.filterHiddenEdges(layout.edges);
         return {
             layout,
             projectionData,
