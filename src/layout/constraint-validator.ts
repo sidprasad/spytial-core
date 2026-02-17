@@ -211,6 +211,11 @@ class ConstraintValidator {
     // Cache for Expression objects to avoid creating duplicates (major memory optimization)
     // Key format: "varName_op_value" e.g., "node1_x_plus_15"
     private expressionCache: Map<string, Expression> = new Map();
+    
+    // Cache for bounding box member constraints to avoid recreating on every cloneSolver() call
+    // These constraints are permanent (member nodes must stay inside their group's bounding box)
+    // With 200 nodes and 5 groups, this could be ~800 constraints - reusing them saves massive memory
+    private boundingBoxMemberConstraints: Constraint[] = [];
 
     layout: InstanceLayout;
     orientationConstraints: LayoutConstraint[];
@@ -956,19 +961,26 @@ class ConstraintValidator {
             // These are conjunctive (always enforced), so add directly to solver
             // IMPORTANT: We DON'T add these to added_constraints because they use the bbox variables
             // which need to exist in the solver. They'll be automatically included when we clone the solver.
+            // Also cache these constraints for reuse in cloneSolver() to avoid memory explosion
             for (const member of memberNodes) {
                 const memberIndex = this.getNodeIndex(member.id);
                 const memberX = this.variables[memberIndex].x;
                 const memberY = this.variables[memberIndex].y;
 
-                // member.x >= groupLeft
-                this.solver.addConstraint(new Constraint(memberX, Operator.Ge, groupLeft, Strength.required));
-                // member.x <= groupRight
-                this.solver.addConstraint(new Constraint(memberX, Operator.Le, groupRight, Strength.required));
-                // member.y >= groupTop
-                this.solver.addConstraint(new Constraint(memberY, Operator.Ge, groupTop, Strength.required));
-                // member.y <= groupBottom
-                this.solver.addConstraint(new Constraint(memberY, Operator.Le, groupBottom, Strength.required));
+                // Create constraints once and cache them for reuse
+                const leftConstraint = new Constraint(memberX, Operator.Ge, groupLeft, Strength.required);
+                const rightConstraint = new Constraint(memberX, Operator.Le, groupRight, Strength.required);
+                const topConstraint = new Constraint(memberY, Operator.Ge, groupTop, Strength.required);
+                const bottomConstraint = new Constraint(memberY, Operator.Le, groupBottom, Strength.required);
+                
+                // Cache for reuse in cloneSolver()
+                this.boundingBoxMemberConstraints.push(leftConstraint, rightConstraint, topConstraint, bottomConstraint);
+                
+                // Add to the main solver
+                this.solver.addConstraint(leftConstraint);
+                this.solver.addConstraint(rightConstraint);
+                this.solver.addConstraint(topConstraint);
+                this.solver.addConstraint(bottomConstraint);
             }
 
             // For each "free" node (not in any other non-singleton group), add disjunctive constraint
@@ -1165,34 +1177,51 @@ class ConstraintValidator {
 
     /**
      * Adds bounding box member constraints to the given solver.
-     * Helper method used both in cloneSolver and getMinimalConflictingConstraints.
+     * Helper method used both in cloneSolver and isConflictingSet.
      * 
      * @param solver - The solver to add constraints to
+     * @param useCache - If true, uses cached constraints (for cloneSolver performance).
+     *                   If false, creates fresh constraints using current groupBoundingBoxes
+     *                   (required for isConflictingSet which uses temporary test bbox variables).
      */
-    private addBoundingBoxMemberConstraintsToSolver(solver: Solver): void {
-        for (const group of this.groups) {
-            if (group.nodeIds.length <= 1) continue;
-            if (!group.sourceConstraint) continue;
-
-            const bbox = this.groupBoundingBoxes.get(group.name);
-            if (!bbox) continue;
-
-            const memberNodes = group.nodeIds
-                .map(id => this.nodes.find(n => n.id === id))
-                .filter((n): n is LayoutNode => n !== undefined);
-
-            for (const member of memberNodes) {
-                const memberIndex = this.getNodeIndex(member.id);
-                const memberX = this.variables[memberIndex].x;
-                const memberY = this.variables[memberIndex].y;
-
+    private addBoundingBoxMemberConstraintsToSolver(solver: Solver, useCache: boolean = true): void {
+        if (useCache && this.boundingBoxMemberConstraints.length > 0) {
+            // Use cached constraints - they were created once in addGroupBoundingBoxConstraints()
+            // This is a critical memory optimization for cloneSolver() during backtracking
+            for (const constraint of this.boundingBoxMemberConstraints) {
                 try {
-                    solver.addConstraint(new Constraint(memberX, Operator.Ge, bbox.left, Strength.required));
-                    solver.addConstraint(new Constraint(memberX, Operator.Le, bbox.right, Strength.required));
-                    solver.addConstraint(new Constraint(memberY, Operator.Ge, bbox.top, Strength.required));
-                    solver.addConstraint(new Constraint(memberY, Operator.Le, bbox.bottom, Strength.required));
+                    solver.addConstraint(constraint);
                 } catch (e) {
                     // Constraint may already exist, ignore
+                }
+            }
+        } else {
+            // Create fresh constraints using current groupBoundingBoxes
+            // This is needed for isConflictingSet which uses temporary test bbox variables
+            for (const group of this.groups) {
+                if (group.nodeIds.length <= 1) continue;
+                if (!group.sourceConstraint) continue;
+
+                const bbox = this.groupBoundingBoxes.get(group.name);
+                if (!bbox) continue;
+
+                const memberNodes = group.nodeIds
+                    .map(id => this.nodes.find(n => n.id === id))
+                    .filter((n): n is LayoutNode => n !== undefined);
+
+                for (const member of memberNodes) {
+                    const memberIndex = this.getNodeIndex(member.id);
+                    const memberX = this.variables[memberIndex].x;
+                    const memberY = this.variables[memberIndex].y;
+
+                    try {
+                        solver.addConstraint(new Constraint(memberX, Operator.Ge, bbox.left, Strength.required));
+                        solver.addConstraint(new Constraint(memberX, Operator.Le, bbox.right, Strength.required));
+                        solver.addConstraint(new Constraint(memberY, Operator.Ge, bbox.top, Strength.required));
+                        solver.addConstraint(new Constraint(memberY, Operator.Le, bbox.bottom, Strength.required));
+                    } catch (e) {
+                        // Constraint may already exist, ignore
+                    }
                 }
             }
         }
@@ -1445,7 +1474,8 @@ class ConstraintValidator {
                 
                 try {
                     // Add member constraints for groups if needed
-                    this.addBoundingBoxMemberConstraintsToSolver(testSolver);
+                    // Use fresh constraints (useCache=false) since we're using temporary test bbox variables
+                    this.addBoundingBoxMemberConstraintsToSolver(testSolver, false);
                     
                     // Add all constraints
                     for (const constraint of constraints) {
