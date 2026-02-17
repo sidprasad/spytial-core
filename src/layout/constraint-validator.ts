@@ -1177,22 +1177,52 @@ class ConstraintValidator {
 
     /**
      * Adds bounding box member constraints to the given solver.
-     * Helper method used both in cloneSolver and getMinimalConflictingConstraints.
-     * 
-     * Uses cached constraints from addGroupBoundingBoxConstraints() to avoid 
-     * recreating Constraint objects on every cloneSolver() call.
-     * This is a critical memory optimization - with 200 nodes and 5 groups,
-     * creating 800+ new constraints per clone would cause memory exhaustion.
+     * Helper method used both in cloneSolver and isConflictingSet.
      * 
      * @param solver - The solver to add constraints to
+     * @param useCache - If true, uses cached constraints (for cloneSolver performance).
+     *                   If false, creates fresh constraints using current groupBoundingBoxes
+     *                   (required for isConflictingSet which uses temporary test bbox variables).
      */
-    private addBoundingBoxMemberConstraintsToSolver(solver: Solver): void {
-        // Use cached constraints - they were created once in addGroupBoundingBoxConstraints()
-        for (const constraint of this.boundingBoxMemberConstraints) {
-            try {
-                solver.addConstraint(constraint);
-            } catch (e) {
-                // Constraint may already exist, ignore
+    private addBoundingBoxMemberConstraintsToSolver(solver: Solver, useCache: boolean = true): void {
+        if (useCache && this.boundingBoxMemberConstraints.length > 0) {
+            // Use cached constraints - they were created once in addGroupBoundingBoxConstraints()
+            // This is a critical memory optimization for cloneSolver() during backtracking
+            for (const constraint of this.boundingBoxMemberConstraints) {
+                try {
+                    solver.addConstraint(constraint);
+                } catch (e) {
+                    // Constraint may already exist, ignore
+                }
+            }
+        } else {
+            // Create fresh constraints using current groupBoundingBoxes
+            // This is needed for isConflictingSet which uses temporary test bbox variables
+            for (const group of this.groups) {
+                if (group.nodeIds.length <= 1) continue;
+                if (!group.sourceConstraint) continue;
+
+                const bbox = this.groupBoundingBoxes.get(group.name);
+                if (!bbox) continue;
+
+                const memberNodes = group.nodeIds
+                    .map(id => this.nodes.find(n => n.id === id))
+                    .filter((n): n is LayoutNode => n !== undefined);
+
+                for (const member of memberNodes) {
+                    const memberIndex = this.getNodeIndex(member.id);
+                    const memberX = this.variables[memberIndex].x;
+                    const memberY = this.variables[memberIndex].y;
+
+                    try {
+                        solver.addConstraint(new Constraint(memberX, Operator.Ge, bbox.left, Strength.required));
+                        solver.addConstraint(new Constraint(memberX, Operator.Le, bbox.right, Strength.required));
+                        solver.addConstraint(new Constraint(memberY, Operator.Ge, bbox.top, Strength.required));
+                        solver.addConstraint(new Constraint(memberY, Operator.Le, bbox.bottom, Strength.required));
+                    } catch (e) {
+                        // Constraint may already exist, ignore
+                    }
+                }
             }
         }
     }
@@ -1444,7 +1474,8 @@ class ConstraintValidator {
                 
                 try {
                     // Add member constraints for groups if needed
-                    this.addBoundingBoxMemberConstraintsToSolver(testSolver);
+                    // Use fresh constraints (useCache=false) since we're using temporary test bbox variables
+                    this.addBoundingBoxMemberConstraintsToSolver(testSolver, false);
                     
                     // Add all constraints
                     for (const constraint of constraints) {
