@@ -230,6 +230,12 @@ class ConstraintValidator {
     // Track alignment constraints for each node pair (for error reporting)
     private horizontalAlignmentMap: Map<string, AlignmentConstraint[]> = new Map();
     private verticalAlignmentMap: Map<string, AlignmentConstraint[]> = new Map();
+    
+    // Union-Find structures for alignment equivalence classes (used for disjunction pruning)
+    // Nodes in the same X-equivalence class share the same X coordinate (vertically aligned)
+    // Nodes in the same Y-equivalence class share the same Y coordinate (horizontally aligned)
+    private xAlignmentParent: Map<string, string> = new Map();
+    private yAlignmentParent: Map<string, string> = new Map();
 
     constructor(layout: InstanceLayout) {
         this.layout = layout;
@@ -885,6 +891,177 @@ class ConstraintValidator {
         return null; // No overlaps found
     }
 
+    // ====== Union-Find helpers for alignment equivalence classes ======
+    
+    /**
+     * Union-Find: Find with path compression.
+     * Returns the representative node ID for the given node's equivalence class.
+     */
+    private ufFind(parent: Map<string, string>, nodeId: string): string {
+        if (!parent.has(nodeId)) {
+            parent.set(nodeId, nodeId);
+            return nodeId;
+        }
+        const p = parent.get(nodeId)!;
+        if (p !== nodeId) {
+            // Path compression
+            const root = this.ufFind(parent, p);
+            parent.set(nodeId, root);
+            return root;
+        }
+        return nodeId;
+    }
+    
+    /**
+     * Union-Find: Union two nodes into the same equivalence class.
+     */
+    private ufUnion(parent: Map<string, string>, nodeId1: string, nodeId2: string): void {
+        const root1 = this.ufFind(parent, nodeId1);
+        const root2 = this.ufFind(parent, nodeId2);
+        if (root1 !== root2) {
+            // Union: make root1 the parent of root2 (arbitrary choice)
+            parent.set(root2, root1);
+        }
+    }
+    
+    /**
+     * Builds alignment equivalence classes from input constraints.
+     * This enables disjunction pruning: nodes in the same alignment class
+     * share coordinates on one axis, so only one representative is needed
+     * for disjunctions on that axis.
+     * 
+     * - X-alignment (vertical alignment): nodes share X coordinate → use one rep for left/right disjunctions
+     * - Y-alignment (horizontal alignment): nodes share Y coordinate → use one rep for top/bottom disjunctions
+     */
+    private buildAlignmentEquivalenceClasses(): void {
+        // Initialize parent maps
+        this.xAlignmentParent = new Map();
+        this.yAlignmentParent = new Map();
+        
+        for (const constraint of this.orientationConstraints) {
+            if (isAlignmentConstraint(constraint)) {
+                const node1Id = constraint.node1.id;
+                const node2Id = constraint.node2.id;
+                
+                if (constraint.axis === 'x') {
+                    // Vertical alignment: same X coordinate
+                    this.ufUnion(this.xAlignmentParent, node1Id, node2Id);
+                } else if (constraint.axis === 'y') {
+                    // Horizontal alignment: same Y coordinate
+                    this.ufUnion(this.yAlignmentParent, node1Id, node2Id);
+                }
+            }
+        }
+    }
+    
+    /**
+     * Gets representative nodes for disjunction creation.
+     * Returns a set of node IDs that should be used as representatives.
+     * 
+     * The optimization: If nodes A, B, C are all X-aligned (same X), then for
+     * left/right-of-group disjunctions, we only need ONE of them. Similarly for Y.
+     * 
+     * For full 4-way disjunctions (left OR right OR top OR bottom), we need nodes
+     * that are representatives in BOTH X and Y dimensions, OR we need to be more
+     * careful about which alternatives to include.
+     * 
+     * Simpler approach: Return nodes that are representatives in at least one dimension,
+     * and for each free node, only create the relevant axis alternatives.
+     * 
+     * @param freeNodes - Set of free node IDs (not in any non-singleton group)
+     * @returns Map from representative node ID to the set of nodes it represents
+     */
+    private getAlignmentRepresentatives(freeNodes: Set<string>): Map<string, Set<string>> {
+        // Build a combined equivalence class using both X and Y alignments
+        // Two nodes are "fully equivalent" if they share both X and Y (but that would mean overlap)
+        // Instead, we use a heuristic: group by (xRoot, yRoot) pair
+        
+        const reprToNodes = new Map<string, Set<string>>();
+        
+        for (const nodeId of freeNodes) {
+            const xRoot = this.ufFind(this.xAlignmentParent, nodeId);
+            const yRoot = this.ufFind(this.yAlignmentParent, nodeId);
+            // Combined key represents the equivalence class
+            const key = `${xRoot}|${yRoot}`;
+            
+            if (!reprToNodes.has(key)) {
+                reprToNodes.set(key, new Set());
+            }
+            reprToNodes.get(key)!.add(nodeId);
+        }
+        
+        // Convert to representative -> represented nodes
+        // Pick first node as representative
+        const result = new Map<string, Set<string>>();
+        for (const nodes of reprToNodes.values()) {
+            const nodesArray = Array.from(nodes);
+            const repr = nodesArray[0]; // First node is the representative
+            result.set(repr, nodes);
+        }
+        
+        return result;
+    }
+    
+    /**
+     * Builds a containment hierarchy for groups.
+     * Returns a map from parent group name to its direct child group names.
+     * This is used to optimize group-vs-group disjunctions by using linear chains
+     * instead of full pairwise comparisons for sibling groups.
+     */
+    private buildGroupHierarchy(): {
+        parentToChildren: Map<string, string[]>;
+        childToParent: Map<string, string>;
+        rootGroups: string[];
+    } {
+        const parentToChildren = new Map<string, string[]>();
+        const childToParent = new Map<string, string>();
+        const allGroups = new Set<string>();
+        const childGroups = new Set<string>();
+        
+        // Find direct containment relationships
+        for (const group of this.groups) {
+            if (group.nodeIds.length <= 1) continue; // Skip singletons
+            allGroups.add(group.name);
+            
+            for (const otherGroup of this.groups) {
+                if (otherGroup.nodeIds.length <= 1) continue;
+                if (group.name === otherGroup.name) continue;
+                
+                // Check if otherGroup is a direct child of group
+                // (otherGroup ⊂ group AND no intermediate group exists)
+                if (this.isSubGroup(otherGroup, group)) {
+                    // otherGroup is contained in group
+                    // Check if it's DIRECT (no group in between)
+                    let isDirect = true;
+                    for (const midGroup of this.groups) {
+                        if (midGroup.nodeIds.length <= 1) continue;
+                        if (midGroup.name === group.name || midGroup.name === otherGroup.name) continue;
+                        
+                        // If otherGroup ⊂ midGroup ⊂ group, then it's not direct
+                        if (this.isSubGroup(otherGroup, midGroup) && this.isSubGroup(midGroup, group)) {
+                            isDirect = false;
+                            break;
+                        }
+                    }
+                    
+                    if (isDirect) {
+                        if (!parentToChildren.has(group.name)) {
+                            parentToChildren.set(group.name, []);
+                        }
+                        parentToChildren.get(group.name)!.push(otherGroup.name);
+                        childToParent.set(otherGroup.name, group.name);
+                        childGroups.add(otherGroup.name);
+                    }
+                }
+            }
+        }
+        
+        // Root groups are those with no parent
+        const rootGroups = Array.from(allGroups).filter(g => !childGroups.has(g));
+        
+        return { parentToChildren, childToParent, rootGroups };
+    }
+
     /**
      * Adds group bounding box constraints to the solver.
      * 
@@ -909,6 +1086,10 @@ class ConstraintValidator {
      * @returns PositionalConstraintError if adding constraints fails, null otherwise
      */
     private addGroupBoundingBoxConstraints(): PositionalConstraintError | null {
+        // Build alignment equivalence classes for disjunction pruning
+        // This allows us to use representative nodes instead of all free nodes
+        this.buildAlignmentEquivalenceClasses();
+        
         // Pre-compute which nodes belong to which groups (for non-singleton groups)
         // This allows us to identify "free" nodes that aren't in any group
         const nodeToGroups = new Map<string, Set<LayoutGroup>>();
@@ -924,6 +1105,25 @@ class ConstraintValidator {
                     nodeToGroups.get(nodeId)?.add(group);
                 }
             }
+        }
+        
+        // Collect all free nodes (not in any non-singleton group)
+        const freeNodeIds = new Set<string>();
+        for (const node of this.nodes) {
+            const nodeGroups = nodeToGroups.get(node.id);
+            if (!nodeGroups || nodeGroups.size === 0) {
+                freeNodeIds.add(node.id);
+            }
+        }
+        
+        // Get representative nodes for alignment equivalence classes
+        // This is the key optimization: instead of O(free_nodes × groups) disjunctions,
+        // we get O(alignment_classes × groups) which can be significantly smaller
+        const alignmentRepresentatives = this.getAlignmentRepresentatives(freeNodeIds);
+        
+        // Log the reduction for debugging
+        if (freeNodeIds.size > 0 && alignmentRepresentatives.size < freeNodeIds.size) {
+            console.log(`Disjunction pruning: Reduced free nodes from ${freeNodeIds.size} to ${alignmentRepresentatives.size} representatives via alignment clustering`);
         }
 
         for (const group of this.groups) {
@@ -984,15 +1184,15 @@ class ConstraintValidator {
             }
 
             // For each "free" node (not in any other non-singleton group), add disjunctive constraint
-            // This optimization leverages the fact that groups cannot overlap (except via subsumption)
-            for (const node of this.nodes) {
-                // Skip if this node is a member of this group
-                if (memberIds.has(node.id)) continue;
+            // OPTIMIZATION: Use alignment representatives instead of all free nodes.
+            // If nodes are aligned (share coordinates), only one representative needs the disjunction.
+            for (const [reprNodeId, representedNodes] of alignmentRepresentatives) {
+                // Skip if the representative is a member of this group
+                if (memberIds.has(reprNodeId)) continue;
                 
-                // Skip if this node belongs to other non-singleton groups
-                // (it's already constrained to be in those groups, so it can't be outside this one)
-                const nodeGroups = nodeToGroups.get(node.id);
-                if (nodeGroups && nodeGroups.size > 0) continue;
+                // Get the representative node
+                const node = this.nodes.find(n => n.id === reprNodeId);
+                if (!node) continue;
 
                 const sourceConstraint = group.sourceConstraint;
 
@@ -1047,6 +1247,13 @@ class ConstraintValidator {
         // Add disjunctive constraints for group-to-group boundary separation
         // For each pair of non-overlapping groups, ensure they are separated in one direction
         
+        // OPTIMIZATION: Build group hierarchy to identify sibling groups
+        // For sibling groups under the same parent, use smarter pairing strategy
+        const hierarchy = this.buildGroupHierarchy();
+        
+        // Collect all group pairs that need disjunctions
+        const groupPairs: Array<[LayoutGroup, LayoutGroup]> = [];
+        
         for (let i = 0; i < this.groups.length; i++) {
             for (let j = i + 1; j < this.groups.length; j++) {
                 const groupA = this.groups[i];
@@ -1068,54 +1275,145 @@ class ConstraintValidator {
                     continue;
                 }
                 
-                // Create four GroupBoundaryConstraint alternatives for group-to-group separation
-                const leftAlternative: GroupBoundaryConstraint = {
-                    groupA: groupA,
-                    groupB: groupB,
-                    side: 'left',  // A left of B
-                    minDistance: this.minPadding,
-                    sourceConstraint: groupA.sourceConstraint || groupB.sourceConstraint!
-                };
-                
-                const rightAlternative: GroupBoundaryConstraint = {
-                    groupA: groupA,
-                    groupB: groupB,
-                    side: 'right',  // A right of B
-                    minDistance: this.minPadding,
-                    sourceConstraint: groupA.sourceConstraint || groupB.sourceConstraint!
-                };
-                
-                const topAlternative: GroupBoundaryConstraint = {
-                    groupA: groupA,
-                    groupB: groupB,
-                    side: 'top',  // A above B
-                    minDistance: this.minPadding,
-                    sourceConstraint: groupA.sourceConstraint || groupB.sourceConstraint!
-                };
-                
-                const bottomAlternative: GroupBoundaryConstraint = {
-                    groupA: groupA,
-                    groupB: groupB,
-                    side: 'bottom',  // A below B
-                    minDistance: this.minPadding,
-                    sourceConstraint: groupA.sourceConstraint || groupB.sourceConstraint!
-                };
-                
-                // Create the disjunction: groups must satisfy ONE of these four alternatives
-                const disjunction = new DisjunctiveConstraint(
-                    groupA.sourceConstraint || groupB.sourceConstraint!,
-                    [[leftAlternative], [rightAlternative], [topAlternative], [bottomAlternative]]
-                );
-                
-                // Add to the list of disjunctive constraints that will be solved
-                if (!this.layout.disjunctiveConstraints) {
-                    this.layout.disjunctiveConstraints = [];
-                }
-                this.layout.disjunctiveConstraints.push(disjunction);
+                // Collect this pair for later processing
+                groupPairs.push([groupA, groupB]);
             }
+        }
+        
+        // OPTIMIZATION: For sibling groups under the same parent, we can use linear chaining
+        // This reduces O(k²) to O(k) for k siblings under each parent
+        const optimizedPairs = this.optimizeGroupPairs(groupPairs, hierarchy);
+        
+        // Log the reduction
+        if (groupPairs.length > 0 && optimizedPairs.length < groupPairs.length) {
+            console.log(`Group-vs-group disjunction pruning: Reduced from ${groupPairs.length} to ${optimizedPairs.length} pairs via sibling chain optimization`);
+        }
+        
+        // Create disjunctions for the optimized pairs
+        for (const [groupA, groupB] of optimizedPairs) {
+            // Create four GroupBoundaryConstraint alternatives for group-to-group separation
+            const leftAlternative: GroupBoundaryConstraint = {
+                groupA: groupA,
+                groupB: groupB,
+                side: 'left',  // A left of B
+                minDistance: this.minPadding,
+                sourceConstraint: groupA.sourceConstraint || groupB.sourceConstraint!
+            };
+            
+            const rightAlternative: GroupBoundaryConstraint = {
+                groupA: groupA,
+                groupB: groupB,
+                side: 'right',  // A right of B
+                minDistance: this.minPadding,
+                sourceConstraint: groupA.sourceConstraint || groupB.sourceConstraint!
+            };
+            
+            const topAlternative: GroupBoundaryConstraint = {
+                groupA: groupA,
+                groupB: groupB,
+                side: 'top',  // A above B
+                minDistance: this.minPadding,
+                sourceConstraint: groupA.sourceConstraint || groupB.sourceConstraint!
+            };
+            
+            const bottomAlternative: GroupBoundaryConstraint = {
+                groupA: groupA,
+                groupB: groupB,
+                side: 'bottom',  // A below B
+                minDistance: this.minPadding,
+                sourceConstraint: groupA.sourceConstraint || groupB.sourceConstraint!
+            };
+            
+            // Create the disjunction: groups must satisfy ONE of these four alternatives
+            const disjunction = new DisjunctiveConstraint(
+                groupA.sourceConstraint || groupB.sourceConstraint!,
+                [[leftAlternative], [rightAlternative], [topAlternative], [bottomAlternative]]
+            );
+            
+            // Add to the list of disjunctive constraints that will be solved
+            if (!this.layout.disjunctiveConstraints) {
+                this.layout.disjunctiveConstraints = [];
+            }
+            this.layout.disjunctiveConstraints.push(disjunction);
         }
 
         return null;
+    }
+    
+    /**
+     * Optimizes group pairs for disjunction creation using sibling chain optimization.
+     * 
+     * For sibling groups (groups that share the same parent), we can use linear chaining
+     * instead of full pairwise comparison. This reduces O(k²) to O(k) for k siblings.
+     * 
+     * The insight: If siblings A, B, C are ordered and we ensure A doesn't overlap B,
+     * and B doesn't overlap C, we still need A doesn't overlap C (disjunctions are OR).
+     * 
+     * HOWEVER, if siblings are ordered by a consistent heuristic (e.g., key node position),
+     * and we use only left/top constraints between consecutive pairs, we can achieve
+     * total ordering without full pairwise. But this is restrictive.
+     * 
+     * Current implementation: Conservative pruning - keep all pairs but log the opportunity.
+     * Future optimization: If layout spec provides explicit ordering among siblings,
+     * use linear chaining.
+     * 
+     * @param pairs - Original pairs needing disjunctions
+     * @param hierarchy - Group containment hierarchy
+     * @returns Optimized (possibly reduced) set of pairs
+     */
+    private optimizeGroupPairs(
+        pairs: Array<[LayoutGroup, LayoutGroup]>,
+        hierarchy: { parentToChildren: Map<string, string[]>; childToParent: Map<string, string>; rootGroups: string[] }
+    ): Array<[LayoutGroup, LayoutGroup]> {
+        // Group pairs by their common parent (for sibling detection)
+        const siblingPairs = new Map<string, Array<[LayoutGroup, LayoutGroup]>>();
+        const nonSiblingPairs: Array<[LayoutGroup, LayoutGroup]> = [];
+        
+        for (const [groupA, groupB] of pairs) {
+            const parentA = hierarchy.childToParent.get(groupA.name);
+            const parentB = hierarchy.childToParent.get(groupB.name);
+            
+            if (parentA && parentA === parentB) {
+                // These are siblings under the same parent
+                if (!siblingPairs.has(parentA)) {
+                    siblingPairs.set(parentA, []);
+                }
+                siblingPairs.get(parentA)!.push([groupA, groupB]);
+            } else if (!parentA && !parentB) {
+                // Both are root groups - treat as siblings at the top level
+                if (!siblingPairs.has('__root__')) {
+                    siblingPairs.set('__root__', []);
+                }
+                siblingPairs.get('__root__')!.push([groupA, groupB]);
+            } else {
+                // Different levels or different parents - keep as-is
+                nonSiblingPairs.push([groupA, groupB]);
+            }
+        }
+        
+        // For each sibling set, apply optimization
+        // Current strategy: For siblings, we COULD reduce to linear chain,
+        // but that requires careful axis selection. For safety, keep all but log.
+        const optimizedSiblingPairs: Array<[LayoutGroup, LayoutGroup]> = [];
+        
+        for (const [parentName, siblingPairList] of siblingPairs) {
+            // For now, conservative: keep all sibling pairs
+            // Future: implement linear chain if we can determine a consistent axis
+            optimizedSiblingPairs.push(...siblingPairList);
+            
+            // Log opportunity for future optimization
+            if (siblingPairList.length > 3) {
+                // More than 3 pairs means more than 2 siblings - potential for O(k) reduction
+                const siblings = new Set<string>();
+                for (const [a, b] of siblingPairList) {
+                    siblings.add(a.name);
+                    siblings.add(b.name);
+                }
+                console.log(`Group-vs-group: ${siblings.size} siblings under "${parentName}" generating ${siblingPairList.length} pairs (linear chain could reduce to ${siblings.size - 1})`);
+            }
+        }
+        
+        return [...nonSiblingPairs, ...optimizedSiblingPairs];
     }
 
     private getNodeIndex(nodeId: string) {
