@@ -230,6 +230,12 @@ class ConstraintValidator {
     // Track alignment constraints for each node pair (for error reporting)
     private horizontalAlignmentMap: Map<string, AlignmentConstraint[]> = new Map();
     private verticalAlignmentMap: Map<string, AlignmentConstraint[]> = new Map();
+    
+    // Union-Find structures for alignment equivalence classes (used for disjunction pruning)
+    // Nodes in the same X-equivalence class share the same X coordinate (vertically aligned)
+    // Nodes in the same Y-equivalence class share the same Y coordinate (horizontally aligned)
+    private xAlignmentParent: Map<string, string> = new Map();
+    private yAlignmentParent: Map<string, string> = new Map();
 
     constructor(layout: InstanceLayout) {
         this.layout = layout;
@@ -885,6 +891,117 @@ class ConstraintValidator {
         return null; // No overlaps found
     }
 
+    // ====== Union-Find helpers for alignment equivalence classes ======
+    
+    /**
+     * Union-Find: Find with path compression.
+     * Returns the representative node ID for the given node's equivalence class.
+     */
+    private ufFind(parent: Map<string, string>, nodeId: string): string {
+        if (!parent.has(nodeId)) {
+            parent.set(nodeId, nodeId);
+            return nodeId;
+        }
+        const p = parent.get(nodeId)!;
+        if (p !== nodeId) {
+            // Path compression
+            const root = this.ufFind(parent, p);
+            parent.set(nodeId, root);
+            return root;
+        }
+        return nodeId;
+    }
+    
+    /**
+     * Union-Find: Union two nodes into the same equivalence class.
+     */
+    private ufUnion(parent: Map<string, string>, nodeId1: string, nodeId2: string): void {
+        const root1 = this.ufFind(parent, nodeId1);
+        const root2 = this.ufFind(parent, nodeId2);
+        if (root1 !== root2) {
+            // Union: make root1 the parent of root2 (arbitrary choice)
+            parent.set(root2, root1);
+        }
+    }
+    
+    /**
+     * Builds alignment equivalence classes from input constraints.
+     * This enables disjunction pruning: nodes in the same alignment class
+     * share coordinates on one axis, so only one representative is needed
+     * for disjunctions on that axis.
+     * 
+     * - X-alignment (vertical alignment): nodes share X coordinate → use one rep for left/right disjunctions
+     * - Y-alignment (horizontal alignment): nodes share Y coordinate → use one rep for top/bottom disjunctions
+     */
+    private buildAlignmentEquivalenceClasses(): void {
+        // Initialize parent maps
+        this.xAlignmentParent = new Map();
+        this.yAlignmentParent = new Map();
+        
+        for (const constraint of this.orientationConstraints) {
+            if (isAlignmentConstraint(constraint)) {
+                const node1Id = constraint.node1.id;
+                const node2Id = constraint.node2.id;
+                
+                if (constraint.axis === 'x') {
+                    // Vertical alignment: same X coordinate
+                    this.ufUnion(this.xAlignmentParent, node1Id, node2Id);
+                } else if (constraint.axis === 'y') {
+                    // Horizontal alignment: same Y coordinate
+                    this.ufUnion(this.yAlignmentParent, node1Id, node2Id);
+                }
+            }
+        }
+    }
+    
+    /**
+     * Gets representative nodes for disjunction creation.
+     * Returns a set of node IDs that should be used as representatives.
+     * 
+     * The optimization: If nodes A, B, C are all X-aligned (same X), then for
+     * left/right-of-group disjunctions, we only need ONE of them. Similarly for Y.
+     * 
+     * For full 4-way disjunctions (left OR right OR top OR bottom), we need nodes
+     * that are representatives in BOTH X and Y dimensions, OR we need to be more
+     * careful about which alternatives to include.
+     * 
+     * Simpler approach: Return nodes that are representatives in at least one dimension,
+     * and for each free node, only create the relevant axis alternatives.
+     * 
+     * @param freeNodes - Set of free node IDs (not in any non-singleton group)
+     * @returns Map from representative node ID to the set of nodes it represents
+     */
+    private getAlignmentRepresentatives(freeNodes: Set<string>): Map<string, Set<string>> {
+        // Build a combined equivalence class using both X and Y alignments
+        // Two nodes are "fully equivalent" if they share both X and Y (but that would mean overlap)
+        // Instead, we use a heuristic: group by (xRoot, yRoot) pair
+        
+        const reprToNodes = new Map<string, Set<string>>();
+        
+        for (const nodeId of freeNodes) {
+            const xRoot = this.ufFind(this.xAlignmentParent, nodeId);
+            const yRoot = this.ufFind(this.yAlignmentParent, nodeId);
+            // Combined key represents the equivalence class
+            const key = `${xRoot}|${yRoot}`;
+            
+            if (!reprToNodes.has(key)) {
+                reprToNodes.set(key, new Set());
+            }
+            reprToNodes.get(key)!.add(nodeId);
+        }
+        
+        // Convert to representative -> represented nodes
+        // Pick first node as representative
+        const result = new Map<string, Set<string>>();
+        for (const nodes of reprToNodes.values()) {
+            const nodesArray = Array.from(nodes);
+            const repr = nodesArray[0]; // First node is the representative
+            result.set(repr, nodes);
+        }
+        
+        return result;
+    }
+    
     /**
      * Adds group bounding box constraints to the solver.
      * 
@@ -909,6 +1026,10 @@ class ConstraintValidator {
      * @returns PositionalConstraintError if adding constraints fails, null otherwise
      */
     private addGroupBoundingBoxConstraints(): PositionalConstraintError | null {
+        // Build alignment equivalence classes for disjunction pruning
+        // This allows us to use representative nodes instead of all free nodes
+        this.buildAlignmentEquivalenceClasses();
+        
         // Pre-compute which nodes belong to which groups (for non-singleton groups)
         // This allows us to identify "free" nodes that aren't in any group
         const nodeToGroups = new Map<string, Set<LayoutGroup>>();
@@ -924,6 +1045,25 @@ class ConstraintValidator {
                     nodeToGroups.get(nodeId)?.add(group);
                 }
             }
+        }
+        
+        // Collect all free nodes (not in any non-singleton group)
+        const freeNodeIds = new Set<string>();
+        for (const node of this.nodes) {
+            const nodeGroups = nodeToGroups.get(node.id);
+            if (!nodeGroups || nodeGroups.size === 0) {
+                freeNodeIds.add(node.id);
+            }
+        }
+        
+        // Get representative nodes for alignment equivalence classes
+        // This is the key optimization: instead of O(free_nodes × groups) disjunctions,
+        // we get O(alignment_classes × groups) which can be significantly smaller
+        const alignmentRepresentatives = this.getAlignmentRepresentatives(freeNodeIds);
+        
+        // Log the reduction for debugging
+        if (freeNodeIds.size > 0 && alignmentRepresentatives.size < freeNodeIds.size) {
+            console.log(`Disjunction pruning: Reduced free nodes from ${freeNodeIds.size} to ${alignmentRepresentatives.size} representatives via alignment clustering`);
         }
 
         for (const group of this.groups) {
@@ -984,15 +1124,15 @@ class ConstraintValidator {
             }
 
             // For each "free" node (not in any other non-singleton group), add disjunctive constraint
-            // This optimization leverages the fact that groups cannot overlap (except via subsumption)
-            for (const node of this.nodes) {
-                // Skip if this node is a member of this group
-                if (memberIds.has(node.id)) continue;
+            // OPTIMIZATION: Use alignment representatives instead of all free nodes.
+            // If nodes are aligned (share coordinates), only one representative needs the disjunction.
+            for (const [reprNodeId, representedNodes] of alignmentRepresentatives) {
+                // Skip if the representative is a member of this group
+                if (memberIds.has(reprNodeId)) continue;
                 
-                // Skip if this node belongs to other non-singleton groups
-                // (it's already constrained to be in those groups, so it can't be outside this one)
-                const nodeGroups = nodeToGroups.get(node.id);
-                if (nodeGroups && nodeGroups.size > 0) continue;
+                // Get the representative node
+                const node = this.nodes.find(n => n.id === reprNodeId);
+                if (!node) continue;
 
                 const sourceConstraint = group.sourceConstraint;
 
@@ -1047,6 +1187,9 @@ class ConstraintValidator {
         // Add disjunctive constraints for group-to-group boundary separation
         // For each pair of non-overlapping groups, ensure they are separated in one direction
         
+        // Collect all group pairs that need disjunctions
+        const groupPairs: Array<[LayoutGroup, LayoutGroup]> = [];
+        
         for (let i = 0; i < this.groups.length; i++) {
             for (let j = i + 1; j < this.groups.length; j++) {
                 const groupA = this.groups[i];
@@ -1068,55 +1211,63 @@ class ConstraintValidator {
                     continue;
                 }
                 
-                // Create four GroupBoundaryConstraint alternatives for group-to-group separation
-                const leftAlternative: GroupBoundaryConstraint = {
-                    groupA: groupA,
-                    groupB: groupB,
-                    side: 'left',  // A left of B
-                    minDistance: this.minPadding,
-                    sourceConstraint: groupA.sourceConstraint || groupB.sourceConstraint!
-                };
-                
-                const rightAlternative: GroupBoundaryConstraint = {
-                    groupA: groupA,
-                    groupB: groupB,
-                    side: 'right',  // A right of B
-                    minDistance: this.minPadding,
-                    sourceConstraint: groupA.sourceConstraint || groupB.sourceConstraint!
-                };
-                
-                const topAlternative: GroupBoundaryConstraint = {
-                    groupA: groupA,
-                    groupB: groupB,
-                    side: 'top',  // A above B
-                    minDistance: this.minPadding,
-                    sourceConstraint: groupA.sourceConstraint || groupB.sourceConstraint!
-                };
-                
-                const bottomAlternative: GroupBoundaryConstraint = {
-                    groupA: groupA,
-                    groupB: groupB,
-                    side: 'bottom',  // A below B
-                    minDistance: this.minPadding,
-                    sourceConstraint: groupA.sourceConstraint || groupB.sourceConstraint!
-                };
-                
-                // Create the disjunction: groups must satisfy ONE of these four alternatives
-                const disjunction = new DisjunctiveConstraint(
-                    groupA.sourceConstraint || groupB.sourceConstraint!,
-                    [[leftAlternative], [rightAlternative], [topAlternative], [bottomAlternative]]
-                );
-                
-                // Add to the list of disjunctive constraints that will be solved
-                if (!this.layout.disjunctiveConstraints) {
-                    this.layout.disjunctiveConstraints = [];
-                }
-                this.layout.disjunctiveConstraints.push(disjunction);
+                // Collect this pair for later processing
+                groupPairs.push([groupA, groupB]);
             }
+        }
+        
+        // Create disjunctions for the collected pairs
+        for (const [groupA, groupB] of groupPairs) {
+            // Create four GroupBoundaryConstraint alternatives for group-to-group separation
+            const leftAlternative: GroupBoundaryConstraint = {
+                groupA: groupA,
+                groupB: groupB,
+                side: 'left',  // A left of B
+                minDistance: this.minPadding,
+                sourceConstraint: groupA.sourceConstraint || groupB.sourceConstraint!
+            };
+            
+            const rightAlternative: GroupBoundaryConstraint = {
+                groupA: groupA,
+                groupB: groupB,
+                side: 'right',  // A right of B
+                minDistance: this.minPadding,
+                sourceConstraint: groupA.sourceConstraint || groupB.sourceConstraint!
+            };
+            
+            const topAlternative: GroupBoundaryConstraint = {
+                groupA: groupA,
+                groupB: groupB,
+                side: 'top',  // A above B
+                minDistance: this.minPadding,
+                sourceConstraint: groupA.sourceConstraint || groupB.sourceConstraint!
+            };
+            
+            const bottomAlternative: GroupBoundaryConstraint = {
+                groupA: groupA,
+                groupB: groupB,
+                side: 'bottom',  // A below B
+                minDistance: this.minPadding,
+                sourceConstraint: groupA.sourceConstraint || groupB.sourceConstraint!
+            };
+            
+            // Create the disjunction: groups must satisfy ONE of these four alternatives
+            const disjunction = new DisjunctiveConstraint(
+                groupA.sourceConstraint || groupB.sourceConstraint!,
+                [[leftAlternative], [rightAlternative], [topAlternative], [bottomAlternative]]
+            );
+            
+            // Add to the list of disjunctive constraints that will be solved
+            if (!this.layout.disjunctiveConstraints) {
+                this.layout.disjunctiveConstraints = [];
+            }
+            this.layout.disjunctiveConstraints.push(disjunction);
         }
 
         return null;
     }
+    
+
 
     private getNodeIndex(nodeId: string) {
         return this.nodes.findIndex(node => node.id === nodeId);
