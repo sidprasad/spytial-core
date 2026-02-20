@@ -1003,66 +1003,6 @@ class ConstraintValidator {
     }
     
     /**
-     * Builds a containment hierarchy for groups.
-     * Returns a map from parent group name to its direct child group names.
-     * This is used to optimize group-vs-group disjunctions by using linear chains
-     * instead of full pairwise comparisons for sibling groups.
-     */
-    private buildGroupHierarchy(): {
-        parentToChildren: Map<string, string[]>;
-        childToParent: Map<string, string>;
-        rootGroups: string[];
-    } {
-        const parentToChildren = new Map<string, string[]>();
-        const childToParent = new Map<string, string>();
-        const allGroups = new Set<string>();
-        const childGroups = new Set<string>();
-        
-        // Find direct containment relationships
-        for (const group of this.groups) {
-            if (group.nodeIds.length <= 1) continue; // Skip singletons
-            allGroups.add(group.name);
-            
-            for (const otherGroup of this.groups) {
-                if (otherGroup.nodeIds.length <= 1) continue;
-                if (group.name === otherGroup.name) continue;
-                
-                // Check if otherGroup is a direct child of group
-                // (otherGroup ⊂ group AND no intermediate group exists)
-                if (this.isSubGroup(otherGroup, group)) {
-                    // otherGroup is contained in group
-                    // Check if it's DIRECT (no group in between)
-                    let isDirect = true;
-                    for (const midGroup of this.groups) {
-                        if (midGroup.nodeIds.length <= 1) continue;
-                        if (midGroup.name === group.name || midGroup.name === otherGroup.name) continue;
-                        
-                        // If otherGroup ⊂ midGroup ⊂ group, then it's not direct
-                        if (this.isSubGroup(otherGroup, midGroup) && this.isSubGroup(midGroup, group)) {
-                            isDirect = false;
-                            break;
-                        }
-                    }
-                    
-                    if (isDirect) {
-                        if (!parentToChildren.has(group.name)) {
-                            parentToChildren.set(group.name, []);
-                        }
-                        parentToChildren.get(group.name)!.push(otherGroup.name);
-                        childToParent.set(otherGroup.name, group.name);
-                        childGroups.add(otherGroup.name);
-                    }
-                }
-            }
-        }
-        
-        // Root groups are those with no parent
-        const rootGroups = Array.from(allGroups).filter(g => !childGroups.has(g));
-        
-        return { parentToChildren, childToParent, rootGroups };
-    }
-
-    /**
      * Adds group bounding box constraints to the solver.
      * 
      * For each group, we create 4 variables representing the bounding box:
@@ -1247,10 +1187,6 @@ class ConstraintValidator {
         // Add disjunctive constraints for group-to-group boundary separation
         // For each pair of non-overlapping groups, ensure they are separated in one direction
         
-        // OPTIMIZATION: Build group hierarchy to identify sibling groups
-        // For sibling groups under the same parent, use smarter pairing strategy
-        const hierarchy = this.buildGroupHierarchy();
-        
         // Collect all group pairs that need disjunctions
         const groupPairs: Array<[LayoutGroup, LayoutGroup]> = [];
         
@@ -1280,17 +1216,8 @@ class ConstraintValidator {
             }
         }
         
-        // OPTIMIZATION: For sibling groups under the same parent, we can use linear chaining
-        // This reduces O(k²) to O(k) for k siblings under each parent
-        const optimizedPairs = this.optimizeGroupPairs(groupPairs, hierarchy);
-        
-        // Log the reduction
-        if (groupPairs.length > 0 && optimizedPairs.length < groupPairs.length) {
-            console.log(`Group-vs-group disjunction pruning: Reduced from ${groupPairs.length} to ${optimizedPairs.length} pairs via sibling chain optimization`);
-        }
-        
-        // Create disjunctions for the optimized pairs
-        for (const [groupA, groupB] of optimizedPairs) {
+        // Create disjunctions for the collected pairs
+        for (const [groupA, groupB] of groupPairs) {
             // Create four GroupBoundaryConstraint alternatives for group-to-group separation
             const leftAlternative: GroupBoundaryConstraint = {
                 groupA: groupA,
@@ -1340,81 +1267,7 @@ class ConstraintValidator {
         return null;
     }
     
-    /**
-     * Optimizes group pairs for disjunction creation using sibling chain optimization.
-     * 
-     * For sibling groups (groups that share the same parent), we can use linear chaining
-     * instead of full pairwise comparison. This reduces O(k²) to O(k) for k siblings.
-     * 
-     * The insight: If siblings A, B, C are ordered and we ensure A doesn't overlap B,
-     * and B doesn't overlap C, we still need A doesn't overlap C (disjunctions are OR).
-     * 
-     * HOWEVER, if siblings are ordered by a consistent heuristic (e.g., key node position),
-     * and we use only left/top constraints between consecutive pairs, we can achieve
-     * total ordering without full pairwise. But this is restrictive.
-     * 
-     * Current implementation: Conservative pruning - keep all pairs but log the opportunity.
-     * Future optimization: If layout spec provides explicit ordering among siblings,
-     * use linear chaining.
-     * 
-     * @param pairs - Original pairs needing disjunctions
-     * @param hierarchy - Group containment hierarchy
-     * @returns Optimized (possibly reduced) set of pairs
-     */
-    private optimizeGroupPairs(
-        pairs: Array<[LayoutGroup, LayoutGroup]>,
-        hierarchy: { parentToChildren: Map<string, string[]>; childToParent: Map<string, string>; rootGroups: string[] }
-    ): Array<[LayoutGroup, LayoutGroup]> {
-        // Group pairs by their common parent (for sibling detection)
-        const siblingPairs = new Map<string, Array<[LayoutGroup, LayoutGroup]>>();
-        const nonSiblingPairs: Array<[LayoutGroup, LayoutGroup]> = [];
-        
-        for (const [groupA, groupB] of pairs) {
-            const parentA = hierarchy.childToParent.get(groupA.name);
-            const parentB = hierarchy.childToParent.get(groupB.name);
-            
-            if (parentA && parentA === parentB) {
-                // These are siblings under the same parent
-                if (!siblingPairs.has(parentA)) {
-                    siblingPairs.set(parentA, []);
-                }
-                siblingPairs.get(parentA)!.push([groupA, groupB]);
-            } else if (!parentA && !parentB) {
-                // Both are root groups - treat as siblings at the top level
-                if (!siblingPairs.has('__root__')) {
-                    siblingPairs.set('__root__', []);
-                }
-                siblingPairs.get('__root__')!.push([groupA, groupB]);
-            } else {
-                // Different levels or different parents - keep as-is
-                nonSiblingPairs.push([groupA, groupB]);
-            }
-        }
-        
-        // For each sibling set, apply optimization
-        // Current strategy: For siblings, we COULD reduce to linear chain,
-        // but that requires careful axis selection. For safety, keep all but log.
-        const optimizedSiblingPairs: Array<[LayoutGroup, LayoutGroup]> = [];
-        
-        for (const [parentName, siblingPairList] of siblingPairs) {
-            // For now, conservative: keep all sibling pairs
-            // Future: implement linear chain if we can determine a consistent axis
-            optimizedSiblingPairs.push(...siblingPairList);
-            
-            // Log opportunity for future optimization
-            if (siblingPairList.length > 3) {
-                // More than 3 pairs means more than 2 siblings - potential for O(k) reduction
-                const siblings = new Set<string>();
-                for (const [a, b] of siblingPairList) {
-                    siblings.add(a.name);
-                    siblings.add(b.name);
-                }
-                console.log(`Group-vs-group: ${siblings.size} siblings under "${parentName}" generating ${siblingPairList.length} pairs (linear chain could reduce to ${siblings.size - 1})`);
-            }
-        }
-        
-        return [...nonSiblingPairs, ...optimizedSiblingPairs];
-    }
+
 
     private getNodeIndex(nodeId: string) {
         return this.nodes.findIndex(node => node.id === nodeId);
