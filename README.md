@@ -393,6 +393,8 @@ The `<webcola-cnd-graph>` custom element provides methods for interacting with t
 
 #### Layout Management
 - **`renderLayout(instanceLayout, options?)`** - Render a layout with optional prior positions
+- `options.temporalPolicy` supports `"baseline"` (default), `"transport_pan_zoom"`, and `"change_emphasis"`.
+- Temporal policies do not change Spytial semantics; they only change WebCola initialization hints and iteration mode.
 - **`clear()`** - Clear the graph and reset state
 - **`getNodePositions()`** - Get current positions of all nodes
 

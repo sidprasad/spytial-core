@@ -3,6 +3,9 @@ import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator, N
 import { InstanceLayout, isAlignmentConstraint, isInstanceLayout, isLeftConstraint, isTopConstraint, LayoutNode } from '../../layout/interfaces';
 import type { GridRouter, Group, Layout, Node, Link } from 'webcola';
 import { IInputDataInstance, ITuple, IAtom } from '../../data-instance/interfaces';
+import * as dagre from 'dagre';
+import { resolveTemporalPolicy } from './temporal-policy';
+import type { Positions } from './temporal-policy';
 
 let d3 = window.d3v4 || window.d3; // Use d3 v4 if available, otherwise fallback to the default window.d3
 let cola = window.cola;
@@ -1311,6 +1314,59 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     }
   }
 
+  private toPositionMap(hints?: NodePositionHint[]): Positions | null {
+    if (!hints || hints.length === 0) {
+      return null;
+    }
+
+    const positions: Positions = new Map();
+    for (const hint of hints) {
+      positions.set(hint.id, { x: hint.x, y: hint.y });
+    }
+    return positions;
+  }
+
+  private computeDefaultSeeds(
+    instanceLayout: InstanceLayout,
+    figWidth: number,
+    figHeight: number
+  ): Positions {
+    const defaultX = figWidth / 2;
+    const defaultY = figHeight / 2;
+    const seeds: Positions = new Map();
+
+    instanceLayout.nodes.forEach(node => {
+      seeds.set(node.id, { x: defaultX, y: defaultY });
+    });
+
+    try {
+      const g = new dagre.graphlib.Graph({ multigraph: true });
+      g.setGraph({ nodesep: 50, ranksep: 100, rankdir: 'TB' });
+      g.setDefaultEdgeLabel(() => ({}));
+
+      instanceLayout.nodes.forEach(node => {
+        g.setNode(node.id, { width: node.width, height: node.height });
+      });
+
+      instanceLayout.edges.forEach(edge => {
+        g.setEdge(edge.source.id, edge.target.id);
+      });
+
+      dagre.layout(g);
+
+      instanceLayout.nodes.forEach(node => {
+        const dagreNode = g.node(node.id);
+        if (dagreNode) {
+          seeds.set(node.id, { x: dagreNode.x, y: dagreNode.y });
+        }
+      });
+    } catch (error) {
+      console.warn('WebCola: Failed to compute DAGRE seed positions, using centered defaults.', error);
+    }
+
+    return seeds;
+  }
+
   /**
    * Render layout using WebCola constraint solver
    * @param instanceLayout - The layout instance to render
@@ -1351,10 +1407,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         if (hasPriorState) {
           // Restore the prior transform to maintain visual continuity
           const transform = d3.zoomIdentity
-            .translate(priorState.transform.x, priorState.transform.y)
-            .scale(priorState.transform.k);
+            .translate(priorState!.transform.x, priorState!.transform.y)
+            .scale(priorState!.transform.k);
           this.svg.call(this.zoomBehavior.transform, transform);
-          console.log(`WebCola: Restored prior state - ${priorState.positions.length} positions, zoom ${priorState.transform.k.toFixed(2)}x`);
+          console.log(`WebCola: Restored prior state - ${priorState!.positions.length} positions, zoom ${priorState!.transform.k.toFixed(2)}x`);
         } else {
           // Reset zoom transform to identity for a fresh start (will be adjusted by fitViewportToContent)
           const identity = d3.zoomIdentity;
@@ -1399,9 +1455,34 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       const containerWidth = containerRect.width || 800; // fallback to default
       const containerHeight = containerRect.height || 600; // fallback to default
 
-      // Translate to WebCola format with actual container dimensions and optional prior state
+      const prevPositions = this.toPositionMap(hasPriorState ? priorState!.positions : undefined);
+      const defaultSeeds = this.computeDefaultSeeds(instanceLayout, containerWidth, containerHeight);
+      const temporalPolicy = resolveTemporalPolicy(options?.temporalPolicy || 'baseline', {
+        changedIds: options?.changedNodeIds
+      });
+
+      const temporalResolution = temporalPolicy.makeHints({
+        prevPositions,
+        prevTransform: hasPriorState ? priorState!.transform : null,
+        nodes: instanceLayout.nodes.map(node => ({ id: node.id })),
+        defaultSeeds,
+        viewport: { width: containerWidth, height: containerHeight }
+      });
+
+      const policyPriorState: LayoutState | undefined = temporalResolution.hints.length > 0
+        ? {
+          positions: temporalResolution.hints,
+          transform: priorState?.transform || { k: 1, x: 0, y: 0 }
+        }
+        : undefined;
+
+      // Translate to WebCola format with policy-derived temporal hints.
+      // Spytial semantics are unchanged; this only affects solver initialization.
       const translator = new WebColaTranslator();
-      const webcolaLayout = await translator.translate(instanceLayout, containerWidth, containerHeight, options);
+      const webcolaLayout = await translator.translate(instanceLayout, containerWidth, containerHeight, {
+        ...options,
+        priorState: policyPriorState
+      });
 
       this.updateLoadingProgress(`Computing layout for ${webcolaLayout.nodes.length} nodes...`);
 
@@ -1411,34 +1492,34 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       let unconstrainedIters = WebColaCnDGraph.INITIAL_UNCONSTRAINED_ITERATIONS;
       let userConstraintIters = WebColaCnDGraph.INITIAL_USER_CONSTRAINT_ITERATIONS;
       let allConstraintIters = WebColaCnDGraph.INITIAL_ALL_CONSTRAINTS_ITERATIONS;
+      const useReducedIterations = temporalResolution.iterationMode === 'reduced';
       
-      // When prior state is provided, minimize iterations to preserve positions.
+      // In reduced mode, minimize iterations to preserve temporal hints.
       // WebCola's unconstrained phase allows nodes to move freely from their initial positions,
       // so minimizing this phase helps preserve the provided positions.
-      // This is crucial for temporal consistency across Alloy traces.
       //
       // Note: We manually compute node bounds in ensureNodeBounds() before edge routing,
       // so we don't need many iterations just for bounds computation.
-      if (hasPriorState) {
-        // Use minimal iterations to preserve prior positions:
-        // - 0 unconstrained: don't let nodes drift from prior positions
+      if (useReducedIterations) {
+        // Use minimal iterations to preserve seed positions:
+        // - 0 unconstrained: don't let nodes drift from hints
         // - 10 user constraint: apply position constraints quickly
         // - 20 all constraints: final constraint satisfaction with overlap avoidance
         unconstrainedIters = 0;
         userConstraintIters = Math.min(10, userConstraintIters);
         allConstraintIters = Math.min(20, allConstraintIters);
         
-        console.log(`WebCola: Using minimal iterations to preserve ${priorState!.positions.length} prior positions`);
+        console.log(`WebCola: Using reduced iteration mode (${temporalPolicy.name}) with ${temporalResolution.hints.length} seed hints`);
       }
       
       if (nodeCount > 100) {
         // For large graphs (>100 nodes), reduce iterations more aggressively
-        unconstrainedIters = Math.max(hasPriorState ? 0 : 5, Math.floor(unconstrainedIters * 0.5));
+        unconstrainedIters = Math.max(useReducedIterations ? 0 : 5, Math.floor(unconstrainedIters * 0.5));
         userConstraintIters = Math.max(25, Math.floor(userConstraintIters * 0.5));
         allConstraintIters = Math.max(100, Math.floor(allConstraintIters * 0.5));
       } else if (nodeCount > 50) {
         // For medium graphs (>50 nodes), reduce iterations moderately
-        unconstrainedIters = Math.max(hasPriorState ? 0 : 8, Math.floor(unconstrainedIters * 0.8));
+        unconstrainedIters = Math.max(useReducedIterations ? 0 : 8, Math.floor(unconstrainedIters * 0.8));
         userConstraintIters = Math.max(40, Math.floor(userConstraintIters * 0.8));
         allConstraintIters = Math.max(150, Math.floor(allConstraintIters * 0.75));
       }
@@ -1455,9 +1536,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
       this.updateLoadingProgress('Applying constraints and initializing...');
 
-      // Use a higher convergence threshold when prior state exists.
-      // This allows the layout to converge faster, preserving prior positions better.
-      const convergenceThreshold = hasPriorState ? 0.1 : 1e-3;
+      // Use a higher convergence threshold in reduced mode to preserve hints better.
+      const convergenceThreshold = useReducedIterations ? 0.1 : 1e-3;
 
       // Create WebCola layout using d3adaptor
       const layout: Layout = cola.d3adaptor(d3)

@@ -29,3 +29,5 @@ export type {
   LayoutState,
   WebColaLayoutOptions 
 } from './webcola/webcolatranslator';
+
+export type { TemporalPolicyName } from './webcola/temporal-policy';

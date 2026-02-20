@@ -3,6 +3,7 @@ import { InstanceLayout, LayoutNode, LayoutEdge, LayoutConstraint, LayoutGroup, 
 import { EdgeStyle } from '../../layout/edge-style';
 import { LayoutInstance } from '../../layout/layoutinstance';
 import * as dagre from 'dagre';
+import type { TemporalPolicyName } from './temporal-policy';
 
 /**
  * WebColaTranslator - Translates InstanceLayout to WebCola format
@@ -123,8 +124,18 @@ export interface WebColaLayoutOptions {
    * const state = graph.getLayoutState();
    * await graph.renderLayout(newLayout, { priorState: state });
    * ```
-   */
+  */
   priorState?: LayoutState;
+  /**
+   * Temporal realization policy used to derive node initialization hints.
+   * This preserves Spytial semantics and only changes solver initialization.
+   */
+  temporalPolicy?: TemporalPolicyName;
+  /**
+   * Optional changed node IDs used by `change_emphasis` policy.
+   * If omitted, changed nodes are approximated as IDs absent from prior positions.
+   */
+  changedNodeIds?: string[];
 }
 
 // WebCola constraint types
