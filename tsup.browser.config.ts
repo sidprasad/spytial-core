@@ -20,6 +20,7 @@ export default defineConfig({
   // Bundle ALL dependencies for browser use
   noExternal: [
     'graphlib',
+    'graphlib-dot',
     'kiwi.js', 
     'chroma-js',
     'js-yaml',

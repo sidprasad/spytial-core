@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebCola DOT Visualization Demo</title>
+
+    <!-- Bootstrap CSS for component styling -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <style>
+        body {
+            display: flex;
+            font-family: Arial, sans-serif;
+            max-width: 90vw;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+            gap: 20px;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        #graph-container-wrapper {
+            position: relative;
+            width: 100%;
+            height: 600px;
+            margin: 20px 0;
+        }
+        #graph-container {
+            width: 100%;
+            height: 600px;
+            border: 2px solid #2d8659;
+            border-radius: 8px;
+            display: block;
+        }
+        #graph-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 8px 12px;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+        button {
+            background-color: #2d8659;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #1e5e3e;
+        }
+        #clearGraphButton {
+            background-color: red;
+        }
+        #clearGraphButton:hover {
+            background-color: rgb(200, 34, 34);
+        }
+        #applyLayoutButton {
+            font-size: 16px;
+        }
+        #applyLayoutButton:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        textarea {
+            width: 100%;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+        #webcola-dot {
+            height: 280px;
+        }
+        #type-config-input {
+            height: 180px;
+        }
+        label {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 5px;
+        }
+        .status {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .status.info { background: #e8f5e9; color: #2e7d32; }
+        .status.success { background: #e8f5e9; color: #1b5e20; }
+        .status.error { background: #ffebee; color: #c62828; }
+        .type-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            margin: 2px;
+            font-family: monospace;
+        }
+        .type-badge.builtin { background: #e3f2fd; color: #1565c0; }
+        .type-badge.regular { background: #f3e5f5; color: #7b1fa2; }
+        #type-info {
+            max-height: 150px;
+            overflow-y: auto;
+            font-size: 13px;
+            padding: 8px;
+            background: #fafafa;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+        .example-btn {
+            background-color: #6c757d;
+            font-size: 12px;
+            padding: 4px 10px;
+        }
+        .example-btn:hover {
+            background-color: #5a6268;
+        }
+
+        @media (max-width: 768px) {
+            #graph-controls {
+                top: 5px;
+                right: 5px;
+                padding: 6px 8px;
+                gap: 6px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container border" id="main-panel">
+        <h1>WebCola DOT Visualization Demo</h1>
+        <p>This demonstrates the DOT → DotDataInstance → Evaluator → Layout → WebCola pipeline, including the <strong>type hierarchy</strong> system.</p>
+
+        <div>
+            <!-- Example buttons -->
+            <div class="mb-2">
+                <strong>Examples:</strong>
+                <button class="example-btn" onclick="loadExample('simple')">Simple Graph</button>
+                <button class="example-btn" onclick="loadExample('typed')">Typed Nodes</button>
+                <button class="example-btn" onclick="loadExample('hierarchy')">Type Hierarchy</button>
+                <button class="example-btn" onclick="loadExample('undirected')">Undirected</button>
+            </div>
+
+            <div class="mb-3">
+                <label for="webcola-dot">DOT Graph:</label>
+                <textarea id="webcola-dot">digraph {
+  alice [label="Alice" type="Person"];
+  bob   [label="Bob"   type="Person"];
+  cs101 [label="CS 101" type="Course"];
+  cs201 [label="CS 201" type="Course"];
+
+  alice -> cs101 [label="enrolled"];
+  alice -> cs201 [label="enrolled"];
+  bob   -> cs101 [label="enrolled"];
+  bob   -> cs201 [label="teaches"];
+}</textarea>
+            </div>
+
+            <div class="mb-3">
+                <label for="type-config-input">Type Config (JSON, optional):</label>
+                <textarea id="type-config-input">{
+  "types": {
+    "Entity": {},
+    "Person": { "extends": "Entity" },
+    "Course": { "extends": "Entity" }
+  },
+  "defaultType": "Entity"
+}</textarea>
+                <small class="text-muted">Declare type hierarchies and built-ins here. Leave empty for flat types.</small>
+            </div>
+
+            <div class="mb-3">
+                <label for="evaluator-select">Evaluator:</label>
+                <select id="evaluator-select" class="form-select form-select-sm" onchange="handleEvaluatorChange()" aria-label="Evaluator selection">
+                    <option value="sgq" selected>Sgq (SGraphQueryEvaluator)</option>
+                    <option value="forge">Forge</option>
+                    <option value="sql">SQL</option>
+                </select>
+            </div>
+
+            <div id="status" class="status info">Ready to load DOT graph...</div>
+            <div id="error-messages"></div>
+
+            <!-- Type info panel -->
+            <div class="mb-3">
+                <details>
+                    <summary class="text-muted small">🏷️ Resolved Types</summary>
+                    <div id="type-info"></div>
+                </details>
+            </div>
+
+            <div id="graph-container-wrapper">
+                <webcola-cnd-graph
+                    id="graph-container"
+                    width="800"
+                    height="600"
+                    layoutFormat="default"
+                    aria-label="Interactive graph visualization">
+                </webcola-cnd-graph>
+            </div>
+        </div>
+    </div>
+
+    <div id="cnd-panel" class="container d-flex flex-column col-md-4 border p-3">
+        <h5 class="h5 mb-2 text-dark">CND Layout Specification:</h5>
+        <button id="applyLayoutButton" class="mb-3" onclick="loadGraph()">Apply Layout</button>
+        <div class="mb-3">
+            <h6 class="h6 text-dark">Export Instance Views:</h6>
+            <div class="d-flex flex-wrap gap-2 mb-2">
+                <button class="btn btn-sm btn-outline-primary" onclick="exportInstanceView('alloy')">Export Alloy View</button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="exportInstanceView('sql')">Export SQL View</button>
+                <button class="btn btn-sm btn-outline-success" onclick="exportDot()">Export DOT</button>
+            </div>
+            <textarea id="instance-export-output" readonly placeholder="Exported view will appear here..." style="height: 200px;"></textarea>
+        </div>
+        <div id="webcola-cnd-container">
+            <!-- React element attached here -->
+        </div>
+    </div>
+
+    <!-- D3 v4 and WebCola - the working combination -->
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="../vendor/cola.js"></script>
+
+    <!-- Complete CND-Core browser bundle -->
+    <script src="../dist/browser/spytial-core-complete.global.js"></script>
+
+    <!-- Your React component bundle (includes React runtime) -->
+    <script src="../dist/components/react-component-integration.global.js"></script>
+    <link rel="stylesheet" href="../dist/components/react-component-integration.css">
+
+    <script>
+        // ─── State ──────────────────────────────────────────────────────────
+        let currentInstanceLayout = null;
+        let cachedEvaluator = null;
+        let cachedLayoutSpec = null;
+        let cachedInstance = null;
+        let cachedEvaluatorType = 'sgq';
+
+        // ─── Example data ───────────────────────────────────────────────────
+        const EXAMPLES = {
+            simple: {
+                dot: `digraph {
+  a -> b;
+  b -> c;
+  c -> a;
+  d -> b;
+}`,
+                typeConfig: '',
+            },
+            typed: {
+                dot: `digraph {
+  alice [label="Alice" type="Person"];
+  bob   [label="Bob"   type="Person"];
+  cs101 [label="CS 101" type="Course"];
+  cs201 [label="CS 201" type="Course"];
+
+  alice -> cs101 [label="enrolled"];
+  alice -> cs201 [label="enrolled"];
+  bob   -> cs101 [label="enrolled"];
+  bob   -> cs201 [label="teaches"];
+}`,
+                typeConfig: JSON.stringify({
+                    types: {
+                        Entity: {},
+                        Person: { extends: 'Entity' },
+                        Course: { extends: 'Entity' },
+                    },
+                    defaultType: 'Entity',
+                }, null, 2),
+            },
+            hierarchy: {
+                dot: `digraph {
+  alice   [label="Alice"   type="Student"];
+  bob     [label="Bob"     type="Student"];
+  carol   [label="Carol"   type="Faculty"];
+  cs101   [label="CS 101"  type="Course"];
+  math201 [label="Math 201" type="Course"];
+  age_20  [label="20"      type="Int"];
+  age_45  [label="45"      type="Int"];
+
+  alice -> cs101   [label="enrolled"];
+  bob   -> cs101   [label="enrolled"];
+  bob   -> math201 [label="enrolled"];
+  carol -> cs101   [label="teaches"];
+  carol -> math201 [label="teaches"];
+  alice -> age_20  [label="age"];
+  carol -> age_45  [label="age"];
+}`,
+                typeConfig: JSON.stringify({
+                    types: {
+                        Entity: {},
+                        Person:  { extends: 'Entity' },
+                        Student: { extends: 'Person' },
+                        Faculty: { extends: 'Person' },
+                        Course:  { extends: 'Entity' },
+                        Int:     { isBuiltin: true },
+                    },
+                    defaultType: 'Entity',
+                    builtinTypes: ['Int'],
+                }, null, 2),
+            },
+            undirected: {
+                dot: `graph {
+  alice [label="Alice" type="Person"];
+  bob   [label="Bob"   type="Person"];
+  carol [label="Carol" type="Person"];
+
+  alice -- bob   [label="friends"];
+  bob   -- carol [label="friends"];
+  alice -- carol [label="colleagues"];
+}`,
+                typeConfig: '',
+            },
+        };
+
+        // ─── Helpers ────────────────────────────────────────────────────────
+        function getCurrentDotText() {
+            return document.getElementById('webcola-dot').value.trim();
+        }
+
+        function getCurrentTypeConfig() {
+            const text = document.getElementById('type-config-input').value.trim();
+            if (!text) return undefined;
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                console.warn('Invalid type config JSON:', e.message);
+                return undefined;
+            }
+        }
+
+        function getCurrentCNDSpec() {
+            return window.getCurrentCNDSpecFromReact ?
+                window.getCurrentCNDSpecFromReact() :
+                document.getElementById('webcola-cnd')?.value?.trim();
+        }
+
+        function updateStatus(message, type = 'info') {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = message;
+            statusElement.className = `status ${type}`;
+        }
+
+        function getSelectedEvaluatorType() {
+            return document.getElementById('evaluator-select')?.value || 'sgq';
+        }
+
+        function handleEvaluatorChange() {
+            cachedEvaluator = null;
+            cachedEvaluatorType = getSelectedEvaluatorType();
+            currentInstanceLayout = null;
+            updateStatus(`Evaluator set to ${cachedEvaluatorType.toUpperCase()}. Reload to apply.`, 'info');
+        }
+
+        function loadExample(name) {
+            const ex = EXAMPLES[name];
+            if (!ex) return;
+            document.getElementById('webcola-dot').value = ex.dot;
+            document.getElementById('type-config-input').value = ex.typeConfig;
+            updateStatus(`Loaded "${name}" example. Click Apply Layout to visualize.`, 'info');
+        }
+
+        function updateTypeInfoPanel(instance) {
+            const container = document.getElementById('type-info');
+            if (!container || !instance) return;
+
+            const types = instance.getTypes();
+            if (types.length === 0) {
+                container.innerHTML = '<em>No types</em>';
+                return;
+            }
+
+            let html = '';
+            for (const t of types) {
+                const cls = t.isBuiltin ? 'builtin' : 'regular';
+                const hierarchy = t.types.join(' → ');
+                const atomCount = t.atoms.length;
+                html += `<div>
+                    <span class="type-badge ${cls}">${t.id}</span>
+                    <span class="text-muted small">${hierarchy}</span>
+                    <span class="text-muted small">(${atomCount} atom${atomCount !== 1 ? 's' : ''})</span>
+                    ${t.isBuiltin ? '<span class="text-muted small">🔧 builtin</span>' : ''}
+                </div>`;
+            }
+            container.innerHTML = html;
+        }
+
+        function exportDot() {
+            if (!cachedInstance) {
+                updateStatus('No instance loaded. Load a DOT graph first.', 'error');
+                return;
+            }
+            const dot = cachedInstance.reify();
+            document.getElementById('instance-export-output').value = dot;
+            updateStatus('Exported DOT (via reify).', 'success');
+        }
+
+        function exportInstanceView(format) {
+            try {
+                if (!cachedInstance) {
+                    throw new Error('No DOT instance available. Load data first.');
+                }
+
+                let output = '';
+                if (format === 'alloy') {
+                    output = CndCore.generateAlloySchema(cachedInstance);
+                } else if (format === 'sql') {
+                    output = CndCore.generateSQLSchema(cachedInstance);
+                } else {
+                    throw new Error('Unknown export format.');
+                }
+
+                document.getElementById('instance-export-output').value = output;
+                updateStatus(`Exported ${format.toUpperCase()} view.`, 'success');
+            } catch (error) {
+                console.error('Export error:', error);
+                updateStatus(`Export failed: ${error.message}`, 'error');
+            }
+        }
+
+        // ─── Pipeline ───────────────────────────────────────────────────────
+        async function initializePipeline() {
+            try {
+                console.log('Complete CND-Core browser bundle loaded successfully');
+                console.log('DotDataInstance available:', !!CndCore.DotDataInstance);
+                console.log('SGraphQueryEvaluator available:', !!CndCore.SGraphQueryEvaluator);
+                console.log('LayoutInstance available:', !!CndCore.LayoutInstance);
+
+                updateStatus('DOT pipeline ready! Enter a DOT graph and click Apply Layout.', 'success');
+                return true;
+            } catch (error) {
+                console.error('Failed to initialize DOT pipeline:', error);
+                updateStatus(`Pipeline init failed: ${error.message}`, 'error');
+                return false;
+            }
+        }
+
+        async function loadDotData() {
+            try {
+                const evaluatorType = getSelectedEvaluatorType();
+                cachedEvaluatorType = evaluatorType;
+                updateStatus(`Processing DOT data with ${evaluatorType.toUpperCase()} evaluator...`, 'info');
+
+                const dotText = getCurrentDotText();
+                if (!dotText) {
+                    throw new Error('Please enter a DOT graph');
+                }
+
+                const typeConfig = getCurrentTypeConfig();
+                const cndSpec = getCurrentCNDSpec() || '';
+
+                console.log('Using DOT data:', dotText.substring(0, 200) + '...');
+                console.log('Type config:', typeConfig);
+
+                // Create DotDataInstance with optional type config
+                updateStatus('Parsing DOT graph...', 'info');
+                const options = {};
+                if (typeConfig) {
+                    options.typeConfig = typeConfig;
+                }
+                cachedInstance = new CndCore.DotDataInstance(dotText, options);
+
+                console.log('Atoms:', cachedInstance.getAtoms());
+                console.log('Types:', cachedInstance.getTypes());
+                console.log('Relations:', cachedInstance.getRelations());
+
+                updateTypeInfoPanel(cachedInstance);
+
+                // Create evaluator
+                if (evaluatorType === 'forge') {
+                    updateStatus('Creating ForgeEvaluator...', 'info');
+                    cachedEvaluator = new CndCore.ForgeEvaluator();
+                    cachedEvaluator.initialize({ sourceData: cachedInstance });
+                } else if (evaluatorType === 'sql') {
+                    updateStatus('Creating SQLEvaluator...', 'info');
+                    cachedEvaluator = new CndCore.SQLEvaluator();
+                    cachedEvaluator.initialize({ sourceData: cachedInstance });
+                } else {
+                    updateStatus('Creating SGraphQueryEvaluator...', 'info');
+                    cachedEvaluator = new CndCore.SGraphQueryEvaluator();
+                    cachedEvaluator.initialize({ sourceData: cachedInstance });
+                }
+
+                // Parse layout spec
+                updateStatus('Parsing layout specification...', 'info');
+                try {
+                    cachedLayoutSpec = CndCore.parseLayoutSpec(cndSpec);
+                    if (window.clearAllErrors) {
+                        window.clearAllErrors();
+                    }
+                } catch (error) {
+                    console.error('Layout spec parse error:', error);
+                    if (window.showParseError) {
+                        window.showParseError(error.message, 'Layout Specification');
+                    } else {
+                        updateStatus(`Layout spec parse error: ${error.message}`, 'error');
+                    }
+                    return;
+                }
+
+                await generateLayout();
+
+                updateStatus(
+                    `DOT pipeline complete! ${cachedInstance.nodeCount} nodes, ${cachedInstance.edgeCount} edges, ${cachedInstance.getTypes().length} types.`,
+                    'success',
+                );
+            } catch (error) {
+                console.error('Failed to load DOT data:', error);
+                updateStatus(`DOT data loading failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function generateLayout() {
+            if (!cachedInstance || !cachedEvaluator || !cachedLayoutSpec) {
+                throw new Error('Missing required data for layout generation');
+            }
+
+            updateStatus('Creating layout...', 'info');
+            const ENABLE_ALIGNMENT_EDGES = true;
+
+            const layoutInstance = new CndCore.LayoutInstance(
+                cachedLayoutSpec,
+                cachedEvaluator,
+                0,
+                ENABLE_ALIGNMENT_EDGES
+            );
+
+            updateStatus('Generating layout with DOT data...', 'info');
+            const layoutResult = layoutInstance.generateLayout(cachedInstance, {});
+            currentInstanceLayout = layoutResult.layout;
+
+            // Handle selector errors
+            if (layoutResult.selectorErrors && layoutResult.selectorErrors.length > 0) {
+                console.warn('Selector errors:', layoutResult.selectorErrors);
+                if (window.showSelectorErrors) {
+                    window.showSelectorErrors(layoutResult.selectorErrors);
+                }
+                const webcolaGraphElement = document.getElementById('graph-container');
+                webcolaGraphElement.setAttribute('unsat', '');
+                return;
+            }
+
+            // Handle constraint errors
+            if (layoutResult.error) {
+                console.error('Layout generation error:', layoutResult.error);
+
+                if (layoutResult.error.errorMessages) {
+                    if (layoutResult.error.type === 'hidden-node-conflict' && window.showHiddenNodeConflict) {
+                        window.showHiddenNodeConflict(layoutResult.error.errorMessages);
+                    } else if (window.showPositionalError) {
+                        window.showPositionalError(layoutResult.error.errorMessages);
+                    } else {
+                        updateStatus(`Constraint conflict: ${layoutResult.error.message}`, 'error');
+                    }
+                } else if (layoutResult.error.overlappingNodes) {
+                    if (window.showGroupOverlapError) {
+                        window.showGroupOverlapError(layoutResult.error.message);
+                    } else {
+                        updateStatus(`Group overlap error: ${layoutResult.error.message}`, 'error');
+                    }
+                } else {
+                    if (window.showGeneralError) {
+                        window.showGeneralError(`Layout error: ${layoutResult.error.message}`);
+                    } else {
+                        updateStatus(`Layout error: ${layoutResult.error.message}`, 'error');
+                    }
+                }
+
+                const webcolaGraphElement = document.getElementById('graph-container');
+                webcolaGraphElement.setAttribute('unsat', '');
+                return;
+            }
+
+            const webcolaGraphElement = document.getElementById('graph-container');
+            webcolaGraphElement.removeAttribute('unsat');
+
+            if (window.clearAllErrors) {
+                window.clearAllErrors();
+            }
+        }
+
+        async function renderGraph() {
+            const graphElement = document.getElementById('graph-container');
+
+            try {
+                if (!currentInstanceLayout) {
+                    if (cachedInstance && cachedEvaluator && cachedLayoutSpec) {
+                        await generateLayout();
+                    } else {
+                        updateStatus('No layout data available. Processing DOT data first...', 'info');
+                        await loadDotData();
+                    }
+
+                    if (!currentInstanceLayout) {
+                        console.warn('No layout data available to render (likely due to constraint errors)');
+                        return;
+                    }
+                }
+
+                if (graphElement.clear) {
+                    graphElement.clear();
+                } else {
+                    const svg = graphElement.shadowRoot?.querySelector('svg');
+                    if (svg) {
+                        const container = svg.querySelector('.zoomable');
+                        if (container) {
+                            container.innerHTML = '';
+                        }
+                    }
+                }
+
+                updateStatus('Rendering DOT graph with WebCola...', 'info');
+                await graphElement.renderLayout(currentInstanceLayout);
+
+                updateStatus('Graph rendered successfully!', 'success');
+            } catch (error) {
+                console.error('Error rendering DOT graph:', error);
+                updateStatus(`Render error: ${error.message}`, 'error');
+            }
+        }
+
+        function clearGraph() {
+            const graphElement = document.getElementById('graph-container');
+
+            if (graphElement.clear) {
+                graphElement.clear();
+            } else {
+                const svg = graphElement.shadowRoot?.querySelector('svg');
+                if (svg) {
+                    const container = svg.querySelector('.zoomable');
+                    if (container) {
+                        container.innerHTML = '';
+                    }
+                }
+            }
+
+            currentInstanceLayout = null;
+            cachedInstance = null;
+            cachedEvaluator = null;
+            cachedLayoutSpec = null;
+            cachedEvaluatorType = getSelectedEvaluatorType();
+
+            document.getElementById('type-info').innerHTML = '';
+            updateStatus('Graph cleared.', 'info');
+        }
+
+        async function loadGraph() {
+            try {
+                await loadDotData();
+                await renderGraph();
+            } catch (error) {
+                console.error('Failed to load and render DOT graph:', error);
+                updateStatus(`Failed to load DOT graph: ${error.message}`, 'error');
+            }
+        }
+
+        // ─── Init ───────────────────────────────────────────────────────────
+        window.addEventListener('load', () => {
+            initializePipeline();
+            if (window.mountCndLayoutInterface) {
+                window.mountCndLayoutInterface();
+            }
+            if (window.mountErrorMessageModal) {
+                window.mountErrorMessageModal();
+            }
+        });
+
+        window.loadGraph = loadGraph;
+        window.loadDotData = loadDotData;
+        window.renderGraph = renderGraph;
+        window.clearGraph = clearGraph;
+    </script>
+</body>
+</html>
