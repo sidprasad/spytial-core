@@ -393,7 +393,12 @@ The `<webcola-cnd-graph>` custom element provides methods for interacting with t
 
 #### Layout Management
 - **`renderLayout(instanceLayout, options?)`** - Render a layout with optional prior positions
-- `options.temporalPolicy` supports `"baseline"` (default), `"transport_pan_zoom"`, and `"change_emphasis"`.
+- `options.temporalPolicy` supports:
+- `"seed_default"` (Dagre/default seeds only)
+- `"seed_continuity_raw"` (default; raw prior-position continuity)
+- `"seed_continuity_transport"` (continuity with transport/alignment to new frame)
+- `"seed_change_emphasis"` (continuity for stable nodes, random reflow for changed)
+- Legacy aliases remain accepted: `"baseline"`, `"transport_pan_zoom"`, `"change_emphasis"`.
 - Temporal policies do not change Spytial semantics; they only change WebCola initialization hints and iteration mode.
 - **`clear()`** - Clear the graph and reset state
 - **`getNodePositions()`** - Get current positions of all nodes

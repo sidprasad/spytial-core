@@ -129,10 +129,20 @@ export interface WebColaLayoutOptions {
   /**
    * Temporal realization policy used to derive node initialization hints.
    * This preserves Spytial semantics and only changes solver initialization.
+   * Preferred values:
+   * - `seed_default` (Dagre/default seeds only)
+   * - `seed_continuity_raw` (reuse prior raw positions)
+   * - `seed_continuity_transport` (reuse prior positions after frame alignment)
+   * - `seed_change_emphasis` (continuity for stable nodes, random reflow for changed)
+   *
+   * Backward-compatible aliases are accepted:
+   * - `baseline` -> `seed_continuity_raw`
+   * - `transport_pan_zoom` -> `seed_continuity_transport`
+   * - `change_emphasis` -> `seed_change_emphasis`
    */
   temporalPolicy?: TemporalPolicyName;
   /**
-   * Optional changed node IDs used by `change_emphasis` policy.
+   * Optional changed node IDs used by `seed_change_emphasis` policy.
    * If omitted, changed nodes are approximated as IDs absent from prior positions.
    */
   changedNodeIds?: string[];

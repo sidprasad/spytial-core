@@ -1457,7 +1457,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
       const prevPositions = this.toPositionMap(hasPriorState ? priorState!.positions : undefined);
       const defaultSeeds = this.computeDefaultSeeds(instanceLayout, containerWidth, containerHeight);
-      const temporalPolicy = resolveTemporalPolicy(options?.temporalPolicy || 'baseline', {
+      const temporalPolicy = resolveTemporalPolicy(options?.temporalPolicy || 'seed_continuity_raw', {
         changedIds: options?.changedNodeIds
       });
 

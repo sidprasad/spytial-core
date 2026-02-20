@@ -3,7 +3,14 @@ import type { NodePositionHint, TransformInfo } from './webcolatranslator';
 export type Position = { x: number; y: number };
 export type Positions = Map<string, Position>;
 export type IterationMode = 'default' | 'reduced';
-export type TemporalPolicyName = 'baseline' | 'transport_pan_zoom' | 'change_emphasis';
+export type TemporalPolicyCanonicalName =
+  | 'seed_default'
+  | 'seed_continuity_raw'
+  | 'seed_continuity_transport'
+  | 'seed_change_emphasis';
+
+export type TemporalPolicyLegacyName = 'baseline' | 'transport_pan_zoom' | 'change_emphasis';
+export type TemporalPolicyName = TemporalPolicyCanonicalName | TemporalPolicyLegacyName;
 
 export interface TemporalPolicy {
   name: string;
@@ -35,12 +42,29 @@ interface SimilarityTransform {
 
 const EPSILON = 1e-6;
 const CHANGE_EMPHASIS_JITTER_RADIUS = 18;
+const DEFAULT_TEMPORAL_POLICY_NAME: TemporalPolicyCanonicalName = 'seed_continuity_raw';
 
 function toHint(id: string, point: Position): NodePositionHint {
   return { id, x: point.x, y: point.y };
 }
 
-function baselineHints(args: {
+function defaultSeedHints(args: {
+  nodes: Array<{ id: string }>;
+  defaultSeeds: Positions;
+}): NodePositionHint[] {
+  const hints: NodePositionHint[] = [];
+
+  for (const node of args.nodes) {
+    const seed = args.defaultSeeds.get(node.id);
+    if (seed) {
+      hints.push(toHint(node.id, seed));
+    }
+  }
+
+  return hints;
+}
+
+function continuityRawHints(args: {
   prevPositions: Positions | null;
   nodes: Array<{ id: string }>;
   defaultSeeds: Positions;
@@ -63,12 +87,24 @@ function baselineHints(args: {
   return hints;
 }
 
-function baselinePolicy(): TemporalPolicy {
+function seedDefaultPolicy(): TemporalPolicy {
   return {
-    name: 'baseline',
+    name: 'seed_default',
     makeHints(args) {
       return {
-        hints: baselineHints(args),
+        hints: defaultSeedHints(args),
+        iterationMode: 'default'
+      };
+    }
+  };
+}
+
+function seedContinuityRawPolicy(): TemporalPolicy {
+  return {
+    name: 'seed_continuity_raw',
+    makeHints(args) {
+      return {
+        hints: continuityRawHints(args),
         iterationMode: args.prevPositions ? 'reduced' : 'default'
       };
     }
@@ -131,11 +167,11 @@ function applySimilarityTransform(point: Position, transform: SimilarityTransfor
   };
 }
 
-function transportPanZoomPolicy(): TemporalPolicy {
+function seedContinuityTransportPolicy(): TemporalPolicy {
   return {
-    name: 'transport_pan_zoom',
+    name: 'seed_continuity_transport',
     makeHints(args) {
-      const fallback = baselinePolicy().makeHints(args);
+      const fallback = seedContinuityRawPolicy().makeHints(args);
       if (!args.prevPositions) {
         return fallback;
       }
@@ -198,20 +234,9 @@ function transportPanZoomPolicy(): TemporalPolicy {
   };
 }
 
-function hashString(input: string): number {
-  // FNV-1a 32-bit hash
-  let hash = 2166136261;
-  for (let i = 0; i < input.length; i++) {
-    hash ^= input.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
-
-function deterministicJitter(id: string, radius: number): Position {
-  const hash = hashString(id);
-  const angle = ((hash & 0xffff) / 0xffff) * Math.PI * 2;
-  const magnitude = (((hash >>> 16) & 0xffff) / 0xffff) * radius;
+function randomJitter(radius: number): Position {
+  const angle = Math.random() * Math.PI * 2;
+  const magnitude = Math.random() * radius;
   return {
     x: Math.cos(angle) * magnitude,
     y: Math.sin(angle) * magnitude
@@ -240,11 +265,11 @@ function changeEmphasisPolicy(config?: TemporalPolicyConfig): TemporalPolicy {
   const changedIds = config?.changedIds ? new Set(config.changedIds) : null;
 
   return {
-    name: 'change_emphasis',
+    name: 'seed_change_emphasis',
     makeHints(args) {
-      const transportedHints = transportPanZoomPolicy().makeHints(args).hints;
-      const transportedMap = new Map<string, Position>(
-        transportedHints.map(hint => [hint.id, { x: hint.x, y: hint.y }])
+      const continuityHints = seedContinuityRawPolicy().makeHints(args).hints;
+      const continuityMap = new Map<string, Position>(
+        continuityHints.map(hint => [hint.id, { x: hint.x, y: hint.y }])
       );
 
       const matchedIds = args.nodes
@@ -256,7 +281,7 @@ function changeEmphasisPolicy(config?: TemporalPolicyConfig): TemporalPolicy {
         : new Set(args.nodes.map(node => node.id).filter(id => !args.prevPositions?.has(id)));
 
       const matchedPoints = matchedIds
-        .map(id => transportedMap.get(id))
+        .map(id => continuityMap.get(id))
         .filter((point): point is Position => !!point);
 
       const defaultPoints = args.nodes
@@ -268,15 +293,15 @@ function changeEmphasisPolicy(config?: TemporalPolicyConfig): TemporalPolicy {
 
       for (const node of args.nodes) {
         if (!effectiveChangedIds.has(node.id)) {
-          const stable = transportedMap.get(node.id);
+          const stable = continuityMap.get(node.id) || args.defaultSeeds.get(node.id);
           if (stable) {
             hints.push(toHint(node.id, stable));
           }
           continue;
         }
 
-        const base = args.defaultSeeds.get(node.id) || anchor;
-        const jitter = deterministicJitter(node.id, CHANGE_EMPHASIS_JITTER_RADIUS);
+        const base = anchor;
+        const jitter = randomJitter(CHANGE_EMPHASIS_JITTER_RADIUS);
         hints.push(toHint(node.id, {
           x: base.x + jitter.x,
           y: base.y + jitter.y
@@ -295,17 +320,34 @@ function changeEmphasisPolicy(config?: TemporalPolicyConfig): TemporalPolicy {
  * Temporal realization policies preserve Spytial semantics and only affect
  * solver initialization hints and iteration mode selection.
  */
+export function normalizeTemporalPolicyName(
+  name: TemporalPolicyName = DEFAULT_TEMPORAL_POLICY_NAME
+): TemporalPolicyCanonicalName {
+  switch (name) {
+    case 'baseline':
+      return 'seed_continuity_raw';
+    case 'transport_pan_zoom':
+      return 'seed_continuity_transport';
+    case 'change_emphasis':
+      return 'seed_change_emphasis';
+    default:
+      return name;
+  }
+}
+
 export function resolveTemporalPolicy(
-  name: TemporalPolicyName = 'baseline',
+  name: TemporalPolicyName = DEFAULT_TEMPORAL_POLICY_NAME,
   config?: TemporalPolicyConfig
 ): TemporalPolicy {
-  switch (name) {
-    case 'transport_pan_zoom':
-      return transportPanZoomPolicy();
-    case 'change_emphasis':
+  switch (normalizeTemporalPolicyName(name)) {
+    case 'seed_default':
+      return seedDefaultPolicy();
+    case 'seed_continuity_transport':
+      return seedContinuityTransportPolicy();
+    case 'seed_change_emphasis':
       return changeEmphasisPolicy(config);
-    case 'baseline':
+    case 'seed_continuity_raw':
     default:
-      return baselinePolicy();
+      return seedContinuityRawPolicy();
   }
 }
