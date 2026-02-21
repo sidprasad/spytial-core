@@ -4,129 +4,87 @@ import { LayoutInstance } from '../../layout/layoutinstance';
 import { parseLayoutSpec } from '../../layout/layoutspec';
 import { WebColaCnDGraph } from './webcola-cnd-graph';
 import type { LayoutState, WebColaLayoutOptions } from './webcolatranslator';
-import type { TemporalPolicyCanonicalName } from './temporal-policy';
+import type { TemporalMode } from './temporal-policy';
 
-export type SequenceMode = TemporalPolicyCanonicalName;
-export type SequenceModeStrategy = SequenceMode | 'default';
-export type ChangedRegionStrategy = 'default' | 'provided';
-
-export interface TemporalSequenceStrategy {
-  /**
-   * Strategy for temporal mode selection.
-   * - `default` => `ignore_history`
-   */
-  mode?: SequenceModeStrategy;
-  /**
-   * Strategy for changed-region handling in `change_emphasis` mode.
-   * - `default` => infer changes from prior positions
-   * - `provided` => use changedNodeIdsByStep
-   */
-  changedRegions?: ChangedRegionStrategy;
-}
-
+/**
+ * Options for rendering a temporal sequence of data instances.
+ */
 export interface RenderTemporalSequenceOptions {
+  /** Ordered list of data instances to render */
   instances: IInputDataInstance[];
+  /** Spytial spec YAML string */
   spytialSpec: string;
-  strategy?: TemporalSequenceStrategy;
+  /** Temporal mode for inter-instance continuity (default: ignore_history) */
+  mode?: TemporalMode;
+  /** Per-step changed node IDs, used with `change_emphasis` mode */
   changedNodeIdsByStep?: Array<ReadonlyArray<string> | undefined>;
+  /** Per-step projection overrides */
   projectionsByStep?: Array<Record<string, string> | undefined>;
-  container?: HTMLElement;
-}
-
-export function resolveSequenceMode(
-  mode: SequenceModeStrategy | undefined
-): SequenceMode {
-  if (!mode || mode === 'default') {
-    return 'ignore_history';
-  }
-  return mode;
-}
-
-function resolveChangedRegionStrategy(
-  strategy: TemporalSequenceStrategy | undefined
-): ChangedRegionStrategy {
-  return strategy?.changedRegions || 'default';
 }
 
 function ensureWebColaElementRegistered(): void {
-  if (
-    typeof window === 'undefined' ||
-    typeof document === 'undefined' ||
-    typeof customElements === 'undefined'
-  ) {
+  if (typeof window === 'undefined' || typeof customElements === 'undefined') {
     throw new Error('Temporal sequence rendering requires a browser environment.');
   }
-
   if (!customElements.get('webcola-cnd-graph')) {
     customElements.define('webcola-cnd-graph', WebColaCnDGraph as any);
   }
 }
 
-function makeGraphElement(): WebColaCnDGraph {
-  ensureWebColaElementRegistered();
-  return document.createElement('webcola-cnd-graph') as WebColaCnDGraph;
-}
-
 /**
- * Sequence layer for rendering multiple instances with temporal strategy.
+ * Render a temporal sequence of data instances, threading layout state
+ * between steps according to the chosen temporal mode.
  *
- * Input:
- * - list of instances
- * - Spytial spec
- * - strategy (defaults to `(default, default)`)
+ * This is a thin orchestration layer atop `WebColaCnDGraph.renderLayout()`.
+ * Each step produces a `webcola-cnd-graph` element; the caller is responsible
+ * for inserting them into the DOM.
  *
- * Output:
- * - list of rendered `webcola-cnd-graph` elements
+ * @param options - Sequence rendering options
+ * @returns Array of rendered `webcola-cnd-graph` elements, one per instance
  */
 export async function renderTemporalSequence(
   options: RenderTemporalSequenceOptions
 ): Promise<WebColaCnDGraph[]> {
-  const { instances, spytialSpec, container } = options;
-  const mode = resolveSequenceMode(options.strategy?.mode);
-  const changedRegionStrategy = resolveChangedRegionStrategy(options.strategy);
-
+  const { instances, spytialSpec } = options;
+  const mode = options.mode ?? 'ignore_history';
   const parsedSpec = parseLayoutSpec(spytialSpec);
-  const renderedGraphs: WebColaCnDGraph[] = [];
+  const results: WebColaCnDGraph[] = [];
   let priorState: LayoutState | null = null;
 
-  for (let index = 0; index < instances.length; index++) {
-    const instance = instances[index];
+  ensureWebColaElementRegistered();
+
+  for (let i = 0; i < instances.length; i++) {
     const evaluator = new SGraphQueryEvaluator();
-    evaluator.initialize({ sourceData: instance });
+    evaluator.initialize({ sourceData: instances[i] });
 
-    const layoutInstance = new LayoutInstance(parsedSpec, evaluator, index, true);
-    const projections = options.projectionsByStep?.[index] || {};
-    const { layout, error } = layoutInstance.generateLayout(instance, projections);
+    const layoutInstance = new LayoutInstance(parsedSpec, evaluator, i, true);
+    const projections = options.projectionsByStep?.[i] ?? {};
+    const { layout, error } = layoutInstance.generateLayout(instances[i], projections);
 
-    if (error) {
-      throw error;
-    }
+    if (error) throw error;
 
-    const graphElement = makeGraphElement();
-    if (container) {
-      container.appendChild(graphElement);
-    }
+    const graphElement = document.createElement('webcola-cnd-graph') as WebColaCnDGraph;
 
     const renderOptions: WebColaLayoutOptions = {
-      temporalPolicy: mode
+      temporalMode: mode,
     };
 
     if (mode !== 'ignore_history' && priorState) {
       renderOptions.priorState = priorState;
     }
 
-    if (mode === 'change_emphasis' && changedRegionStrategy === 'provided') {
-      const changedIds = options.changedNodeIdsByStep?.[index];
+    if (mode === 'change_emphasis') {
+      const changedIds = options.changedNodeIdsByStep?.[i];
       if (changedIds) {
         renderOptions.changedNodeIds = [...changedIds];
       }
     }
 
     await graphElement.renderLayout(layout, renderOptions);
-    renderedGraphs.push(graphElement);
+    results.push(graphElement);
 
     priorState = mode === 'ignore_history' ? null : graphElement.getLayoutState();
   }
 
-  return renderedGraphs;
+  return results;
 }

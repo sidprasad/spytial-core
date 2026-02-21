@@ -715,7 +715,7 @@
                 const temporalPolicyMode = getTemporalPolicyMode();
                 
                 const renderOptions = {
-                    temporalPolicy: temporalPolicyMode
+                    temporalMode: temporalPolicyMode
                 };
                 if (shouldUsePriorStateForTemporalPolicy() && priorState) {
                     renderOptions.priorState = priorState;

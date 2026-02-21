@@ -1,15 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { resolveSequenceMode } from '../src/translators/webcola/temporal-sequence';
+import type { TemporalMode } from '../src/translators/webcola/temporal-policy';
 
-describe('Temporal sequence mode resolution', () => {
-  it('defaults to ignore_history', () => {
-    expect(resolveSequenceMode(undefined)).toBe('ignore_history');
-    expect(resolveSequenceMode('default')).toBe('ignore_history');
-  });
-
-  it('passes through explicit modes', () => {
-    expect(resolveSequenceMode('ignore_history')).toBe('ignore_history');
-    expect(resolveSequenceMode('stability')).toBe('stability');
-    expect(resolveSequenceMode('change_emphasis')).toBe('change_emphasis');
+describe('Temporal sequence types', () => {
+  it('TemporalMode accepts the three canonical modes', () => {
+    const modes: TemporalMode[] = ['ignore_history', 'stability', 'change_emphasis'];
+    expect(modes).toHaveLength(3);
   });
 });

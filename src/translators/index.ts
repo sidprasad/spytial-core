@@ -7,7 +7,7 @@ export { WebColaTranslator } from './webcola/webcolatranslator';
 
 // WebColaCnDGraph web component for browser usage
 export { WebColaCnDGraph } from './webcola/webcola-cnd-graph';
-export { renderTemporalSequence, resolveSequenceMode } from './webcola/temporal-sequence';
+export { renderTemporalSequence } from './webcola/temporal-sequence';
 
 // StructuredInputGraph web component for structured input
 export { StructuredInputGraph } from './webcola/structured-input-graph';
@@ -31,11 +31,5 @@ export type {
   WebColaLayoutOptions 
 } from './webcola/webcolatranslator';
 
-export type { TemporalPolicyName, TemporalPolicyCanonicalName } from './webcola/temporal-policy';
-export type {
-  SequenceMode,
-  SequenceModeStrategy,
-  ChangedRegionStrategy,
-  TemporalSequenceStrategy,
-  RenderTemporalSequenceOptions
-} from './webcola/temporal-sequence';
+export type { TemporalMode } from './webcola/temporal-policy';
+export type { RenderTemporalSequenceOptions } from './webcola/temporal-sequence';

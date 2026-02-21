@@ -35,19 +35,14 @@ export { ForgeEvaluator, WrappedForgeEvaluator } from './evaluators/forge-evalua
 export { SQLEvaluator } from './evaluators/sql-evaluator';
 export { WebColaTranslator } from './translators';
 export { StructuredInputGraph } from './translators';
-export { renderTemporalSequence, resolveSequenceMode } from './translators';
+export { renderTemporalSequence } from './translators';
 export type {
   ParsedCnDSpec,
   NodePositionHint,
   TransformInfo,
   LayoutState,
   WebColaLayoutOptions,
-  TemporalPolicyName,
-  TemporalPolicyCanonicalName,
-  SequenceMode,
-  SequenceModeStrategy,
-  ChangedRegionStrategy,
-  TemporalSequenceStrategy,
+  TemporalMode,
   RenderTemporalSequenceOptions
 } from './translators';
 export { SGraphQueryEvaluator } from "./evaluators/sgq-evaluator";

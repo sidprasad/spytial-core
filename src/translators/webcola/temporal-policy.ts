@@ -1,108 +1,29 @@
-import type { NodePositionHint, TransformInfo } from './webcolatranslator';
+import type { NodePositionHint, LayoutState } from './webcolatranslator';
 
-export type Position = { x: number; y: number };
-export type Positions = Map<string, Position>;
-export type IterationMode = 'default' | 'reduced';
+/**
+ * Temporal modes control how prior layout state affects the next render.
+ * These preserve Spytial semantics -- they only affect solver initialization
+ * hints and iteration mode selection.
+ *
+ * - `ignore_history`: Fresh layout, no prior state used (default)
+ * - `stability`: Preserve prior node positions across time
+ * - `change_emphasis`: Preserve stable regions, destabilize changed regions
+ */
+export type TemporalMode = 'ignore_history' | 'stability' | 'change_emphasis';
 
-export type TemporalPolicyCanonicalName = 'ignore_history' | 'stability' | 'change_emphasis';
-
-// Legacy names kept for backwards compatibility.
-export type TemporalPolicyLegacyName =
-  | 'seed_default'
-  | 'seed_continuity_raw'
-  | 'seed_continuity_transport'
-  | 'seed_change_emphasis'
-  | 'baseline'
-  | 'transport_pan_zoom';
-
-export type TemporalPolicyName = TemporalPolicyCanonicalName | TemporalPolicyLegacyName;
-
-export interface TemporalPolicy {
-  name: TemporalPolicyCanonicalName;
-  makeHints(args: {
-    prevPositions: Positions | null;
-    prevTransform: TransformInfo | null;
-    nodes: Array<{ id: string }>;
-    defaultSeeds: Positions;
-    viewport?: { width: number; height: number };
-  }): { hints: NodePositionHint[]; iterationMode: IterationMode };
-}
-
-export interface TemporalPolicyConfig {
-  changedIds?: Iterable<string>;
+/**
+ * Result of applying a temporal policy to a prior layout state.
+ */
+export interface TemporalPolicyResult {
+  /** Effective prior state to pass to the translator, or undefined for fresh layout */
+  effectivePriorState: LayoutState | undefined;
+  /** Whether to use reduced solver iterations to better preserve hint positions */
+  useReducedIterations: boolean;
 }
 
 const CHANGE_EMPHASIS_JITTER_RADIUS = 18;
-const DEFAULT_TEMPORAL_POLICY_NAME: TemporalPolicyCanonicalName = 'ignore_history';
 
-function toHint(id: string, point: Position): NodePositionHint {
-  return { id, x: point.x, y: point.y };
-}
-
-function ignoreHistoryHints(args: {
-  nodes: Array<{ id: string }>;
-  defaultSeeds: Positions;
-}): NodePositionHint[] {
-  const hints: NodePositionHint[] = [];
-
-  for (const node of args.nodes) {
-    const seed = args.defaultSeeds.get(node.id);
-    if (seed) {
-      hints.push(toHint(node.id, seed));
-    }
-  }
-
-  return hints;
-}
-
-function stabilityHints(args: {
-  prevPositions: Positions | null;
-  nodes: Array<{ id: string }>;
-  defaultSeeds: Positions;
-}): NodePositionHint[] {
-  const hints: NodePositionHint[] = [];
-
-  for (const node of args.nodes) {
-    const previous = args.prevPositions?.get(node.id);
-    if (previous) {
-      hints.push(toHint(node.id, previous));
-      continue;
-    }
-
-    const seed = args.defaultSeeds.get(node.id);
-    if (seed) {
-      hints.push(toHint(node.id, seed));
-    }
-  }
-
-  return hints;
-}
-
-function ignoreHistoryPolicy(): TemporalPolicy {
-  return {
-    name: 'ignore_history',
-    makeHints(args) {
-      return {
-        hints: ignoreHistoryHints(args),
-        iterationMode: 'default'
-      };
-    }
-  };
-}
-
-function stabilityPolicy(): TemporalPolicy {
-  return {
-    name: 'stability',
-    makeHints(args) {
-      return {
-        hints: stabilityHints(args),
-        iterationMode: args.prevPositions ? 'reduced' : 'default'
-      };
-    }
-  };
-}
-
-function randomJitter(radius: number): Position {
+function randomJitter(radius: number): { x: number; y: number } {
   const angle = Math.random() * Math.PI * 2;
   const magnitude = Math.random() * radius;
   return {
@@ -111,111 +32,77 @@ function randomJitter(radius: number): Position {
   };
 }
 
-function centroid(points: Position[]): Position | null {
-  if (points.length === 0) {
-    return null;
-  }
-
+function centroid(points: Array<{ x: number; y: number }>): { x: number; y: number } | null {
+  if (points.length === 0) return null;
   let sumX = 0;
   let sumY = 0;
-  for (const point of points) {
-    sumX += point.x;
-    sumY += point.y;
+  for (const p of points) {
+    sumX += p.x;
+    sumY += p.y;
   }
-
-  return {
-    x: sumX / points.length,
-    y: sumY / points.length
-  };
-}
-
-function changeEmphasisPolicy(config?: TemporalPolicyConfig): TemporalPolicy {
-  const changedIds = config?.changedIds ? new Set(config.changedIds) : null;
-
-  return {
-    name: 'change_emphasis',
-    makeHints(args) {
-      const stableHints = stabilityPolicy().makeHints(args).hints;
-      const stableMap = new Map<string, Position>(
-        stableHints.map(hint => [hint.id, { x: hint.x, y: hint.y }])
-      );
-
-      const matchedIds = args.nodes
-        .map(node => node.id)
-        .filter(id => args.prevPositions?.has(id));
-
-      const effectiveChangedIds = changedIds
-        ? new Set(changedIds)
-        : new Set(args.nodes.map(node => node.id).filter(id => !args.prevPositions?.has(id)));
-
-      const matchedPoints = matchedIds
-        .map(id => stableMap.get(id))
-        .filter((point): point is Position => !!point);
-
-      const defaultPoints = args.nodes
-        .map(node => args.defaultSeeds.get(node.id))
-        .filter((point): point is Position => !!point);
-
-      const anchor = centroid(matchedPoints) || centroid(defaultPoints) || { x: 0, y: 0 };
-      const hints: NodePositionHint[] = [];
-
-      for (const node of args.nodes) {
-        if (!effectiveChangedIds.has(node.id)) {
-          const stable = stableMap.get(node.id) || args.defaultSeeds.get(node.id);
-          if (stable) {
-            hints.push(toHint(node.id, stable));
-          }
-          continue;
-        }
-
-        const jitter = randomJitter(CHANGE_EMPHASIS_JITTER_RADIUS);
-        hints.push(toHint(node.id, {
-          x: anchor.x + jitter.x,
-          y: anchor.y + jitter.y
-        }));
-      }
-
-      return {
-        hints,
-        iterationMode: 'default'
-      };
-    }
-  };
+  return { x: sumX / points.length, y: sumY / points.length };
 }
 
 /**
- * Temporal realization policies preserve Spytial semantics and only affect
- * solver initialization hints and iteration mode selection.
+ * Apply change_emphasis transformation: keep stable node positions,
+ * jitter changed nodes around the centroid of stable positions.
  */
-export function normalizeTemporalPolicyName(
-  name: TemporalPolicyName = DEFAULT_TEMPORAL_POLICY_NAME
-): TemporalPolicyCanonicalName {
-  switch (name) {
-    case 'seed_default':
-      return 'ignore_history';
-    case 'seed_continuity_raw':
-    case 'seed_continuity_transport':
-    case 'baseline':
-    case 'transport_pan_zoom':
-      return 'stability';
-    case 'seed_change_emphasis':
-      return 'change_emphasis';
-    default:
-      return name;
+function applyChangeEmphasis(
+  priorState: LayoutState,
+  changedNodeIds?: string[]
+): LayoutState {
+  if (!changedNodeIds || changedNodeIds.length === 0) {
+    // No explicit changes -- fall back to stability (preserve all positions)
+    return priorState;
   }
+
+  const changedSet = new Set(changedNodeIds);
+  const stablePositions = priorState.positions.filter(p => !changedSet.has(p.id));
+  const anchor = centroid(stablePositions) ?? centroid(priorState.positions) ?? { x: 0, y: 0 };
+
+  const newPositions: NodePositionHint[] = priorState.positions.map(p => {
+    if (!changedSet.has(p.id)) return p;
+    const jitter = randomJitter(CHANGE_EMPHASIS_JITTER_RADIUS);
+    return { id: p.id, x: anchor.x + jitter.x, y: anchor.y + jitter.y };
+  });
+
+  return { positions: newPositions, transform: priorState.transform };
 }
 
-export function resolveTemporalPolicy(
-  name: TemporalPolicyName = DEFAULT_TEMPORAL_POLICY_NAME,
-  config?: TemporalPolicyConfig
-): TemporalPolicy {
-  switch (normalizeTemporalPolicyName(name)) {
-    case 'stability':
-      return stabilityPolicy();
-    case 'change_emphasis':
-      return changeEmphasisPolicy(config);
+/**
+ * Apply a temporal policy to compute the effective prior state for a render.
+ *
+ * This only affects solver initialization and iteration mode --
+ * Spytial semantics are unchanged.
+ *
+ * @param priorState - Layout state captured from a previous render (if any)
+ * @param mode - Temporal mode to apply (default: `ignore_history`)
+ * @param changedNodeIds - Node IDs that changed, for `change_emphasis` mode
+ */
+export function applyTemporalPolicy(
+  priorState: LayoutState | undefined,
+  mode: TemporalMode = 'ignore_history',
+  changedNodeIds?: string[]
+): TemporalPolicyResult {
+  // No prior state -- always fresh layout regardless of mode
+  if (!priorState || priorState.positions.length === 0) {
+    return { effectivePriorState: undefined, useReducedIterations: false };
+  }
+
+  switch (mode) {
     case 'ignore_history':
+      return { effectivePriorState: undefined, useReducedIterations: false };
+
+    case 'stability':
+      return { effectivePriorState: priorState, useReducedIterations: true };
+
+    case 'change_emphasis':
+      return {
+        effectivePriorState: applyChangeEmphasis(priorState, changedNodeIds),
+        useReducedIterations: false
+      };
+
     default:
-      return ignoreHistoryPolicy();
+      return { effectivePriorState: undefined, useReducedIterations: false };
   }
 }

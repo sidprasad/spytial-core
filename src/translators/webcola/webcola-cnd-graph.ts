@@ -3,9 +3,7 @@ import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator, N
 import { InstanceLayout, isAlignmentConstraint, isInstanceLayout, isLeftConstraint, isTopConstraint, LayoutNode } from '../../layout/interfaces';
 import type { GridRouter, Group, Layout, Node, Link } from 'webcola';
 import { IInputDataInstance, ITuple, IAtom } from '../../data-instance/interfaces';
-import * as dagre from 'dagre';
-import { resolveTemporalPolicy } from './temporal-policy';
-import type { Positions } from './temporal-policy';
+import { applyTemporalPolicy } from './temporal-policy';
 
 let d3 = window.d3v4 || window.d3; // Use d3 v4 if available, otherwise fallback to the default window.d3
 let cola = window.cola;
@@ -1314,59 +1312,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     }
   }
 
-  private toPositionMap(hints?: NodePositionHint[]): Positions | null {
-    if (!hints || hints.length === 0) {
-      return null;
-    }
-
-    const positions: Positions = new Map();
-    for (const hint of hints) {
-      positions.set(hint.id, { x: hint.x, y: hint.y });
-    }
-    return positions;
-  }
-
-  private computeDefaultSeeds(
-    instanceLayout: InstanceLayout,
-    figWidth: number,
-    figHeight: number
-  ): Positions {
-    const defaultX = figWidth / 2;
-    const defaultY = figHeight / 2;
-    const seeds: Positions = new Map();
-
-    instanceLayout.nodes.forEach(node => {
-      seeds.set(node.id, { x: defaultX, y: defaultY });
-    });
-
-    try {
-      const g = new dagre.graphlib.Graph({ multigraph: true });
-      g.setGraph({ nodesep: 50, ranksep: 100, rankdir: 'TB' });
-      g.setDefaultEdgeLabel(() => ({}));
-
-      instanceLayout.nodes.forEach(node => {
-        g.setNode(node.id, { width: node.width, height: node.height });
-      });
-
-      instanceLayout.edges.forEach(edge => {
-        g.setEdge(edge.source.id, edge.target.id);
-      });
-
-      dagre.layout(g);
-
-      instanceLayout.nodes.forEach(node => {
-        const dagreNode = g.node(node.id);
-        if (dagreNode) {
-          seeds.set(node.id, { x: dagreNode.x, y: dagreNode.y });
-        }
-      });
-    } catch (error) {
-      console.warn('WebCola: Failed to compute DAGRE seed positions, using centered defaults.', error);
-    }
-
-    return seeds;
-  }
-
   /**
    * Render layout using WebCola constraint solver
    * @param instanceLayout - The layout instance to render
@@ -1390,9 +1335,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       throw new Error('Invalid instance layout provided. Expected an InstanceLayout instance.');
     }
 
-    // Extract prior state if provided
-    const priorState = options?.priorState;
-    const hasPriorState = priorState && priorState.positions.length > 0;
+    // Apply temporal policy to compute effective prior state and iteration mode.
+    // This only affects solver initialization — Spytial semantics are unchanged.
+    const { effectivePriorState, useReducedIterations } = applyTemporalPolicy(
+      options?.priorState,
+      options?.temporalMode,
+      options?.changedNodeIds
+    );
+    const hasPriorState = effectivePriorState && effectivePriorState.positions.length > 0;
 
     // Mark this as a new render - we'll fit viewport after layout completes
     // Only reset if this is a completely new layout (no prior state)
@@ -1407,10 +1357,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         if (hasPriorState) {
           // Restore the prior transform to maintain visual continuity
           const transform = d3.zoomIdentity
-            .translate(priorState!.transform.x, priorState!.transform.y)
-            .scale(priorState!.transform.k);
+            .translate(effectivePriorState.transform.x, effectivePriorState.transform.y)
+            .scale(effectivePriorState.transform.k);
           this.svg.call(this.zoomBehavior.transform, transform);
-          console.log(`WebCola: Restored prior state - ${priorState!.positions.length} positions, zoom ${priorState!.transform.k.toFixed(2)}x`);
+          console.log(`WebCola: Restored prior state - ${effectivePriorState.positions.length} positions, zoom ${effectivePriorState.transform.k.toFixed(2)}x`);
         } else {
           // Reset zoom transform to identity for a fresh start (will be adjusted by fitViewportToContent)
           const identity = d3.zoomIdentity;
@@ -1455,33 +1405,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       const containerWidth = containerRect.width || 800; // fallback to default
       const containerHeight = containerRect.height || 600; // fallback to default
 
-      const prevPositions = this.toPositionMap(hasPriorState ? priorState!.positions : undefined);
-      const defaultSeeds = this.computeDefaultSeeds(instanceLayout, containerWidth, containerHeight);
-      const temporalPolicy = resolveTemporalPolicy(options?.temporalPolicy || 'ignore_history', {
-        changedIds: options?.changedNodeIds
-      });
-
-      const temporalResolution = temporalPolicy.makeHints({
-        prevPositions,
-        prevTransform: hasPriorState ? priorState!.transform : null,
-        nodes: instanceLayout.nodes.map(node => ({ id: node.id })),
-        defaultSeeds,
-        viewport: { width: containerWidth, height: containerHeight }
-      });
-
-      const policyPriorState: LayoutState | undefined = temporalResolution.hints.length > 0
-        ? {
-          positions: temporalResolution.hints,
-          transform: priorState?.transform || { k: 1, x: 0, y: 0 }
-        }
-        : undefined;
-
-      // Translate to WebCola format with policy-derived temporal hints.
-      // Spytial semantics are unchanged; this only affects solver initialization.
+      // Translate to WebCola format with effective prior state from temporal policy
       const translator = new WebColaTranslator();
       const webcolaLayout = await translator.translate(instanceLayout, containerWidth, containerHeight, {
         ...options,
-        priorState: policyPriorState
+        priorState: effectivePriorState
       });
 
       this.updateLoadingProgress(`Computing layout for ${webcolaLayout.nodes.length} nodes...`);
@@ -1492,24 +1420,20 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       let unconstrainedIters = WebColaCnDGraph.INITIAL_UNCONSTRAINED_ITERATIONS;
       let userConstraintIters = WebColaCnDGraph.INITIAL_USER_CONSTRAINT_ITERATIONS;
       let allConstraintIters = WebColaCnDGraph.INITIAL_ALL_CONSTRAINTS_ITERATIONS;
-      const useReducedIterations = temporalResolution.iterationMode === 'reduced';
       
-      // In reduced mode, minimize iterations to preserve temporal hints.
-      // WebCola's unconstrained phase allows nodes to move freely from their initial positions,
-      // so minimizing this phase helps preserve the provided positions.
+      // When using reduced iterations (stability mode), minimize solver phases
+      // to preserve hint positions. WebCola's unconstrained phase allows nodes
+      // to drift from their initial positions, so minimizing this phase helps
+      // preserve temporal continuity.
       //
       // Note: We manually compute node bounds in ensureNodeBounds() before edge routing,
       // so we don't need many iterations just for bounds computation.
       if (useReducedIterations) {
-        // Use minimal iterations to preserve seed positions:
-        // - 0 unconstrained: don't let nodes drift from hints
-        // - 10 user constraint: apply position constraints quickly
-        // - 20 all constraints: final constraint satisfaction with overlap avoidance
         unconstrainedIters = 0;
         userConstraintIters = Math.min(10, userConstraintIters);
         allConstraintIters = Math.min(20, allConstraintIters);
         
-        console.log(`WebCola: Using reduced iteration mode (${temporalPolicy.name}) with ${temporalResolution.hints.length} seed hints`);
+        console.log(`WebCola: Using reduced iterations to preserve ${effectivePriorState?.positions.length ?? 0} prior positions`);
       }
       
       if (nodeCount > 100) {

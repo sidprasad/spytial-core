@@ -3,7 +3,7 @@ import { InstanceLayout, LayoutNode, LayoutEdge, LayoutConstraint, LayoutGroup, 
 import { EdgeStyle } from '../../layout/edge-style';
 import { LayoutInstance } from '../../layout/layoutinstance';
 import * as dagre from 'dagre';
-import type { TemporalPolicyName } from './temporal-policy';
+import type { TemporalMode } from './temporal-policy';
 
 /**
  * WebColaTranslator - Translates InstanceLayout to WebCola format
@@ -127,25 +127,17 @@ export interface WebColaLayoutOptions {
   */
   priorState?: LayoutState;
   /**
-   * Temporal realization policy used to derive node initialization hints.
-   * This preserves Spytial semantics and only changes solver initialization.
-   * Preferred values:
-   * - `ignore_history` (default; Dagre/default seeds only)
-   * - `stability` (reuse prior raw positions)
-   * - `change_emphasis` (continuity for stable nodes, random reflow for changed)
+   * Temporal mode controlling how prior state affects solver initialization.
+   * Only affects initialization hints and iteration mode — Spytial semantics are unchanged.
    *
-   * Backward-compatible aliases are accepted:
-   * - `seed_default` -> `ignore_history`
-   * - `seed_continuity_raw` -> `stability`
-   * - `seed_continuity_transport` -> `stability`
-   * - `baseline` -> `stability`
-   * - `transport_pan_zoom` -> `stability`
-   * - `seed_change_emphasis` -> `change_emphasis`
+   * - `ignore_history` (default): Fresh layout, no prior state
+   * - `stability`: Preserve prior positions across time
+   * - `change_emphasis`: Preserve stable regions, destabilize changed regions
    */
-  temporalPolicy?: TemporalPolicyName;
+  temporalMode?: TemporalMode;
   /**
-   * Optional changed node IDs used by `change_emphasis` policy.
-   * If omitted, changed nodes are approximated as IDs absent from prior positions.
+   * Node IDs that changed between instances, used by `change_emphasis` mode.
+   * If omitted in change_emphasis mode, all prior positions are preserved (same as stability).
    */
   changedNodeIds?: string[];
 }
