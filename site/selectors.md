@@ -2,7 +2,7 @@
 
 Selectors are expressions that identify which **atoms** (nodes) or **tuples** (edges) a constraint or directive applies to. Every constraint and directive in Spytial uses a selector.
 
-By default, Spytial uses **[Forge](https://forge-fm.org/) relational syntax** (equivalent to [Alloy](https://alloytools.org/)). If you've used either, you already know how to write selectors. For the full language reference, see the [Forge documentation](https://forge-fm.org/docs/building-models/constraints/formulas-and-expressions/).
+By default, Spytial uses **[Forge](https://forge-fm.org/) relational syntax** (equivalent to [Alloy](https://alloytools.org/)). If you've used either, you already know how to write selectors. For the full language reference, see the [Forge documentation](https://forge-fm.github.io/forge-documentation/5.0/building-models/constraints/constraints/).
 
 > **Other selector languages:** Spytial also supports [AlaSQL](https://alasql.org/) as an alternative selector language for users who prefer writing SQL queries.
 
