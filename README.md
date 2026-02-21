@@ -393,6 +393,10 @@ The `<webcola-cnd-graph>` custom element provides methods for interacting with t
 
 #### Layout Management
 - **`renderLayout(instanceLayout, options?)`** - Render a layout with optional prior positions
+  - `options.priorState`: prior layout state for visual continuity (use `getLayoutState()` to capture)
+  - Prior state enables reduced iterations to preserve positions across renders.
+- **`generateSequenceLayouts({ instances, spytialSpec, mode? })`** - Generate layouts for a sequence of instances with inter-step continuity.
+  - `mode`: `"ignore_history"` (default) | `"stability"` | `"change_emphasis"` — applied before each render via `applyTemporalPolicy()`
 - **`clear()`** - Clear the graph and reset state
 - **`getNodePositions()`** - Get current positions of all nodes
 

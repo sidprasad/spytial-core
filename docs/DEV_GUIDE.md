@@ -28,6 +28,11 @@ Everything in this repo revolves around a **pipelined flow** from input data →
    - Use the generated layout with WebCola, SVG, Canvas, or a React-based UI.
    - Most demos render through WebCola and provide controls for re-running the pipeline.
 
+6. **Sequence continuity** *(optional)*
+   - For ordered sequences of instances (e.g., Alloy traces), pass a `policy`, `prevInstance`, and `currInstance` to `renderLayout()`.
+   - A **`SequencePolicy`** (e.g., `stability`, `changeEmphasis`) is applied pairwise inside `renderLayout` to resolve prior positions for the solver.
+   - See [docs/SEQUENCE_LAYOUT_API.md](./SEQUENCE_LAYOUT_API.md) for the full API reference.
+
 ### Demos that show the pipeline
 
 The demos are the best references for how to wire everything up end-to-end:

@@ -6,14 +6,14 @@ import { SGraphQueryEvaluator } from '../src/evaluators/sgq-evaluator';
 import { WebColaTranslator, WebColaLayoutOptions, NodePositionHint, LayoutState } from '../src/translators/webcola/webcolatranslator';
 
 /**
- * Test for temporal Alloy rendering consistency.
+ * Test for sequence layout rendering consistency.
  * 
- * When rendering temporal sequences from Alloy, atoms remain roughly the same
+ * When rendering sequences from Alloy, atoms remain roughly the same
  * but tuples (relations) may change. To maintain visual stability, we need
  * a mechanism to pass prior node positions to subsequent renders.
  */
 
-// First temporal state: A -> B
+// First state: A -> B
 const jsonData1: IJsonDataInstance = {
   atoms: [
     { id: 'A', type: 'Node', label: 'A' },
@@ -30,7 +30,7 @@ const jsonData1: IJsonDataInstance = {
   ]
 };
 
-// Second temporal state: A -> B -> C (same atoms, different relations)
+// Second state: A -> B -> C (same atoms, different relations)
 const jsonData2: IJsonDataInstance = {
   atoms: [
     { id: 'A', type: 'Node', label: 'A' },
@@ -50,7 +50,7 @@ const jsonData2: IJsonDataInstance = {
   ]
 };
 
-// Third temporal state: only A -> C (removing B from sequence)
+// Third state: only A -> C (removing B from chain)
 const jsonData3: IJsonDataInstance = {
   atoms: [
     { id: 'A', type: 'Node', label: 'A' },
@@ -83,7 +83,7 @@ function createEvaluator(instance: JSONDataInstance) {
   return evaluator;
 }
 
-describe('Temporal Layout Consistency', () => {
+describe('Sequence Layout Consistency', () => {
   describe('WebColaLayoutOptions', () => {
     it('accepts prior state option in translate()', async () => {
       const instance = new JSONDataInstance(jsonData1);
@@ -94,7 +94,7 @@ describe('Temporal Layout Consistency', () => {
       const translator = new WebColaTranslator();
       
       // Define prior state with positions and transform
-      const priorState: LayoutState = {
+      const priorPositions: LayoutState = {
         positions: [
           { id: 'A', x: 100, y: 200 },
           { id: 'B', x: 300, y: 200 },
@@ -104,7 +104,7 @@ describe('Temporal Layout Consistency', () => {
       };
 
       const options: WebColaLayoutOptions = {
-        priorState
+        priorPositions
       };
 
       const result = await translator.translate(layout, 800, 600, options);
@@ -139,7 +139,7 @@ describe('Temporal Layout Consistency', () => {
       const translator = new WebColaTranslator();
       
       // Only provide prior state with position for node A
-      const priorState: LayoutState = {
+      const priorPositions: LayoutState = {
         positions: [
           { id: 'A', x: 100, y: 200 }
         ],
@@ -147,7 +147,7 @@ describe('Temporal Layout Consistency', () => {
       };
 
       const options: WebColaLayoutOptions = {
-        priorState
+        priorPositions
       };
 
       const result = await translator.translate(layout, 800, 600, options);
@@ -186,11 +186,11 @@ describe('Temporal Layout Consistency', () => {
     });
   });
 
-  describe('Simulated Temporal Sequence', () => {
-    it('can render temporal sequence with consistent positions', async () => {
+  describe('Simulated Sequence', () => {
+    it('can render sequence with consistent positions', async () => {
       const translator = new WebColaTranslator();
 
-      // First temporal state
+      // First state
       const instance1 = new JSONDataInstance(jsonData1);
       const evaluator1 = createEvaluator(instance1);
       const layoutInstance1 = new LayoutInstance(layoutSpec, evaluator1, 0, true);
@@ -199,7 +199,7 @@ describe('Temporal Layout Consistency', () => {
       const result1 = await translator.translate(layout1, 800, 600);
       
       // Extract positions from first render and create prior state
-      const priorState: LayoutState = {
+      const priorPositions: LayoutState = {
         positions: result1.colaNodes.map(node => ({
           id: node.id,
           x: node.x || 0,
@@ -208,13 +208,13 @@ describe('Temporal Layout Consistency', () => {
         transform: { k: 1, x: 0, y: 0 }
       };
 
-      // Second temporal state with prior state
+      // Second state with prior positions
       const instance2 = new JSONDataInstance(jsonData2);
       const evaluator2 = createEvaluator(instance2);
       const layoutInstance2 = new LayoutInstance(layoutSpec, evaluator2, 0, true);
       const { layout: layout2 } = layoutInstance2.generateLayout(instance2, {});
       
-      const result2 = await translator.translate(layout2, 800, 600, { priorState });
+      const result2 = await translator.translate(layout2, 800, 600, { priorPositions });
 
       // Verify nodes exist in second render
       expect(result2.colaNodes).toHaveLength(3);
@@ -224,7 +224,7 @@ describe('Temporal Layout Consistency', () => {
       const nodesById2 = new Map(result2.colaNodes.map(n => [n.id, n]));
 
       // Verify that shared nodes (A, B, C) start at the same positions in the second render
-      for (const priorPos of priorState.positions) {
+      for (const priorPos of priorPositions.positions) {
         const node2 = nodesById2.get(priorPos.id);
         expect(node2).toBeDefined();
         expect(node2!.x).toBe(priorPos.x);
@@ -232,7 +232,7 @@ describe('Temporal Layout Consistency', () => {
       }
     });
 
-    it('handles atom additions/removals in temporal sequence', async () => {
+    it('handles atom additions/removals across sequence steps', async () => {
       const translator = new WebColaTranslator();
 
       // Base state with A, B, C
@@ -244,7 +244,7 @@ describe('Temporal Layout Consistency', () => {
       const result1 = await translator.translate(layout1, 800, 600);
       
       // Save positions as prior state
-      const priorState: LayoutState = {
+      const priorPositions: LayoutState = {
         positions: result1.colaNodes.map(node => ({
           id: node.id,
           x: node.x || 0,
@@ -279,7 +279,7 @@ describe('Temporal Layout Consistency', () => {
       const layoutInstance2 = new LayoutInstance(layoutSpec, evaluator2, 0, true);
       const { layout: layout2 } = layoutInstance2.generateLayout(instance2, {});
       
-      const result2 = await translator.translate(layout2, 800, 600, { priorState });
+      const result2 = await translator.translate(layout2, 800, 600, { priorPositions });
 
       // Verify all 4 nodes exist
       expect(result2.colaNodes).toHaveLength(4);
@@ -290,9 +290,9 @@ describe('Temporal Layout Consistency', () => {
       const nodeC = result2.colaNodes.find(n => n.id === 'C');
       const nodeD = result2.colaNodes.find(n => n.id === 'D');
 
-      expect(nodeA!.x).toBe(priorState.positions.find(p => p.id === 'A')!.x);
-      expect(nodeB!.x).toBe(priorState.positions.find(p => p.id === 'B')!.x);
-      expect(nodeC!.x).toBe(priorState.positions.find(p => p.id === 'C')!.x);
+      expect(nodeA!.x).toBe(priorPositions.positions.find(p => p.id === 'A')!.x);
+      expect(nodeB!.x).toBe(priorPositions.positions.find(p => p.id === 'B')!.x);
+      expect(nodeC!.x).toBe(priorPositions.positions.find(p => p.id === 'C')!.x);
 
       // New node D should have a position (computed by DAGRE)
       expect(typeof nodeD!.x).toBe('number');
@@ -310,7 +310,7 @@ describe('Temporal Layout Consistency', () => {
       const translator = new WebColaTranslator();
       
       const options: WebColaLayoutOptions = {
-        priorState: {
+        priorPositions: {
           positions: [],
           transform: { k: 1, x: 0, y: 0 }
         }
@@ -335,7 +335,7 @@ describe('Temporal Layout Consistency', () => {
       const translator = new WebColaTranslator();
       
       // Prior state with position for a node that doesn't exist in this layout
-      const priorState: LayoutState = {
+      const priorPositions: LayoutState = {
         positions: [
           { id: 'A', x: 100, y: 200 },
           { id: 'NonExistentNode', x: 999, y: 999 }
@@ -344,7 +344,7 @@ describe('Temporal Layout Consistency', () => {
       };
 
       const options: WebColaLayoutOptions = {
-        priorState
+        priorPositions
       };
 
       const result = await translator.translate(layout, 800, 600, options);

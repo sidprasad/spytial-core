@@ -187,19 +187,21 @@
         <!-- Projection Controls (shows when there are projections) -->
         <div id="projection-controls-container" class="mb-3"></div>
         
-        <!-- Temporal Explorer for multiple instances -->
-        <div id="temporal-explorer" class="mb-3" style="display: none;">
-            <h6 class="h6 text-dark">Temporal Explorer:</h6>
+        <!-- Sequence Explorer for multiple instances -->
+        <div id="sequence-explorer" class="mb-3" style="display: none;">
+            <h6 class="h6 text-dark">Sequence Explorer:</h6>
             <div class="d-flex align-items-center gap-2 mb-2">
                 <button id="prevInstanceBtn" onclick="navigateInstance(-1)" class="btn btn-sm btn-outline-primary" disabled>◀ Prev</button>
                 <span id="instanceIndicator" class="badge bg-primary">Instance 1 / 1</span>
                 <button id="nextInstanceBtn" onclick="navigateInstance(1)" class="btn btn-sm btn-outline-primary" disabled>Next ▶</button>
             </div>
-            <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" id="usePriorPositions" checked>
-                <label class="form-check-label" for="usePriorPositions">
-                    Use prior positions (temporal consistency)
-                </label>
+            <div class="mb-2">
+                <label class="form-label form-label-sm mb-1" for="sequencePolicy">Sequence Policy:</label>
+                <select id="sequencePolicy" class="form-select form-select-sm" aria-label="Sequence policy selection">
+                    <option value="ignore_history" selected>Ignore history (default)</option>
+                    <option value="stability">Stability</option>
+                    <option value="change_emphasis">Change emphasis</option>
+                </select>
             </div>
             <div id="priorPositionsInfo" class="small text-muted mt-1"></div>
         </div>
@@ -223,10 +225,10 @@
         // Variables to store data
         let currentInstanceLayout = null;
         
-        // Temporal state for multiple instances
+        // Sequence state for multiple instances
         let alloyInstances = [];           // Array of all parsed Alloy instances
         let currentInstanceIndex = 0;      // Current instance being displayed
-        let priorState = null;             // Layout state from previous render (positions + transform)
+        let prevInstance = null;           // Previous IDataInstance (for policy)
         let parsedAlloyDatum = null;       // Cached parsed Alloy datum
         let cachedEvaluator = null;        // Cached evaluator
         let cachedEvaluatorType = 'sgq';
@@ -254,6 +256,19 @@
                 window.getCurrentCNDSpecFromReact() : 
                 document.getElementById('webcola-cnd')?.value?.trim();
         }
+
+        function getSequencePolicyName() {
+            const policySelect = document.getElementById('sequencePolicy');
+            if (!policySelect || !policySelect.value) {
+                return 'ignore_history';
+            }
+            return policySelect.value;
+        }
+
+        // No stepper needed — renderLayout handles policy directly
+        document.getElementById('sequencePolicy')?.addEventListener('change', function() {
+            updateSequenceExplorer();
+        });
 
         function getCurrentExportInstance() {
             if (!alloyInstances.length) {
@@ -365,7 +380,7 @@
 
         /**
          * Process Alloy data using the complete Alloy → Evaluator → Layout pipeline
-         * Now supports multiple temporal instances
+         * Now supports multiple sequence instances
          */
         async function loadAlloyData() {
             try {
@@ -394,17 +409,16 @@
                     throw new Error('No instances found in Alloy XML');
                 }
 
-                // Store all instances for temporal exploration
+                // Store all instances for sequence exploration
                 alloyInstances = parsedAlloyDatum.instances;
                 currentInstanceIndex = 0;
-                priorState = null; // Reset prior state when loading new data
                 
                 // IMPORTANT: Reset projections when loading new data
                 // This ensures we start fresh and allow the layout to set defaults
                 window.currentProjections = {};
                 
-                // Show temporal explorer if multiple instances
-                updateTemporalExplorer();
+                // Show sequence explorer if multiple instances
+                updateSequenceExplorer();
 
                 // Step 2: Create evaluator with Alloy data
                 await createEvaluatorForCurrentInstance(alloyXml);
@@ -566,82 +580,44 @@
         }
 
         /**
-         * Update the temporal explorer UI based on current state
+         * Update the sequence explorer UI based on current state
          */
-        function updateTemporalExplorer() {
-            const explorerDiv = document.getElementById('temporal-explorer');
+        function updateSequenceExplorer() {
+            const explorerDiv = document.getElementById('sequence-explorer');
             const prevBtn = document.getElementById('prevInstanceBtn');
             const nextBtn = document.getElementById('nextInstanceBtn');
             const indicator = document.getElementById('instanceIndicator');
             const priorInfo = document.getElementById('priorPositionsInfo');
-
-            console.log(`updateTemporalExplorer: ${alloyInstances.length} instances, current=${currentInstanceIndex}`);
+            const policyName = getSequencePolicyName();
 
             if (alloyInstances.length <= 1) {
                 explorerDiv.style.display = 'none';
-                console.log('Temporal explorer hidden (single instance)');
                 return;
             }
 
             explorerDiv.style.display = 'block';
             indicator.textContent = `Instance ${currentInstanceIndex + 1} / ${alloyInstances.length}`;
             
-            const prevDisabled = currentInstanceIndex === 0;
-            const nextDisabled = currentInstanceIndex === alloyInstances.length - 1;
-            
-            prevBtn.disabled = prevDisabled;
-            nextBtn.disabled = nextDisabled;
-            
-            console.log(`Temporal explorer visible: prevBtn.disabled=${prevDisabled}, nextBtn.disabled=${nextDisabled}`);
+            prevBtn.disabled = currentInstanceIndex === 0;
+            nextBtn.disabled = currentInstanceIndex === alloyInstances.length - 1;
 
-            // Update prior state info
-            if (priorState && priorState.positions.length > 0) {
-                priorInfo.textContent = `${priorState.positions.length} positions, zoom ${priorState.transform.k.toFixed(1)}x`;
-            } else {
-                priorInfo.textContent = 'No prior state (first render)';
-            }
+            priorInfo.textContent = `Policy: ${policyName}`;
         }
 
         /**
-         * Navigate to a different instance (for temporal exploration)
+         * Navigate to a different instance.
          * @param {number} delta - Direction to navigate (-1 for prev, +1 for next)
          */
         async function navigateInstance(delta) {
-            console.log(`navigateInstance called with delta=${delta}, currentIndex=${currentInstanceIndex}, totalInstances=${alloyInstances.length}`);
-            
             const newIndex = currentInstanceIndex + delta;
-            
-            if (newIndex < 0 || newIndex >= alloyInstances.length) {
-                console.warn('Cannot navigate: index out of bounds');
-                return;
-            }
-
-            console.log(`Navigating from instance ${currentInstanceIndex + 1} to instance ${newIndex + 1}`);
-
-            // Capture current layout state before navigating
-            const graphElement = document.getElementById('graph-container');
-            const usePriorPositionsCheckbox = document.getElementById('usePriorPositions');
-            
-            if (usePriorPositionsCheckbox.checked && graphElement.getLayoutState) {
-                // Use the new cleaner API
-                const state = graphElement.getLayoutState();
-                if (state.positions && state.positions.length > 0) {
-                    priorState = state;
-                    console.log(`Captured layout state: ${state.positions.length} positions, zoom ${state.transform.k.toFixed(2)}x`);
-                }
-            } else {
-                console.log('Prior state disabled or not available');
-            }
+            if (newIndex < 0 || newIndex >= alloyInstances.length) return;
 
             currentInstanceIndex = newIndex;
-            console.log(`Updated currentInstanceIndex to ${currentInstanceIndex}`);
-            
-            updateTemporalExplorer();
+            updateSequenceExplorer();
 
             try {
                 await generateLayoutForCurrentInstance();
                 await renderGraph();
-                
                 updateStatus(`Showing instance ${currentInstanceIndex + 1} of ${alloyInstances.length}`, 'success');
             } catch (error) {
                 console.error('Error navigating to instance:', error);
@@ -650,8 +626,8 @@
         }
 
         /**
-         * Render the graph using the webcola-cnd-graph custom element
-         * Passes prior positions for temporal consistency if available
+         * Render the graph using the webcola-cnd-graph custom element.
+         * Passes the active policy + instance pair to renderLayout.
          */
         async function renderGraph() {
             const graphElement = document.getElementById('graph-container');
@@ -659,8 +635,6 @@
             try {
                 // Check if we need to generate layout first
                 if (!currentInstanceLayout) {
-                    // If we have cached data, regenerate layout for current instance
-                    // Otherwise, load fresh data (which resets to instance 0)
                     if (alloyInstances.length > 0 && cachedEvaluator && cachedLayoutSpec) {
                         console.log('renderGraph: No layout available, generating for current instance');
                         await generateLayoutForCurrentInstance();
@@ -670,18 +644,23 @@
                     }
                     
                     if (!currentInstanceLayout) {
-                        // Layout generation failed - error already displayed by generateLayoutForCurrentInstance
                         console.warn('No layout data available to render (likely due to constraint errors)');
                         return;
                     }
                 }
                 
+                // Capture layout state BEFORE clearing so the policy has positions to work with.
+                // After clear(), the DOM is empty and getLayoutState() returns nothing.
+                let capturedPositions = null;
+                if (prevInstance && graphElement.getLayoutState) {
+                    capturedPositions = graphElement.getLayoutState();
+                }
+
                 // Clear the graph before rendering the new layout
                 console.log('renderGraph: Clearing graph before render');
                 if (graphElement.clear) {
                     graphElement.clear();
                 } else {
-                    // Fallback: remove all SVG content
                     const svg = graphElement.shadowRoot?.querySelector('svg');
                     if (svg) {
                         const container = svg.querySelector('.zoomable');
@@ -693,18 +672,25 @@
 
                 updateStatus('Rendering Alloy graph with WebCola...', 'info');
                 
-                // Build render options with prior state if available
-                const usePriorPositionsCheckbox = document.getElementById('usePriorPositions');
-                const shouldUsePriorState = usePriorPositionsCheckbox && usePriorPositionsCheckbox.checked;
-                
+                // Build render options: pass policy + instance pair directly.
+                // Supply the captured positions since we cleared the DOM above.
+                const currInstance = new CndCore.AlloyDataInstance(alloyInstances[currentInstanceIndex]);
                 const renderOptions = {};
-                if (shouldUsePriorState && priorState) {
-                    renderOptions.priorState = priorState;
-                    console.log(`Rendering with prior state: ${priorState.positions.length} positions, zoom ${priorState.transform.k.toFixed(2)}x`);
+
+                if (prevInstance) {
+                    const policyName = getSequencePolicyName();
+                    renderOptions.policy = CndCore.getSequencePolicy(policyName);
+                    renderOptions.prevInstance = prevInstance;
+                    renderOptions.currInstance = currInstance;
+                    if (capturedPositions && capturedPositions.positions.length > 0) {
+                        renderOptions.priorPositions = capturedPositions;
+                    }
                 }
-                
-                // Use the real InstanceLayout data with WebCola custom element
+
                 await graphElement.renderLayout(currentInstanceLayout, renderOptions);
+
+                // Track the instance we just rendered for the next step
+                prevInstance = currInstance;
 
                 updateStatus(`Instance ${currentInstanceIndex + 1}/${alloyInstances.length} rendered successfully!`, 'success');
             } catch (error) {
@@ -832,26 +818,26 @@
                 }
             }
             
-            // Clear stored layout (but preserve temporal state for navigation)
+            // Clear stored layout (but preserve sequence state for navigation)
             currentInstanceLayout = null;
             
             updateStatus('Graph cleared.', 'info');
         }
 
         /**
-         * Full reset - clears everything including temporal state
+         * Full reset - clears everything including sequence state
          */
         function resetAll() {
             clearGraph();
             alloyInstances = [];
             currentInstanceIndex = 0;
-            priorState = null;
+            prevInstance = null;
             parsedAlloyDatum = null;
             cachedEvaluator = null;
             cachedLayoutSpec = null;
             cachedEvaluatorType = getSelectedEvaluatorType();
             cachedEvaluatorInstanceIndex = null;
-            updateTemporalExplorer();
+            updateSequenceExplorer();
             updateStatus('All state reset.', 'info');
         }
 
@@ -894,59 +880,20 @@
                 window.mountRelationHighlighter('relation-highlighter-mount', 'graph-container');
             }
 
-            // Listen for node drag events to update prior positions
+            // SequenceStepper captures layout state (including drag) internally,
+            // so no manual node-drag-end or layout-complete handlers are needed.
             if (graphElement) {
                 graphElement.addEventListener('node-drag-end', (e) => {
                     const detail = e.detail;
-                    console.log(`Node ${detail.id} dragged from (${detail.previous?.x?.toFixed(2)}, ${detail.previous?.y?.toFixed(2)}) to (${detail.current.x.toFixed(2)}, ${detail.current.y.toFixed(2)})`);
-                    
-                    // Update prior positions with the new dragged position
-                    // This ensures the dragged position is used for the next render
-                    if (priorPositions) {
-                        const existingIndex = priorPositions.findIndex(p => p.id === detail.id);
-                        if (existingIndex >= 0) {
-                            priorPositions[existingIndex] = {
-                                id: detail.id,
-                                x: detail.current.x,
-                                y: detail.current.y
-                            };
-                        } else {
-                            priorPositions.push({
-                                id: detail.id,
-                                x: detail.current.x,
-                                y: detail.current.y
-                            });
-                        }
-                        console.log(`Updated prior position for ${detail.id} to (${detail.current.x.toFixed(2)}, ${detail.current.y.toFixed(2)})`);
-                    }
-                });
-
-                // Listen for layout-complete to capture final positions
-                graphElement.addEventListener('layout-complete', (e) => {
-                    const detail = e.detail;
-                    console.log('Layout complete! Capturing final positions for temporal consistency.');
-                    
-                    // Store the final positions from the completed layout
-                    priorPositions = detail.nodePositions;
-                    
-                    // Log positions for debugging
-                    if (priorPositions && priorPositions.length > 0) {
-                        console.log(`Captured ${priorPositions.length} node positions:`);
-                        priorPositions.slice(0, 5).forEach(p => {
-                            console.log(`  ${p.id}: x=${p.x.toFixed(2)}, y=${p.y.toFixed(2)}`);
-                        });
-                    }
-                    
-                    // Update UI to show positions are available
-                    updateTemporalExplorer();
+                    console.log(`Node ${detail.id} dragged to (${detail.current.x.toFixed(2)}, ${detail.current.y.toFixed(2)})`);
                 });
             }
 
-            // Add keyboard navigation for temporal explorer
+            // Add keyboard navigation for sequence explorer
             document.addEventListener('keydown', (e) => {
-                // Only handle arrow keys when temporal explorer is visible and not typing in input
-                const temporalExplorer = document.getElementById('temporal-explorer');
-                if (temporalExplorer.style.display === 'none') return;
+                // Only handle arrow keys when sequence explorer is visible and not typing in input
+                const sequenceExplorer = document.getElementById('sequence-explorer');
+                if (sequenceExplorer.style.display === 'none') return;
                 
                 const activeElement = document.activeElement;
                 const isTyping = activeElement.tagName === 'INPUT' || 
@@ -962,6 +909,7 @@
                     navigateInstance(1);
                 }
             });
+
         });
 
         // Auto-initialize when page loads

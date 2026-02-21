@@ -1312,20 +1312,31 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
-   * Render layout using WebCola constraint solver
+   * Render layout using WebCola constraint solver.
+   *
    * @param instanceLayout - The layout instance to render
-   * @param options - Optional layout options including prior positions for temporal consistency
-   * 
+   * @param options - Optional; pass a `policy` with `prevInstance` / `currInstance`
+   *   for sequence continuity.  Omit entirely for a fresh layout.
+   *
    * @example
    * ```typescript
-   * // First render
-   * await graph.renderLayout(layout1);
-   * 
-   * // Capture state before navigating
-   * const state = graph.getLayoutState();
-   * 
-   * // Second render using prior state for visual continuity
-   * await graph.renderLayout(layout2, { priorState: state });
+   * // Fresh
+   * await graph.renderLayout(layout);
+   *
+   * // Policy-driven (graph captures its own state)
+   * await graph.renderLayout(nextLayout, {
+   *   policy: stability,
+   *   prevInstance: prev,
+   *   currInstance: curr,
+   * });
+   *
+   * // Policy-driven with explicit prior positions
+   * await graph.renderLayout(nextLayout, {
+   *   policy: stability,
+   *   prevInstance: prev,
+   *   currInstance: curr,
+   *   priorPositions: graph.getLayoutState(),
+   * });
    * ```
    */
   public async renderLayout(instanceLayout: InstanceLayout, options?: WebColaLayoutOptions): Promise<void> {
@@ -1334,9 +1345,31 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       throw new Error('Invalid instance layout provided. Expected an InstanceLayout instance.');
     }
 
-    // Extract prior state if provided
-    const priorState = options?.priorState;
-    const hasPriorState = priorState && priorState.positions.length > 0;
+    // ── Resolve effective prior state via policy ────────────────────────
+    // If a policy + instance pair is provided, run the policy to decide
+    // what prior positions (if any) reach the solver.
+    let resolvedState: LayoutState | undefined;
+    let useReducedIterations = false;
+
+    if (options?.policy && options.prevInstance && options.currInstance) {
+      const rawState = options.priorPositions ?? this.getLayoutState();
+      if (rawState && rawState.positions.length > 0) {
+        const result = options.policy.apply({
+          priorState: rawState,
+          prevInstance: options.prevInstance,
+          currInstance: options.currInstance,
+          spec: { constraints: { orientation: { relative: [], cyclic: [] }, alignment: [], grouping: { groups: [], subgroups: [] } }, directives: { sizes: [], hiddenAtoms: [], icons: [], projections: [], edgeStyles: [] } } as any,
+        });
+        resolvedState = result.effectivePriorState;
+        useReducedIterations = result.useReducedIterations;
+      }
+    }
+
+    const hasPriorState = resolvedState && resolvedState.positions.length > 0;
+    // Build the options the translator will see (only priorPositions)
+    const translatorOptions: WebColaLayoutOptions | undefined = hasPriorState
+      ? { priorPositions: resolvedState }
+      : undefined;
 
     // Mark this as a new render - we'll fit viewport after layout completes
     // Only reset if this is a completely new layout (no prior state)
@@ -1351,10 +1384,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         if (hasPriorState) {
           // Restore the prior transform to maintain visual continuity
           const transform = d3.zoomIdentity
-            .translate(priorState.transform.x, priorState.transform.y)
-            .scale(priorState.transform.k);
+            .translate(resolvedState!.transform.x, resolvedState!.transform.y)
+            .scale(resolvedState!.transform.k);
           this.svg.call(this.zoomBehavior.transform, transform);
-          console.log(`WebCola: Restored prior state - ${priorState.positions.length} positions, zoom ${priorState.transform.k.toFixed(2)}x`);
+          console.log(`WebCola: Restored prior state - ${resolvedState!.positions.length} positions, zoom ${resolvedState!.transform.k.toFixed(2)}x`);
         } else {
           // Reset zoom transform to identity for a fresh start (will be adjusted by fitViewportToContent)
           const identity = d3.zoomIdentity;
@@ -1399,9 +1432,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       const containerWidth = containerRect.width || 800; // fallback to default
       const containerHeight = containerRect.height || 600; // fallback to default
 
-      // Translate to WebCola format with actual container dimensions and optional prior state
+      // Translate to WebCola format with actual container dimensions
       const translator = new WebColaTranslator();
-      const webcolaLayout = await translator.translate(instanceLayout, containerWidth, containerHeight, options);
+      const webcolaLayout = await translator.translate(instanceLayout, containerWidth, containerHeight, translatorOptions);
 
       this.updateLoadingProgress(`Computing layout for ${webcolaLayout.nodes.length} nodes...`);
 
@@ -1412,14 +1445,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       let userConstraintIters = WebColaCnDGraph.INITIAL_USER_CONSTRAINT_ITERATIONS;
       let allConstraintIters = WebColaCnDGraph.INITIAL_ALL_CONSTRAINTS_ITERATIONS;
       
-      // When prior state is provided, minimize iterations to preserve positions.
+      // When prior state is provided and the policy requests reduced iterations,
+      // minimize solver iterations to preserve node positions.
       // WebCola's unconstrained phase allows nodes to move freely from their initial positions,
       // so minimizing this phase helps preserve the provided positions.
-      // This is crucial for temporal consistency across Alloy traces.
       //
-      // Note: We manually compute node bounds in ensureNodeBounds() before edge routing,
-      // so we don't need many iterations just for bounds computation.
-      if (hasPriorState) {
+      // The policy controls this via useReducedIterations — a policy can return
+      // positions while requesting normal iterations (useReducedIterations: false)
+      // to let the solver fully re-converge.
+      if (hasPriorState && useReducedIterations) {
         // Use minimal iterations to preserve prior positions:
         // - 0 unconstrained: don't let nodes drift from prior positions
         // - 10 user constraint: apply position constraints quickly
@@ -1428,7 +1462,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         userConstraintIters = Math.min(10, userConstraintIters);
         allConstraintIters = Math.min(20, allConstraintIters);
         
-        console.log(`WebCola: Using minimal iterations to preserve ${priorState!.positions.length} prior positions`);
+        console.log(`WebCola: Using reduced iterations to preserve ${resolvedState!.positions.length} prior positions`);
+      } else if (hasPriorState) {
+        console.log(`WebCola: Prior positions provided (${resolvedState!.positions.length} nodes) with normal iteration count`);
       }
       
       if (nodeCount > 100) {
@@ -1639,20 +1675,23 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
   /**
    * Get the complete layout state for preservation across renders.
-   * 
-   * This is the recommended method for capturing state when navigating between
-   * layouts (e.g., temporal sequences in Alloy). Pass the returned state to
-   * `renderLayout({ priorState: state })` to restore visual continuity.
-   * 
+   *
+   * When using the policy-driven `renderLayout` API, you generally don't
+   * need to call this — the graph captures its own state automatically.
+   * Use this only when you need explicit control over prior positions.
+   *
    * @returns Complete layout state including positions and transform
-   * 
+   *
    * @example
    * ```typescript
-   * // Before navigating away, capture state
+   * // Explicit capture (optional — graph auto-captures when policy is used)
    * const state = graph.getLayoutState();
-   * 
-   * // Later, render new layout preserving visual continuity
-   * await graph.renderLayout(newLayout, { priorState: state });
+   * await graph.renderLayout(newLayout, {
+   *   policy: stability,
+   *   prevInstance: prev,
+   *   currInstance: curr,
+   *   priorPositions: state,
+   * });
    * ```
    */
   public getLayoutState(): LayoutState {
