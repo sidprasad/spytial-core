@@ -195,11 +195,13 @@
                 <span id="instanceIndicator" class="badge bg-primary">Instance 1 / 1</span>
                 <button id="nextInstanceBtn" onclick="navigateInstance(1)" class="btn btn-sm btn-outline-primary" disabled>Next ▶</button>
             </div>
-            <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" id="usePriorPositions" checked>
-                <label class="form-check-label" for="usePriorPositions">
-                    Use prior positions (temporal consistency)
-                </label>
+            <div class="mb-2">
+                <label class="form-label form-label-sm mb-1" for="temporalPolicy">Temporal Policy:</label>
+                <select id="temporalPolicy" class="form-select form-select-sm" aria-label="Temporal policy selection">
+                    <option value="ignore_history" selected>Ignore history (default)</option>
+                    <option value="stability">Stability</option>
+                    <option value="change_emphasis">Change emphasis</option>
+                </select>
             </div>
             <div id="priorPositionsInfo" class="small text-muted mt-1"></div>
         </div>
@@ -253,6 +255,18 @@
             return window.getCurrentCNDSpecFromReact ? 
                 window.getCurrentCNDSpecFromReact() : 
                 document.getElementById('webcola-cnd')?.value?.trim();
+        }
+
+        function getTemporalPolicyMode() {
+            const temporalPolicySelect = document.getElementById('temporalPolicy');
+            if (!temporalPolicySelect || !temporalPolicySelect.value) {
+                return 'ignore_history';
+            }
+            return temporalPolicySelect.value;
+        }
+
+        function shouldUsePriorStateForTemporalPolicy() {
+            return getTemporalPolicyMode() !== 'ignore_history';
         }
 
         function getCurrentExportInstance() {
@@ -574,6 +588,7 @@
             const nextBtn = document.getElementById('nextInstanceBtn');
             const indicator = document.getElementById('instanceIndicator');
             const priorInfo = document.getElementById('priorPositionsInfo');
+            const temporalPolicyMode = getTemporalPolicyMode();
 
             console.log(`updateTemporalExplorer: ${alloyInstances.length} instances, current=${currentInstanceIndex}`);
 
@@ -595,10 +610,12 @@
             console.log(`Temporal explorer visible: prevBtn.disabled=${prevDisabled}, nextBtn.disabled=${nextDisabled}`);
 
             // Update prior state info
-            if (priorState && priorState.positions.length > 0) {
-                priorInfo.textContent = `${priorState.positions.length} positions, zoom ${priorState.transform.k.toFixed(1)}x`;
+            if (temporalPolicyMode === 'ignore_history') {
+                priorInfo.textContent = 'Policy: ignore_history (no prior state used)';
+            } else if (priorState && priorState.positions.length > 0) {
+                priorInfo.textContent = `Policy: ${temporalPolicyMode} | ${priorState.positions.length} positions, zoom ${priorState.transform.k.toFixed(1)}x`;
             } else {
-                priorInfo.textContent = 'No prior state (first render)';
+                priorInfo.textContent = `Policy: ${temporalPolicyMode} | no prior state (first render)`;
             }
         }
 
@@ -620,9 +637,9 @@
 
             // Capture current layout state before navigating
             const graphElement = document.getElementById('graph-container');
-            const usePriorPositionsCheckbox = document.getElementById('usePriorPositions');
+            const temporalPolicyMode = getTemporalPolicyMode();
             
-            if (usePriorPositionsCheckbox.checked && graphElement.getLayoutState) {
+            if (shouldUsePriorStateForTemporalPolicy() && graphElement.getLayoutState) {
                 // Use the new cleaner API
                 const state = graphElement.getLayoutState();
                 if (state.positions && state.positions.length > 0) {
@@ -630,7 +647,8 @@
                     console.log(`Captured layout state: ${state.positions.length} positions, zoom ${state.transform.k.toFixed(2)}x`);
                 }
             } else {
-                console.log('Prior state disabled or not available');
+                priorState = null;
+                console.log(`Prior state disabled for temporal policy '${temporalPolicyMode}' or not available`);
             }
 
             currentInstanceIndex = newIndex;
@@ -693,14 +711,17 @@
 
                 updateStatus('Rendering Alloy graph with WebCola...', 'info');
                 
-                // Build render options with prior state if available
-                const usePriorPositionsCheckbox = document.getElementById('usePriorPositions');
-                const shouldUsePriorState = usePriorPositionsCheckbox && usePriorPositionsCheckbox.checked;
+                // Build render options with temporal policy and optional prior state.
+                const temporalPolicyMode = getTemporalPolicyMode();
                 
-                const renderOptions = {};
-                if (shouldUsePriorState && priorState) {
+                const renderOptions = {
+                    temporalPolicy: temporalPolicyMode
+                };
+                if (shouldUsePriorStateForTemporalPolicy() && priorState) {
                     renderOptions.priorState = priorState;
-                    console.log(`Rendering with prior state: ${priorState.positions.length} positions, zoom ${priorState.transform.k.toFixed(2)}x`);
+                    console.log(`Rendering with temporal policy '${temporalPolicyMode}' and prior state: ${priorState.positions.length} positions, zoom ${priorState.transform.k.toFixed(2)}x`);
+                } else {
+                    console.log(`Rendering with temporal policy '${temporalPolicyMode}' and no prior state`);
                 }
                 
                 // Use the real InstanceLayout data with WebCola custom element
@@ -900,18 +921,18 @@
                     const detail = e.detail;
                     console.log(`Node ${detail.id} dragged from (${detail.previous?.x?.toFixed(2)}, ${detail.previous?.y?.toFixed(2)}) to (${detail.current.x.toFixed(2)}, ${detail.current.y.toFixed(2)})`);
                     
-                    // Update prior positions with the new dragged position
-                    // This ensures the dragged position is used for the next render
-                    if (priorPositions) {
-                        const existingIndex = priorPositions.findIndex(p => p.id === detail.id);
+                    // Update prior state positions with the new dragged position.
+                    // This ensures the dragged position is used for the next temporal render.
+                    if (priorState && priorState.positions) {
+                        const existingIndex = priorState.positions.findIndex(p => p.id === detail.id);
                         if (existingIndex >= 0) {
-                            priorPositions[existingIndex] = {
+                            priorState.positions[existingIndex] = {
                                 id: detail.id,
                                 x: detail.current.x,
                                 y: detail.current.y
                             };
                         } else {
-                            priorPositions.push({
+                            priorState.positions.push({
                                 id: detail.id,
                                 x: detail.current.x,
                                 y: detail.current.y
@@ -924,15 +945,25 @@
                 // Listen for layout-complete to capture final positions
                 graphElement.addEventListener('layout-complete', (e) => {
                     const detail = e.detail;
-                    console.log('Layout complete! Capturing final positions for temporal consistency.');
+                    const temporalPolicyMode = getTemporalPolicyMode();
+                    if (!shouldUsePriorStateForTemporalPolicy()) {
+                        priorState = null;
+                        updateTemporalExplorer();
+                        return;
+                    }
+                    console.log(`Layout complete! Capturing final positions for temporal policy '${temporalPolicyMode}'.`);
                     
                     // Store the final positions from the completed layout
-                    priorPositions = detail.nodePositions;
+                    const transform = graphElement.getCurrentTransform ? graphElement.getCurrentTransform() : { k: 1, x: 0, y: 0 };
+                    priorState = {
+                        positions: detail.nodePositions || [],
+                        transform
+                    };
                     
                     // Log positions for debugging
-                    if (priorPositions && priorPositions.length > 0) {
-                        console.log(`Captured ${priorPositions.length} node positions:`);
-                        priorPositions.slice(0, 5).forEach(p => {
+                    if (priorState.positions && priorState.positions.length > 0) {
+                        console.log(`Captured ${priorState.positions.length} node positions:`);
+                        priorState.positions.slice(0, 5).forEach(p => {
                             console.log(`  ${p.id}: x=${p.x.toFixed(2)}, y=${p.y.toFixed(2)}`);
                         });
                     }
@@ -962,6 +993,21 @@
                     navigateInstance(1);
                 }
             });
+
+            const temporalPolicySelect = document.getElementById('temporalPolicy');
+            if (temporalPolicySelect) {
+                temporalPolicySelect.addEventListener('change', async () => {
+                    const temporalPolicyMode = getTemporalPolicyMode();
+                    console.log(`Temporal policy changed to '${temporalPolicyMode}'`);
+                    if (temporalPolicyMode === 'ignore_history') {
+                        priorState = null;
+                    }
+                    updateTemporalExplorer();
+                    if (currentInstanceLayout) {
+                        await renderGraph();
+                    }
+                });
+            }
         });
 
         // Auto-initialize when page loads
