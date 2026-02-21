@@ -3,17 +3,22 @@ import type { NodePositionHint, TransformInfo } from './webcolatranslator';
 export type Position = { x: number; y: number };
 export type Positions = Map<string, Position>;
 export type IterationMode = 'default' | 'reduced';
-export type TemporalPolicyCanonicalName =
+
+export type TemporalPolicyCanonicalName = 'ignore_history' | 'stability' | 'change_emphasis';
+
+// Legacy names kept for backwards compatibility.
+export type TemporalPolicyLegacyName =
   | 'seed_default'
   | 'seed_continuity_raw'
   | 'seed_continuity_transport'
-  | 'seed_change_emphasis';
+  | 'seed_change_emphasis'
+  | 'baseline'
+  | 'transport_pan_zoom';
 
-export type TemporalPolicyLegacyName = 'baseline' | 'transport_pan_zoom' | 'change_emphasis';
 export type TemporalPolicyName = TemporalPolicyCanonicalName | TemporalPolicyLegacyName;
 
 export interface TemporalPolicy {
-  name: string;
+  name: TemporalPolicyCanonicalName;
   makeHints(args: {
     prevPositions: Positions | null;
     prevTransform: TransformInfo | null;
@@ -27,28 +32,14 @@ export interface TemporalPolicyConfig {
   changedIds?: Iterable<string>;
 }
 
-interface Bounds {
-  minX: number;
-  maxX: number;
-  minY: number;
-  maxY: number;
-}
-
-interface SimilarityTransform {
-  scale: number;
-  sourceCenter: Position;
-  targetCenter: Position;
-}
-
-const EPSILON = 1e-6;
 const CHANGE_EMPHASIS_JITTER_RADIUS = 18;
-const DEFAULT_TEMPORAL_POLICY_NAME: TemporalPolicyCanonicalName = 'seed_continuity_raw';
+const DEFAULT_TEMPORAL_POLICY_NAME: TemporalPolicyCanonicalName = 'ignore_history';
 
 function toHint(id: string, point: Position): NodePositionHint {
   return { id, x: point.x, y: point.y };
 }
 
-function defaultSeedHints(args: {
+function ignoreHistoryHints(args: {
   nodes: Array<{ id: string }>;
   defaultSeeds: Positions;
 }): NodePositionHint[] {
@@ -64,7 +55,7 @@ function defaultSeedHints(args: {
   return hints;
 }
 
-function continuityRawHints(args: {
+function stabilityHints(args: {
   prevPositions: Positions | null;
   nodes: Array<{ id: string }>;
   defaultSeeds: Positions;
@@ -87,147 +78,24 @@ function continuityRawHints(args: {
   return hints;
 }
 
-function seedDefaultPolicy(): TemporalPolicy {
+function ignoreHistoryPolicy(): TemporalPolicy {
   return {
-    name: 'seed_default',
+    name: 'ignore_history',
     makeHints(args) {
       return {
-        hints: defaultSeedHints(args),
+        hints: ignoreHistoryHints(args),
         iterationMode: 'default'
       };
     }
   };
 }
 
-function seedContinuityRawPolicy(): TemporalPolicy {
+function stabilityPolicy(): TemporalPolicy {
   return {
-    name: 'seed_continuity_raw',
+    name: 'stability',
     makeHints(args) {
       return {
-        hints: continuityRawHints(args),
-        iterationMode: args.prevPositions ? 'reduced' : 'default'
-      };
-    }
-  };
-}
-
-function computeBounds(points: Position[]): Bounds | null {
-  if (points.length === 0) {
-    return null;
-  }
-
-  let minX = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let minY = Number.POSITIVE_INFINITY;
-  let maxY = Number.NEGATIVE_INFINITY;
-
-  for (const point of points) {
-    minX = Math.min(minX, point.x);
-    maxX = Math.max(maxX, point.x);
-    minY = Math.min(minY, point.y);
-    maxY = Math.max(maxY, point.y);
-  }
-
-  return { minX, maxX, minY, maxY };
-}
-
-function isDegenerate(bounds: Bounds): boolean {
-  const width = bounds.maxX - bounds.minX;
-  const height = bounds.maxY - bounds.minY;
-  return width <= EPSILON || height <= EPSILON;
-}
-
-function centerOf(bounds: Bounds): Position {
-  return {
-    x: (bounds.minX + bounds.maxX) / 2,
-    y: (bounds.minY + bounds.maxY) / 2
-  };
-}
-
-function buildSimilarityTransform(source: Bounds, target: Bounds): SimilarityTransform {
-  const sourceWidth = source.maxX - source.minX;
-  const sourceHeight = source.maxY - source.minY;
-  const targetWidth = target.maxX - target.minX;
-  const targetHeight = target.maxY - target.minY;
-
-  const scaleX = targetWidth / sourceWidth;
-  const scaleY = targetHeight / sourceHeight;
-
-  return {
-    scale: Math.min(scaleX, scaleY),
-    sourceCenter: centerOf(source),
-    targetCenter: centerOf(target)
-  };
-}
-
-function applySimilarityTransform(point: Position, transform: SimilarityTransform): Position {
-  return {
-    x: (point.x - transform.sourceCenter.x) * transform.scale + transform.targetCenter.x,
-    y: (point.y - transform.sourceCenter.y) * transform.scale + transform.targetCenter.y
-  };
-}
-
-function seedContinuityTransportPolicy(): TemporalPolicy {
-  return {
-    name: 'seed_continuity_transport',
-    makeHints(args) {
-      const fallback = seedContinuityRawPolicy().makeHints(args);
-      if (!args.prevPositions) {
-        return fallback;
-      }
-
-      const persistentIds = args.nodes
-        .map(node => node.id)
-        .filter(id => args.prevPositions!.has(id));
-
-      if (persistentIds.length === 0) {
-        return fallback;
-      }
-
-      const sourcePoints = persistentIds
-        .map(id => args.prevPositions!.get(id))
-        .filter((point): point is Position => !!point);
-      const sourceBounds = computeBounds(sourcePoints);
-      if (!sourceBounds || isDegenerate(sourceBounds)) {
-        return fallback;
-      }
-
-      const targetPoints = persistentIds
-        .map(id => args.defaultSeeds.get(id))
-        .filter((point): point is Position => !!point);
-
-      let targetBounds = computeBounds(targetPoints);
-      if (!targetBounds && args.viewport) {
-        targetBounds = {
-          minX: 0,
-          minY: 0,
-          maxX: args.viewport.width,
-          maxY: args.viewport.height
-        };
-      }
-
-      if (!targetBounds || isDegenerate(targetBounds)) {
-        return fallback;
-      }
-
-      const transform = buildSimilarityTransform(sourceBounds, targetBounds);
-      const hints: NodePositionHint[] = [];
-
-      for (const node of args.nodes) {
-        const previous = args.prevPositions.get(node.id);
-        if (previous) {
-          hints.push(toHint(node.id, applySimilarityTransform(previous, transform)));
-          continue;
-        }
-
-        const seed = args.defaultSeeds.get(node.id);
-        if (seed) {
-          hints.push(toHint(node.id, seed));
-        }
-      }
-
-      return {
-        hints,
+        hints: stabilityHints(args),
         iterationMode: args.prevPositions ? 'reduced' : 'default'
       };
     }
@@ -265,11 +133,11 @@ function changeEmphasisPolicy(config?: TemporalPolicyConfig): TemporalPolicy {
   const changedIds = config?.changedIds ? new Set(config.changedIds) : null;
 
   return {
-    name: 'seed_change_emphasis',
+    name: 'change_emphasis',
     makeHints(args) {
-      const continuityHints = seedContinuityRawPolicy().makeHints(args).hints;
-      const continuityMap = new Map<string, Position>(
-        continuityHints.map(hint => [hint.id, { x: hint.x, y: hint.y }])
+      const stableHints = stabilityPolicy().makeHints(args).hints;
+      const stableMap = new Map<string, Position>(
+        stableHints.map(hint => [hint.id, { x: hint.x, y: hint.y }])
       );
 
       const matchedIds = args.nodes
@@ -281,7 +149,7 @@ function changeEmphasisPolicy(config?: TemporalPolicyConfig): TemporalPolicy {
         : new Set(args.nodes.map(node => node.id).filter(id => !args.prevPositions?.has(id)));
 
       const matchedPoints = matchedIds
-        .map(id => continuityMap.get(id))
+        .map(id => stableMap.get(id))
         .filter((point): point is Position => !!point);
 
       const defaultPoints = args.nodes
@@ -293,18 +161,17 @@ function changeEmphasisPolicy(config?: TemporalPolicyConfig): TemporalPolicy {
 
       for (const node of args.nodes) {
         if (!effectiveChangedIds.has(node.id)) {
-          const stable = continuityMap.get(node.id) || args.defaultSeeds.get(node.id);
+          const stable = stableMap.get(node.id) || args.defaultSeeds.get(node.id);
           if (stable) {
             hints.push(toHint(node.id, stable));
           }
           continue;
         }
 
-        const base = anchor;
         const jitter = randomJitter(CHANGE_EMPHASIS_JITTER_RADIUS);
         hints.push(toHint(node.id, {
-          x: base.x + jitter.x,
-          y: base.y + jitter.y
+          x: anchor.x + jitter.x,
+          y: anchor.y + jitter.y
         }));
       }
 
@@ -324,12 +191,15 @@ export function normalizeTemporalPolicyName(
   name: TemporalPolicyName = DEFAULT_TEMPORAL_POLICY_NAME
 ): TemporalPolicyCanonicalName {
   switch (name) {
+    case 'seed_default':
+      return 'ignore_history';
+    case 'seed_continuity_raw':
+    case 'seed_continuity_transport':
     case 'baseline':
-      return 'seed_continuity_raw';
     case 'transport_pan_zoom':
-      return 'seed_continuity_transport';
-    case 'change_emphasis':
-      return 'seed_change_emphasis';
+      return 'stability';
+    case 'seed_change_emphasis':
+      return 'change_emphasis';
     default:
       return name;
   }
@@ -340,14 +210,12 @@ export function resolveTemporalPolicy(
   config?: TemporalPolicyConfig
 ): TemporalPolicy {
   switch (normalizeTemporalPolicyName(name)) {
-    case 'seed_default':
-      return seedDefaultPolicy();
-    case 'seed_continuity_transport':
-      return seedContinuityTransportPolicy();
-    case 'seed_change_emphasis':
+    case 'stability':
+      return stabilityPolicy();
+    case 'change_emphasis':
       return changeEmphasisPolicy(config);
-    case 'seed_continuity_raw':
+    case 'ignore_history':
     default:
-      return seedContinuityRawPolicy();
+      return ignoreHistoryPolicy();
   }
 }

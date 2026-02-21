@@ -19,8 +19,8 @@ function hintsToMap(hints: Array<{ id: string; x: number; y: number }>): Map<str
 }
 
 describe('Temporal policies', () => {
-  it('seed_default ignores prior positions and uses default seeds', () => {
-    const policy = resolveTemporalPolicy('seed_default');
+  it('ignore_history ignores prior positions and uses default seeds', () => {
+    const policy = resolveTemporalPolicy('ignore_history');
     const prevPositions = createPositions([
       ['A', 10, 20],
       ['B', 30, 40]
@@ -46,8 +46,8 @@ describe('Temporal policies', () => {
     ]);
   });
 
-  it('seed_continuity_raw maps matched ids to prior positions and unmatched ids to default seeds', () => {
-    const policy = resolveTemporalPolicy('seed_continuity_raw');
+  it('stability maps matched ids to prior positions and unmatched ids to default seeds', () => {
+    const policy = resolveTemporalPolicy('stability');
     const prevPositions = createPositions([
       ['A', 10, 20],
       ['C', 30, 40]
@@ -73,43 +73,8 @@ describe('Temporal policies', () => {
     ]);
   });
 
-  it('seed_continuity_transport applies a uniform scale+translate transform to matched prior positions', () => {
-    const policy = resolveTemporalPolicy('seed_continuity_transport');
-    const prevPositions = createPositions([
-      ['A', 0, 0],
-      ['B', 10, 10],
-      ['C', 0, 10]
-    ]);
-    const defaultSeeds = createPositions([
-      ['A', 100, 200],
-      ['B', 300, 400],
-      ['C', 100, 400],
-      ['D', 250, 300]
-    ]);
-
-    const result = policy.makeHints({
-      prevPositions,
-      prevTransform: null,
-      nodes: [{ id: 'A' }, { id: 'B' }, { id: 'C' }, { id: 'D' }],
-      defaultSeeds,
-      viewport: { width: 800, height: 600 }
-    });
-
-    const hintsById = hintsToMap(result.hints);
-
-    expect(result.iterationMode).toBe('reduced');
-    expect(hintsById.get('A')!.x).toBeCloseTo(100);
-    expect(hintsById.get('A')!.y).toBeCloseTo(200);
-    expect(hintsById.get('B')!.x).toBeCloseTo(300);
-    expect(hintsById.get('B')!.y).toBeCloseTo(400);
-    expect(hintsById.get('C')!.x).toBeCloseTo(100);
-    expect(hintsById.get('C')!.y).toBeCloseTo(400);
-    expect(hintsById.get('D')!.x).toBe(250);
-    expect(hintsById.get('D')!.y).toBe(300);
-  });
-
-  it('seed_change_emphasis keeps stable nodes and randomly reflows changed nodes', () => {
-    const policy = resolveTemporalPolicy('seed_change_emphasis', { changedIds: ['D'] });
+  it('change_emphasis keeps stable nodes and randomly reflows changed nodes', () => {
+    const policy = resolveTemporalPolicy('change_emphasis', { changedIds: ['D'] });
     const prevPositions = createPositions([
       ['A', 20, 30],
       ['B', 40, 50],
@@ -138,7 +103,7 @@ describe('Temporal policies', () => {
     const hintsById = hintsToMap(result.hints);
     expect(result.iterationMode).toBe('default');
 
-    // Stable/matched IDs keep continuity-raw positions.
+    // Stable/matched IDs keep stability positions.
     expect(hintsById.get('A')).toEqual({ x: 20, y: 30 });
     expect(hintsById.get('B')).toEqual({ x: 40, y: 50 });
     expect(hintsById.get('C')).toEqual({ x: 60, y: 70 });
@@ -149,8 +114,11 @@ describe('Temporal policies', () => {
   });
 
   it('normalizes legacy aliases to canonical policy names', () => {
-    expect(normalizeTemporalPolicyName('baseline')).toBe('seed_continuity_raw');
-    expect(normalizeTemporalPolicyName('transport_pan_zoom')).toBe('seed_continuity_transport');
-    expect(normalizeTemporalPolicyName('change_emphasis')).toBe('seed_change_emphasis');
+    expect(normalizeTemporalPolicyName('seed_default')).toBe('ignore_history');
+    expect(normalizeTemporalPolicyName('seed_continuity_raw')).toBe('stability');
+    expect(normalizeTemporalPolicyName('seed_continuity_transport')).toBe('stability');
+    expect(normalizeTemporalPolicyName('seed_change_emphasis')).toBe('change_emphasis');
+    expect(normalizeTemporalPolicyName('baseline')).toBe('stability');
+    expect(normalizeTemporalPolicyName('transport_pan_zoom')).toBe('stability');
   });
 });
