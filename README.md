@@ -393,10 +393,10 @@ The `<webcola-cnd-graph>` custom element provides methods for interacting with t
 
 #### Layout Management
 - **`renderLayout(instanceLayout, options?)`** - Render a layout with optional prior positions
-  - `options.temporalMode`: `"ignore_history"` (default) | `"stability"` | `"change_emphasis"`
-  - `options.changedNodeIds`: node IDs that changed (for `change_emphasis` mode)
-  - Temporal modes only affect WebCola initialization hints and iteration mode — Spytial semantics are unchanged.
-- **`renderTemporalSequence({ instances, spytialSpec, mode? })`** - Render a temporal sequence of instances with inter-step layout continuity.
+  - `options.priorState`: prior layout state for visual continuity (use `getLayoutState()` to capture)
+  - Prior state enables reduced iterations to preserve positions across renders.
+- **`generateSequenceLayouts({ instances, spytialSpec, mode? })`** - Generate layouts for a sequence of instances with inter-step continuity.
+  - `mode`: `"ignore_history"` (default) | `"stability"` | `"change_emphasis"` — applied before each render via `applyTemporalPolicy()`
 - **`clear()`** - Clear the graph and reset state
 - **`getNodePositions()`** - Get current positions of all nodes
 

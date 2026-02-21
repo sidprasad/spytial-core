@@ -3,7 +3,6 @@ import { InstanceLayout, LayoutNode, LayoutEdge, LayoutConstraint, LayoutGroup, 
 import { EdgeStyle } from '../../layout/edge-style';
 import { LayoutInstance } from '../../layout/layoutinstance';
 import * as dagre from 'dagre';
-import type { TemporalMode } from './temporal-policy';
 
 /**
  * WebColaTranslator - Translates InstanceLayout to WebCola format
@@ -124,22 +123,8 @@ export interface WebColaLayoutOptions {
    * const state = graph.getLayoutState();
    * await graph.renderLayout(newLayout, { priorState: state });
    * ```
-  */
+   */
   priorState?: LayoutState;
-  /**
-   * Temporal mode controlling how prior state affects solver initialization.
-   * Only affects initialization hints and iteration mode — Spytial semantics are unchanged.
-   *
-   * - `ignore_history` (default): Fresh layout, no prior state
-   * - `stability`: Preserve prior positions across time
-   * - `change_emphasis`: Preserve stable regions, destabilize changed regions
-   */
-  temporalMode?: TemporalMode;
-  /**
-   * Node IDs that changed between instances, used by `change_emphasis` mode.
-   * If omitted in change_emphasis mode, all prior positions are preserved (same as stability).
-   */
-  changedNodeIds?: string[];
 }
 
 // WebCola constraint types

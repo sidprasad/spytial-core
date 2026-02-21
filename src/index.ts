@@ -35,7 +35,8 @@ export { ForgeEvaluator, WrappedForgeEvaluator } from './evaluators/forge-evalua
 export { SQLEvaluator } from './evaluators/sql-evaluator';
 export { WebColaTranslator } from './translators';
 export { StructuredInputGraph } from './translators';
-export { renderTemporalSequence } from './translators';
+export { generateSequenceLayouts } from './translators';
+export { applyTemporalPolicy } from './translators';
 export type {
   ParsedCnDSpec,
   NodePositionHint,
@@ -43,7 +44,7 @@ export type {
   LayoutState,
   WebColaLayoutOptions,
   TemporalMode,
-  RenderTemporalSequenceOptions
+  SequenceLayoutOptions
 } from './translators';
 export { SGraphQueryEvaluator } from "./evaluators/sgq-evaluator";
 

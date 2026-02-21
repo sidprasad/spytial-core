@@ -4,17 +4,18 @@ import { LayoutInstance } from '../../layout/layoutinstance';
 import { parseLayoutSpec } from '../../layout/layoutspec';
 import { WebColaCnDGraph } from './webcola-cnd-graph';
 import type { LayoutState, WebColaLayoutOptions } from './webcolatranslator';
+import { applyTemporalPolicy } from './temporal-policy';
 import type { TemporalMode } from './temporal-policy';
 
 /**
- * Options for rendering a temporal sequence of data instances.
+ * Options for generating layouts for a sequence of data instances.
  */
-export interface RenderTemporalSequenceOptions {
-  /** Ordered list of data instances to render */
+export interface SequenceLayoutOptions {
+  /** Ordered list of data instances to lay out */
   instances: IInputDataInstance[];
   /** Spytial spec YAML string */
   spytialSpec: string;
-  /** Temporal mode for inter-instance continuity (default: ignore_history) */
+  /** Inter-sequence policy mode (default: ignore_history) */
   mode?: TemporalMode;
   /** Per-step changed node IDs, used with `change_emphasis` mode */
   changedNodeIdsByStep?: Array<ReadonlyArray<string> | undefined>;
@@ -24,7 +25,7 @@ export interface RenderTemporalSequenceOptions {
 
 function ensureWebColaElementRegistered(): void {
   if (typeof window === 'undefined' || typeof customElements === 'undefined') {
-    throw new Error('Temporal sequence rendering requires a browser environment.');
+    throw new Error('Sequence layout generation requires a browser environment.');
   }
   if (!customElements.get('webcola-cnd-graph')) {
     customElements.define('webcola-cnd-graph', WebColaCnDGraph as any);
@@ -32,18 +33,21 @@ function ensureWebColaElementRegistered(): void {
 }
 
 /**
- * Render a temporal sequence of data instances, threading layout state
- * between steps according to the chosen temporal mode.
+ * Generate layouts for a sequence of data instances, threading layout state
+ * between steps according to the chosen inter-sequence policy.
  *
  * This is a thin orchestration layer atop `WebColaCnDGraph.renderLayout()`.
+ * The temporal policy (`applyTemporalPolicy`) is applied here — the graph
+ * component only receives the final `priorState` and is unaware of modes.
+ *
  * Each step produces a `webcola-cnd-graph` element; the caller is responsible
  * for inserting them into the DOM.
  *
- * @param options - Sequence rendering options
- * @returns Array of rendered `webcola-cnd-graph` elements, one per instance
+ * @param options - Sequence layout options
+ * @returns Array of `webcola-cnd-graph` elements, one per instance
  */
-export async function renderTemporalSequence(
-  options: RenderTemporalSequenceOptions
+export async function generateSequenceLayouts(
+  options: SequenceLayoutOptions
 ): Promise<WebColaCnDGraph[]> {
   const { instances, spytialSpec } = options;
   const mode = options.mode ?? 'ignore_history';
@@ -65,19 +69,20 @@ export async function renderTemporalSequence(
 
     const graphElement = document.createElement('webcola-cnd-graph') as WebColaCnDGraph;
 
-    const renderOptions: WebColaLayoutOptions = {
-      temporalMode: mode,
-    };
+    // Apply temporal policy here — the graph component only sees priorState.
+    const changedIds = mode === 'change_emphasis'
+      ? options.changedNodeIdsByStep?.[i] ? [...options.changedNodeIdsByStep[i]!] : undefined
+      : undefined;
 
-    if (mode !== 'ignore_history' && priorState) {
-      renderOptions.priorState = priorState;
-    }
+    const { effectivePriorState } = applyTemporalPolicy(
+      priorState ?? undefined,
+      mode,
+      changedIds
+    );
 
-    if (mode === 'change_emphasis') {
-      const changedIds = options.changedNodeIdsByStep?.[i];
-      if (changedIds) {
-        renderOptions.changedNodeIds = [...changedIds];
-      }
+    const renderOptions: WebColaLayoutOptions = {};
+    if (effectivePriorState) {
+      renderOptions.priorState = effectivePriorState;
     }
 
     await graphElement.renderLayout(layout, renderOptions);

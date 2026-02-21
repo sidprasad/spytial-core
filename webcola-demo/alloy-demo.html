@@ -711,15 +711,21 @@
 
                 updateStatus('Rendering Alloy graph with WebCola...', 'info');
                 
-                // Build render options with temporal policy and optional prior state.
+                // Build render options: apply temporal policy to compute effective prior state.
+                // The graph component only sees priorState — temporal modes are handled here.
                 const temporalPolicyMode = getTemporalPolicyMode();
                 
-                const renderOptions = {
-                    temporalMode: temporalPolicyMode
-                };
-                if (shouldUsePriorStateForTemporalPolicy() && priorState) {
-                    renderOptions.priorState = priorState;
+                const renderOptions = {};
+                if (shouldUsePriorStateForTemporalPolicy() && priorState && window.CndCore && window.CndCore.applyTemporalPolicy) {
+                    const { effectivePriorState } = window.CndCore.applyTemporalPolicy(priorState, temporalPolicyMode);
+                    if (effectivePriorState) {
+                        renderOptions.priorState = effectivePriorState;
+                    }
                     console.log(`Rendering with temporal policy '${temporalPolicyMode}' and prior state: ${priorState.positions.length} positions, zoom ${priorState.transform.k.toFixed(2)}x`);
+                } else if (shouldUsePriorStateForTemporalPolicy() && priorState) {
+                    // Fallback: pass raw prior state if applyTemporalPolicy is not available
+                    renderOptions.priorState = priorState;
+                    console.log(`Rendering with raw prior state (applyTemporalPolicy not available)`);
                 } else {
                     console.log(`Rendering with temporal policy '${temporalPolicyMode}' and no prior state`);
                 }
