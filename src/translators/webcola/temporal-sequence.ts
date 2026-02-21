@@ -4,8 +4,8 @@ import { LayoutInstance } from '../../layout/layoutinstance';
 import { parseLayoutSpec } from '../../layout/layoutspec';
 import { WebColaCnDGraph } from './webcola-cnd-graph';
 import type { LayoutState, WebColaLayoutOptions } from './webcolatranslator';
-import { applyTemporalPolicy } from './temporal-policy';
-import type { TemporalMode } from './temporal-policy';
+import { ignoreHistory } from './sequence-policy';
+import type { SequencePolicy } from './sequence-policy';
 
 /**
  * Options for generating layouts for a sequence of data instances.
@@ -15,10 +15,8 @@ export interface SequenceLayoutOptions {
   instances: IInputDataInstance[];
   /** Spytial spec YAML string */
   spytialSpec: string;
-  /** Inter-sequence policy mode (default: ignore_history) */
-  mode?: TemporalMode;
-  /** Per-step changed node IDs, used with `change_emphasis` mode */
-  changedNodeIdsByStep?: Array<ReadonlyArray<string> | undefined>;
+  /** Sequence policy controlling how prior state carries forward (default: ignoreHistory) */
+  policy?: SequencePolicy;
   /** Per-step projection overrides */
   projectionsByStep?: Array<Record<string, string> | undefined>;
 }
@@ -34,11 +32,11 @@ function ensureWebColaElementRegistered(): void {
 
 /**
  * Generate layouts for a sequence of data instances, threading layout state
- * between steps according to the chosen inter-sequence policy.
+ * between steps according to the chosen sequence policy.
  *
  * This is a thin orchestration layer atop `WebColaCnDGraph.renderLayout()`.
- * The temporal policy (`applyTemporalPolicy`) is applied here — the graph
- * component only receives the final `priorState` and is unaware of modes.
+ * The policy is applied here — the graph component only receives the
+ * final `priorState` and is unaware of policy logic.
  *
  * Each step produces a `webcola-cnd-graph` element; the caller is responsible
  * for inserting them into the DOM.
@@ -50,7 +48,7 @@ export async function generateSequenceLayouts(
   options: SequenceLayoutOptions
 ): Promise<WebColaCnDGraph[]> {
   const { instances, spytialSpec } = options;
-  const mode = options.mode ?? 'ignore_history';
+  const policy = options.policy ?? ignoreHistory;
   const parsedSpec = parseLayoutSpec(spytialSpec);
   const results: WebColaCnDGraph[] = [];
   let priorState: LayoutState | null = null;
@@ -69,16 +67,18 @@ export async function generateSequenceLayouts(
 
     const graphElement = document.createElement('webcola-cnd-graph') as WebColaCnDGraph;
 
-    // Apply temporal policy here — the graph component only sees priorState.
-    const changedIds = mode === 'change_emphasis'
-      ? options.changedNodeIdsByStep?.[i] ? [...options.changedNodeIdsByStep[i]!] : undefined
-      : undefined;
-
-    const { effectivePriorState } = applyTemporalPolicy(
-      priorState ?? undefined,
-      mode,
-      changedIds
-    );
+    // Apply the sequence policy to compute effective prior state.
+    // The policy receives the pairwise context (prior state + prev/curr instances).
+    let effectivePriorState: LayoutState | undefined;
+    if (i > 0 && priorState && priorState.positions.length > 0) {
+      const result = policy.apply({
+        priorState,
+        prevInstance: instances[i - 1],
+        currInstance: instances[i],
+        spec: parsedSpec,
+      });
+      effectivePriorState = result.effectivePriorState;
+    }
 
     const renderOptions: WebColaLayoutOptions = {};
     if (effectivePriorState) {
@@ -88,7 +88,8 @@ export async function generateSequenceLayouts(
     await graphElement.renderLayout(layout, renderOptions);
     results.push(graphElement);
 
-    priorState = mode === 'ignore_history' ? null : graphElement.getLayoutState();
+    // Always capture state — the policy decides whether to use it
+    priorState = graphElement.getLayoutState();
   }
 
   return results;

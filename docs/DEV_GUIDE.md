@@ -30,9 +30,9 @@ Everything in this repo revolves around a **pipelined flow** from input data →
 
 6. **Sequence orchestration** *(optional layer)*
    - For ordered sequences of instances (e.g., Alloy traces), wrap the render step with `generateSequenceLayouts()`.
-   - The sequence layer applies a **temporal policy** (`applyTemporalPolicy`) to compute inter-step `priorState`, then calls `renderLayout()` with only `{ priorState }`.
-   - The graph component (`WebColaCnDGraph`) knows nothing about temporal modes — it only sees prior positions.
-   - See [docs/SEQUENCE_LAYOUT_API.md](./SEQUENCE_LAYOUT_API.md) for the full API reference and migration guide.
+   - A **`SequencePolicy`** (e.g., `stability`, `changeEmphasis`) is applied pairwise to compute inter-step `priorState`, then `renderLayout()` is called with only `{ priorState }`.
+   - The graph component (`WebColaCnDGraph`) knows nothing about sequence policies — it only sees prior positions.
+   - See [docs/SEQUENCE_LAYOUT_API.md](./SEQUENCE_LAYOUT_API.md) for the full API reference.
 
 ### Demos that show the pipeline
 

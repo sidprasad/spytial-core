@@ -196,8 +196,8 @@
                 <button id="nextInstanceBtn" onclick="navigateInstance(1)" class="btn btn-sm btn-outline-primary" disabled>Next ▶</button>
             </div>
             <div class="mb-2">
-                <label class="form-label form-label-sm mb-1" for="temporalPolicy">Temporal Policy:</label>
-                <select id="temporalPolicy" class="form-select form-select-sm" aria-label="Temporal policy selection">
+                <label class="form-label form-label-sm mb-1" for="sequencePolicy">Sequence Policy:</label>
+                <select id="sequencePolicy" class="form-select form-select-sm" aria-label="Sequence policy selection">
                     <option value="ignore_history" selected>Ignore history (default)</option>
                     <option value="stability">Stability</option>
                     <option value="change_emphasis">Change emphasis</option>
@@ -228,6 +228,7 @@
         // Temporal state for multiple instances
         let alloyInstances = [];           // Array of all parsed Alloy instances
         let currentInstanceIndex = 0;      // Current instance being displayed
+        let previousInstanceIndex = null;  // Previous instance index (for change_emphasis diff)
         let priorState = null;             // Layout state from previous render (positions + transform)
         let parsedAlloyDatum = null;       // Cached parsed Alloy datum
         let cachedEvaluator = null;        // Cached evaluator
@@ -257,16 +258,16 @@
                 document.getElementById('webcola-cnd')?.value?.trim();
         }
 
-        function getTemporalPolicyMode() {
-            const temporalPolicySelect = document.getElementById('temporalPolicy');
-            if (!temporalPolicySelect || !temporalPolicySelect.value) {
+        function getSequencePolicyName() {
+            const policySelect = document.getElementById('sequencePolicy');
+            if (!policySelect || !policySelect.value) {
                 return 'ignore_history';
             }
-            return temporalPolicySelect.value;
+            return policySelect.value;
         }
 
-        function shouldUsePriorStateForTemporalPolicy() {
-            return getTemporalPolicyMode() !== 'ignore_history';
+        function shouldUsePriorState() {
+            return getSequencePolicyName() !== 'ignore_history';
         }
 
         function getCurrentExportInstance() {
@@ -411,6 +412,7 @@
                 // Store all instances for temporal exploration
                 alloyInstances = parsedAlloyDatum.instances;
                 currentInstanceIndex = 0;
+                previousInstanceIndex = null;
                 priorState = null; // Reset prior state when loading new data
                 
                 // IMPORTANT: Reset projections when loading new data
@@ -580,7 +582,7 @@
         }
 
         /**
-         * Update the temporal explorer UI based on current state
+         * Update the sequence explorer UI based on current state
          */
         function updateTemporalExplorer() {
             const explorerDiv = document.getElementById('temporal-explorer');
@@ -588,13 +590,13 @@
             const nextBtn = document.getElementById('nextInstanceBtn');
             const indicator = document.getElementById('instanceIndicator');
             const priorInfo = document.getElementById('priorPositionsInfo');
-            const temporalPolicyMode = getTemporalPolicyMode();
+            const policyName = getSequencePolicyName();
 
             console.log(`updateTemporalExplorer: ${alloyInstances.length} instances, current=${currentInstanceIndex}`);
 
             if (alloyInstances.length <= 1) {
                 explorerDiv.style.display = 'none';
-                console.log('Temporal explorer hidden (single instance)');
+                console.log('Sequence explorer hidden (single instance)');
                 return;
             }
 
@@ -606,21 +608,19 @@
             
             prevBtn.disabled = prevDisabled;
             nextBtn.disabled = nextDisabled;
-            
-            console.log(`Temporal explorer visible: prevBtn.disabled=${prevDisabled}, nextBtn.disabled=${nextDisabled}`);
 
             // Update prior state info
-            if (temporalPolicyMode === 'ignore_history') {
+            if (policyName === 'ignore_history') {
                 priorInfo.textContent = 'Policy: ignore_history (no prior state used)';
             } else if (priorState && priorState.positions.length > 0) {
-                priorInfo.textContent = `Policy: ${temporalPolicyMode} | ${priorState.positions.length} positions, zoom ${priorState.transform.k.toFixed(1)}x`;
+                priorInfo.textContent = `Policy: ${policyName} | ${priorState.positions.length} positions, zoom ${priorState.transform.k.toFixed(1)}x`;
             } else {
-                priorInfo.textContent = `Policy: ${temporalPolicyMode} | no prior state (first render)`;
+                priorInfo.textContent = `Policy: ${policyName} | no prior state (first render)`;
             }
         }
 
         /**
-         * Navigate to a different instance (for temporal exploration)
+         * Navigate to a different instance (for sequence exploration)
          * @param {number} delta - Direction to navigate (-1 for prev, +1 for next)
          */
         async function navigateInstance(delta) {
@@ -637,10 +637,9 @@
 
             // Capture current layout state before navigating
             const graphElement = document.getElementById('graph-container');
-            const temporalPolicyMode = getTemporalPolicyMode();
+            const policyName = getSequencePolicyName();
             
-            if (shouldUsePriorStateForTemporalPolicy() && graphElement.getLayoutState) {
-                // Use the new cleaner API
+            if (shouldUsePriorState() && graphElement.getLayoutState) {
                 const state = graphElement.getLayoutState();
                 if (state.positions && state.positions.length > 0) {
                     priorState = state;
@@ -648,9 +647,11 @@
                 }
             } else {
                 priorState = null;
-                console.log(`Prior state disabled for temporal policy '${temporalPolicyMode}' or not available`);
+                console.log(`Prior state disabled for policy '${policyName}' or not available`);
             }
 
+            // Track previous index for pairwise diffing
+            previousInstanceIndex = currentInstanceIndex;
             currentInstanceIndex = newIndex;
             console.log(`Updated currentInstanceIndex to ${currentInstanceIndex}`);
             
@@ -711,23 +712,36 @@
 
                 updateStatus('Rendering Alloy graph with WebCola...', 'info');
                 
-                // Build render options: apply temporal policy to compute effective prior state.
-                // The graph component only sees priorState — temporal modes are handled here.
-                const temporalPolicyMode = getTemporalPolicyMode();
+                // Build render options: apply sequence policy to compute effective prior state.
+                // The graph component only sees priorState — policy logic is handled here.
+                const policyName = getSequencePolicyName();
                 
                 const renderOptions = {};
-                if (shouldUsePriorStateForTemporalPolicy() && priorState && window.CndCore && window.CndCore.applyTemporalPolicy) {
-                    const { effectivePriorState } = window.CndCore.applyTemporalPolicy(priorState, temporalPolicyMode);
+                if (shouldUsePriorState() && priorState && window.CndCore && window.CndCore.getSequencePolicy) {
+                    const policy = window.CndCore.getSequencePolicy(policyName);
+
+                    // Build prev/curr instances for the policy context
+                    const prevInst = (previousInstanceIndex != null)
+                        ? new CndCore.AlloyDataInstance(alloyInstances[previousInstanceIndex])
+                        : new CndCore.AlloyDataInstance(alloyInstances[currentInstanceIndex]);
+                    const currInst = new CndCore.AlloyDataInstance(alloyInstances[currentInstanceIndex]);
+
+                    const { effectivePriorState } = policy.apply({
+                        priorState,
+                        prevInstance: prevInst,
+                        currInstance: currInst,
+                        spec: cachedLayoutSpec,
+                    });
                     if (effectivePriorState) {
                         renderOptions.priorState = effectivePriorState;
                     }
-                    console.log(`Rendering with temporal policy '${temporalPolicyMode}' and prior state: ${priorState.positions.length} positions, zoom ${priorState.transform.k.toFixed(2)}x`);
-                } else if (shouldUsePriorStateForTemporalPolicy() && priorState) {
-                    // Fallback: pass raw prior state if applyTemporalPolicy is not available
+                    console.log(`Rendering with policy '${policyName}' and prior state: ${priorState.positions.length} positions, zoom ${priorState.transform.k.toFixed(2)}x`);
+                } else if (shouldUsePriorState() && priorState) {
+                    // Fallback: pass raw prior state if getSequencePolicy is not available
                     renderOptions.priorState = priorState;
-                    console.log(`Rendering with raw prior state (applyTemporalPolicy not available)`);
+                    console.log(`Rendering with raw prior state (getSequencePolicy not available)`);
                 } else {
-                    console.log(`Rendering with temporal policy '${temporalPolicyMode}' and no prior state`);
+                    console.log(`Rendering with policy '${policyName}' and no prior state`);
                 }
                 
                 // Use the real InstanceLayout data with WebCola custom element

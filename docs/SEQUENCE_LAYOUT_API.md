@@ -13,25 +13,75 @@ The sequence layer sits **above** the core rendering component and is deliberate
 │  generateSequenceLayouts()                       │
 │    • parses spec                                 │
 │    • iterates over instances                     │
-│    • calls applyTemporalPolicy() per step        │
+│    • calls policy.apply() per step               │
 │    • passes only { priorState } to renderLayout  │
 │    ↓                                             │
 │  WebColaCnDGraph.renderLayout()                  │
 │    • receives priorState (or nothing)            │
-│    • knows nothing about temporal modes          │
+│    • knows nothing about sequence policies       │
 │    • tunes solver iterations when priorState     │
 │      is present                                  │
 └──────────────────────────────────────────────────┘
 ```
 
 **Key design principle:** `WebColaCnDGraph` and `WebColaLayoutOptions` are
-unaware of temporal modes. They only know about `priorState` — a bag of node
+unaware of sequence policies. They only know about `priorState` — a bag of node
 positions and a zoom transform captured from a previous render. The decision of
-*how* to compute that prior state from a temporal mode is entirely the
-responsibility of the caller (or `generateSequenceLayouts`).
+*how* to compute that prior state is entirely the responsibility of the
+`SequencePolicy` implementation.
 
 This keeps the graph component's API surface minimal and avoids coupling the
 rendering layer to sequence-specific concerns.
+
+## SequencePolicy Interface
+
+All policies implement the same interface. They are pairwise — they receive the
+prior layout state plus the previous and current data instances, and return the
+effective state that the solver should use.
+
+```typescript
+interface SequencePolicy {
+  readonly name: string;
+  apply(context: SequencePolicyContext): SequencePolicyResult;
+}
+
+interface SequencePolicyContext {
+  priorState: LayoutState;
+  prevInstance: IDataInstance;
+  currInstance: IDataInstance;
+  spec: LayoutSpec;
+}
+
+interface SequencePolicyResult {
+  effectivePriorState: LayoutState | undefined;
+  useReducedIterations: boolean;
+}
+```
+
+### Built-in Policies
+
+| Policy object | Name string | Behavior |
+|---|---|---|
+| `ignoreHistory` | `'ignore_history'` | Fresh layout — prior state is discarded. (default) |
+| `stability` | `'stability'` | Prior node positions are passed through as-is; solver uses reduced iterations. |
+| `changeEmphasis` | `'change_emphasis'` | Diffs prev/curr instances. Stable nodes keep positions; changed nodes are omitted so the solver re-places them. |
+
+### Adding a custom policy
+
+```typescript
+import { registerSequencePolicy } from 'spytial-core';
+import type { SequencePolicy } from 'spytial-core';
+
+const myPolicy: SequencePolicy = {
+  name: 'my_custom',
+  apply: ({ priorState, prevInstance, currInstance, spec }) => {
+    // Custom logic here
+    return { effectivePriorState: priorState, useReducedIterations: true };
+  },
+};
+
+registerSequencePolicy(myPolicy);
+```
 
 ## Public Exports
 
@@ -40,12 +90,18 @@ All exports are available from the top-level `spytial-core` package:
 ```typescript
 import {
   generateSequenceLayouts,
-  applyTemporalPolicy,
+  getSequencePolicy,
+  ignoreHistory,
+  stability,
+  changeEmphasis,
+  registerSequencePolicy,
 } from 'spytial-core';
 
 import type {
+  SequencePolicy,
+  SequencePolicyContext,
+  SequencePolicyResult,
   SequenceLayoutOptions,
-  TemporalMode,
 } from 'spytial-core';
 ```
 
@@ -54,7 +110,7 @@ import type {
 ### `generateSequenceLayouts(options)`
 
 Generate layouts for a sequence of data instances, threading layout state
-between steps.
+between steps via the chosen policy.
 
 ```typescript
 async function generateSequenceLayouts(
@@ -68,12 +124,8 @@ async function generateSequenceLayouts(
 |---|---|---|---|
 | `instances` | `IInputDataInstance[]` | Yes | Ordered list of data instances |
 | `spytialSpec` | `string` | Yes | CnD (Spytial) spec YAML string |
-| `mode` | `TemporalMode` | No | Inter-step policy (default: `'ignore_history'`) |
-| `changedNodeIdsByStep` | `Array<ReadonlyArray<string> \| undefined>` | No | Per-step changed node IDs for `change_emphasis` |
+| `policy` | `SequencePolicy` | No | Inter-step policy (default: `ignoreHistory`) |
 | `projectionsByStep` | `Array<Record<string, string> \| undefined>` | No | Per-step projection overrides |
-
-**Returns:** Array of `WebColaCnDGraph` elements (one per instance). The caller
-is responsible for inserting them into the DOM.
 
 **Example:**
 
@@ -81,7 +133,7 @@ is responsible for inserting them into the DOM.
 const elements = await generateSequenceLayouts({
   instances: [instance0, instance1, instance2],
   spytialSpec: myCndYaml,
-  mode: 'stability',
+  policy: stability,
 });
 
 elements.forEach((el, i) => {
@@ -89,59 +141,36 @@ elements.forEach((el, i) => {
 });
 ```
 
-### `applyTemporalPolicy(priorState, mode, changedNodeIds?)`
+### `getSequencePolicy(name)`
 
-Pure function that computes an effective prior state from a raw prior state and
-a temporal mode. Use this directly if you are calling `renderLayout()` yourself
-rather than going through `generateSequenceLayouts`.
+Look up a built-in policy by its string name. Returns `ignoreHistory` for
+unrecognized names. Useful when the policy name comes from a UI dropdown.
 
 ```typescript
-function applyTemporalPolicy(
-  priorState: LayoutState | undefined,
-  mode?: TemporalMode,       // default: 'ignore_history'
-  changedNodeIds?: string[]
-): TemporalPolicyResult
+function getSequencePolicy(name: string): SequencePolicy
 ```
 
-**Returns:**
+### Direct policy usage (manual rendering)
+
+If you are calling `renderLayout()` yourself rather than going through
+`generateSequenceLayouts`, use a policy directly:
 
 ```typescript
-interface TemporalPolicyResult {
-  /** Effective prior state to pass to renderLayout, or undefined for fresh layout */
-  effectivePriorState: LayoutState | undefined;
-  /** Whether the caller should expect reduced iterations (informational) */
-  useReducedIterations: boolean;
-}
-```
-
-**Example (manual single-step rendering):**
-
-```typescript
-import { applyTemporalPolicy } from 'spytial-core';
+import { stability } from 'spytial-core';
 
 const priorState = graphElement.getLayoutState();
 
-const { effectivePriorState } = applyTemporalPolicy(
+const { effectivePriorState } = stability.apply({
   priorState,
-  'stability'
-);
+  prevInstance: prevInst,
+  currInstance: currInst,
+  spec: parsedSpec,
+});
 
 await graphElement.renderLayout(nextLayout, {
   priorState: effectivePriorState,
 });
 ```
-
-### `TemporalMode`
-
-```typescript
-type TemporalMode = 'ignore_history' | 'stability' | 'change_emphasis';
-```
-
-| Mode | Behavior |
-|---|---|
-| `ignore_history` | Fresh layout — prior state is discarded. (default) |
-| `stability` | Prior node positions are passed through as-is, solver uses reduced iterations to preserve them. |
-| `change_emphasis` | Stable nodes keep their positions; changed nodes are jittered around the centroid of stable nodes to draw visual attention. |
 
 ## `WebColaLayoutOptions` (Graph Component)
 
@@ -149,70 +178,20 @@ The graph component's options interface is intentionally minimal:
 
 ```typescript
 interface WebColaLayoutOptions {
-  /**
-   * Layout state from a previous render.
-   * Preserves visual continuity by restoring node positions and zoom/pan.
-   */
   priorState?: LayoutState;
 }
 ```
 
-There are **no** `temporalMode` or `changedNodeIds` fields on this interface.
-Temporal policy is the caller's responsibility — either via
-`generateSequenceLayouts` or a manual call to `applyTemporalPolicy`.
-
-When `priorState` is provided, the graph component automatically:
-- Restores the zoom/pan transform
-- Seeds WebCola nodes at their prior positions (via dagre hint seeding)
-- Reduces solver iterations to preserve positions
-- Uses a higher convergence threshold for faster stabilization
-
-## Migration from previous API
-
-If you were previously passing `temporalMode` or `changedNodeIds` on `WebColaLayoutOptions`:
-
-### Before (old API)
-
-```typescript
-await graphElement.renderLayout(layout, {
-  temporalMode: 'stability',
-  priorState: previousState,
-  changedNodeIds: ['Node1', 'Node2'],
-});
-```
-
-### After (new API)
-
-```typescript
-import { applyTemporalPolicy } from 'spytial-core';
-
-const { effectivePriorState } = applyTemporalPolicy(
-  previousState,
-  'stability',
-  // changedNodeIds only needed for 'change_emphasis' mode
-);
-
-await graphElement.renderLayout(layout, {
-  priorState: effectivePriorState,
-});
-```
-
-### Renamed exports
-
-| Old name | New name |
-|---|---|
-| `renderTemporalSequence` | `generateSequenceLayouts` |
-| `RenderTemporalSequenceOptions` | `SequenceLayoutOptions` |
-
-The `TemporalMode` type and `applyTemporalPolicy` function are unchanged.
+There are **no** policy-related fields. Policy logic is the caller's
+responsibility — either via `generateSequenceLayouts` or direct `policy.apply()`.
 
 ## File Layout
 
 ```
 src/translators/webcola/
-  temporal-policy.ts      — TemporalMode type, applyTemporalPolicy() pure function
+  sequence-policy.ts      — SequencePolicy interface, built-in policies, registry
   temporal-sequence.ts    — SequenceLayoutOptions, generateSequenceLayouts()
-  webcola-cnd-graph.ts    — WebColaCnDGraph (unchanged from main; no temporal knowledge)
+  webcola-cnd-graph.ts    — WebColaCnDGraph (unchanged; no policy knowledge)
   webcolatranslator.ts    — WebColaLayoutOptions (priorState only)
 ```
 
@@ -220,12 +199,13 @@ src/translators/webcola/
 
 ```
 tests/
-  temporal-policy.test.ts     — 7 unit tests for applyTemporalPolicy
-  temporal-sequence.test.ts   — Type-level test for TemporalMode
+  sequence-policy.test.ts     — 17 tests: ignoreHistory, stability, changeEmphasis,
+                                  getSequencePolicy, registerSequencePolicy
+  temporal-sequence.test.ts   — 2 tests: built-in policy names and interface checks
 ```
 
 Run with:
 
 ```bash
-npx vitest run tests/temporal-policy.test.ts tests/temporal-sequence.test.ts
+npx vitest run tests/sequence-policy.test.ts tests/temporal-sequence.test.ts
 ```

@@ -31,6 +31,7 @@ export type {
   WebColaLayoutOptions 
 } from './webcola/webcolatranslator';
 
-export type { TemporalMode } from './webcola/temporal-policy';
-export { applyTemporalPolicy } from './webcola/temporal-policy';
+// Sequence policies
+export type { SequencePolicy, SequencePolicyContext, SequencePolicyResult } from './webcola/sequence-policy';
+export { ignoreHistory, stability, changeEmphasis, getSequencePolicy, registerSequencePolicy } from './webcola/sequence-policy';
 export type { SequenceLayoutOptions } from './webcola/temporal-sequence';

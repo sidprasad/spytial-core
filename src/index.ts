@@ -36,14 +36,16 @@ export { SQLEvaluator } from './evaluators/sql-evaluator';
 export { WebColaTranslator } from './translators';
 export { StructuredInputGraph } from './translators';
 export { generateSequenceLayouts } from './translators';
-export { applyTemporalPolicy } from './translators';
+export { ignoreHistory, stability, changeEmphasis, getSequencePolicy, registerSequencePolicy } from './translators';
 export type {
   ParsedCnDSpec,
   NodePositionHint,
   TransformInfo,
   LayoutState,
   WebColaLayoutOptions,
-  TemporalMode,
+  SequencePolicy,
+  SequencePolicyContext,
+  SequencePolicyResult,
   SequenceLayoutOptions
 } from './translators';
 export { SGraphQueryEvaluator } from "./evaluators/sgq-evaluator";
