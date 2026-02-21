@@ -649,6 +649,13 @@
                     }
                 }
                 
+                // Capture layout state BEFORE clearing so the policy has positions to work with.
+                // After clear(), the DOM is empty and getLayoutState() returns nothing.
+                let capturedPositions = null;
+                if (prevInstance && graphElement.getLayoutState) {
+                    capturedPositions = graphElement.getLayoutState();
+                }
+
                 // Clear the graph before rendering the new layout
                 console.log('renderGraph: Clearing graph before render');
                 if (graphElement.clear) {
@@ -666,7 +673,7 @@
                 updateStatus('Rendering Alloy graph with WebCola...', 'info');
                 
                 // Build render options: pass policy + instance pair directly.
-                // The graph captures its own prior positions automatically.
+                // Supply the captured positions since we cleared the DOM above.
                 const currInstance = new CndCore.AlloyDataInstance(alloyInstances[currentInstanceIndex]);
                 const renderOptions = {};
 
@@ -675,6 +682,9 @@
                     renderOptions.policy = CndCore.getSequencePolicy(policyName);
                     renderOptions.prevInstance = prevInstance;
                     renderOptions.currInstance = currInstance;
+                    if (capturedPositions && capturedPositions.positions.length > 0) {
+                        renderOptions.priorPositions = capturedPositions;
+                    }
                 }
 
                 await graphElement.renderLayout(currentInstanceLayout, renderOptions);

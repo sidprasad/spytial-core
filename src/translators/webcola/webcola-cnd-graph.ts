@@ -1349,6 +1349,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // If a policy + instance pair is provided, run the policy to decide
     // what prior positions (if any) reach the solver.
     let resolvedState: LayoutState | undefined;
+    let useReducedIterations = false;
 
     if (options?.policy && options.prevInstance && options.currInstance) {
       const rawState = options.priorPositions ?? this.getLayoutState();
@@ -1360,6 +1361,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           spec: { constraints: { orientation: { relative: [], cyclic: [] }, alignment: [], grouping: { groups: [], subgroups: [] } }, directives: { sizes: [], hiddenAtoms: [], icons: [], projections: [], edgeStyles: [] } } as any,
         });
         resolvedState = result.effectivePriorState;
+        useReducedIterations = result.useReducedIterations;
       }
     }
 
@@ -1443,14 +1445,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       let userConstraintIters = WebColaCnDGraph.INITIAL_USER_CONSTRAINT_ITERATIONS;
       let allConstraintIters = WebColaCnDGraph.INITIAL_ALL_CONSTRAINTS_ITERATIONS;
       
-      // When prior state is provided, minimize iterations to preserve positions.
+      // When prior state is provided and the policy requests reduced iterations,
+      // minimize solver iterations to preserve node positions.
       // WebCola's unconstrained phase allows nodes to move freely from their initial positions,
       // so minimizing this phase helps preserve the provided positions.
-      // This is crucial for sequence continuity across instance steps.
       //
-      // Note: We manually compute node bounds in ensureNodeBounds() before edge routing,
-      // so we don't need many iterations just for bounds computation.
-      if (hasPriorState) {
+      // The policy controls this via useReducedIterations — a policy can return
+      // positions while requesting normal iterations (useReducedIterations: false)
+      // to let the solver fully re-converge.
+      if (hasPriorState && useReducedIterations) {
         // Use minimal iterations to preserve prior positions:
         // - 0 unconstrained: don't let nodes drift from prior positions
         // - 10 user constraint: apply position constraints quickly
@@ -1459,7 +1462,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         userConstraintIters = Math.min(10, userConstraintIters);
         allConstraintIters = Math.min(20, allConstraintIters);
         
-        console.log(`WebCola: Using minimal iterations to preserve ${resolvedState!.positions.length} prior positions`);
+        console.log(`WebCola: Using reduced iterations to preserve ${resolvedState!.positions.length} prior positions`);
+      } else if (hasPriorState) {
+        console.log(`WebCola: Prior positions provided (${resolvedState!.positions.length} nodes) with normal iteration count`);
       }
       
       if (nodeCount > 100) {
