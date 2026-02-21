@@ -225,11 +225,10 @@
         // Variables to store data
         let currentInstanceLayout = null;
         
-        // Temporal state for multiple instances
+        // Sequence state for multiple instances
         let alloyInstances = [];           // Array of all parsed Alloy instances
         let currentInstanceIndex = 0;      // Current instance being displayed
-        let previousInstanceIndex = null;  // Previous instance index (for change_emphasis diff)
-        let priorState = null;             // Layout state from previous render (positions + transform)
+        let sequenceStepper = null;        // SequenceStepper manages prior state + policy
         let parsedAlloyDatum = null;       // Cached parsed Alloy datum
         let cachedEvaluator = null;        // Cached evaluator
         let cachedEvaluatorType = 'sgq';
@@ -266,9 +265,13 @@
             return policySelect.value;
         }
 
-        function shouldUsePriorState() {
-            return getSequencePolicyName() !== 'ignore_history';
-        }
+        // Sync dropdown changes to the stepper
+        document.getElementById('sequencePolicy')?.addEventListener('change', function() {
+            if (sequenceStepper && window.CndCore) {
+                sequenceStepper.setPolicy(CndCore.getSequencePolicy(this.value));
+                updateTemporalExplorer();
+            }
+        });
 
         function getCurrentExportInstance() {
             if (!alloyInstances.length) {
@@ -409,11 +412,9 @@
                     throw new Error('No instances found in Alloy XML');
                 }
 
-                // Store all instances for temporal exploration
+                // Store all instances for sequence exploration
                 alloyInstances = parsedAlloyDatum.instances;
                 currentInstanceIndex = 0;
-                previousInstanceIndex = null;
-                priorState = null; // Reset prior state when loading new data
                 
                 // IMPORTANT: Reset projections when loading new data
                 // This ensures we start fresh and allow the layout to set defaults
@@ -449,6 +450,14 @@
                     return;
                 }
                 console.log('Parsed Layout Spec:', cachedLayoutSpec);
+
+                // Create the sequence stepper (manages prior state + policy automatically)
+                const graphElement = document.getElementById('graph-container');
+                const policyName = getSequencePolicyName();
+                sequenceStepper = new CndCore.SequenceStepper(graphElement, {
+                    policy: CndCore.getSequencePolicy(policyName),
+                    spec: cachedLayoutSpec,
+                });
 
                 // Generate layout for current instance
                 await generateLayoutForCurrentInstance();
@@ -592,75 +601,35 @@
             const priorInfo = document.getElementById('priorPositionsInfo');
             const policyName = getSequencePolicyName();
 
-            console.log(`updateTemporalExplorer: ${alloyInstances.length} instances, current=${currentInstanceIndex}`);
-
             if (alloyInstances.length <= 1) {
                 explorerDiv.style.display = 'none';
-                console.log('Sequence explorer hidden (single instance)');
                 return;
             }
 
             explorerDiv.style.display = 'block';
             indicator.textContent = `Instance ${currentInstanceIndex + 1} / ${alloyInstances.length}`;
             
-            const prevDisabled = currentInstanceIndex === 0;
-            const nextDisabled = currentInstanceIndex === alloyInstances.length - 1;
-            
-            prevBtn.disabled = prevDisabled;
-            nextBtn.disabled = nextDisabled;
+            prevBtn.disabled = currentInstanceIndex === 0;
+            nextBtn.disabled = currentInstanceIndex === alloyInstances.length - 1;
 
-            // Update prior state info
-            if (policyName === 'ignore_history') {
-                priorInfo.textContent = 'Policy: ignore_history (no prior state used)';
-            } else if (priorState && priorState.positions.length > 0) {
-                priorInfo.textContent = `Policy: ${policyName} | ${priorState.positions.length} positions, zoom ${priorState.transform.k.toFixed(1)}x`;
-            } else {
-                priorInfo.textContent = `Policy: ${policyName} | no prior state (first render)`;
-            }
+            priorInfo.textContent = `Policy: ${policyName}`;
         }
 
         /**
-         * Navigate to a different instance (for sequence exploration)
+         * Navigate to a different instance.
+         * The SequenceStepper handles prior state capture and policy application.
          * @param {number} delta - Direction to navigate (-1 for prev, +1 for next)
          */
         async function navigateInstance(delta) {
-            console.log(`navigateInstance called with delta=${delta}, currentIndex=${currentInstanceIndex}, totalInstances=${alloyInstances.length}`);
-            
             const newIndex = currentInstanceIndex + delta;
-            
-            if (newIndex < 0 || newIndex >= alloyInstances.length) {
-                console.warn('Cannot navigate: index out of bounds');
-                return;
-            }
+            if (newIndex < 0 || newIndex >= alloyInstances.length) return;
 
-            console.log(`Navigating from instance ${currentInstanceIndex + 1} to instance ${newIndex + 1}`);
-
-            // Capture current layout state before navigating
-            const graphElement = document.getElementById('graph-container');
-            const policyName = getSequencePolicyName();
-            
-            if (shouldUsePriorState() && graphElement.getLayoutState) {
-                const state = graphElement.getLayoutState();
-                if (state.positions && state.positions.length > 0) {
-                    priorState = state;
-                    console.log(`Captured layout state: ${state.positions.length} positions, zoom ${state.transform.k.toFixed(2)}x`);
-                }
-            } else {
-                priorState = null;
-                console.log(`Prior state disabled for policy '${policyName}' or not available`);
-            }
-
-            // Track previous index for pairwise diffing
-            previousInstanceIndex = currentInstanceIndex;
             currentInstanceIndex = newIndex;
-            console.log(`Updated currentInstanceIndex to ${currentInstanceIndex}`);
-            
             updateTemporalExplorer();
 
             try {
                 await generateLayoutForCurrentInstance();
                 await renderGraph();
-                
                 updateStatus(`Showing instance ${currentInstanceIndex + 1} of ${alloyInstances.length}`, 'success');
             } catch (error) {
                 console.error('Error navigating to instance:', error);
@@ -670,7 +639,7 @@
 
         /**
          * Render the graph using the webcola-cnd-graph custom element
-         * Passes prior positions for temporal consistency if available
+         * Uses SequenceStepper for policy-aware prior state management
          */
         async function renderGraph() {
             const graphElement = document.getElementById('graph-container');
@@ -689,7 +658,6 @@
                     }
                     
                     if (!currentInstanceLayout) {
-                        // Layout generation failed - error already displayed by generateLayoutForCurrentInstance
                         console.warn('No layout data available to render (likely due to constraint errors)');
                         return;
                     }
@@ -700,7 +668,6 @@
                 if (graphElement.clear) {
                     graphElement.clear();
                 } else {
-                    // Fallback: remove all SVG content
                     const svg = graphElement.shadowRoot?.querySelector('svg');
                     if (svg) {
                         const container = svg.querySelector('.zoomable');
@@ -712,40 +679,16 @@
 
                 updateStatus('Rendering Alloy graph with WebCola...', 'info');
                 
-                // Build render options: apply sequence policy to compute effective prior state.
-                // The graph component only sees priorState — policy logic is handled here.
-                const policyName = getSequencePolicyName();
-                
-                const renderOptions = {};
-                if (shouldUsePriorState() && priorState && window.CndCore && window.CndCore.getSequencePolicy) {
-                    const policy = window.CndCore.getSequencePolicy(policyName);
-
-                    // Build prev/curr instances for the policy context
-                    const prevInst = (previousInstanceIndex != null)
-                        ? new CndCore.AlloyDataInstance(alloyInstances[previousInstanceIndex])
-                        : new CndCore.AlloyDataInstance(alloyInstances[currentInstanceIndex]);
-                    const currInst = new CndCore.AlloyDataInstance(alloyInstances[currentInstanceIndex]);
-
-                    const { effectivePriorState } = policy.apply({
-                        priorState,
-                        prevInstance: prevInst,
-                        currInstance: currInst,
-                        spec: cachedLayoutSpec,
-                    });
-                    if (effectivePriorState) {
-                        renderOptions.priorState = effectivePriorState;
-                    }
-                    console.log(`Rendering with policy '${policyName}' and prior state: ${priorState.positions.length} positions, zoom ${priorState.transform.k.toFixed(2)}x`);
-                } else if (shouldUsePriorState() && priorState) {
-                    // Fallback: pass raw prior state if getSequencePolicy is not available
-                    renderOptions.priorState = priorState;
-                    console.log(`Rendering with raw prior state (getSequencePolicy not available)`);
+                // Use the stepper for policy-aware rendering.
+                // It captures prior positions (including drag), applies the policy,
+                // and calls renderLayout — no manual state management needed.
+                if (sequenceStepper) {
+                    const instance = new CndCore.AlloyDataInstance(alloyInstances[currentInstanceIndex]);
+                    await sequenceStepper.step(instance, currentInstanceLayout);
                 } else {
-                    console.log(`Rendering with policy '${policyName}' and no prior state`);
+                    // Fallback: direct render with no policy (before stepper is created)
+                    await graphElement.renderLayout(currentInstanceLayout, {});
                 }
-                
-                // Use the real InstanceLayout data with WebCola custom element
-                await graphElement.renderLayout(currentInstanceLayout, renderOptions);
 
                 updateStatus(`Instance ${currentInstanceIndex + 1}/${alloyInstances.length} rendered successfully!`, 'success');
             } catch (error) {
