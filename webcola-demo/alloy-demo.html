@@ -187,9 +187,9 @@
         <!-- Projection Controls (shows when there are projections) -->
         <div id="projection-controls-container" class="mb-3"></div>
         
-        <!-- Temporal Explorer for multiple instances -->
-        <div id="temporal-explorer" class="mb-3" style="display: none;">
-            <h6 class="h6 text-dark">Temporal Explorer:</h6>
+        <!-- Sequence Explorer for multiple instances -->
+        <div id="sequence-explorer" class="mb-3" style="display: none;">
+            <h6 class="h6 text-dark">Sequence Explorer:</h6>
             <div class="d-flex align-items-center gap-2 mb-2">
                 <button id="prevInstanceBtn" onclick="navigateInstance(-1)" class="btn btn-sm btn-outline-primary" disabled>◀ Prev</button>
                 <span id="instanceIndicator" class="badge bg-primary">Instance 1 / 1</span>
@@ -269,7 +269,7 @@
         document.getElementById('sequencePolicy')?.addEventListener('change', function() {
             if (sequenceStepper && window.CndCore) {
                 sequenceStepper.setPolicy(CndCore.getSequencePolicy(this.value));
-                updateTemporalExplorer();
+                updateSequenceExplorer();
             }
         });
 
@@ -383,7 +383,7 @@
 
         /**
          * Process Alloy data using the complete Alloy → Evaluator → Layout pipeline
-         * Now supports multiple temporal instances
+         * Now supports multiple sequence instances
          */
         async function loadAlloyData() {
             try {
@@ -420,8 +420,8 @@
                 // This ensures we start fresh and allow the layout to set defaults
                 window.currentProjections = {};
                 
-                // Show temporal explorer if multiple instances
-                updateTemporalExplorer();
+                // Show sequence explorer if multiple instances
+                updateSequenceExplorer();
 
                 // Step 2: Create evaluator with Alloy data
                 await createEvaluatorForCurrentInstance(alloyXml);
@@ -593,8 +593,8 @@
         /**
          * Update the sequence explorer UI based on current state
          */
-        function updateTemporalExplorer() {
-            const explorerDiv = document.getElementById('temporal-explorer');
+        function updateSequenceExplorer() {
+            const explorerDiv = document.getElementById('sequence-explorer');
             const prevBtn = document.getElementById('prevInstanceBtn');
             const nextBtn = document.getElementById('nextInstanceBtn');
             const indicator = document.getElementById('instanceIndicator');
@@ -625,7 +625,7 @@
             if (newIndex < 0 || newIndex >= alloyInstances.length) return;
 
             currentInstanceIndex = newIndex;
-            updateTemporalExplorer();
+            updateSequenceExplorer();
 
             try {
                 await generateLayoutForCurrentInstance();
@@ -816,26 +816,26 @@
                 }
             }
             
-            // Clear stored layout (but preserve temporal state for navigation)
+            // Clear stored layout (but preserve sequence state for navigation)
             currentInstanceLayout = null;
             
             updateStatus('Graph cleared.', 'info');
         }
 
         /**
-         * Full reset - clears everything including temporal state
+         * Full reset - clears everything including sequence state
          */
         function resetAll() {
             clearGraph();
             alloyInstances = [];
             currentInstanceIndex = 0;
-            priorState = null;
+            if (sequenceStepper) sequenceStepper.reset();
             parsedAlloyDatum = null;
             cachedEvaluator = null;
             cachedLayoutSpec = null;
             cachedEvaluatorType = getSelectedEvaluatorType();
             cachedEvaluatorInstanceIndex = null;
-            updateTemporalExplorer();
+            updateSequenceExplorer();
             updateStatus('All state reset.', 'info');
         }
 
@@ -878,69 +878,20 @@
                 window.mountRelationHighlighter('relation-highlighter-mount', 'graph-container');
             }
 
-            // Listen for node drag events to update prior positions
+            // SequenceStepper captures layout state (including drag) internally,
+            // so no manual node-drag-end or layout-complete handlers are needed.
             if (graphElement) {
                 graphElement.addEventListener('node-drag-end', (e) => {
                     const detail = e.detail;
-                    console.log(`Node ${detail.id} dragged from (${detail.previous?.x?.toFixed(2)}, ${detail.previous?.y?.toFixed(2)}) to (${detail.current.x.toFixed(2)}, ${detail.current.y.toFixed(2)})`);
-                    
-                    // Update prior state positions with the new dragged position.
-                    // This ensures the dragged position is used for the next temporal render.
-                    if (priorState && priorState.positions) {
-                        const existingIndex = priorState.positions.findIndex(p => p.id === detail.id);
-                        if (existingIndex >= 0) {
-                            priorState.positions[existingIndex] = {
-                                id: detail.id,
-                                x: detail.current.x,
-                                y: detail.current.y
-                            };
-                        } else {
-                            priorState.positions.push({
-                                id: detail.id,
-                                x: detail.current.x,
-                                y: detail.current.y
-                            });
-                        }
-                        console.log(`Updated prior position for ${detail.id} to (${detail.current.x.toFixed(2)}, ${detail.current.y.toFixed(2)})`);
-                    }
-                });
-
-                // Listen for layout-complete to capture final positions
-                graphElement.addEventListener('layout-complete', (e) => {
-                    const detail = e.detail;
-                    const temporalPolicyMode = getTemporalPolicyMode();
-                    if (!shouldUsePriorStateForTemporalPolicy()) {
-                        priorState = null;
-                        updateTemporalExplorer();
-                        return;
-                    }
-                    console.log(`Layout complete! Capturing final positions for temporal policy '${temporalPolicyMode}'.`);
-                    
-                    // Store the final positions from the completed layout
-                    const transform = graphElement.getCurrentTransform ? graphElement.getCurrentTransform() : { k: 1, x: 0, y: 0 };
-                    priorState = {
-                        positions: detail.nodePositions || [],
-                        transform
-                    };
-                    
-                    // Log positions for debugging
-                    if (priorState.positions && priorState.positions.length > 0) {
-                        console.log(`Captured ${priorState.positions.length} node positions:`);
-                        priorState.positions.slice(0, 5).forEach(p => {
-                            console.log(`  ${p.id}: x=${p.x.toFixed(2)}, y=${p.y.toFixed(2)}`);
-                        });
-                    }
-                    
-                    // Update UI to show positions are available
-                    updateTemporalExplorer();
+                    console.log(`Node ${detail.id} dragged to (${detail.current.x.toFixed(2)}, ${detail.current.y.toFixed(2)})`);
                 });
             }
 
-            // Add keyboard navigation for temporal explorer
+            // Add keyboard navigation for sequence explorer
             document.addEventListener('keydown', (e) => {
-                // Only handle arrow keys when temporal explorer is visible and not typing in input
-                const temporalExplorer = document.getElementById('temporal-explorer');
-                if (temporalExplorer.style.display === 'none') return;
+                // Only handle arrow keys when sequence explorer is visible and not typing in input
+                const sequenceExplorer = document.getElementById('sequence-explorer');
+                if (sequenceExplorer.style.display === 'none') return;
                 
                 const activeElement = document.activeElement;
                 const isTyping = activeElement.tagName === 'INPUT' || 
@@ -957,20 +908,6 @@
                 }
             });
 
-            const temporalPolicySelect = document.getElementById('temporalPolicy');
-            if (temporalPolicySelect) {
-                temporalPolicySelect.addEventListener('change', async () => {
-                    const temporalPolicyMode = getTemporalPolicyMode();
-                    console.log(`Temporal policy changed to '${temporalPolicyMode}'`);
-                    if (temporalPolicyMode === 'ignore_history') {
-                        priorState = null;
-                    }
-                    updateTemporalExplorer();
-                    if (currentInstanceLayout) {
-                        await renderGraph();
-                    }
-                });
-            }
         });
 
         // Auto-initialize when page loads
