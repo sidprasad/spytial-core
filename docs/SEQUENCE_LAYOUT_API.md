@@ -1,37 +1,36 @@
 # Sequence Layout API
 
-This document describes the **sequence layout layer** — a thin orchestration API that generates layouts for an ordered sequence of data instances (e.g., Alloy trace steps) with configurable inter-step continuity.
+This document describes the **sequence layout layer** — the mechanism for rendering an ordered sequence of data instances (e.g., Alloy trace steps) with configurable inter-step continuity.
 
 ## Architecture
 
-The sequence layer sits **above** the core rendering component and is deliberately separated from it:
+Sequence continuity is handled **inside** `renderLayout()`. When you pass a `policy`, `prevInstance`, and `currInstance` as options, `renderLayout` automatically:
+
+1. Captures the current layout state (or uses the explicit `priorPositions` you provide)
+2. Calls `policy.apply()` with the prior state and instance pair
+3. Passes the resolved positions to the translator
 
 ```
 ┌──────────────────────────────────────────────────┐
 │  Caller code (demo, app, test harness)           │
 │    ↓                                             │
-│  generateSequenceLayouts()                       │
-│    • parses spec                                 │
-│    • iterates over instances                     │
-│    • calls policy.apply() per step               │
-│    • passes only { priorState } to renderLayout  │
+│  WebColaCnDGraph.renderLayout(layout, {          │
+│    policy,                                       │
+│    prevInstance,                                  │
+│    currInstance,                                  │
+│    priorPositions   (optional override)           │
+│  })                                              │
 │    ↓                                             │
-│  WebColaCnDGraph.renderLayout()                  │
-│    • receives priorState (or nothing)            │
-│    • knows nothing about sequence policies       │
-│    • tunes solver iterations when priorState     │
-│      is present                                  │
+│    • calls policy.apply() internally             │
+│    • passes resolved positions to translator     │
+│    • tunes solver iterations when positions      │
+│      are present                                 │
 └──────────────────────────────────────────────────┘
 ```
 
-**Key design principle:** `WebColaCnDGraph` and `WebColaLayoutOptions` are
-unaware of sequence policies. They only know about `priorState` — a bag of node
-positions and a zoom transform captured from a previous render. The decision of
-*how* to compute that prior state is entirely the responsibility of the
-`SequencePolicy` implementation.
-
-This keeps the graph component's API surface minimal and avoids coupling the
-rendering layer to sequence-specific concerns.
+**Key design principle:** The policy is the sole gateway to continuity.
+Without a policy, `renderLayout()` produces a fresh layout. With a policy,
+it threads position hints between steps automatically.
 
 ## SequencePolicy Interface
 
@@ -89,7 +88,6 @@ All exports are available from the top-level `spytial-core` package:
 
 ```typescript
 import {
-  generateSequenceLayouts,
   getSequencePolicy,
   ignoreHistory,
   stability,
@@ -101,44 +99,54 @@ import type {
   SequencePolicy,
   SequencePolicyContext,
   SequencePolicyResult,
-  SequenceLayoutOptions,
+  WebColaLayoutOptions,
 } from 'spytial-core';
 ```
 
 ## API Reference
 
-### `generateSequenceLayouts(options)`
+### `renderLayout(layout, options?)`
 
-Generate layouts for a sequence of data instances, threading layout state
-between steps via the chosen policy.
+Render a layout, optionally threading continuity from a previous step via a policy.
 
 ```typescript
-async function generateSequenceLayouts(
-  options: SequenceLayoutOptions
-): Promise<WebColaCnDGraph[]>
+async renderLayout(
+  layout: Layout,
+  options?: WebColaLayoutOptions
+): Promise<void>
 ```
 
-**Parameters:**
+**`WebColaLayoutOptions`:**
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `instances` | `IInputDataInstance[]` | Yes | Ordered list of data instances |
-| `spytialSpec` | `string` | Yes | CnD (Spytial) spec YAML string |
-| `policy` | `SequencePolicy` | No | Inter-step policy (default: `ignoreHistory`) |
-| `projectionsByStep` | `Array<Record<string, string> \| undefined>` | No | Per-step projection overrides |
+| `policy` | `SequencePolicy` | No | Inter-step policy to resolve prior positions |
+| `prevInstance` | `IDataInstance` | No | Previous step's data instance (required if `policy` is set) |
+| `currInstance` | `IDataInstance` | No | Current step's data instance (required if `policy` is set) |
+| `priorPositions` | `LayoutState` | No | Explicit prior positions override; if omitted, `getLayoutState()` is used |
 
-**Example:**
+When `policy`, `prevInstance`, and `currInstance` are all provided, `renderLayout` calls `policy.apply()` internally and passes the resolved positions to the translator. When no policy is provided, a fresh layout is produced.
+
+**Example — stepping through instances:**
 
 ```typescript
-const elements = await generateSequenceLayouts({
-  instances: [instance0, instance1, instance2],
-  spytialSpec: myCndYaml,
-  policy: stability,
-});
+import { getSequencePolicy } from 'spytial-core';
 
-elements.forEach((el, i) => {
-  document.getElementById(`step-${i}`)?.appendChild(el);
-});
+let prevInstance = null;
+
+for (const instance of instances) {
+  const layout = generateLayoutForInstance(instance);
+  const options = {};
+
+  if (prevInstance) {
+    options.policy = getSequencePolicy('stability');
+    options.prevInstance = prevInstance;
+    options.currInstance = instance;
+  }
+
+  await graphElement.renderLayout(layout, options);
+  prevInstance = instance;
+}
 ```
 
 ### `getSequencePolicy(name)`
@@ -150,62 +158,36 @@ unrecognized names. Useful when the policy name comes from a UI dropdown.
 function getSequencePolicy(name: string): SequencePolicy
 ```
 
-### Direct policy usage (manual rendering)
+### `getLayoutState()`
 
-If you are calling `renderLayout()` yourself rather than going through
-`generateSequenceLayouts`, use a policy directly:
-
-```typescript
-import { stability } from 'spytial-core';
-
-const priorState = graphElement.getLayoutState();
-
-const { effectivePriorState } = stability.apply({
-  priorState,
-  prevInstance: prevInst,
-  currInstance: currInst,
-  spec: parsedSpec,
-});
-
-await graphElement.renderLayout(nextLayout, {
-  priorState: effectivePriorState,
-});
-```
-
-## `WebColaLayoutOptions` (Graph Component)
-
-The graph component's options interface is intentionally minimal:
+Capture the current layout's node positions and zoom transform. This is called
+automatically by `renderLayout` when a policy is present, but can also be used
+to supply explicit `priorPositions`.
 
 ```typescript
-interface WebColaLayoutOptions {
-  priorState?: LayoutState;
-}
+getLayoutState(): LayoutState | undefined
 ```
-
-There are **no** policy-related fields. Policy logic is the caller's
-responsibility — either via `generateSequenceLayouts` or direct `policy.apply()`.
 
 ## File Layout
 
 ```
 src/translators/webcola/
   sequence-policy.ts      — SequencePolicy interface, built-in policies, registry
-  temporal-sequence.ts    — SequenceLayoutOptions, generateSequenceLayouts()
-  webcola-cnd-graph.ts    — WebColaCnDGraph (unchanged; no policy knowledge)
-  webcolatranslator.ts    — WebColaLayoutOptions (priorState only)
+  webcola-cnd-graph.ts    — WebColaCnDGraph with renderLayout (policy-aware)
+  webcolatranslator.ts    — WebColaLayoutOptions, WebColaLayout, translator
 ```
 
 ## Tests
 
 ```
 tests/
-  sequence-policy.test.ts     — 17 tests: ignoreHistory, stability, changeEmphasis,
-                                  getSequencePolicy, registerSequencePolicy
-  temporal-sequence.test.ts   — 2 tests: built-in policy names and interface checks
+  sequence-policy.test.ts                — 17 tests: ignoreHistory, stability, changeEmphasis,
+                                            getSequencePolicy, registerSequencePolicy
+  temporal-layout-consistency.test.ts    — 7 tests: position hint passthrough at translator level
 ```
 
 Run with:
 
 ```bash
-npx vitest run tests/sequence-policy.test.ts tests/temporal-sequence.test.ts
+npx vitest run tests/sequence-policy.test.ts tests/temporal-layout-consistency.test.ts
 ```

@@ -228,7 +228,7 @@
         // Sequence state for multiple instances
         let alloyInstances = [];           // Array of all parsed Alloy instances
         let currentInstanceIndex = 0;      // Current instance being displayed
-        let sequenceStepper = null;        // SequenceStepper manages prior state + policy
+        let prevInstance = null;           // Previous IDataInstance (for policy)
         let parsedAlloyDatum = null;       // Cached parsed Alloy datum
         let cachedEvaluator = null;        // Cached evaluator
         let cachedEvaluatorType = 'sgq';
@@ -265,12 +265,9 @@
             return policySelect.value;
         }
 
-        // Sync dropdown changes to the stepper
+        // No stepper needed — renderLayout handles policy directly
         document.getElementById('sequencePolicy')?.addEventListener('change', function() {
-            if (sequenceStepper && window.CndCore) {
-                sequenceStepper.setPolicy(CndCore.getSequencePolicy(this.value));
-                updateSequenceExplorer();
-            }
+            updateSequenceExplorer();
         });
 
         function getCurrentExportInstance() {
@@ -451,14 +448,6 @@
                 }
                 console.log('Parsed Layout Spec:', cachedLayoutSpec);
 
-                // Create the sequence stepper (manages prior state + policy automatically)
-                const graphElement = document.getElementById('graph-container');
-                const policyName = getSequencePolicyName();
-                sequenceStepper = new CndCore.SequenceStepper(graphElement, {
-                    policy: CndCore.getSequencePolicy(policyName),
-                    spec: cachedLayoutSpec,
-                });
-
                 // Generate layout for current instance
                 await generateLayoutForCurrentInstance();
 
@@ -617,7 +606,6 @@
 
         /**
          * Navigate to a different instance.
-         * The SequenceStepper handles prior state capture and policy application.
          * @param {number} delta - Direction to navigate (-1 for prev, +1 for next)
          */
         async function navigateInstance(delta) {
@@ -638,8 +626,8 @@
         }
 
         /**
-         * Render the graph using the webcola-cnd-graph custom element
-         * Uses SequenceStepper for policy-aware prior state management
+         * Render the graph using the webcola-cnd-graph custom element.
+         * Passes the active policy + instance pair to renderLayout.
          */
         async function renderGraph() {
             const graphElement = document.getElementById('graph-container');
@@ -647,8 +635,6 @@
             try {
                 // Check if we need to generate layout first
                 if (!currentInstanceLayout) {
-                    // If we have cached data, regenerate layout for current instance
-                    // Otherwise, load fresh data (which resets to instance 0)
                     if (alloyInstances.length > 0 && cachedEvaluator && cachedLayoutSpec) {
                         console.log('renderGraph: No layout available, generating for current instance');
                         await generateLayoutForCurrentInstance();
@@ -679,16 +665,22 @@
 
                 updateStatus('Rendering Alloy graph with WebCola...', 'info');
                 
-                // Use the stepper for policy-aware rendering.
-                // It captures prior positions (including drag), applies the policy,
-                // and calls renderLayout — no manual state management needed.
-                if (sequenceStepper) {
-                    const instance = new CndCore.AlloyDataInstance(alloyInstances[currentInstanceIndex]);
-                    await sequenceStepper.step(instance, currentInstanceLayout);
-                } else {
-                    // Fallback: direct render with no policy (before stepper is created)
-                    await graphElement.renderLayout(currentInstanceLayout, {});
+                // Build render options: pass policy + instance pair directly.
+                // The graph captures its own prior positions automatically.
+                const currInstance = new CndCore.AlloyDataInstance(alloyInstances[currentInstanceIndex]);
+                const renderOptions = {};
+
+                if (prevInstance) {
+                    const policyName = getSequencePolicyName();
+                    renderOptions.policy = CndCore.getSequencePolicy(policyName);
+                    renderOptions.prevInstance = prevInstance;
+                    renderOptions.currInstance = currInstance;
                 }
+
+                await graphElement.renderLayout(currentInstanceLayout, renderOptions);
+
+                // Track the instance we just rendered for the next step
+                prevInstance = currInstance;
 
                 updateStatus(`Instance ${currentInstanceIndex + 1}/${alloyInstances.length} rendered successfully!`, 'success');
             } catch (error) {
@@ -829,7 +821,7 @@
             clearGraph();
             alloyInstances = [];
             currentInstanceIndex = 0;
-            if (sequenceStepper) sequenceStepper.reset();
+            prevInstance = null;
             parsedAlloyDatum = null;
             cachedEvaluator = null;
             cachedLayoutSpec = null;

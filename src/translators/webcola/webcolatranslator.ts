@@ -2,6 +2,8 @@ import { Node, Group, Link, Rectangle } from 'webcola';
 import { InstanceLayout, LayoutNode, LayoutEdge, LayoutConstraint, LayoutGroup, LeftConstraint, TopConstraint, AlignmentConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, isBoundingBoxConstraint, isGroupBoundaryConstraint } from '../../layout/interfaces';
 import { EdgeStyle } from '../../layout/edge-style';
 import { LayoutInstance } from '../../layout/layoutinstance';
+import type { IDataInstance } from '../../data-instance/interfaces';
+import type { SequencePolicy } from './sequence-policy';
 import * as dagre from 'dagre';
 
 /**
@@ -86,18 +88,10 @@ export interface TransformInfo {
 
 /**
  * Complete layout state snapshot that can be captured and restored.
- * This bundles node positions with the zoom/pan transform for easy state management.
- * 
- * Use `graph.getLayoutState()` to capture and pass to `renderLayout({ priorState: ... })`
- * 
- * @example
- * ```typescript
- * // Capture current state before navigating
- * const state = graph.getLayoutState();
- * 
- * // Later, restore it when rendering
- * await graph.renderLayout(newLayout, { priorState: state });
- * ```
+ * Bundles node positions with the zoom/pan transform.
+ *
+ * Use `graph.getLayoutState()` to capture, then pass as `priorPositions`
+ * in `WebColaLayoutOptions`.
  */
 export interface LayoutState {
   /** Node positions from the layout */
@@ -107,24 +101,57 @@ export interface LayoutState {
 }
 
 /**
- * Options for WebColaLayout configuration.
- * Allows customization of layout behavior, especially for temporal sequences.
+ * Options for `renderLayout`.
+ *
+ * There are two modes:
+ *
+ * 1. **Fresh layout** (default) — omit all fields.
+ * 2. **Policy-driven** — pass `policy`, `prevInstance`, and `currInstance`.
+ *    The graph captures its own layout state (or uses an explicit
+ *    `priorPositions` if provided) and lets the policy decide what
+ *    reaches the solver.
+ *
+ * @example
+ * ```typescript
+ * // Fresh
+ * await graph.renderLayout(layout);
+ *
+ * // Policy-driven (graph captures state automatically)
+ * await graph.renderLayout(nextLayout, {
+ *   policy: stability,
+ *   prevInstance: instanceA,
+ *   currInstance: instanceB,
+ * });
+ *
+ * // Policy-driven with explicit prior positions
+ * await graph.renderLayout(nextLayout, {
+ *   policy: stability,
+ *   prevInstance: instanceA,
+ *   currInstance: instanceB,
+ *   priorPositions: graph.getLayoutState(),
+ * });
+ * ```
  */
 export interface WebColaLayoutOptions {
   /**
-   * Layout state from a previous render.
-   * 
-   * Preserves visual continuity between renders by restoring node positions
-   * and zoom/pan state. Use `graph.getLayoutState()` to capture this before
-   * navigating away, then pass it back when rendering the next layout.
-   * 
-   * @example
-   * ```typescript
-   * const state = graph.getLayoutState();
-   * await graph.renderLayout(newLayout, { priorState: state });
-   * ```
+   * A sequence policy that transforms prior state before it reaches the
+   * solver.  Requires `prevInstance` and `currInstance`.
    */
-  priorState?: LayoutState;
+  policy?: SequencePolicy;
+
+  /** The data instance rendered in the *previous* step. */
+  prevInstance?: IDataInstance;
+
+  /** The data instance being rendered *now*. */
+  currInstance?: IDataInstance;
+
+  /**
+   * Explicit prior layout state to feed into the policy.
+   *
+   * If omitted the graph calls `getLayoutState()` internally, which
+   * includes any drag the user may have performed.
+   */
+  priorPositions?: LayoutState;
 }
 
 // WebCola constraint types
@@ -197,13 +224,15 @@ export class WebColaLayout {
 
     // Build a map of prior positions for O(1) lookup
     this.priorPositionMap = new Map();
-    
-    if (options?.priorState?.positions) {
-      for (const hint of options.priorState.positions) {
+
+    // The caller (renderLayout) resolves the policy and passes the
+    // effective positions through priorPositions.
+    if (options?.priorPositions?.positions) {
+      for (const hint of options.priorPositions.positions) {
         this.priorPositionMap.set(hint.id, hint);
       }
       if (typeof console !== 'undefined' && console.log) {
-        console.log(`WebColaLayout: Using ${this.priorPositionMap.size} prior positions for temporal consistency`);
+        console.log(`WebColaLayout: Using ${this.priorPositionMap.size} prior positions for sequence continuity`);
       }
     }
 
