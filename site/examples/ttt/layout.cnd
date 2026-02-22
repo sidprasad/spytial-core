@@ -1,0 +1,11 @@
+constraints:
+  - orientation: {selector: down, directions: [directlyBelow]}
+  - orientation: {selector: right, directions: [directlyRight]}
+
+directives:
+  - icon: {showLabels: false, selector: '{ x : Cell | (some x.mark) and x.mark in O}', path: tic-o}
+  - icon: {showLabels: false, selector: '{ x : Cell | (some x.mark) and x.mark in X}', path: tic-x}
+  - hideAtom: {selector: O + X}
+  - hideField: {field: down}
+  - hideField: {field: right}
+  - flag: hideDisconnectedBuiltIns
