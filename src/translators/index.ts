@@ -31,5 +31,17 @@ export type {
 } from './webcola/webcolatranslator';
 
 // Sequence policies
-export type { SequencePolicy, SequencePolicyContext, SequencePolicyResult } from './webcola/sequence-policy';
-export { ignoreHistory, stability, changeEmphasis, getSequencePolicy, registerSequencePolicy } from './webcola/sequence-policy';
+export type {
+  SequencePolicy,
+  SequencePolicyContext,
+  SequencePolicyResult,
+  SequenceViewportBounds,
+} from './webcola/sequence-policy';
+export {
+  ignoreHistory,
+  stability,
+  changeEmphasis,
+  randomPositioning,
+  getSequencePolicy,
+  registerSequencePolicy,
+} from './webcola/sequence-policy';

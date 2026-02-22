@@ -3,12 +3,14 @@ import {
   ignoreHistory,
   stability,
   changeEmphasis,
+  randomPositioning,
   getSequencePolicy,
   registerSequencePolicy,
 } from '../src/translators/webcola/sequence-policy';
 import type {
   SequencePolicy,
   SequencePolicyContext,
+  SequenceViewportBounds,
 } from '../src/translators/webcola/sequence-policy';
 import type { LayoutState } from '../src/translators/webcola/webcolatranslator';
 import type { IDataInstance, IAtom, IRelation, IType } from '../src/data-instance/interfaces';
@@ -48,14 +50,26 @@ function makeInstance(
 }
 
 /** Minimal LayoutSpec stub — current policies don't inspect it. */
-const STUB_SPEC = { constraints: { orientation: { relative: [], cyclic: [] }, alignment: [], grouping: { groups: [], subgroups: [] } }, directives: { sizes: [], hiddenAtoms: [], icons: [], projections: [], edgeStyles: [] } } as any;
+const STUB_SPEC = {
+  constraints: {
+    orientation: { relative: [], cyclic: [] },
+    alignment: [],
+    grouping: { groups: [], subgroups: [] },
+  },
+  directives: { sizes: [], hiddenAtoms: [], icons: [], projections: [], edgeStyles: [] },
+} as any;
 
 function ctx(
   priorState: LayoutState,
   prev: IDataInstance,
-  curr: IDataInstance
+  curr: IDataInstance,
+  viewportBounds?: SequenceViewportBounds
 ): SequencePolicyContext {
-  return { priorState, prevInstance: prev, currInstance: curr, spec: STUB_SPEC };
+  return { priorState, prevInstance: prev, currInstance: curr, spec: STUB_SPEC, viewportBounds };
+}
+
+function distance(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
 // ---------------------------------------------------------------------------
@@ -113,39 +127,54 @@ describe('changeEmphasis', () => {
 
     const result = changeEmphasis.apply(ctx(prior, inst, inst));
 
-    expect(result.effectivePriorState).toBe(prior); // same reference — unchanged
+    expect(result.effectivePriorState).toBe(prior);
     expect(result.useReducedIterations).toBe(true);
   });
 
-  it('pins stable nodes and omits nodes with changed edges', () => {
-    const prior = makeState([['A', 20, 30], ['B', 40, 50], ['C', 60, 70]]);
+  it('keeps stable nodes fixed and applies obvious deterministic jitter to changed nodes', () => {
+    const prior = makeState([['A', 200, 200], ['B', 260, 260], ['C', 320, 320]]);
 
     const prev = makeInstance(
       [{ id: 'A', type: 'T' }, { id: 'B', type: 'T' }, { id: 'C', type: 'T' }],
       [{ name: 'edge', tuples: [['A', 'B']] }]
     );
-    // C gains an edge — B and C changed, A keeps its single edge
     const curr = makeInstance(
       [{ id: 'A', type: 'T' }, { id: 'B', type: 'T' }, { id: 'C', type: 'T' }],
       [{ name: 'edge', tuples: [['A', 'B'], ['B', 'C']] }]
     );
 
-    const result = changeEmphasis.apply(ctx(prior, prev, curr));
+    const viewportBounds = { minX: 0, maxX: 800, minY: 0, maxY: 600 };
+    const result1 = changeEmphasis.apply(ctx(prior, prev, curr, viewportBounds));
+    const result2 = changeEmphasis.apply(ctx(prior, prev, curr, viewportBounds));
 
-    expect(result.useReducedIterations).toBe(true);
-    const positions = result.effectivePriorState!.positions;
+    expect(result1.useReducedIterations).toBe(true);
+    expect(result1.effectivePriorState!.transform).toEqual(prior.transform);
 
-    // A is stable (same edge fingerprint)
-    expect(positions).toContainEqual({ id: 'A', x: 20, y: 30 });
-    // B changed (gained B->C), C changed (gained B->C)
-    expect(positions.find(p => p.id === 'B')).toBeUndefined();
-    expect(positions.find(p => p.id === 'C')).toBeUndefined();
+    const posA = result1.effectivePriorState!.positions.find(p => p.id === 'A');
+    const posB = result1.effectivePriorState!.positions.find(p => p.id === 'B');
+    const posC = result1.effectivePriorState!.positions.find(p => p.id === 'C');
 
-    // Transform preserved
-    expect(result.effectivePriorState!.transform).toEqual(prior.transform);
+    expect(posA).toEqual({ id: 'A', x: 200, y: 200 });
+    expect(posB).toBeDefined();
+    expect(posC).toBeDefined();
+
+    // "obvious" jitter: changed nodes move by a meaningful amount.
+    expect(distance({ x: posB!.x, y: posB!.y }, { x: 260, y: 260 })).toBeGreaterThan(20);
+    expect(distance({ x: posC!.x, y: posC!.y }, { x: 320, y: 320 })).toBeGreaterThan(20);
+
+    // Deterministic for same prev/curr pair.
+    expect(result2.effectivePriorState).toEqual(result1.effectivePriorState);
+
+    // Stay in viewport bounds.
+    for (const p of result1.effectivePriorState!.positions) {
+      expect(p.x).toBeGreaterThanOrEqual(viewportBounds.minX);
+      expect(p.x).toBeLessThanOrEqual(viewportBounds.maxX);
+      expect(p.y).toBeGreaterThanOrEqual(viewportBounds.minY);
+      expect(p.y).toBeLessThanOrEqual(viewportBounds.maxY);
+    }
   });
 
-  it('detects new atoms as changed', () => {
+  it('detects new atoms as changed (new atoms have no prior positions)', () => {
     const prior = makeState([['A', 10, 20], ['B', 30, 40]]);
 
     const prev = makeInstance(
@@ -160,13 +189,12 @@ describe('changeEmphasis', () => {
     const result = changeEmphasis.apply(ctx(prior, prev, curr));
     const ids = result.effectivePriorState!.positions.map(p => p.id);
 
-    // A and B are stable, C is new (no prior position anyway)
     expect(ids).toContain('A');
     expect(ids).toContain('B');
     expect(ids).not.toContain('C');
   });
 
-  it('detects removed atoms as changed', () => {
+  it('filters out removed atoms while retaining current atoms', () => {
     const prior = makeState([['A', 10, 20], ['B', 30, 40]]);
 
     const prev = makeInstance(
@@ -181,55 +209,83 @@ describe('changeEmphasis', () => {
     const result = changeEmphasis.apply(ctx(prior, prev, curr));
     const ids = result.effectivePriorState!.positions.map(p => p.id);
 
-    // A had edge A->B, now has nothing — changed
-    // B is removed — changed
-    expect(ids).not.toContain('A');
+    expect(ids).toContain('A');
     expect(ids).not.toContain('B');
   });
 
-  it('when all nodes changed, returns empty positions but preserves transform', () => {
-    const prior = makeState([['A', 10, 20], ['B', 30, 40]]);
-
+  it('keeps jittered nodes inside a tight viewport', () => {
+    const prior = makeState([['A', 95, 95]]);
     const prev = makeInstance(
-      [{ id: 'A', type: 'T' }, { id: 'B', type: 'T' }],
-      [{ name: 'edge', tuples: [['A', 'B']] }]
+      [{ id: 'A', type: 'T' }],
+      []
     );
     const curr = makeInstance(
-      [{ id: 'A', type: 'T' }, { id: 'B', type: 'T' }],
-      [{ name: 'edge', tuples: [['B', 'A']] }]
+      [{ id: 'A', type: 'T' }],
+      [{ name: 'edge', tuples: [['A', 'A']] }]
     );
 
-    const result = changeEmphasis.apply(ctx(prior, prev, curr));
+    const viewportBounds = { minX: 0, maxX: 100, minY: 0, maxY: 100 };
+    const result = changeEmphasis.apply(ctx(prior, prev, curr, viewportBounds));
+    const posA = result.effectivePriorState!.positions.find(p => p.id === 'A')!;
 
-    expect(result.effectivePriorState!.positions).toHaveLength(0);
-    expect(result.effectivePriorState!.transform).toEqual(prior.transform);
-    expect(result.useReducedIterations).toBe(true);
+    expect(posA.x).toBeGreaterThanOrEqual(0);
+    expect(posA.x).toBeLessThanOrEqual(100);
+    expect(posA.y).toBeGreaterThanOrEqual(0);
+    expect(posA.y).toBeLessThanOrEqual(100);
   });
 
-  it('handles added edge on existing atoms', () => {
-    const prior = makeState([['A', 10, 20], ['B', 30, 40]]);
-    const atoms = [{ id: 'A', type: 'T' }, { id: 'B', type: 'T' }];
-
-    const prev = makeInstance(atoms, []);
-    const curr = makeInstance(atoms, [{ name: 'edge', tuples: [['A', 'B']] }]);
-
-    const result = changeEmphasis.apply(ctx(prior, prev, curr));
-    const ids = result.effectivePriorState!.positions.map(p => p.id);
-
-    // Both A and B gained an edge — both changed
-    expect(ids).not.toContain('A');
-    expect(ids).not.toContain('B');
-  });
-
-  it('returns empty for two empty instances (no changes)', () => {
+  it('returns prior for two empty instances (no changes)', () => {
     const prior = makeState([['A', 10, 20]]);
     const prev = makeInstance([], []);
     const curr = makeInstance([], []);
 
     const result = changeEmphasis.apply(ctx(prior, prev, curr));
 
-    // No atoms at all → no changes → prior state preserved
     expect(result.effectivePriorState).toBe(prior);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// randomPositioning
+// ---------------------------------------------------------------------------
+
+describe('randomPositioning', () => {
+  it('has name "random_positioning"', () => {
+    expect(randomPositioning.name).toBe('random_positioning');
+  });
+
+  it('returns randomized positions for all current atoms within viewport bounds', () => {
+    const prior = makeState([['A', 0, 0], ['B', 100, 100]]);
+    const prev = makeInstance(
+      [{ id: 'A', type: 'T' }, { id: 'B', type: 'T' }],
+      []
+    );
+    const curr = makeInstance(
+      [{ id: 'A', type: 'T' }, { id: 'B', type: 'T' }, { id: 'C', type: 'T' }],
+      []
+    );
+
+    const viewportBounds = { minX: -50, maxX: 50, minY: 10, maxY: 20 };
+    const result = randomPositioning.apply(ctx(prior, prev, curr, viewportBounds));
+    const positions = result.effectivePriorState!.positions;
+
+    expect(result.useReducedIterations).toBe(true);
+    expect(result.effectivePriorState!.transform).toEqual(prior.transform);
+    expect(positions).toHaveLength(3);
+
+    const ids = positions.map(p => p.id).sort();
+    expect(ids).toEqual(['A', 'B', 'C']);
+
+    for (const pos of positions) {
+      expect(typeof pos.x).toBe('number');
+      expect(typeof pos.y).toBe('number');
+      expect(Number.isFinite(pos.x)).toBe(true);
+      expect(Number.isFinite(pos.y)).toBe(true);
+      expect(pos.x).toBeGreaterThanOrEqual(viewportBounds.minX);
+      expect(pos.x).toBeLessThanOrEqual(viewportBounds.maxX);
+      expect(pos.y).toBeGreaterThanOrEqual(viewportBounds.minY);
+      expect(pos.y).toBeLessThanOrEqual(viewportBounds.maxY);
+    }
   });
 });
 
@@ -248,6 +304,10 @@ describe('getSequencePolicy', () => {
 
   it('returns changeEmphasis by name', () => {
     expect(getSequencePolicy('change_emphasis')).toBe(changeEmphasis);
+  });
+
+  it('returns randomPositioning by name', () => {
+    expect(getSequencePolicy('random_positioning')).toBe(randomPositioning);
   });
 
   it('defaults to ignoreHistory for unknown names', () => {

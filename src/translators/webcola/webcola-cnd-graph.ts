@@ -608,6 +608,39 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
+   * Convert screen viewport bounds to layout-coordinate bounds using zoom transform.
+   */
+  private getViewportBoundsInLayoutSpace(transform: TransformInfo): {
+    minX: number;
+    maxX: number;
+    minY: number;
+    maxY: number;
+  } | undefined {
+    const svgContainer = this.shadowRoot?.querySelector('#svg-container') as HTMLElement | null;
+    const viewportWidth = svgContainer?.clientWidth || WebColaCnDGraph.DEFAULT_SVG_WIDTH;
+    const viewportHeight = svgContainer?.clientHeight || WebColaCnDGraph.DEFAULT_SVG_HEIGHT;
+
+    if (viewportWidth <= 0 || viewportHeight <= 0) {
+      return undefined;
+    }
+
+    const k = transform.k;
+    if (!Number.isFinite(k) || k === 0) {
+      return undefined;
+    }
+
+    const tx = Number.isFinite(transform.x) ? transform.x : 0;
+    const ty = Number.isFinite(transform.y) ? transform.y : 0;
+
+    return {
+      minX: (0 - tx) / k,
+      maxX: (viewportWidth - tx) / k,
+      minY: (0 - ty) / k,
+      maxY: (viewportHeight - ty) / k,
+    };
+  }
+
+  /**
    * Calculate the maximum nesting depth of groups.
    * Depth 1 = groups with only leaf nodes
    * Depth 2 = groups containing other groups
@@ -1354,11 +1387,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     if (options?.policy && options.prevInstance && options.currInstance) {
       const rawState = options.priorPositions ?? this.getLayoutState();
       if (rawState && rawState.positions.length > 0) {
+        const viewportBounds = this.getViewportBoundsInLayoutSpace(rawState.transform);
         const result = options.policy.apply({
           priorState: rawState,
           prevInstance: options.prevInstance,
           currInstance: options.currInstance,
           spec: { constraints: { orientation: { relative: [], cyclic: [] }, alignment: [], grouping: { groups: [], subgroups: [] } }, directives: { sizes: [], hiddenAtoms: [], icons: [], projections: [], edgeStyles: [] } } as any,
+          viewportBounds,
         });
         resolvedState = result.effectivePriorState;
         useReducedIterations = result.useReducedIterations;

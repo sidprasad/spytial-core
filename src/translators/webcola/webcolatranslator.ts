@@ -707,12 +707,6 @@ export class WebColaLayout {
     }
 
     if (isAlignmentConstraint(constraint)) {
-
-      let gap = Math.floor(Math.random() * 2); // a random number between 0 and 1
-      // This is a hack to potentially ameliorate cola stability issues
-      // causing nodes to be placed on top of each other.
-
-
       // Is this right or do I have to switch axes. Check.
       const alignmentConstraint = {
         type: "separation",
