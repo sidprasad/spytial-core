@@ -30,7 +30,7 @@ Everything in this repo revolves around a **pipelined flow** from input data →
 
 6. **Sequence continuity** *(optional)*
    - For ordered sequences of instances (e.g., Alloy traces), pass a `policy`, `prevInstance`, and `currInstance` to `renderLayout()`.
-   - A **`SequencePolicy`** (e.g., `stability`, `changeEmphasis`) is applied pairwise inside `renderLayout` to resolve prior positions for the solver.
+   - A **`SequencePolicy`** (e.g., `stability`, `changeEmphasis`, `randomPositioning`) is applied pairwise inside `renderLayout` to resolve prior positions for the solver.
    - See [docs/SEQUENCE_LAYOUT_API.md](./SEQUENCE_LAYOUT_API.md) for the full API reference.
 
 ### Demos that show the pipeline

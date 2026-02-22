@@ -63,7 +63,8 @@ interface SequencePolicyResult {
 |---|---|---|
 | `ignoreHistory` | `'ignore_history'` | Fresh layout — prior state is discarded. (default) |
 | `stability` | `'stability'` | Prior node positions are passed through as-is; solver uses reduced iterations. |
-| `changeEmphasis` | `'change_emphasis'` | Diffs prev/curr instances. Stable nodes keep positions; changed nodes are omitted so the solver re-places them. |
+| `changeEmphasis` | `'change_emphasis'` | Diffs prev/curr instances. Stable nodes stay fixed; changed nodes get deterministic visible jitter clamped to viewport bounds. |
+| `randomPositioning` | `'random_positioning'` | Fully randomize all current-node positions within viewport bounds. |
 
 ### Adding a custom policy
 
@@ -92,6 +93,7 @@ import {
   ignoreHistory,
   stability,
   changeEmphasis,
+  randomPositioning,
   registerSequencePolicy,
 } from 'spytial-core';
 
@@ -181,7 +183,7 @@ src/translators/webcola/
 
 ```
 tests/
-  sequence-policy.test.ts                — 17 tests: ignoreHistory, stability, changeEmphasis,
+  sequence-policy.test.ts                — ignoreHistory, stability, changeEmphasis, randomPositioning,
                                             getSequencePolicy, registerSequencePolicy
   temporal-layout-consistency.test.ts    — 7 tests: position hint passthrough at translator level
 ```

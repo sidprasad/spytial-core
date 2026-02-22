@@ -35,7 +35,14 @@ export { ForgeEvaluator, WrappedForgeEvaluator } from './evaluators/forge-evalua
 export { SQLEvaluator } from './evaluators/sql-evaluator';
 export { WebColaTranslator } from './translators';
 export { StructuredInputGraph } from './translators';
-export { ignoreHistory, stability, changeEmphasis, getSequencePolicy, registerSequencePolicy } from './translators';
+export {
+  ignoreHistory,
+  stability,
+  changeEmphasis,
+  randomPositioning,
+  getSequencePolicy,
+  registerSequencePolicy,
+} from './translators';
 export type {
   ParsedCnDSpec,
   NodePositionHint,
@@ -45,6 +52,7 @@ export type {
   SequencePolicy,
   SequencePolicyContext,
   SequencePolicyResult,
+  SequenceViewportBounds,
 } from './translators';
 export { SGraphQueryEvaluator } from "./evaluators/sgq-evaluator";
 
