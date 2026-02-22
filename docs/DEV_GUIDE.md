@@ -41,6 +41,8 @@ The demos are the best references for how to wire everything up end-to-end:
   - Demonstrates the **Alloy XML → AlloyDataInstance → ForgeEvaluator → Layout → WebCola** pipeline.
 - `webcola-demo/json-demo.html`
   - Demonstrates the **JSON → JSONDataInstance → SGraphQueryEvaluator → Layout → WebCola** pipeline.
+- `webcola-demo/dot-demo.html`
+  - Demonstrates the **DOT → DotDataInstance → Evaluator → Layout → WebCola** pipeline, including the type hierarchy system.
 - `webcola-demo/selector-synthesis-demo.html`
   - Shows the **selector synthesis pipeline**, including initialization and status reporting.
 - `webcola-demo/structured-input-demo.html`
