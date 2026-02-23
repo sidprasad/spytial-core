@@ -22,6 +22,8 @@ import {
 
 
 import IEvaluator from '../evaluators/interfaces';
+import { SelectorArityError } from '../evaluators/interfaces';
+import type { IEvaluatorResult } from '../evaluators/interfaces';
 import { ColorPicker } from './colorpicker';
 import { type ConstraintError, type ErrorMessages, ConstraintValidator, orientationConstraintToString } from './constraint-validator';
 const UNIVERSAL_TYPE = "univ";
@@ -236,6 +238,45 @@ export class LayoutInstance {
             context,
             errorMessage
         });
+    }
+
+    /**
+     * Checks whether the selector result has the expected arity.
+     * Records a SelectorArityError and returns false if mismatched.
+     * @param selectorRes - The evaluated selector result
+     * @param selector - The selector expression (for error messages)
+     * @param expectedArity - 'unary' or 'binary'
+     * @param context - Description of where the selector is being used (e.g. 'orientation selector')
+     * @returns true if arity matches (or result is empty), false if mismatched
+     */
+    private checkSelectorArity(
+        selectorRes: IEvaluatorResult,
+        selector: string,
+        expectedArity: 'unary' | 'binary',
+        context: string
+    ): boolean {
+        const arity = selectorRes.maxArity();
+        if (arity === 0) {
+            // No results — nothing to validate
+            return true;
+        }
+        if (expectedArity === 'binary' && arity < 2) {
+            this.recordSelectorError(
+                selector,
+                context,
+                new SelectorArityError(selector, 'binary', 'unary')
+            );
+            return false;
+        }
+        if (expectedArity === 'unary' && arity > 1) {
+            this.recordSelectorError(
+                selector,
+                context,
+                new SelectorArityError(selector, 'unary', 'binary')
+            );
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -507,10 +548,12 @@ export class LayoutInstance {
 
             // Now, we should support both unary and binary selectors.
 
-            // First try binary, if none are selected, then try unary.
-            let selectedTwoples: string[][] = selectorRes.selectedTwoples();
-
-            if (selectedTwoples.length > 0) {
+            // Use maxArity to decide which path to take, avoiding SelectorArityError
+            // since groups intentionally support both unary and binary selectors.
+            let isBinary = selectorRes.maxArity() > 1;
+            
+            if (isBinary) {
+                let selectedTwoples: string[][] = selectorRes.selectedTwoples();
 
                 function constructGroupEdgeID(edgelabel: string, src : string, tgt: string): string {
                     return `_g_0_1_` + edgelabel + `:` + src + `->` + tgt;
@@ -896,6 +939,9 @@ export class LayoutInstance {
                 for (const directive of hiddenAtomDirectives) {
                     try {
                         const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
+                        if (!this.checkSelectorArity(selectorResult, directive.selector, 'unary', 'hideAtom selector')) {
+                            continue; // Skip — binary selector in unary position
+                        }
                         const selectedAtoms = selectorResult.selectedAtoms();
                         if (selectedAtoms.includes(node)) {
                             hideBySelector = true;
@@ -1585,13 +1631,17 @@ export class LayoutInstance {
 
         // For each cyclic constraint, extract fragments
         for (const [, c] of cyclicConstraints.entries()) {
-            let selectedTuples: string[][];
+            let selectorRes;
             try {
-                selectedTuples = this.evaluator.evaluate(c.selector, { instanceIndex: this.instanceNum }).selectedTwoples();
+                selectorRes = this.evaluator.evaluate(c.selector, { instanceIndex: this.instanceNum });
             } catch (error) {
                 this.recordSelectorError(c.selector, 'cyclic orientation selector', error);
                 continue; // Skip this cyclic constraint
             }
+            if (!this.checkSelectorArity(selectorRes, c.selector, 'binary', 'cyclic orientation selector')) {
+                continue; // Skip — unary selector in binary position
+            }
+            let selectedTuples: string[][] = selectorRes.selectedTwoples();
             let nextNodeMap: Map<LayoutNode, LayoutNode[]> = new Map<LayoutNode, LayoutNode[]>();
             
             // Build nextNodeMap from selected tuples
@@ -1809,6 +1859,9 @@ export class LayoutInstance {
                 this.recordSelectorError(selector, 'orientation selector', error);
                 return; // Skip this orientation constraint
             }
+            if (!this.checkSelectorArity(selectorRes, selector, 'binary', 'orientation selector')) {
+                return; // Skip — unary selector in binary position
+            }
             let selectedTuples: string[][] = selectorRes.selectedTwoples();
 
             // For each tuple, we need to apply the constraints
@@ -2017,6 +2070,9 @@ export class LayoutInstance {
             } catch (error) {
                 this.recordSelectorError(selector, 'align selector', error);
                 return; // Skip this align constraint
+            }
+            if (!this.checkSelectorArity(selectorRes, selector, 'binary', 'align selector')) {
+                return; // Skip — unary selector in binary position
             }
             let selectedTuples: string[][] = selectorRes.selectedTwoples();
 
@@ -2338,7 +2394,11 @@ export class LayoutInstance {
         sizeDirectives.forEach((sizeDirective) => {
             let selectedNodes: string[];
             try {
-                selectedNodes = this.evaluator.evaluate(sizeDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
+                const selectorRes = this.evaluator.evaluate(sizeDirective.selector, { instanceIndex: this.instanceNum });
+                if (!this.checkSelectorArity(selectorRes, sizeDirective.selector, 'unary', 'size selector')) {
+                    return; // Skip — binary selector in unary position
+                }
+                selectedNodes = selectorRes.selectedAtoms();
             } catch (error) {
                 this.recordSelectorError(sizeDirective.selector, 'size selector', error);
                 return; // Skip this size directive
@@ -2385,7 +2445,11 @@ export class LayoutInstance {
         colorDirectives.forEach((colorDirective) => {
             let selected: string[];
             try {
-                selected = this.evaluator.evaluate(colorDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
+                const selectorRes = this.evaluator.evaluate(colorDirective.selector, { instanceIndex: this.instanceNum });
+                if (!this.checkSelectorArity(selectorRes, colorDirective.selector, 'unary', 'color selector')) {
+                    return; // Skip — binary selector in unary position
+                }
+                selected = selectorRes.selectedAtoms();
             } catch (error) {
                 this.recordSelectorError(colorDirective.selector, 'color selector', error);
                 return; // Skip this color directive
@@ -2426,7 +2490,11 @@ export class LayoutInstance {
         iconDirectives.forEach((iconDirective) => {
             let selected: string[];
             try {
-                selected = this.evaluator.evaluate(iconDirective.selector, { instanceIndex: this.instanceNum }).selectedAtoms();
+                const selectorRes = this.evaluator.evaluate(iconDirective.selector, { instanceIndex: this.instanceNum });
+                if (!this.checkSelectorArity(selectorRes, iconDirective.selector, 'unary', 'icon selector')) {
+                    return; // Skip — binary selector in unary position
+                }
+                selected = selectorRes.selectedAtoms();
             } catch (error) {
                 this.recordSelectorError(iconDirective.selector, 'icon selector', error);
                 return; // Skip this icon directive

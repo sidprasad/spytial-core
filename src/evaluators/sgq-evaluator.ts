@@ -167,6 +167,17 @@ export class SGQEvaluatorResult implements IEvaluatorResult {
         return selectedTuples;
     }
 
+    maxArity(): number {
+        if (this.isSingletonResult || this.isErrorResult) {
+            return 0;
+        }
+        let asTuple = this.result as Tuple[];
+        if (asTuple.length === 0) {
+            return 0;
+        }
+        return Math.max(...asTuple.map((t) => t.length));
+    }
+
     selectedTuplesAll(): string[][] {
         if (this.isSingletonResult || this.isErrorResult) {
             let pp = this.prettyPrint();

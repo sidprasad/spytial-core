@@ -166,6 +166,17 @@ export class SQLEvaluatorResult implements IEvaluatorResult {
     return selectedTuples;
   }
 
+  maxArity(): number {
+    if (this.isSingletonResult || this.isErrorResult) {
+      return 0;
+    }
+    const asTuple = this.result as Tuple[];
+    if (asTuple.length === 0) {
+      return 0;
+    }
+    return Math.max(...asTuple.map((t) => t.length));
+  }
+
   selectedTuplesAll(): string[][] {
     if (this.isSingletonResult || this.isErrorResult) {
       const pp = this.prettyPrint();

@@ -8,7 +8,7 @@ import IEvaluator, {
   EvaluationContext, 
   EvaluatorConfig, 
   IEvaluatorResult, 
-  EvaluatorResult as IEvaluatorResultType 
+  EvaluatorResult as IEvaluatorResultType
 } from './interfaces';
 
 
@@ -284,6 +284,17 @@ export class ForgeEvaluatorResult implements IEvaluatorResult {
             return element.map((e) => singleValueToString(e));
         });
         return selectedTuples;
+    }
+
+    maxArity(): number {
+        if (this.isSingletonResult || this.isErrorResult) {
+            return 0;
+        }
+        let asTuple = this.result as Tuple[];
+        if (asTuple.length === 0) {
+            return 0;
+        }
+        return Math.max(...asTuple.map((t) => t.length));
     }
 
     selectedTuplesAll(): string[][] {
