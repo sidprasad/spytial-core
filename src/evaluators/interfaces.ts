@@ -1,6 +1,35 @@
 import { IDataInstance } from "../data-instance/interfaces";
 
 /**
+ * Error thrown when a selector's arity doesn't match what a constraint expects.
+ * For example, using a unary selector (e.g. `Person`) where a binary selector
+ * (e.g. `Person->Person`) is required, or vice versa.
+ */
+export class SelectorArityError extends Error {
+  /** The selector expression that had the wrong arity */
+  public readonly selector: string;
+  /** The arity that was expected ('unary' or 'binary') */
+  public readonly expectedArity: 'unary' | 'binary';
+  /** The arity that the selector actually produced */
+  public readonly actualArity: 'unary' | 'binary';
+
+  constructor(selector: string, expectedArity: 'unary' | 'binary', actualArity: 'unary' | 'binary', message?: string) {
+    const defaultMessage = expectedArity === 'binary'
+      ? `Selector "${selector}" evaluates to unary (atom) results, but a binary selector was expected. ` +
+        `This selector produces individual atoms, but the constraint requires pairs (e.g. A->B). ` +
+        `Try using a binary/relational selector instead.`
+      : `Selector "${selector}" evaluates to binary (pair) results, but a unary selector was expected. ` +
+        `This selector produces pairs (e.g. A->B), but the constraint requires individual atoms. ` +
+        `Try using a unary selector instead.`;
+    super(message || defaultMessage);
+    this.name = 'SelectorArityError';
+    this.selector = selector;
+    this.expectedArity = expectedArity;
+    this.actualArity = actualArity;
+  }
+}
+
+/**
  * Result types for evaluator operations
  */
 export type EvaluatorResult = SingleValue | Tuple[] | ErrorResult;
@@ -65,6 +94,12 @@ export interface IEvaluatorResult {
   
   /** Get all selected tuples with all elements */
   selectedTuplesAll(): string[][];
+
+  /**
+   * Returns the maximum arity of the non-empty tuples in the result.
+   * Returns 0 if there are no results, or if the result is a singleton/error.
+   */
+  maxArity(): number;
   
   /** Check if result is an error */
   isError(): boolean;

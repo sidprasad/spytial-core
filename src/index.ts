@@ -31,7 +31,7 @@ export type { SchemaDescriptorOptions } from './data-instance/schema-descriptor'
 export { LayoutInstance } from './layout/layoutinstance';
 export { parseLayoutSpec } from './layout/layoutspec';
 export { setupLayout } from './layout';
-export { type default as IEvaluator } from './evaluators/interfaces';
+export { type default as IEvaluator, SelectorArityError } from './evaluators/interfaces';
 export { ForgeEvaluator, WrappedForgeEvaluator } from './evaluators/forge-evaluator';
 export { SQLEvaluator } from './evaluators/sql-evaluator';
 export { WebColaTranslator } from './translators';
