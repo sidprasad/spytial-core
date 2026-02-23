@@ -915,6 +915,24 @@ export class LayoutInstance {
 
         let nodes = [...g.nodes()];
 
+        // Pre-evaluate all hideAtom directives once (not per node)
+        const hiddenAtomDirectives = this._layoutSpec.directives.hiddenAtoms;
+        const evaluatedHideDirectives: { selector: string; hiddenSet: Set<string> }[] = [];
+        for (const directive of hiddenAtomDirectives) {
+            try {
+                const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
+                if (!this.checkSelectorArity(selectorResult, directive.selector, 'unary', 'hideAtom selector')) {
+                    continue; // Skip — binary selector in unary position (recorded once)
+                }
+                const selectedAtoms = selectorResult.selectedAtoms();
+                evaluatedHideDirectives.push({
+                    selector: directive.selector,
+                    hiddenSet: new Set(selectedAtoms),
+                });
+            } catch (error) {
+                this.recordSelectorError(directive.selector, 'hideAtom selector', error);
+            }
+        }
 
         nodes.forEach((node) => {
 
@@ -935,21 +953,11 @@ export class LayoutInstance {
                 // New selector-based hiding logic
                 let hideBySelector = false;
                 let hidingSelector: string | undefined;
-                const hiddenAtomDirectives = this._layoutSpec.directives.hiddenAtoms;
-                for (const directive of hiddenAtomDirectives) {
-                    try {
-                        const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
-                        if (!this.checkSelectorArity(selectorResult, directive.selector, 'unary', 'hideAtom selector')) {
-                            continue; // Skip — binary selector in unary position
-                        }
-                        const selectedAtoms = selectorResult.selectedAtoms();
-                        if (selectedAtoms.includes(node)) {
-                            hideBySelector = true;
-                            hidingSelector = directive.selector;
-                            break;
-                        }
-                    } catch (error) {
-                        this.recordSelectorError(directive.selector, 'hideAtom selector', error);
+                for (const evaluated of evaluatedHideDirectives) {
+                    if (evaluated.hiddenSet.has(node)) {
+                        hideBySelector = true;
+                        hidingSelector = evaluated.selector;
+                        break;
                     }
                 }
 
