@@ -432,4 +432,50 @@ directives:
     // Both should have the same available atoms
     expect(result1.projectionData[0].atoms).toEqual(result2.projectionData[0].atoms);
   });
+
+  it('inferred edge with ternary selector uses middle elements as label', () => {
+    // A ternary relation: A --[via B]--> C
+    // The middle element (B) should appear in the inferred edge label.
+    const ternaryData: IJsonDataInstance = {
+      atoms: [
+        { id: 'A', type: 'Node', label: 'Alpha' },
+        { id: 'B', type: 'Node', label: 'Bravo' },
+        { id: 'C', type: 'Node', label: 'Charlie' },
+      ],
+      relations: [
+        {
+          id: 'path',
+          name: 'path',
+          types: ['Node', 'Node', 'Node'],
+          tuples: [
+            { atoms: ['A', 'B', 'C'], types: ['Node', 'Node', 'Node'] },
+          ],
+        },
+      ],
+    };
+
+    const spec = parseLayoutSpec(`
+directives:
+  - inferredEdge:
+      name: route
+      selector: path
+`);
+
+    const instance = new JSONDataInstance(ternaryData);
+    const evaluator = createEvaluator(instance);
+    const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
+    const { layout, selectorErrors } = layoutInstance.generateLayout(instance, {});
+
+    // No selector errors — ternary selectors are valid for inferred edges
+    expect(selectorErrors).toHaveLength(0);
+
+    // The inferred edge should go from A to C
+    const inferredEdge = layout.edges.find(e => e.id.includes('_inferred_') && e.id.includes('route'));
+    expect(inferredEdge).toBeDefined();
+    expect(inferredEdge!.source.id).toBe('A');
+    expect(inferredEdge!.target.id).toBe('C');
+
+    // The label should include the middle node's label: "route[Bravo]"
+    expect(inferredEdge!.label).toBe('route[Bravo]');
+  });
 });
