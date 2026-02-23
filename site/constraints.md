@@ -98,33 +98,33 @@ Arranges nodes along the perimeter of a circle, based on the order defined by a 
 
 ## Alignment
 
-Ensures a set of nodes share the same horizontal or vertical position.
+Ensures pairs of nodes share the same horizontal or vertical position.
 
 ```yaml
 - align:
-    selector: <n-ary-selector>   # Required
+    selector: <binary-selector>  # Required
     direction: <alignment>       # Required
 ```
 
 | Field | Required | Type | Description |
 |-------|----------|------|-------------|
-| `selector` | Yes | string | Selector returning the atoms to align |
+| `selector` | Yes | string | Binary selector returning (source, target) pairs to align |
 | `direction` | Yes | string | `horizontal` or `vertical` |
 
-- **`horizontal`** — All matched nodes get the same Y coordinate (same row).
-- **`vertical`** — All matched nodes get the same X coordinate (same column).
+- **`horizontal`** — Matched node pairs get the same Y coordinate (same row).
+- **`vertical`** — Matched node pairs get the same X coordinate (same column).
 
 ### Examples
 
 ```yaml
-# All Person nodes in the same row
+# Align all Person pairs horizontally
 - align:
-    selector: Person
+    selector: Person->Person
     direction: horizontal
 
-# Selected nodes in the same column
+# Align selected nodes vertically
 - align:
-    selector: Node.selected
+    selector: Node.selected->Node.selected
     direction: vertical
 ```
 
