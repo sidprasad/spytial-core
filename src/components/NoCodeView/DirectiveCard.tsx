@@ -3,17 +3,15 @@ import {
     AttributeSelector, 
     FlagSelector, 
     IconSelector, 
-    SizeSelector, 
     ColorAtomSelector, 
     ColorEdgeSelector, 
     HideFieldSelector, 
-    HideAtomSelector, 
     HelperEdgeSelector, 
     ProjectionSelector,
     TagSelector
 } from './index';
 import { useHighlight } from './hooks';
-import { DirectiveData, ConstraintData } from './interfaces';
+import { DirectiveData } from './interfaces';
 import { DirectiveType } from './types';
 
 /**
@@ -55,24 +53,17 @@ const renderSelectorComponent = (
     directiveData: DirectiveData,
     onUpdate: (updates: Partial<Omit<DirectiveData, 'id'>>) => void
 ): React.JSX.Element => {
-    // For dual-use selectors (size, hideAtom), cast the onUpdate to the expected type
-    const dualUseOnUpdate = onUpdate as (updates: Partial<Omit<ConstraintData | DirectiveData, 'id'>>) => void;
-    
     switch (type) {
         case 'attribute':
             return <AttributeSelector directiveData={directiveData} onUpdate={onUpdate}/>;
         case 'hideField':
             return <HideFieldSelector directiveData={directiveData} onUpdate={onUpdate}/>;
-        case 'hideAtom':
-            return <HideAtomSelector directiveData={directiveData} onUpdate={dualUseOnUpdate}/>;
         case 'icon':
             return <IconSelector directiveData={directiveData} onUpdate={onUpdate}/>;
         case 'atomColor':
             return <ColorAtomSelector directiveData={directiveData} onUpdate={onUpdate}/>;
         case 'edgeColor':
             return <ColorEdgeSelector directiveData={directiveData} onUpdate={onUpdate}/>;
-        case 'size':
-            return <SizeSelector directiveData={directiveData} onUpdate={dualUseOnUpdate}/>;
         case 'projection':
             return <ProjectionSelector directiveData={directiveData} onUpdate={onUpdate}/>;
         case 'flag':
@@ -91,6 +82,9 @@ const DirectiveCard: React.FC<DirectiveCardProps> = (props: DirectiveCardProps) 
     const [isEditingComment, setIsEditingComment] = useState(false);
 
     const isCollapsed = props.directiveData.collapsed ?? false;
+    const selectValue = props.directiveData.type === 'size' || props.directiveData.type === 'hideAtom'
+        ? 'flag'
+        : props.directiveData.type;
 
     /**
      * Toggle collapsed state
@@ -154,16 +148,14 @@ const DirectiveCard: React.FC<DirectiveCardProps> = (props: DirectiveCardProps) 
             <div className="input-group-prepend">
                 <span className="input-group-text">Directive</span>
             </div>
-            <select onChange={ updateFields } value={ props.directiveData.type }>
+            <select onChange={ updateFields } value={selectValue}>
                 <option value="flag">Visibility Flag</option>
-                <option value="hideAtom">Hide Atom</option>
                 <option value="attribute">Attribute</option>
                 <option value="tag">Tag</option>
                 <option value="hideField">Hide Field</option>
                 <option value="icon">Icon</option>
                 <option value="atomColor">Color (Atom)</option>
                 <option value="edgeColor">Edge Style</option>
-                <option value="size">Size</option>
                 <option value="projection">Projection</option>
                 <option value="inferredEdge">Inferred Edge</option>
             </select>

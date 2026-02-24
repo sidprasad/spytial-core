@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ConstraintCard } from "./ConstraintCard";
 import { DirectiveCard } from "./DirectiveCard";
 import { ConstraintData, DirectiveData } from "./interfaces";
 import jsyaml from "js-yaml";
 import { normalizeConstraintParams, normalizeDirectiveParams } from "./paramDefaults";
+import { ConstraintType, DirectiveType } from "./types";
 
 import "./NoCodeView.css";
 
@@ -24,6 +25,89 @@ export function generateId(): string {
 
     return `${timestamp}-${randomPart}-${extraRandom}`;
 };
+
+const DUAL_USE_TYPES: ReadonlySet<'size' | 'hideAtom'> = new Set(['size', 'hideAtom']);
+const SUPPORTED_DIRECTIVE_TYPES: ReadonlySet<DirectiveType> = new Set([
+    'attribute',
+    'hideField',
+    'icon',
+    'atomColor',
+    'edgeColor',
+    'size',
+    'projection',
+    'flag',
+    'inferredEdge',
+    'hideAtom',
+    'tag',
+]);
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normalizeYamlSection(section: unknown): unknown[] {
+    if (Array.isArray(section)) {
+        return section;
+    }
+    if (isObjectRecord(section)) {
+        return Object.entries(section).map(([key, value]) => ({ [key]: value }));
+    }
+    return [];
+}
+
+function toParamObject(value: unknown): Record<string, unknown> {
+    if (!isObjectRecord(value)) {
+        return {};
+    }
+    return { ...value };
+}
+
+function isDualUseType(type: string): type is 'size' | 'hideAtom' {
+    return DUAL_USE_TYPES.has(type as 'size' | 'hideAtom');
+}
+
+function isDualUseDirective(
+    directive: DirectiveData
+): directive is DirectiveData & { type: 'size' | 'hideAtom' } {
+    return isDualUseType(directive.type);
+}
+
+function getConstraintTypeFromYaml(constraint: Record<string, unknown>): ConstraintType | "unknown" {
+    const type = Object.keys(constraint)[0];
+    if (!type) {
+        return "unknown";
+    }
+
+    if (type === "cyclic" || type === "orientation" || type === "align" || type === "size" || type === "hideAtom") {
+        return type;
+    }
+
+    if (type === "group") {
+        const groupParams = constraint[type];
+        if (!isObjectRecord(groupParams)) {
+            return "unknown";
+        }
+        if (groupParams.field !== undefined) {
+            return "groupfield";
+        }
+        if (groupParams.selector !== undefined) {
+            return "groupselector";
+        }
+    }
+
+    return "unknown";
+}
+
+function getDirectiveTypeFromYaml(directive: Record<string, unknown>): DirectiveType | "unknown" {
+    const type = Object.keys(directive)[0];
+    if (!type) {
+        return "unknown";
+    }
+    if (SUPPORTED_DIRECTIVE_TYPES.has(type as DirectiveType)) {
+        return type as DirectiveType;
+    }
+    return "unknown";
+}
 
 // TODO: Add unit tests for this function
 // Specifically for the Flag Selector
@@ -65,10 +149,10 @@ export function parseLayoutSpecToData(yamlString: string): {
     let constraints: ConstraintData[] = [];
     let directives: DirectiveData[] = [];
 
-    const parsedYaml = jsyaml.load(yamlString) as any;
+    const parsedYaml = (jsyaml.load(yamlString) ?? {}) as Record<string, unknown>;
 
-    const yamlConstraints = parsedYaml?.constraints;
-    const yamlDirectives = parsedYaml?.directives;
+    const yamlConstraints = normalizeYamlSection(parsedYaml?.constraints);
+    const yamlDirectives = normalizeYamlSection(parsedYaml?.directives);
 
     // Extract comments from YAML string
     // Comments are associated with the item that follows them
@@ -119,81 +203,70 @@ export function parseLayoutSpecToData(yamlString: string): {
     const constraintComments = extractComments(yamlString, 'constraints');
     const directiveComments = extractComments(yamlString, 'directives');
 
-    // Helper function to determine constraint type from YAML object
-    // Maps YAML constraint types to internal structured types
-    function get_constraint_type_from_yaml(constraint: any): string {
-        const type = Object.keys(constraint)[0]; // Get the constraint type
-        const params = constraint[type]; // Get the parameters for the constraint
-
-        // Direct mappings for simple constraint types
-        if (type === "cyclic" || type === "orientation" || type === "align" || type === "size" || type === "hideAtom") {
-            return type;
-        }
-        // Group constraints have two variants based on params
-        if (type === "group") {
-            if (params["selector"]) {
-                return "groupselector";
-            }
-            if (params["field"]) {
-                return "groupfield";
-            }
-        }
-        return "unknown";
-    }
-
     // Convert YAML constraints to structured data
-    if (yamlConstraints) {
-        if (!Array.isArray(yamlConstraints)) {
-            throw new Error("Invalid YAML: 'constraints' should be an array");
-        }
-
+    if (yamlConstraints.length > 0) {
         constraints = yamlConstraints.map((constraint, index) => {
-            const type = get_constraint_type_from_yaml(constraint);
+            if (!isObjectRecord(constraint)) {
+                throw new Error(`Invalid constraint at index ${index}: expected an object entry`);
+            }
+
+            const type = getConstraintTypeFromYaml(constraint);
             if (type === "unknown") {
                 throw new Error(`Unsupported constraint type in YAML: ${JSON.stringify(constraint)}`);
             }
-            const params = constraint[Object.keys(constraint)[0]];
-            const normalizedParams = normalizeConstraintParams(type, params as Record<string, unknown>);
+            const yamlType = Object.keys(constraint)[0];
+            const params = toParamObject(constraint[yamlType]);
 
             // Return structured constraint data with comment if present
             return {
                 id: generateId(),
                 type,
-                params: normalizedParams,
+                params,
                 comment: constraintComments.get(index),
             } as ConstraintData;
-        })
+        });
     }
 
     // Convert YAML directives to structured data
-    if (yamlDirectives) {
-        if (!Array.isArray(yamlDirectives)) {
-            throw new Error("Invalid YAML: 'directives' should be an array");
-        }
+    if (yamlDirectives.length > 0) {
+        const migratedConstraints: ConstraintData[] = [];
 
         directives = yamlDirectives.map((directive, index) => {
-            const type = Object.keys(directive)[0]; // Get the directive type
-            let params = directive[type]; // Get the parameters for the directive
+            if (!isObjectRecord(directive)) {
+                throw new Error(`Invalid directive at index ${index}: expected an object entry`);
+            }
 
-            // HACK: This means that it's flag selector
-            if (typeof params === "string") {
-                params = { flag: params };
+            const type = getDirectiveTypeFromYaml(directive);
+            if (type === "unknown") {
+                throw new Error(`Unsupported directive type in YAML: ${JSON.stringify(directive)}`);
             }
-            
-            // Ensure params is always an object
-            if (!params || typeof params !== 'object') {
-                params = {};
+            const yamlType = Object.keys(directive)[0];
+            const rawParams = directive[yamlType];
+            const params = type === "flag" && typeof rawParams === "string"
+                ? { flag: rawParams }
+                : toParamObject(rawParams);
+            const comment = directiveComments.get(index);
+
+            if (isDualUseType(type)) {
+                migratedConstraints.push({
+                    id: generateId(),
+                    type,
+                    params,
+                    comment,
+                });
+                return null;
             }
-            const normalizedParams = normalizeDirectiveParams(type, params as Record<string, unknown>);
 
             // Return structured directive data with comment if present
             return {
                 id: generateId(),
                 type,
-                params: normalizedParams,
-                comment: directiveComments.get(index),
+                params,
+                comment,
             } as DirectiveData;
-        })
+        }).filter((directive): directive is DirectiveData => directive !== null);
+
+        constraints = [...constraints, ...migratedConstraints];
     }
 
     return {
@@ -228,6 +301,10 @@ const NoCodeView = ({
     // Drag and drop state
     const [draggedConstraintId, setDraggedConstraintId] = useState<string | null>(null);
     const [draggedDirectiveId, setDraggedDirectiveId] = useState<string | null>(null);
+    const visibleDirectives = useMemo(
+        () => directives.filter((directive) => !isDualUseDirective(directive)),
+        [directives]
+    );
 
     const addConstraint = () => {
         const newConstraint: ConstraintData = {
@@ -258,9 +335,12 @@ const NoCodeView = ({
                     ...updates,
                     params: mergedParams
                 };
+                const shouldNormalizeParams = updates.params !== undefined || updates.type !== undefined;
                 return {
                     ...mergedConstraint,
-                    params: normalizeConstraintParams(mergedConstraint.type, mergedConstraint.params as Record<string, unknown>)
+                    params: shouldNormalizeParams
+                        ? normalizeConstraintParams(mergedConstraint.type, mergedConstraint.params as Record<string, unknown>)
+                        : mergedConstraint.params
                 };
             }
             return constraint;
@@ -351,12 +431,41 @@ const NoCodeView = ({
                 ...updates,
                 params: mergedParams
             };
+            const shouldNormalizeParams = updates.params !== undefined || updates.type !== undefined;
             return {
                 ...mergedDirective,
-                params: normalizeDirectiveParams(mergedDirective.type, mergedDirective.params as Record<string, unknown>)
+                params: shouldNormalizeParams
+                    ? normalizeDirectiveParams(mergedDirective.type, mergedDirective.params as Record<string, unknown>)
+                    : mergedDirective.params
             };
         }));
     }, [setDirectives]);
+
+    // Migrate legacy dual-use directives so the structured builder only exposes them under constraints.
+    useEffect(() => {
+        const legacyDualUseDirectives = directives.filter(isDualUseDirective);
+        if (legacyDualUseDirectives.length === 0) {
+            return;
+        }
+
+        const migratedConstraints: ConstraintData[] = legacyDualUseDirectives.map((directive) => ({
+            id: directive.id,
+            type: directive.type,
+            params: { ...directive.params },
+            collapsed: directive.collapsed,
+            comment: directive.comment,
+        }));
+
+        setConstraints((prev) => {
+            const existingIds = new Set(prev.map((constraint) => constraint.id));
+            const toAdd = migratedConstraints.filter((constraint) => !existingIds.has(constraint.id));
+            if (toAdd.length === 0) {
+                return prev;
+            }
+            return [...prev, ...toAdd];
+        });
+        setDirectives((prev) => prev.filter((directive) => !isDualUseDirective(directive)));
+    }, [directives, setConstraints, setDirectives]);
 
     /**
      * Collapse or expand all directives
@@ -437,14 +546,13 @@ const NoCodeView = ({
      */
     const loadStateFromYaml = (yamlString: string): void => {
         const { constraints: newConstraints, directives: newDirectives } = parseLayoutSpecToData(yamlString);
-        setConstraints((prev) => newConstraints);
-        setDirectives((prev) => newDirectives);
+        setConstraints(() => newConstraints);
+        setDirectives(() => newDirectives);
     };
 
     // Load state from YAML when component mounts or when yamlValue changes
     useEffect(() => {
         // If switching to Structured Builder and have YAML, load it
-        console.log(yamlValue);
         if (yamlValue) {
             try {
                 loadStateFromYaml(yamlValue);
@@ -507,7 +615,7 @@ const NoCodeView = ({
             <div>
                 <div className="sectionHeader">
                     <h5>Directives  <button type="button" onClick={ addDirective } title="Click to add a new directive" aria-label="Click to add a new directive" disabled={disabled}>+</button></h5>
-                    {directives.length > 0 && (
+                    {visibleDirectives.length > 0 && (
                         <div className="collapseAllButtons">
                             <button 
                                 type="button" 
@@ -530,7 +638,7 @@ const NoCodeView = ({
                 </div>
                 <section className='cardContainer' id="directiveContainer" aria-label="Directives List">
                     { 
-                        directives.map((dd1) => (
+                        visibleDirectives.map((dd1) => (
                             <DirectiveCard 
                                 key={dd1.id} 
                                 directiveData={dd1}

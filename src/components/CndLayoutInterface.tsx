@@ -207,19 +207,20 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
       // If switching to Code View, generate YAML from current constraints/directives
       const generatedYaml = generateLayoutSpecYaml(constraints, directives);
       onChange(generatedYaml);
-    } else {
-      // If switching to Structured Builder, parse YAML into constraints/directives
-      try {
-        const parsed = parseLayoutSpecToData(yamlValue);
-        setConstraints(() => parsed.constraints);
-        setDirectives(() => parsed.directives);
-      } catch (error) {
-        // If parsing fails, keep existing constraints/directives
-        console.warn('Failed to parse YAML when switching to Structured Builder:', error);
-      }
+      onViewChange(false);
+      return;
     }
 
-    onViewChange(event.target.checked);
+    // If switching to Structured Builder, parse YAML into constraints/directives first.
+    try {
+      const parsed = parseLayoutSpecToData(yamlValue);
+      setConstraints(() => parsed.constraints);
+      setDirectives(() => parsed.directives);
+      onViewChange(true);
+    } catch (error) {
+      // Keep the user in Code View so invalid or unsupported YAML is never overwritten by stale no-code state.
+      console.warn('Failed to parse YAML when switching to Structured Builder:', error);
+    }
   }, [disabled, onViewChange, onChange, constraints, directives, yamlValue, setConstraints, setDirectives]);
 
   /**

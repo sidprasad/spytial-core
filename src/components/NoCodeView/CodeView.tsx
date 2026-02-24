@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { ConstraintData, DirectiveData } from './interfaces';
 import jsyaml from 'js-yaml';
 import { parseLayoutSpec } from '../../layout/layoutspec';
-import { normalizeConstraintParams, normalizeDirectiveParams } from './paramDefaults';
 import './NoCodeView.css';
 
 /**
@@ -39,6 +38,12 @@ export function generateLayoutSpecYaml(
   constraints: ConstraintData[], 
   directives: DirectiveData[]
 ): string {
+    const sanitizeParams = (params: Record<string, unknown> | undefined): Record<string, unknown> => {
+        if (!params || typeof params !== 'object' || Array.isArray(params)) {
+            return {};
+        }
+        return { ...params };
+    };
 
     // Helper function to determine YAML constraint type from structured data
     // TODO: Make this a map??
@@ -75,7 +80,7 @@ export function generateLayoutSpecYaml(
                 lines.push(`  # ${c.comment}`);
             }
             const yamlType = toYamlConstraintType(c.type);
-            const normalizedParams = normalizeConstraintParams(c.type, c.params as Record<string, unknown>);
+            const normalizedParams = sanitizeParams(c.params as Record<string, unknown>);
             // Use flow style for the entire constraint object to keep it on one line
             const constraintObj = { [yamlType]: normalizedParams };
             const constraintYaml = jsyaml.dump([constraintObj], { flowLevel: 2 }).trim();
@@ -94,7 +99,7 @@ export function generateLayoutSpecYaml(
             if (d.comment) {
                 lines.push(`  # ${d.comment}`);
             }
-            const normalizedParams = normalizeDirectiveParams(d.type, d.params as Record<string, unknown>);
+            const normalizedParams = sanitizeParams(d.params as Record<string, unknown>);
             // HACK: Special case for flag directives
             if (d.type === "flag") {
                 const flagValue = normalizedParams.flag as string || '';
