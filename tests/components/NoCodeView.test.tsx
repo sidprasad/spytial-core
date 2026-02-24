@@ -38,13 +38,24 @@ describe('NoCodeView Component Tests', () => {
 
     it('should display directives in No Code view', () => {
       const directives: DirectiveData[] = [
-        { id: '1', type: 'size', params: { value: 50 } }
+        { id: '1', type: 'attribute', params: { field: 'id' } }
       ]
       
       render(<NoCodeView {...defaultProps} directives={directives} />)
       
       expect(screen.getByText(/directives/i)).toBeInTheDocument()
-      expect(screen.getByText(/size/i)).toBeInTheDocument()
+      expect(screen.getByText(/attribute/i)).toBeInTheDocument()
+    })
+
+    it('should not offer size or hide atom in directive type dropdown', () => {
+      const directives: DirectiveData[] = [
+        { id: '1', type: 'attribute', params: { field: 'id' } }
+      ];
+
+      render(<NoCodeView {...defaultProps} directives={directives} />);
+
+      expect(screen.queryByRole('option', { name: 'Size' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('option', { name: 'Hide Atom' })).not.toBeInTheDocument();
     })
   })
 

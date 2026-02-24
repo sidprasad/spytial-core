@@ -131,6 +131,21 @@ describe('CndLayoutInterface Component', () => {
       expect(mockOnViewChange).toHaveBeenCalledWith(true)
     })
 
+    it('should remain in Code View when YAML cannot be parsed for Structured Builder', async () => {
+      const user = userEvent.setup();
+      const mockOnViewChange = defaultProps.onViewChange;
+
+      render(<CndLayoutInterface {...defaultProps} yamlValue={'constraints:\n  - orientation: {directions: [below]'} />);
+
+      const toggle = screen.getByRole('switch');
+      await user.click(toggle);
+
+      expect(mockOnViewChange).not.toHaveBeenCalledWith(true);
+      expect(defaultProps.setConstraints).not.toHaveBeenCalled();
+      expect(defaultProps.setDirectives).not.toHaveBeenCalled();
+      expect(screen.getByRole('textbox')).toBeInTheDocument();
+    })
+
     it('should not call onChange when disabled', async () => {
       const user = userEvent.setup()
       const mockOnChange = defaultProps.onChange

@@ -139,16 +139,17 @@ constraints:
     expect(result.constraints[0].params.direction).toBe('horizontal');
   });
 
-  it('should parse size directive', () => {
+  it('should map size directives into constraints for structured builder', () => {
     const yaml = `
 directives:
   - size: {selector: Node, width: 100, height: 50}
 `;
     const result = parseLayoutSpecToData(yaml);
-    expect(result.directives).toHaveLength(1);
-    expect(result.directives[0].type).toBe('size');
-    expect(result.directives[0].params.width).toBe(100);
-    expect(result.directives[0].params.height).toBe(50);
+    expect(result.constraints).toHaveLength(1);
+    expect(result.constraints[0].type).toBe('size');
+    expect(result.constraints[0].params.width).toBe(100);
+    expect(result.constraints[0].params.height).toBe(50);
+    expect(result.directives).toHaveLength(0);
   });
 
   it('should parse flag directive', () => {
@@ -198,8 +199,22 @@ directives:
   - flag: hideDisconnectedBuiltIns
 `;
     const result = parseLayoutSpecToData(yaml);
-    expect(result.constraints).toHaveLength(2);
-    expect(result.directives).toHaveLength(2);
+    expect(result.constraints).toHaveLength(3);
+    expect(result.directives).toHaveLength(1);
+  });
+
+  it('should support object-form sections for unexpected YAML formats', () => {
+    const yaml = `
+constraints:
+  orientation: {directions: [below], selector: below}
+directives:
+  flag: hideDisconnectedBuiltIns
+`;
+    const result = parseLayoutSpecToData(yaml);
+    expect(result.constraints).toHaveLength(1);
+    expect(result.constraints[0].type).toBe('orientation');
+    expect(result.directives).toHaveLength(1);
+    expect(result.directives[0].type).toBe('flag');
   });
 
   it('should generate unique IDs for each item', () => {
@@ -286,8 +301,8 @@ directives:
 `;
     
     const parsed = parseLayoutSpecToData(yaml);
-    expect(parsed.constraints).toHaveLength(3);
-    expect(parsed.directives).toHaveLength(5);
+    expect(parsed.constraints).toHaveLength(6);
+    expect(parsed.directives).toHaveLength(2);
     
     const regenerated = generateLayoutSpecYaml(parsed.constraints, parsed.directives);
     expect(regenerated).toContain('align:');
