@@ -57,6 +57,17 @@ describe('NoCodeView Component Tests', () => {
       expect(screen.queryByRole('option', { name: 'Size' })).not.toBeInTheDocument();
       expect(screen.queryByRole('option', { name: 'Hide Atom' })).not.toBeInTheDocument();
     })
+
+    it('should not render legacy size/hideAtom directive cards', () => {
+      const directives: DirectiveData[] = [
+        { id: '1', type: 'size', params: { selector: 'Node', width: 100, height: 50 } },
+        { id: '2', type: 'hideAtom', params: { selector: 'Node' } },
+      ];
+
+      render(<NoCodeView {...defaultProps} directives={directives} />);
+
+      expect(screen.queryAllByRole('button', { name: /Remove directive/i })).toHaveLength(0);
+    })
   })
 
   interface TestWrapperProps {

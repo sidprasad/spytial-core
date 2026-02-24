@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ConstraintCard } from "./ConstraintCard";
 import { DirectiveCard } from "./DirectiveCard";
 import { ConstraintData, DirectiveData } from "./interfaces";
@@ -301,6 +301,10 @@ const NoCodeView = ({
     // Drag and drop state
     const [draggedConstraintId, setDraggedConstraintId] = useState<string | null>(null);
     const [draggedDirectiveId, setDraggedDirectiveId] = useState<string | null>(null);
+    const visibleDirectives = useMemo(
+        () => directives.filter((directive) => !isDualUseDirective(directive)),
+        [directives]
+    );
 
     const addConstraint = () => {
         const newConstraint: ConstraintData = {
@@ -611,7 +615,7 @@ const NoCodeView = ({
             <div>
                 <div className="sectionHeader">
                     <h5>Directives  <button type="button" onClick={ addDirective } title="Click to add a new directive" aria-label="Click to add a new directive" disabled={disabled}>+</button></h5>
-                    {directives.length > 0 && (
+                    {visibleDirectives.length > 0 && (
                         <div className="collapseAllButtons">
                             <button 
                                 type="button" 
@@ -634,7 +638,7 @@ const NoCodeView = ({
                 </div>
                 <section className='cardContainer' id="directiveContainer" aria-label="Directives List">
                     { 
-                        directives.map((dd1) => (
+                        visibleDirectives.map((dd1) => (
                             <DirectiveCard 
                                 key={dd1.id} 
                                 directiveData={dd1}
