@@ -438,6 +438,8 @@
                 } catch (err) {
                     console.error('Projection transform failed:', err);
                     showProjectionError(err.message);
+                    // Render rows with remove buttons so the user can fix/remove the bad projection.
+                    renderProjectionChoices([]);
                 }
             } else {
                 projectedInstance = null;

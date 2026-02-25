@@ -186,7 +186,7 @@ const layoutResult = layoutInstance.generateLayout(projResult.instance);
   onProjectionChange={(type, atomId) => {
     selections[type] = atomId;
     // Re-apply projection and regenerate layout
-    const newProj = applyProjectionTransform(dataInstance, directives, selections);
+    const newProj = applyProjectionTransform(dataInstance, projections, selections);
     const newLayout = layoutInstance.generateLayout(newProj.instance);
   }}
 />
