@@ -169,7 +169,7 @@ const KNOWN_CONSTRAINT_TYPES = ['orientation', 'cyclic', 'group', 'align', 'size
  * @see src/layout/layoutspec.ts#parseDirectives
  */
 const KNOWN_DIRECTIVE_TYPES = [
-    'atomColor', 'edgeColor', 'size', 'icon', 'projection', 
+    'atomColor', 'edgeColor', 'size', 'icon',
     'attribute', 'hideField', 'inferredEdge', 'hideAtom', 'flag', 'tag'
 ];
 

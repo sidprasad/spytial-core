@@ -402,7 +402,7 @@
             );
 
             updateStatus('Generating layout with JSON data...', 'info');
-            const layoutResult = layoutInstance.generateLayout(cachedInstance, {});
+            const layoutResult = layoutInstance.generateLayout(cachedInstance);
             currentInstanceLayout = layoutResult.layout;
 
             // 1. Check for selector errors first - early out if present

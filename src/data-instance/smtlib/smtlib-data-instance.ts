@@ -619,7 +619,7 @@ function isNumericLiteral(str: string): boolean {
  * const dataInstance = createSmtLibDataInstance(modelText);
  * 
  * // Use with layout system
- * const layout = layoutInstance.generateLayout(dataInstance, {});
+ * const layout = layoutInstance.generateLayout(dataInstance);
  * ```
  */
 export function createSmtLibDataInstance(

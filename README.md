@@ -127,7 +127,7 @@ const evaluator = new SGraphQueryEvaluator();
 evaluator.initialize({ sourceData: myDataInstance });
 
 const layoutInstance = new LayoutInstance(layoutSpec, evaluator);
-const result = layoutInstance.generateLayout(myDataInstance, {});
+const result = layoutInstance.generateLayout(myDataInstance);
 // Use result.layout with your visualization library
 ```
 
@@ -165,27 +165,34 @@ See the [full documentation](./docs/SELECTOR_SYNTHESIS.md) for advanced synthesi
 
 ### Projection Controls
 
-For Forge/Alloy instances with projections, use the `ProjectionControls` component to let users dynamically select which atoms to project:
+For Forge/Alloy instances with projections, use `applyProjectionTransform` as a pre-layout step to project over types, then use the `ProjectionControls` component to let users select atoms:
 
 ```typescript
-import { ProjectionControls, LayoutInstance } from 'spytial-core';
+import { applyProjectionTransform, ProjectionControls, LayoutInstance } from 'spytial-core';
 
-// Generate layout with projections
-const layoutResult = layoutInstance.generateLayout(dataInstance, projections);
+// Define projection directives (which types to project over)
+const directives = [{ sig: 'State', orderBy: 'next' }];
+const selections = {}; // user selections: type → chosen atom
 
-// Render projection controls with the projection data
+// Apply projection as a pre-layout data transformation
+const projResult = applyProjectionTransform(dataInstance, directives, selections);
+
+// Generate layout on the projected instance
+const layoutResult = layoutInstance.generateLayout(projResult.instance);
+
+// Render projection controls with the projection choices
 <ProjectionControls
-  projectionData={layoutResult.projectionData}
+  projectionData={projResult.choices}
   onProjectionChange={(type, atomId) => {
-    // Update projection for this type
-    projections[type] = atomId;
-    // Regenerate layout with new projections
-    const newLayout = layoutInstance.generateLayout(dataInstance, projections);
+    selections[type] = atomId;
+    // Re-apply projection and regenerate layout
+    const newProj = applyProjectionTransform(dataInstance, directives, selections);
+    const newLayout = layoutInstance.generateLayout(newProj.instance);
   }}
 />
 ```
 
-The `projectionData` returned from `generateLayout()` includes:
+The `choices` returned from `applyProjectionTransform()` includes:
 - `type`: The signature being projected
 - `projectedAtom`: The currently selected atom
 - `atoms`: All available atoms for this type

@@ -98,7 +98,7 @@ directives:
 
     const layoutSpec = parseLayoutSpec(layoutSpecStr);
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0);
-    const result = layoutInstance.generateLayout(dataInstance, {});
+    const result = layoutInstance.generateLayout(dataInstance);
     
     // Find Alice and Bob nodes
     const aliceNode = result.layout.nodes.find(n => n.id === 'Alice');
@@ -154,7 +154,7 @@ directives:
 
     const layoutSpec = parseLayoutSpec(layoutSpecStr);
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0);
-    const result = layoutInstance.generateLayout(dataInstance, {});
+    const result = layoutInstance.generateLayout(dataInstance);
     
     // Find Alice node
     const aliceNode = result.layout.nodes.find(n => n.id === 'Alice');
@@ -199,7 +199,7 @@ directives:
 
     const layoutSpec = parseLayoutSpec(layoutSpecStr);
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0);
-    const result = layoutInstance.generateLayout(dataInstance, {});
+    const result = layoutInstance.generateLayout(dataInstance);
     
     const teslaNode = result.layout.nodes.find(n => n.id === 'Tesla');
     
@@ -241,7 +241,7 @@ directives:
 
     const layoutSpec = parseLayoutSpec(layoutSpecStr);
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0);
-    const result = layoutInstance.generateLayout(dataInstance, {});
+    const result = layoutInstance.generateLayout(dataInstance);
     
     const profNode = result.layout.nodes.find(n => n.id === 'Prof_Smith');
     
@@ -290,7 +290,7 @@ directives:
 
     const layoutSpec = parseLayoutSpec(layoutSpecStr);
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0);
-    const result = layoutInstance.generateLayout(dataInstance, {});
+    const result = layoutInstance.generateLayout(dataInstance);
     
     const aliceNode = result.layout.nodes.find(n => n.id === 'Alice');
     

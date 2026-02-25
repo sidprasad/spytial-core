@@ -1072,8 +1072,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       console.log('🔧 Generating layout with constraint enforcement...');
 
       // Generate layout with constraint enforcement
-      const projections = {};
-      const layoutResult = this.layoutInstance.generateLayout(this.dataInstance, projections);
+      const layoutResult = this.layoutInstance.generateLayout(this.dataInstance);
       
       // Check for constraint validation errors
       if (layoutResult.error) {

@@ -178,7 +178,7 @@ constraints:
     expect(layoutSpec.constraints.orientation.relative).toHaveLength(1);
     
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = layoutInstance.generateLayout(instance);
     
     // The layout should have only 1 unique constraint applied
     // (the removeDuplicateConstraints function will handle final deduplication)

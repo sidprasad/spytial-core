@@ -42,7 +42,7 @@ describe('Hidden Node Conflict Detection', () => {
     const evaluator = new SGraphQueryEvaluator();
     evaluator.initialize({ sourceData: dataInstance });
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    return layoutInstance.generateLayout(dataInstance, {});
+    return layoutInstance.generateLayout(dataInstance);
   }
 
   describe('Error type and structure', () => {

@@ -238,6 +238,8 @@
         
         // Projection state (maps type to selected atom)
         window.currentProjections = {};
+        // Projection directives (configured separately from layout spec)
+        window.projectionDirectives = [];
 
         /**
          * Get current Alloy XML from input field
@@ -277,12 +279,15 @@
             }
 
             const baseInstance = new CndCore.AlloyDataInstance(alloyInstances[currentInstanceIndex]);
-            const projectionAtoms = window.currentProjections
-                ? Object.values(window.currentProjections).filter(Boolean)
-                : [];
-
-            if (projectionAtoms.length > 0) {
-                return baseInstance.applyProjections(projectionAtoms);
+            
+            // Apply projection as a pre-step if directives exist
+            if (window.projectionDirectives && window.projectionDirectives.length > 0) {
+                const projResult = CndCore.applyProjectionTransform(
+                    baseInstance,
+                    window.projectionDirectives,
+                    window.currentProjections || {}
+                );
+                return projResult.instance;
             }
 
             return baseInstance;
@@ -497,22 +502,33 @@
                 window.currentProjections = {};
             }
             
-            // IMPORTANT: Pass window.currentProjections directly (not a copy)
-            // This allows the layout to mutate it with defaults on first load
-            console.log('generateLayoutForCurrentInstance: Using projections:', JSON.stringify(window.currentProjections));
+            // Apply projection as a pre-layout data transformation
+            let instanceForLayout = alloyDataInstance;
+            if (window.projectionDirectives && window.projectionDirectives.length > 0) {
+                console.log('Applying projection transform with directives:', window.projectionDirectives);
+                console.log('Current projection selections:', JSON.stringify(window.currentProjections));
+                const projResult = CndCore.applyProjectionTransform(
+                    alloyDataInstance,
+                    window.projectionDirectives,
+                    window.currentProjections,
+                    {
+                        evaluateOrderBy: cachedEvaluator
+                            ? (sel) => cachedEvaluator.evaluate(sel).selectedTwoples()
+                            : undefined
+                    }
+                );
+                instanceForLayout = projResult.instance;
+
+                // Update projection controls with projection choices
+                if (window.updateProjectionData) {
+                    console.log('Projection choices:', projResult.choices);
+                    window.updateProjectionData(projResult.choices);
+                }
+            }
 
             try {
-                const layoutResult = layoutInstance.generateLayout(alloyDataInstance, window.currentProjections);
+                const layoutResult = layoutInstance.generateLayout(instanceForLayout);
                 currentInstanceLayout = layoutResult.layout;
-
-                // Update projection controls with projection data
-                if (window.updateProjectionData && layoutResult.projectionData) {
-                    console.log('generateLayoutForCurrentInstance: Received projectionData from layout:', layoutResult.projectionData);
-                    console.log('generateLayoutForCurrentInstance: Calling updateProjectionData');
-                    window.updateProjectionData(layoutResult.projectionData);
-                } else if (layoutResult.projectionData && layoutResult.projectionData.length > 0) {
-                    console.warn('Projection data available but updateProjectionData function not found. Projection controls may not display correctly.');
-                }
 
                 // 1. Check for selector errors first - early out if present
                 if (layoutResult.selectorErrors && layoutResult.selectorErrors.length > 0) {

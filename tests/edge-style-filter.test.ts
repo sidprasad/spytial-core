@@ -62,7 +62,7 @@ directives:
     const evaluator = createEvaluator(instance);
 
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = layoutInstance.generateLayout(instance);
 
     // All 'left' edges should be hidden
     const leftEdges = layout.edges.filter(e => e.relationName === 'left');
@@ -89,7 +89,7 @@ directives:
     const evaluator = createEvaluator(instance);
 
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = layoutInstance.generateLayout(instance);
 
     // Only Node3->Node1 left edge should be hidden
     const leftEdges = layout.edges.filter(e => e.relationName === 'left');
@@ -120,7 +120,7 @@ directives:
     const evaluator = createEvaluator(instance);
 
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = layoutInstance.generateLayout(instance);
 
     // Only left edges from Node3 should be hidden
     const leftEdges = layout.edges.filter(e => e.relationName === 'left');
@@ -145,7 +145,7 @@ directives:
     const evaluator = createEvaluator(instance);
 
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = layoutInstance.generateLayout(instance);
 
     // All left edges should still be present
     const leftEdges = layout.edges.filter(e => e.relationName === 'left');
@@ -183,7 +183,7 @@ directives:
     const evaluator = createEvaluator(instance);
 
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = layoutInstance.generateLayout(instance);
 
     // All left edges should still be present
     const leftEdges = layout.edges.filter(e => e.relationName === 'left');
@@ -216,7 +216,7 @@ directives:
     const evaluator = createEvaluator(instance);
 
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = layoutInstance.generateLayout(instance);
 
     // All left edges should still be present (filter matches nothing)
     const leftEdges = layout.edges.filter(e => e.relationName === 'left');

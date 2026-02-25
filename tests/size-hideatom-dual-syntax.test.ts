@@ -46,7 +46,7 @@ directives:
       evaluator.initialize({ sourceData: dataInstance });
 
       const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-      const { layout } = layoutInstance.generateLayout(dataInstance, {});
+      const { layout } = layoutInstance.generateLayout(dataInstance);
 
       const nodeIds = layout.nodes.map(node => node.id);
       expect(nodeIds).toContain('A');
@@ -73,7 +73,7 @@ directives: []
       evaluator.initialize({ sourceData: dataInstance });
 
       const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-      const { layout } = layoutInstance.generateLayout(dataInstance, {});
+      const { layout } = layoutInstance.generateLayout(dataInstance);
 
       const nodeIds = layout.nodes.map(node => node.id);
       expect(nodeIds).toContain('A');
@@ -103,7 +103,7 @@ directives:
       evaluator.initialize({ sourceData: dataInstance });
 
       const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-      const { layout } = layoutInstance.generateLayout(dataInstance, {});
+      const { layout } = layoutInstance.generateLayout(dataInstance);
 
       const nodeIds = layout.nodes.map(node => node.id);
       expect(nodeIds).toContain('A');
