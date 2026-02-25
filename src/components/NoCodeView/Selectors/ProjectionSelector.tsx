@@ -10,7 +10,7 @@ interface ProjectionSelectorProps {
 }
 
 /**
- * Minimal React component for projection directive.
+ * Minimal React component for projection specification.
  * Specifies a signature to project and optional ordering selector.
  */
 export const ProjectionSelector: React.FC<ProjectionSelectorProps> = (props: ProjectionSelectorProps) => {

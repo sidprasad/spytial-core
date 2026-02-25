@@ -165,6 +165,10 @@ export type { PyretEvaluator, PyretEvaluationResult } from './components/ReplInt
 export { ProjectionControls } from './components/ProjectionControls';
 export type { ProjectionControlsProps, ProjectionChoice } from './components/ProjectionControls';
 
+// Projection Orchestrator Component (manages projections + transform + controls)
+export { ProjectionOrchestrator } from './components/ProjectionControls';
+export type { ProjectionOrchestratorProps, ProjectionOrchestratorResult } from './components/ProjectionControls';
+
 // Projection Transform (pre-layout data instance transformation)
 export { applyProjectionTransform, topologicalSortWithCycleBreaking } from './data-instance/projection-transform';
-export type { ProjectionDirective, ProjectionTransformOptions, ProjectionTransformResult } from './data-instance/projection-transform';
+export type { Projection, ProjectionTransformOptions, ProjectionTransformResult } from './data-instance/projection-transform';

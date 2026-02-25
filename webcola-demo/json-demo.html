@@ -196,6 +196,9 @@
         <div id="webcola-cnd-container">
             <!-- React element attached here -->
         </div>
+        
+        <!-- Projection Orchestrator (shows when projections are added) -->
+        <div id="projection-controls-container" class="mb-3"></div>
     </div>
 
     <!-- D3 v4 and WebCola - the working combination -->
@@ -214,6 +217,8 @@
         let cachedLayoutSpec = null;
         let cachedInstance = null;
         let cachedEvaluatorType = 'sgq';
+        // Projected instance set by the orchestrator callback
+        let projectedInstance = null;
 
         function getCurrentJsonText() {
             return document.getElementById('webcola-json').value.trim();
@@ -402,7 +407,18 @@
             );
 
             updateStatus('Generating layout with JSON data...', 'info');
-            const layoutResult = layoutInstance.generateLayout(cachedInstance);
+
+            // Push instance + evaluator into the orchestrator
+            if (window.updateProjectionOrchestratorInstance) {
+                window.updateProjectionOrchestratorInstance(cachedInstance);
+            }
+            if (window.updateProjectionOrchestratorEvaluator) {
+                window.updateProjectionOrchestratorEvaluator(cachedEvaluator);
+            }
+
+            // Use projected instance if available, otherwise the raw instance
+            const instanceForLayout = projectedInstance || cachedInstance;
+            const layoutResult = layoutInstance.generateLayout(instanceForLayout);
             currentInstanceLayout = layoutResult.layout;
 
             // 1. Check for selector errors first - early out if present
@@ -634,6 +650,25 @@
             }
         }
 
+        /**
+         * Callback from the ProjectionOrchestrator.
+         * Stores the projected instance and regenerates the layout.
+         */
+        function handleProjectionResult(result) {
+            console.log('handleProjectionResult: received projected instance, choices:', result.choices);
+            projectedInstance = result.instance;
+
+            // Regenerate layout with the projected instance
+            if (cachedInstance && cachedEvaluator && cachedLayoutSpec) {
+                generateLayout()
+                    .then(() => renderGraph())
+                    .catch(error => {
+                        console.error('Error regenerating layout after projection change:', error);
+                        updateStatus(`Layout regeneration error: ${error.message}`, 'error');
+                    });
+            }
+        }
+
         window.addEventListener('load', () => {
             initializePipeline();
             if (window.mountCndLayoutInterface) {
@@ -642,6 +677,11 @@
 
             if (window.mountErrorMessageModal) {
                 window.mountErrorMessageModal();
+            }
+
+            // Mount Projection Orchestrator
+            if (window.mountProjectionOrchestrator) {
+                window.mountProjectionOrchestrator('projection-controls-container', handleProjectionResult);
             }
         });
 

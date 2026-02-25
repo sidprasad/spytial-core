@@ -133,7 +133,7 @@ The component is fully accessible with:
 
 **Important**: The `ProjectionControls` component is different from the existing `ProjectionSelector`:
 
-- **`ProjectionSelector`**: Used in the No Code View to specify WHICH types should be projected (adds projection directives to the spec)
+- **`ProjectionSelector`**: Used in the No Code View to specify WHICH types should be projected (adds projections to the spec)
 - **`ProjectionControls`**: Used to select WHICH specific atom to project for each already-projected type (runtime selection)
 
 These components serve complementary purposes in the projection workflow.

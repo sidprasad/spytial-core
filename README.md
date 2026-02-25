@@ -170,12 +170,12 @@ For Forge/Alloy instances with projections, use `applyProjectionTransform` as a 
 ```typescript
 import { applyProjectionTransform, ProjectionControls, LayoutInstance } from 'spytial-core';
 
-// Define projection directives (which types to project over)
-const directives = [{ sig: 'State', orderBy: 'next' }];
+// Define projections (which types to project over)
+const projections = [{ sig: 'State', orderBy: 'next' }];
 const selections = {}; // user selections: type → chosen atom
 
 // Apply projection as a pre-layout data transformation
-const projResult = applyProjectionTransform(dataInstance, directives, selections);
+const projResult = applyProjectionTransform(dataInstance, projections, selections);
 
 // Generate layout on the projected instance
 const layoutResult = layoutInstance.generateLayout(projResult.instance);

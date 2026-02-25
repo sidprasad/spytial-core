@@ -128,23 +128,23 @@ Directives (color, size, alignment, etc.) describe how to **display** a given da
 ```
 IDataInstance  ──►  applyProjectionTransform()  ──►  projected IDataInstance  ──►  LayoutInstance.generateLayout()
                          ▲                                                              
-                    ProjectionDirective[]                                           
+                    Projection[]                                           
                     selections: Record<string, string>                                
 ```
 
 ### API
 
 ```typescript
-import { applyProjectionTransform, ProjectionDirective } from 'spytial-core';
+import { applyProjectionTransform, Projection } from 'spytial-core';
 
-const directives: ProjectionDirective[] = [
+const projections: Projection[] = [
   { sig: 'State', orderBy: 'next' }
 ];
 const selections: Record<string, string> = {}; // type → chosen atom
 
 const result = applyProjectionTransform(
   dataInstance,
-  directives,
+  projections,
   selections,
   {
     // Optional: evaluator for orderBy sorting
@@ -162,7 +162,7 @@ const result = applyProjectionTransform(
 
 | Type | Description |
 |------|-------------|
-| `ProjectionDirective` | `{ sig: string; orderBy?: string }` — which type to project over |
+| `Projection` | `{ sig: string; orderBy?: string }` — which type to project over |
 | `ProjectionChoice` | `{ type, projectedAtom, atoms }` — UI dropdown metadata |
 | `ProjectionTransformOptions` | `{ evaluateOrderBy?, onOrderByError? }` — optional callbacks |
 | `ProjectionTransformResult` | `{ instance, choices }` — transform output |
@@ -193,18 +193,18 @@ Do **not** re-initialise the evaluator with the projected instance between steps
 
 ### Integration pattern
 
-In demos and applications, projection directives are specified separately from the CnD layout spec:
+In demos and applications, projections are specified separately from the CnD layout spec:
 
 ```javascript
 // 1. Initialise evaluator with the original (un-projected) instance
 evaluator.initialize({ sourceData: originalInstance });
 
-// 2. Define projection directives
-const directives = [{ sig: 'Time', orderBy: 'next' }];
+// 2. Define projections
+const projections = [{ sig: 'Time', orderBy: 'next' }];
 const selections = {};
 
 // 3. Apply projection (pre-layout step) — orderBy evaluated here
-const projResult = applyProjectionTransform(originalInstance, directives, selections, {
+const projResult = applyProjectionTransform(originalInstance, projections, selections, {
   evaluateOrderBy: (sel) => evaluator.evaluate(sel).selectedTwoples(),
 });
 

@@ -238,8 +238,8 @@
         
         // Projection state (maps type to selected atom)
         window.currentProjections = {};
-        // Projection directives (configured separately from layout spec)
-        window.projectionDirectives = [];
+        // Projected instance set by the orchestrator callback
+        window._projectedInstance = null;
 
         /**
          * Get current Alloy XML from input field
@@ -278,19 +278,12 @@
                 return null;
             }
 
-            const baseInstance = new CndCore.AlloyDataInstance(alloyInstances[currentInstanceIndex]);
-            
-            // Apply projection as a pre-step if directives exist
-            if (window.projectionDirectives && window.projectionDirectives.length > 0) {
-                const projResult = CndCore.applyProjectionTransform(
-                    baseInstance,
-                    window.projectionDirectives,
-                    window.currentProjections || {}
-                );
-                return projResult.instance;
+            // Use the projected instance if the orchestrator has set one
+            if (window._projectedInstance) {
+                return window._projectedInstance;
             }
 
-            return baseInstance;
+            return new CndCore.AlloyDataInstance(alloyInstances[currentInstanceIndex]);
         }
 
         /**
@@ -420,8 +413,7 @@
                 currentInstanceIndex = 0;
                 
                 // IMPORTANT: Reset projections when loading new data
-                // This ensures we start fresh and allow the layout to set defaults
-                window.currentProjections = {};
+                window._projectedInstance = null;
                 
                 // Show sequence explorer if multiple instances
                 updateSequenceExplorer();
@@ -496,35 +488,22 @@
 
             // Step 5: Generate layout using Alloy data instance
             updateStatus('Generating layout with Alloy data...', 'info');
-            
-            // Ensure window.currentProjections exists
-            if (!window.currentProjections) {
-                window.currentProjections = {};
-            }
-            
-            // Apply projection as a pre-layout data transformation
-            let instanceForLayout = alloyDataInstance;
-            if (window.projectionDirectives && window.projectionDirectives.length > 0) {
-                console.log('Applying projection transform with directives:', window.projectionDirectives);
-                console.log('Current projection selections:', JSON.stringify(window.currentProjections));
-                const projResult = CndCore.applyProjectionTransform(
-                    alloyDataInstance,
-                    window.projectionDirectives,
-                    window.currentProjections,
-                    {
-                        evaluateOrderBy: cachedEvaluator
-                            ? (sel) => cachedEvaluator.evaluate(sel).selectedTwoples()
-                            : undefined
-                    }
-                );
-                instanceForLayout = projResult.instance;
 
-                // Update projection controls with projection choices
-                if (window.updateProjectionData) {
-                    console.log('Projection choices:', projResult.choices);
-                    window.updateProjectionData(projResult.choices);
-                }
+            // Push instance + evaluator into the orchestrator so it can
+            // apply projection transforms.  The orchestrator calls back
+            // via handleProjectionResult which stores the projected
+            // instance.  If no projections are active the orchestrator
+            // emits the original instance unchanged.
+            if (window.updateProjectionOrchestratorInstance) {
+                window.updateProjectionOrchestratorInstance(alloyDataInstance);
             }
+            if (window.updateProjectionOrchestratorEvaluator) {
+                window.updateProjectionOrchestratorEvaluator(cachedEvaluator);
+            }
+
+            // Use the projected instance if the orchestrator has set one,
+            // otherwise fall back to the raw data instance.
+            const instanceForLayout = window._projectedInstance || alloyDataInstance;
 
             try {
                 const layoutResult = layoutInstance.generateLayout(instanceForLayout);
@@ -942,9 +921,9 @@
                 window.mountErrorMessageModal();
             }
 
-            // Mount Projection Controls
-            if (window.mountProjectionControls) {
-                window.mountProjectionControls('projection-controls-container', handleProjectionChange);
+            // Mount Projection Orchestrator
+            if (window.mountProjectionOrchestrator) {
+                window.mountProjectionOrchestrator('projection-controls-container', handleProjectionResult);
             }
 
             // Mount Evaluator REPL
@@ -1002,34 +981,24 @@
 
         /**
          * Handle projection selection change
-         * Updates the projections map and regenerates the layout
+         * Callback from the ProjectionOrchestrator.
+         * Stores the projected instance and regenerates the layout.
          */
-        function handleProjectionChange(type, atomId) {
-            console.log(`handleProjectionChange called: ${type} -> ${atomId}`);
-            console.log('Current projections before update:', JSON.stringify(window.currentProjections));
-            
-            // Update the projections map stored in global scope
-            if (!window.currentProjections) {
-                window.currentProjections = {};
-            }
-            window.currentProjections[type] = atomId;
-            
-            console.log('Current projections after update:', JSON.stringify(window.currentProjections));
-            
-            // Regenerate layout with new projections
+        function handleProjectionResult(result) {
+            console.log('handleProjectionResult: received projected instance, choices:', result.choices);
+            window._projectedInstance = result.instance;
+
+            // Regenerate layout with the projected instance
             if (currentInstanceIndex >= 0 && currentInstanceIndex < alloyInstances.length) {
-                console.log('Regenerating layout with projections:', window.currentProjections);
                 generateLayoutForCurrentInstance()
                     .then(() => {
-                        console.log('Layout regenerated successfully');
+                        console.log('Layout regenerated after projection change');
                         return renderGraph();
                     })
                     .catch(error => {
                         console.error('Error regenerating layout with new projection:', error);
                         updateStatus(`Layout regeneration error: ${error.message}`, 'error');
                     });
-            } else {
-                console.warn('Cannot regenerate layout: invalid instance index');
             }
         }
 

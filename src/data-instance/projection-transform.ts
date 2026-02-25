@@ -16,10 +16,10 @@
 import { IDataInstance, IType } from './interfaces';
 
 /**
- * A projection directive specifying which type (sig) to project over,
+ * A projection specifying which type (sig) to project over,
  * and optionally how to order the atoms of that type.
  */
-export interface ProjectionDirective {
+export interface Projection {
   /** The type/sig name to project over */
   sig: string;
   /** 
@@ -50,11 +50,11 @@ export interface ProjectionChoice {
 export interface ProjectionTransformOptions {
   /**
    * Optional evaluator function for `orderBy` selectors.
-   * When a ProjectionDirective has an `orderBy` field, this function
+   * When a Projection has an `orderBy` field, this function
    * is called with the selector string and should return an array of
    * [from, to] tuple pairs defining a partial order on atoms.
    * 
-   * If not provided, orderBy directives are ignored and atoms are
+   * If not provided, orderBy fields are ignored and atoms are
    * sorted lexicographically.
    */
   evaluateOrderBy?: (selector: string) => string[][];
@@ -79,7 +79,7 @@ export interface ProjectionTransformResult {
 
 
 /**
- * Applies projection directives to a data instance, producing a new
+ * Applies projections to a data instance, producing a new
  * IDataInstance with projected types/atoms removed and relation arities
  * reduced accordingly.
  * 
@@ -107,7 +107,7 @@ export interface ProjectionTransformResult {
  * silently filtered out during node matching.
  *
  * @param instance - The source data instance to project
- * @param directives - The projection directives (which sigs to project)
+ * @param projections - The projections (which sigs to project over)
  * @param selections - User selections mapping type/sig name → chosen atom ID.
  *                     This object is mutated to fill in defaults for unset projections.
  * @param options - Optional configuration (orderBy evaluator, error handler)
@@ -130,11 +130,11 @@ export interface ProjectionTransformResult {
  */
 export function applyProjectionTransform(
   instance: IDataInstance,
-  directives: ProjectionDirective[],
+  projections: Projection[],
   selections: Record<string, string>,
   options: ProjectionTransformOptions = {}
 ): ProjectionTransformResult {
-  const projectedSigs = directives.map(d => d.sig);
+  const projectedSigs = projections.map(d => d.sig);
   
   if (projectedSigs.length === 0) {
     return { instance, choices: [] };
@@ -146,8 +146,8 @@ export function applyProjectionTransform(
   // this sig in their type hierarchy (handles abstract sigs / subtypes)
   const atomsPerType: Record<string, string[]> = {};
 
-  for (const directive of directives) {
-    const sig = directive.sig;
+  for (const projection of projections) {
+    const sig = projection.sig;
 
     // Validate that the sig exists in the type hierarchy
     const sigExists = allTypes.some(t => t.types.includes(sig));
@@ -169,13 +169,13 @@ export function applyProjectionTransform(
     let atoms = [...atomSet];
 
     // Apply orderBy sorting if an evaluator is provided
-    if (directive.orderBy && options.evaluateOrderBy) {
+    if (projection.orderBy && options.evaluateOrderBy) {
       try {
-        const orderTuples = options.evaluateOrderBy(directive.orderBy);
+        const orderTuples = options.evaluateOrderBy(projection.orderBy);
         atoms = topologicalSortWithCycleBreaking(atoms, orderTuples);
       } catch (error) {
         if (options.onOrderByError) {
-          options.onOrderByError(directive.orderBy, error);
+          options.onOrderByError(projection.orderBy, error);
         }
         // Fallback to lexicographic sort
         atoms.sort((a, b) => a.localeCompare(b));

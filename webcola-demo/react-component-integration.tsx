@@ -23,6 +23,8 @@ import { EvaluatorRepl } from '../src/components/EvaluatorRepl/EvaluatorRepl';
 import { IEvaluator } from '../src/evaluators';
 import { RelationHighlighter } from '../src/components/RelationHighlighter/RelationHighlighter';
 import { ProjectionControls, ProjectionChoice } from '../src/components/ProjectionControls';
+import { ProjectionOrchestrator, ProjectionOrchestratorResult } from '../src/components/ProjectionControls';
+import { IDataInstance } from '../src/data-instance/interfaces';
 
 /**
  * Configuration options for mounting CndLayoutInterface
@@ -1487,6 +1489,175 @@ export function updateProjectionData(projectionData: ProjectionChoice[]): void {
 
 
 
+/*******************************************************
+ *                                                     *
+ *        PROJECTION ORCHESTRATOR INTEGRATION          *
+ *                                                     *
+ *******************************************************/
+
+
+/**
+ * Projection Orchestrator State Manager
+ * Bridges imperative demo code ↔ React component state.
+ */
+class ProjectionOrchestratorStateManager {
+  private static inst: ProjectionOrchestratorStateManager;
+  private instance: IDataInstance | null = null;
+  private evaluator: IEvaluator | null = null;
+  private onProjectionChange: ((result: ProjectionOrchestratorResult) => void) | null = null;
+  private updateCallback: (() => void) | null = null;
+
+  private constructor() {}
+
+  static getInstance(): ProjectionOrchestratorStateManager {
+    if (!ProjectionOrchestratorStateManager.inst) {
+      ProjectionOrchestratorStateManager.inst = new ProjectionOrchestratorStateManager();
+    }
+    return ProjectionOrchestratorStateManager.inst;
+  }
+
+  setInstance(instance: IDataInstance | null) {
+    this.instance = instance;
+    this.updateCallback?.();
+  }
+
+  getInstance2(): IDataInstance | null {
+    return this.instance;
+  }
+
+  setEvaluator(evaluator: IEvaluator | null) {
+    this.evaluator = evaluator;
+    this.updateCallback?.();
+  }
+
+  getEvaluator(): IEvaluator | null {
+    return this.evaluator;
+  }
+
+  setOnProjectionChange(cb: (result: ProjectionOrchestratorResult) => void) {
+    this.onProjectionChange = cb;
+  }
+
+  getOnProjectionChange(): ((result: ProjectionOrchestratorResult) => void) | null {
+    return this.onProjectionChange;
+  }
+
+  setUpdateCallback(cb: () => void) {
+    this.updateCallback = cb;
+  }
+}
+
+
+/**
+ * React wrapper for ProjectionOrchestrator that subscribes to the state manager.
+ */
+function ProjectionOrchestratorWrapper() {
+  const [instance, setInstance] = useState<IDataInstance | null>(null);
+  const [evaluator, setEvaluator] = useState<IEvaluator | null>(null);
+
+  useEffect(() => {
+    const mgr = ProjectionOrchestratorStateManager.getInstance();
+    setInstance(mgr.getInstance2());
+    setEvaluator(mgr.getEvaluator());
+
+    mgr.setUpdateCallback(() => {
+      setInstance(mgr.getInstance2());
+      setEvaluator(mgr.getEvaluator());
+    });
+  }, []);
+
+  const handleChange = useCallback((result: ProjectionOrchestratorResult) => {
+    const mgr = ProjectionOrchestratorStateManager.getInstance();
+    mgr.getOnProjectionChange()?.(result);
+  }, []);
+
+  return (
+    <ProjectionOrchestrator
+      instance={instance}
+      evaluator={evaluator}
+      onProjectionChange={handleChange}
+    />
+  );
+}
+
+
+/**
+ * Mount ProjectionOrchestrator into specified container.
+ *
+ * Unlike `mountProjectionControls` (which requires the caller to manage
+ * projections, run `applyProjectionTransform`, and push `updateProjectionData`),
+ * this function provides a fully self-contained projection UI. The caller
+ * only needs to push the data instance / evaluator and react to
+ * `onProjectionChange` callbacks.
+ *
+ * @param containerId - DOM element ID to mount into
+ * @param onProjectionChange - Called whenever the projected instance changes.
+ *   The `result.instance` should be passed to `LayoutInstance.generateLayout()`.
+ * @returns `true` if mounting succeeded
+ *
+ * @example
+ * ```javascript
+ * mountProjectionOrchestrator('projection-container', (result) => {
+ *   const layoutResult = layoutInstance.generateLayout(result.instance);
+ *   renderGraph(layoutResult);
+ * });
+ *
+ * // When data is available, push it into the orchestrator:
+ * updateProjectionOrchestratorInstance(myDataInstance);
+ * updateProjectionOrchestratorEvaluator(myEvaluator);
+ * ```
+ *
+ * @public
+ */
+export function mountProjectionOrchestrator(
+  containerId: string = 'projection-controls-container',
+  onProjectionChange?: (result: ProjectionOrchestratorResult) => void,
+): boolean {
+  const container = document.getElementById(containerId);
+  if (!container) {
+    console.error(`ProjectionOrchestrator: Container '${containerId}' not found`);
+    return false;
+  }
+
+  try {
+    const mgr = ProjectionOrchestratorStateManager.getInstance();
+    if (onProjectionChange) {
+      mgr.setOnProjectionChange(onProjectionChange);
+    }
+
+    const root = createRoot(container);
+    root.render(<ProjectionOrchestratorWrapper />);
+    console.log(`ProjectionOrchestrator mounted to #${containerId}`);
+    return true;
+  } catch (error) {
+    console.error('Failed to mount ProjectionOrchestrator:', error);
+    return false;
+  }
+}
+
+
+/**
+ * Push a new data instance into the mounted ProjectionOrchestrator.
+ * This triggers re-projection and a fresh `onProjectionChange` callback.
+ *
+ * @public
+ */
+export function updateProjectionOrchestratorInstance(instance: IDataInstance | null): void {
+  ProjectionOrchestratorStateManager.getInstance().setInstance(instance);
+}
+
+
+/**
+ * Push an evaluator into the mounted ProjectionOrchestrator.
+ * Required for `orderBy` support.
+ *
+ * @public
+ */
+export function updateProjectionOrchestratorEvaluator(evaluator: IEvaluator | null): void {
+  ProjectionOrchestratorStateManager.getInstance().setEvaluator(evaluator);
+}
+
+
 /**
  * Data access functions for CDN users
  * Provides access to current state and instances
@@ -1637,6 +1808,7 @@ export const CnDCore = {
   mountEvaluatorRepl,
   mountRelationHighlighter,
   mountProjectionControls,
+  mountProjectionOrchestrator,
   // Pyret REPL mounting functions
   mountPyretRepl,
   mountReplWithVisualization,
@@ -1644,12 +1816,15 @@ export const CnDCore = {
 
   // Projection functions
   updateProjectionData,
+  updateProjectionOrchestratorInstance,
+  updateProjectionOrchestratorEvaluator,
 
   // State managers
   CndLayoutStateManager,
   InstanceStateManager,
   PyretReplStateManager,
   ProjectionStateManager,
+  ProjectionOrchestratorStateManager,
   globalErrorManager,
 
   // API namespaces
@@ -1685,6 +1860,9 @@ if (typeof window !== 'undefined') {
   (window as any).mountRelationHighlighter = mountRelationHighlighter;
   (window as any).mountProjectionControls = mountProjectionControls;
   (window as any).updateProjectionData = updateProjectionData;
+  (window as any).mountProjectionOrchestrator = mountProjectionOrchestrator;
+  (window as any).updateProjectionOrchestratorInstance = updateProjectionOrchestratorInstance;
+  (window as any).updateProjectionOrchestratorEvaluator = updateProjectionOrchestratorEvaluator;
   
   // Pyret REPL functions for legacy compatibility
   (window as any).mountPyretRepl = mountPyretRepl;

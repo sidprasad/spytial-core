@@ -3,7 +3,7 @@ import { JSONDataInstance, IJsonDataInstance } from '../src/data-instance/json-d
 import {
   applyProjectionTransform,
   topologicalSortWithCycleBreaking,
-  ProjectionDirective,
+  Projection,
 } from '../src/data-instance/projection-transform';
 
 /**
@@ -54,9 +54,9 @@ describe('Projection Ordering', () => {
 
   it('should sort atoms lexicographically by default when no orderBy is specified', () => {
     const instance = new JSONDataInstance(timeChainData);
-    const directives: ProjectionDirective[] = [{ sig: 'Time' }];
+    const projections: Projection[] = [{ sig: 'Time' }];
 
-    const { choices } = applyProjectionTransform(instance, directives, {});
+    const { choices } = applyProjectionTransform(instance, projections, {});
 
     expect(choices).toHaveLength(1);
     expect(choices[0].type).toBe('Time');
@@ -69,9 +69,9 @@ describe('Projection Ordering', () => {
     // Time0 -> Time1, Time1 -> Time2
     // Topological sort should give: Time0, Time1, Time2
     const instance = new JSONDataInstance(timeChainData);
-    const directives: ProjectionDirective[] = [{ sig: 'Time', orderBy: 'next' }];
+    const projections: Projection[] = [{ sig: 'Time', orderBy: 'next' }];
 
-    const { choices } = applyProjectionTransform(instance, directives, {}, {
+    const { choices } = applyProjectionTransform(instance, projections, {}, {
       evaluateOrderBy: makeOrderByEvaluator(timeChainData),
     });
 
@@ -112,9 +112,9 @@ describe('Projection Ordering', () => {
     };
 
     const instance = new JSONDataInstance(dataWithExtra);
-    const directives: ProjectionDirective[] = [{ sig: 'Time', orderBy: 'next' }];
+    const projections: Projection[] = [{ sig: 'Time', orderBy: 'next' }];
 
-    const { choices } = applyProjectionTransform(instance, directives, {}, {
+    const { choices } = applyProjectionTransform(instance, projections, {}, {
       evaluateOrderBy: makeOrderByEvaluator(dataWithExtra),
     });
 
@@ -129,11 +129,11 @@ describe('Projection Ordering', () => {
 
   it('should fallback to lexicographic sort on invalid orderBy selector', () => {
     const instance = new JSONDataInstance(timeChainData);
-    const directives: ProjectionDirective[] = [{ sig: 'Time', orderBy: 'nonExistentRelation' }];
+    const projections: Projection[] = [{ sig: 'Time', orderBy: 'nonExistentRelation' }];
 
     const errors: { selector: string; error: unknown }[] = [];
 
-    const { choices } = applyProjectionTransform(instance, directives, {}, {
+    const { choices } = applyProjectionTransform(instance, projections, {}, {
       evaluateOrderBy: (selector) => {
         throw new Error(`Unknown relation: ${selector}`);
       },
@@ -180,9 +180,9 @@ describe('Projection Ordering', () => {
     };
 
     const instance = new JSONDataInstance(cyclicData);
-    const directives: ProjectionDirective[] = [{ sig: 'State', orderBy: 'next' }];
+    const projections: Projection[] = [{ sig: 'State', orderBy: 'next' }];
 
-    const { choices } = applyProjectionTransform(instance, directives, {}, {
+    const { choices } = applyProjectionTransform(instance, projections, {}, {
       evaluateOrderBy: makeOrderByEvaluator(cyclicData),
     });
 
@@ -249,12 +249,12 @@ describe('Projection Ordering', () => {
     };
 
     const instance = new JSONDataInstance(multiProjectionData);
-    const directives: ProjectionDirective[] = [
+    const projections: Projection[] = [
       { sig: 'Time', orderBy: 'next' },
       { sig: 'Process', orderBy: 'priority' },
     ];
 
-    const { choices } = applyProjectionTransform(instance, directives, {}, {
+    const { choices } = applyProjectionTransform(instance, projections, {}, {
       evaluateOrderBy: makeOrderByEvaluator(multiProjectionData),
     });
 
@@ -274,23 +274,23 @@ describe('Projection Ordering', () => {
     expect(processProjection!.atoms).toEqual(['ProcessA', 'ProcessB', 'ProcessC']);
   });
 
-  it('should accept ProjectionDirective objects directly', () => {
-    const directives: ProjectionDirective[] = [
+  it('should accept Projection objects directly', () => {
+    const projections: Projection[] = [
       { sig: 'Time', orderBy: '^next' },
     ];
     
-    expect(directives).toHaveLength(1);
-    expect(directives[0].sig).toBe('Time');
-    expect(directives[0].orderBy).toBe('^next');
+    expect(projections).toHaveLength(1);
+    expect(projections[0].sig).toBe('Time');
+    expect(projections[0].orderBy).toBe('^next');
   });
 
-  it('should handle ProjectionDirective without orderBy', () => {
-    const directives: ProjectionDirective[] = [
+  it('should handle Projection without orderBy', () => {
+    const projections: Projection[] = [
       { sig: 'State' },
     ];
 
-    expect(directives).toHaveLength(1);
-    expect(directives[0].sig).toBe('State');
-    expect(directives[0].orderBy).toBeUndefined();
+    expect(projections).toHaveLength(1);
+    expect(projections[0].sig).toBe('State');
+    expect(projections[0].orderBy).toBeUndefined();
   });
 });
