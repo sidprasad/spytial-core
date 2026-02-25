@@ -41,7 +41,7 @@ directives:
     evaluator.initialize({ sourceData: dataInstance });
 
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(dataInstance, {});
+    const { layout } = layoutInstance.generateLayout(dataInstance);
 
     // Type2 atoms (C, D) should be hidden, only Type1 atoms (A, B) should remain
     const nodeIds = layout.nodes.map(node => node.id);
@@ -65,7 +65,7 @@ directives:
     evaluator.initialize({ sourceData: dataInstance });
 
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(dataInstance, {});
+    const { layout } = layoutInstance.generateLayout(dataInstance);
 
     // A and B should be hidden, C and D should remain
     const nodeIds = layout.nodes.map(node => node.id);
@@ -89,7 +89,7 @@ directives:
     evaluator.initialize({ sourceData: dataInstance });
 
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(dataInstance, {});
+    const { layout } = layoutInstance.generateLayout(dataInstance);
 
     // A should be hidden by selector
     // C and D are disconnected but not flagged to hide
@@ -117,7 +117,7 @@ directives:
     evaluator.initialize({ sourceData: dataInstance });
 
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(dataInstance, {});
+    const { layout } = layoutInstance.generateLayout(dataInstance);
 
     // A and C should be hidden by selectors
     // B and D should remain
@@ -145,7 +145,7 @@ directives:
     
     // Should not throw an error
     expect(() => {
-      layoutInstance.generateLayout(dataInstance, {});
+      layoutInstance.generateLayout(dataInstance);
     }).not.toThrow();
   });
 
@@ -166,7 +166,7 @@ directives:
     evaluator.initialize({ sourceData: dataInstance });
 
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout, error } = layoutInstance.generateLayout(dataInstance, {});
+    const { layout, error } = layoutInstance.generateLayout(dataInstance);
 
     expect(error).not.toBeNull();
     expect(error?.type).toBe('hidden-node-conflict');

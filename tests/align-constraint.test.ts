@@ -75,7 +75,7 @@ describe('AlignConstraint', () => {
     const evaluator = createEvaluator(dataInstance);
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
     
-    const result = layoutInstance.generateLayout(dataInstance, {});
+    const result = layoutInstance.generateLayout(dataInstance);
     
     expect(result.layout).toBeDefined();
     expect(result.layout.constraints.length).toBeGreaterThan(0);
@@ -95,7 +95,7 @@ describe('AlignConstraint', () => {
     const evaluator = createEvaluator(dataInstance);
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
     
-    const result = layoutInstance.generateLayout(dataInstance, {});
+    const result = layoutInstance.generateLayout(dataInstance);
     
     expect(result.layout).toBeDefined();
     expect(result.layout.constraints.length).toBeGreaterThan(0);

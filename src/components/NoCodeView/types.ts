@@ -12,4 +12,4 @@ export type ConstraintType = 'orientation' | 'cyclic' | 'align' | 'groupfield' |
  * 
  * @public
  */
-export type DirectiveType = 'attribute' | 'hideField' | 'icon' | 'atomColor' | 'edgeColor' | 'size' | 'projection' | 'flag' | 'inferredEdge' | 'hideAtom' | 'tag';
+export type DirectiveType = 'attribute' | 'hideField' | 'icon' | 'atomColor' | 'edgeColor' | 'size' | 'flag' | 'inferredEdge' | 'hideAtom' | 'tag';

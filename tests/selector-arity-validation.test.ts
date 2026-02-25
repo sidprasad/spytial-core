@@ -97,7 +97,7 @@ constraints:
             const instance = new JSONDataInstance(mixedData);
             const evaluator = createEvaluator(instance);
             const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
-            const { selectorErrors } = layoutInstance.generateLayout(instance, {});
+            const { selectorErrors } = layoutInstance.generateLayout(instance);
 
             expect(selectorErrors.length).toBeGreaterThan(0);
             const arityError = selectorErrors.find(e => e.selector === 'selected' && e.context === 'orientation selector');
@@ -115,7 +115,7 @@ constraints:
             const instance = new JSONDataInstance(mixedData);
             const evaluator = createEvaluator(instance);
             const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
-            const { selectorErrors } = layoutInstance.generateLayout(instance, {});
+            const { selectorErrors } = layoutInstance.generateLayout(instance);
 
             expect(selectorErrors.length).toBeGreaterThan(0);
             const arityError = selectorErrors.find(e => e.selector === 'selected' && e.context === 'align selector');
@@ -133,7 +133,7 @@ constraints:
             const instance = new JSONDataInstance(mixedData);
             const evaluator = createEvaluator(instance);
             const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
-            const { selectorErrors } = layoutInstance.generateLayout(instance, {});
+            const { selectorErrors } = layoutInstance.generateLayout(instance);
 
             expect(selectorErrors.length).toBeGreaterThan(0);
             const arityError = selectorErrors.find(e => e.selector === 'selected' && e.context === 'cyclic orientation selector');
@@ -154,7 +154,7 @@ directives:
             const instance = new JSONDataInstance(mixedData);
             const evaluator = createEvaluator(instance);
             const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
-            const { selectorErrors } = layoutInstance.generateLayout(instance, {});
+            const { selectorErrors } = layoutInstance.generateLayout(instance);
 
             expect(selectorErrors.length).toBeGreaterThan(0);
             const arityError = selectorErrors.find(e => e.selector === 'next' && e.context === 'hideAtom selector');
@@ -173,7 +173,7 @@ directives:
             const instance = new JSONDataInstance(mixedData);
             const evaluator = createEvaluator(instance);
             const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
-            const { selectorErrors } = layoutInstance.generateLayout(instance, {});
+            const { selectorErrors } = layoutInstance.generateLayout(instance);
 
             expect(selectorErrors.length).toBeGreaterThan(0);
             const arityError = selectorErrors.find(e => e.selector === 'next' && e.context === 'size selector');
@@ -191,7 +191,7 @@ directives:
             const instance = new JSONDataInstance(mixedData);
             const evaluator = createEvaluator(instance);
             const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
-            const { selectorErrors } = layoutInstance.generateLayout(instance, {});
+            const { selectorErrors } = layoutInstance.generateLayout(instance);
 
             expect(selectorErrors.length).toBeGreaterThan(0);
             const arityError = selectorErrors.find(e => e.selector === 'next' && e.context === 'color selector');
@@ -213,7 +213,7 @@ constraints:
             const instance = new JSONDataInstance(mixedData);
             const evaluator = createEvaluator(instance);
             const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
-            const { selectorErrors } = layoutInstance.generateLayout(instance, {});
+            const { selectorErrors } = layoutInstance.generateLayout(instance);
 
             const arityErrors = selectorErrors.filter(e => e.errorMessage.includes('binary') || e.errorMessage.includes('unary'));
             expect(arityErrors).toHaveLength(0);
@@ -229,7 +229,7 @@ constraints:
             const instance = new JSONDataInstance(mixedData);
             const evaluator = createEvaluator(instance);
             const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
-            const { selectorErrors } = layoutInstance.generateLayout(instance, {});
+            const { selectorErrors } = layoutInstance.generateLayout(instance);
 
             const arityErrors = selectorErrors.filter(e => e.errorMessage.includes('binary') || e.errorMessage.includes('unary'));
             expect(arityErrors).toHaveLength(0);
@@ -244,7 +244,7 @@ directives:
             const instance = new JSONDataInstance(mixedData);
             const evaluator = createEvaluator(instance);
             const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
-            const { selectorErrors } = layoutInstance.generateLayout(instance, {});
+            const { selectorErrors } = layoutInstance.generateLayout(instance);
 
             const arityErrors = selectorErrors.filter(e => e.errorMessage.includes('binary') || e.errorMessage.includes('unary'));
             expect(arityErrors).toHaveLength(0);
@@ -264,7 +264,7 @@ constraints:
             const instance = new JSONDataInstance(mixedData);
             const evaluator = createEvaluator(instance);
             const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
-            const { selectorErrors } = layoutInstance.generateLayout(instance, {});
+            const { selectorErrors } = layoutInstance.generateLayout(instance);
 
             const arityErrors = selectorErrors.filter(e => e.errorMessage.includes('binary') || e.errorMessage.includes('unary'));
             expect(arityErrors).toHaveLength(0);
@@ -280,7 +280,7 @@ constraints:
             const instance = new JSONDataInstance(mixedData);
             const evaluator = createEvaluator(instance);
             const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
-            const { selectorErrors } = layoutInstance.generateLayout(instance, {});
+            const { selectorErrors } = layoutInstance.generateLayout(instance);
 
             const arityErrors = selectorErrors.filter(e => e.errorMessage.includes('binary') || e.errorMessage.includes('unary'));
             expect(arityErrors).toHaveLength(0);

@@ -184,8 +184,17 @@
             <textarea id="instance-export-output" readonly placeholder="Exported view will appear here..."></textarea>
         </div>
         
-        <!-- Projection Controls (shows when there are projections) -->
-        <div id="projection-controls-container" class="mb-3"></div>
+        <!-- Inline Projection Controls -->
+        <div id="projection-panel" class="mb-3">
+            <h6 class="h6 text-dark">Projections:</h6>
+            <div class="d-flex gap-2 mb-2">
+                <input id="projection-type-input" type="text" class="form-control form-control-sm"
+                       placeholder="Type name (e.g. Node, Int)" autocomplete="off" />
+                <button id="addProjectionBtn" class="btn btn-sm btn-outline-primary" onclick="addProjection()" style="white-space:nowrap">Add</button>
+            </div>
+            <div id="projection-error" class="text-danger small mb-2" style="display:none"></div>
+            <div id="projection-list"></div>
+        </div>
         
         <!-- Sequence Explorer for multiple instances -->
         <div id="sequence-explorer" class="mb-3" style="display: none;">
@@ -237,7 +246,12 @@
         let cachedLayoutSpec = null;       // Cached layout specification
         
         // Projection state (maps type to selected atom)
-        window.currentProjections = {};
+        // Active projections: array of { sig: string }
+        let activeProjections = [];
+        // User selections: maps type name → selected atom id
+        let projectionSelections = {};
+        // The projected IDataInstance (null = use raw)
+        window._projectedInstance = null;
 
         /**
          * Get current Alloy XML from input field
@@ -276,16 +290,12 @@
                 return null;
             }
 
-            const baseInstance = new CndCore.AlloyDataInstance(alloyInstances[currentInstanceIndex]);
-            const projectionAtoms = window.currentProjections
-                ? Object.values(window.currentProjections).filter(Boolean)
-                : [];
-
-            if (projectionAtoms.length > 0) {
-                return baseInstance.applyProjections(projectionAtoms);
+            // Use the projected instance if the orchestrator has set one
+            if (window._projectedInstance) {
+                return window._projectedInstance;
             }
 
-            return baseInstance;
+            return new CndCore.AlloyDataInstance(alloyInstances[currentInstanceIndex]);
         }
 
         /**
@@ -415,8 +425,12 @@
                 currentInstanceIndex = 0;
                 
                 // IMPORTANT: Reset projections when loading new data
-                // This ensures we start fresh and allow the layout to set defaults
-                window.currentProjections = {};
+                window._projectedInstance = null;
+                activeProjections = [];
+                projectionSelections = {};
+                const projListEl = document.getElementById('projection-list');
+                if (projListEl) projListEl.innerHTML = '';
+                clearProjectionError();
                 
                 // Show sequence explorer if multiple instances
                 updateSequenceExplorer();
@@ -469,6 +483,11 @@
                 throw new Error('Missing required data for layout generation');
             }
 
+            // Reset projected instance so we never use a stale one from
+            // a previous instance index.  The orchestrator will set it
+            // again asynchronously after its React state update fires.
+            window._projectedInstance = null;
+
             const alloyDataInstance = new CndCore.AlloyDataInstance(alloyInstances[currentInstanceIndex]);
             console.log(`Generating layout for instance ${currentInstanceIndex + 1}/${alloyInstances.length}`);
             console.log('Using Alloy Data Instance:', alloyDataInstance);
@@ -491,28 +510,35 @@
 
             // Step 5: Generate layout using Alloy data instance
             updateStatus('Generating layout with Alloy data...', 'info');
-            
-            // Ensure window.currentProjections exists
-            if (!window.currentProjections) {
-                window.currentProjections = {};
+
+            // Apply projection transform if any projections are active
+            let instanceForLayout = alloyDataInstance;
+            if (activeProjections.length > 0) {
+                try {
+                    const result = CndCore.applyProjectionTransform(
+                        alloyDataInstance,
+                        activeProjections,
+                        projectionSelections
+                    );
+                    instanceForLayout = result.instance;
+                    window._projectedInstance = result.instance;
+                    // Update the atom dropdowns with the choices
+                    renderProjectionChoices(result.choices);
+                } catch (err) {
+                    console.error('Projection transform failed:', err);
+                    showProjectionError(err.message);
+                    // Render rows with remove buttons so the user can fix/remove the bad projection.
+                    // Pass empty choices — renderProjectionChoices falls back to "Type not found" per row.
+                    renderProjectionChoices([]);
+                    // Fall back to un-projected
+                }
+            } else {
+                window._projectedInstance = null;
             }
-            
-            // IMPORTANT: Pass window.currentProjections directly (not a copy)
-            // This allows the layout to mutate it with defaults on first load
-            console.log('generateLayoutForCurrentInstance: Using projections:', JSON.stringify(window.currentProjections));
 
             try {
-                const layoutResult = layoutInstance.generateLayout(alloyDataInstance, window.currentProjections);
+                const layoutResult = layoutInstance.generateLayout(instanceForLayout);
                 currentInstanceLayout = layoutResult.layout;
-
-                // Update projection controls with projection data
-                if (window.updateProjectionData && layoutResult.projectionData) {
-                    console.log('generateLayoutForCurrentInstance: Received projectionData from layout:', layoutResult.projectionData);
-                    console.log('generateLayoutForCurrentInstance: Calling updateProjectionData');
-                    window.updateProjectionData(layoutResult.projectionData);
-                } else if (layoutResult.projectionData && layoutResult.projectionData.length > 0) {
-                    console.warn('Projection data available but updateProjectionData function not found. Projection controls may not display correctly.');
-                }
 
                 // 1. Check for selector errors first - early out if present
                 if (layoutResult.selectorErrors && layoutResult.selectorErrors.length > 0) {
@@ -926,12 +952,6 @@
                 window.mountErrorMessageModal();
             }
 
-            // Mount Projection Controls
-            if (window.mountProjectionControls) {
-                window.mountProjectionControls('projection-controls-container', handleProjectionChange);
-            }
-
-            // Mount Evaluator REPL
             // Mount Relation Highlighter
             if (window.mountRelationHighlighter) {
                 window.mountRelationHighlighter('relation-highlighter-mount');
@@ -984,38 +1004,138 @@
             }
         }
 
-        /**
-         * Handle projection selection change
-         * Updates the projections map and regenerates the layout
-         */
-        function handleProjectionChange(type, atomId) {
-            console.log(`handleProjectionChange called: ${type} -> ${atomId}`);
-            console.log('Current projections before update:', JSON.stringify(window.currentProjections));
-            
-            // Update the projections map stored in global scope
-            if (!window.currentProjections) {
-                window.currentProjections = {};
+        // ── Projection UI (vanilla JS) ─────────────────────────────────
+
+        /** Show an error message in the projection panel */
+        function showProjectionError(msg) {
+            const el = document.getElementById('projection-error');
+            el.textContent = msg;
+            el.style.display = 'block';
+        }
+
+        /** Hide the projection error */
+        function clearProjectionError() {
+            const el = document.getElementById('projection-error');
+            el.textContent = '';
+            el.style.display = 'none';
+        }
+
+        /** Add a new projection type from the input field */
+        function addProjection() {
+            const input = document.getElementById('projection-type-input');
+            const sig = input.value.trim();
+            if (!sig) return;
+
+            // Prevent duplicates
+            if (activeProjections.some(p => p.sig === sig)) {
+                showProjectionError('Already projecting over "' + sig + '".');
+                return;
             }
-            window.currentProjections[type] = atomId;
-            
-            console.log('Current projections after update:', JSON.stringify(window.currentProjections));
-            
-            // Regenerate layout with new projections
-            if (currentInstanceIndex >= 0 && currentInstanceIndex < alloyInstances.length) {
-                console.log('Regenerating layout with projections:', window.currentProjections);
-                generateLayoutForCurrentInstance()
-                    .then(() => {
-                        console.log('Layout regenerated successfully');
-                        return renderGraph();
-                    })
-                    .catch(error => {
-                        console.error('Error regenerating layout with new projection:', error);
-                        updateStatus(`Layout regeneration error: ${error.message}`, 'error');
-                    });
-            } else {
-                console.warn('Cannot regenerate layout: invalid instance index');
+
+            clearProjectionError();
+            activeProjections.push({ sig });
+            input.value = '';
+
+            // Re-run layout with the new projection
+            rerunProjectedLayout();
+        }
+
+        /** Remove a projection and re-run layout */
+        function removeProjection(sig) {
+            activeProjections = activeProjections.filter(p => p.sig !== sig);
+            delete projectionSelections[sig];
+            clearProjectionError();
+            rerunProjectedLayout();
+        }
+
+        /** Handle atom selection change for a projected type */
+        function onProjectionAtomChange(sig, atomId) {
+            projectionSelections[sig] = atomId;
+            rerunProjectedLayout();
+        }
+
+        /** Re-run layout with current projection state */
+        async function rerunProjectedLayout() {
+            if (!alloyInstances.length || !cachedEvaluator || !cachedLayoutSpec) return;
+            try {
+                await generateLayoutForCurrentInstance();
+                await renderGraph();
+            } catch (error) {
+                console.error('Error re-running projected layout:', error);
+                updateStatus('Projection layout error: ' + error.message, 'error');
             }
         }
+
+        /**
+         * Render the projection atom-selector dropdowns.
+         * Called after applyProjectionTransform returns choices.
+         */
+        function renderProjectionChoices(choices) {
+            const listEl = document.getElementById('projection-list');
+            listEl.innerHTML = '';
+
+            for (const proj of activeProjections) {
+                const choice = choices.find(c => c.type === proj.sig);
+
+                const row = document.createElement('div');
+                row.className = 'd-flex align-items-center gap-2 mb-1';
+
+                // Tag with remove button
+                const tag = document.createElement('span');
+                tag.className = 'badge bg-secondary d-flex align-items-center gap-1';
+                tag.textContent = proj.sig;
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'btn-close btn-close-white ms-1';
+                removeBtn.style.fontSize = '0.5rem';
+                removeBtn.setAttribute('aria-label', 'Remove ' + proj.sig);
+                removeBtn.onclick = () => removeProjection(proj.sig);
+                tag.appendChild(removeBtn);
+                row.appendChild(tag);
+
+                // Atom dropdown
+                if (choice && choice.atoms.length > 0) {
+                    const select = document.createElement('select');
+                    select.className = 'form-select form-select-sm';
+                    select.style.maxWidth = '200px';
+                    select.setAttribute('aria-label', 'Atom for ' + proj.sig);
+                    for (const atom of choice.atoms) {
+                        const opt = document.createElement('option');
+                        opt.value = atom;
+                        opt.textContent = atom;
+                        if (atom === choice.projectedAtom) opt.selected = true;
+                        select.appendChild(opt);
+                    }
+                    select.onchange = () => onProjectionAtomChange(proj.sig, select.value);
+                    row.appendChild(select);
+                } else if (choice) {
+                    const noAtoms = document.createElement('span');
+                    noAtoms.className = 'text-muted small';
+                    noAtoms.textContent = 'No atoms';
+                    row.appendChild(noAtoms);
+                } else {
+                    const notFound = document.createElement('span');
+                    notFound.className = 'text-danger small';
+                    notFound.textContent = 'Type not found';
+                    row.appendChild(notFound);
+                }
+
+                listEl.appendChild(row);
+            }
+
+            // If no projections, show nothing
+            if (activeProjections.length === 0) {
+                listEl.innerHTML = '';
+            }
+        }
+
+        // Wire up the Enter key on the projection text input
+        document.getElementById('projection-type-input')?.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addProjection();
+            }
+        });
 
         // Expose functions globally for buttons
         window.loadGraph = loadGraph;
@@ -1024,6 +1144,8 @@
         window.clearGraph = clearGraph;
         window.navigateInstance = navigateInstance;
         window.resetAll = resetAll;
+        window.addProjection = addProjection;
+        window.removeProjection = removeProjection;
     </script>
 </body>
 </html>

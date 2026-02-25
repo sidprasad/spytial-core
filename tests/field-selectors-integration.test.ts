@@ -83,7 +83,7 @@ directives:
     const evaluator = createEvaluator(instance);
 
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = layoutInstance.generateLayout(instance);
 
     // Find edges by relation name and source type (source-only selector logic)
     const personNameEdges = layout.edges.filter(e => 
@@ -131,7 +131,7 @@ directives:
     const evaluator = createEvaluator(instance);
 
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = layoutInstance.generateLayout(instance);
 
     // Find Person and Car nodes
     const personNodes = layout.nodes.filter(n => n.types.includes('Person'));
@@ -183,7 +183,7 @@ directives:
     const evaluator = createEvaluator(instance);
 
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = layoutInstance.generateLayout(instance);
 
     // Car name edges should be hidden (not present in layout)
     const carNameEdges = layout.edges.filter(e => 
@@ -219,7 +219,7 @@ directives:
     const evaluator = createEvaluator(instance);
 
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = layoutInstance.generateLayout(instance);
 
     // All name edges should be green (legacy behavior - applies to all)
     const allNameEdges = layout.edges.filter(e => e.relationName === 'name');
@@ -269,7 +269,7 @@ directives:
     const evaluator = createEvaluator(instance);
 
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = layoutInstance.generateLayout(instance);
 
     // Find alice node - should have active attribute (active=True)
     const aliceNode = layout.nodes.find(n => n.id === 'alice');
@@ -306,7 +306,7 @@ directives:
     const evaluator = createEvaluator(instance);
 
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = layoutInstance.generateLayout(instance);
 
     // Alice and charlie should have attributes (both in selector and both have True)
     const aliceNode = layout.nodes.find(n => n.id === 'alice');
@@ -332,7 +332,7 @@ directives:
     const evaluator = createEvaluator(instance);
 
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = layoutInstance.generateLayout(instance);
 
     // All nodes should have active attribute (no filter)
     const aliceNode = layout.nodes.find(n => n.id === 'alice');

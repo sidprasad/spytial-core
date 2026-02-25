@@ -547,7 +547,7 @@
             );
 
             updateStatus('Generating layout with DOT data...', 'info');
-            const layoutResult = layoutInstance.generateLayout(cachedInstance, {});
+            const layoutResult = layoutInstance.generateLayout(cachedInstance);
             currentInstanceLayout = layoutResult.layout;
 
             // Handle selector errors

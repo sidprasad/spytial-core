@@ -432,48 +432,9 @@ Sets node dimensions for atoms matching a selector.
 
 ---
 
-### Projection Directive
-
-Projects over a signature, showing one atom at a time with navigation controls.
-
-```yaml
-- projection:
-    sig: <signature-name>        # Required: Signature/type to project over
-    orderBy: <binary-selector>   # Optional: Relation for atom ordering
-```
-
-**Fields:**
-
-| Field | Required | Type | Description |
-|-------|----------|------|-------------|
-| `sig` | ✅ Yes | string | Name of the signature/type to project |
-| `orderBy` | ❌ No | string | Binary selector defining ordering relation between atoms |
-
-**Ordering Behavior:**
-- When `orderBy` is not specified, atoms are sorted lexicographically by their ID
-- When `orderBy` is specified, the selector should return pairs `(a, b)` meaning "a comes before b"
-- Atoms are sorted using topological sort based on this partial order
-- If cycles exist in the relation, they are broken by choosing the lexicographically smallest atom
-- Atoms not mentioned in the relation are interleaved based on when they become "ready" (no predecessors remaining)
-
-**Examples:**
-
-```yaml
-# Basic projection (lexicographic order)
-- projection:
-    sig: Time
-
-# Projection with ordering based on 'next' relation
-# If next = {(T0, T1), (T1, T2)}, atoms are ordered: T0, T1, T2
-- projection:
-    sig: Time
-    orderBy: "next"
-
-# Using transitive closure for derived ordering
-- projection:
-    sig: State
-    orderBy: "^next"
-```
+> **Note:** Projection is no longer a layout directive. Projections are applied as a pre-layout
+> data transformation using `applyProjectionTransform()`. See the [DEV_GUIDE](./DEV_GUIDE.md) 
+> for details on the projection transform API.
 
 ---
 

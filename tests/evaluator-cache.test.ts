@@ -59,7 +59,7 @@ directives:
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
     
     // Generate layout - this should trigger multiple uses of the same selector
-    layoutInstance.generateLayout(instance, {});
+    layoutInstance.generateLayout(instance);
     
     // Count how many times 'A->B' was actually evaluated (not cached hits)
     const aToB_Calls = evaluateSpy.mock.calls.filter(
@@ -91,7 +91,7 @@ constraints:
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
     
     // First layout generation
-    layoutInstance.generateLayout(instance, {});
+    layoutInstance.generateLayout(instance);
     const firstCallCount = evaluateSpy.mock.calls.length;
     
     // Clean up first spy
@@ -105,7 +105,7 @@ constraints:
     evaluateSpy = vi.spyOn(internalEval, 'evaluateExpression');
     
     // Second layout generation after reinitialization
-    layoutInstance.generateLayout(instance, {});
+    layoutInstance.generateLayout(instance);
     const secondCallCount = evaluateSpy.mock.calls.length;
     
     // After reinitialization, the cache should be cleared, so we should see
@@ -140,7 +140,7 @@ directives:
     const layoutSpec = parseLayoutSpec(layoutSpecWithMultipleDirectives);
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
     
-    layoutInstance.generateLayout(instance, {});
+    layoutInstance.generateLayout(instance);
     
     // Count actual evaluations of 'Type1' selector
     const type1Calls = evaluateSpy.mock.calls.filter(
@@ -172,7 +172,7 @@ directives:
     const layoutSpec = parseLayoutSpec(layoutSpecStr);
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
     
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = layoutInstance.generateLayout(instance);
     
     // Verify the layout is correct
     expect(layout.nodes).toHaveLength(3);

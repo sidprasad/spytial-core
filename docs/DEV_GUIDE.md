@@ -19,10 +19,11 @@ Everything in this repo revolves around a **pipelined flow** from input data →
 3. **Layout specification (CnD)**
    - Parse a CnD spec (constraints + directives) into a `LayoutSpec`.
    - This spec defines *what* the layout engine must satisfy (alignment, ordering, spacing, color, etc.).
+   - **Note:** Projections are not part of the layout spec. They are applied as a pre-layout data transform via `applyProjectionTransform()`.
 
 4. **Layout instance generation**
    - Build a `LayoutInstance` from the `LayoutSpec` + evaluator.
-   - Generate a layout using the `DataInstance` and any projections or configuration.
+   - Generate a layout using the `DataInstance` (after any projection transform has been applied).
 
 5. **Rendering / visualization**
    - Use the generated layout with WebCola, SVG, Canvas, or a React-based UI.
@@ -110,3 +111,106 @@ When extending the system, use this checklist:
 - **Evaluator**: Resolves selectors (queries) against a data instance.
 - **LayoutSpec**: Parsed CnD specification.
 - **LayoutInstance**: The runtime pipeline state (spec + evaluator) used to generate layouts.
+## Projection Transform (pre-layout data rewriting)
+
+Projections are a **pre-layout data transformation**, not a layout directive. They operate on an `IDataInstance` and produce a new `IDataInstance` with projected types/atoms removed and relation arities collapsed. This is a form of metaprogramming: projections rewrite the datum itself before any layout logic runs.
+
+### Why projections are not directives
+
+Directives (color, size, alignment, etc.) describe how to **display** a given data instance. Projections change **what data** is displayed — they are a semantic transformation on the model. By decoupling projections from the layout engine:
+
+- The layout engine has a simpler API: `generateLayout(instance)` takes one argument
+- Projected instances can be reused for export, analysis, or rendering without going through the layout engine
+- The projection logic is testable in isolation
+
+### Architecture
+
+```
+IDataInstance  ──►  applyProjectionTransform()  ──►  projected IDataInstance  ──►  LayoutInstance.generateLayout()
+                         ▲                                                              
+                    Projection[]                                           
+                    selections: Record<string, string>                                
+```
+
+### API
+
+```typescript
+import { applyProjectionTransform, Projection } from 'spytial-core';
+
+const projections: Projection[] = [
+  { sig: 'State', orderBy: 'next' }
+];
+const selections: Record<string, string> = {}; // type → chosen atom
+
+const result = applyProjectionTransform(
+  dataInstance,
+  projections,
+  selections,
+  {
+    // Optional: evaluator for orderBy sorting
+    evaluateOrderBy: (sel) => evaluator.evaluate(sel).selectedTwoples(),
+    // Optional: error handler
+    onOrderByError: (sel, err) => console.warn(`orderBy error for ${sel}:`, err),
+  }
+);
+
+// result.instance  — the projected IDataInstance (pass to layout)
+// result.choices   — ProjectionChoice[] for populating UI controls
+```
+
+### Key types
+
+| Type | Description |
+|------|-------------|
+| `Projection` | `{ sig: string; orderBy?: string }` — which type to project over |
+| `ProjectionChoice` | `{ type, projectedAtom, atoms }` — UI dropdown metadata |
+| `ProjectionTransformOptions` | `{ evaluateOrderBy?, onOrderByError? }` — optional callbacks |
+| `ProjectionTransformResult` | `{ instance, choices }` — transform output |
+
+### Ordering behavior
+
+- Without `orderBy`: atoms are sorted lexicographically by ID
+- With `orderBy` + `evaluateOrderBy` callback: atoms are topologically sorted based on the binary relation
+- Cycles in the relation are broken by choosing the lexicographically smallest atom
+- Atoms not in the relation are interleaved when their in-degree reaches 0
+
+### Evaluation-order dependency (`orderBy` and the evaluator)
+
+The `evaluateOrderBy` callback inside `applyProjectionTransform` is invoked **before** `instance.applyProjections()`. This means it evaluates against the **original, un-projected** data instance. This is intentional:
+
+- The ordering relation (e.g., `next: Time → Time`) involves atoms of the projected type. After projection removes all but one atom, those relation tuples are gone.
+- Layout selectors that run later (inside `generateLayout`) still work: atom IDs returned by the evaluator that don't exist in the projected graph are silently filtered out during node matching.
+
+Consequence for callers:
+
+```
+evaluator.initialize({ sourceData: originalInstance })   // ① evaluator sees full data
+applyProjectionTransform(originalInstance, ...)           // ② orderBy evaluated here
+layoutInstance.generateLayout(projectedInstance)          // ③ layout on projected data
+```
+
+Do **not** re-initialise the evaluator with the projected instance between steps ② and ③ — the evaluator's role at step ③ is to resolve layout selectors, and IDs that were projected away are harmlessly ignored.
+
+### Integration pattern
+
+In demos and applications, projections are specified separately from the CnD layout spec:
+
+```javascript
+// 1. Initialise evaluator with the original (un-projected) instance
+evaluator.initialize({ sourceData: originalInstance });
+
+// 2. Define projections
+const projections = [{ sig: 'Time', orderBy: 'next' }];
+const selections = {};
+
+// 3. Apply projection (pre-layout step) — orderBy evaluated here
+const projResult = applyProjectionTransform(originalInstance, projections, selections, {
+  evaluateOrderBy: (sel) => evaluator.evaluate(sel).selectedTwoples(),
+});
+
+// 4. Generate layout on the projected instance
+const layoutResult = layoutInstance.generateLayout(projResult.instance);
+
+// 5. Populate projection controls with choices
+updateProjectionControls(projResult.choices);
+```

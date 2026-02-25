@@ -89,7 +89,7 @@ describe('Sequence Layout Consistency', () => {
       const instance = new JSONDataInstance(jsonData1);
       const evaluator = createEvaluator(instance);
       const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-      const { layout } = layoutInstance.generateLayout(instance, {});
+      const { layout } = layoutInstance.generateLayout(instance);
 
       const translator = new WebColaTranslator();
       
@@ -134,7 +134,7 @@ describe('Sequence Layout Consistency', () => {
       const instance = new JSONDataInstance(jsonData1);
       const evaluator = createEvaluator(instance);
       const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-      const { layout } = layoutInstance.generateLayout(instance, {});
+      const { layout } = layoutInstance.generateLayout(instance);
 
       const translator = new WebColaTranslator();
       
@@ -171,7 +171,7 @@ describe('Sequence Layout Consistency', () => {
       const instance = new JSONDataInstance(jsonData1);
       const evaluator = createEvaluator(instance);
       const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-      const { layout } = layoutInstance.generateLayout(instance, {});
+      const { layout } = layoutInstance.generateLayout(instance);
 
       const translator = new WebColaTranslator();
       
@@ -194,7 +194,7 @@ describe('Sequence Layout Consistency', () => {
       const instance1 = new JSONDataInstance(jsonData1);
       const evaluator1 = createEvaluator(instance1);
       const layoutInstance1 = new LayoutInstance(layoutSpec, evaluator1, 0, true);
-      const { layout: layout1 } = layoutInstance1.generateLayout(instance1, {});
+      const { layout: layout1 } = layoutInstance1.generateLayout(instance1);
       
       const result1 = await translator.translate(layout1, 800, 600);
       
@@ -212,7 +212,7 @@ describe('Sequence Layout Consistency', () => {
       const instance2 = new JSONDataInstance(jsonData2);
       const evaluator2 = createEvaluator(instance2);
       const layoutInstance2 = new LayoutInstance(layoutSpec, evaluator2, 0, true);
-      const { layout: layout2 } = layoutInstance2.generateLayout(instance2, {});
+      const { layout: layout2 } = layoutInstance2.generateLayout(instance2);
       
       const result2 = await translator.translate(layout2, 800, 600, { priorPositions });
 
@@ -239,7 +239,7 @@ describe('Sequence Layout Consistency', () => {
       const instance1 = new JSONDataInstance(jsonData1);
       const evaluator1 = createEvaluator(instance1);
       const layoutInstance1 = new LayoutInstance(layoutSpec, evaluator1, 0, true);
-      const { layout: layout1 } = layoutInstance1.generateLayout(instance1, {});
+      const { layout: layout1 } = layoutInstance1.generateLayout(instance1);
       
       const result1 = await translator.translate(layout1, 800, 600);
       
@@ -277,7 +277,7 @@ describe('Sequence Layout Consistency', () => {
       const instance2 = new JSONDataInstance(jsonDataWithNewAtom);
       const evaluator2 = createEvaluator(instance2);
       const layoutInstance2 = new LayoutInstance(layoutSpec, evaluator2, 0, true);
-      const { layout: layout2 } = layoutInstance2.generateLayout(instance2, {});
+      const { layout: layout2 } = layoutInstance2.generateLayout(instance2);
       
       const result2 = await translator.translate(layout2, 800, 600, { priorPositions });
 
@@ -305,7 +305,7 @@ describe('Sequence Layout Consistency', () => {
       const instance = new JSONDataInstance(jsonData1);
       const evaluator = createEvaluator(instance);
       const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-      const { layout } = layoutInstance.generateLayout(instance, {});
+      const { layout } = layoutInstance.generateLayout(instance);
 
       const translator = new WebColaTranslator();
       
@@ -330,7 +330,7 @@ describe('Sequence Layout Consistency', () => {
       const instance = new JSONDataInstance(jsonData1);
       const evaluator = createEvaluator(instance);
       const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-      const { layout } = layoutInstance.generateLayout(instance, {});
+      const { layout } = layoutInstance.generateLayout(instance);
 
       const translator = new WebColaTranslator();
       

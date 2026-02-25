@@ -7,7 +7,6 @@ import {
     ColorEdgeSelector, 
     HideFieldSelector, 
     HelperEdgeSelector, 
-    ProjectionSelector,
     TagSelector
 } from './index';
 import { useHighlight } from './hooks';
@@ -64,8 +63,6 @@ const renderSelectorComponent = (
             return <ColorAtomSelector directiveData={directiveData} onUpdate={onUpdate}/>;
         case 'edgeColor':
             return <ColorEdgeSelector directiveData={directiveData} onUpdate={onUpdate}/>;
-        case 'projection':
-            return <ProjectionSelector directiveData={directiveData} onUpdate={onUpdate}/>;
         case 'flag':
             return <FlagSelector directiveData={directiveData} onUpdate={onUpdate}/>;
         case 'inferredEdge':
@@ -156,7 +153,6 @@ const DirectiveCard: React.FC<DirectiveCardProps> = (props: DirectiveCardProps) 
                 <option value="icon">Icon</option>
                 <option value="atomColor">Color (Atom)</option>
                 <option value="edgeColor">Edge Style</option>
-                <option value="projection">Projection</option>
                 <option value="inferredEdge">Inferred Edge</option>
             </select>
         </div>

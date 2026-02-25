@@ -196,6 +196,18 @@
         <div id="webcola-cnd-container">
             <!-- React element attached here -->
         </div>
+        
+        <!-- Inline Projection Controls -->
+        <div id="projection-panel" class="mb-3">
+            <h6 class="h6 text-dark">Projections:</h6>
+            <div class="d-flex gap-2 mb-2">
+                <input id="projection-type-input" type="text" class="form-control form-control-sm"
+                       placeholder="Type name (e.g. Person)" autocomplete="off" />
+                <button id="addProjectionBtn" class="btn btn-sm btn-outline-primary" onclick="addProjection()" style="white-space:nowrap">Add</button>
+            </div>
+            <div id="projection-error" class="text-danger small mb-2" style="display:none"></div>
+            <div id="projection-list"></div>
+        </div>
     </div>
 
     <!-- D3 v4 and WebCola - the working combination -->
@@ -214,6 +226,10 @@
         let cachedLayoutSpec = null;
         let cachedInstance = null;
         let cachedEvaluatorType = 'sgq';
+        // Projection state
+        let activeProjections = [];
+        let projectionSelections = {};
+        let projectedInstance = null;
 
         function getCurrentJsonText() {
             return document.getElementById('webcola-json').value.trim();
@@ -391,6 +407,10 @@
                 throw new Error('Missing required data for layout generation');
             }
 
+            // Reset projected instance so we never use a stale one.
+            // The orchestrator will set it again after its React state update.
+            projectedInstance = null;
+
             updateStatus('Creating layout...', 'info');
             const ENABLE_ALIGNMENT_EDGES = true;
 
@@ -402,7 +422,30 @@
             );
 
             updateStatus('Generating layout with JSON data...', 'info');
-            const layoutResult = layoutInstance.generateLayout(cachedInstance, {});
+
+            // Apply projection transform if any projections are active
+            let instanceForLayout = cachedInstance;
+            if (activeProjections.length > 0) {
+                try {
+                    const result = CndCore.applyProjectionTransform(
+                        cachedInstance,
+                        activeProjections,
+                        projectionSelections
+                    );
+                    instanceForLayout = result.instance;
+                    projectedInstance = result.instance;
+                    renderProjectionChoices(result.choices);
+                } catch (err) {
+                    console.error('Projection transform failed:', err);
+                    showProjectionError(err.message);
+                    // Render rows with remove buttons so the user can fix/remove the bad projection.
+                    renderProjectionChoices([]);
+                }
+            } else {
+                projectedInstance = null;
+            }
+
+            const layoutResult = layoutInstance.generateLayout(instanceForLayout);
             currentInstanceLayout = layoutResult.layout;
 
             // 1. Check for selector errors first - early out if present
@@ -602,6 +645,11 @@
             cachedEvaluator = null;
             cachedLayoutSpec = null;
             cachedEvaluatorType = getSelectedEvaluatorType();
+            activeProjections = [];
+            projectionSelections = {};
+            projectedInstance = null;
+            const projListEl = document.getElementById('projection-list');
+            if (projListEl) projListEl.innerHTML = '';
 
             updateStatus('Graph cleared.', 'info');
         }
@@ -634,6 +682,118 @@
             }
         }
 
+        // ── Projection UI (vanilla JS) ─────────────────────────────────
+
+        function showProjectionError(msg) {
+            const el = document.getElementById('projection-error');
+            el.textContent = msg;
+            el.style.display = 'block';
+        }
+
+        function clearProjectionError() {
+            const el = document.getElementById('projection-error');
+            el.textContent = '';
+            el.style.display = 'none';
+        }
+
+        function addProjection() {
+            const input = document.getElementById('projection-type-input');
+            const sig = input.value.trim();
+            if (!sig) return;
+
+            if (activeProjections.some(p => p.sig === sig)) {
+                showProjectionError('Already projecting over "' + sig + '".');
+                return;
+            }
+
+            clearProjectionError();
+            activeProjections.push({ sig });
+            input.value = '';
+            rerunProjectedLayout();
+        }
+
+        function removeProjection(sig) {
+            activeProjections = activeProjections.filter(p => p.sig !== sig);
+            delete projectionSelections[sig];
+            clearProjectionError();
+            rerunProjectedLayout();
+        }
+
+        function onProjectionAtomChange(sig, atomId) {
+            projectionSelections[sig] = atomId;
+            rerunProjectedLayout();
+        }
+
+        async function rerunProjectedLayout() {
+            if (!cachedInstance || !cachedEvaluator || !cachedLayoutSpec) return;
+            try {
+                await generateLayout();
+                await renderGraph();
+            } catch (error) {
+                console.error('Error re-running projected layout:', error);
+                updateStatus('Projection layout error: ' + error.message, 'error');
+            }
+        }
+
+        function renderProjectionChoices(choices) {
+            const listEl = document.getElementById('projection-list');
+            listEl.innerHTML = '';
+
+            for (const proj of activeProjections) {
+                const choice = choices.find(c => c.type === proj.sig);
+
+                const row = document.createElement('div');
+                row.className = 'd-flex align-items-center gap-2 mb-1';
+
+                const tag = document.createElement('span');
+                tag.className = 'badge bg-secondary d-flex align-items-center gap-1';
+                tag.textContent = proj.sig;
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'btn-close btn-close-white ms-1';
+                removeBtn.style.fontSize = '0.5rem';
+                removeBtn.setAttribute('aria-label', 'Remove ' + proj.sig);
+                removeBtn.onclick = () => removeProjection(proj.sig);
+                tag.appendChild(removeBtn);
+                row.appendChild(tag);
+
+                if (choice && choice.atoms.length > 0) {
+                    const select = document.createElement('select');
+                    select.className = 'form-select form-select-sm';
+                    select.style.maxWidth = '200px';
+                    select.setAttribute('aria-label', 'Atom for ' + proj.sig);
+                    for (const atom of choice.atoms) {
+                        const opt = document.createElement('option');
+                        opt.value = atom;
+                        opt.textContent = atom;
+                        if (atom === choice.projectedAtom) opt.selected = true;
+                        select.appendChild(opt);
+                    }
+                    select.onchange = () => onProjectionAtomChange(proj.sig, select.value);
+                    row.appendChild(select);
+                } else if (choice) {
+                    const noAtoms = document.createElement('span');
+                    noAtoms.className = 'text-muted small';
+                    noAtoms.textContent = 'No atoms';
+                    row.appendChild(noAtoms);
+                } else {
+                    const notFound = document.createElement('span');
+                    notFound.className = 'text-danger small';
+                    notFound.textContent = 'Type not found';
+                    row.appendChild(notFound);
+                }
+
+                listEl.appendChild(row);
+            }
+        }
+
+        document.getElementById('projection-type-input')?.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addProjection();
+            }
+        });
+
         window.addEventListener('load', () => {
             initializePipeline();
             if (window.mountCndLayoutInterface) {
@@ -649,6 +809,8 @@
         window.loadJsonData = loadJsonData;
         window.renderGraph = renderGraph;
         window.clearGraph = clearGraph;
+        window.addProjection = addProjection;
+        window.removeProjection = removeProjection;
     </script>
 </body>
 </html>

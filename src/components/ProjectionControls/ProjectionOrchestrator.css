@@ -1,0 +1,137 @@
+/**
+ * Projection Orchestrator Styles
+ *
+ * Simplified projection UI: free-text input for type names,
+ * per-type atom dropdowns inline with remove buttons.
+ */
+
+.projection-orchestrator {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 0.25rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+/* ── Add projection row ──────────────────────────────── */
+.projection-orchestrator__add {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.projection-controls__input {
+  flex: 1;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  border: 1px solid #ced4da;
+  border-radius: 0.25rem;
+  color: #495057;
+  background-color: #fff;
+  min-width: 0;
+}
+
+.projection-controls__input:focus {
+  border-color: #80bdff;
+  outline: 0;
+  box-shadow: 0 0 0 0.15rem rgba(0, 123, 255, 0.25);
+}
+
+.projection-orchestrator__add-btn {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: #fff;
+  background-color: #007bff;
+  border: 1px solid #007bff;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.projection-orchestrator__add-btn:hover:not(:disabled) {
+  background-color: #0069d9;
+  border-color: #0062cc;
+}
+
+.projection-orchestrator__add-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* ── Error banner ────────────────────────────────────── */
+.projection-orchestrator__error {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8rem;
+  color: #856404;
+  background-color: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+
+/* ── Projection rows (type tag + atom dropdown) ──────── */
+.projection-orchestrator__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.projection-orchestrator__row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.projection-orchestrator__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #495057;
+  background-color: #e2e6ea;
+  border: 1px solid #ced4da;
+  border-radius: 1rem;
+  white-space: nowrap;
+}
+
+.projection-orchestrator__remove-btn {
+  background: none;
+  border: none;
+  padding: 0 0.15rem;
+  font-size: 1rem;
+  line-height: 1;
+  color: #6c757d;
+  cursor: pointer;
+}
+
+.projection-orchestrator__remove-btn:hover:not(:disabled) {
+  color: #dc3545;
+}
+
+.projection-orchestrator__remove-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.projection-orchestrator__no-atoms {
+  font-size: 0.8rem;
+  color: #6c757d;
+  font-style: italic;
+}
+
+/* ── Responsive adjustments ─────────────────────────── */
+@media (max-width: 576px) {
+  .projection-orchestrator__add {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .projection-orchestrator__row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

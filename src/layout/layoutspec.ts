@@ -292,17 +292,6 @@ export interface EdgeStyleDirective extends FieldDirective {
 export type EdgeColorDirective = EdgeStyleDirective;
 
 
-export interface ProjectionDirective extends DirectiveOperation {
-    sig : string;
-    /** 
-     * Optional selector to determine the order of atoms in projection controls.
-     * The selector should return tuples of (atom, sortKey) pairs.
-     * Atoms will be sorted by their associated sort keys lexicographically.
-     * If not specified, atoms are returned in their natural order (typically lexicographic by ID).
-     */
-    orderBy?: string;
-}
-
 /////////////////////////////////////////////////
 
 interface ConstraintsBlock 
@@ -324,7 +313,6 @@ interface DirectivesBlock {
     sizes: AtomSizeDirective[];
     icons: AtomIconDirective[];
     edgeColors: EdgeColorDirective[];
-    projections: ProjectionDirective[];
     attributes: AttributeDirective[];
     tags: TagDirective[];
     hiddenFields: FieldHidingDirective[];
@@ -377,7 +365,6 @@ function DEFAULT_LAYOUT() : LayoutSpec
             sizes: [],
             icons: [],
             edgeColors: [],
-            projections: [],
             attributes: [],
             tags: [],
             hiddenFields: [],
@@ -817,14 +804,6 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
         }
     });
 
-    let projections : ProjectionDirective[] = typedDirectives.filter(d => d.projection).map(d => {
-            return {
-                sig: d.projection.sig,
-                orderBy: d.projection.orderBy
-            }
-        }
-    );
-
     let flags = typedDirectives.filter(d => d.flag).map(d => d.flag);
     let hideDisconnected = flags.includes("hideDisconnected");
     let hideDisconnectedBuiltIns = flags.includes("hideDisconnectedBuiltIns");
@@ -858,7 +837,6 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
         sizes,
         icons,
         edgeColors,
-        projections,
         attributes,
         tags,
         hiddenFields,

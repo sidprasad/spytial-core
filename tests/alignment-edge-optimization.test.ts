@@ -48,7 +48,7 @@ constraints:
     
     // Generate layout with alignment edges enabled
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const result = layoutInstance.generateLayout(dataInstance, {});
+    const result = layoutInstance.generateLayout(dataInstance);
     
     // Count edges - should only have the original 2 edges (A->B, B->C)
     // No alignment edges should be added since A-B and B-C are already connected
@@ -80,7 +80,7 @@ constraints:
     
     // Generate layout with alignment edges enabled
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const result = layoutInstance.generateLayout(dataInstance, {});
+    const result = layoutInstance.generateLayout(dataInstance);
     
     // Should have added 1 alignment edge since A and B are disconnected
     expect(result.layout.edges.length).toBe(1);
@@ -124,7 +124,7 @@ constraints:
     
     // Generate layout with alignment edges enabled
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const result = layoutInstance.generateLayout(dataInstance, {});
+    const result = layoutInstance.generateLayout(dataInstance);
     
     // Should only have the original 3 edges (A->B, B->C, C->D)
     // No alignment edges needed because all nodes are connected via paths:
@@ -156,7 +156,7 @@ constraints:
     
     // Generate layout with alignment edges DISABLED
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, false);
-    const result = layoutInstance.generateLayout(dataInstance, {});
+    const result = layoutInstance.generateLayout(dataInstance);
     
     // Should have NO edges at all since alignment edge creation is disabled
     expect(result.layout.edges.length).toBe(0);
@@ -206,7 +206,7 @@ constraints:
     evaluator.initialize({ sourceData: dataInstance });
     
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const result = layoutInstance.generateLayout(dataInstance, {});
+    const result = layoutInstance.generateLayout(dataInstance);
     
     // Should only have 9 edges (the chain connections), not 9 + 45 alignment edges
     // All nodes are connected via the chain, so no alignment edges needed
@@ -242,7 +242,7 @@ constraints:
     
     // Generate layout with NEVER strategy
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true, AlignmentEdgeStrategy.NEVER);
-    const result = layoutInstance.generateLayout(dataInstance, {});
+    const result = layoutInstance.generateLayout(dataInstance);
     
     // Should have NO edges at all with NEVER strategy
     expect(result.layout.edges.length).toBe(0);
@@ -283,7 +283,7 @@ constraints:
     
     // Generate layout with DIRECT strategy
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true, AlignmentEdgeStrategy.DIRECT);
-    const result = layoutInstance.generateLayout(dataInstance, {});
+    const result = layoutInstance.generateLayout(dataInstance);
     
     // Should have 2 data edges + 1 alignment edge for A-C (not directly connected)
     // A-B are directly connected: no alignment edge
@@ -330,7 +330,7 @@ constraints:
     
     // Generate layout with CONNECTED strategy (default)
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true, AlignmentEdgeStrategy.CONNECTED);
-    const result = layoutInstance.generateLayout(dataInstance, {});
+    const result = layoutInstance.generateLayout(dataInstance);
     
     // Should have only 2 data edges, no alignment edges
     // All nodes are connected via paths, so no alignment edges needed
@@ -375,7 +375,7 @@ constraints:
     evaluator1.initialize({ sourceData: dataInstance });
     
     const layoutInstance1 = new LayoutInstance(layoutSpec1, evaluator1, 0, true, AlignmentEdgeStrategy.CONNECTED);
-    const result1 = layoutInstance1.generateLayout(dataInstance, {});
+    const result1 = layoutInstance1.generateLayout(dataInstance);
     
     // Should have 2 data edges (A-B, C-D) + 1 alignment edge (A-C)
     expect(result1.layout.edges.length).toBe(3);
@@ -394,7 +394,7 @@ constraints:
     evaluator2.initialize({ sourceData: dataInstance });
     
     const layoutInstance2 = new LayoutInstance(layoutSpec2, evaluator2, 0, true, AlignmentEdgeStrategy.CONNECTED);
-    const result2 = layoutInstance2.generateLayout(dataInstance, {});
+    const result2 = layoutInstance2.generateLayout(dataInstance);
     
     // Should have 2 data edges + 1 alignment edge (A-C only)
     // B-D should NOT get alignment edge because they're connected via: B->A->C(alignment)->D
@@ -440,7 +440,7 @@ constraints:
     evaluator.initialize({ sourceData: dataInstance });
     
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true, AlignmentEdgeStrategy.CONNECTED);
-    const result = layoutInstance.generateLayout(dataInstance, {});
+    const result = layoutInstance.generateLayout(dataInstance);
     
     // Should have only 3 data edges (the triangle), no alignment edges
     // All nodes are already connected via the cycle
@@ -487,7 +487,7 @@ constraints:
     evaluator.initialize({ sourceData: dataInstance });
     
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true, AlignmentEdgeStrategy.CONNECTED);
-    const result = layoutInstance.generateLayout(dataInstance, {});
+    const result = layoutInstance.generateLayout(dataInstance);
     
     // Should have 2 data edges (A-B, C-D) + 1 alignment edge
     // One of the alignment edges (B-C or A-D) should be pruned as redundant

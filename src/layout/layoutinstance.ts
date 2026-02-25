@@ -341,13 +341,6 @@ export class LayoutInstance {
         }
     }
 
-    get projectedSigs(): string[] {
-        if (!this._layoutSpec.directives.projections) {
-            return [];
-        }
-        return this._layoutSpec.directives.projections.map((projection) => projection.sig);
-    }
-
     get hideDisconnected(): boolean {
         return this._layoutSpec.directives.hideDisconnected || false;
     }
@@ -1011,196 +1004,17 @@ export class LayoutInstance {
     }
 
     /**
-     * Performs a topological sort on atoms based on a partial order defined by tuples.
-     * If (a, b) is in the tuples, then a comes before b in the result.
-     * Handles cycles by breaking them (choosing lexicographically smallest node to continue).
-     * Atoms not mentioned in any tuple are placed at the end, sorted lexicographically.
-     * 
-     * @param atoms - The atoms to sort
-     * @param tuples - Pairs [a, b] meaning a should come before b
-     * @returns Sorted array of atoms
-     */
-    private topologicalSortWithCycleBreaking(atoms: string[], tuples: string[][]): string[] {
-        const atomSet = new Set(atoms);
-        
-        // Build adjacency list and in-degree count (only for atoms we care about)
-        const adjacency = new Map<string, Set<string>>();
-        const inDegree = new Map<string, number>();
-        
-        // Initialize all atoms
-        for (const atom of atoms) {
-            adjacency.set(atom, new Set());
-            inDegree.set(atom, 0);
-        }
-        
-        // Build the graph from tuples
-        for (const tuple of tuples) {
-            if (tuple.length >= 2) {
-                const from = tuple[0];
-                const to = tuple[1];
-                
-                // Only consider edges between atoms in our set
-                if (atomSet.has(from) && atomSet.has(to) && from !== to) {
-                    const neighbors = adjacency.get(from)!;
-                    if (!neighbors.has(to)) {
-                        neighbors.add(to);
-                        inDegree.set(to, (inDegree.get(to) || 0) + 1);
-                    }
-                }
-            }
-        }
-        
-        // Kahn's algorithm with cycle breaking
-        const result: string[] = [];
-        const remaining = new Set(atoms);
-        
-        while (remaining.size > 0) {
-            // Find all nodes with in-degree 0
-            const ready: string[] = [];
-            for (const atom of remaining) {
-                if ((inDegree.get(atom) || 0) === 0) {
-                    ready.push(atom);
-                }
-            }
-            
-            if (ready.length === 0) {
-                // Cycle detected - break it by picking the lexicographically smallest remaining node
-                const sorted = [...remaining].sort((a, b) => a.localeCompare(b));
-                ready.push(sorted[0]);
-            }
-            
-            // Sort ready nodes lexicographically for deterministic output
-            ready.sort((a, b) => a.localeCompare(b));
-            
-            // Process the first ready node
-            const node = ready[0];
-            result.push(node);
-            remaining.delete(node);
-            
-            // Decrease in-degree of neighbors
-            const neighbors = adjacency.get(node) || new Set();
-            for (const neighbor of neighbors) {
-                if (remaining.has(neighbor)) {
-                    inDegree.set(neighbor, (inDegree.get(neighbor) || 1) - 1);
-                }
-            }
-        }
-        
-        return result;
-    }
-
-    private applyLayoutProjections(ai: IDataInstance, projections: Record<string, string>): { projectedInstance: IDataInstance, finalProjectionChoices: { type: string, projectedAtom: string, atoms: string[] }[] } {
-
-        let projectedSigs: string[] = this.projectedSigs;
-        const projectionDirectives = this._layoutSpec.directives.projections || [];
-
-        // Get all types
-        const allTypes = ai.getTypes();
-        
-        // For each projected sig, collect atoms from all types that have this sig in their type hierarchy
-        // This handles abstract sigs - e.g., if projecting over "State", collect atoms from 
-        // "Initial extends State", "Changed extends State", etc.
-        let atomsPerProjectedType: Record<string, string[]> = {};
-        
-        for (const sig of projectedSigs) {
-            // Check if this sig exists in the type hierarchy
-            const sigExists = allTypes.some(t => t.types.includes(sig));
-            if (!sigExists) {
-                throw new Error(`Projected type '${sig}' not found in data instance`);
-            }
-            
-            // Find all types that include this sig in their hierarchy (i.e., subtypes/descendants)
-            const matchingTypes = allTypes.filter(t => t.types.includes(sig));
-            
-            // Collect all atoms from matching types, using a Set to deduplicate
-            // (In Alloy, parent sigs may include atoms from subsigs, so the same atom
-            // could appear in multiple type entries)
-            const atomSet = new Set<string>();
-            for (const type of matchingTypes) {
-                for (const atom of type.atoms) {
-                    atomSet.add(atom.id);
-                }
-            }
-            
-            let atoms = [...atomSet];
-            
-            // Check if there's an orderBy selector for this projection
-            const projectionDirective = projectionDirectives.find(p => p.sig === sig);
-            if (projectionDirective?.orderBy) {
-                try {
-                    // Evaluate the orderBy selector to get (atom, sortKey) tuples
-                    const orderResult = this.evaluator.evaluate(projectionDirective.orderBy, { instanceIndex: this.instanceNum });
-                    const orderTuples = orderResult.selectedTwoples();
-                    
-                    // Perform topological sort on the partial order defined by the tuples
-                    // If (a, b) is in the relation, then a should come before b
-                    atoms = this.topologicalSortWithCycleBreaking(atoms, orderTuples);
-                } catch (error) {
-                    // Record the error but continue with default ordering
-                    this.recordSelectorError(projectionDirective.orderBy, 'projection orderBy selector', error);
-                    // Fallback to lexicographic sort
-                    atoms.sort((a, b) => a.localeCompare(b));
-                }
-            } else {
-                // Default: sort lexicographically by atom ID
-                atoms.sort((a, b) => a.localeCompare(b));
-            }
-            
-            atomsPerProjectedType[sig] = atoms;
-        }
-
-
-
-
-        let projectedAtomIds: string[] = [];
-
-        Object.entries(atomsPerProjectedType).forEach(([typeId, atomIds]) => {
-
-
-            // TODO: Here, we need to actually get a user to select the atom from a dropdown. If none is selected, we should default to the first atom.
-
-            if (atomIds.length > 0) {
-
-
-                // Check if projections[typeId] exists
-                if (projections[typeId]) {
-                    projectedAtomIds.push(projections[typeId]);
-                }
-                else {
-                    let to_project = atomIds[0];
-                    projections[typeId] = to_project;
-                    projectedAtomIds.push(to_project);
-                }
-            }
-        });
-
-        // finalProjectionChoices : { type : string, projectedAtom : string, atoms : string[]} 
-        let finalProjectionChoices = Object.entries(projections)
-
-            .filter(([typeId]) => projectedSigs.includes(typeId)) // This is crucial for scenarios where the projection is changed.
-
-            .map(([typeId, atomId]) => {
-                let atoms = atomsPerProjectedType[typeId];
-                return { type: typeId, projectedAtom: atomId, atoms: atoms };
-            });
-
-        let projectedInstance = ai.applyProjections(projectedAtomIds);
-        return { projectedInstance, finalProjectionChoices };
-    }
-
-    /**
-     * Generates the layout for the given data instance and projections.
+     * Generates the layout for the given data instance.
+     * Projections should be applied to the data instance before calling this method
+     * using `applyProjectionTransform()` from the data-instance module.
      * @param a - The data instance to generate the layout for.
-     * @param projections - ...
-     * @returns An object containing the layout, projection data, constraint error (if any), and any selector errors encountered.
+     * @returns An object containing the layout, constraint error (if any), and any selector errors encountered.
      * @throws {ConstraintError} If the layout cannot be generated due to unsatisfiable constraints and error isn't caught to be surfaced to the user.
      */
     public generateLayout(
-        a: IDataInstance,
-        projections: Record<string, string>
+        a: IDataInstance
     ): {
         layout: InstanceLayout,
-        projectionData: { type: string, projectedAtom: string, atoms: string[] }[],
         error: ConstraintError | null,
         selectorErrors: SelectorErrorDetail[]
     } {
@@ -1211,10 +1025,7 @@ export class LayoutInstance {
         this.hiddenNodeConflicts = new Map();
         this.conflictedHiddenNodes = new Set();
 
-        /** Here, we calculate some of the presentational directive choices */
-        let projectionResult = this.applyLayoutProjections(a, projections);
-        let ai = projectionResult.projectedInstance;
-        let projectionData = projectionResult.finalProjectionChoices;
+        let ai = a;
 
         // Do not apply hideDisconnectedBuiltIns here — inferred edges may connect built-in atoms.
         // We apply built-in hiding afterwards in `ensureNoExtraNodes` so inferred edges can reconnect them.
@@ -1329,7 +1140,6 @@ export class LayoutInstance {
                         graph: g,
                         groups,
                         disconnectedNodes: dcN,
-                        projectionData,
                         constraints
                     }
                 );
@@ -1349,7 +1159,7 @@ export class LayoutInstance {
         // Check for hidden-node conflicts: constraints that were dropped because they
         // reference nodes hidden by hideAtom directives. Report these like IIS conflicts.
         if (this.hiddenNodeConflicts.size > 0) {
-            return this.handleHiddenNodeConflictError(layout, projectionData);
+            return this.handleHiddenNodeConflictError(layout);
         }
 
         // Validate all constraints (conjunctive + disjunctive) in one pass
@@ -1360,16 +1170,14 @@ export class LayoutInstance {
             if ((constraintError as PositionalConstraintError).minimalConflictingSet) {
                 return this.handlePositionalConstraintError(
                     constraintError as PositionalConstraintError,
-                    layout,
-                    projectionData
+                    layout
                 );
             }
 
             if ((constraintError as GroupOverlapError).overlappingNodes) {
                 return this.handleGroupOverlapError(
                     constraintError as GroupOverlapError,
-                    layout,
-                    projectionData
+                    layout
                 );
             }
 
@@ -1399,7 +1207,7 @@ export class LayoutInstance {
 
         // Return layout with selectorErrors (if any) - these don't block the layout
         // but callers should check and display them to the user
-        return { layout, projectionData, error: null, selectorErrors: this.selectorErrors };
+        return { layout, error: null, selectorErrors: this.selectorErrors };
     }
 
     /**
@@ -1413,12 +1221,10 @@ export class LayoutInstance {
             graph: Graph,
             groups: LayoutGroup[],
             disconnectedNodes: string[],
-            projectionData: { type: string, projectedAtom: string, atoms: string[] }[],
             constraints: LayoutConstraint[],
         }
     ): {
         layout: InstanceLayout,
-        projectionData: { type: string, projectedAtom: string, atoms: string[] }[],
         error: ConstraintError,
         selectorErrors: SelectorErrorDetail[]
     } {
@@ -1439,7 +1245,6 @@ export class LayoutInstance {
 
         return {
             layout: layoutWithErrorMetadata,
-            projectionData: context.projectionData,
             error,
             selectorErrors: this.selectorErrors
         };
@@ -1452,11 +1257,9 @@ export class LayoutInstance {
      * constraints already dropped (the counterfactual).
      */
     private handleHiddenNodeConflictError(
-        layout: InstanceLayout,
-        projectionData: { type: string, projectedAtom: string, atoms: string[] }[]
+        layout: InstanceLayout
     ): {
         layout: InstanceLayout,
-        projectionData: { type: string, projectedAtom: string, atoms: string[] }[],
         error: ConstraintError,
         selectorErrors: SelectorErrorDetail[]
     } {
@@ -1525,7 +1328,6 @@ export class LayoutInstance {
 
         return {
             layout: filteredLayout,
-            projectionData,
             error,
             selectorErrors: this.selectorErrors
         };
@@ -1533,15 +1335,13 @@ export class LayoutInstance {
 
     /**
      * Helper function to handle positional constraint errors by creating a layout with conflicting constraints removed
-     * @returns An object containing the layout with error metadata, projection data, and the error itself.
+     * @returns An object containing the layout with error metadata and the error itself.
      */
     private handlePositionalConstraintError(
         error: PositionalConstraintError,
-        layout: InstanceLayout,
-        projectionData: { type: string, projectedAtom: string, atoms: string[] }[]
+        layout: InstanceLayout
     ): {
         layout: InstanceLayout,
-        projectionData: { type: string, projectedAtom: string, atoms: string[] }[],
         error: ConstraintError,
         selectorErrors: SelectorErrorDetail[]
     } {
@@ -1560,7 +1360,6 @@ export class LayoutInstance {
         };
         return {
             layout: layoutWithErrorMetadata,
-            projectionData,
             error: error,
             selectorErrors: this.selectorErrors
         };
@@ -1568,15 +1367,13 @@ export class LayoutInstance {
 
     /**
      * Helper function to handle group overlap errors by creating a layout with overlapping nodes metadata
-     * @returns An object containing the layout with error metadata, projection data, and the error itself.
+     * @returns An object containing the layout with error metadata and the error itself.
      */
     private handleGroupOverlapError(
         error: GroupOverlapError,
-        layout: InstanceLayout,
-        projectionData: { type: string, projectedAtom: string, atoms: string[] }[]
+        layout: InstanceLayout
     ): {
         layout: InstanceLayout,
-        projectionData: { type: string, projectedAtom: string, atoms: string[] }[],
         error: ConstraintError,
         selectorErrors: SelectorErrorDetail[]
     } {
@@ -1613,7 +1410,6 @@ export class LayoutInstance {
         }
         return { 
             layout: layoutWithErrorMetadata, 
-            projectionData, 
             error: error,
             selectorErrors: this.selectorErrors
         };

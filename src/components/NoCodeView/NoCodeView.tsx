@@ -34,7 +34,6 @@ const SUPPORTED_DIRECTIVE_TYPES: ReadonlySet<DirectiveType> = new Set([
     'atomColor',
     'edgeColor',
     'size',
-    'projection',
     'flag',
     'inferredEdge',
     'hideAtom',

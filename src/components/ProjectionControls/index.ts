@@ -10,3 +10,6 @@
 
 export { ProjectionControls } from './ProjectionControls';
 export type { ProjectionControlsProps, ProjectionChoice } from './ProjectionControls';
+
+export { ProjectionOrchestrator } from './ProjectionOrchestrator';
+export type { ProjectionOrchestratorProps, ProjectionOrchestratorResult } from './ProjectionOrchestrator';

@@ -3,6 +3,7 @@ import { JSONDataInstance, IJsonDataInstance } from '../src/data-instance/json-d
 import { parseLayoutSpec } from '../src/layout/layoutspec';
 import { LayoutInstance } from '../src/layout/layoutinstance';
 import { SGraphQueryEvaluator } from '../src/evaluators/sgq-evaluator';
+import { applyProjectionTransform } from '../src/data-instance/projection-transform';
 
 const jsonData: IJsonDataInstance = {
   atoms: [
@@ -66,7 +67,7 @@ describe('LayoutInstance', () => {
     const evaluator = createEvaluator(instance);
 
     const layoutInstance = new LayoutInstance(layoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = layoutInstance.generateLayout(instance);
 
     expect(layout.nodes).toHaveLength(2);
     expect(layout.edges).toHaveLength(1); // Only the original relation edge, no alignment edge because they're already connected
@@ -78,7 +79,7 @@ describe('LayoutInstance', () => {
     const evaluator = createEvaluator(instance);
 
     const layoutInstance = new LayoutInstance(layoutSpecDisconnectedNodes, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = layoutInstance.generateLayout(instance);
 
     expect(layout.nodes).toHaveLength(3);
     expect(layout.edges).toHaveLength(2); // Original relation edge A->B + alignment edge A->C
@@ -112,7 +113,7 @@ constraints:
     const alignLayoutSpec = parseLayoutSpec(alignConstraintSpec);
 
     const layoutInstance = new LayoutInstance(alignLayoutSpec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = layoutInstance.generateLayout(instance);
 
     expect(layout.nodes).toHaveLength(3);
     expect(layout.edges).toHaveLength(1); // Only the alignment edge A->B
@@ -128,7 +129,7 @@ constraints:
     const evaluator = createEvaluator(instance);
 
     const layoutInstance = new LayoutInstance(layoutSpecDisconnectedNodes, evaluator, 0, false);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = layoutInstance.generateLayout(instance);
 
     expect(layout.nodes).toHaveLength(3);
     expect(layout.edges).toHaveLength(1); // Only the original relation edge A->B
@@ -172,7 +173,7 @@ directives:
     const spec = parseLayoutSpec(specWithInferredEdge);
 
     const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = layoutInstance.generateLayout(instance);
 
     expect(layout.nodes).toHaveLength(3);
     // Should have original edges (A->B, B->C) and inferred edge (A->C)
@@ -216,7 +217,7 @@ directives:
     const spec = parseLayoutSpec(specWithInferredEdge);
 
     const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = layoutInstance.generateLayout(instance);
 
     expect(layout.nodes).toHaveLength(3);
     // Should have original edges (A->B, B->C) and inferred edge (A->C)
@@ -259,7 +260,7 @@ directives:
 
     const spec = parseLayoutSpec(specWithFlagAndInferredEdge);
     const layoutInstance = new LayoutInstance(spec, dummyEvaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = layoutInstance.generateLayout(instance);
 
     expect(layout.nodes).toHaveLength(2);
     const inferredEdge2 = layout.edges.find(e => e.id.includes('_inferred_') && e.id.includes('connects'));
@@ -297,7 +298,7 @@ directives:
 
     const spec = parseLayoutSpec(specStr);
     const layoutInstance = new LayoutInstance(spec, dummyEvaluator, 0, true);
-    const { layout } = layoutInstance.generateLayout(instance, {});
+    const { layout } = layoutInstance.generateLayout(instance);
 
     expect(layout.nodes).toHaveLength(2);
     const inferred = layout.edges.find(e => e.id.includes('_inferred_') && e.id.includes('conn'));
@@ -351,17 +352,21 @@ directives:
     };
 
     const specWithProjection = `
-directives:
-  - projection:
-      sig: State
+directives: []
 `;
 
     const instance = new JSONDataInstance(abstractSigData);
     const evaluator = createEvaluator(instance);
     const spec = parseLayoutSpec(specWithProjection);
     const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
-    
-    const { layout, projectionData } = layoutInstance.generateLayout(instance, {});
+
+    // Apply projection as a pre-layout step
+    const projectionResult = applyProjectionTransform(
+      instance,
+      [{ sig: 'State' }],
+      {}
+    );
+    const projectionData = projectionResult.choices;
 
     // Projection data should include the abstract sig with all descendant atoms
     expect(projectionData).toHaveLength(1);
@@ -374,6 +379,10 @@ directives:
     
     // The projected atom should be one of the available atoms (defaults to first)
     expect(projectionData[0].atoms).toContain(projectionData[0].projectedAtom);
+
+    // Layout should work on the projected instance
+    const { layout } = layoutInstance.generateLayout(projectionResult.instance);
+    expect(layout).toBeDefined();
   });
 
   it('supports switching projection between atoms of abstract sig subtypes', () => {
@@ -408,9 +417,7 @@ directives:
     };
 
     const specWithProjection = `
-directives:
-  - projection:
-      sig: State
+directives: []
 `;
 
     const instance = new JSONDataInstance(abstractSigData);
@@ -418,19 +425,28 @@ directives:
     const spec = parseLayoutSpec(specWithProjection);
     const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
     
-    // First layout with explicit projection on Changed0
-    const result1 = layoutInstance.generateLayout(instance, { 'State': 'Changed0' });
-    expect(result1.projectionData[0].projectedAtom).toBe('Changed0');
+    // Apply projection as a pre-layout step with explicit selection
+    const result1 = applyProjectionTransform(
+      instance,
+      [{ sig: 'State' }],
+      { 'State': 'Changed0' }
+    );
+    expect(result1.choices[0].projectedAtom).toBe('Changed0');
     
-    // The layout should show edges for Changed0's allocated tuples
-    // Changed0 has HeapCell0 and HeapCell1 allocated
+    // The layout should work on the projected instance
+    const layout1 = layoutInstance.generateLayout(result1.instance);
+    expect(layout1.layout).toBeDefined();
     
-    // Second layout with projection on Initial0
-    const result2 = layoutInstance.generateLayout(instance, { 'State': 'Initial0' });
-    expect(result2.projectionData[0].projectedAtom).toBe('Initial0');
+    // Second projection with different selection
+    const result2 = applyProjectionTransform(
+      instance,
+      [{ sig: 'State' }],
+      { 'State': 'Initial0' }
+    );
+    expect(result2.choices[0].projectedAtom).toBe('Initial0');
     
     // Both should have the same available atoms
-    expect(result1.projectionData[0].atoms).toEqual(result2.projectionData[0].atoms);
+    expect(result1.choices[0].atoms).toEqual(result2.choices[0].atoms);
   });
 
   it('inferred edge with ternary selector uses middle elements as label', () => {
@@ -464,7 +480,7 @@ directives:
     const instance = new JSONDataInstance(ternaryData);
     const evaluator = createEvaluator(instance);
     const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
-    const { layout, selectorErrors } = layoutInstance.generateLayout(instance, {});
+    const { layout, selectorErrors } = layoutInstance.generateLayout(instance);
 
     // No selector errors — ternary selectors are valid for inferred edges
     expect(selectorErrors).toHaveLength(0);

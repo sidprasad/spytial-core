@@ -14,24 +14,21 @@ export * from './icon-registry';
 import { LayoutInstance } from './layoutinstance';
 import { LayoutSpec, parseLayoutSpec } from './layoutspec';
 import IEvaluator from '../evaluators/interfaces';
-import { AlloyInstance } from '../data-instance/alloy/alloy-instance';
 import { IDataInstance } from '../data-instance/interfaces';
 
 /**
  * Convenience function to set up and generate a layout
  * @param spec The layout specification (YAML content or LayoutSpec object)
- * @param instance The Alloy instance to layout
+ * @param instance The data instance to layout (apply projections before passing)
  * @param evaluator The evaluator to use for constraint evaluation
- * @param projections Optional projections to apply
- * @returns The generated layout and projection data
+ * @returns The generated layout
  */
 export function setupLayout(
   spec: string | LayoutSpec,
   instance: IDataInstance,
-  evaluator: IEvaluator,
-  projections: Record<string, string> = {}
+  evaluator: IEvaluator
 ) {
   const layoutSpec = typeof spec === 'string' ? parseLayoutSpec(spec) : spec;
   const layoutInstance = new LayoutInstance(layoutSpec, evaluator);
-  return layoutInstance.generateLayout(instance, projections);
+  return layoutInstance.generateLayout(instance);
 }
