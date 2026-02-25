@@ -149,14 +149,16 @@ export function applyProjectionTransform(
   for (const projection of projections) {
     const sig = projection.sig;
 
-    // Validate that the sig exists in the type hierarchy
-    const sigExists = allTypes.some(t => t.types.includes(sig));
+    // Validate that the sig exists in the type hierarchy.
+    // Check both `t.types` (which lists the full hierarchy, e.g. ["Node","univ"])
+    // and `t.id` (the type's own identifier) for a match.
+    const sigExists = allTypes.some(t => t.id === sig || t.types.includes(sig));
     if (!sigExists) {
       throw new Error(`Projected type '${sig}' not found in data instance`);
     }
 
-    // Find all types that include this sig (i.e., subtypes/descendants)
-    const matchingTypes = allTypes.filter(t => t.types.includes(sig));
+    // Find all types that include this sig (subtypes/descendants)
+    const matchingTypes = allTypes.filter(t => t.id === sig || t.types.includes(sig));
 
     // Collect all atoms, deduplicating (parent sigs may include subsig atoms)
     const atomSet = new Set<string>();

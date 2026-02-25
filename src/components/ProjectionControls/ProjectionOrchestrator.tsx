@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { ProjectionControls, ProjectionChoice } from './ProjectionControls';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { ProjectionChoice } from './ProjectionControls';
 import './ProjectionOrchestrator.css';
 import {
   applyProjectionTransform,
@@ -34,30 +34,15 @@ export interface ProjectionOrchestratorProps {
    * Optional evaluator, initialised against `instance`.
    * Required for `orderBy` support — if omitted, `orderBy` is ignored
    * and atoms fall back to lexicographic sorting.
-   *
-   * **Important:** The evaluator must be initialised with the original
-   * (un-projected) instance, not the projected one. See the DEV_GUIDE
-   * section on evaluation-order dependency.
    */
   evaluator?: IEvaluator | null;
 
   /**
    * Callback fired whenever the projected instance changes.
-   * This is called:
-   *  - When `instance` changes (initial projection)
-   *  - When a projection is added / removed
-   *  - When the user selects a different atom in a dropdown
-   *
+   * Called on instance change, projection add/remove, or atom selection change.
    * The caller should use `result.instance` for layout generation.
    */
   onProjectionChange: (result: ProjectionOrchestratorResult) => void;
-
-  /**
-   * Available type names that can be projected. If provided, the "add
-   * projection" dropdown only shows these types. If omitted, all non-builtin
-   * types from `instance.getTypes()` are offered.
-   */
-  availableTypes?: string[];
 
   /** Additional CSS class name */
   className?: string;
@@ -69,27 +54,17 @@ export interface ProjectionOrchestratorProps {
 /**
  * ProjectionOrchestrator
  *
- * A self-contained React component that implements the full projection
- * pattern: managing projections, applying the pre-layout
- * `applyProjectionTransform` step, and rendering `ProjectionControls`
- * for atom selection.
+ * A simplified, self-contained projection UI.
  *
- * This component owns the `Projection[]` and `selections`
- * state. When anything changes (projections, selections, or upstream
- * instance), it re-runs `applyProjectionTransform` and emits the
- * projected `IDataInstance` via `onProjectionChange`.
+ * **Step 1 — Add a projection:** Type any type/sig name (including built-in
+ * types like `Int`) into the text box and press Enter or click Add.
  *
- * @example
- * ```tsx
- * <ProjectionOrchestrator
- *   instance={myDataInstance}
- *   evaluator={myEvaluator}
- *   onProjectionChange={({ instance, choices }) => {
- *     const layout = layoutInstance.generateLayout(instance);
- *     renderGraph(layout);
- *   }}
- * />
- * ```
+ * **Step 2 — Pick an atom:** Once a type is added, a dropdown appears listing
+ * every atom of that type. Selecting a different atom re-projects the
+ * instance and fires `onProjectionChange`.
+ *
+ * The component runs `applyProjectionTransform` internally and emits the
+ * projected `IDataInstance` — the caller just passes it to `generateLayout()`.
  *
  * @public
  */
@@ -97,7 +72,6 @@ export const ProjectionOrchestrator: React.FC<ProjectionOrchestratorProps> = ({
   instance,
   evaluator,
   onProjectionChange,
-  availableTypes,
   className = '',
   disabled = false,
 }) => {
@@ -105,29 +79,14 @@ export const ProjectionOrchestrator: React.FC<ProjectionOrchestratorProps> = ({
   const [projections, setProjections] = useState<Projection[]>([]);
   const [selections, setSelections] = useState<Record<string, string>>({});
   const [choices, setChoices] = useState<ProjectionChoice[]>([]);
-  const [addSigValue, setAddSigValue] = useState('');
+  const [inputValue, setInputValue] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   // Ref to avoid stale closures in the onProjectionChange callback.
   const onChangeRef = useRef(onProjectionChange);
   useEffect(() => {
     onChangeRef.current = onProjectionChange;
   }, [onProjectionChange]);
-
-  // ── Derived: available types for the "add" dropdown ────────────────
-  const typeOptions = useMemo(() => {
-    if (availableTypes) return availableTypes;
-    if (!instance) return [];
-    return instance
-      .getTypes()
-      .filter((t) => !t.isBuiltin)
-      .map((t) => t.id);
-  }, [instance, availableTypes]);
-
-  // Types that haven't been projected yet
-  const unusedTypes = useMemo(() => {
-    const projectedSigs = new Set(projections.map((d) => d.sig));
-    return typeOptions.filter((t) => !projectedSigs.has(t));
-  }, [typeOptions, projections]);
 
   // ── Core: run projection transform ─────────────────────────────────
   const runTransform = useCallback(
@@ -165,33 +124,54 @@ export const ProjectionOrchestrator: React.FC<ProjectionOrchestratorProps> = ({
     }
 
     if (projections.length === 0) {
-      // No projections — emit the original instance
+      // No projections active — emit the original instance unchanged.
       setChoices([]);
       onChangeRef.current({ instance, choices: [] });
       return;
     }
 
-    const result = runTransform(instance, projections, selections);
+    const selsCopy = { ...selections };
+    const result = runTransform(instance, projections, selsCopy);
     if (result) {
       setChoices(result.choices);
+      // Sync defaults that applyProjectionTransform may have filled in.
+      setSelections(selsCopy);
+      setError(null);
       onChangeRef.current({ instance: result.instance, choices: result.choices });
     } else {
       // Transform failed — fallback to un-projected
       setChoices([]);
+      setError('Projection transform failed — showing un-projected data.');
       onChangeRef.current({ instance, choices: [] });
     }
-    // We intentionally use a JSON key for selections to avoid infinite loops
-    // from the object reference changing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [instance, projections, JSON.stringify(selections), runTransform]);
 
   // ── Handlers ───────────────────────────────────────────────────────
   const handleAddProjection = useCallback(() => {
-    const sig = addSigValue;
+    const sig = inputValue.trim();
     if (!sig) return;
+
+    // Prevent duplicates
+    if (projections.some((p) => p.sig === sig)) {
+      setError(`Already projecting over "${sig}".`);
+      return;
+    }
+
+    setError(null);
     setProjections((prev) => [...prev, { sig }]);
-    setAddSigValue('');
-  }, [addSigValue]);
+    setInputValue('');
+  }, [inputValue, projections]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleAddProjection();
+      }
+    },
+    [handleAddProjection],
+  );
 
   const handleRemoveProjection = useCallback((sig: string) => {
     setProjections((prev) => prev.filter((d) => d.sig !== sig));
@@ -200,6 +180,7 @@ export const ProjectionOrchestrator: React.FC<ProjectionOrchestratorProps> = ({
       delete next[sig];
       return next;
     });
+    setError(null);
   }, []);
 
   const handleAtomChange = useCallback(
@@ -218,66 +199,88 @@ export const ProjectionOrchestrator: React.FC<ProjectionOrchestratorProps> = ({
       role="region"
       aria-label="Projection Orchestrator"
     >
-      {/* ── Add new projection ───────────────────────────── */}
-      {unusedTypes.length > 0 && (
-        <div className="projection-orchestrator__add">
-          <label
-            htmlFor="projection-orchestrator-add"
-            className="projection-controls__label"
-          >
-            Project over:
-          </label>
-          <select
-            id="projection-orchestrator-add"
-            className="projection-controls__select"
-            value={addSigValue}
-            onChange={(e) => setAddSigValue(e.target.value)}
-            disabled={disabled}
-          >
-            <option value="">— select type —</option>
-            {unusedTypes.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            className="projection-orchestrator__add-btn"
-            onClick={handleAddProjection}
-            disabled={disabled || !addSigValue}
-          >
-            Add
-          </button>
+      {/* ── Add new projection (free-text) ─────────────── */}
+      <div className="projection-orchestrator__add">
+        <label
+          htmlFor="projection-orchestrator-add"
+          className="projection-controls__label"
+        >
+          Project over:
+        </label>
+        <input
+          id="projection-orchestrator-add"
+          className="projection-controls__input"
+          type="text"
+          placeholder="Type name (e.g. State, Node, Int)"
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          disabled={disabled}
+          autoComplete="off"
+        />
+        <button
+          type="button"
+          className="projection-orchestrator__add-btn"
+          onClick={handleAddProjection}
+          disabled={disabled || !inputValue.trim()}
+        >
+          Add
+        </button>
+      </div>
+
+      {/* ── Error banner ─────────────────────────────────── */}
+      {error && (
+        <div className="projection-orchestrator__error" role="alert">
+          {error}
         </div>
       )}
 
-      {/* ── Active projections (with remove) ─── */}
+      {/* ── Active projections ───────────────────────────── */}
       {projections.length > 0 && (
-        <div className="projection-orchestrator__projections">
-          {projections.map((d) => (
-            <span key={d.sig} className="projection-orchestrator__tag">
-              {d.sig}
-              <button
-                type="button"
-                className="projection-orchestrator__remove-btn"
-                onClick={() => handleRemoveProjection(d.sig)}
-                disabled={disabled}
-                aria-label={`Remove projection on ${d.sig}`}
-              >
-                ×
-              </button>
-            </span>
-          ))}
+        <div className="projection-orchestrator__list">
+          {projections.map((d) => {
+            const choice = choices.find((c) => c.type === d.sig);
+            return (
+              <div key={d.sig} className="projection-orchestrator__row">
+                {/* Type tag with remove button */}
+                <span className="projection-orchestrator__tag">
+                  {d.sig}
+                  <button
+                    type="button"
+                    className="projection-orchestrator__remove-btn"
+                    onClick={() => handleRemoveProjection(d.sig)}
+                    disabled={disabled}
+                    aria-label={`Remove projection on ${d.sig}`}
+                  >
+                    ×
+                  </button>
+                </span>
+
+                {/* Atom selector */}
+                {choice && choice.atoms.length > 0 ? (
+                  <select
+                    className="projection-controls__select"
+                    value={choice.projectedAtom}
+                    onChange={(e) => handleAtomChange(d.sig, e.target.value)}
+                    disabled={disabled}
+                    aria-label={`Select atom for ${d.sig}`}
+                  >
+                    {choice.atoms.map((atom) => (
+                      <option key={atom} value={atom}>
+                        {atom}
+                      </option>
+                    ))}
+                  </select>
+                ) : choice ? (
+                  <span className="projection-orchestrator__no-atoms">
+                    No atoms
+                  </span>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       )}
-
-      {/* ── Atom selection dropdowns (delegate to ProjectionControls) */}
-      <ProjectionControls
-        projectionData={choices}
-        onProjectionChange={handleAtomChange}
-        disabled={disabled}
-      />
     </div>
   );
 };

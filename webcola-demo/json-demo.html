@@ -197,8 +197,17 @@
             <!-- React element attached here -->
         </div>
         
-        <!-- Projection Orchestrator (shows when projections are added) -->
-        <div id="projection-controls-container" class="mb-3"></div>
+        <!-- Inline Projection Controls -->
+        <div id="projection-panel" class="mb-3">
+            <h6 class="h6 text-dark">Projections:</h6>
+            <div class="d-flex gap-2 mb-2">
+                <input id="projection-type-input" type="text" class="form-control form-control-sm"
+                       placeholder="Type name (e.g. Person)" autocomplete="off" />
+                <button id="addProjectionBtn" class="btn btn-sm btn-outline-primary" onclick="addProjection()" style="white-space:nowrap">Add</button>
+            </div>
+            <div id="projection-error" class="text-danger small mb-2" style="display:none"></div>
+            <div id="projection-list"></div>
+        </div>
     </div>
 
     <!-- D3 v4 and WebCola - the working combination -->
@@ -217,7 +226,9 @@
         let cachedLayoutSpec = null;
         let cachedInstance = null;
         let cachedEvaluatorType = 'sgq';
-        // Projected instance set by the orchestrator callback
+        // Projection state
+        let activeProjections = [];
+        let projectionSelections = {};
         let projectedInstance = null;
 
         function getCurrentJsonText() {
@@ -412,16 +423,26 @@
 
             updateStatus('Generating layout with JSON data...', 'info');
 
-            // Push instance + evaluator into the orchestrator
-            if (window.updateProjectionOrchestratorInstance) {
-                window.updateProjectionOrchestratorInstance(cachedInstance);
-            }
-            if (window.updateProjectionOrchestratorEvaluator) {
-                window.updateProjectionOrchestratorEvaluator(cachedEvaluator);
+            // Apply projection transform if any projections are active
+            let instanceForLayout = cachedInstance;
+            if (activeProjections.length > 0) {
+                try {
+                    const result = CndCore.applyProjectionTransform(
+                        cachedInstance,
+                        activeProjections,
+                        projectionSelections
+                    );
+                    instanceForLayout = result.instance;
+                    projectedInstance = result.instance;
+                    renderProjectionChoices(result.choices);
+                } catch (err) {
+                    console.error('Projection transform failed:', err);
+                    showProjectionError(err.message);
+                }
+            } else {
+                projectedInstance = null;
             }
 
-            // Use projected instance if available, otherwise the raw instance
-            const instanceForLayout = projectedInstance || cachedInstance;
             const layoutResult = layoutInstance.generateLayout(instanceForLayout);
             currentInstanceLayout = layoutResult.layout;
 
@@ -622,6 +643,11 @@
             cachedEvaluator = null;
             cachedLayoutSpec = null;
             cachedEvaluatorType = getSelectedEvaluatorType();
+            activeProjections = [];
+            projectionSelections = {};
+            projectedInstance = null;
+            const projListEl = document.getElementById('projection-list');
+            if (projListEl) projListEl.innerHTML = '';
 
             updateStatus('Graph cleared.', 'info');
         }
@@ -654,31 +680,117 @@
             }
         }
 
-        /**
-         * Callback from the ProjectionOrchestrator.
-         * Stores the projected instance and regenerates the layout.
-         */
-        function handleProjectionResult(result) {
-            console.log('handleProjectionResult: received projected instance, choices:', result.choices);
-            projectedInstance = result.instance;
+        // ── Projection UI (vanilla JS) ─────────────────────────────────
 
-            // Only regenerate when projections are active.
-            // When choices is empty the orchestrator echoes the original
-            // instance which we already rendered — skip the double-render.
-            if (result.choices.length === 0) {
+        function showProjectionError(msg) {
+            const el = document.getElementById('projection-error');
+            el.textContent = msg;
+            el.style.display = 'block';
+        }
+
+        function clearProjectionError() {
+            const el = document.getElementById('projection-error');
+            el.textContent = '';
+            el.style.display = 'none';
+        }
+
+        function addProjection() {
+            const input = document.getElementById('projection-type-input');
+            const sig = input.value.trim();
+            if (!sig) return;
+
+            if (activeProjections.some(p => p.sig === sig)) {
+                showProjectionError('Already projecting over "' + sig + '".');
                 return;
             }
 
-            // Regenerate layout with the projected instance
-            if (cachedInstance && cachedEvaluator && cachedLayoutSpec) {
-                generateLayout()
-                    .then(() => renderGraph())
-                    .catch(error => {
-                        console.error('Error regenerating layout after projection change:', error);
-                        updateStatus(`Layout regeneration error: ${error.message}`, 'error');
-                    });
+            clearProjectionError();
+            activeProjections.push({ sig });
+            input.value = '';
+            rerunProjectedLayout();
+        }
+
+        function removeProjection(sig) {
+            activeProjections = activeProjections.filter(p => p.sig !== sig);
+            delete projectionSelections[sig];
+            clearProjectionError();
+            rerunProjectedLayout();
+        }
+
+        function onProjectionAtomChange(sig, atomId) {
+            projectionSelections[sig] = atomId;
+            rerunProjectedLayout();
+        }
+
+        async function rerunProjectedLayout() {
+            if (!cachedInstance || !cachedEvaluator || !cachedLayoutSpec) return;
+            try {
+                await generateLayout();
+                await renderGraph();
+            } catch (error) {
+                console.error('Error re-running projected layout:', error);
+                updateStatus('Projection layout error: ' + error.message, 'error');
             }
         }
+
+        function renderProjectionChoices(choices) {
+            const listEl = document.getElementById('projection-list');
+            listEl.innerHTML = '';
+
+            for (const proj of activeProjections) {
+                const choice = choices.find(c => c.type === proj.sig);
+
+                const row = document.createElement('div');
+                row.className = 'd-flex align-items-center gap-2 mb-1';
+
+                const tag = document.createElement('span');
+                tag.className = 'badge bg-secondary d-flex align-items-center gap-1';
+                tag.textContent = proj.sig;
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'btn-close btn-close-white ms-1';
+                removeBtn.style.fontSize = '0.5rem';
+                removeBtn.setAttribute('aria-label', 'Remove ' + proj.sig);
+                removeBtn.onclick = () => removeProjection(proj.sig);
+                tag.appendChild(removeBtn);
+                row.appendChild(tag);
+
+                if (choice && choice.atoms.length > 0) {
+                    const select = document.createElement('select');
+                    select.className = 'form-select form-select-sm';
+                    select.style.maxWidth = '200px';
+                    select.setAttribute('aria-label', 'Atom for ' + proj.sig);
+                    for (const atom of choice.atoms) {
+                        const opt = document.createElement('option');
+                        opt.value = atom;
+                        opt.textContent = atom;
+                        if (atom === choice.projectedAtom) opt.selected = true;
+                        select.appendChild(opt);
+                    }
+                    select.onchange = () => onProjectionAtomChange(proj.sig, select.value);
+                    row.appendChild(select);
+                } else if (choice) {
+                    const noAtoms = document.createElement('span');
+                    noAtoms.className = 'text-muted small';
+                    noAtoms.textContent = 'No atoms';
+                    row.appendChild(noAtoms);
+                } else {
+                    const notFound = document.createElement('span');
+                    notFound.className = 'text-danger small';
+                    notFound.textContent = 'Type not found';
+                    row.appendChild(notFound);
+                }
+
+                listEl.appendChild(row);
+            }
+        }
+
+        document.getElementById('projection-type-input')?.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addProjection();
+            }
+        });
 
         window.addEventListener('load', () => {
             initializePipeline();
@@ -689,17 +801,14 @@
             if (window.mountErrorMessageModal) {
                 window.mountErrorMessageModal();
             }
-
-            // Mount Projection Orchestrator
-            if (window.mountProjectionOrchestrator) {
-                window.mountProjectionOrchestrator('projection-controls-container', handleProjectionResult);
-            }
         });
 
         window.loadGraph = loadGraph;
         window.loadJsonData = loadJsonData;
         window.renderGraph = renderGraph;
         window.clearGraph = clearGraph;
+        window.addProjection = addProjection;
+        window.removeProjection = removeProjection;
     </script>
 </body>
 </html>
