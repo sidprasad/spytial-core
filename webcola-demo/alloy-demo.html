@@ -466,6 +466,11 @@
                 throw new Error('Missing required data for layout generation');
             }
 
+            // Reset projected instance so we never use a stale one from
+            // a previous instance index.  The orchestrator will set it
+            // again asynchronously after its React state update fires.
+            window._projectedInstance = null;
+
             const alloyDataInstance = new CndCore.AlloyDataInstance(alloyInstances[currentInstanceIndex]);
             console.log(`Generating layout for instance ${currentInstanceIndex + 1}/${alloyInstances.length}`);
             console.log('Using Alloy Data Instance:', alloyDataInstance);
@@ -987,6 +992,15 @@
         function handleProjectionResult(result) {
             console.log('handleProjectionResult: received projected instance, choices:', result.choices);
             window._projectedInstance = result.instance;
+
+            // Only regenerate the layout when there are active projections.
+            // When choices is empty the orchestrator is echoing back the
+            // original instance which we already rendered — re-rendering
+            // would be a wasteful double-render and can race with the
+            // first layout's WebCola computation.
+            if (result.choices.length === 0) {
+                return;
+            }
 
             // Regenerate layout with the projected instance
             if (currentInstanceIndex >= 0 && currentInstanceIndex < alloyInstances.length) {

@@ -396,6 +396,10 @@
                 throw new Error('Missing required data for layout generation');
             }
 
+            // Reset projected instance so we never use a stale one.
+            // The orchestrator will set it again after its React state update.
+            projectedInstance = null;
+
             updateStatus('Creating layout...', 'info');
             const ENABLE_ALIGNMENT_EDGES = true;
 
@@ -657,6 +661,13 @@
         function handleProjectionResult(result) {
             console.log('handleProjectionResult: received projected instance, choices:', result.choices);
             projectedInstance = result.instance;
+
+            // Only regenerate when projections are active.
+            // When choices is empty the orchestrator echoes the original
+            // instance which we already rendered — skip the double-render.
+            if (result.choices.length === 0) {
+                return;
+            }
 
             // Regenerate layout with the projected instance
             if (cachedInstance && cachedEvaluator && cachedLayoutSpec) {
