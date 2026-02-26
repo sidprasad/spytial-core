@@ -24,12 +24,16 @@ import * as dagre from 'dagre';
  */
 
 /**
- * Extra padding added to each side of a node's dimensions for WebCola's overlap-avoidance
- * engine. This ensures nodes never visually touch each other after layout converges.
- * The visual (rendered) size remains the original node size; only the collision bounds
- * used by WebCola are inflated.
+ * Extra padding added to each side of a node's collision bounds for WebCola's
+ * overlap-avoidance engine. The visual (rendered) size remains the original node size.
  */
 const NODE_LAYOUT_PADDING = 8;
+
+/**
+ * Disconnected nodes (no edges) get more padding so they sit clearly apart from
+ * the main graph cluster rather than being placed flush against it.
+ */
+const NODE_LAYOUT_PADDING_DISCONNECTED = 20;
 
 type NodeWithMetadata = Node & {
 
@@ -598,11 +602,12 @@ export class WebColaLayout {
       color: node.color,
       attributes: node.attributes || {},
       labels: node.labels,
-      // Inflate width/height by NODE_LAYOUT_PADDING on each side so WebCola's
-      // avoidOverlaps engine keeps a visible gap between nodes. The visual
-      // size is stored in visualWidth/visualHeight and used for rendering.
-      width: node.width + 2 * NODE_LAYOUT_PADDING,
-      height: node.height + 2 * NODE_LAYOUT_PADDING,
+      // Inflate width/height by padding on each side so WebCola's avoidOverlaps
+      // engine keeps a visible gap between nodes. Disconnected nodes get larger
+      // padding so they sit clearly apart from the main cluster.
+      // The visual size is stored in visualWidth/visualHeight and used for rendering.
+      width: node.width + 2 * (node.disconnected ? NODE_LAYOUT_PADDING_DISCONNECTED : NODE_LAYOUT_PADDING),
+      height: node.height + 2 * (node.disconnected ? NODE_LAYOUT_PADDING_DISCONNECTED : NODE_LAYOUT_PADDING),
       visualWidth: node.width,
       visualHeight: node.height,
       x: x,
@@ -893,19 +898,14 @@ export class WebColaLayout {
     const colaGroupsBeforeSubgrouping = Object.entries(groupDefinitions).map(([key, value]) => {
 
 
-      const defaultPadding = 10;
-      const disconnectedNodePadding = 30;
-      const disconnectedNodeMarker = LayoutInstance.DISCONNECTED_PREFIX;
-
       // FIXME: The 'leaves' array is expected to contain node indices for WebCola, but in some cases it contains node objects instead.
       // This issue occurs when the mapping from node IDs to indices is not consistent, possibly due to changes in the node data structure or the getNodeIndex method.
       // To resolve this, ensure that 'leaves' always contains node indices before passing to WebCola. Refactor the code to handle cases where node objects are present, or update the mapping logic to guarantee indices.
-      let leaves = value.map((nodeId) => this.getNodeIndex(nodeId));  
+      let leaves = value.map((nodeId) => this.getNodeIndex(nodeId));
       let name = key;
+      const defaultPadding = 10;
 
-      let padding = name.startsWith(disconnectedNodeMarker) ? disconnectedNodePadding : defaultPadding;
-
-      return { leaves, padding, name };
+      return { leaves, padding: defaultPadding, name };
     });
 
     const colaGroups = Object.entries(colaGroupsBeforeSubgrouping).map(([key, value]) => {

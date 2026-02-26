@@ -1099,7 +1099,8 @@ export class LayoutInstance {
                 width: width,
                 mostSpecificType: mostSpecificType,
                 types: allTypes,
-                showLabels: showLabels
+                showLabels: showLabels,
+                disconnected: dcN.includes(nodeId)
             };
         });
 
@@ -1191,14 +1192,6 @@ export class LayoutInstance {
         // Filter out all edges that are hidden
         layoutEdges = this.filterHiddenEdges(layoutEdges);
 
-        // And now make sure that all the disconnected nodes (as identified)
-        // have some padding around them.
-        let dcnGroups = dcN.map((node) => {
-            return this.singletonGroup(node);
-        }
-        );
-        groups = groups.concat(dcnGroups);
-
         // Update the layout with final groups
         layout.nodes = layoutNodes;
         layout.edges = layoutEdges;
@@ -1231,9 +1224,7 @@ export class LayoutInstance {
         const layoutEdges = this.filterHiddenEdges(
             this.buildLayoutEdges(context.graph, context.layoutNodes)
         );
-        const layoutGroups = context.groups.concat(
-            context.disconnectedNodes.map(node => this.singletonGroup(node))
-        );
+        const layoutGroups = context.groups;
 
         const layoutWithErrorMetadata: InstanceLayout = {
             nodes: context.layoutNodes,
