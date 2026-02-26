@@ -3134,10 +3134,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private routeEdges(): void {
     try {
-      // Ensure all nodes have bounds computed before edge routing.
-      // This is critical when using prior positions with minimal iterations,
-      // as WebCola may not have had time to compute bounds internally.
-      this.ensureNodeBounds();
+      // Force-recompute bounds using visual dimensions (visualWidth/visualHeight) before
+      // routing. After layout converges, WebCola has set node.bounds to the inflated
+      // collision size (width/height + padding). Without forceRecompute=true the stale
+      // check would pass (center still matches x,y) and leave inflated bounds in place,
+      // causing edges to stop short of the visual node boundary.
+      this.ensureNodeBounds(true);
 
       // Prepare edge routing with margin
       if (typeof (this.colaLayout as any)?.prepareEdgeRouting === 'function') {
