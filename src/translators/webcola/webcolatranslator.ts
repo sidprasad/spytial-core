@@ -23,6 +23,14 @@ import * as dagre from 'dagre';
  * positioning of nodes using separation and alignment constraints.
  */
 
+/**
+ * Extra padding added to each side of a node's dimensions for WebCola's overlap-avoidance
+ * engine. This ensures nodes never visually touch each other after layout converges.
+ * The visual (rendered) size remains the original node size; only the collision bounds
+ * used by WebCola are inflated.
+ */
+const NODE_LAYOUT_PADDING = 8;
+
 type NodeWithMetadata = Node & {
 
   label: string, // This is the label that will be displayed on the node
@@ -37,6 +45,10 @@ type NodeWithMetadata = Node & {
   icon: string,
   mostSpecificType: string,
   showLabels: boolean,
+  /** Original visual width of the node (without layout padding). Use this for rendering. */
+  visualWidth: number,
+  /** Original visual height of the node (without layout padding). Use this for rendering. */
+  visualHeight: number,
 };
 
 type EdgeWithMetadata = Link<NodeWithMetadata> & {
@@ -455,9 +467,9 @@ export class WebColaLayout {
    * Computes adaptive horizontal separation between two nodes using their actual dimensions
    */
   private computeHorizontalSeparation(node1: NodeWithMetadata, node2: NodeWithMetadata, minDistance: number): number {
-    // Use actual node widths
-    const node1Width = node1.width || 100;
-    const node2Width = node2.width || 100;
+    // Use actual visual node widths (not the inflated collision bounds)
+    const node1Width = node1.visualWidth ?? node1.width ?? 100;
+    const node2Width = node2.visualWidth ?? node2.width ?? 100;
     
     // Base separation: half-widths + minimum distance
     const baseSeparation = (node1Width / 2) + (node2Width / 2) + minDistance;
@@ -473,9 +485,9 @@ export class WebColaLayout {
    * Computes adaptive vertical separation between two nodes using their actual dimensions
    */
   private computeVerticalSeparation(node1: NodeWithMetadata, node2: NodeWithMetadata, minDistance: number): number {
-    // Use actual node heights
-    const node1Height = node1.height || 60;
-    const node2Height = node2.height || 60;
+    // Use actual visual node heights (not the inflated collision bounds)
+    const node1Height = node1.visualHeight ?? node1.height ?? 60;
+    const node2Height = node2.visualHeight ?? node2.height ?? 60;
     
     // Base separation: half-heights + minimum distance
     const baseSeparation = (node1Height / 2) + (node2Height / 2) + minDistance;
@@ -586,8 +598,13 @@ export class WebColaLayout {
       color: node.color,
       attributes: node.attributes || {},
       labels: node.labels,
-      width: node.width,
-      height: node.height,
+      // Inflate width/height by NODE_LAYOUT_PADDING on each side so WebCola's
+      // avoidOverlaps engine keeps a visible gap between nodes. The visual
+      // size is stored in visualWidth/visualHeight and used for rendering.
+      width: node.width + 2 * NODE_LAYOUT_PADDING,
+      height: node.height + 2 * NODE_LAYOUT_PADDING,
+      visualWidth: node.width,
+      visualHeight: node.height,
       x: x,
       y: y,
       icon: node.icon || '',
