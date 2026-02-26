@@ -38,6 +38,8 @@ export interface LayoutNode {
     mostSpecificType : string;
     types : string[];
     showLabels : boolean;
+    /** True when the node has no edges connecting it to the rest of the graph. */
+    disconnected?: boolean;
 }
 
 

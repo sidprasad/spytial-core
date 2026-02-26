@@ -350,8 +350,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     }
     
     // Calculate visual size (coordinate size * zoom scale)
-    const visualWidth = (node.width || 0) * zoomScale;
-    const visualHeight = (node.height || 0) * zoomScale;
+    const visualWidth = ((node as any).visualWidth ?? node.width ?? 0) * zoomScale;
+    const visualHeight = ((node as any).visualHeight ?? node.height ?? 0) * zoomScale;
     
     return visualWidth < minVisualSize || visualHeight < minVisualSize;
   }
@@ -452,15 +452,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       return 150; // fallback
     }
 
-    // Calculate average node dimensions using actual width/height
+    // Calculate average node dimensions using visual width/height (not inflated collision bounds)
     let totalWidth = 0;
     let totalHeight = 0;
     let validNodes = 0;
 
     nodes.forEach(node => {
       if (node && !this.isHiddenNode(node)) {
-        totalWidth += (node.width || 100);
-        totalHeight += (node.height || 60);
+        totalWidth += (node.visualWidth ?? node.width ?? 100);
+        totalHeight += (node.visualHeight ?? node.height ?? 60);
         validNodes++;
       }
     });
@@ -2007,8 +2007,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     
     // Check each node to see if the position is within its bounds
     for (const node of this.currentLayout.nodes) {
-      const halfWidth = (node.width || 0) / 2;
-      const halfHeight = (node.height || 0) / 2;
+      const halfWidth = ((node as any).visualWidth ?? node.width ?? 0) / 2;
+      const halfHeight = ((node as any).visualHeight ?? node.height ?? 0) / 2;
       
       if (x >= node.x - halfWidth && x <= node.x + halfWidth &&
           y >= node.y - halfHeight && y <= node.y + halfHeight) {
@@ -2370,10 +2370,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private setupNodeRectangles(nodeSelection: d3.Selection<SVGGElement, any, any, unknown>): void {
     nodeSelection
       .append("rect")
-      .attr("width", (d: any) => d.width )
-      .attr("height", (d: any) => d.height )
-      .attr("x", (d: any) => -(d.width ) / 2) // Center on node's x position
-      .attr("y", (d: any) => -(d.height ) / 2) // Center on node's y position
+      .attr("width", (d: any) => d.visualWidth ?? d.width)
+      .attr("height", (d: any) => d.visualHeight ?? d.height)
+      .attr("x", (d: any) => -((d.visualWidth ?? d.width)) / 2) // Center on node's x position
+      .attr("y", (d: any) => -((d.visualHeight ?? d.height)) / 2) // Center on node's y position
       .attr("stroke", (d: any) => d.color || "black")
       .attr("rx", WebColaCnDGraph.NODE_BORDER_RADIUS)
       .attr("ry", WebColaCnDGraph.NODE_BORDER_RADIUS)
@@ -2406,17 +2406,19 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .append("image")
       .attr("xlink:href", (d: any) => d.icon)
       .attr("width", (d: any) => {
+        const vw = d.visualWidth ?? d.width;
         return d.showLabels
-          ? (d.width ) * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR
-          : (d.width );
+          ? vw * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR
+          : vw;
       })
       .attr("height", (d: any) => {
+        const vh = d.visualHeight ?? d.height;
         return d.showLabels
-          ? (d.height ) * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR
-          : (d.height );
+          ? vh * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR
+          : vh;
       })
       .attr("x", (d: any) => {
-        const width = d.width ;
+        const width = d.visualWidth ?? d.width;
         if (d.showLabels) {
           // Position in top-right corner when labels are shown
           return d.x + width - (width * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR);
@@ -2425,7 +2427,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         return d.x - width / 2;
       })
       .attr("y", (d: any) => {
-        const height = d.height ;
+        const height = d.visualHeight ?? d.height;
         // Always align with top edge
         return d.y - height / 2;
       })
@@ -2770,43 +2772,46 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr('height', (d: any) => d.bounds.height() )
       .lower();
 
-    // Update node rectangles using bounds
+    // Update node rectangles using visual dimensions (NOT d.bounds, which WebCola inflates
+    // for collision avoidance). Rects should reflect the original visual size.
     this.svgNodes.select('rect')
       .each((d: any) => {
         if (d.bounds) {
           d.innerBounds = d.bounds.inflate(-1);
         }
       })
-      .attr('x', (d: any) => d.bounds.x )
-      .attr('y', (d: any) => d.bounds.y )
-      .attr('width', (d: any) => d.bounds.width() )
-      .attr('height', (d: any) => d.bounds.height());
+      .attr('x', (d: any) => d.x - (d.visualWidth ?? d.width) / 2)
+      .attr('y', (d: any) => d.y - (d.visualHeight ?? d.height) / 2)
+      .attr('width', (d: any) => d.visualWidth ?? d.width)
+      .attr('height', (d: any) => d.visualHeight ?? d.height);
 
     // Update node icons with proper positioning
     this.svgNodes.select('image')
       .attr('x', (d: any) => {
+        const vw = d.visualWidth ?? d.width;
         if (d.showLabels) {
           // Move to the top-right corner
-          return d.x + (d.width) / 2 - ((d.width) * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR);
+          return d.x + vw / 2 - (vw * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR);
         } else {
-          // Align with bounds if available, otherwise center
-          return d.bounds.x;
+          // Align with visual left edge
+          return d.x - vw / 2;
         }
       })
       .attr('y', (d: any) => {
+        const vh = d.visualHeight ?? d.height;
         if (d.showLabels) {
           // Align with the top edge
-          return d.y - (d.height) / 2;
+          return d.y - vh / 2;
         } else {
-          // Align with bounds if available, otherwise center
-          return d.bounds.y;
+          // Align with visual top edge
+          return d.y - vh / 2;
         }
       });
 
     // Update most specific type labels
     this.svgNodes.select('.mostSpecificTypeLabel')
-      .attr('x', (d: NodeWithMetadata) => d.x - (d.width || 0) / 2 + 5)
-      .attr('y', (d: NodeWithMetadata) => d.y - (d.height || 0) / 2 + 10)
+      .attr('x', (d: NodeWithMetadata) => d.x - ((d as any).visualWidth ?? d.width ?? 0) / 2 + 5)
+      .attr('y', (d: NodeWithMetadata) => d.y - ((d as any).visualHeight ?? d.height ?? 0) / 2 + 10)
       .raise();
 
     // Update main node labels with tspan positioning
@@ -2997,18 +3002,20 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
     node.select("image")
         .attr("x", function (d: any) {
+            const vw = d.visualWidth ?? d.width;
             if (d.showLabels) {
                 // Move to the top-right corner
-                return d.x + (d.width / 2) - (d.width * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR);
+                return d.x + (vw / 2) - (vw * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR);
             } else {
                 // Align with d.bounds.x
                 return d.bounds.x;
             }
         })
         .attr("y", function (d: any) {
+            const vh = d.visualHeight ?? d.height;
             if (d.showLabels) {
                 // Align with the top edge
-                return d.y - d.height / 2;
+                return d.y - vh / 2;
             } else {
                 // Align with d.bounds.y
                 return d.bounds.y;
@@ -3182,10 +3189,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         }
       }
 
-      // Compute bounds from node position and dimensions
+      // Compute bounds from node position and visual dimensions (not the inflated
+      // collision dimensions stored in node.width/height).
       // Rectangle constructor: (x, X, y, Y) where x,y is top-left and X,Y is bottom-right
-      const halfWidth = (node.width || 50) / 2;
-      const halfHeight = (node.height || 30) / 2;
+      const halfWidth = ((node as any).visualWidth ?? node.width ?? 50) / 2;
+      const halfHeight = ((node as any).visualHeight ?? node.height ?? 30) / 2;
       const x = (node.x || 0) - halfWidth;
       const X = (node.x || 0) + halfWidth;
       const y = (node.y || 0) - halfHeight;
@@ -3918,18 +3926,21 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Normalizes node bounds to a consistent format with x, y and width/height as functions.
    */
   private normalizeNodeBounds(node: any): { x: number; y: number; width: () => number; height: () => number } {
+    // Use visual dimensions for rendering bounds (not the inflated collision width/height)
+    const vw = node.visualWidth ?? node.width ?? 50;
+    const vh = node.visualHeight ?? node.height ?? 30;
     const bounds = node.bounds || {
-      x: node.x - (node.width || 50) / 2,
-      y: node.y - (node.height || 30) / 2,
-      width: () => node.width || 50,
-      height: () => node.height || 30
+      x: node.x - vw / 2,
+      y: node.y - vh / 2,
+      width: () => vw,
+      height: () => vh
     };
     
     return {
-      x: typeof bounds.x === 'number' ? bounds.x : (bounds.X !== undefined ? bounds.x : node.x - (node.width || 50) / 2),
-      y: typeof bounds.y === 'number' ? bounds.y : node.y - (node.height || 30) / 2,
-      width: () => typeof bounds.width === 'function' ? bounds.width() : (bounds.X !== undefined ? bounds.X - bounds.x : node.width || 50),
-      height: () => typeof bounds.height === 'function' ? bounds.height() : (bounds.Y !== undefined ? bounds.Y - bounds.y : node.height || 30)
+      x: typeof bounds.x === 'number' ? bounds.x : (bounds.X !== undefined ? bounds.x : node.x - vw / 2),
+      y: typeof bounds.y === 'number' ? bounds.y : node.y - vh / 2,
+      width: () => typeof bounds.width === 'function' ? bounds.width() : (bounds.X !== undefined ? bounds.X - bounds.x : vw),
+      height: () => typeof bounds.height === 'function' ? bounds.height() : (bounds.Y !== undefined ? bounds.Y - bounds.y : vh)
     };
   }
 
@@ -4212,8 +4223,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     if (!cola?.Rectangle) {
       return null;
     }
-    const halfWidth = (node.width || 50) / 2;
-    const halfHeight = (node.height || 30) / 2;
+    const halfWidth = ((node.visualWidth ?? node.width) || 50) / 2;
+    const halfHeight = ((node.visualHeight ?? node.height) || 30) / 2;
     const x = (node.x || 0) - halfWidth;
     const X = (node.x || 0) + halfWidth;
     const y = (node.y || 0) - halfHeight;
