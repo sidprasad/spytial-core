@@ -36,12 +36,10 @@ export type {
   SequencePolicyContext,
   SequencePolicyResult,
   SequenceViewportBounds,
-  StabilityMemoryOptions,
 } from './webcola/sequence-policy';
 export {
   ignoreHistory,
   stability,
-  createStabilityMemoryPolicy,
   changeEmphasis,
   randomPositioning,
   getSequencePolicy,

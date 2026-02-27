@@ -6,7 +6,6 @@ import {
   randomPositioning,
   getSequencePolicy,
   registerSequencePolicy,
-  createStabilityMemoryPolicy,
 } from '../src/translators/webcola/sequence-policy';
 import type {
   SequencePolicy,
@@ -97,7 +96,13 @@ describe('ignoreHistory', () => {
 // ---------------------------------------------------------------------------
 
 describe('stability', () => {
+  function resetStabilityMemory(): void {
+    const empty = makeInstance([], []);
+    stability.apply(ctx(makeState([]), empty, empty));
+  }
+
   it('passes through current prior positions when all nodes still exist', () => {
+    resetStabilityMemory();
     const prior = makeState([['A', 10, 20], ['B', 30, 40]]);
     const inst = makeInstance([{ id: 'A', type: 'T' }, { id: 'B', type: 'T' }], []);
     const result = stability.apply(ctx(prior, inst, inst));
@@ -106,28 +111,16 @@ describe('stability', () => {
     expect(result.useReducedIterations).toBe(true);
   });
 
-  it('treats reappearing nodes as new when using pairwise stability singleton', () => {
-    const state2 = makeState([['Node2', 205, 225]]);
-    const inst2 = makeInstance([{ id: 'Node2', type: 'T' }], []);
-    const inst3 = makeInstance([{ id: 'Node1', type: 'T' }, { id: 'Node2', type: 'T' }], []);
-
-    const resultStep3 = stability.apply(ctx(state2, inst2, inst3));
-    const nodeIds = resultStep3.effectivePriorState?.positions.map(p => p.id) ?? [];
-
-    expect(nodeIds).toContain('Node2');
-    expect(nodeIds).not.toContain('Node1');
-  });
-
-  it('restores recently reappearing nodes with a per-sequence memory policy', () => {
-    const memoryPolicy = createStabilityMemoryPolicy();
+  it('restores recently reappearing nodes from internal stability memory', () => {
+    resetStabilityMemory();
     const state1 = makeState([['Node1', 100, 120], ['Node2', 200, 220]]);
     const inst1 = makeInstance([{ id: 'Node1', type: 'T' }, { id: 'Node2', type: 'T' }], []);
     const state2 = makeState([['Node2', 205, 225]]);
     const inst2 = makeInstance([{ id: 'Node2', type: 'T' }], []);
     const inst3 = makeInstance([{ id: 'Node1', type: 'T' }, { id: 'Node2', type: 'T' }], []);
 
-    memoryPolicy.apply(ctx(state1, inst1, inst2));
-    const resultStep3 = memoryPolicy.apply(ctx(state2, inst2, inst3));
+    stability.apply(ctx(state1, inst1, inst2));
+    const resultStep3 = stability.apply(ctx(state2, inst2, inst3));
 
     const node1 = resultStep3.effectivePriorState?.positions.find(p => p.id === 'Node1');
     const node2 = resultStep3.effectivePriorState?.positions.find(p => p.id === 'Node2');
@@ -136,45 +129,24 @@ describe('stability', () => {
     expect(node2).toEqual({ id: 'Node2', x: 205, y: 225 });
   });
 
-  it('keeps memory isolated across independently created memory policies', () => {
-    const seqA = createStabilityMemoryPolicy({ maxReappearanceGapSteps: 5 });
-    const seqB = createStabilityMemoryPolicy({ maxReappearanceGapSteps: 5 });
-
-    const sA1 = makeState([['Shared', 10, 20]]);
-    const iA1 = makeInstance([{ id: 'Shared', type: 'T' }], []);
-    const iA2 = makeInstance([], []);
-    seqA.apply(ctx(sA1, iA1, iA2));
-
-    const sB2 = makeState([]);
-    const iBPrev = makeInstance([], []);
-    const iBCurr = makeInstance([{ id: 'Shared', type: 'T' }], []);
-    const bResult = seqB.apply(ctx(sB2, iBPrev, iBCurr));
-
-    expect(bResult.effectivePriorState?.positions.find(p => p.id === 'Shared')).toBeUndefined();
-  });
-
-  it('forgets nodes that have been absent for too many steps in memory policy', () => {
-    const memoryPolicy = createStabilityMemoryPolicy({ maxReappearanceGapSteps: 1 });
+  it('forgets nodes that have been absent for too many steps', () => {
+    resetStabilityMemory();
     const s1 = makeState([['OldNode', 40, 50]]);
     const i1 = makeInstance([{ id: 'OldNode', type: 'T' }], []);
     const iEmpty = makeInstance([], []);
 
-    memoryPolicy.apply(ctx(s1, i1, iEmpty));
-    memoryPolicy.apply(ctx(makeState([]), iEmpty, iEmpty));
-    memoryPolicy.apply(ctx(makeState([]), iEmpty, iEmpty));
+    stability.apply(ctx(s1, i1, iEmpty));
+    stability.apply(ctx(makeState([]), iEmpty, iEmpty));
+    stability.apply(ctx(makeState([]), iEmpty, iEmpty));
 
     const iReturn = makeInstance([{ id: 'OldNode', type: 'T' }], []);
-    const result = memoryPolicy.apply(ctx(makeState([]), iEmpty, iReturn));
+    const result = stability.apply(ctx(makeState([]), iEmpty, iReturn));
 
     expect(result.effectivePriorState?.positions.find(p => p.id === 'OldNode')).toBeUndefined();
   });
 
-  it('enforces maxCacheSize by evicting oldest remembered ids when needed', () => {
-    const memoryPolicy = createStabilityMemoryPolicy({
-      maxReappearanceGapSteps: 10,
-      maxCacheSize: 2,
-    });
-
+  it('enforces max cache size by evicting oldest remembered ids when needed', () => {
+    resetStabilityMemory();
     const manyState = makeState([
       ['A', 1, 1],
       ['B', 2, 2],
@@ -189,14 +161,14 @@ describe('stability', () => {
     ], []);
     const emptyInst = makeInstance([], []);
 
-    // Seeds memory with 4 ids; policy must evict down to maxCacheSize=2.
-    memoryPolicy.apply(ctx(manyState, manyInst, emptyInst));
+    // Fill memory with many ids; only recent/bounded entries should survive.
+    stability.apply(ctx(manyState, manyInst, emptyInst));
 
     const smallState = makeState([['Z', 99, 99]]);
     const prevOnlyZ = makeInstance([{ id: 'Z', type: 'T' }], []);
     const wantsOldIds = makeInstance([{ id: 'A', type: 'T' }, { id: 'B', type: 'T' }], []);
 
-    const result = memoryPolicy.apply(ctx(smallState, prevOnlyZ, wantsOldIds));
+    const result = stability.apply(ctx(smallState, prevOnlyZ, wantsOldIds));
     const ids = result.effectivePriorState?.positions.map(p => p.id) ?? [];
 
     expect(ids).not.toContain('A');
