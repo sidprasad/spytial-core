@@ -1812,10 +1812,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         return "link";
       })
       .attr("data-link-id", (d: any) => d.id || "")
-      .attr("stroke", (d: any) => d.color)
+      .attr("stroke", (d: any) => this.isAlignmentEdge(d) ? "none" : d.color)
       .attr("fill", "none")
       // Use .style() for stroke-width so inline styles override CSS class rules (.link, .inferredLink)
-      .style("stroke-width", (d: any) => d.weight != null ? `${d.weight}px` : null)
+      .style("stroke-width", (d: any) => {
+        if (this.isAlignmentEdge(d)) return 0;
+        return d.weight != null ? `${d.weight}px` : null;
+      })
+      .style("opacity", (d: any) => this.isAlignmentEdge(d) ? 0 : null)
       .attr("stroke-dasharray", (d: any) => this.getEdgeDasharray(d.style))
       .attr("marker-end", (d: any) => {
         if (this.isAlignmentEdge(d)) return "none";
