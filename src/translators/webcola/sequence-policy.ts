@@ -66,6 +66,19 @@ export interface SequencePolicy {
   apply(context: SequencePolicyContext): SequencePolicyResult;
 }
 
+
+export interface StabilityMemoryOptions {
+  /**
+   * Maximum number of transitions a node can remain absent and still be restored
+   * when it reappears.
+   */
+  maxReappearanceGapSteps?: number;
+  /** Maximum number of remembered ids before stale entries are pruned. */
+  maxCacheSize?: number;
+  /** Optional policy name for easier debugging/registration. */
+  name?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Instance diffing (internal to change_emphasis)
 // ---------------------------------------------------------------------------
@@ -121,6 +134,32 @@ interface NodeChangeDetails {
   signatureById: Map<string, string>;
 }
 
+function computeRemovedNeighborLoss(prev: IDataInstance, curr: IDataInstance): Map<string, number> {
+  const currAtomIds = new Set(curr.getAtoms().map(atom => atom.id));
+  const removedAtomIds = new Set(
+    prev.getAtoms().map(atom => atom.id).filter(atomId => !currAtomIds.has(atomId))
+  );
+
+  const lossById = new Map<string, number>();
+  if (removedAtomIds.size === 0) {
+    return lossById;
+  }
+
+  for (const relation of prev.getRelations()) {
+    for (const tuple of relation.tuples) {
+      const hasRemovedAtom = tuple.atoms.some(atomId => removedAtomIds.has(atomId));
+      if (!hasRemovedAtom) continue;
+
+      for (const atomId of tuple.atoms) {
+        if (!currAtomIds.has(atomId)) continue;
+        lossById.set(atomId, (lossById.get(atomId) ?? 0) + 1);
+      }
+    }
+  }
+
+  return lossById;
+}
+
 /**
  * Analyze per-node change between two adjacent instances.
  *
@@ -136,6 +175,7 @@ function analyzeNodeChanges(
   const changedIds = new Set<string>();
   const intensityById = new Map<string, number>();
   const signatureById = new Map<string, string>();
+  const removedNeighborLoss = computeRemovedNeighborLoss(prev, curr);
 
   for (const [atomId, currSet] of currFP) {
     const prevSet = prevFP.get(atomId);
@@ -150,8 +190,10 @@ function analyzeNodeChanges(
     const currKey = fingerprintKey(currSet);
     if (prevKey !== currKey) {
       changedIds.add(atomId);
-      intensityById.set(atomId, Math.max(1, symmetricDifferenceSize(prevSet, currSet)));
-      signatureById.set(atomId, `diff|${prevKey}|${currKey}`);
+      const diffIntensity = Math.max(1, symmetricDifferenceSize(prevSet, currSet));
+      const removedLoss = removedNeighborLoss.get(atomId) ?? 0;
+      intensityById.set(atomId, diffIntensity + removedLoss);
+      signatureById.set(atomId, `diff|${prevKey}|${currKey}|removed_loss:${removedLoss}`);
     }
   }
 
@@ -278,16 +320,102 @@ export const ignoreHistory: SequencePolicy = {
 };
 
 /**
- * Preserve all prior node positions.  The solver uses reduced iterations
- * so hint positions are largely maintained.
+ * Preserve prior positions for nodes present in the current step.
+ *
+ * This built-in is intentionally pure/pairwise to avoid cross-sequence state
+ * leaks from a shared module singleton.
  */
 export const stability: SequencePolicy = {
   name: 'stability',
-  apply: ({ priorState }) => ({
-    effectivePriorState: priorState,
-    useReducedIterations: true,
-  }),
+  apply: ({ priorState, currInstance }) => {
+    const currAtomIds = new Set(currInstance.getAtoms().map(atom => atom.id));
+    const stablePositions = priorState.positions.filter(position => currAtomIds.has(position.id));
+
+    return {
+      effectivePriorState: {
+        positions: stablePositions,
+        transform: priorState.transform,
+      },
+      useReducedIterations: true,
+    };
+  },
 };
+
+/**
+ * Create a per-sequence memory-enabled stability policy.
+ *
+ * Use this factory when you want id-based reappearance restoration without
+ * contaminating independent graphs/sequences.
+ */
+export function createStabilityMemoryPolicy(options: StabilityMemoryOptions = {}): SequencePolicy {
+  const recentPositionsById = new Map<string, { x: number; y: number; step: number }>();
+  const maxReappearanceGapSteps = options.maxReappearanceGapSteps ?? 2;
+  const maxCacheSize = options.maxCacheSize ?? 5000;
+  const policyName = options.name ?? 'stability_with_memory';
+  let step = 0;
+
+  return {
+    name: policyName,
+    apply: ({ priorState, currInstance }) => {
+      if (priorState.positions.length === 0) {
+        recentPositionsById.clear();
+        step = 0;
+      }
+      step += 1;
+
+      for (const position of priorState.positions) {
+        recentPositionsById.set(position.id, { x: position.x, y: position.y, step });
+      }
+
+      const priorById = new Map(priorState.positions.map(position => [position.id, position]));
+      const stablePositions = currInstance.getAtoms().map(atom => {
+        const directPrior = priorById.get(atom.id);
+        if (directPrior) return directPrior;
+
+        const remembered = recentPositionsById.get(atom.id);
+        if (!remembered || (step - remembered.step) > maxReappearanceGapSteps) {
+          return undefined;
+        }
+
+        return { id: atom.id, x: remembered.x, y: remembered.y };
+      }).filter((position): position is { id: string; x: number; y: number } => Boolean(position));
+
+      for (const position of stablePositions) {
+        recentPositionsById.set(position.id, { x: position.x, y: position.y, step });
+      }
+
+      if (recentPositionsById.size > maxCacheSize) {
+        for (const [id, remembered] of recentPositionsById) {
+          if ((step - remembered.step) > maxReappearanceGapSteps) {
+            recentPositionsById.delete(id);
+          }
+        }
+
+        if (recentPositionsById.size > maxCacheSize) {
+          const victims = [...recentPositionsById.entries()]
+            .sort((a, b) => {
+              const stepDelta = a[1].step - b[1].step;
+              if (stepDelta !== 0) return stepDelta;
+              return a[0].localeCompare(b[0]);
+            })
+            .slice(0, recentPositionsById.size - maxCacheSize);
+
+          for (const [id] of victims) {
+            recentPositionsById.delete(id);
+          }
+        }
+      }
+
+      return {
+        effectivePriorState: {
+          positions: stablePositions,
+          transform: priorState.transform,
+        },
+        useReducedIterations: true,
+      };
+    },
+  };
+}
 
 /**
  * Emphasize changed nodes with deterministic, visible jitter while keeping
