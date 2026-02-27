@@ -66,6 +66,7 @@ export interface SequencePolicy {
   apply(context: SequencePolicyContext): SequencePolicyResult;
 }
 
+
 // ---------------------------------------------------------------------------
 // Instance diffing (internal to change_emphasis)
 // ---------------------------------------------------------------------------
@@ -121,6 +122,32 @@ interface NodeChangeDetails {
   signatureById: Map<string, string>;
 }
 
+function computeRemovedNeighborLoss(prev: IDataInstance, curr: IDataInstance): Map<string, number> {
+  const currAtomIds = new Set(curr.getAtoms().map(atom => atom.id));
+  const removedAtomIds = new Set(
+    prev.getAtoms().map(atom => atom.id).filter(atomId => !currAtomIds.has(atomId))
+  );
+
+  const lossById = new Map<string, number>();
+  if (removedAtomIds.size === 0) {
+    return lossById;
+  }
+
+  for (const relation of prev.getRelations()) {
+    for (const tuple of relation.tuples) {
+      const hasRemovedAtom = tuple.atoms.some(atomId => removedAtomIds.has(atomId));
+      if (!hasRemovedAtom) continue;
+
+      for (const atomId of tuple.atoms) {
+        if (!currAtomIds.has(atomId)) continue;
+        lossById.set(atomId, (lossById.get(atomId) ?? 0) + 1);
+      }
+    }
+  }
+
+  return lossById;
+}
+
 /**
  * Analyze per-node change between two adjacent instances.
  *
@@ -136,6 +163,7 @@ function analyzeNodeChanges(
   const changedIds = new Set<string>();
   const intensityById = new Map<string, number>();
   const signatureById = new Map<string, string>();
+  const removedNeighborLoss = computeRemovedNeighborLoss(prev, curr);
 
   for (const [atomId, currSet] of currFP) {
     const prevSet = prevFP.get(atomId);
@@ -150,8 +178,10 @@ function analyzeNodeChanges(
     const currKey = fingerprintKey(currSet);
     if (prevKey !== currKey) {
       changedIds.add(atomId);
-      intensityById.set(atomId, Math.max(1, symmetricDifferenceSize(prevSet, currSet)));
-      signatureById.set(atomId, `diff|${prevKey}|${currKey}`);
+      const diffIntensity = Math.max(1, symmetricDifferenceSize(prevSet, currSet));
+      const removedLoss = removedNeighborLoss.get(atomId) ?? 0;
+      intensityById.set(atomId, diffIntensity + removedLoss);
+      signatureById.set(atomId, `diff|${prevKey}|${currKey}|removed_loss:${removedLoss}`);
     }
   }
 
@@ -278,15 +308,102 @@ export const ignoreHistory: SequencePolicy = {
 };
 
 /**
- * Preserve all prior node positions.  The solver uses reduced iterations
- * so hint positions are largely maintained.
+ * Preserve prior positions for nodes present in the current step.
+ *
+ * This built-in includes short-lived in-memory recall for ids that
+ * disappear briefly and reappear in nearby steps.
+ *
+ * ### Behavioural notes
+ *
+ * **Singleton closure state.** `recentPositionsById` and `step` live in a
+ * closure on the exported object instance.  Two independent sequence renderers
+ * that share the same `stability` reference will corrupt each other's memory;
+ * each renderer should hold its own policy object if isolation is needed.
+ *
+ * **Aggressive reset on empty `priorState`.** When `priorState.positions` is
+ * empty the entire cache is wiped and `step` resets to 0.  A single
+ * momentarily blank graph will therefore erase all short-lived recall built up
+ * so far.  This is intentional (treat an empty state as a fresh start), but is
+ * a sharp edge to be aware of.
+ *
+ * **Recalled nodes have their step refreshed.** When a node is pulled back
+ * from the cache and placed in `stablePositions` its cache entry is updated to
+ * the current step.  A node that oscillates in/out will therefore never time
+ * out by the gap rule alone — only overflow eviction can remove it.
  */
 export const stability: SequencePolicy = {
   name: 'stability',
-  apply: ({ priorState }) => ({
-    effectivePriorState: priorState,
-    useReducedIterations: true,
-  }),
+  apply: (() => {
+    const recentPositionsById = new Map<string, { x: number; y: number; step: number }>();
+    const maxReappearanceGapSteps = 2;
+    const maxCacheSize = 5000;
+    let step = 0;
+
+    return ({ priorState, currInstance }) => {
+      // An empty priorState signals a fresh sequence start — clear all memory
+      // so stale positions from a previous run cannot leak into the new one.
+      if (priorState.positions.length === 0) {
+        recentPositionsById.clear();
+        step = 0;
+      }
+      step += 1;
+
+      // Snapshot every known position into the cache at the current step so
+      // that nodes which disappear next step can still be recalled.
+      for (const position of priorState.positions) {
+        recentPositionsById.set(position.id, { x: position.x, y: position.y, step });
+      }
+
+      const priorById = new Map(priorState.positions.map(position => [position.id, position]));
+      const stablePositions = currInstance.getAtoms().map(atom => {
+        const directPrior = priorById.get(atom.id);
+        if (directPrior) return directPrior;
+
+        const remembered = recentPositionsById.get(atom.id);
+        if (!remembered || (step - remembered.step) > maxReappearanceGapSteps) {
+          return undefined;
+        }
+
+        return { id: atom.id, x: remembered.x, y: remembered.y };
+      }).filter((position): position is { id: string; x: number; y: number } => Boolean(position));
+
+      // Refresh the cache step for every recalled node so its lifetime extends
+      // as long as it keeps being assigned a position (see note above).
+      for (const position of stablePositions) {
+        recentPositionsById.set(position.id, { x: position.x, y: position.y, step });
+      }
+
+      if (recentPositionsById.size > maxCacheSize) {
+        for (const [id, remembered] of recentPositionsById) {
+          if ((step - remembered.step) > maxReappearanceGapSteps) {
+            recentPositionsById.delete(id);
+          }
+        }
+
+        if (recentPositionsById.size > maxCacheSize) {
+          const victims = [...recentPositionsById.entries()]
+            .sort((a, b) => {
+              const stepDelta = a[1].step - b[1].step;
+              if (stepDelta !== 0) return stepDelta;
+              return a[0].localeCompare(b[0]);
+            })
+            .slice(0, recentPositionsById.size - maxCacheSize);
+
+          for (const [id] of victims) {
+            recentPositionsById.delete(id);
+          }
+        }
+      }
+
+      return {
+        effectivePriorState: {
+          positions: stablePositions,
+          transform: priorState.transform,
+        },
+        useReducedIterations: true,
+      };
+    };
+  })(),
 };
 
 /**
@@ -294,6 +411,24 @@ export const stability: SequencePolicy = {
  * stable nodes fixed. Jitter is clamped to the viewport bounds.
  *
  * The diff is computed automatically from the provided instances.
+ *
+ * ### Behavioural notes
+ *
+ * **New atoms receive no solver hint.** `emphasizedPositions` iterates only
+ * over `priorState.positions`, so genuinely new atoms (no prior position)
+ * are silently omitted and the solver places them freely.  This is correct
+ * but implicit rather than explicit.
+ *
+ * **No between-step recall.** Unlike `stability`, this policy has no memory
+ * of briefly-absent nodes.  A node absent for one step returns as "new" and
+ * receives a free solver position with no jitter.  The two policies are
+ * therefore not composable — you cannot get both recall *and* emphasis from
+ * this single policy.
+ *
+ * **Hard-coded jitter radius range (≈30–76 px).** The radius floor is 36 px
+ * (scaled by 0.85) regardless of intensity, ensuring the movement is always
+ * visible.  The ceiling is 66 px (scaled by 1.15).  This range is intentional
+ * for "visible but not dislocating" jitter and is not currently configurable.
  */
 export const changeEmphasis: SequencePolicy = {
   name: 'change_emphasis',
@@ -306,6 +441,7 @@ export const changeEmphasis: SequencePolicy = {
     const bounds = resolveViewportBounds(priorState, viewportBounds);
     const currAtomIds = new Set(currInstance.getAtoms().map(atom => atom.id));
     const emphasizedPositions = priorState.positions
+      // Atoms removed in this step have no place in the current layout.
       .filter(position => currAtomIds.has(position.id))
       .map(position => {
         if (!analysis.changedIds.has(position.id)) {

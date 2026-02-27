@@ -96,14 +96,116 @@ describe('ignoreHistory', () => {
 // ---------------------------------------------------------------------------
 
 describe('stability', () => {
-  it('passes through prior state verbatim', () => {
+  function resetStabilityMemory(): void {
+    const empty = makeInstance([], []);
+    stability.apply(ctx(makeState([]), empty, empty));
+  }
+
+  it('passes through current prior positions when all nodes still exist', () => {
+    resetStabilityMemory();
     const prior = makeState([['A', 10, 20], ['B', 30, 40]]);
-    const inst = makeInstance([{ id: 'A', type: 'T' }], []);
+    const inst = makeInstance([{ id: 'A', type: 'T' }, { id: 'B', type: 'T' }], []);
     const result = stability.apply(ctx(prior, inst, inst));
 
-    expect(result.effectivePriorState).toBe(prior);
+    expect(result.effectivePriorState).toEqual(prior);
     expect(result.useReducedIterations).toBe(true);
   });
+
+  it('restores recently reappearing nodes from internal stability memory', () => {
+    resetStabilityMemory();
+    const state1 = makeState([['Node1', 100, 120], ['Node2', 200, 220]]);
+    const inst1 = makeInstance([{ id: 'Node1', type: 'T' }, { id: 'Node2', type: 'T' }], []);
+    const state2 = makeState([['Node2', 205, 225]]);
+    const inst2 = makeInstance([{ id: 'Node2', type: 'T' }], []);
+    const inst3 = makeInstance([{ id: 'Node1', type: 'T' }, { id: 'Node2', type: 'T' }], []);
+
+    stability.apply(ctx(state1, inst1, inst2));
+    const resultStep3 = stability.apply(ctx(state2, inst2, inst3));
+
+    const node1 = resultStep3.effectivePriorState?.positions.find(p => p.id === 'Node1');
+    const node2 = resultStep3.effectivePriorState?.positions.find(p => p.id === 'Node2');
+
+    expect(node1).toEqual({ id: 'Node1', x: 100, y: 120 });
+    expect(node2).toEqual({ id: 'Node2', x: 205, y: 225 });
+  });
+
+  it('forgets nodes that have been absent for too many steps', () => {
+    resetStabilityMemory();
+    const s1 = makeState([['OldNode', 40, 50]]);
+    const i1 = makeInstance([{ id: 'OldNode', type: 'T' }], []);
+    const iEmpty = makeInstance([], []);
+
+    stability.apply(ctx(s1, i1, iEmpty));
+    stability.apply(ctx(makeState([]), iEmpty, iEmpty));
+    stability.apply(ctx(makeState([]), iEmpty, iEmpty));
+
+    const iReturn = makeInstance([{ id: 'OldNode', type: 'T' }], []);
+    const result = stability.apply(ctx(makeState([]), iEmpty, iReturn));
+
+    expect(result.effectivePriorState?.positions.find(p => p.id === 'OldNode')).toBeUndefined();
+  });
+
+  it('recalls nodes that reappear within the gap window', () => {
+    resetStabilityMemory();
+    const manyState = makeState([
+      ['A', 1, 1],
+      ['B', 2, 2],
+      ['C', 3, 3],
+      ['D', 4, 4],
+    ]);
+    const manyInst = makeInstance([
+      { id: 'A', type: 'T' },
+      { id: 'B', type: 'T' },
+      { id: 'C', type: 'T' },
+      { id: 'D', type: 'T' },
+    ], []);
+    const emptyInst = makeInstance([], []);
+
+    // A, B, C, D disappear for one step — within the 2-step recall window.
+    stability.apply(ctx(manyState, manyInst, emptyInst));
+
+    const smallState = makeState([['Z', 99, 99]]);
+    const prevOnlyZ = makeInstance([{ id: 'Z', type: 'T' }], []);
+    const wantsOldIds = makeInstance([{ id: 'A', type: 'T' }, { id: 'B', type: 'T' }], []);
+
+    const result = stability.apply(ctx(smallState, prevOnlyZ, wantsOldIds));
+    const ids = result.effectivePriorState?.positions.map(p => p.id) ?? [];
+
+    // Gap is 1 step ≤ maxReappearanceGapSteps(2), so both should be restored.
+    expect(ids).toContain('A');
+    expect(ids).toContain('B');
+  });
+
+  it('enforces max cache size by evicting oldest remembered ids when needed', () => {
+    resetStabilityMemory();
+
+    // Fill cache with maxCacheSize+1 entries to trigger the overflow eviction path.
+    const overflowSize = 5001;
+    const allIds = Array.from({ length: overflowSize }, (_, i) => `node_${String(i).padStart(4, '0')}`);
+    const bigState = makeState(allIds.map((id, i) => [id, i, i] as [string, number, number]));
+    const bigInst = makeInstance(allIds.map(id => ({ id, type: 'T' })), []);
+    const emptyInst = makeInstance([], []);
+
+    // After this call the cache has 5001 entries; eviction removes the
+    // alphabetically-earliest id ('node_0000') to get back to 5000.
+    stability.apply(ctx(bigState, bigInst, emptyInst));
+
+    const evictedId = allIds[0];               // 'node_0000' — evicted
+    const survivingId = allIds[overflowSize - 1]; // 'node_5000' — still cached
+
+    const wantsEvicted = makeInstance(
+      [{ id: evictedId, type: 'T' }, { id: survivingId, type: 'T' }],
+      []
+    );
+    const result = stability.apply(
+      ctx(makeState([['Z', 0, 0]]), makeInstance([{ id: 'Z', type: 'T' }], []), wantsEvicted)
+    );
+    const ids = result.effectivePriorState?.positions.map(p => p.id) ?? [];
+
+    expect(ids).not.toContain(evictedId);  // removed by cache overflow eviction
+    expect(ids).toContain(survivingId);    // within window and not evicted, recalled
+  });
+
 
   it('has name "stability"', () => {
     expect(stability.name).toBe('stability');
@@ -211,6 +313,35 @@ describe('changeEmphasis', () => {
 
     expect(ids).toContain('A');
     expect(ids).not.toContain('B');
+  });
+
+  it('adds extra emphasis to nodes that lost neighbors due to removed atoms', () => {
+    const prior = makeState([['A', 200, 200], ['B', 260, 260]]);
+    const viewportBounds = { minX: 0, maxX: 800, minY: 0, maxY: 600 };
+
+    const prev = makeInstance(
+      [{ id: 'A', type: 'T' }, { id: 'B', type: 'T' }, { id: 'C', type: 'T' }],
+      [{ name: 'edge', tuples: [['A', 'B'], ['A', 'C']] }]
+    );
+    const currWithoutRemoval = makeInstance(
+      [{ id: 'A', type: 'T' }, { id: 'B', type: 'T' }, { id: 'C', type: 'T' }],
+      [{ name: 'edge', tuples: [['A', 'B']] }]
+    );
+    const currWithRemoval = makeInstance(
+      [{ id: 'A', type: 'T' }, { id: 'B', type: 'T' }],
+      [{ name: 'edge', tuples: [['A', 'B']] }]
+    );
+
+    const noRemovalResult = changeEmphasis.apply(ctx(prior, prev, currWithoutRemoval, viewportBounds));
+    const withRemovalResult = changeEmphasis.apply(ctx(prior, prev, currWithRemoval, viewportBounds));
+
+    const aWithoutRemoval = noRemovalResult.effectivePriorState!.positions.find(p => p.id === 'A')!;
+    const aWithRemoval = withRemovalResult.effectivePriorState!.positions.find(p => p.id === 'A')!;
+
+    const distWithoutRemoval = distance({ x: aWithoutRemoval.x, y: aWithoutRemoval.y }, { x: 200, y: 200 });
+    const distWithRemoval = distance({ x: aWithRemoval.x, y: aWithRemoval.y }, { x: 200, y: 200 });
+
+    expect(distWithRemoval).toBeGreaterThan(distWithoutRemoval);
   });
 
   it('keeps jittered nodes inside a tight viewport', () => {
