@@ -66,6 +66,19 @@ export interface SequencePolicy {
   apply(context: SequencePolicyContext): SequencePolicyResult;
 }
 
+
+export interface StabilityMemoryOptions {
+  /**
+   * Maximum number of transitions a node can remain absent and still be restored
+   * when it reappears.
+   */
+  maxReappearanceGapSteps?: number;
+  /** Maximum number of remembered ids before stale entries are pruned. */
+  maxCacheSize?: number;
+  /** Optional policy name for easier debugging/registration. */
+  name?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Instance diffing (internal to change_emphasis)
 // ---------------------------------------------------------------------------
@@ -309,19 +322,41 @@ export const ignoreHistory: SequencePolicy = {
 /**
  * Preserve prior positions for nodes present in the current step.
  *
- * To support temporal traces where atoms may disappear and then reappear,
- * this policy also keeps a small in-memory cache of recent node positions
- * keyed by id. Reappearing nodes can reuse their recent coordinates.
+ * This built-in is intentionally pure/pairwise to avoid cross-sequence state
+ * leaks from a shared module singleton.
  */
 export const stability: SequencePolicy = {
   name: 'stability',
-  apply: (() => {
-    const recentPositionsById = new Map<string, { x: number; y: number; step: number }>();
-    const maxReappearanceGapSteps = 2;
-    const maxCacheSize = 5000;
-    let step = 0;
+  apply: ({ priorState, currInstance }) => {
+    const currAtomIds = new Set(currInstance.getAtoms().map(atom => atom.id));
+    const stablePositions = priorState.positions.filter(position => currAtomIds.has(position.id));
 
-    return ({ priorState, currInstance }) => {
+    return {
+      effectivePriorState: {
+        positions: stablePositions,
+        transform: priorState.transform,
+      },
+      useReducedIterations: true,
+    };
+  },
+};
+
+/**
+ * Create a per-sequence memory-enabled stability policy.
+ *
+ * Use this factory when you want id-based reappearance restoration without
+ * contaminating independent graphs/sequences.
+ */
+export function createStabilityMemoryPolicy(options: StabilityMemoryOptions = {}): SequencePolicy {
+  const recentPositionsById = new Map<string, { x: number; y: number; step: number }>();
+  const maxReappearanceGapSteps = options.maxReappearanceGapSteps ?? 2;
+  const maxCacheSize = options.maxCacheSize ?? 5000;
+  const policyName = options.name ?? 'stability_with_memory';
+  let step = 0;
+
+  return {
+    name: policyName,
+    apply: ({ priorState, currInstance }) => {
       if (priorState.positions.length === 0) {
         recentPositionsById.clear();
         step = 0;
@@ -335,20 +370,14 @@ export const stability: SequencePolicy = {
       const priorById = new Map(priorState.positions.map(position => [position.id, position]));
       const stablePositions = currInstance.getAtoms().map(atom => {
         const directPrior = priorById.get(atom.id);
-        if (directPrior) {
-          return directPrior;
-        }
+        if (directPrior) return directPrior;
 
         const remembered = recentPositionsById.get(atom.id);
         if (!remembered || (step - remembered.step) > maxReappearanceGapSteps) {
           return undefined;
         }
 
-        return {
-          id: atom.id,
-          x: remembered.x,
-          y: remembered.y,
-        };
+        return { id: atom.id, x: remembered.x, y: remembered.y };
       }).filter((position): position is { id: string; x: number; y: number } => Boolean(position));
 
       for (const position of stablePositions) {
@@ -370,9 +399,9 @@ export const stability: SequencePolicy = {
         },
         useReducedIterations: true,
       };
-    };
-  })(),
-};
+    },
+  };
+}
 
 /**
  * Emphasize changed nodes with deterministic, visible jitter while keeping

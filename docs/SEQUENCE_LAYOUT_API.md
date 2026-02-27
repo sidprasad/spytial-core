@@ -62,9 +62,11 @@ interface SequencePolicyResult {
 | Policy object | Name string | Behavior |
 |---|---|---|
 | `ignoreHistory` | `'ignore_history'` | Fresh layout — prior state is discarded. (default) |
-| `stability` | `'stability'` | Preserves positions for current nodes and also restores recently reappearing node IDs from a small internal memory cache (bounded/short-lived) to maintain temporal continuity. |
+| `stability` | `'stability'` | Pairwise continuity only: prior positions are preserved for nodes present in the current step; reappearing nodes are treated as new. |
 | `changeEmphasis` | `'change_emphasis'` | Diffs prev/curr instances. Stable nodes stay fixed; changed nodes get deterministic visible jitter clamped to viewport bounds, with stronger emphasis when neighbors disappear. |
 | `randomPositioning` | `'random_positioning'` | Fully randomize all current-node positions within viewport bounds. |
+
+For id-based reappearance continuity with **per-sequence isolated memory**, use `createStabilityMemoryPolicy()` to create a dedicated policy instance for each sequence/graph.
 
 ### Adding a custom policy
 
@@ -92,6 +94,7 @@ import {
   getSequencePolicy,
   ignoreHistory,
   stability,
+  createStabilityMemoryPolicy,
   changeEmphasis,
   randomPositioning,
   registerSequencePolicy,
