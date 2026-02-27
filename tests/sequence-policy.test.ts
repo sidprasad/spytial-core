@@ -105,26 +105,16 @@ describe('stability', () => {
     expect(result.useReducedIterations).toBe(true);
   });
 
-  it('restores a previously seen position when a node reappears later in sequence', () => {
-    const state1 = makeState([['Node1', 100, 120], ['Node2', 200, 220]]);
-    const inst1 = makeInstance([{ id: 'Node1', type: 'T' }, { id: 'Node2', type: 'T' }], []);
-
+  it('treats reappearing nodes as new when they are absent in the pairwise prior state', () => {
     const state2 = makeState([['Node2', 205, 225]]);
     const inst2 = makeInstance([{ id: 'Node2', type: 'T' }], []);
-
     const inst3 = makeInstance([{ id: 'Node1', type: 'T' }, { id: 'Node2', type: 'T' }], []);
 
-    // Step 1 -> 2 (Node1 disappears)
-    const resultStep2 = stability.apply(ctx(state1, inst1, inst2));
-    expect(resultStep2.effectivePriorState?.positions.map(p => p.id)).toEqual(['Node2']);
-
-    // Step 2 -> 3 (Node1 reappears)
     const resultStep3 = stability.apply(ctx(state2, inst2, inst3));
-    const node1 = resultStep3.effectivePriorState?.positions.find(p => p.id === 'Node1');
-    const node2 = resultStep3.effectivePriorState?.positions.find(p => p.id === 'Node2');
+    const nodeIds = resultStep3.effectivePriorState?.positions.map(p => p.id) ?? [];
 
-    expect(node1).toEqual({ id: 'Node1', x: 100, y: 120 });
-    expect(node2).toEqual({ id: 'Node2', x: 205, y: 225 });
+    expect(nodeIds).toContain('Node2');
+    expect(nodeIds).not.toContain('Node1');
   });
 
   it('has name "stability"', () => {

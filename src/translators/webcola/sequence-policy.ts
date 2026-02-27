@@ -307,51 +307,26 @@ export const ignoreHistory: SequencePolicy = {
 };
 
 /**
- * Preserve all prior node positions.  The solver uses reduced iterations
- * so hint positions are largely maintained.
+ * Preserve prior positions for nodes present in the current step.
+ *
+ * This policy is intentionally pairwise/pure: if a node disappears for one
+ * step and later reappears, it is treated as new unless the caller supplies
+ * explicit historical hints via `priorPositions`.
  */
 export const stability: SequencePolicy = {
   name: 'stability',
-  apply: (() => {
-    const lastKnownPositionByNodeId = new Map<string, { x: number; y: number }>();
+  apply: ({ priorState, currInstance }) => {
+    const currAtomIds = new Set(currInstance.getAtoms().map(atom => atom.id));
+    const stablePositions = priorState.positions.filter(position => currAtomIds.has(position.id));
 
-    return ({ priorState, currInstance }) => {
-      for (const position of priorState.positions) {
-        lastKnownPositionByNodeId.set(position.id, { x: position.x, y: position.y });
-      }
-
-      const priorById = new Map(priorState.positions.map(position => [position.id, position]));
-      const stablePositions = currInstance.getAtoms().map(atom => {
-        const priorPosition = priorById.get(atom.id);
-        if (priorPosition) {
-          return priorPosition;
-        }
-
-        const remembered = lastKnownPositionByNodeId.get(atom.id);
-        if (!remembered) {
-          return undefined;
-        }
-
-        return {
-          id: atom.id,
-          x: remembered.x,
-          y: remembered.y,
-        };
-      }).filter((position): position is { id: string; x: number; y: number } => Boolean(position));
-
-      for (const position of stablePositions) {
-        lastKnownPositionByNodeId.set(position.id, { x: position.x, y: position.y });
-      }
-
-      return {
-        effectivePriorState: {
-          positions: stablePositions,
-          transform: priorState.transform,
-        },
-        useReducedIterations: true,
-      };
+    return {
+      effectivePriorState: {
+        positions: stablePositions,
+        transform: priorState.transform,
+      },
+      useReducedIterations: true,
     };
-  })(),
+  },
 };
 
 /**
