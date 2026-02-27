@@ -309,24 +309,69 @@ export const ignoreHistory: SequencePolicy = {
 /**
  * Preserve prior positions for nodes present in the current step.
  *
- * This policy is intentionally pairwise/pure: if a node disappears for one
- * step and later reappears, it is treated as new unless the caller supplies
- * explicit historical hints via `priorPositions`.
+ * To support temporal traces where atoms may disappear and then reappear,
+ * this policy also keeps a small in-memory cache of recent node positions
+ * keyed by id. Reappearing nodes can reuse their recent coordinates.
  */
 export const stability: SequencePolicy = {
   name: 'stability',
-  apply: ({ priorState, currInstance }) => {
-    const currAtomIds = new Set(currInstance.getAtoms().map(atom => atom.id));
-    const stablePositions = priorState.positions.filter(position => currAtomIds.has(position.id));
+  apply: (() => {
+    const recentPositionsById = new Map<string, { x: number; y: number; step: number }>();
+    const maxReappearanceGapSteps = 2;
+    const maxCacheSize = 5000;
+    let step = 0;
 
-    return {
-      effectivePriorState: {
-        positions: stablePositions,
-        transform: priorState.transform,
-      },
-      useReducedIterations: true,
+    return ({ priorState, currInstance }) => {
+      if (priorState.positions.length === 0) {
+        recentPositionsById.clear();
+        step = 0;
+      }
+      step += 1;
+
+      for (const position of priorState.positions) {
+        recentPositionsById.set(position.id, { x: position.x, y: position.y, step });
+      }
+
+      const priorById = new Map(priorState.positions.map(position => [position.id, position]));
+      const stablePositions = currInstance.getAtoms().map(atom => {
+        const directPrior = priorById.get(atom.id);
+        if (directPrior) {
+          return directPrior;
+        }
+
+        const remembered = recentPositionsById.get(atom.id);
+        if (!remembered || (step - remembered.step) > maxReappearanceGapSteps) {
+          return undefined;
+        }
+
+        return {
+          id: atom.id,
+          x: remembered.x,
+          y: remembered.y,
+        };
+      }).filter((position): position is { id: string; x: number; y: number } => Boolean(position));
+
+      for (const position of stablePositions) {
+        recentPositionsById.set(position.id, { x: position.x, y: position.y, step });
+      }
+
+      if (recentPositionsById.size > maxCacheSize) {
+        for (const [id, remembered] of recentPositionsById) {
+          if ((step - remembered.step) > maxReappearanceGapSteps) {
+            recentPositionsById.delete(id);
+          }
+        }
+      }
+
+      return {
+        effectivePriorState: {
+          positions: stablePositions,
+          transform: priorState.transform,
+        },
+        useReducedIterations: true,
+      };
     };
-  },
+  })(),
 };
 
 /**

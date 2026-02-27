@@ -105,16 +105,38 @@ describe('stability', () => {
     expect(result.useReducedIterations).toBe(true);
   });
 
-  it('treats reappearing nodes as new when they are absent in the pairwise prior state', () => {
+  it('restores recently reappearing nodes from internal stability memory', () => {
+    const state1 = makeState([['Node1', 100, 120], ['Node2', 200, 220]]);
+    const inst1 = makeInstance([{ id: 'Node1', type: 'T' }, { id: 'Node2', type: 'T' }], []);
+
     const state2 = makeState([['Node2', 205, 225]]);
     const inst2 = makeInstance([{ id: 'Node2', type: 'T' }], []);
+
     const inst3 = makeInstance([{ id: 'Node1', type: 'T' }, { id: 'Node2', type: 'T' }], []);
 
+    stability.apply(ctx(state1, inst1, inst2));
     const resultStep3 = stability.apply(ctx(state2, inst2, inst3));
-    const nodeIds = resultStep3.effectivePriorState?.positions.map(p => p.id) ?? [];
 
-    expect(nodeIds).toContain('Node2');
-    expect(nodeIds).not.toContain('Node1');
+    const node1 = resultStep3.effectivePriorState?.positions.find(p => p.id === 'Node1');
+    const node2 = resultStep3.effectivePriorState?.positions.find(p => p.id === 'Node2');
+
+    expect(node1).toEqual({ id: 'Node1', x: 100, y: 120 });
+    expect(node2).toEqual({ id: 'Node2', x: 205, y: 225 });
+  });
+
+  it('forgets nodes that have been absent for too many steps', () => {
+    const s1 = makeState([['OldNode', 40, 50]]);
+    const i1 = makeInstance([{ id: 'OldNode', type: 'T' }], []);
+    const iEmpty = makeInstance([], []);
+
+    stability.apply(ctx(s1, i1, iEmpty));
+    stability.apply(ctx(makeState([]), iEmpty, iEmpty));
+    stability.apply(ctx(makeState([]), iEmpty, iEmpty));
+
+    const iReturn = makeInstance([{ id: 'OldNode', type: 'T' }], []);
+    const result = stability.apply(ctx(makeState([]), iEmpty, iReturn));
+
+    expect(result.effectivePriorState?.positions.find(p => p.id === 'OldNode')).toBeUndefined();
   });
 
   it('has name "stability"', () => {

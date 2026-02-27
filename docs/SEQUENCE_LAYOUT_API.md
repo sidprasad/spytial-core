@@ -62,7 +62,7 @@ interface SequencePolicyResult {
 | Policy object | Name string | Behavior |
 |---|---|---|
 | `ignoreHistory` | `'ignore_history'` | Fresh layout — prior state is discarded. (default) |
-| `stability` | `'stability'` | Pairwise continuity only: prior positions are preserved for nodes present in the current step; nodes that reappear after an absent step are treated as new unless callers provide explicit historical hints. |
+| `stability` | `'stability'` | Preserves positions for current nodes and also restores recently reappearing node IDs from a small internal memory cache (bounded/short-lived) to maintain temporal continuity. |
 | `changeEmphasis` | `'change_emphasis'` | Diffs prev/curr instances. Stable nodes stay fixed; changed nodes get deterministic visible jitter clamped to viewport bounds, with stronger emphasis when neighbors disappear. |
 | `randomPositioning` | `'random_positioning'` | Fully randomize all current-node positions within viewport bounds. |
 
