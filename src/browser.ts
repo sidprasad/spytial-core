@@ -14,7 +14,6 @@ function registerWebColaCnDGraph() {
     if (!customElements.get('webcola-cnd-graph')) {
       try {
         customElements.define('webcola-cnd-graph', WebColaCnDGraph as any);
-        console.log('WebCola CnD Graph custom element registered successfully');
       } catch (error) {
         console.error('Failed to register WebCola CnD Graph custom element:', error);
       }
@@ -37,9 +36,12 @@ if (typeof window !== 'undefined') {
   globalWindow.WebColaCnDGraph = WebColaCnDGraph;
   globalWindow.registerWebColaCnDGraph = registerWebColaCnDGraph;
   
-  // Import and expose CnD Core on the global object
-  import('./index').then((CndCore) => {
-    globalWindow.CndCore = CndCore;
-    //console.log('✅ CndCore library loaded globally with JSONDataInstance support');
+  // Import and expose spytial-core on the global object
+  // window.spytialcore is the canonical name going forward;
+  // window.CndCore and window.CnDCore are kept as legacy aliases.
+  import('./index').then((core) => {
+    globalWindow.spytialcore = core;
+    globalWindow.CndCore = core;   // legacy alias
+    globalWindow.CnDCore = core;   // legacy alias
   }).catch(console.error);
 }

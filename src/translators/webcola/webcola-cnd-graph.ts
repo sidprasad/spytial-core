@@ -588,9 +588,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // Deeper nesting requires stronger group boundaries to prevent jitter
     if (maxDepth > 2) {
       compactness *= 10; // 10x stronger for deeply nested groups
-      if (typeof console !== 'undefined' && console.log) {
-        console.log(`WebCola: Using 10x group compactness for depth ${maxDepth} nested groups`);
-      }
     } else if (maxDepth > 1) {
       compactness *= 5; // 5x stronger for moderately nested groups
     }
@@ -599,9 +596,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // Many groups can create conflicting constraints that cause oscillation
     if (groupRatio > 0.3) {
       compactness *= 2; // Double strength for high group density
-      if (typeof console !== 'undefined' && console.log) {
-        console.log(`WebCola: Using 2x group compactness for high group density (ratio: ${groupRatio.toFixed(2)})`);
-      }
     }
     
     return compactness;
@@ -1422,7 +1416,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
             .translate(resolvedState!.transform.x, resolvedState!.transform.y)
             .scale(resolvedState!.transform.k);
           this.svg.call(this.zoomBehavior.transform, transform);
-          console.log(`WebCola: Restored prior state - ${resolvedState!.positions.length} positions, zoom ${resolvedState!.transform.k.toFixed(2)}x`);
         } else {
           // Reset zoom transform to identity for a fresh start (will be adjusted by fitViewportToContent)
           const identity = d3.zoomIdentity;
@@ -1497,9 +1490,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         userConstraintIters = Math.min(10, userConstraintIters);
         allConstraintIters = Math.min(20, allConstraintIters);
         
-        console.log(`WebCola: Using reduced iterations to preserve ${resolvedState!.positions.length} prior positions`);
-      } else if (hasPriorState) {
-        console.log(`WebCola: Prior positions provided (${resolvedState!.positions.length} nodes) with normal iteration count`);
       }
       
       if (nodeCount > 100) {

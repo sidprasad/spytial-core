@@ -259,17 +259,19 @@ You can use the browser bundle directly from a CDN:
 - **unpkg:**  
   [`https://unpkg.com/spytial-core/dist/browser/spytial-core-complete.global.js`](https://unpkg.com/spytial-core/dist/browser/spytial-core-complete.global.js)
 
-Once loaded, use via the global `CndCore` object:
+Once loaded, use via the global `spytialcore` object:
 
 ```html
 <script src="https://cdn.jsdelivr.net/npm/spytial-core/dist/browser/spytial-core-complete.global.js"></script>
 <script>
-  const { synthesizeAtomSelector, synthesizeBinarySelector } = CndCore;
+  const { synthesizeAtomSelector, synthesizeBinarySelector } = spytialcore;
   
   // Your code here
   const selector = synthesizeAtomSelector([...]);
 </script>
 ```
+
+> **Note:** For backward compatibility, `window.CndCore` and `window.CnDCore` are also available as aliases for `window.spytialcore`.
 
 ---
 

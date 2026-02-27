@@ -46,7 +46,9 @@ if (typeof window !== 'undefined') {
     }
     
     // Clear any global window properties set by CnD components
+    delete (window as any).spytialcore
     delete (window as any).CnDCore
+    delete (window as any).CndCore
     delete (window as any).CnDReactState
     delete (window as any).updateFromCnDSpec
     delete (window as any).updateFromBuilder

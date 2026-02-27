@@ -6,7 +6,7 @@ export default defineConfig({
     'spytial-core-complete': 'src/index.ts'
   },
   format: ['iife'], // Immediately Invoked Function Expression for browser
-  globalName: 'CndCore', // Global variable name for the complete library
+  globalName: 'spytialcore', // Global variable name for the complete library
   dts: false, // No TypeScript definitions for browser bundle
   splitting: false,
   sourcemap: true,
@@ -17,6 +17,10 @@ export default defineConfig({
   external: ['react', 'react-dom'], // Bundle everything, except React
   bundle: true,
   treeshake: true,
+  // Create backward-compatible aliases for the global name
+  footer: {
+    js: 'if(typeof window!=="undefined"){window.CndCore=window.spytialcore;window.CnDCore=window.spytialcore;}',
+  },
   // Bundle ALL dependencies for browser use
   noExternal: [
     'graphlib',
