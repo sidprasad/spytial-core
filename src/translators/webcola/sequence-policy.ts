@@ -121,6 +121,32 @@ interface NodeChangeDetails {
   signatureById: Map<string, string>;
 }
 
+function computeRemovedNeighborLoss(prev: IDataInstance, curr: IDataInstance): Map<string, number> {
+  const currAtomIds = new Set(curr.getAtoms().map(atom => atom.id));
+  const removedAtomIds = new Set(
+    prev.getAtoms().map(atom => atom.id).filter(atomId => !currAtomIds.has(atomId))
+  );
+
+  const lossById = new Map<string, number>();
+  if (removedAtomIds.size === 0) {
+    return lossById;
+  }
+
+  for (const relation of prev.getRelations()) {
+    for (const tuple of relation.tuples) {
+      const hasRemovedAtom = tuple.atoms.some(atomId => removedAtomIds.has(atomId));
+      if (!hasRemovedAtom) continue;
+
+      for (const atomId of tuple.atoms) {
+        if (!currAtomIds.has(atomId)) continue;
+        lossById.set(atomId, (lossById.get(atomId) ?? 0) + 1);
+      }
+    }
+  }
+
+  return lossById;
+}
+
 /**
  * Analyze per-node change between two adjacent instances.
  *
@@ -136,6 +162,7 @@ function analyzeNodeChanges(
   const changedIds = new Set<string>();
   const intensityById = new Map<string, number>();
   const signatureById = new Map<string, string>();
+  const removedNeighborLoss = computeRemovedNeighborLoss(prev, curr);
 
   for (const [atomId, currSet] of currFP) {
     const prevSet = prevFP.get(atomId);
@@ -150,8 +177,10 @@ function analyzeNodeChanges(
     const currKey = fingerprintKey(currSet);
     if (prevKey !== currKey) {
       changedIds.add(atomId);
-      intensityById.set(atomId, Math.max(1, symmetricDifferenceSize(prevSet, currSet)));
-      signatureById.set(atomId, `diff|${prevKey}|${currKey}`);
+      const diffIntensity = Math.max(1, symmetricDifferenceSize(prevSet, currSet));
+      const removedLoss = removedNeighborLoss.get(atomId) ?? 0;
+      intensityById.set(atomId, diffIntensity + removedLoss);
+      signatureById.set(atomId, `diff|${prevKey}|${currKey}|removed_loss:${removedLoss}`);
     }
   }
 
@@ -283,10 +312,46 @@ export const ignoreHistory: SequencePolicy = {
  */
 export const stability: SequencePolicy = {
   name: 'stability',
-  apply: ({ priorState }) => ({
-    effectivePriorState: priorState,
-    useReducedIterations: true,
-  }),
+  apply: (() => {
+    const lastKnownPositionByNodeId = new Map<string, { x: number; y: number }>();
+
+    return ({ priorState, currInstance }) => {
+      for (const position of priorState.positions) {
+        lastKnownPositionByNodeId.set(position.id, { x: position.x, y: position.y });
+      }
+
+      const priorById = new Map(priorState.positions.map(position => [position.id, position]));
+      const stablePositions = currInstance.getAtoms().map(atom => {
+        const priorPosition = priorById.get(atom.id);
+        if (priorPosition) {
+          return priorPosition;
+        }
+
+        const remembered = lastKnownPositionByNodeId.get(atom.id);
+        if (!remembered) {
+          return undefined;
+        }
+
+        return {
+          id: atom.id,
+          x: remembered.x,
+          y: remembered.y,
+        };
+      }).filter((position): position is { id: string; x: number; y: number } => Boolean(position));
+
+      for (const position of stablePositions) {
+        lastKnownPositionByNodeId.set(position.id, { x: position.x, y: position.y });
+      }
+
+      return {
+        effectivePriorState: {
+          positions: stablePositions,
+          transform: priorState.transform,
+        },
+        useReducedIterations: true,
+      };
+    };
+  })(),
 };
 
 /**

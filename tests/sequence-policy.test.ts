@@ -96,13 +96,35 @@ describe('ignoreHistory', () => {
 // ---------------------------------------------------------------------------
 
 describe('stability', () => {
-  it('passes through prior state verbatim', () => {
+  it('passes through current prior positions when all nodes still exist', () => {
     const prior = makeState([['A', 10, 20], ['B', 30, 40]]);
-    const inst = makeInstance([{ id: 'A', type: 'T' }], []);
+    const inst = makeInstance([{ id: 'A', type: 'T' }, { id: 'B', type: 'T' }], []);
     const result = stability.apply(ctx(prior, inst, inst));
 
-    expect(result.effectivePriorState).toBe(prior);
+    expect(result.effectivePriorState).toEqual(prior);
     expect(result.useReducedIterations).toBe(true);
+  });
+
+  it('restores a previously seen position when a node reappears later in sequence', () => {
+    const state1 = makeState([['Node1', 100, 120], ['Node2', 200, 220]]);
+    const inst1 = makeInstance([{ id: 'Node1', type: 'T' }, { id: 'Node2', type: 'T' }], []);
+
+    const state2 = makeState([['Node2', 205, 225]]);
+    const inst2 = makeInstance([{ id: 'Node2', type: 'T' }], []);
+
+    const inst3 = makeInstance([{ id: 'Node1', type: 'T' }, { id: 'Node2', type: 'T' }], []);
+
+    // Step 1 -> 2 (Node1 disappears)
+    const resultStep2 = stability.apply(ctx(state1, inst1, inst2));
+    expect(resultStep2.effectivePriorState?.positions.map(p => p.id)).toEqual(['Node2']);
+
+    // Step 2 -> 3 (Node1 reappears)
+    const resultStep3 = stability.apply(ctx(state2, inst2, inst3));
+    const node1 = resultStep3.effectivePriorState?.positions.find(p => p.id === 'Node1');
+    const node2 = resultStep3.effectivePriorState?.positions.find(p => p.id === 'Node2');
+
+    expect(node1).toEqual({ id: 'Node1', x: 100, y: 120 });
+    expect(node2).toEqual({ id: 'Node2', x: 205, y: 225 });
   });
 
   it('has name "stability"', () => {
@@ -211,6 +233,35 @@ describe('changeEmphasis', () => {
 
     expect(ids).toContain('A');
     expect(ids).not.toContain('B');
+  });
+
+  it('adds extra emphasis to nodes that lost neighbors due to removed atoms', () => {
+    const prior = makeState([['A', 200, 200], ['B', 260, 260]]);
+    const viewportBounds = { minX: 0, maxX: 800, minY: 0, maxY: 600 };
+
+    const prev = makeInstance(
+      [{ id: 'A', type: 'T' }, { id: 'B', type: 'T' }, { id: 'C', type: 'T' }],
+      [{ name: 'edge', tuples: [['A', 'B'], ['A', 'C']] }]
+    );
+    const currWithoutRemoval = makeInstance(
+      [{ id: 'A', type: 'T' }, { id: 'B', type: 'T' }, { id: 'C', type: 'T' }],
+      [{ name: 'edge', tuples: [['A', 'B']] }]
+    );
+    const currWithRemoval = makeInstance(
+      [{ id: 'A', type: 'T' }, { id: 'B', type: 'T' }],
+      [{ name: 'edge', tuples: [['A', 'B']] }]
+    );
+
+    const noRemovalResult = changeEmphasis.apply(ctx(prior, prev, currWithoutRemoval, viewportBounds));
+    const withRemovalResult = changeEmphasis.apply(ctx(prior, prev, currWithRemoval, viewportBounds));
+
+    const aWithoutRemoval = noRemovalResult.effectivePriorState!.positions.find(p => p.id === 'A')!;
+    const aWithRemoval = withRemovalResult.effectivePriorState!.positions.find(p => p.id === 'A')!;
+
+    const distWithoutRemoval = distance({ x: aWithoutRemoval.x, y: aWithoutRemoval.y }, { x: 200, y: 200 });
+    const distWithRemoval = distance({ x: aWithRemoval.x, y: aWithRemoval.y }, { x: 200, y: 200 });
+
+    expect(distWithRemoval).toBeGreaterThan(distWithoutRemoval);
   });
 
   it('keeps jittered nodes inside a tight viewport', () => {
