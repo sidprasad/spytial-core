@@ -145,7 +145,7 @@ describe('stability', () => {
     expect(result.effectivePriorState?.positions.find(p => p.id === 'OldNode')).toBeUndefined();
   });
 
-  it('enforces max cache size by evicting oldest remembered ids when needed', () => {
+  it('recalls nodes that reappear within the gap window', () => {
     resetStabilityMemory();
     const manyState = makeState([
       ['A', 1, 1],
@@ -161,7 +161,7 @@ describe('stability', () => {
     ], []);
     const emptyInst = makeInstance([], []);
 
-    // Fill memory with many ids; only recent/bounded entries should survive.
+    // A, B, C, D disappear for one step — within the 2-step recall window.
     stability.apply(ctx(manyState, manyInst, emptyInst));
 
     const smallState = makeState([['Z', 99, 99]]);
@@ -171,8 +171,39 @@ describe('stability', () => {
     const result = stability.apply(ctx(smallState, prevOnlyZ, wantsOldIds));
     const ids = result.effectivePriorState?.positions.map(p => p.id) ?? [];
 
-    expect(ids).not.toContain('A');
-    expect(ids).not.toContain('B');
+    // Gap is 1 step ≤ maxReappearanceGapSteps(2), so both should be restored.
+    expect(ids).toContain('A');
+    expect(ids).toContain('B');
+  });
+
+  it('enforces max cache size by evicting oldest remembered ids when needed', () => {
+    resetStabilityMemory();
+
+    // Fill cache with maxCacheSize+1 entries to trigger the overflow eviction path.
+    const overflowSize = 5001;
+    const allIds = Array.from({ length: overflowSize }, (_, i) => `node_${String(i).padStart(4, '0')}`);
+    const bigState = makeState(allIds.map((id, i) => [id, i, i] as [string, number, number]));
+    const bigInst = makeInstance(allIds.map(id => ({ id, type: 'T' })), []);
+    const emptyInst = makeInstance([], []);
+
+    // After this call the cache has 5001 entries; eviction removes the
+    // alphabetically-earliest id ('node_0000') to get back to 5000.
+    stability.apply(ctx(bigState, bigInst, emptyInst));
+
+    const evictedId = allIds[0];               // 'node_0000' — evicted
+    const survivingId = allIds[overflowSize - 1]; // 'node_5000' — still cached
+
+    const wantsEvicted = makeInstance(
+      [{ id: evictedId, type: 'T' }, { id: survivingId, type: 'T' }],
+      []
+    );
+    const result = stability.apply(
+      ctx(makeState([['Z', 0, 0]]), makeInstance([{ id: 'Z', type: 'T' }], []), wantsEvicted)
+    );
+    const ids = result.effectivePriorState?.positions.map(p => p.id) ?? [];
+
+    expect(ids).not.toContain(evictedId);  // removed by cache overflow eviction
+    expect(ids).toContain(survivingId);    // within window and not evicted, recalled
   });
 
 
