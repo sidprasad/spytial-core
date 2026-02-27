@@ -1847,9 +1847,13 @@ export const CnDCore = {
 
 
 
-// Expose to global scope for legacy usage
+// Expose to global scope
+// window.spytialcore is the canonical name going forward;
+// window.CnDCore and window.CndCore are kept as legacy aliases.
 if (typeof window !== 'undefined') {
-  (window as any).CnDCore = CnDCore;
+  (window as any).spytialcore = CnDCore;
+  (window as any).CnDCore = CnDCore;  // legacy alias
+  (window as any).CndCore = CnDCore;  // legacy alias
   
   // Legacy compatibility - expose individual functions
   (window as any).mountCndLayoutInterface = mountCndLayoutInterface;
@@ -1889,5 +1893,5 @@ if (typeof window !== 'undefined') {
   (window as any).showSelectorErrors = ErrorAPI.showSelectorErrors;
   (window as any).clearAllErrors = ErrorAPI.clearAllErrors;
 
-  console.log('CnD-Core CDN integration ready! Use window.CnDCore to access all features including Pyret REPL.');
+  console.log('spytial-core CDN integration ready! Use window.spytialcore to access all features (window.CnDCore and window.CndCore also work as legacy aliases).');
 }
