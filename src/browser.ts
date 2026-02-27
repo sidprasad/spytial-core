@@ -14,7 +14,6 @@ function registerWebColaCnDGraph() {
     if (!customElements.get('webcola-cnd-graph')) {
       try {
         customElements.define('webcola-cnd-graph', WebColaCnDGraph as any);
-        console.log('WebCola CnD Graph custom element registered successfully');
       } catch (error) {
         console.error('Failed to register WebCola CnD Graph custom element:', error);
       }

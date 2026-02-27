@@ -247,9 +247,6 @@ export class WebColaLayout {
       for (const hint of options.priorPositions.positions) {
         this.priorPositionMap.set(hint.id, hint);
       }
-      if (typeof console !== 'undefined' && console.log) {
-        console.log(`WebColaLayout: Using ${this.priorPositionMap.size} prior positions for sequence continuity`);
-      }
     }
 
     // Can I create a DAGRE graph here.
@@ -290,25 +287,12 @@ export class WebColaLayout {
     this.overlappingNodesData = instanceLayout.overlappingNodes || [];
     this.colaConstraints = instanceLayout.constraints.map(constraint => this.toColaConstraint(constraint));
 
-    // Log constraint count for debugging and monitoring
-    const originalConstraintCount = this.colaConstraints.length;
-    if (typeof console !== 'undefined' && console.log) {
-      console.log(`WebColaTranslator: Generated ${originalConstraintCount} constraints for ${this.colaNodes.length} nodes`);
-    }
-
     // Apply transitive reduction optimization if we have many constraints
     // Threshold: optimize when we have more than 100 constraints
+    const originalConstraintCount = this.colaConstraints.length;
     const OPTIMIZATION_THRESHOLD = 100;
     if (originalConstraintCount > OPTIMIZATION_THRESHOLD) {
-      if (typeof console !== 'undefined' && console.log) {
-        console.log(`WebColaTranslator: Constraint count exceeds threshold (${OPTIMIZATION_THRESHOLD}), applying transitive reduction optimization...`);
-      }
       this.colaConstraints = this.optimizeConstraints(this.colaConstraints);
-      const optimizedCount = this.colaConstraints.length;
-      const reductionPercent = ((originalConstraintCount - optimizedCount) / originalConstraintCount * 100).toFixed(1);
-      if (typeof console !== 'undefined' && console.log) {
-        console.log(`WebColaTranslator: Reduced constraints from ${originalConstraintCount} to ${optimizedCount} (${reductionPercent}% reduction)`);
-      }
     }
 
     if (this.colaConstraints.length === 0 && this.dagre_graph) {
@@ -814,11 +798,6 @@ export class WebColaLayout {
         
         collapsed.push(mergedGroup);
       }
-    }
-    
-    // Log deduplication results
-    if (deduplicationCount > 0 && typeof console !== 'undefined' && console.log) {
-      console.log(`WebColaTranslator: Collapsed ${deduplicationCount} duplicate group(s) from ${groups.length} to ${collapsed.length}`);
     }
     
     return collapsed;
