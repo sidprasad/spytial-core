@@ -312,6 +312,24 @@ export const ignoreHistory: SequencePolicy = {
  *
  * This built-in includes short-lived in-memory recall for ids that
  * disappear briefly and reappear in nearby steps.
+ *
+ * ### Behavioural notes
+ *
+ * **Singleton closure state.** `recentPositionsById` and `step` live in a
+ * closure on the exported object instance.  Two independent sequence renderers
+ * that share the same `stability` reference will corrupt each other's memory;
+ * each renderer should hold its own policy object if isolation is needed.
+ *
+ * **Aggressive reset on empty `priorState`.** When `priorState.positions` is
+ * empty the entire cache is wiped and `step` resets to 0.  A single
+ * momentarily blank graph will therefore erase all short-lived recall built up
+ * so far.  This is intentional (treat an empty state as a fresh start), but is
+ * a sharp edge to be aware of.
+ *
+ * **Recalled nodes have their step refreshed.** When a node is pulled back
+ * from the cache and placed in `stablePositions` its cache entry is updated to
+ * the current step.  A node that oscillates in/out will therefore never time
+ * out by the gap rule alone — only overflow eviction can remove it.
  */
 export const stability: SequencePolicy = {
   name: 'stability',
@@ -322,12 +340,16 @@ export const stability: SequencePolicy = {
     let step = 0;
 
     return ({ priorState, currInstance }) => {
+      // An empty priorState signals a fresh sequence start — clear all memory
+      // so stale positions from a previous run cannot leak into the new one.
       if (priorState.positions.length === 0) {
         recentPositionsById.clear();
         step = 0;
       }
       step += 1;
 
+      // Snapshot every known position into the cache at the current step so
+      // that nodes which disappear next step can still be recalled.
       for (const position of priorState.positions) {
         recentPositionsById.set(position.id, { x: position.x, y: position.y, step });
       }
@@ -345,6 +367,8 @@ export const stability: SequencePolicy = {
         return { id: atom.id, x: remembered.x, y: remembered.y };
       }).filter((position): position is { id: string; x: number; y: number } => Boolean(position));
 
+      // Refresh the cache step for every recalled node so its lifetime extends
+      // as long as it keeps being assigned a position (see note above).
       for (const position of stablePositions) {
         recentPositionsById.set(position.id, { x: position.x, y: position.y, step });
       }
@@ -387,6 +411,24 @@ export const stability: SequencePolicy = {
  * stable nodes fixed. Jitter is clamped to the viewport bounds.
  *
  * The diff is computed automatically from the provided instances.
+ *
+ * ### Behavioural notes
+ *
+ * **New atoms receive no solver hint.** `emphasizedPositions` iterates only
+ * over `priorState.positions`, so genuinely new atoms (no prior position)
+ * are silently omitted and the solver places them freely.  This is correct
+ * but implicit rather than explicit.
+ *
+ * **No between-step recall.** Unlike `stability`, this policy has no memory
+ * of briefly-absent nodes.  A node absent for one step returns as "new" and
+ * receives a free solver position with no jitter.  The two policies are
+ * therefore not composable — you cannot get both recall *and* emphasis from
+ * this single policy.
+ *
+ * **Hard-coded jitter radius range (≈30–76 px).** The radius floor is 36 px
+ * (scaled by 0.85) regardless of intensity, ensuring the movement is always
+ * visible.  The ceiling is 66 px (scaled by 1.15).  This range is intentional
+ * for "visible but not dislocating" jitter and is not currently configurable.
  */
 export const changeEmphasis: SequencePolicy = {
   name: 'change_emphasis',
@@ -399,6 +441,7 @@ export const changeEmphasis: SequencePolicy = {
     const bounds = resolveViewportBounds(priorState, viewportBounds);
     const currAtomIds = new Set(currInstance.getAtoms().map(atom => atom.id));
     const emphasizedPositions = priorState.positions
+      // Atoms removed in this step have no place in the current layout.
       .filter(position => currAtomIds.has(position.id))
       .map(position => {
         if (!analysis.changedIds.has(position.id)) {
