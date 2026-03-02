@@ -1,0 +1,901 @@
+<alloy builddate="Monday, March 2nd, 2026">
+<instance bitwidth="4" maxseq="-1" command="temporary-name_goats_and_wolves_1" filename="/Users/siddharthaprasad/Desktop/TAing/1710/lfs_dev/2026/temporal_modeling/submission/goats_and_wolves.frg" version="5.0.1" prefixLength="12" loop="10" >
+
+<sig label="seq/Int" ID="0" parentID="1" builtin="yes">
+</sig>
+
+<sig label="Int" ID="1" parentID="2" builtin="yes">
+
+</sig>
+
+<sig label="univ" ID="2" builtin="yes">
+</sig>
+
+<field label="no-field-guard" ID="3" parentID="2">
+<types> <type ID="2"/><type ID="2"/> </types>
+</field>
+
+<sig label="GWBoat" ID="4" parentID="2">
+<atom label="GWBoat0"/>
+</sig>
+
+<sig label="GWPosition" ID="5" parentID="2">
+
+</sig>
+
+<sig label="GWNear" ID="6" parentID="5">
+<atom label="GWNear0"/>
+</sig>
+
+<sig label="GWAnimal" ID="7" parentID="2">
+
+</sig>
+
+<sig label="Wolf" ID="8" parentID="7">
+<atom label="Wolf0"/><atom label="Wolf1"/><atom label="Wolf2"/>
+</sig>
+
+<sig label="Goat" ID="9" parentID="7">
+<atom label="Goat0"/><atom label="Goat1"/><atom label="Goat2"/>
+</sig>
+
+<sig label="GWFar" ID="10" parentID="5">
+<atom label="GWFar0"/>
+</sig>
+
+<field label="gwlocation" ID="11" parentID="4">
+<tuple><atom label="GWBoat0"/><atom label="GWNear0"/></tuple>
+<types><type ID="4"/><type ID="5"/></types>
+
+</field>
+
+<field label="gw" ID="12" parentID="5">
+<tuple><atom label="GWNear0"/><atom label="Goat0"/></tuple>
+<tuple><atom label="GWNear0"/><atom label="Goat1"/></tuple>
+<tuple><atom label="GWNear0"/><atom label="Goat2"/></tuple>
+<tuple><atom label="GWNear0"/><atom label="Wolf0"/></tuple>
+<tuple><atom label="GWNear0"/><atom label="Wolf1"/></tuple>
+<tuple><atom label="GWNear0"/><atom label="Wolf2"/></tuple>
+<types><type ID="5"/><type ID="7"/></types>
+
+</field>
+
+
+</instance>
+<instance bitwidth="4" maxseq="-1" command="temporary-name_goats_and_wolves_1" filename="/Users/siddharthaprasad/Desktop/TAing/1710/lfs_dev/2026/temporal_modeling/submission/goats_and_wolves.frg" version="5.0.1" prefixLength="12" loop="10" >
+
+<sig label="seq/Int" ID="0" parentID="1" builtin="yes">
+</sig>
+
+<sig label="Int" ID="1" parentID="2" builtin="yes">
+
+</sig>
+
+<sig label="univ" ID="2" builtin="yes">
+</sig>
+
+<field label="no-field-guard" ID="3" parentID="2">
+<types> <type ID="2"/><type ID="2"/> </types>
+</field>
+
+<sig label="GWBoat" ID="4" parentID="2">
+<atom label="GWBoat0"/>
+</sig>
+
+<sig label="GWPosition" ID="5" parentID="2">
+
+</sig>
+
+<sig label="GWNear" ID="6" parentID="5">
+<atom label="GWNear0"/>
+</sig>
+
+<sig label="GWAnimal" ID="7" parentID="2">
+
+</sig>
+
+<sig label="Wolf" ID="8" parentID="7">
+<atom label="Wolf0"/><atom label="Wolf1"/><atom label="Wolf2"/>
+</sig>
+
+<sig label="Goat" ID="9" parentID="7">
+<atom label="Goat0"/><atom label="Goat1"/><atom label="Goat2"/>
+</sig>
+
+<sig label="GWFar" ID="10" parentID="5">
+<atom label="GWFar0"/>
+</sig>
+
+<field label="gwlocation" ID="11" parentID="4">
+<tuple><atom label="GWBoat0"/><atom label="GWFar0"/></tuple>
+<types><type ID="4"/><type ID="5"/></types>
+
+</field>
+
+<field label="gw" ID="12" parentID="5">
+<tuple><atom label="GWNear0"/><atom label="Goat0"/></tuple>
+<tuple><atom label="GWNear0"/><atom label="Goat1"/></tuple>
+<tuple><atom label="GWNear0"/><atom label="Goat2"/></tuple>
+<tuple><atom label="GWNear0"/><atom label="Wolf2"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Wolf0"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Wolf1"/></tuple>
+<types><type ID="5"/><type ID="7"/></types>
+
+</field>
+
+
+</instance>
+<instance bitwidth="4" maxseq="-1" command="temporary-name_goats_and_wolves_1" filename="/Users/siddharthaprasad/Desktop/TAing/1710/lfs_dev/2026/temporal_modeling/submission/goats_and_wolves.frg" version="5.0.1" prefixLength="12" loop="10" >
+
+<sig label="seq/Int" ID="0" parentID="1" builtin="yes">
+</sig>
+
+<sig label="Int" ID="1" parentID="2" builtin="yes">
+
+</sig>
+
+<sig label="univ" ID="2" builtin="yes">
+</sig>
+
+<field label="no-field-guard" ID="3" parentID="2">
+<types> <type ID="2"/><type ID="2"/> </types>
+</field>
+
+<sig label="GWBoat" ID="4" parentID="2">
+<atom label="GWBoat0"/>
+</sig>
+
+<sig label="GWPosition" ID="5" parentID="2">
+
+</sig>
+
+<sig label="GWNear" ID="6" parentID="5">
+<atom label="GWNear0"/>
+</sig>
+
+<sig label="GWAnimal" ID="7" parentID="2">
+
+</sig>
+
+<sig label="Wolf" ID="8" parentID="7">
+<atom label="Wolf0"/><atom label="Wolf1"/><atom label="Wolf2"/>
+</sig>
+
+<sig label="Goat" ID="9" parentID="7">
+<atom label="Goat0"/><atom label="Goat1"/><atom label="Goat2"/>
+</sig>
+
+<sig label="GWFar" ID="10" parentID="5">
+<atom label="GWFar0"/>
+</sig>
+
+<field label="gwlocation" ID="11" parentID="4">
+<tuple><atom label="GWBoat0"/><atom label="GWNear0"/></tuple>
+<types><type ID="4"/><type ID="5"/></types>
+
+</field>
+
+<field label="gw" ID="12" parentID="5">
+<tuple><atom label="GWNear0"/><atom label="Goat0"/></tuple>
+<tuple><atom label="GWNear0"/><atom label="Goat1"/></tuple>
+<tuple><atom label="GWNear0"/><atom label="Goat2"/></tuple>
+<tuple><atom label="GWNear0"/><atom label="Wolf1"/></tuple>
+<tuple><atom label="GWNear0"/><atom label="Wolf2"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Wolf0"/></tuple>
+<types><type ID="5"/><type ID="7"/></types>
+
+</field>
+
+
+</instance>
+<instance bitwidth="4" maxseq="-1" command="temporary-name_goats_and_wolves_1" filename="/Users/siddharthaprasad/Desktop/TAing/1710/lfs_dev/2026/temporal_modeling/submission/goats_and_wolves.frg" version="5.0.1" prefixLength="12" loop="10" >
+
+<sig label="seq/Int" ID="0" parentID="1" builtin="yes">
+</sig>
+
+<sig label="Int" ID="1" parentID="2" builtin="yes">
+
+</sig>
+
+<sig label="univ" ID="2" builtin="yes">
+</sig>
+
+<field label="no-field-guard" ID="3" parentID="2">
+<types> <type ID="2"/><type ID="2"/> </types>
+</field>
+
+<sig label="GWBoat" ID="4" parentID="2">
+<atom label="GWBoat0"/>
+</sig>
+
+<sig label="GWPosition" ID="5" parentID="2">
+
+</sig>
+
+<sig label="GWNear" ID="6" parentID="5">
+<atom label="GWNear0"/>
+</sig>
+
+<sig label="GWAnimal" ID="7" parentID="2">
+
+</sig>
+
+<sig label="Wolf" ID="8" parentID="7">
+<atom label="Wolf0"/><atom label="Wolf1"/><atom label="Wolf2"/>
+</sig>
+
+<sig label="Goat" ID="9" parentID="7">
+<atom label="Goat0"/><atom label="Goat1"/><atom label="Goat2"/>
+</sig>
+
+<sig label="GWFar" ID="10" parentID="5">
+<atom label="GWFar0"/>
+</sig>
+
+<field label="gwlocation" ID="11" parentID="4">
+<tuple><atom label="GWBoat0"/><atom label="GWFar0"/></tuple>
+<types><type ID="4"/><type ID="5"/></types>
+
+</field>
+
+<field label="gw" ID="12" parentID="5">
+<tuple><atom label="GWNear0"/><atom label="Goat0"/></tuple>
+<tuple><atom label="GWNear0"/><atom label="Goat1"/></tuple>
+<tuple><atom label="GWNear0"/><atom label="Goat2"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Wolf0"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Wolf1"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Wolf2"/></tuple>
+<types><type ID="5"/><type ID="7"/></types>
+
+</field>
+
+
+</instance>
+<instance bitwidth="4" maxseq="-1" command="temporary-name_goats_and_wolves_1" filename="/Users/siddharthaprasad/Desktop/TAing/1710/lfs_dev/2026/temporal_modeling/submission/goats_and_wolves.frg" version="5.0.1" prefixLength="12" loop="10" >
+
+<sig label="seq/Int" ID="0" parentID="1" builtin="yes">
+</sig>
+
+<sig label="Int" ID="1" parentID="2" builtin="yes">
+
+</sig>
+
+<sig label="univ" ID="2" builtin="yes">
+</sig>
+
+<field label="no-field-guard" ID="3" parentID="2">
+<types> <type ID="2"/><type ID="2"/> </types>
+</field>
+
+<sig label="GWBoat" ID="4" parentID="2">
+<atom label="GWBoat0"/>
+</sig>
+
+<sig label="GWPosition" ID="5" parentID="2">
+
+</sig>
+
+<sig label="GWNear" ID="6" parentID="5">
+<atom label="GWNear0"/>
+</sig>
+
+<sig label="GWAnimal" ID="7" parentID="2">
+
+</sig>
+
+<sig label="Wolf" ID="8" parentID="7">
+<atom label="Wolf0"/><atom label="Wolf1"/><atom label="Wolf2"/>
+</sig>
+
+<sig label="Goat" ID="9" parentID="7">
+<atom label="Goat0"/><atom label="Goat1"/><atom label="Goat2"/>
+</sig>
+
+<sig label="GWFar" ID="10" parentID="5">
+<atom label="GWFar0"/>
+</sig>
+
+<field label="gwlocation" ID="11" parentID="4">
+<tuple><atom label="GWBoat0"/><atom label="GWNear0"/></tuple>
+<types><type ID="4"/><type ID="5"/></types>
+
+</field>
+
+<field label="gw" ID="12" parentID="5">
+<tuple><atom label="GWNear0"/><atom label="Goat0"/></tuple>
+<tuple><atom label="GWNear0"/><atom label="Goat1"/></tuple>
+<tuple><atom label="GWNear0"/><atom label="Goat2"/></tuple>
+<tuple><atom label="GWNear0"/><atom label="Wolf1"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Wolf0"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Wolf2"/></tuple>
+<types><type ID="5"/><type ID="7"/></types>
+
+</field>
+
+
+</instance>
+<instance bitwidth="4" maxseq="-1" command="temporary-name_goats_and_wolves_1" filename="/Users/siddharthaprasad/Desktop/TAing/1710/lfs_dev/2026/temporal_modeling/submission/goats_and_wolves.frg" version="5.0.1" prefixLength="12" loop="10" >
+
+<sig label="seq/Int" ID="0" parentID="1" builtin="yes">
+</sig>
+
+<sig label="Int" ID="1" parentID="2" builtin="yes">
+
+</sig>
+
+<sig label="univ" ID="2" builtin="yes">
+</sig>
+
+<field label="no-field-guard" ID="3" parentID="2">
+<types> <type ID="2"/><type ID="2"/> </types>
+</field>
+
+<sig label="GWBoat" ID="4" parentID="2">
+<atom label="GWBoat0"/>
+</sig>
+
+<sig label="GWPosition" ID="5" parentID="2">
+
+</sig>
+
+<sig label="GWNear" ID="6" parentID="5">
+<atom label="GWNear0"/>
+</sig>
+
+<sig label="GWAnimal" ID="7" parentID="2">
+
+</sig>
+
+<sig label="Wolf" ID="8" parentID="7">
+<atom label="Wolf0"/><atom label="Wolf1"/><atom label="Wolf2"/>
+</sig>
+
+<sig label="Goat" ID="9" parentID="7">
+<atom label="Goat0"/><atom label="Goat1"/><atom label="Goat2"/>
+</sig>
+
+<sig label="GWFar" ID="10" parentID="5">
+<atom label="GWFar0"/>
+</sig>
+
+<field label="gwlocation" ID="11" parentID="4">
+<tuple><atom label="GWBoat0"/><atom label="GWFar0"/></tuple>
+<types><type ID="4"/><type ID="5"/></types>
+
+</field>
+
+<field label="gw" ID="12" parentID="5">
+<tuple><atom label="GWNear0"/><atom label="Goat1"/></tuple>
+<tuple><atom label="GWNear0"/><atom label="Wolf1"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Goat0"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Goat2"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Wolf0"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Wolf2"/></tuple>
+<types><type ID="5"/><type ID="7"/></types>
+
+</field>
+
+
+</instance>
+<instance bitwidth="4" maxseq="-1" command="temporary-name_goats_and_wolves_1" filename="/Users/siddharthaprasad/Desktop/TAing/1710/lfs_dev/2026/temporal_modeling/submission/goats_and_wolves.frg" version="5.0.1" prefixLength="12" loop="10" >
+
+<sig label="seq/Int" ID="0" parentID="1" builtin="yes">
+</sig>
+
+<sig label="Int" ID="1" parentID="2" builtin="yes">
+
+</sig>
+
+<sig label="univ" ID="2" builtin="yes">
+</sig>
+
+<field label="no-field-guard" ID="3" parentID="2">
+<types> <type ID="2"/><type ID="2"/> </types>
+</field>
+
+<sig label="GWBoat" ID="4" parentID="2">
+<atom label="GWBoat0"/>
+</sig>
+
+<sig label="GWPosition" ID="5" parentID="2">
+
+</sig>
+
+<sig label="GWNear" ID="6" parentID="5">
+<atom label="GWNear0"/>
+</sig>
+
+<sig label="GWAnimal" ID="7" parentID="2">
+
+</sig>
+
+<sig label="Wolf" ID="8" parentID="7">
+<atom label="Wolf0"/><atom label="Wolf1"/><atom label="Wolf2"/>
+</sig>
+
+<sig label="Goat" ID="9" parentID="7">
+<atom label="Goat0"/><atom label="Goat1"/><atom label="Goat2"/>
+</sig>
+
+<sig label="GWFar" ID="10" parentID="5">
+<atom label="GWFar0"/>
+</sig>
+
+<field label="gwlocation" ID="11" parentID="4">
+<tuple><atom label="GWBoat0"/><atom label="GWNear0"/></tuple>
+<types><type ID="4"/><type ID="5"/></types>
+
+</field>
+
+<field label="gw" ID="12" parentID="5">
+<tuple><atom label="GWNear0"/><atom label="Goat1"/></tuple>
+<tuple><atom label="GWNear0"/><atom label="Goat2"/></tuple>
+<tuple><atom label="GWNear0"/><atom label="Wolf0"/></tuple>
+<tuple><atom label="GWNear0"/><atom label="Wolf1"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Goat0"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Wolf2"/></tuple>
+<types><type ID="5"/><type ID="7"/></types>
+
+</field>
+
+
+</instance>
+<instance bitwidth="4" maxseq="-1" command="temporary-name_goats_and_wolves_1" filename="/Users/siddharthaprasad/Desktop/TAing/1710/lfs_dev/2026/temporal_modeling/submission/goats_and_wolves.frg" version="5.0.1" prefixLength="12" loop="10" >
+
+<sig label="seq/Int" ID="0" parentID="1" builtin="yes">
+</sig>
+
+<sig label="Int" ID="1" parentID="2" builtin="yes">
+
+</sig>
+
+<sig label="univ" ID="2" builtin="yes">
+</sig>
+
+<field label="no-field-guard" ID="3" parentID="2">
+<types> <type ID="2"/><type ID="2"/> </types>
+</field>
+
+<sig label="GWBoat" ID="4" parentID="2">
+<atom label="GWBoat0"/>
+</sig>
+
+<sig label="GWPosition" ID="5" parentID="2">
+
+</sig>
+
+<sig label="GWNear" ID="6" parentID="5">
+<atom label="GWNear0"/>
+</sig>
+
+<sig label="GWAnimal" ID="7" parentID="2">
+
+</sig>
+
+<sig label="Wolf" ID="8" parentID="7">
+<atom label="Wolf0"/><atom label="Wolf1"/><atom label="Wolf2"/>
+</sig>
+
+<sig label="Goat" ID="9" parentID="7">
+<atom label="Goat0"/><atom label="Goat1"/><atom label="Goat2"/>
+</sig>
+
+<sig label="GWFar" ID="10" parentID="5">
+<atom label="GWFar0"/>
+</sig>
+
+<field label="gwlocation" ID="11" parentID="4">
+<tuple><atom label="GWBoat0"/><atom label="GWFar0"/></tuple>
+<types><type ID="4"/><type ID="5"/></types>
+
+</field>
+
+<field label="gw" ID="12" parentID="5">
+<tuple><atom label="GWNear0"/><atom label="Wolf0"/></tuple>
+<tuple><atom label="GWNear0"/><atom label="Wolf1"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Goat0"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Goat1"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Goat2"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Wolf2"/></tuple>
+<types><type ID="5"/><type ID="7"/></types>
+
+</field>
+
+
+</instance>
+<instance bitwidth="4" maxseq="-1" command="temporary-name_goats_and_wolves_1" filename="/Users/siddharthaprasad/Desktop/TAing/1710/lfs_dev/2026/temporal_modeling/submission/goats_and_wolves.frg" version="5.0.1" prefixLength="12" loop="10" >
+
+<sig label="seq/Int" ID="0" parentID="1" builtin="yes">
+</sig>
+
+<sig label="Int" ID="1" parentID="2" builtin="yes">
+
+</sig>
+
+<sig label="univ" ID="2" builtin="yes">
+</sig>
+
+<field label="no-field-guard" ID="3" parentID="2">
+<types> <type ID="2"/><type ID="2"/> </types>
+</field>
+
+<sig label="GWBoat" ID="4" parentID="2">
+<atom label="GWBoat0"/>
+</sig>
+
+<sig label="GWPosition" ID="5" parentID="2">
+
+</sig>
+
+<sig label="GWNear" ID="6" parentID="5">
+<atom label="GWNear0"/>
+</sig>
+
+<sig label="GWAnimal" ID="7" parentID="2">
+
+</sig>
+
+<sig label="Wolf" ID="8" parentID="7">
+<atom label="Wolf0"/><atom label="Wolf1"/><atom label="Wolf2"/>
+</sig>
+
+<sig label="Goat" ID="9" parentID="7">
+<atom label="Goat0"/><atom label="Goat1"/><atom label="Goat2"/>
+</sig>
+
+<sig label="GWFar" ID="10" parentID="5">
+<atom label="GWFar0"/>
+</sig>
+
+<field label="gwlocation" ID="11" parentID="4">
+<tuple><atom label="GWBoat0"/><atom label="GWNear0"/></tuple>
+<types><type ID="4"/><type ID="5"/></types>
+
+</field>
+
+<field label="gw" ID="12" parentID="5">
+<tuple><atom label="GWNear0"/><atom label="Wolf0"/></tuple>
+<tuple><atom label="GWNear0"/><atom label="Wolf1"/></tuple>
+<tuple><atom label="GWNear0"/><atom label="Wolf2"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Goat0"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Goat1"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Goat2"/></tuple>
+<types><type ID="5"/><type ID="7"/></types>
+
+</field>
+
+
+</instance>
+<instance bitwidth="4" maxseq="-1" command="temporary-name_goats_and_wolves_1" filename="/Users/siddharthaprasad/Desktop/TAing/1710/lfs_dev/2026/temporal_modeling/submission/goats_and_wolves.frg" version="5.0.1" prefixLength="12" loop="10" >
+
+<sig label="seq/Int" ID="0" parentID="1" builtin="yes">
+</sig>
+
+<sig label="Int" ID="1" parentID="2" builtin="yes">
+
+</sig>
+
+<sig label="univ" ID="2" builtin="yes">
+</sig>
+
+<field label="no-field-guard" ID="3" parentID="2">
+<types> <type ID="2"/><type ID="2"/> </types>
+</field>
+
+<sig label="GWBoat" ID="4" parentID="2">
+<atom label="GWBoat0"/>
+</sig>
+
+<sig label="GWPosition" ID="5" parentID="2">
+
+</sig>
+
+<sig label="GWNear" ID="6" parentID="5">
+<atom label="GWNear0"/>
+</sig>
+
+<sig label="GWAnimal" ID="7" parentID="2">
+
+</sig>
+
+<sig label="Wolf" ID="8" parentID="7">
+<atom label="Wolf0"/><atom label="Wolf1"/><atom label="Wolf2"/>
+</sig>
+
+<sig label="Goat" ID="9" parentID="7">
+<atom label="Goat0"/><atom label="Goat1"/><atom label="Goat2"/>
+</sig>
+
+<sig label="GWFar" ID="10" parentID="5">
+<atom label="GWFar0"/>
+</sig>
+
+<field label="gwlocation" ID="11" parentID="4">
+<tuple><atom label="GWBoat0"/><atom label="GWFar0"/></tuple>
+<types><type ID="4"/><type ID="5"/></types>
+
+</field>
+
+<field label="gw" ID="12" parentID="5">
+<tuple><atom label="GWNear0"/><atom label="Wolf1"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Goat0"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Goat1"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Goat2"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Wolf0"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Wolf2"/></tuple>
+<types><type ID="5"/><type ID="7"/></types>
+
+</field>
+
+
+</instance>
+<instance bitwidth="4" maxseq="-1" command="temporary-name_goats_and_wolves_1" filename="/Users/siddharthaprasad/Desktop/TAing/1710/lfs_dev/2026/temporal_modeling/submission/goats_and_wolves.frg" version="5.0.1" prefixLength="12" loop="10" >
+
+<sig label="seq/Int" ID="0" parentID="1" builtin="yes">
+</sig>
+
+<sig label="Int" ID="1" parentID="2" builtin="yes">
+
+</sig>
+
+<sig label="univ" ID="2" builtin="yes">
+</sig>
+
+<field label="no-field-guard" ID="3" parentID="2">
+<types> <type ID="2"/><type ID="2"/> </types>
+</field>
+
+<sig label="GWBoat" ID="4" parentID="2">
+<atom label="GWBoat0"/>
+</sig>
+
+<sig label="GWPosition" ID="5" parentID="2">
+
+</sig>
+
+<sig label="GWNear" ID="6" parentID="5">
+<atom label="GWNear0"/>
+</sig>
+
+<sig label="GWAnimal" ID="7" parentID="2">
+
+</sig>
+
+<sig label="Wolf" ID="8" parentID="7">
+<atom label="Wolf0"/><atom label="Wolf1"/><atom label="Wolf2"/>
+</sig>
+
+<sig label="Goat" ID="9" parentID="7">
+<atom label="Goat0"/><atom label="Goat1"/><atom label="Goat2"/>
+</sig>
+
+<sig label="GWFar" ID="10" parentID="5">
+<atom label="GWFar0"/>
+</sig>
+
+<field label="gwlocation" ID="11" parentID="4">
+<tuple><atom label="GWBoat0"/><atom label="GWNear0"/></tuple>
+<types><type ID="4"/><type ID="5"/></types>
+
+</field>
+
+<field label="gw" ID="12" parentID="5">
+<tuple><atom label="GWNear0"/><atom label="Wolf0"/></tuple>
+<tuple><atom label="GWNear0"/><atom label="Wolf1"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Goat0"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Goat1"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Goat2"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Wolf2"/></tuple>
+<types><type ID="5"/><type ID="7"/></types>
+
+</field>
+
+
+</instance>
+<instance bitwidth="4" maxseq="-1" command="temporary-name_goats_and_wolves_1" filename="/Users/siddharthaprasad/Desktop/TAing/1710/lfs_dev/2026/temporal_modeling/submission/goats_and_wolves.frg" version="5.0.1" prefixLength="12" loop="10" >
+
+<sig label="seq/Int" ID="0" parentID="1" builtin="yes">
+</sig>
+
+<sig label="Int" ID="1" parentID="2" builtin="yes">
+
+</sig>
+
+<sig label="univ" ID="2" builtin="yes">
+</sig>
+
+<field label="no-field-guard" ID="3" parentID="2">
+<types> <type ID="2"/><type ID="2"/> </types>
+</field>
+
+<sig label="GWBoat" ID="4" parentID="2">
+<atom label="GWBoat0"/>
+</sig>
+
+<sig label="GWPosition" ID="5" parentID="2">
+
+</sig>
+
+<sig label="GWNear" ID="6" parentID="5">
+<atom label="GWNear0"/>
+</sig>
+
+<sig label="GWAnimal" ID="7" parentID="2">
+
+</sig>
+
+<sig label="Wolf" ID="8" parentID="7">
+<atom label="Wolf0"/><atom label="Wolf1"/><atom label="Wolf2"/>
+</sig>
+
+<sig label="Goat" ID="9" parentID="7">
+<atom label="Goat0"/><atom label="Goat1"/><atom label="Goat2"/>
+</sig>
+
+<sig label="GWFar" ID="10" parentID="5">
+<atom label="GWFar0"/>
+</sig>
+
+<field label="gwlocation" ID="11" parentID="4">
+<tuple><atom label="GWBoat0"/><atom label="GWFar0"/></tuple>
+<types><type ID="4"/><type ID="5"/></types>
+
+</field>
+
+<field label="gw" ID="12" parentID="5">
+<tuple><atom label="GWFar0"/><atom label="Goat0"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Goat1"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Goat2"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Wolf0"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Wolf1"/></tuple>
+<tuple><atom label="GWFar0"/><atom label="Wolf2"/></tuple>
+<types><type ID="5"/><type ID="7"/></types>
+
+</field>
+
+
+</instance>
+
+<source filename="/Users/siddharthaprasad/Desktop/TAing/1710/lfs_dev/2026/temporal_modeling/submission/goats_and_wolves.frg" content="#lang forge/temporal
+&#xA;
+&#xA;option max_tracelength 12
+&#xA;option min_tracelength 12
+&#xA;
+&#xA;option run_sterling &amp;quot;goats_and_wolves.cnd&amp;quot;
+&#xA;
+&#xA;---------- Definitions ----------
+&#xA;
+&#xA;abstract sig GWPosition {
+&#xA;    var gw: set GWAnimal
+&#xA;}
+&#xA;one sig GWNear extends GWPosition {}
+&#xA;one sig GWFar extends GWPosition {}
+&#xA;
+&#xA;abstract sig GWAnimal {}
+&#xA;sig Goat extends GWAnimal {}
+&#xA;sig Wolf extends GWAnimal {}
+&#xA;
+&#xA;one sig GWBoat {
+&#xA;    var gwlocation: one GWPosition
+&#xA;}
+&#xA;
+&#xA;pred GWvalidState {
+&#xA;     // For this problem, valid states are ones which are physically reasonable:
+&#xA;    //  - animals should be on one side or the other, but not both
+&#xA;    no a: GWAnimal | a in GWNear.gw and a in GWFar.gw
+&#xA;    GWAnimal = GWNear.gw + GWFar.gw
+&#xA;    // - boat must be on a side
+&#xA;    GWBoat.gwlocation = GWNear or GWBoat.gwlocation = GWFar
+&#xA;}
+&#xA;
+&#xA;// Each of the predicates below should *assume* valid states
+&#xA;// but should *not enforce* valid states.
+&#xA;
+&#xA;pred GWinitState {
+&#xA;    // All of the animals and the boat should start on the near side
+&#xA;    GWAnimal = GWNear.gw
+&#xA;    GWBoat.gwlocation = GWNear
+&#xA;}
+&#xA;
+&#xA;pred GWfinalState {
+&#xA;    // We want to see all of the animals reach the far side.
+&#xA;    GWAnimal = GWFar.gw
+&#xA;}
+&#xA;
+&#xA;pred GWmove[to, from: GWPosition] {
+&#xA;    // The boat can carry at most two animals each way,
+&#xA;    // but it can't travel across the river on its own.
+&#xA;    GWBoat.gwlocation = from
+&#xA;    GWBoat.gwlocation' = to
+&#xA;    // One animal will cross iff a1 == a2
+&#xA;    some a1, a2: GWAnimal | {
+&#xA;        a1 in from.gw
+&#xA;        a2 in from.gw
+&#xA;        from.gw' = from.gw - (a1 + a2)
+&#xA;        to.gw' = to.gw + (a1 + a2)
+&#xA;    }
+&#xA;}
+&#xA;
+&#xA;-----------------------------------------
+&#xA;
+&#xA;pred GWneverEating {
+&#xA;    // If the sheep are out numbered on one of the sides,
+&#xA;    // then the wolves can overpower and eat them!
+&#xA;    // Check to see if we can avoid that.
+&#xA;    // Need the implication since we don't know if there are any goats to be outnumbered
+&#xA;    #{g: Goat | g in GWNear.gw} &amp;gt; 0 implies (#{w: Wolf | w in GWNear.gw} &amp;lt;= #{g: Goat | g in GWNear.gw})
+&#xA;    #{g: Goat | g in GWFar.gw} &amp;gt; 0 implies (#{w: Wolf | w in GWFar.gw} &amp;lt;= #{g: Goat | g in GWFar.gw})
+&#xA;}
+&#xA;
+&#xA;pred GWtraces {
+&#xA;    GWinitState
+&#xA;    eventually GWfinalState
+&#xA;    always GWvalidState
+&#xA;    always GWneverEating
+&#xA;    always (GWmove[GWNear, GWFar] or GWmove[GWFar, GWNear])
+&#xA;}
+&#xA;
+&#xA;run {
+&#xA;    GWtraces
+&#xA;} for exactly 6 GWAnimal, exactly 3 Goat, exactly 3 Wolf
+&#xA;
+&#xA;// test expect {
+&#xA;//   sat3G3W: traces
+&#xA;//     for exactly 6 Animal, exactly 3 Goat, exactly 3 Wolf
+&#xA;//     is sat
+&#xA;//   sat2G2W: traces
+&#xA;//     for exactly 4 Animal, exactly 2 Goat, exactly 2 Wolf
+&#xA;//     is sat
+&#xA;// }
+&#xA;
+&#xA;// pred ag_problemSolves {
+&#xA;//     traces =&amp;gt; eventually finalState
+&#xA;// }
+&#xA;
+&#xA;// pred ag_validStateAllAllocated {
+&#xA;//     validState =&amp;gt; (Animal = Near.animals + Far.animals)
+&#xA;// }
+&#xA;
+&#xA;// pred ag_validStateNoOverlap {
+&#xA;//     validState =&amp;gt; { no a: Animal | a in Near.animals and a in Far.animals }
+&#xA;// }
+&#xA;
+&#xA;// pred ag_validStateBoatOnSide {
+&#xA;//     validState =&amp;gt; (Boat.location = Near or Boat.location = Far)
+&#xA;// }
+&#xA;
+&#xA;// pred ag_initAllNear {
+&#xA;//     initState =&amp;gt; Animal = Near.animals
+&#xA;// }
+&#xA;
+&#xA;// pred ag_initNearBoat {
+&#xA;//     initState =&amp;gt; Boat.location = Near
+&#xA;// }
+&#xA;
+&#xA;// pred ag_finalAllFar {
+&#xA;//     finalState =&amp;gt; Animal = Far.animals
+&#xA;// }
+&#xA;
+&#xA;// pred ag_nearEatingTest {
+&#xA;//    (#{w: Wolf | w in Near.animals} &amp;gt; #{g: Goat | g in Near.animals} and (#{g: Goat | g in Near.animals} != 0)) =&amp;gt; not neverEating
+&#xA;// }
+&#xA;
+&#xA;// pred ag_farEatingTest {
+&#xA;//    (#{w: Wolf | w in Far.animals} &amp;gt; #{g: Goat | g in Far.animals} and (#{g: Goat | g in Far.animals} != 0)) =&amp;gt; not neverEating
+&#xA;// }
+&#xA;
+&#xA;// test expect {
+&#xA;//     ag_test_problemSolves: { ag_problemSolves } for exactly 6 Animal, exactly 3 Goat, exactly 3 Wolf is checked
+&#xA;//     ag_test_validStateAllAllocated: { ag_validStateAllAllocated } for exactly 6 Animal, exactly 3 Goat, exactly 3 Wolf is checked
+&#xA;//     ag_test_validStateNoOverlap: { ag_validStateNoOverlap } for exactly 6 Animal, exactly 3 Goat, exactly 3 Wolf is checked
+&#xA;//     ag_test_validStateBoatOnSide: { ag_validStateBoatOnSide } for exactly 6 Animal, exactly 3 Goat, exactly 3 Wolf is checked
+&#xA;//     ag_test_initAllNear: { ag_initAllNear } for exactly 6 Animal, exactly 3 Goat, exactly 3 Wolf is checked
+&#xA;//     ag_test_initNearBoat: { ag_initNearBoat } for exactly 6 Animal, exactly 3 Goat, exactly 3 Wolf is checked
+&#xA;//     ag_test_finalAllFar: { ag_finalAllFar } for exactly 6 Animal, exactly 3 Goat, exactly 3 Wolf is checked
+&#xA;//     ag_test_nearEatingTest: { ag_nearEatingTest } for exactly 6 Animal, exactly 3 Goat, exactly 3 Wolf is checked
+&#xA;//     ag_test_farEatingTest: { ag_farEatingTest } for exactly 6 Animal, exactly 3 Goat, exactly 3 Wolf is checked
+&#xA;// }
+&#xA;
+&#xA;
+&#xA;"></source>
+ <visualizer cnd="temporal:&#xA;  policy: stability&#xA;&#xA;constraints:&#xA;  - orientation: {directions: [right], selector: GWFar-&amp;gt;GWAnimal &amp; gw}&#xA;  - orientation: {directions: [left], selector: GWNear-&amp;gt;GWAnimal &amp; gw}&#xA;  - orientation: {directions: [directlyRight], selector: GWNear-&amp;gt;GWBoat + GWBoat-&amp;gt;GWFar}&#xA;  - group: {addEdge: true, selector: gw, name: gw}&#xA;&#xA;directives:&#xA;  - icon: {showLabels: true, selector: Goat, path: https://www.siddharthaprasad.com/uploads/goat.png}&#xA;  - icon: {showLabels: true, selector: Wolf, path: https://www.siddharthaprasad.com/uploads/wolf.png}&#xA;  - hideField: {field: gw}&#xA;  - flag: hideDisconnectedBuiltIns&#xA;" /></alloy>

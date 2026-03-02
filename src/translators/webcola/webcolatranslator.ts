@@ -65,7 +65,19 @@ type EdgeWithMetadata = Link<NodeWithMetadata> & {
   style?: EdgeStyle,
   weight?: number,
   showLabel?: boolean, // Whether to show the edge label (default: true)
-  bidirectional?: boolean // Flag to indicate if this edge represents a bidirectional relationship
+  bidirectional?: boolean, // Flag to indicate if this edge represents a bidirectional relationship
+  /**
+   * For group edges (id starts with `_g_`), the name of the group this edge
+   * was created for. Matches `group.id` so routing can look up the group
+   * directly without string-parsing the edge ID or matching leaf indices.
+   */
+  groupId?: string,
+  /**
+   * For group edges, the node ID of the key (groupOn) node — the external
+   * anchor that is NOT inside the group.  Stamped at edge-construction time
+   * so the renderer knows which side to snap to the group boundary.
+   */
+  keyNodeId?: string,
 };
 
 // Export the types for use in other modules
@@ -621,6 +633,8 @@ export class WebColaLayout {
       style: edge.style,
       weight: edge.weight,
       showLabel: edge.showLabel,
+      groupId: edge.groupId,
+      keyNodeId: edge.keyNodeId,
     }
   }
 

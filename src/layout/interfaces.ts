@@ -54,6 +54,19 @@ export interface LayoutEdge {
     weight?: number;
     showLabel?: boolean;
     hidden?: boolean;
+    /**
+     * For group edges (_g_ prefix), the name of the group this edge was created for.
+     * Matches `group.id` in the WebCola translator so routing can look up the group
+     * directly without re-parsing edge IDs or matching fragile leaf indices.
+     */
+    groupId?: string;
+    /**
+     * For group edges (_g_ prefix), the node ID of the key (groupOn) node — i.e.
+     * the external anchor node that is NOT inside the group.  Stamped at edge
+     * construction time (= graphlib edge.v) so the renderer knows definitively
+     * which end is the anchor and which end should be snapped to the group boundary.
+     */
+    keyNodeId?: string;
 }
 
 export class ImplicitConstraint {

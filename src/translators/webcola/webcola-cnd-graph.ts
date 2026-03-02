@@ -1759,8 +1759,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
   /**
    * Renders link elements with proper grouping, styling, and labels.
-   * Creates link groups containing paths and optional text labels for non-alignment edges.
-   * Handles different edge types (alignment, inferred, standard) with appropriate styling.
+   * Creates link groups for ALL edges, including alignment edges (which are rendered
+   * fully transparent so WebCola can use them as layout constraints without them
+   * being visually present). Non-alignment edges receive normal styling and labels.
    * 
    * @param links - Array of edge objects to render
    * @param layout - WebCola layout instance (unused but maintained for API consistency)
@@ -1812,11 +1813,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         return "link";
       })
       .attr("data-link-id", (d: any) => d.id || "")
-      .attr("stroke", (d: any) => d.color)
+      .attr("stroke", (d: any) => this.isAlignmentEdge(d) ? "none" : d.color)
       .attr("fill", "none")
+      .attr("opacity", (d: any) => this.isAlignmentEdge(d) ? 0 : null)
       // Use .style() for stroke-width so inline styles override CSS class rules (.link, .inferredLink)
-      .style("stroke-width", (d: any) => d.weight != null ? `${d.weight}px` : null)
-      .attr("stroke-dasharray", (d: any) => this.getEdgeDasharray(d.style))
+      .style("stroke-width", (d: any) => this.isAlignmentEdge(d) ? "0" : d.weight != null ? `${d.weight}px` : null)
+      .attr("stroke-dasharray", (d: any) => this.isAlignmentEdge(d) ? null : this.getEdgeDasharray(d.style))
       .attr("marker-end", (d: any) => {
         if (this.isAlignmentEdge(d)) return "none";
         return "url(#end-arrow)";
@@ -2692,58 +2694,76 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
-   * Extracts group-on and add-to-group indices from group edge ID.
-   * Group edges follow the pattern "_g_{groupOnIndex}_{addToGroupIndex}".
-   * 
-   * @param edgeId - The edge ID to parse
-   * @returns Object containing groupOnIndex and addToGroupIndex
-   * 
-   * @example
-   * ```typescript
-   * const result = this.getGroupOnAndAddToGroupIndices("_g_5_10");
-   * // Returns: { groupOnIndex: 5, addToGroupIndex: 10 }
-   * ```
+   * Resolves a group edge's {source, target} into rendering endpoints.
+   *
+   * For `_g_` edges the rendered arrow terminates at the group boundary rather
+   * than the member-node center.  By construction, `d.groupId` IS the target
+   * group: the edge always runs from the external anchor node (source) to a
+   * member of that group (target).  The source is always kept as-is — even if
+   * it happens to live in a different group, the arrow must still leave from
+   * the source node itself, not from the source's group boundary.
+   *
+   * @param d - Edge data object (must have d.groupId set for group edges).
+   * @returns { source, target } where target is replaced by the group object.
    */
-  private getGroupOnAndAddToGroupIndices(edgeId: string): { groupOnIndex: number; addToGroupIndex: number } {
-    const parts = edgeId.split('_');
-    if (parts.length < 4 || parts[0] !== '' || parts[1] !== 'g') {
-      throw new Error(`Invalid group edge ID format: ${edgeId}`);
+  private resolveGroupEdgeEndpoints(d: any): { source: any; target: any } {
+    if (!d.groupId) {
+      return { source: d.source, target: d.target };
     }
-    
-    return {
-      groupOnIndex: parseInt(parts[2], 10),
-      addToGroupIndex: parseInt(parts[3], 10)
-    };
-  }
 
-  /**
-   * Finds all groups that contain the specified node.
-   * 
-   * @param groups - Array of group objects
-   * @param node - Node to find containing groups for
-   * @returns Array of groups that contain the node
-   * 
-   * @example
-   * ```typescript
-   * const containingGroups = this.getContainingGroups(groups, targetNode);
-   * ```
-   */
-  private getContainingGroups(groups: any[], node: any): any[] {
-    return groups.filter(group => {
-      if (!group.leaves) return false;
-      return group.leaves.some((leaf: any) => leaf.id === node.id);
-    });
-  }
+    const groups = this.currentLayout?.groups || [];
+    const group = groups.find((g: any) => g.id === d.groupId);
 
-  /**
-   * Gets the index of a node in the current layout's nodes array.
-   * 
-   * @param node - Node object to find index for
-   * @returns Index of the node, or -1 if not found
-   */
-  private getNodeIndex(node: any): number {
-    if (!this.currentLayout?.nodes) return -1;
-    return this.currentLayout.nodes.findIndex((n: any) => n.id === node.id);
+    // DEBUG — log once per unique edge id
+    if (!(this as any)._groupEdgeDebugLogged) (this as any)._groupEdgeDebugLogged = new Set();
+    if (!(this as any)._groupEdgeDebugLogged.has(d.id)) {
+      (this as any)._groupEdgeDebugLogged.add(d.id);
+      console.log('[groupEdge DEBUG]', {
+        edgeId: d.id,
+        groupId: d.groupId,
+        keyNodeId: d.keyNodeId,
+        sourceId: d.source?.id,
+        targetId: d.target?.id,
+        sourceIsInt: typeof d.source === 'number',
+        targetIsInt: typeof d.target === 'number',
+        groupFound: !!group,
+        groupId_on_group: group?.id,
+        availableGroupIds: groups.map((g: any) => g.id),
+      });
+    }
+
+    if (!group) return { source: d.source, target: d.target };
+
+    // d.keyNodeId is stamped at edge-construction time (= graphlib edge.v = groupOn).
+    // The key node is the external anchor; the other end is the group member.
+    let source = d.source;
+    let target = d.target;
+
+    if (d.source?.id === d.keyNodeId) {
+      target = group;       // source is anchor, target is member → snap target to group
+    } else if (d.target?.id === d.keyNodeId) {
+      source = group;       // target is anchor, source is member → snap source to group
+    } else {
+      // keyNodeId didn't match either side — log and leave unmodified
+      console.warn('[groupEdge] keyNodeId matched neither side', {
+        keyNodeId: d.keyNodeId, sourceId: d.source?.id, targetId: d.target?.id
+      });
+    }
+
+    // If the group has no bounds yet (first ticks under stability / fast convergence),
+    // synthesise temporary bounds from the MEMBER node (not anchor) so the edge
+    // points in the right direction.
+    const memberNode = source === group ? d.source : target === group ? d.target : null;
+    if (memberNode && !group.bounds && memberNode.x != null && cola?.Rectangle) {
+      const hw = (memberNode.visualWidth ?? memberNode.width ?? 50) / 2;
+      const hh = (memberNode.visualHeight ?? memberNode.height ?? 30) / 2;
+      group.bounds = new cola.Rectangle(
+        memberNode.x - hw, memberNode.x + hw,
+        memberNode.y - hh, memberNode.y + hh
+      );
+    }
+
+    return { source, target };
   }
 
   /**
@@ -2828,31 +2848,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // Select 'path' to include all edge types: .link, .inferredLink, and .alignmentLink
     this.svgLinkGroups.select('path')
       .attr('d', (d: EdgeWithMetadata) => {
-        let source = d.source;
-        let target = d.target;
-
-        // Handle group edges with special routing
-        if (d.id?.startsWith('_g_')) {
-          const { groupOnIndex, addToGroupIndex } = this.getGroupOnAndAddToGroupIndices(d.id);
-          const addSourceToGroup = groupOnIndex >= addToGroupIndex;
-          const addTargetToGroup = groupOnIndex < addToGroupIndex;
-
-          if (addTargetToGroup) {
-            const potentialGroups = this.getContainingGroups(this.currentLayout?.groups || [], target);
-            const targetGroup = potentialGroups.find(group => group.keyNode === this.getNodeIndex(source));
-            
-            if (targetGroup) {
-              target = targetGroup;
-            }
-          } else if (addSourceToGroup) {
-            const potentialGroups = this.getContainingGroups(this.currentLayout?.groups || [], source);
-            const sourceGroup = potentialGroups.find(group => group.keyNode === this.getNodeIndex(target));
-            
-            if (sourceGroup) {
-              source = sourceGroup;
-            }
-          }
-        }
+        // Resolve group-edge endpoints (group boundary instead of member node center).
+        const { source, target } = this.resolveGroupEdgeEndpoints(d);
 
         // Use stable anchor-based edge routing to prevent jitter during dragging
         // This approach selects consistent edge anchor points based on dominant direction
@@ -3054,36 +3051,49 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
                 const route = this.createSelfLoopRoute(d);
                 return this.lineFunction(route);
             }
+
+            // Resolve group-edge endpoints: for _g_ edges the arrow should reach
+            // the group boundary, not the member node center.
+            const { source, target } = this.resolveGroupEdgeEndpoints(d);
             
-            // Create orthogonal (Manhattan) path for grid mode
-            // Use node.x/y as primary source (same as default mode) with bounds as fallback
-            const sourceX = d.source?.x ?? d.source?.bounds?.cx() ?? 0;
-            const sourceY = d.source?.y ?? d.source?.bounds?.cy() ?? 0;
-            const targetX = d.target?.x ?? d.target?.bounds?.cx() ?? 0;
-            const targetY = d.target?.y ?? d.target?.bounds?.cy() ?? 0;
-            
-            // Create simple orthogonal path (horizontal then vertical, or vice versa)
-            const dx = targetX - sourceX;
-            const dy = targetY - sourceY;
+            // Determine start/end coordinates.
+            // For group endpoints (which have .bounds but no .x/.y), use bounds centre.
+            const getCenter = (endpoint: any): { x: number; y: number } => {
+              if (endpoint.bounds) {
+                if (typeof endpoint.bounds.cx === 'function') {
+                  return { x: endpoint.bounds.cx(), y: endpoint.bounds.cy() };
+                }
+                return {
+                  x: (endpoint.bounds.x + endpoint.bounds.X) / 2,
+                  y: (endpoint.bounds.y + endpoint.bounds.Y) / 2
+                };
+              }
+              return { x: endpoint.x ?? 0, y: endpoint.y ?? 0 };
+            };
+
+            const src = getCenter(source);
+            const tgt = getCenter(target);
+            const dx = tgt.x - src.x;
+            const dy = tgt.y - src.y;
             
             // Choose routing based on which direction is dominant
             if (Math.abs(dx) > Math.abs(dy)) {
                 // Horizontal first, then vertical
-                const midX = sourceX + dx / 2;
+                const midX = src.x + dx / 2;
                 return this.gridLineFunction([
-                    { x: sourceX, y: sourceY },
-                    { x: midX, y: sourceY },
-                    { x: midX, y: targetY },
-                    { x: targetX, y: targetY }
+                    { x: src.x, y: src.y },
+                    { x: midX, y: src.y },
+                    { x: midX, y: tgt.y },
+                    { x: tgt.x, y: tgt.y }
                 ]);
             } else {
                 // Vertical first, then horizontal
-                const midY = sourceY + dy / 2;
+                const midY = src.y + dy / 2;
                 return this.gridLineFunction([
-                    { x: sourceX, y: sourceY },
-                    { x: sourceX, y: midY },
-                    { x: targetX, y: midY },
-                    { x: targetX, y: targetY }
+                    { x: src.x, y: src.y },
+                    { x: src.x, y: midY },
+                    { x: tgt.x, y: midY },
+                    { x: tgt.x, y: tgt.y }
                 ]);
             }
         });
@@ -4363,9 +4373,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     if (edgeData.source.id === edgeData.target.id) {
       route = this.createSelfLoopRoute(edgeData);
     }
-    // Handle group edges
+    // Handle group edges: snap the member end to the group boundary.
+    // After this, skip getNearTouchPerpendicularRoute — it uses raw node positions
+    // and would override the group boundary snap with a member-node-center route.
     else if (edgeData.id?.startsWith('_g_')) {
       route = this.routeGroupEdge(edgeData, route);
+      return this.lineFunction(route);
     }
     // Handle multiple edges between same nodes (only if not already handled above)
     else {
@@ -4433,40 +4446,49 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * @returns Modified route points for group edge
    */
   private routeGroupEdge(edgeData: any, route: Array<{ x: number; y: number }>): Array<{ x: number; y: number }> {
-    const { groupOnIndex, addToGroupIndex } = this.getGroupOnAndAddToGroupIndices(edgeData.id);
-    const addTargetToGroup = groupOnIndex < addToGroupIndex;
-    const addSourceToGroup = groupOnIndex >= addToGroupIndex;
+    // Look up the group directly by the groupId stamped on the edge at creation time.
+    const group = edgeData.groupId
+      ? (this.currentLayout?.groups || []).find((g: any) => g.id === edgeData.groupId)
+      : null;
 
-    if (addTargetToGroup) {
-      const sourceIndex = this.getNodeIndex(edgeData.source);
-      const potentialGroups = this.getContainingGroups(this.currentLayout?.groups || [], edgeData.target);
-      const targetGroup = potentialGroups.find(group => group.keyNode === sourceIndex);
-      
-      if (targetGroup) {
-        const newTargetCoords = this.closestPointOnRect(targetGroup.bounds, route[0]);
-        route[route.length - 1] = newTargetCoords;
-      } else {
-        console.log('Target group not found', potentialGroups, this.getNodeIndex(edgeData.target), edgeData.id);
-      }
-    } else if (addSourceToGroup) {
-      const sourceIndex = this.getNodeIndex(edgeData.source);
-      const targetIndex = this.getNodeIndex(edgeData.target);
-      const potentialGroups = this.getContainingGroups(this.currentLayout?.groups || [], edgeData.source);
-      const sourceGroup = potentialGroups.find(group => group.keyNode === targetIndex); // NOTE: Could the keyNode not be set?
-      
-      if (sourceGroup) {
-        const inflatedBounds = sourceGroup.bounds?.inflate(-1);
-        const newSourceCoords = this.closestPointOnRect(inflatedBounds || sourceGroup.bounds, route[route.length - 1]);
-        route[0] = newSourceCoords;
-      } else {
-        console.log('Source group not found', potentialGroups, sourceIndex, targetIndex, edgeData.id);
-      }
+    if (!group) {
+      console.warn('[routeGroupEdge] Group not found for edge:', edgeData.id, '— groupId:', edgeData.groupId);
+      // Leave route unmodified; edge will point at member node center.
     } else {
-      // If neither source nor target is a group, log the edge data
-      console.log("This is a group edge, but neither source nor target is a group.", edgeData);
+      // Synthesise bounds if WebCola hasn't computed them yet (stability / few-iteration layouts).
+      // Use the MEMBER node's position (not the anchor) so the edge points in the right direction.
+      // In routeGroupEdge: route[0] is near source, route[last] is near target.
+      if (!group.bounds && cola?.Rectangle) {
+        const memberPt = edgeData.source?.id === edgeData.keyNodeId
+          ? route[route.length - 1]   // source is anchor → member end is last route point
+          : route[0];                  // target is anchor → member end is first route point
+        if (memberPt) {
+          group.bounds = new cola.Rectangle(
+            memberPt.x - 50, memberPt.x + 50,
+            memberPt.y - 30, memberPt.y + 30
+          );
+        }
+      }
+
+      if (group.bounds) {
+        // edgeData.keyNodeId is the external anchor stamped at construction time (= graphlib edge.v).
+        // The other end is the group member — snap that route endpoint to the group boundary.
+        if (edgeData.source?.id === edgeData.keyNodeId) {
+          // source is anchor → target is member → snap last route point to group boundary
+          route[route.length - 1] = this.closestPointOnRect(group.bounds, route[0]);
+        } else if (edgeData.target?.id === edgeData.keyNodeId) {
+          // target is anchor → source is member → snap first route point to group boundary
+          const bounds = group.bounds.inflate?.(-1) ?? group.bounds;
+          route[0] = this.closestPointOnRect(bounds, route[route.length - 1]);
+        } else {
+          console.warn('[routeGroupEdge] keyNodeId matched neither side', {
+            keyNodeId: edgeData.keyNodeId, sourceId: edgeData.source?.id, targetId: edgeData.target?.id
+          });
+        }
+      }
     }
 
-    // Simplify route for group edges (remove intermediate points)
+    // Simplify route — remove intermediate waypoints for group edges.
     if (route.length > 2) {
       route.splice(1, route.length - 2);
     }
