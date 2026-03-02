@@ -25,6 +25,7 @@ import { RelationHighlighter } from '../src/components/RelationHighlighter/Relat
 import { ProjectionControls, ProjectionChoice } from '../src/components/ProjectionControls';
 import { ProjectionOrchestrator, ProjectionOrchestratorResult } from '../src/components/ProjectionControls';
 import { IDataInstance } from '../src/data-instance/interfaces';
+import { exposeComponentBundleGlobals } from '../src/cdn-globals';
 
 /**
  * Configuration options for mounting CndLayoutInterface
@@ -1847,51 +1848,53 @@ export const CnDCore = {
 
 
 
-// Expose to global scope
-// window.spytialcore is the canonical name going forward;
-// window.CnDCore and window.CndCore are kept as legacy aliases.
+// Expose to global scope.
+// The runtime/browser bundle owns window.spytialcore (plus legacy aliases).
+// The components bundle publishes its API under window.spytialComponents and
+// augments the runtime global when it is already present.
 if (typeof window !== 'undefined') {
-  (window as any).spytialcore = CnDCore;
-  (window as any).CnDCore = CnDCore;  // legacy alias
-  (window as any).CndCore = CnDCore;  // legacy alias
+  const globalWindow = window as any;
+  exposeComponentBundleGlobals(globalWindow, CnDCore);
   
   // Legacy compatibility - expose individual functions
-  (window as any).mountCndLayoutInterface = mountCndLayoutInterface;
-  (window as any).mountInstanceBuilder = mountInstanceBuilder;
-  (window as any).mountErrorMessageModal = mountErrorMessageModal;
-  (window as any).mountIntegratedComponents = mountAllComponents;
-  (window as any).mountEvaluatorRepl = mountEvaluatorRepl;
-  (window as any).mountRelationHighlighter = mountRelationHighlighter;
-  (window as any).mountProjectionControls = mountProjectionControls;
-  (window as any).updateProjectionData = updateProjectionData;
-  (window as any).mountProjectionOrchestrator = mountProjectionOrchestrator;
-  (window as any).updateProjectionOrchestratorInstance = updateProjectionOrchestratorInstance;
-  (window as any).updateProjectionOrchestratorEvaluator = updateProjectionOrchestratorEvaluator;
+  globalWindow.mountCndLayoutInterface = mountCndLayoutInterface;
+  globalWindow.mountInstanceBuilder = mountInstanceBuilder;
+  globalWindow.mountErrorMessageModal = mountErrorMessageModal;
+  globalWindow.mountIntegratedComponents = mountAllComponents;
+  globalWindow.mountEvaluatorRepl = mountEvaluatorRepl;
+  globalWindow.mountRelationHighlighter = mountRelationHighlighter;
+  globalWindow.mountProjectionControls = mountProjectionControls;
+  globalWindow.updateProjectionData = updateProjectionData;
+  globalWindow.mountProjectionOrchestrator = mountProjectionOrchestrator;
+  globalWindow.updateProjectionOrchestratorInstance = updateProjectionOrchestratorInstance;
+  globalWindow.updateProjectionOrchestratorEvaluator = updateProjectionOrchestratorEvaluator;
   
   // Pyret REPL functions for legacy compatibility
-  (window as any).mountPyretRepl = mountPyretRepl;
-  (window as any).mountReplWithVisualization = mountReplWithVisualization;
-  (window as any).mountAllComponentsWithPyret = mountAllComponentsWithPyret;
+  globalWindow.mountPyretRepl = mountPyretRepl;
+  globalWindow.mountReplWithVisualization = mountReplWithVisualization;
+  globalWindow.mountAllComponentsWithPyret = mountAllComponentsWithPyret;
 
   // Expose data functions for legacy compatibility
-  (window as any).getCurrentCNDSpecFromReact = DataAPI.getCurrentCndSpec;
-  (window as any).getCurrentInstanceFromReact = DataAPI.getCurrentInstance;
+  globalWindow.getCurrentCNDSpecFromReact = DataAPI.getCurrentCndSpec;
+  globalWindow.getCurrentInstanceFromReact = DataAPI.getCurrentInstance;
   
   // Pyret-specific data functions for legacy compatibility
-  (window as any).getCurrentPyretInstanceFromReact = DataAPI.getCurrentPyretInstance;
-  (window as any).reifyCurrentPyretInstanceFromReact = DataAPI.reifyCurrentPyretInstance;
-  (window as any).updatePyretInstanceFromReact = DataAPI.updatePyretInstance;
-  (window as any).setExternalPyretEvaluator = DataAPI.setExternalPyretEvaluator;
-  (window as any).getExternalPyretEvaluator = DataAPI.getExternalPyretEvaluator;
+  globalWindow.getCurrentPyretInstanceFromReact = DataAPI.getCurrentPyretInstance;
+  globalWindow.reifyCurrentPyretInstanceFromReact = DataAPI.reifyCurrentPyretInstance;
+  globalWindow.updatePyretInstanceFromReact = DataAPI.updatePyretInstance;
+  globalWindow.setExternalPyretEvaluator = DataAPI.setExternalPyretEvaluator;
+  globalWindow.getExternalPyretEvaluator = DataAPI.getExternalPyretEvaluator;
   
   // Expose error functions for legacy compatibility
-  (window as any).showParseError = ErrorAPI.showParseError;
-  (window as any).showGroupOverlapError = ErrorAPI.showGroupOverlapError;
-  (window as any).showPositionalError = ErrorAPI.showConstraintError;
-  (window as any).showHiddenNodeConflict = ErrorAPI.showHiddenNodeConflict;
-  (window as any).showGeneralError = ErrorAPI.showGeneralError;
-  (window as any).showSelectorErrors = ErrorAPI.showSelectorErrors;
-  (window as any).clearAllErrors = ErrorAPI.clearAllErrors;
+  globalWindow.showParseError = ErrorAPI.showParseError;
+  globalWindow.showGroupOverlapError = ErrorAPI.showGroupOverlapError;
+  globalWindow.showPositionalError = ErrorAPI.showConstraintError;
+  globalWindow.showHiddenNodeConflict = ErrorAPI.showHiddenNodeConflict;
+  globalWindow.showGeneralError = ErrorAPI.showGeneralError;
+  globalWindow.showSelectorErrors = ErrorAPI.showSelectorErrors;
+  globalWindow.clearAllErrors = ErrorAPI.clearAllErrors;
 
-  console.log('spytial-core CDN integration ready! Use window.spytialcore to access all features (window.CnDCore and window.CndCore also work as legacy aliases).');
+  console.log(
+    'spytial-core component integration ready. Mount APIs are available on window.spytialComponents and are merged into window.spytialcore when the runtime bundle is loaded.',
+  );
 }

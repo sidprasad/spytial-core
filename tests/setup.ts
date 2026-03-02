@@ -49,6 +49,9 @@ if (typeof window !== 'undefined') {
     delete (window as any).spytialcore
     delete (window as any).CnDCore
     delete (window as any).CndCore
+    delete (window as any).spytialComponents
+    delete (window as any).CnDComponents
+    delete (window as any).CndComponents
     delete (window as any).CnDReactState
     delete (window as any).updateFromCnDSpec
     delete (window as any).updateFromBuilder
