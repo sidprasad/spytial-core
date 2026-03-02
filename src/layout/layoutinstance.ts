@@ -1128,10 +1128,11 @@ export class LayoutInstance {
             // Constraints NOW holds the conjuctive CORE of layout constraints.
             constraints = removeDuplicateConstraints(constraints);
 
-            layoutEdges = this.buildLayoutEdges(g, layoutNodes);
+            // Build cyclic constraint disjunctions (must happen before buildLayoutEdges
+            // so that alignment edges added for cyclic pairs are included in the edge list)
+            cyclicDisjunctions = this.buildCyclicDisjunctions(layoutNodes, g);
 
-            // Build cyclic constraint disjunctions
-            cyclicDisjunctions = this.buildCyclicDisjunctions(layoutNodes);
+            layoutEdges = this.buildLayoutEdges(g, layoutNodes);
         } catch (error) {
             if (isMissingNodeConstraintError(error)) {
                 return this.handleMissingNodeConstraintError(
@@ -1420,7 +1421,7 @@ export class LayoutInstance {
      * @param layoutNodes - The layout nodes to which the constraints will be applied.
      * @returns Array of DisjunctiveConstraint instances, one per cyclic fragment.
      */
-    private buildCyclicDisjunctions(layoutNodes: LayoutNode[]): DisjunctiveConstraint[] {
+    private buildCyclicDisjunctions(layoutNodes: LayoutNode[], g: Graph): DisjunctiveConstraint[] {
         const cyclicConstraints = this._layoutSpec.constraints.orientation.cyclic;
         const disjunctions: DisjunctiveConstraint[] = [];
 
@@ -1450,6 +1451,14 @@ export class LayoutInstance {
                 // Skip if either node is not found
                 if (!srcN || !tgtN) {
                     return;
+                }
+
+                // Add an alignment edge so WebCola applies spring forces between
+                // cyclic-constrained nodes, which is needed for positional constraints
+                // to take effect when there is no existing graph edge between them.
+                if (this.shouldAddAlignmentEdge(g, sourceNodeId, targetNodeId)) {
+                    const alignmentEdgeLabel = `_alignment_${sourceNodeId}_${targetNodeId}_`;
+                    g.setEdge(sourceNodeId, targetNodeId, alignmentEdgeLabel, alignmentEdgeLabel);
                 }
 
                 if (nextNodeMap.has(srcN)) {
