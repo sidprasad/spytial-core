@@ -4375,9 +4375,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     if (edgeData.source.id === edgeData.target.id) {
       route = this.createSelfLoopRoute(edgeData);
     }
-    // Handle group edges
+    // Handle group edges: snap the member end to the group boundary.
+    // After this, skip getNearTouchPerpendicularRoute — it uses raw node positions
+    // and would override the group boundary snap with a member-node-center route.
     else if (edgeData.id?.startsWith('_g_')) {
       route = this.routeGroupEdge(edgeData, route);
+      return this.lineFunction(route);
     }
     // Handle multiple edges between same nodes (only if not already handled above)
     else {
