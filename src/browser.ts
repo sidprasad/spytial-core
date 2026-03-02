@@ -40,8 +40,17 @@ if (typeof window !== 'undefined') {
   // window.spytialcore is the canonical name going forward;
   // window.CndCore and window.CnDCore are kept as legacy aliases.
   import('./index').then((core) => {
-    globalWindow.spytialcore = core;
-    globalWindow.CndCore = core;   // legacy alias
-    globalWindow.CnDCore = core;   // legacy alias
+    const componentApi =
+      globalWindow.spytialComponents ||
+      globalWindow.CnDComponents ||
+      globalWindow.CndComponents;
+    const mergedCore =
+      componentApi && typeof componentApi === 'object'
+        ? Object.assign({}, core, componentApi)
+        : core;
+
+    globalWindow.spytialcore = mergedCore;
+    globalWindow.CndCore = mergedCore;   // legacy alias
+    globalWindow.CnDCore = mergedCore;   // legacy alias
   }).catch(console.error);
 }

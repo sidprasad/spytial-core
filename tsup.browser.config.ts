@@ -19,7 +19,7 @@ export default defineConfig({
   treeshake: true,
   // Create backward-compatible aliases for the global name
   footer: {
-    js: 'if(typeof window!=="undefined"){window.CndCore=window.spytialcore;window.CnDCore=window.spytialcore;}',
+    js: 'if(typeof window!=="undefined"){const componentApi=window.spytialComponents||window.CnDComponents||window.CndComponents;if(componentApi&&typeof componentApi==="object"){Object.assign(window.spytialcore,componentApi);}window.CndCore=window.spytialcore;window.CnDCore=window.spytialcore;}',
   },
   // Bundle ALL dependencies for browser use
   noExternal: [
