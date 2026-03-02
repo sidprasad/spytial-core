@@ -2282,6 +2282,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Render links using D3 data binding with enhanced grouping and labeling
    */
   private renderLinks(links: Array<EdgeWithMetadata>, layout: Layout): void {
+    // Clear the stale alignment-edge cache so isAlignmentEdge() falls back to the
+    // reliable id-prefix check during rendering. On re-renders (e.g. stability policy)
+    // the cache still holds IDs from the previous render; new alignment edges with
+    // different IDs are not found in it and would be treated as visible real edges.
+    // buildEdgeRoutingCaches() will repopulate the cache during routeEdges() as usual.
+    this.edgeRoutingCache.alignmentEdges.clear();
     this.svgLinkGroups = this.setupLinks(links, layout);
   }
 
