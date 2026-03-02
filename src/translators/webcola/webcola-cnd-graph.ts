@@ -2713,33 +2713,55 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       return { source: d.source, target: d.target };
     }
 
-    const group = (this.currentLayout?.groups || []).find((g: any) => g.id === d.groupId);
+    const groups = this.currentLayout?.groups || [];
+    const group = groups.find((g: any) => g.id === d.groupId);
+
+    // DEBUG — log once per unique edge id
+    if (!(this as any)._groupEdgeDebugLogged) (this as any)._groupEdgeDebugLogged = new Set();
+    if (!(this as any)._groupEdgeDebugLogged.has(d.id)) {
+      (this as any)._groupEdgeDebugLogged.add(d.id);
+      console.log('[groupEdge DEBUG]', {
+        edgeId: d.id,
+        groupId: d.groupId,
+        keyNodeId: d.keyNodeId,
+        sourceId: d.source?.id,
+        targetId: d.target?.id,
+        sourceIsInt: typeof d.source === 'number',
+        targetIsInt: typeof d.target === 'number',
+        groupFound: !!group,
+        groupId_on_group: group?.id,
+        availableGroupIds: groups.map((g: any) => g.id),
+      });
+    }
+
     if (!group) return { source: d.source, target: d.target };
 
     // d.keyNodeId is stamped at edge-construction time (= graphlib edge.v = groupOn).
     // The key node is the external anchor; the other end is the group member.
-    // Whichever side IS the key node stays as a plain node; the other side
-    // is replaced by the group object so the arrow hits the group boundary.
     let source = d.source;
     let target = d.target;
-    let anchor: any;
 
     if (d.source?.id === d.keyNodeId) {
       target = group;       // source is anchor, target is member → snap target to group
-      anchor = d.source;
-    } else {
+    } else if (d.target?.id === d.keyNodeId) {
       source = group;       // target is anchor, source is member → snap source to group
-      anchor = d.target;
+    } else {
+      // keyNodeId didn't match either side — log and leave unmodified
+      console.warn('[groupEdge] keyNodeId matched neither side', {
+        keyNodeId: d.keyNodeId, sourceId: d.source?.id, targetId: d.target?.id
+      });
     }
 
-    // If the group has no bounds yet (first tick under stability / fast convergence),
-    // synthesise temporary bounds from the anchor node so routing has a direction.
-    if (!group.bounds && anchor?.x != null && cola?.Rectangle) {
-      const hw = (anchor.visualWidth ?? anchor.width ?? 50) / 2;
-      const hh = (anchor.visualHeight ?? anchor.height ?? 30) / 2;
+    // If the group has no bounds yet (first ticks under stability / fast convergence),
+    // synthesise temporary bounds from the MEMBER node (not anchor) so the edge
+    // points in the right direction.
+    const memberNode = source === group ? d.source : target === group ? d.target : null;
+    if (memberNode && !group.bounds && memberNode.x != null && cola?.Rectangle) {
+      const hw = (memberNode.visualWidth ?? memberNode.width ?? 50) / 2;
+      const hh = (memberNode.visualHeight ?? memberNode.height ?? 30) / 2;
       group.bounds = new cola.Rectangle(
-        anchor.x - hw, anchor.x + hw,
-        anchor.y - hh, anchor.y + hh
+        memberNode.x - hw, memberNode.x + hw,
+        memberNode.y - hh, memberNode.y + hh
       );
     }
 
@@ -4431,16 +4453,37 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     if (!group) {
       console.warn('[routeGroupEdge] Group not found for edge:', edgeData.id, '— groupId:', edgeData.groupId);
       // Leave route unmodified; edge will point at member node center.
-    } else if (group.bounds) {
-      // edgeData.keyNodeId is the external anchor stamped at construction time.
-      // The other end is the group member — snap it to the group boundary.
-      if (edgeData.source?.id === edgeData.keyNodeId) {
-        // source is anchor → target is member → snap last point
-        route[route.length - 1] = this.closestPointOnRect(group.bounds, route[0]);
-      } else {
-        // target is anchor → source is member → snap first point
-        const bounds = group.bounds.inflate(-1) ?? group.bounds;
-        route[0] = this.closestPointOnRect(bounds, route[route.length - 1]);
+    } else {
+      // Synthesise bounds if WebCola hasn't computed them yet (stability / few-iteration layouts).
+      // Use the MEMBER node's position (not the anchor) so the edge points in the right direction.
+      // In routeGroupEdge: route[0] is near source, route[last] is near target.
+      if (!group.bounds && cola?.Rectangle) {
+        const memberPt = edgeData.source?.id === edgeData.keyNodeId
+          ? route[route.length - 1]   // source is anchor → member end is last route point
+          : route[0];                  // target is anchor → member end is first route point
+        if (memberPt) {
+          group.bounds = new cola.Rectangle(
+            memberPt.x - 50, memberPt.x + 50,
+            memberPt.y - 30, memberPt.y + 30
+          );
+        }
+      }
+
+      if (group.bounds) {
+        // edgeData.keyNodeId is the external anchor stamped at construction time (= graphlib edge.v).
+        // The other end is the group member — snap that route endpoint to the group boundary.
+        if (edgeData.source?.id === edgeData.keyNodeId) {
+          // source is anchor → target is member → snap last route point to group boundary
+          route[route.length - 1] = this.closestPointOnRect(group.bounds, route[0]);
+        } else if (edgeData.target?.id === edgeData.keyNodeId) {
+          // target is anchor → source is member → snap first route point to group boundary
+          const bounds = group.bounds.inflate?.(-1) ?? group.bounds;
+          route[0] = this.closestPointOnRect(bounds, route[route.length - 1]);
+        } else {
+          console.warn('[routeGroupEdge] keyNodeId matched neither side', {
+            keyNodeId: edgeData.keyNodeId, sourceId: edgeData.source?.id, targetId: edgeData.target?.id
+          });
+        }
       }
     }
 
