@@ -54,6 +54,12 @@ export interface LayoutEdge {
     weight?: number;
     showLabel?: boolean;
     hidden?: boolean;
+    /**
+     * For group edges (_g_ prefix), the name of the group this edge was created for.
+     * Matches `group.id` in the WebCola translator so routing can look up the group
+     * directly without re-parsing edge IDs or matching fragile leaf indices.
+     */
+    groupId?: string;
 }
 
 export class ImplicitConstraint {

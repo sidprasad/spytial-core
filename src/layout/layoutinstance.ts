@@ -2115,6 +2115,10 @@ export class LayoutInstance {
                 style: style,
                 weight: weight,
                 showLabel: showLabel,
+                // For group edges the graphlib edge label IS the group name (see constructGroupEdgeID).
+                // Carry it forward so the renderer can look up the group directly by ID
+                // without re-parsing the edge ID string or matching fragile leaf indices.
+                groupId: edgeId.startsWith('_g_') ? edgeLabel : undefined,
             };
             return e;
         }).filter((edge): edge is LayoutEdge => edge !== null);
