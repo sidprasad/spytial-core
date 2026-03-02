@@ -2119,6 +2119,9 @@ export class LayoutInstance {
                 // Carry it forward so the renderer can look up the group directly by ID
                 // without re-parsing the edge ID string or matching fragile leaf indices.
                 groupId: edgeId.startsWith('_g_') ? edgeLabel : undefined,
+                // edge.v is always the groupOn (key/anchor) node — stamp it so the renderer
+                // knows definitively which end is the anchor vs. the group member.
+                keyNodeId: edgeId.startsWith('_g_') ? edge.v : undefined,
             };
             return e;
         }).filter((edge): edge is LayoutEdge => edge !== null);
