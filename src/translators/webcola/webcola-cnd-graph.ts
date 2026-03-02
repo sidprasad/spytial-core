@@ -1775,10 +1775,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     links: Array<EdgeWithMetadata>, 
     layout: Layout
   ) {
+    // Alignment edges are used only by the WebCola solver for layout constraints.
+    // They must never be rendered — filter them out before touching the DOM.
+    const visibleLinks = links.filter(link => !link.id?.startsWith('_alignment_'));
+
     // Create link groups for each edge
     const linkGroups = this.container
       .selectAll(".link-group")
-      .data(links)
+      .data(visibleLinks)
       .enter()
       .append("g")
       .attr("class", "link-group");
@@ -2729,9 +2733,19 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * ```
    */
   private getContainingGroups(groups: any[], node: any): any[] {
+    // After WebCola runs, group.leaves may contain either:
+    //   - integer node indices (as originally passed to WebCola), or
+    //   - node objects (if WebCola replaced them during layout).
+    // Handle both representations so group-edge routing works reliably.
+    const nodeIndex = this.getNodeIndex(node);
     return groups.filter(group => {
       if (!group.leaves) return false;
-      return group.leaves.some((leaf: any) => leaf.id === node.id);
+      return group.leaves.some((leaf: any) => {
+        if (typeof leaf === 'number') {
+          return leaf === nodeIndex;
+        }
+        return leaf.id === node.id;
+      });
     });
   }
 
