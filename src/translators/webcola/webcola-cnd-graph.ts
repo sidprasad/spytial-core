@@ -1759,8 +1759,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
   /**
    * Renders link elements with proper grouping, styling, and labels.
-   * Creates link groups containing paths and optional text labels for non-alignment edges.
-   * Handles different edge types (alignment, inferred, standard) with appropriate styling.
+   * Creates link groups for ALL edges, including alignment edges (which are rendered
+   * fully transparent so WebCola can use them as layout constraints without them
+   * being visually present). Non-alignment edges receive normal styling and labels.
    * 
    * @param links - Array of edge objects to render
    * @param layout - WebCola layout instance (unused but maintained for API consistency)
@@ -1775,14 +1776,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     links: Array<EdgeWithMetadata>, 
     layout: Layout
   ) {
-    // Alignment edges are used only by the WebCola solver for layout constraints.
-    // They must never be rendered — filter them out before touching the DOM.
-    const visibleLinks = links.filter(link => !link.id?.startsWith('_alignment_'));
-
     // Create link groups for each edge
     const linkGroups = this.container
       .selectAll(".link-group")
-      .data(visibleLinks)
+      .data(links)
       .enter()
       .append("g")
       .attr("class", "link-group");
@@ -1816,11 +1813,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         return "link";
       })
       .attr("data-link-id", (d: any) => d.id || "")
-      .attr("stroke", (d: any) => d.color)
+      .attr("stroke", (d: any) => this.isAlignmentEdge(d) ? "none" : d.color)
       .attr("fill", "none")
+      .attr("opacity", (d: any) => this.isAlignmentEdge(d) ? 0 : null)
       // Use .style() for stroke-width so inline styles override CSS class rules (.link, .inferredLink)
-      .style("stroke-width", (d: any) => d.weight != null ? `${d.weight}px` : null)
-      .attr("stroke-dasharray", (d: any) => this.getEdgeDasharray(d.style))
+      .style("stroke-width", (d: any) => this.isAlignmentEdge(d) ? "0" : d.weight != null ? `${d.weight}px` : null)
+      .attr("stroke-dasharray", (d: any) => this.isAlignmentEdge(d) ? null : this.getEdgeDasharray(d.style))
       .attr("marker-end", (d: any) => {
         if (this.isAlignmentEdge(d)) return "none";
         return "url(#end-arrow)";
