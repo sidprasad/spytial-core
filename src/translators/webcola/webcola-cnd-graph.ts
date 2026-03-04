@@ -127,6 +127,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private static readonly INITIAL_USER_CONSTRAINT_ITERATIONS = 50;
   private static readonly INITIAL_ALL_CONSTRAINTS_ITERATIONS = 200;
   private static readonly GRID_SNAP_ITERATIONS = 1; // Reduced from 5 for performance, but kept at 1 for alignment
+  private static readonly LOADING_INDICATOR_DELAY_MS = 180;
 
   /**
    * Counter for edge routing iterations (for performance tracking)
@@ -174,6 +175,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * We always fit viewport on initial render.
    */
   private isInitialRender: boolean = true;
+  private loadingShowTimer: number | null = null;
   
   /**
    * Stores the starting coordinates when a node begins dragging so
@@ -635,6 +637,59 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
+   * Returns true when a transform can be safely reapplied for viewport continuity.
+   */
+  private hasValidTransform(transform?: TransformInfo): boolean {
+    if (!transform) return false;
+    return Number.isFinite(transform.k) && transform.k > 0 &&
+      Number.isFinite(transform.x) && Number.isFinite(transform.y);
+  }
+
+  /**
+   * Applies viewport continuity rules before a new render.
+   * Temporal transitions should preserve the prior transform even when
+   * there are few/no reusable node positions.
+   */
+  private applyViewportRenderPolicy(hasPriorPositions: boolean, hasPriorTransform: boolean): void {
+    if (hasPriorTransform) {
+      // Prevent automatic fit from overriding temporal viewport continuity.
+      this.isInitialRender = false;
+      this.userHasManuallyZoomed = true;
+      return;
+    }
+
+    if (!hasPriorPositions) {
+      this.isInitialRender = true;
+      this.userHasManuallyZoomed = false;
+    }
+  }
+
+  /**
+   * Builds the raw prior state used by sequence policies.
+   * For temporal transitions we anchor the transform to the live viewport at
+   * render-start time when a previous layout is currently displayed.
+   */
+  private buildPolicyRawState(options?: WebColaLayoutOptions): LayoutState {
+    const liveStateAtChange = this.getLayoutState();
+    const priorState = options?.priorPositions ?? liveStateAtChange;
+    const hasPolicyContext = !!(options?.policy && options.prevInstance && options.currInstance);
+    const hasLiveLayout = !!(this.currentLayout?.nodes && this.currentLayout.nodes.length > 0);
+
+    if (
+      hasPolicyContext &&
+      hasLiveLayout &&
+      this.hasValidTransform(liveStateAtChange.transform)
+    ) {
+      return {
+        positions: priorState.positions,
+        transform: liveStateAtChange.transform,
+      };
+    }
+
+    return priorState;
+  }
+
+  /**
    * Calculate the maximum nesting depth of groups.
    * Depth 1 = groups with only leaf nodes
    * Depth 2 = groups containing other groups
@@ -696,6 +751,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       </div>
       <div id="svg-container">
       <span id="error-icon" title="This graph is depicting an error state">⚠️</span>
+      <div id="loading" role="status" aria-live="polite" aria-atomic="true">
+        <span class="loading-dot" aria-hidden="true"></span>
+        <span id="loading-progress">Computing layout...</span>
+      </div>
       <svg id="svg" viewBox="0 0 ${containerWidth} ${containerHeight}" preserveAspectRatio="xMidYMid meet">
         <defs>
         <marker id="end-arrow" markerWidth="15" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse">
@@ -707,12 +766,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         </defs>
         <g class="zoomable"></g>
       </svg>
-      </div>
-      <div id="loading" style="display: none;">
-        <div style="text-align: center; padding: 20px; background: rgba(255, 255, 255, 0.9); border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-          <div style="font-size: 16px; margin-bottom: 10px;">Computing layout...</div>
-          <div id="loading-progress" style="font-size: 12px; color: #666;"></div>
-        </div>
       </div>
       <div id="error" style="display: none; color: red;"></div>
     `;
@@ -1379,44 +1432,39 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     let useReducedIterations = false;
 
     if (options?.policy && options.prevInstance && options.currInstance) {
-      const rawState = options.priorPositions ?? this.getLayoutState();
-      if (rawState && rawState.positions.length > 0) {
-        const viewportBounds = this.getViewportBoundsInLayoutSpace(rawState.transform);
-        const result = options.policy.apply({
-          priorState: rawState,
-          prevInstance: options.prevInstance,
-          currInstance: options.currInstance,
-          spec: { constraints: { orientation: { relative: [], cyclic: [] }, alignment: [], grouping: { groups: [], subgroups: [] } }, directives: { sizes: [], hiddenAtoms: [], icons: [], projections: [], edgeStyles: [] } } as any,
-          viewportBounds,
-        });
-        resolvedState = result.effectivePriorState;
-        useReducedIterations = result.useReducedIterations;
-      }
+      const rawState = this.buildPolicyRawState(options);
+      const viewportBounds = this.getViewportBoundsInLayoutSpace(rawState.transform);
+      const result = options.policy.apply({
+        priorState: rawState,
+        prevInstance: options.prevInstance,
+        currInstance: options.currInstance,
+        spec: { constraints: { orientation: { relative: [], cyclic: [] }, alignment: [], grouping: { groups: [], subgroups: [] } }, directives: { sizes: [], hiddenAtoms: [], icons: [], projections: [], edgeStyles: [] } } as any,
+        viewportBounds,
+      });
+      resolvedState = result.effectivePriorState;
+      useReducedIterations = result.useReducedIterations;
     }
 
-    const hasPriorState = resolvedState && resolvedState.positions.length > 0;
+    const hasPriorPositions = !!(resolvedState && resolvedState.positions.length > 0);
+    const hasPriorTransform = this.hasValidTransform(resolvedState?.transform);
     // Build the options the translator will see (only priorPositions)
-    const translatorOptions: WebColaLayoutOptions | undefined = hasPriorState
+    const translatorOptions: WebColaLayoutOptions | undefined = hasPriorPositions
       ? { priorPositions: resolvedState }
       : undefined;
 
-    // Mark this as a new render - we'll fit viewport after layout completes
-    // Only reset if this is a completely new layout (no prior state)
-    if (!hasPriorState) {
-      this.isInitialRender = true;
-      this.userHasManuallyZoomed = false;
-    }
+    this.applyViewportRenderPolicy(hasPriorPositions, hasPriorTransform);
     
-    // Handle zoom transform based on whether we have prior state to restore
+    // Handle zoom transform based on whether we have prior transform to restore
     if (this.svg && this.zoomBehavior && d3) {
       try {
-        if (hasPriorState) {
+        if (hasPriorTransform) {
           // Restore the prior transform to maintain visual continuity
+          const priorTransform = resolvedState!.transform;
           const transform = d3.zoomIdentity
-            .translate(resolvedState!.transform.x, resolvedState!.transform.y)
-            .scale(resolvedState!.transform.k);
+            .translate(priorTransform.x, priorTransform.y)
+            .scale(priorTransform.k);
           this.svg.call(this.zoomBehavior.transform, transform);
-        } else {
+        } else if (!hasPriorPositions) {
           // Reset zoom transform to identity for a fresh start (will be adjusted by fitViewportToContent)
           const identity = d3.zoomIdentity;
           this.svg.call(this.zoomBehavior.transform, identity);
@@ -1481,7 +1529,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       // The policy controls this via useReducedIterations — a policy can return
       // positions while requesting normal iterations (useReducedIterations: false)
       // to let the solver fully re-converge.
-      if (hasPriorState && useReducedIterations) {
+      if (hasPriorPositions && useReducedIterations) {
         // Use minimal iterations to preserve prior positions:
         // - 0 unconstrained: don't let nodes drift from prior positions
         // - 10 user constraint: apply position constraints quickly
@@ -1494,12 +1542,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       
       if (nodeCount > 100) {
         // For large graphs (>100 nodes), reduce iterations more aggressively
-        unconstrainedIters = Math.max(hasPriorState ? 0 : 5, Math.floor(unconstrainedIters * 0.5));
+        unconstrainedIters = Math.max(hasPriorPositions ? 0 : 5, Math.floor(unconstrainedIters * 0.5));
         userConstraintIters = Math.max(25, Math.floor(userConstraintIters * 0.5));
         allConstraintIters = Math.max(100, Math.floor(allConstraintIters * 0.5));
       } else if (nodeCount > 50) {
         // For medium graphs (>50 nodes), reduce iterations moderately
-        unconstrainedIters = Math.max(hasPriorState ? 0 : 8, Math.floor(unconstrainedIters * 0.8));
+        unconstrainedIters = Math.max(hasPriorPositions ? 0 : 8, Math.floor(unconstrainedIters * 0.8));
         userConstraintIters = Math.max(40, Math.floor(userConstraintIters * 0.8));
         allConstraintIters = Math.max(150, Math.floor(allConstraintIters * 0.75));
       }
@@ -1518,7 +1566,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
       // Use a higher convergence threshold when prior state exists.
       // This allows the layout to converge faster, preserving prior positions better.
-      const convergenceThreshold = hasPriorState ? 0.1 : 1e-3;
+      const convergenceThreshold = hasPriorPositions ? 0.1 : 1e-3;
 
       // Create WebCola layout using d3adaptor
       const layout: Layout = cola.d3adaptor(d3)
@@ -1656,6 +1704,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     this.edgeRoutingCache.edgesBetweenNodes.clear();
     this.edgeRoutingCache.alignmentEdges.clear();
     this.dragStartPositions.clear();
+    this.hideLoading();
   }
 
   /**
@@ -5048,55 +5097,51 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       let minY = Infinity;
       let maxX = -Infinity;
       let maxY = -Infinity;
+      const updateBounds = (x0: number, x1: number, y0: number, y1: number): void => {
+        if (![x0, x1, y0, y1].every(Number.isFinite)) return;
+        minX = Math.min(minX, x0);
+        maxX = Math.max(maxX, x1);
+        minY = Math.min(minY, y0);
+        maxY = Math.max(maxY, y1);
+      };
 
       // Check all nodes
       const nodes = this.currentLayout.nodes;
       if (nodes && nodes.length > 0) {
-        
-        nodes.forEach((node: NodeWithMetadata, index: number) => {
-          if (typeof node.x === 'number' && typeof node.y === 'number') {
-            const nodeWidth = node.width || 0;
-            const nodeHeight = node.height || 0;
-            
-            // Calculate node bounds (nodes are positioned from top-left)
-            const nodeMinX = node.x;
-            const nodeMaxX = node.x + nodeWidth;
-            const nodeMinY = node.y;
-            const nodeMaxY = node.y + nodeHeight;
+        nodes.forEach((node: NodeWithMetadata) => {
+          if (this.isHiddenNode(node)) return;
+          if (typeof node.x !== 'number' || typeof node.y !== 'number') return;
 
-
-            const prevMinY = minY;
-            const prevMaxY = maxY;
-            
-            minX = Math.min(minX, nodeMinX);
-            maxX = Math.max(maxX, nodeMaxX);
-            minY = Math.min(minY, nodeMinY);
-            maxY = Math.max(maxY, nodeMaxY);
-          }
+          // WebCola node positions are centered at (x, y).
+          const nodeWidth = (node as any).visualWidth ?? node.width ?? 0;
+          const nodeHeight = (node as any).visualHeight ?? node.height ?? 0;
+          const halfWidth = nodeWidth / 2;
+          const halfHeight = nodeHeight / 2;
+          updateBounds(
+            node.x - halfWidth,
+            node.x + halfWidth,
+            node.y - halfHeight,
+            node.y + halfHeight
+          );
         });
-        
-        // Find and log the node with the highest Y (bottom-most)
-        const bottomMostNode = nodes.reduce((bottom, node) => {
-          if (typeof node.x === 'number' && typeof node.y === 'number') {
-            const nodeBottom = node.y + (node.height || 0);
-            const currentBottom = bottom ? (bottom.y + (bottom.height || 0)) : -Infinity;
-            return nodeBottom > currentBottom ? node : bottom;
-          }
-          return bottom;
-        }, null as NodeWithMetadata | null);
       }
 
-      // Check all edge paths by examining actual DOM elements
-      const linkGroups = this.container.selectAll('.link-group');
-      if (!linkGroups.empty()) {
-        linkGroups.each(function(this: SVGGElement) {
+      const self = this;
+
+      // Check rendered (non-alignment) edge paths.
+      const edgePaths = this.container.selectAll('.link-group path');
+      if (!edgePaths.empty()) {
+        edgePaths.each(function(this: SVGPathElement, edgeData: any) {
+          if (edgeData?.id && self.isAlignmentEdge(edgeData)) return;
           try {
             const bbox = this.getBBox();
-            if (bbox.width > 0 && bbox.height > 0) {
-              minX = Math.min(minX, bbox.x);
-              maxX = Math.max(maxX, bbox.x + bbox.width);
-              minY = Math.min(minY, bbox.y);
-              maxY = Math.max(maxY, bbox.y + bbox.height);
+            if (bbox.width > 0 || bbox.height > 0) {
+              updateBounds(
+                bbox.x,
+                bbox.x + bbox.width,
+                bbox.y,
+                bbox.y + bbox.height
+              );
             }
           } catch (e) {
             // Skip elements that can't provide bbox
@@ -5107,14 +5152,17 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       // Check all node groups by examining actual DOM elements
       const nodeGroups = this.container.selectAll('.node, .error-node');
       if (!nodeGroups.empty()) {
-        nodeGroups.each(function(this: SVGGElement) {
+        nodeGroups.each(function(this: SVGGElement, nodeData: NodeWithMetadata) {
+          if (self.isHiddenNode(nodeData)) return;
           try {
             const bbox = this.getBBox();
-            if (bbox.width > 0 && bbox.height > 0) {
-              minX = Math.min(minX, bbox.x);
-              maxX = Math.max(maxX, bbox.x + bbox.width);
-              minY = Math.min(minY, bbox.y);
-              maxY = Math.max(maxY, bbox.y + bbox.height);
+            if (bbox.width > 0 || bbox.height > 0) {
+              updateBounds(
+                bbox.x,
+                bbox.x + bbox.width,
+                bbox.y,
+                bbox.y + bbox.height
+              );
             }
           } catch (e) {
             // Skip elements that can't provide bbox
@@ -5125,38 +5173,31 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       // Check all text elements separately for better text bounds calculation
       const textElements = this.container.selectAll('text');
       if (!textElements.empty()) {
-        let textBoundsFound = 0;
-        
-        textElements.each(function(this: SVGTextElement) {
+        textElements.each(function(this: SVGTextElement, boundData: any) {
+          if (
+            boundData &&
+            (typeof boundData.name === 'string' || typeof boundData.id === 'string') &&
+            self.isHiddenNode(boundData)
+          ) {
+            return;
+          }
+
           try {
             const bbox = this.getBBox();
-            if (bbox.width > 0 && bbox.height > 0) {
-              textBoundsFound++;
-              
+            if (bbox.width > 0 || bbox.height > 0) {
               // Add extra padding for text elements due to font metrics
               const textPadding = 5;
-              const textMinY = bbox.y - textPadding;
-              const textMaxY = bbox.y + bbox.height + textPadding;
-              
-              // Log text elements that might extend the bottom boundary
-
-              
-              const prevMaxY = maxY;
-              
-              minX = Math.min(minX, bbox.x - textPadding);
-              maxX = Math.max(maxX, bbox.x + bbox.width + textPadding);
-              minY = Math.min(minY, textMinY);
-              maxY = Math.max(maxY, textMaxY);
-              
-
-
+              updateBounds(
+                bbox.x - textPadding,
+                bbox.x + bbox.width + textPadding,
+                bbox.y - textPadding,
+                bbox.y + bbox.height + textPadding
+              );
             }
           } catch (e) {
             // Skip elements that can't provide bbox
           }
         });
-        
-
       }
 
       // Check for any group elements
@@ -5165,11 +5206,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         groupElements.each(function(this: SVGGElement) {
           try {
             const bbox = this.getBBox();
-            if (bbox.width > 0 && bbox.height > 0) {
-              minX = Math.min(minX, bbox.x);
-              maxX = Math.max(maxX, bbox.x + bbox.width);
-              minY = Math.min(minY, bbox.y);
-              maxY = Math.max(maxY, bbox.y + bbox.height);
+            if (bbox.width > 0 || bbox.height > 0) {
+              updateBounds(
+                bbox.x,
+                bbox.x + bbox.width,
+                bbox.y,
+                bbox.y + bbox.height
+              );
             }
           } catch (e) {
             // Skip elements that can't provide bbox
@@ -5486,6 +5529,56 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         border: 1px solid #ccc;
         overflow: hidden;
       }
+
+      #loading {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        max-width: min(65%, 420px);
+        padding: 6px 10px;
+        background: rgba(255, 255, 255, 0.93);
+        border: 1px solid rgba(0, 0, 0, 0.12);
+        border-radius: 999px;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.14);
+        color: #374151;
+        font-size: 12px;
+        white-space: nowrap;
+        pointer-events: none;
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(-4px);
+        transition: opacity 120ms ease, transform 120ms ease, visibility 0s linear 120ms;
+      }
+
+      #loading.visible {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+        transition: opacity 120ms ease, transform 120ms ease;
+      }
+
+      .loading-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #2563eb;
+        flex-shrink: 0;
+        animation: loading-pulse 1s ease-in-out infinite;
+      }
+
+      #loading-progress {
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      @keyframes loading-pulse {
+        0%, 100% { opacity: 0.4; transform: scale(0.85); }
+        50% { opacity: 1; transform: scale(1); }
+      }
       
       /* Make SVG fill the container completely */
       svg {
@@ -5630,7 +5723,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         pointer-events: none;
       }
       
-      #loading, #error {
+      #error {
         position: absolute;
         top: 50%;
         left: 50%;
@@ -5927,14 +6020,16 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private showLoading(): void {
     const loading = this.shadowRoot!.querySelector('#loading') as HTMLElement;
     const error = this.shadowRoot!.querySelector('#error') as HTMLElement;
-    loading.style.display = 'flex';
-    loading.style.justifyContent = 'center';
-    loading.style.alignItems = 'center';
-    loading.style.position = 'absolute';
-    loading.style.top = '50%';
-    loading.style.left = '50%';
-    loading.style.transform = 'translate(-50%, -50%)';
-    loading.style.zIndex = '1000';
+    if (this.loadingShowTimer !== null) {
+      window.clearTimeout(this.loadingShowTimer);
+      this.loadingShowTimer = null;
+    }
+    if (!loading.classList.contains('visible')) {
+      this.loadingShowTimer = window.setTimeout(() => {
+        loading.classList.add('visible');
+        this.loadingShowTimer = null;
+      }, WebColaCnDGraph.LOADING_INDICATOR_DELAY_MS);
+    }
     error.style.display = 'none';
   }
 
@@ -5942,9 +6037,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Update loading progress message
    */
   private updateLoadingProgress(message: string): void {
+    const loading = this.shadowRoot!.querySelector('#loading') as HTMLElement;
     const progressEl = this.shadowRoot!.querySelector('#loading-progress') as HTMLElement;
     if (progressEl) {
       progressEl.textContent = message;
+      loading.setAttribute('aria-label', message);
     }
   }
 
@@ -5953,16 +6050,19 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private hideLoading(): void {
     const loading = this.shadowRoot!.querySelector('#loading') as HTMLElement;
-    loading.style.display = 'none';
+    if (this.loadingShowTimer !== null) {
+      window.clearTimeout(this.loadingShowTimer);
+      this.loadingShowTimer = null;
+    }
+    loading.classList.remove('visible');
   }
 
   /**
    * Show error message
    */
   private showError(message: string): void {
-    const loading = this.shadowRoot!.querySelector('#loading') as HTMLElement;
     const error = this.shadowRoot!.querySelector('#error') as HTMLElement;
-    loading.style.display = 'none';
+    this.hideLoading();
     error.style.display = 'block';
     error.textContent = message;
   }
