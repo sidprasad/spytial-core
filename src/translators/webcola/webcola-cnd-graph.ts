@@ -665,6 +665,31 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
+   * Builds the raw prior state used by sequence policies.
+   * For temporal transitions we anchor the transform to the live viewport at
+   * render-start time when a previous layout is currently displayed.
+   */
+  private buildPolicyRawState(options?: WebColaLayoutOptions): LayoutState {
+    const liveStateAtChange = this.getLayoutState();
+    const priorState = options?.priorPositions ?? liveStateAtChange;
+    const hasPolicyContext = !!(options?.policy && options.prevInstance && options.currInstance);
+    const hasLiveLayout = !!(this.currentLayout?.nodes && this.currentLayout.nodes.length > 0);
+
+    if (
+      hasPolicyContext &&
+      hasLiveLayout &&
+      this.hasValidTransform(liveStateAtChange.transform)
+    ) {
+      return {
+        positions: priorState.positions,
+        transform: liveStateAtChange.transform,
+      };
+    }
+
+    return priorState;
+  }
+
+  /**
    * Calculate the maximum nesting depth of groups.
    * Depth 1 = groups with only leaf nodes
    * Depth 2 = groups containing other groups
@@ -1407,19 +1432,17 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     let useReducedIterations = false;
 
     if (options?.policy && options.prevInstance && options.currInstance) {
-      const rawState = options.priorPositions ?? this.getLayoutState();
-      if (rawState && rawState.positions.length > 0) {
-        const viewportBounds = this.getViewportBoundsInLayoutSpace(rawState.transform);
-        const result = options.policy.apply({
-          priorState: rawState,
-          prevInstance: options.prevInstance,
-          currInstance: options.currInstance,
-          spec: { constraints: { orientation: { relative: [], cyclic: [] }, alignment: [], grouping: { groups: [], subgroups: [] } }, directives: { sizes: [], hiddenAtoms: [], icons: [], projections: [], edgeStyles: [] } } as any,
-          viewportBounds,
-        });
-        resolvedState = result.effectivePriorState;
-        useReducedIterations = result.useReducedIterations;
-      }
+      const rawState = this.buildPolicyRawState(options);
+      const viewportBounds = this.getViewportBoundsInLayoutSpace(rawState.transform);
+      const result = options.policy.apply({
+        priorState: rawState,
+        prevInstance: options.prevInstance,
+        currInstance: options.currInstance,
+        spec: { constraints: { orientation: { relative: [], cyclic: [] }, alignment: [], grouping: { groups: [], subgroups: [] } }, directives: { sizes: [], hiddenAtoms: [], icons: [], projections: [], edgeStyles: [] } } as any,
+        viewportBounds,
+      });
+      resolvedState = result.effectivePriorState;
+      useReducedIterations = result.useReducedIterations;
     }
 
     const hasPriorPositions = !!(resolvedState && resolvedState.positions.length > 0);

@@ -34,4 +34,55 @@ describe('Temporal viewport continuity policy', () => {
     expect(fakeThis.isInitialRender).toBe(true);
     expect(fakeThis.userHasManuallyZoomed).toBe(false);
   });
+
+  it('anchors policy raw state transform to the live viewport at change time', () => {
+    const suppliedState = {
+      positions: [{ id: 'a', x: 1, y: 2 }],
+      transform: { k: 1, x: 0, y: 0 },
+    };
+    const liveState = {
+      positions: [{ id: 'a', x: 10, y: 20 }],
+      transform: { k: 2, x: 30, y: -40 },
+    };
+    const fakeThis: any = {
+      currentLayout: { nodes: [{ id: 'a' }] },
+      getLayoutState: () => liveState,
+      hasValidTransform: proto.hasValidTransform,
+    };
+    const options: any = {
+      priorPositions: suppliedState,
+      policy: { name: 'stability', apply: () => ({}) },
+      prevInstance: {},
+      currInstance: {},
+    };
+
+    const result = proto.buildPolicyRawState.call(fakeThis, options);
+    expect(result.positions).toEqual(suppliedState.positions);
+    expect(result.transform).toEqual(liveState.transform);
+  });
+
+  it('keeps supplied transform when no live layout is present', () => {
+    const suppliedState = {
+      positions: [{ id: 'a', x: 1, y: 2 }],
+      transform: { k: 1.5, x: -12, y: 9 },
+    };
+    const liveState = {
+      positions: [],
+      transform: { k: 3, x: 100, y: 100 },
+    };
+    const fakeThis: any = {
+      currentLayout: null,
+      getLayoutState: () => liveState,
+      hasValidTransform: proto.hasValidTransform,
+    };
+    const options: any = {
+      priorPositions: suppliedState,
+      policy: { name: 'stability', apply: () => ({}) },
+      prevInstance: {},
+      currInstance: {},
+    };
+
+    const result = proto.buildPolicyRawState.call(fakeThis, options);
+    expect(result).toEqual(suppliedState);
+  });
 });
