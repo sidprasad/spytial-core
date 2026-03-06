@@ -97,6 +97,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private static readonly MAX_FONT_SIZE = 16;
   private static readonly TEXT_PADDING = 8; // Padding inside node for text
   private static readonly LINE_HEIGHT_RATIO = 1.2;
+  private static readonly TYPE_LABEL_BAND_HEIGHT = 14; // Reserved top band for mostSpecificType label
+
+  /**
+   * Configuration constants for screenshot export
+   */
+  private static readonly SCREENSHOT_SCALE = 3; // 3x for high-def PNG export
 
   /**
    * Configuration constants for group visualization
@@ -748,6 +754,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
             <option value="grid">Grid</option>
           </select>
         </div>
+        <div id="screenshot-control">
+          <button id="screenshot-btn" title="Download high-res PNG screenshot" aria-label="Screenshot graph">⬇</button>
+        </div>
       </div>
       <div id="svg-container">
       <span id="error-icon" title="This graph is depicting an error state">⚠️</span>
@@ -850,6 +859,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       
       routingModeSelect.addEventListener('change', () => {
         this.handleRoutingModeChange(routingModeSelect.value);
+      });
+    }
+
+    // Set up screenshot button
+    const screenshotButton = this.shadowRoot!.querySelector('#screenshot-btn') as HTMLButtonElement;
+    if (screenshotButton) {
+      screenshotButton.addEventListener('click', () => {
+        this.takeScreenshot();
       });
     }
 
@@ -2617,7 +2634,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         const nodeWidth = d.width || 100;
         const nodeHeight = d.height || 60;
         const maxTextWidth = nodeWidth - WebColaCnDGraph.TEXT_PADDING * 2;
-        const maxTextHeight = nodeHeight - WebColaCnDGraph.TEXT_PADDING * 2;
+        
+        // Reserve a top band for the type label if it exists, so main content doesn't overlap
+        const hasTypeLabel = !!(d.mostSpecificType);
+        const typeLabelReserve = hasTypeLabel ? WebColaCnDGraph.TYPE_LABEL_BAND_HEIGHT : 0;
+        const maxTextHeight = nodeHeight - WebColaCnDGraph.TEXT_PADDING * 2 - typeLabelReserve;
+        
+        // Store the type label offset for use in updatePositions
+        d._typeLabelBandHeight = typeLabelReserve;
         
         const displayLabel = d.label || d.name || d.id || "Node";
         const attributes = d.attributes || {};
@@ -2873,18 +2897,21 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         }
       });
 
-    // Update most specific type labels
+    // Update most specific type labels — positioned at top-left of the node
     this.svgNodes.select('.mostSpecificTypeLabel')
       .attr('x', (d: NodeWithMetadata) => d.x - ((d as any).visualWidth ?? d.width ?? 0) / 2 + 5)
       .attr('y', (d: NodeWithMetadata) => d.y - ((d as any).visualHeight ?? d.height ?? 0) / 2 + 10)
       .raise();
 
     // Update main node labels with tspan positioning
-    this.svgNodes.select('.label') // NOTE: Does this need `text.label`?
+    // Shift center down by half the type label band to avoid overlapping the type label
+    this.svgNodes.select('.label')
       .attr('x', (d: NodeWithMetadata) => d.x)
-      .attr('y', (d: NodeWithMetadata) => d.y)
+      .attr('y', (d: NodeWithMetadata) => {
+        const typeBand = (d as any)._typeLabelBandHeight || 0;
+        return d.y + typeBand / 2;
+      })
       .each((d: any, i: number, nodes: Array<any>) => {
-        let lineOffset = 0;
         const verticalOffset = d._labelVerticalOffset || 0;
         const lineHeight = d._labelLineHeight || 12;
         d3.select(nodes[i])
@@ -3071,7 +3098,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
     label
         .attr("x", (d: any) => d.x)
-        .attr("y", (d: any) => d.y)
+        .attr("y", (d: any) => {
+            const typeBand = d._typeLabelBandHeight || 0;
+            return d.y + typeBand / 2;
+        })
         .each(function (d: any) {
             var y = 0; // Initialize y offset for tspans
             d3.select(this).selectAll("tspan")
@@ -5897,6 +5927,45 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
       }
 
+      /* Screenshot control styling */
+      #screenshot-control {
+        display: flex;
+        align-items: center;
+        margin-left: 16px;
+        padding-left: 16px;
+        border-left: 1px solid #e5e7eb;
+      }
+
+      #screenshot-btn {
+        width: 24px;
+        height: 24px;
+        border: 1px solid #d1d5db;
+        background: #f9fafb;
+        color: #374151;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.15s ease;
+        user-select: none;
+        line-height: 1;
+      }
+
+      #screenshot-btn:hover {
+        background: #f3f4f6;
+        border-color: #9ca3af;
+        color: #111827;
+      }
+
+      #screenshot-btn:active {
+        background: #e5e7eb;
+        border-color: #6b7280;
+        transform: translateY(0.5px);
+      }
+
       /* Modal Overlay and Dialog */
       .modal-overlay {
         position: fixed;
@@ -6280,6 +6349,205 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       // Focus and select the input
       input.focus();
       input.select();
+    });
+  }
+
+  // =========================================
+  // SCREENSHOT / EXPORT API
+  // =========================================
+
+  /**
+   * Captures the current graph as a high-resolution PNG and downloads it.
+   * Inlines all computed styles and converts external images to base64
+   * for accurate offline rendering.
+   */
+  public async takeScreenshot(): Promise<void> {
+    const svg = this.shadowRoot?.querySelector('#svg') as SVGSVGElement | null;
+    if (!svg) {
+      console.warn('No SVG element found for screenshot.');
+      return;
+    }
+
+    try {
+      // Clone the SVG so we don't mutate the live DOM
+      const svgClone = svg.cloneNode(true) as SVGSVGElement;
+
+      // Read viewBox dimensions for proper sizing
+      const viewBox = svg.getAttribute('viewBox');
+      let width = svg.clientWidth || 800;
+      let height = svg.clientHeight || 600;
+      if (viewBox) {
+        const parts = viewBox.split(/[\s,]+/).map(Number);
+        if (parts.length === 4) {
+          width = parts[2];
+          height = parts[3];
+        }
+        svgClone.setAttribute('viewBox', viewBox);
+      }
+      svgClone.setAttribute('width', String(width));
+      svgClone.setAttribute('height', String(height));
+      svgClone.removeAttribute('preserveAspectRatio');
+
+      // Inline computed styles from the live SVG into the clone so they survive serialization
+      this.inlineComputedStyles(svg, svgClone);
+
+      // Convert <image> hrefs to base64 data URIs so icons render in the PNG
+      await this.convertImagesToBase64(svgClone);
+
+      // Add a white background rect as the first child
+      const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      bgRect.setAttribute('width', '100%');
+      bgRect.setAttribute('height', '100%');
+      bgRect.setAttribute('fill', 'white');
+      svgClone.insertBefore(bgRect, svgClone.firstChild);
+
+      // Serialize the clone to a string
+      const serializer = new XMLSerializer();
+      const svgString = serializer.serializeToString(svgClone);
+
+      // Render to a high-res canvas
+      const scale = WebColaCnDGraph.SCREENSHOT_SCALE;
+      const blob = await this.svgStringToPngBlob(svgString, width, height, scale);
+      if (!blob) {
+        console.error('Failed to generate PNG blob from SVG.');
+        return;
+      }
+
+      // Trigger download
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      link.download = `graph-screenshot-${timestamp}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Screenshot failed:', error);
+    }
+  }
+
+  /**
+   * Walks the original and cloned SVG trees in parallel, copying key computed
+   * style properties onto the clone as inline styles.
+   */
+  private inlineComputedStyles(original: Element, clone: Element): void {
+    const STYLE_PROPS = [
+      'font-family', 'font-size', 'font-weight', 'font-style',
+      'fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-linejoin',
+      'opacity', 'text-anchor', 'dominant-baseline',
+      'paint-order', 'visibility', 'display',
+    ];
+
+    const origChildren = original.children;
+    const cloneChildren = clone.children;
+
+    // Inline styles on the current element
+    if (original instanceof HTMLElement || original instanceof SVGElement) {
+      const computed = getComputedStyle(original);
+      const cloneEl = clone as HTMLElement | SVGElement;
+      for (const prop of STYLE_PROPS) {
+        const val = computed.getPropertyValue(prop);
+        if (val) {
+          cloneEl.style.setProperty(prop, val);
+        }
+      }
+    }
+
+    // Recurse into children
+    const len = Math.min(origChildren.length, cloneChildren.length);
+    for (let i = 0; i < len; i++) {
+      this.inlineComputedStyles(origChildren[i], cloneChildren[i]);
+    }
+  }
+
+  /**
+   * Finds all <image> elements in the cloned SVG and replaces their
+   * href/xlink:href with base64 data URIs so they render when serialized.
+   */
+  private async convertImagesToBase64(svgClone: SVGSVGElement): Promise<void> {
+    const images = svgClone.querySelectorAll('image');
+    const promises: Promise<void>[] = [];
+
+    images.forEach((img) => {
+      const href = img.getAttribute('href') || img.getAttributeNS('http://www.w3.org/1999/xlink', 'href');
+      if (!href || href.startsWith('data:')) return;
+
+      const promise = this.fetchImageAsBase64(href)
+        .then((dataUri) => {
+          img.setAttribute('href', dataUri);
+          img.removeAttributeNS('http://www.w3.org/1999/xlink', 'href');
+        })
+        .catch(() => {
+          // If CORS or network prevents fetching, remove the image gracefully
+          img.remove();
+        });
+      promises.push(promise);
+    });
+
+    await Promise.all(promises);
+  }
+
+  /**
+   * Fetches an image URL and returns a base64 data URI.
+   */
+  private fetchImageAsBase64(url: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { reject(new Error('No canvas context')); return; }
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      img.onerror = () => reject(new Error(`Failed to load: ${url}`));
+      img.src = url;
+    });
+  }
+
+  /**
+   * Renders an SVG string to a PNG Blob at the given scale factor.
+   */
+  private svgStringToPngBlob(
+    svgString: string,
+    width: number,
+    height: number,
+    scale: number
+  ): Promise<Blob | null> {
+    return new Promise((resolve) => {
+      const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(svgBlob);
+      const img = new Image();
+
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = width * scale;
+        canvas.height = height * scale;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { URL.revokeObjectURL(url); resolve(null); return; }
+
+        ctx.scale(scale, scale);
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob((blob) => {
+          URL.revokeObjectURL(url);
+          resolve(blob);
+        }, 'image/png');
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(null);
+      };
+
+      img.src = url;
     });
   }
 
