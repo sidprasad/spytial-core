@@ -511,6 +511,35 @@ export class LayoutInstance {
      * @param a - The ORIGINAL (pre-projection) Data Instance.
      * @returns A record of groups.
      */
+    private normalizeComparableGroupToken(token: string): string {
+        const trimmed = token.trim();
+        if (
+            (trimmed.startsWith('"') && trimmed.endsWith('"'))
+            || (trimmed.startsWith("'") && trimmed.endsWith("'"))
+        ) {
+            return trimmed.slice(1, -1);
+        }
+        return trimmed;
+    }
+
+    private buildGroupKeyDisplay(nodeId: string, nodeLabel?: string): string {
+        const normalizedId = this.normalizeComparableGroupToken(nodeId);
+        const rawLabel = (nodeLabel || '').trim();
+
+        if (!rawLabel) {
+            return normalizedId || nodeId;
+        }
+
+        const normalizedLabel = this.normalizeComparableGroupToken(rawLabel);
+
+        // Avoid redundant keys like x1:"x1" when they represent the same value.
+        if (normalizedLabel === normalizedId) {
+            return normalizedId || normalizedLabel || nodeId;
+        }
+
+        return `${rawLabel}:${nodeId}`;
+    }
+
     private generateGroups(g: Graph, a: IDataInstance): LayoutGroup[] {
 
         //let groupingConstraints : GroupingConstraint[] = this._layoutSpec.constraints.grouping;
@@ -566,10 +595,8 @@ export class LayoutInstance {
                     let groupOn = t[0];
                     let addToGroup = t[1];
 
-                    let groupOnLabel =  g.node(groupOn)?.label || groupOn;
-                    if(groupOnLabel != groupOn) {
-                        groupOnLabel = groupOnLabel + ":" + groupOn;
-                    }
+                    const keyNodeLabel = g.node(groupOn)?.label;
+                    const groupOnLabel = this.buildGroupKeyDisplay(groupOn, keyNodeLabel);
                     let groupName = `${gc.name}[${groupOnLabel}]`;
 
                     // Check if the group already exists
