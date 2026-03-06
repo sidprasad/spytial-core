@@ -97,7 +97,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private static readonly MAX_FONT_SIZE = 16;
   private static readonly TEXT_PADDING = 8; // Padding inside node for text
   private static readonly LINE_HEIGHT_RATIO = 1.2;
-  private static readonly TYPE_LABEL_BAND_HEIGHT = 14; // Reserved top band for mostSpecificType label
 
   /**
    * Configuration constants for screenshot export
@@ -2634,14 +2633,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         const nodeWidth = d.width || 100;
         const nodeHeight = d.height || 60;
         const maxTextWidth = nodeWidth - WebColaCnDGraph.TEXT_PADDING * 2;
-        
-        // Reserve a top band for the type label if it exists, so main content doesn't overlap
-        const hasTypeLabel = !!(d.mostSpecificType);
-        const typeLabelReserve = hasTypeLabel ? WebColaCnDGraph.TYPE_LABEL_BAND_HEIGHT : 0;
-        const maxTextHeight = nodeHeight - WebColaCnDGraph.TEXT_PADDING * 2 - typeLabelReserve;
-        
-        // Store the type label offset for use in updatePositions
-        d._typeLabelBandHeight = typeLabelReserve;
+        const maxTextHeight = nodeHeight - WebColaCnDGraph.TEXT_PADDING * 2;
         
         const displayLabel = d.label || d.name || d.id || "Node";
         const attributes = d.attributes || {};
@@ -2904,13 +2896,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .raise();
 
     // Update main node labels with tspan positioning
-    // Shift center down by half the type label band to avoid overlapping the type label
     this.svgNodes.select('.label')
       .attr('x', (d: NodeWithMetadata) => d.x)
-      .attr('y', (d: NodeWithMetadata) => {
-        const typeBand = (d as any)._typeLabelBandHeight || 0;
-        return d.y + typeBand / 2;
-      })
+      .attr('y', (d: NodeWithMetadata) => d.y)
       .each((d: any, i: number, nodes: Array<any>) => {
         const verticalOffset = d._labelVerticalOffset || 0;
         const lineHeight = d._labelLineHeight || 12;
@@ -3098,10 +3086,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
     label
         .attr("x", (d: any) => d.x)
-        .attr("y", (d: any) => {
-            const typeBand = d._typeLabelBandHeight || 0;
-            return d.y + typeBand / 2;
-        })
+        .attr("y", (d: any) => d.y)
         .each(function (d: any) {
             var y = 0; // Initialize y offset for tspans
             d3.select(this).selectAll("tspan")
