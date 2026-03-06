@@ -2303,49 +2303,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     return groupRects;
   }
 
-  private normalizeGroupDisplayToken(token: string): string {
-    const trimmed = token.trim();
-    if (
-      (trimmed.startsWith('"') && trimmed.endsWith('"'))
-      || (trimmed.startsWith("'") && trimmed.endsWith("'"))
-    ) {
-      return trimmed.slice(1, -1);
-    }
-    return trimmed;
-  }
-
-  private simplifyGroupDisplayToken(token: string): string {
-    const trimmed = token.trim();
-    const colonIndex = trimmed.indexOf(':');
-    if (colonIndex <= 0 || colonIndex >= trimmed.length - 1) {
-      return trimmed;
-    }
-
-    const left = trimmed.slice(0, colonIndex).trim();
-    const right = trimmed.slice(colonIndex + 1).trim();
-    if (!left || !right) {
-      return trimmed;
-    }
-
-    const normalizedLeft = this.normalizeGroupDisplayToken(left);
-    const normalizedRight = this.normalizeGroupDisplayToken(right);
-    if (normalizedLeft === normalizedRight) {
-      return normalizedLeft;
-    }
-
-    return trimmed;
-  }
-
-  private formatGroupDisplayName(groupName: string): string {
-    return groupName.replace(/\[([^\]]+)\]/g, (_match: string, inner: string) => {
-      const simplifiedInner = inner
-        .split(',')
-        .map((token: string) => this.simplifyGroupDisplayToken(token))
-        .join(',');
-      return `[${simplifiedInner}]`;
-    });
-  }
-
   private resolveGroupLeafToNodeIndex(leaf: unknown): number | null {
     if (typeof leaf === 'number' && Number.isInteger(leaf) && leaf >= 0) {
       return leaf;
@@ -2502,7 +2459,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           if (d.padding) {
             d.padding = Math.max(d.padding, WebColaCnDGraph.GROUP_LABEL_PADDING);
           }
-          return this.formatGroupDisplayName(d.name || "");
+          return d.name || "";
         }
         
         return "";
