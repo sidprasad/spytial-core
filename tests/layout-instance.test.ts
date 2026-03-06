@@ -74,6 +74,72 @@ describe('LayoutInstance', () => {
     expect(layout.constraints.length).toBeGreaterThan(0);
   });
 
+  it('normalizes redundant quoted group key labels in group names', () => {
+    const groupedData: IJsonDataInstance = {
+      atoms: [
+        { id: '"x1"', type: 'Node', label: 'x1' },
+        { id: 'member', type: 'Node', label: 'member' }
+      ],
+      relations: [
+        {
+          id: 'nodes',
+          name: 'nodes',
+          types: ['Node', 'Node'],
+          tuples: [{ atoms: ['"x1"', 'member'], types: ['Node', 'Node'] }]
+        }
+      ]
+    };
+
+    const groupSpec = parseLayoutSpec(`
+constraints:
+  - group:
+      selector: nodes
+      name: nodes
+`);
+
+    const instance = new JSONDataInstance(groupedData);
+    const evaluator = createEvaluator(instance);
+    const layoutInstance = new LayoutInstance(groupSpec, evaluator, 0, true);
+    const { layout } = layoutInstance.generateLayout(instance);
+
+    const selectorGroup = layout.groups.find(group => group.name.startsWith('nodes['));
+    expect(selectorGroup).toBeDefined();
+    expect(selectorGroup?.name).toBe('nodes[x1]');
+  });
+
+  it('keeps both key label and id when they are meaningfully different', () => {
+    const groupedData: IJsonDataInstance = {
+      atoms: [
+        { id: 'x1', type: 'Node', label: 'node-x1' },
+        { id: 'member', type: 'Node', label: 'member' }
+      ],
+      relations: [
+        {
+          id: 'nodes',
+          name: 'nodes',
+          types: ['Node', 'Node'],
+          tuples: [{ atoms: ['x1', 'member'], types: ['Node', 'Node'] }]
+        }
+      ]
+    };
+
+    const groupSpec = parseLayoutSpec(`
+constraints:
+  - group:
+      selector: nodes
+      name: nodes
+`);
+
+    const instance = new JSONDataInstance(groupedData);
+    const evaluator = createEvaluator(instance);
+    const layoutInstance = new LayoutInstance(groupSpec, evaluator, 0, true);
+    const { layout } = layoutInstance.generateLayout(instance);
+
+    const selectorGroup = layout.groups.find(group => group.name.startsWith('nodes['));
+    expect(selectorGroup).toBeDefined();
+    expect(selectorGroup?.name).toBe('nodes[node-x1:x1]');
+  });
+
   it('adds alignment edges for disconnected nodes with orientation constraints', () => {
     const instance = new JSONDataInstance(jsonDataDisconnected);
     const evaluator = createEvaluator(instance);

@@ -2303,6 +2303,168 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     return groupRects;
   }
 
+  private normalizeGroupDisplayToken(token: string): string {
+    const trimmed = token.trim();
+    if (
+      (trimmed.startsWith('"') && trimmed.endsWith('"'))
+      || (trimmed.startsWith("'") && trimmed.endsWith("'"))
+    ) {
+      return trimmed.slice(1, -1);
+    }
+    return trimmed;
+  }
+
+  private simplifyGroupDisplayToken(token: string): string {
+    const trimmed = token.trim();
+    const colonIndex = trimmed.indexOf(':');
+    if (colonIndex <= 0 || colonIndex >= trimmed.length - 1) {
+      return trimmed;
+    }
+
+    const left = trimmed.slice(0, colonIndex).trim();
+    const right = trimmed.slice(colonIndex + 1).trim();
+    if (!left || !right) {
+      return trimmed;
+    }
+
+    const normalizedLeft = this.normalizeGroupDisplayToken(left);
+    const normalizedRight = this.normalizeGroupDisplayToken(right);
+    if (normalizedLeft === normalizedRight) {
+      return normalizedLeft;
+    }
+
+    return trimmed;
+  }
+
+  private formatGroupDisplayName(groupName: string): string {
+    return groupName.replace(/\[([^\]]+)\]/g, (_match: string, inner: string) => {
+      const simplifiedInner = inner
+        .split(',')
+        .map((token: string) => this.simplifyGroupDisplayToken(token))
+        .join(',');
+      return `[${simplifiedInner}]`;
+    });
+  }
+
+  private resolveGroupLeafToNodeIndex(leaf: unknown): number | null {
+    if (typeof leaf === 'number' && Number.isInteger(leaf) && leaf >= 0) {
+      return leaf;
+    }
+
+    if (leaf && typeof leaf === 'object') {
+      const nodeLike = leaf as { id?: string; index?: number };
+      if (typeof nodeLike.index === 'number' && Number.isInteger(nodeLike.index) && nodeLike.index >= 0) {
+        return nodeLike.index;
+      }
+
+      if (typeof nodeLike.id === 'string' && this.currentLayout?.nodes) {
+        const index = this.currentLayout.nodes.findIndex((node: NodeWithMetadata) => node.id === nodeLike.id);
+        return index >= 0 ? index : null;
+      }
+    }
+
+    return null;
+  }
+
+  private collectGroupNodeIndices(group: any, allGroups: any[]): number[] {
+    const nodeIndices = new Set<number>();
+    const visitedGroupIndices = new Set<number>();
+
+    const collect = (grp: any, groupIndex?: number): void => {
+      if (!grp) {
+        return;
+      }
+
+      if (typeof groupIndex === 'number') {
+        if (visitedGroupIndices.has(groupIndex)) {
+          return;
+        }
+        visitedGroupIndices.add(groupIndex);
+      }
+
+      if (Array.isArray(grp.leaves)) {
+        grp.leaves.forEach((leaf: unknown) => {
+          const index = this.resolveGroupLeafToNodeIndex(leaf);
+          if (index !== null) {
+            nodeIndices.add(index);
+          }
+        });
+      }
+
+      if (!Array.isArray(grp.groups)) {
+        return;
+      }
+
+      grp.groups.forEach((subgroupIndex: unknown) => {
+        if (
+          typeof subgroupIndex === 'number'
+          && Number.isInteger(subgroupIndex)
+          && subgroupIndex >= 0
+          && subgroupIndex < allGroups.length
+        ) {
+          collect(allGroups[subgroupIndex], subgroupIndex);
+        }
+      });
+    };
+
+    const rootIndex = allGroups.indexOf(group);
+    collect(group, rootIndex >= 0 ? rootIndex : undefined);
+
+    return Array.from(nodeIndices);
+  }
+
+  private getNodeMainLabelFontSize(node: any): number {
+    const cachedSize = node?._mainLabelFontSize;
+    if (typeof cachedSize === 'number' && Number.isFinite(cachedSize)) {
+      return cachedSize;
+    }
+
+    const nodeWidth = node?.visualWidth ?? node?.width ?? 100;
+    const nodeHeight = node?.visualHeight ?? node?.height ?? 60;
+    const maxTextWidth = Math.max(1, nodeWidth - WebColaCnDGraph.TEXT_PADDING * 2);
+    const maxTextHeight = Math.max(1, nodeHeight - WebColaCnDGraph.TEXT_PADDING * 2);
+
+    const displayLabel = node?.label || node?.name || node?.id || "Node";
+    const hasLabels = Object.keys(node?.labels || {}).length > 0;
+    const hasAttributes = Object.keys(node?.attributes || {}).length > 0;
+    const hasExtraContent = hasLabels || hasAttributes;
+    const mainLabelMaxHeight = hasExtraContent ? maxTextHeight * 0.5 : maxTextHeight;
+
+    return this.calculateOptimalFontSize(
+      displayLabel,
+      maxTextWidth,
+      Math.max(1, mainLabelMaxHeight),
+      'system-ui'
+    );
+  }
+
+  private calculateGroupLabelFontSize(group: any, allGroups: any[]): number {
+    if (!this.currentLayout?.nodes?.length) {
+      return WebColaCnDGraph.DEFAULT_FONT_SIZE;
+    }
+
+    const nodeIndices = this.collectGroupNodeIndices(group, allGroups);
+    if (nodeIndices.length === 0) {
+      return WebColaCnDGraph.DEFAULT_FONT_SIZE;
+    }
+
+    const fontSizes = nodeIndices
+      .map((index: number) => this.currentLayout.nodes[index])
+      .filter((node: NodeWithMetadata | undefined): node is NodeWithMetadata => Boolean(node))
+      .map((node: NodeWithMetadata) => this.getNodeMainLabelFontSize(node));
+
+    if (fontSizes.length === 0) {
+      return WebColaCnDGraph.DEFAULT_FONT_SIZE;
+    }
+
+    const averageFontSize = fontSizes.reduce((sum: number, size: number) => sum + size, 0) / fontSizes.length;
+    const clampedFontSize = Math.max(
+      WebColaCnDGraph.MIN_FONT_SIZE,
+      Math.min(averageFontSize, WebColaCnDGraph.MAX_FONT_SIZE)
+    );
+    return Math.round(clampedFontSize * 10) / 10;
+  }
+
   /**
    * Adds text labels to groups that should display them.
    * Labels are positioned at the top of each group with proper spacing.
@@ -2324,7 +2486,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr("text-anchor", "middle")
       .attr("dominant-baseline", "hanging")
       .attr("font-family", "system-ui")
-      .attr("font-size", "12px")
+      .attr("font-size", (d: any) => {
+        const computedFontSize = this.calculateGroupLabelFontSize(d, groups);
+        d._groupLabelFontSize = computedFontSize;
+        return `${computedFontSize}px`;
+      })
       .attr("font-weight", "bold")
       .attr("fill", "#333")
       .attr("pointer-events", "none")
@@ -2336,7 +2502,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           if (d.padding) {
             d.padding = Math.max(d.padding, WebColaCnDGraph.GROUP_LABEL_PADDING);
           }
-          return d.name || "";
+          return this.formatGroupDisplayName(d.name || "");
         }
         
         return "";
@@ -2657,6 +2823,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           mainLabelMaxHeight,
           'system-ui'
         );
+        d._mainLabelFontSize = mainLabelFontSize;
         
         textElement.attr("font-size", `${mainLabelFontSize}px`);
         
@@ -2970,7 +3137,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       })
       .attr('y', (d: any) => {
         if (!d.bounds) return 0;
-        return d.bounds.y + 5; // Slight padding from top
+        const labelFontSize = d._groupLabelFontSize || WebColaCnDGraph.DEFAULT_FONT_SIZE;
+        return d.bounds.y + Math.max(4, labelFontSize * 0.35);
       })
       .attr('text-anchor', 'middle')
       .lower();
@@ -3107,7 +3275,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
     // Render group labels
     groupLabel.attr("x", function (d: any) { return d.bounds.x + d.bounds.width() / 2; }) // Center horizontally
-        .attr("y", function (d: any) { return d.bounds.y + 12; })
+        .attr("y", function (d: any) {
+          const labelFontSize = d._groupLabelFontSize || WebColaCnDGraph.DEFAULT_FONT_SIZE;
+          return d.bounds.y + Math.max(4, labelFontSize * 0.35);
+        })
         .attr("text-anchor", "middle") // Center the text on its position
         .raise();
 
