@@ -1109,9 +1109,14 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         }
       }
       
-      // Render the layout (which will include visual indicators for error nodes if present)
+      // Render the layout (which will include visual indicators for error nodes if present).
+      // Capture the current node positions BEFORE re-rendering so the solver can
+      // warm-start from them.  This prevents nodes from jumping back to random
+      // positions on every data change and makes convergence visibly faster.
       console.log('🎨 Rendering layout...');
-      await this.renderLayout(layoutResult.layout);
+      const priorState = this.getLayoutState();
+      const hasExistingLayout = priorState.positions.length > 0;
+      await this.renderLayout(layoutResult.layout, hasExistingLayout ? { priorPositions: priorState } : undefined);
       
       console.log('✅ Constraints enforced and layout regenerated successfully');
     } catch (error) {
