@@ -48,7 +48,11 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   private customTypes: Set<string> = new Set();
   private relationAtomPositions: string[] = ['', '']; // Default to 2 positions
   private currentConstraintError: ConstraintError | null = null; // Track current constraint validation error
-  
+
+  // When true, data-instance event handlers skip their enforceConstraintsAndRegenerate
+  // call so that multi-step operations (remove + add) only trigger a single re-render.
+  private _suppressDataChangeRerender = false;
+
   // Track event listeners to prevent duplicates
   private dataInstanceEventHandlers = {
     atomAdded: null as DataInstanceEventListener | null,
@@ -874,13 +878,15 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     const { relationId, sourceNodeId, targetNodeId, tuple } = event.detail;
     
     try {
-      // Add relation to data instance
-      this.dataInstance.addRelationTuple(relationId, tuple);
-      console.log(`✅ Added relation to data instance: ${relationId}(${sourceNodeId}, ${targetNodeId})`);
-      
-      // Trigger constraint enforcement and layout regeneration
+      // Suppress the data-instance event handler so we get a single re-render below.
+      this._suppressDataChangeRerender = true;
+      try {
+        this.dataInstance.addRelationTuple(relationId, tuple);
+        console.log(`✅ Added relation to data instance: ${relationId}(${sourceNodeId}, ${targetNodeId})`);
+      } finally {
+        this._suppressDataChangeRerender = false;
+      }
       await this.enforceConstraintsAndRegenerate();
-      
     } catch (error) {
       console.error('❌ Failed to handle edge creation request:', error);
     }
@@ -896,42 +902,40 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     const { oldRelationId, newRelationId, sourceNodeId, targetNodeId, tuple } = event.detail;
     
     try {
-      // If the new relation name is empty, delete the edge
-      if (!newRelationId || newRelationId.trim() === '') {
-        console.log('🗑️ Deleting edge (empty new relation name)');
-        if (oldRelationId && oldRelationId.trim()) {
-          this.dataInstance.removeRelationTuple(oldRelationId, tuple);
-          console.log(`✅ Removed relation tuple from ${oldRelationId}`);
-        }
-      }
-      // If the names are the same, no change needed
-      else if (oldRelationId.trim() === newRelationId.trim()) {
-        console.log('⏭️ Same relation name, no data changes needed');
-        return;
-      }
-      // Otherwise, move the tuple from old relation to new relation
-      else {
-        // Remove from old relation if it has a valid name
-        // Use try-catch to gracefully handle cases where the old relation doesn't exist
-        if (oldRelationId && oldRelationId.trim()) {
-          try {
+      // Suppress data-instance events for all mutations; single re-render at the end.
+      this._suppressDataChangeRerender = true;
+      try {
+        // If the new relation name is empty, delete the edge
+        if (!newRelationId || newRelationId.trim() === '') {
+          console.log('🗑️ Deleting edge (empty new relation name)');
+          if (oldRelationId && oldRelationId.trim()) {
             this.dataInstance.removeRelationTuple(oldRelationId, tuple);
-            console.log(`🗑️ Removed from ${oldRelationId}`);
-          } catch (error) {
-            // Relation may not exist, which is fine - just skip removal and proceed with adding to new relation
-            const errorMsg = error instanceof Error ? error.message : String(error);
-            console.log(`⚠️ Could not remove from ${oldRelationId}: ${errorMsg}`);
+            console.log(`✅ Removed relation tuple from ${oldRelationId}`);
           }
         }
-        
-        // Add to new relation (will create if doesn't exist)
-        this.dataInstance.addRelationTuple(newRelationId, tuple);
-        console.log(`➕ Added to ${newRelationId}`);
+        // If the names are the same, no change needed
+        else if (oldRelationId.trim() === newRelationId.trim()) {
+          console.log('⏭️ Same relation name, no data changes needed');
+          return;
+        }
+        // Otherwise, move the tuple from old relation to new relation
+        else {
+          if (oldRelationId && oldRelationId.trim()) {
+            try {
+              this.dataInstance.removeRelationTuple(oldRelationId, tuple);
+              console.log(`🗑️ Removed from ${oldRelationId}`);
+            } catch (error) {
+              const errorMsg = error instanceof Error ? error.message : String(error);
+              console.log(`⚠️ Could not remove from ${oldRelationId}: ${errorMsg}`);
+            }
+          }
+          this.dataInstance.addRelationTuple(newRelationId, tuple);
+          console.log(`➕ Added to ${newRelationId}`);
+        }
+      } finally {
+        this._suppressDataChangeRerender = false;
       }
-      
-      // Trigger constraint enforcement and layout regeneration
       await this.enforceConstraintsAndRegenerate();
-      
     } catch (error) {
       console.error('❌ Failed to handle edge modification request:', error);
     }
@@ -947,24 +951,24 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     const { relationId, oldTuple, newTuple, oldSourceNodeId, oldTargetNodeId, newSourceNodeId, newTargetNodeId } = event.detail;
     
     try {
-      // Remove the old tuple
-      if (relationId && relationId.trim()) {
-        try {
-          this.dataInstance.removeRelationTuple(relationId, oldTuple);
-          console.log(`🗑️ Removed old tuple from ${relationId}: ${oldSourceNodeId} -> ${oldTargetNodeId}`);
-        } catch (error) {
-          const errorMsg = error instanceof Error ? error.message : String(error);
-          console.log(`⚠️ Could not remove old tuple from ${relationId}: ${errorMsg}`);
+      // Suppress data-instance events for both mutations; single re-render at the end.
+      this._suppressDataChangeRerender = true;
+      try {
+        if (relationId && relationId.trim()) {
+          try {
+            this.dataInstance.removeRelationTuple(relationId, oldTuple);
+            console.log(`🗑️ Removed old tuple from ${relationId}: ${oldSourceNodeId} -> ${oldTargetNodeId}`);
+          } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            console.log(`⚠️ Could not remove old tuple from ${relationId}: ${errorMsg}`);
+          }
         }
+        this.dataInstance.addRelationTuple(relationId, newTuple);
+        console.log(`➕ Added new tuple to ${relationId}: ${newSourceNodeId} -> ${newTargetNodeId}`);
+      } finally {
+        this._suppressDataChangeRerender = false;
       }
-      
-      // Add the new tuple
-      this.dataInstance.addRelationTuple(relationId, newTuple);
-      console.log(`➕ Added new tuple to ${relationId}: ${newSourceNodeId} -> ${newTargetNodeId}`);
-      
-      // Trigger constraint enforcement and layout regeneration
       await this.enforceConstraintsAndRegenerate();
-      
     } catch (error) {
       console.error('❌ Failed to handle edge reconnection request:', error);
     }
@@ -1535,27 +1539,39 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     
     // Create and store event handlers
     // ALL event handlers now trigger constraint validation to ensure constraints are
-    // checked on every data change (additions, deletions, modifications)
+    // checked on every data change (additions, deletions, modifications).
+    // They respect _suppressDataChangeRerender so multi-step operations can batch
+    // multiple mutations and only pay for one re-render.
     this.dataInstanceEventHandlers.atomAdded = async () => {
       console.log('📍 Atom added to instance - updating UI and re-validating constraints');
       this.handleDataChangeUIUpdate(true); // Include atom positions for atom additions
-      await this.enforceConstraintsAndRegenerate(); // Re-run constraint validation
+      if (!this._suppressDataChangeRerender) {
+        await this.enforceConstraintsAndRegenerate();
+      }
     };
 
     this.dataInstanceEventHandlers.relationTupleAdded = async () => {
       console.log('🔗 Relation added to instance - updating UI and re-validating constraints');
       this.handleDataChangeUIUpdate(false); // No atom positions needed for relation additions
-      await this.enforceConstraintsAndRegenerate(); // Re-run constraint validation
+      if (!this._suppressDataChangeRerender) {
+        await this.enforceConstraintsAndRegenerate();
+      }
     };
 
     this.dataInstanceEventHandlers.atomRemoved = async () => {
       console.log('🗑️ Atom removed from instance - updating UI and re-validating constraints');
-      await this.handleDataDeletionWithValidation(true); // Include atom positions for atom deletions
+      this.handleDataChangeUIUpdate(true);
+      if (!this._suppressDataChangeRerender) {
+        await this.handleDataDeletionWithValidation(true);
+      }
     };
 
     this.dataInstanceEventHandlers.relationTupleRemoved = async () => {
       console.log('🗑️ Relation tuple removed from instance - updating UI and re-validating constraints');
-      await this.handleDataDeletionWithValidation(false); // No atom positions needed for relation deletions
+      this.handleDataChangeUIUpdate(false);
+      if (!this._suppressDataChangeRerender) {
+        await this.handleDataDeletionWithValidation(false);
+      }
     };
     
     // Add event listeners to the new instance

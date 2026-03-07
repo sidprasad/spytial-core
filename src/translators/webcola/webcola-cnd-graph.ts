@@ -1461,9 +1461,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       useReducedIterations = result.useReducedIterations;
     } else if (options?.priorPositions) {
       // Direct prior-positions path (no policy): warm-start the solver from the
-      // caller-supplied positions. useReducedIterations stays false so the solver
-      // runs its full iteration budget — positions are just a warm start, not fixed.
+      // caller-supplied positions and use reduced iterations so existing nodes
+      // barely drift. This makes incremental re-renders (e.g. StructuredInputGraph
+      // adding an atom) feel stable — nodes stay where the user left them while
+      // the solver handles the new element and re-satisfies constraints.
       resolvedState = options.priorPositions;
+      useReducedIterations = true;
     }
 
     const hasPriorPositions = !!(resolvedState && resolvedState.positions.length > 0);
