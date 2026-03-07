@@ -1459,6 +1459,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       });
       resolvedState = result.effectivePriorState;
       useReducedIterations = result.useReducedIterations;
+    } else if (options?.priorPositions) {
+      // Direct prior-positions path (no policy): warm-start the solver from the
+      // caller-supplied positions. useReducedIterations stays false so the solver
+      // runs its full iteration budget — positions are just a warm start, not fixed.
+      resolvedState = options.priorPositions;
     }
 
     const hasPriorPositions = !!(resolvedState && resolvedState.positions.length > 0);
@@ -5040,33 +5045,47 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     source: any,
     target: any
   ): Array<{ x: number; y: number }> {
-    // Get target point (center of target)
-    let targetCenter: { x: number; y: number };
-    if (target.bounds && typeof target.bounds.cx === 'function') {
-      targetCenter = { x: target.bounds.cx(), y: target.bounds.cy() };
-    } else if (target.bounds) {
-      targetCenter = { x: (target.bounds.x + target.bounds.X) / 2, y: (target.bounds.y + target.bounds.Y) / 2 };
-    } else {
-      targetCenter = { x: target.x || 0, y: target.y || 0 };
-    }
+    // Always use node.x/y as the center — these are the authoritative positions
+    // from the WebCola solver and are always in sync, whereas bounds.cx()/cy()
+    // lag slightly and can reflect the inflated collision rectangle center.
+    const sourceCenter: { x: number; y: number } = { x: source.x || 0, y: source.y || 0 };
+    const targetCenter: { x: number; y: number } = { x: target.x || 0, y: target.y || 0 };
 
-    // Get source point (center of source)
-    let sourceCenter: { x: number; y: number };
-    if (source.bounds && typeof source.bounds.cx === 'function') {
-      sourceCenter = { x: source.bounds.cx(), y: source.bounds.cy() };
-    } else if (source.bounds) {
-      sourceCenter = { x: (source.bounds.x + source.bounds.X) / 2, y: (source.bounds.y + source.bounds.Y) / 2 };
-    } else {
-      sourceCenter = { x: source.x || 0, y: source.y || 0 };
-    }
+    // Build visual bounds from the node's rendered dimensions (visualWidth/visualHeight).
+    // WebCola inflates node.width/height for collision avoidance, so d.bounds ends up
+    // larger than the rendered rectangle.  Using visualWidth/visualHeight here ensures
+    // edge anchors snap to the VISIBLE node boundary both during animation ticks and
+    // after final routing — preventing the "edges float around nodes" effect.
+    const makeVisualBounds = (node: any): any | null => {
+      const hw = ((node.visualWidth ?? node.width) || 0) / 2;
+      const hh = ((node.visualHeight ?? node.height) || 0) / 2;
+      if (hw === 0 && hh === 0) return null;
+      const cx = node.x || 0;
+      const cy = node.y || 0;
+      return {
+        cx: () => cx,
+        cy: () => cy,
+        width: () => hw * 2,
+        height: () => hh * 2,
+        x: cx - hw,
+        X: cx + hw,
+        y: cy - hh,
+        Y: cy + hh,
+      };
+    };
+
+    // Prefer visual bounds; fall back to WebCola bounds only for group nodes that
+    // don't carry visualWidth/visualHeight (groups use d.bounds for their extent).
+    const sourceBounds = makeVisualBounds(source) ?? source.bounds ?? source.innerBounds;
+    const targetBounds = makeVisualBounds(target) ?? target.bounds ?? target.innerBounds;
 
     // Calculate stable anchor points on the perimeter
-    const sourceAnchor = source.bounds || source.innerBounds
-      ? this.getStableEdgeAnchor(source.bounds || source.innerBounds, targetCenter)
+    const sourceAnchor = sourceBounds
+      ? this.getStableEdgeAnchor(sourceBounds, targetCenter)
       : sourceCenter;
-    
-    const targetAnchor = target.bounds || target.innerBounds
-      ? this.getStableEdgeAnchor(target.bounds || target.innerBounds, sourceCenter)
+
+    const targetAnchor = targetBounds
+      ? this.getStableEdgeAnchor(targetBounds, sourceCenter)
       : targetCenter;
 
     return [sourceAnchor, targetAnchor];
