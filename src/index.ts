@@ -58,7 +58,7 @@ export type {
 export { SGraphQueryEvaluator } from "./evaluators/sgq-evaluator";
 
 // Selector synthesis API (requires SGraphQueryEvaluator)
-export { 
+export {
   synthesizeAtomSelector,
   synthesizeBinarySelector,
   synthesizeAtomSelectorWithExplanation,
@@ -69,7 +69,9 @@ export {
   SelectorSynthesisError,
   isSynthesisSupported
 } from './synthesis/selector-synthesizer';
+export { findProgramDiffWitness } from './synthesis/program-differentiator';
 export type { SynthesisWhy } from 'simple-graph-query';
+export type { ProgramDiffWitness, ProgramDiffWitnessOptions } from './synthesis/program-differentiator';
 
 // Browser-specific exports and initialization
 if (typeof window !== 'undefined') {
