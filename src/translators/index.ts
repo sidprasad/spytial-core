@@ -3,6 +3,7 @@
  */
 
 export { WebColaTranslator } from './webcola/webcolatranslator';
+export { PenroseBloomTranslator } from './penrose/penrose-bloom-translator';
 
 
 // WebColaCnDGraph web component for browser usage
@@ -29,6 +30,8 @@ export type {
   LayoutState,
   WebColaLayoutOptions 
 } from './webcola/webcolatranslator';
+
+export type { PenroseBloomTranslation } from './penrose/penrose-bloom-translator';
 
 // Sequence policies
 export type {

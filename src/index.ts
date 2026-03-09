@@ -35,6 +35,7 @@ export { type default as IEvaluator, SelectorArityError } from './evaluators/int
 export { ForgeEvaluator, WrappedForgeEvaluator } from './evaluators/forge-evaluator';
 export { SQLEvaluator } from './evaluators/sql-evaluator';
 export { WebColaTranslator } from './translators';
+export { PenroseBloomTranslator } from './translators';
 export { StructuredInputGraph } from './translators';
 export {
   ignoreHistory,
@@ -50,6 +51,7 @@ export type {
   TransformInfo,
   LayoutState,
   WebColaLayoutOptions,
+  PenroseBloomTranslation,
   SequencePolicy,
   SequencePolicyContext,
   SequencePolicyResult,
