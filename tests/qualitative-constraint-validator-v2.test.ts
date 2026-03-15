@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { QualitativeConstraintValidatorV2, PositionalConstraintError } from '../src/layout/qualitative-constraint-validator-v2';
+import { QualitativeConstraintValidator, PositionalConstraintError } from '../src/layout/qualitative-constraint-validator';
 import {
     DisjunctiveConstraint,
     InstanceLayout,
@@ -82,7 +82,7 @@ function createLayout(
 // Tests — all V1 tests should pass identically on V2
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('QualitativeConstraintValidatorV2', () => {
+describe('QualitativeConstraintValidator', () => {
 
     // ─── Same tests as V1 (drop-in compatibility) ────────────────────────────
 
@@ -97,7 +97,7 @@ describe('QualitativeConstraintValidatorV2', () => {
                 [createLeftConstraint(a, b), createLeftConstraint(b, c)]
             );
 
-            const validator = new QualitativeConstraintValidatorV2(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
             expect(error).toBeNull();
         });
@@ -116,7 +116,7 @@ describe('QualitativeConstraintValidatorV2', () => {
                 ]
             );
 
-            const validator = new QualitativeConstraintValidatorV2(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
             expect(error).not.toBeNull();
             expect(error!.type).toBe('positional-conflict');
@@ -131,7 +131,7 @@ describe('QualitativeConstraintValidatorV2', () => {
                 [createTopConstraint(a, b), createTopConstraint(b, a)]
             );
 
-            const validator = new QualitativeConstraintValidatorV2(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
             expect(error).not.toBeNull();
         });
@@ -145,7 +145,7 @@ describe('QualitativeConstraintValidatorV2', () => {
                 [createLeftConstraint(a, b), createAlignConstraint(a, b, 'x')]
             );
 
-            const validator = new QualitativeConstraintValidatorV2(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
             expect(error).not.toBeNull();
         });
@@ -164,7 +164,7 @@ describe('QualitativeConstraintValidatorV2', () => {
             ]);
 
             const layout = createLayout([a, b], [], [disj]);
-            const validator = new QualitativeConstraintValidatorV2(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
             expect(error).toBeNull();
         });
@@ -188,7 +188,7 @@ describe('QualitativeConstraintValidatorV2', () => {
             ]);
 
             const layout = createLayout([a, b, c], [], [disj1, disj2]);
-            const validator = new QualitativeConstraintValidatorV2(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
             expect(error).toBeNull();
         });
@@ -215,7 +215,7 @@ describe('QualitativeConstraintValidatorV2', () => {
                 ]
             );
 
-            const validator = new QualitativeConstraintValidatorV2(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
             expect(error).toBeNull();
         });
@@ -240,7 +240,7 @@ describe('QualitativeConstraintValidatorV2', () => {
                 ]
             );
 
-            const validator = new QualitativeConstraintValidatorV2(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
             expect(error).toBeNull();
 
@@ -271,7 +271,7 @@ describe('QualitativeConstraintValidatorV2', () => {
                 ]
             );
 
-            const validator = new QualitativeConstraintValidatorV2(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
             expect(error).toBeNull();
         });
@@ -295,7 +295,7 @@ describe('QualitativeConstraintValidatorV2', () => {
                 ]
             );
 
-            const validator = new QualitativeConstraintValidatorV2(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
             expect(error).toBeNull();
         });
@@ -322,7 +322,7 @@ describe('QualitativeConstraintValidatorV2', () => {
                 ]
             );
 
-            const validator = new QualitativeConstraintValidatorV2(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
             expect(error).not.toBeNull();
             expect(error!.type).toBe('positional-conflict');
@@ -342,7 +342,7 @@ describe('QualitativeConstraintValidatorV2', () => {
             ]);
 
             const layout = createLayout([a, b, c], [], [disj]);
-            const validator = new QualitativeConstraintValidatorV2(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
             expect(error).toBeNull();
         });
@@ -365,7 +365,7 @@ describe('QualitativeConstraintValidatorV2', () => {
                 ]
             );
 
-            const validator = new QualitativeConstraintValidatorV2(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
             expect(error).not.toBeNull();
             expect(error!.type).toBe('positional-conflict');
@@ -394,7 +394,7 @@ describe('QualitativeConstraintValidatorV2', () => {
 
             const layout = createLayout([a, b, c], [], [], [group1]);
 
-            const validator = new QualitativeConstraintValidatorV2(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
             expect(error).toBeNull();
         });
@@ -422,7 +422,7 @@ describe('QualitativeConstraintValidatorV2', () => {
             };
 
             const layout = createLayout([a, b], [], [], [group1, group2]);
-            const validator = new QualitativeConstraintValidatorV2(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
             expect(error).toBeNull();
         });
@@ -442,7 +442,7 @@ describe('QualitativeConstraintValidatorV2', () => {
                 ]
             );
 
-            const validator = new QualitativeConstraintValidatorV2(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
             expect(error).toBeNull();
             expect(validator.horizontallyAligned.length).toBeGreaterThan(0);
@@ -478,13 +478,13 @@ describe('QualitativeConstraintValidatorV2', () => {
             };
 
             const layout = createLayout([a, b, c], [bc], [], [group1]);
-            const validator = new QualitativeConstraintValidatorV2(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
             expect(error).toBeNull();
 
             // Verify containment propagation happened
             const stats = validator.getStats();
-            expect(stats.prunedByContainment).toBeGreaterThan(0);
+            expect(stats.prunedByTransitivity).toBeGreaterThan(0);
         });
 
         it('should skip non-member disjunctions when already separated via containment', () => {
@@ -512,7 +512,7 @@ describe('QualitativeConstraintValidatorV2', () => {
                 [group1]
             );
 
-            const validator = new QualitativeConstraintValidatorV2(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
             expect(error).toBeNull();
         });
@@ -542,7 +542,7 @@ describe('QualitativeConstraintValidatorV2', () => {
                 ]
             );
 
-            const validator = new QualitativeConstraintValidatorV2(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
             expect(error).toBeNull();
 
@@ -556,14 +556,14 @@ describe('QualitativeConstraintValidatorV2', () => {
 
             const layout = createLayout([a, b], [createLeftConstraint(a, b)]);
 
-            const validator = new QualitativeConstraintValidatorV2(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             validator.validateConstraints();
 
             const stats = validator.getStats();
-            expect(stats).toHaveProperty('prunedByContainment');
+            expect(stats).toHaveProperty('prunedByTransitivity');
             expect(stats).toHaveProperty('prunedByDimension');
             expect(stats).toHaveProperty('prunedByPigeonhole');
-            expect(stats).toHaveProperty('prunedByIntervalDecomp');
+            expect(stats).toHaveProperty('prunedByDecomposition');
         });
     });
 
@@ -584,7 +584,7 @@ describe('QualitativeConstraintValidatorV2', () => {
                 ]
             );
 
-            const validator = new QualitativeConstraintValidatorV2(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
             expect(error).toBeNull();
         });
@@ -613,7 +613,7 @@ describe('QualitativeConstraintValidatorV2', () => {
                 ]
             );
 
-            const validator = new QualitativeConstraintValidatorV2(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
             expect(error).toBeNull();
         });
@@ -639,14 +639,14 @@ describe('QualitativeConstraintValidatorV2', () => {
             }
 
             const layout = createLayout(nodes, [], disjunctions);
-            const validator = new QualitativeConstraintValidatorV2(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
             expect(error).toBeNull();
 
             const stats = validator.getStats();
             // With interval decomposition, many disjunctions should be resolved
             // without entering the CDCL search
-            expect(stats.prunedByIntervalDecomp).toBeGreaterThanOrEqual(0);
+            expect(stats.prunedByDecomposition).toBeGreaterThanOrEqual(0);
         });
     });
 
@@ -675,7 +675,7 @@ describe('QualitativeConstraintValidatorV2', () => {
 
             const layout = createLayout(nodes, [], disjunctions);
             const start = performance.now();
-            const validator = new QualitativeConstraintValidatorV2(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
             const elapsed = performance.now() - start;
 
@@ -685,10 +685,10 @@ describe('QualitativeConstraintValidatorV2', () => {
 
             const stats = validator.getStats();
             // Verify the geometry insights helped
-            const totalPruned = stats.prunedByContainment
+            const totalPruned = stats.prunedByTransitivity
                 + stats.prunedByDimension
                 + stats.prunedByPigeonhole
-                + stats.prunedByIntervalDecomp;
+                + stats.prunedByDecomposition;
             // At least some pruning should have happened
             expect(totalPruned + stats.conflicts).toBeGreaterThanOrEqual(0);
         });
@@ -718,7 +718,7 @@ describe('QualitativeConstraintValidatorV2', () => {
             );
 
             const start = performance.now();
-            const validator = new QualitativeConstraintValidatorV2(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
             const elapsed = performance.now() - start;
 
@@ -737,17 +737,791 @@ describe('QualitativeConstraintValidatorV2', () => {
                 [createLeftConstraint(a, b)]
             );
 
-            const validator = new QualitativeConstraintValidatorV2(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             validator.validateConstraints();
 
             const stats = validator.getStats();
             expect(stats.hEdges).toBeGreaterThanOrEqual(1);
             expect(stats.conflicts).toBe(0);
             expect(stats.addedConstraints).toBeGreaterThanOrEqual(1);
-            expect(typeof stats.prunedByContainment).toBe('number');
+            expect(typeof stats.prunedByTransitivity).toBe('number');
             expect(typeof stats.prunedByDimension).toBe('number');
             expect(typeof stats.prunedByPigeonhole).toBe('number');
-            expect(typeof stats.prunedByIntervalDecomp).toBe('number');
+            expect(typeof stats.prunedByDecomposition).toBe('number');
+        });
+    });
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Pathological cases
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    describe('Pathological: Cyclic constraint interactions', () => {
+
+        it('should detect a long cycle (A < B < C < D < E < A)', () => {
+            const nodes = Array.from({ length: 5 }, (_, i) =>
+                createNode(String.fromCharCode(65 + i)) // A–E
+            );
+            const constraints = nodes.map((n, i) =>
+                createLeftConstraint(n, nodes[(i + 1) % nodes.length])
+            );
+
+            const layout = createLayout(nodes, constraints);
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).not.toBeNull();
+            expect(error!.type).toBe('positional-conflict');
+        });
+
+        it('should detect cycle that only emerges through disjunction forcing', () => {
+            // A < B, B < C conjunctive.
+            // Disj 1 (unit): C < A  → forced, creates cycle A<B<C<A
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+            const src = new RelativeOrientationConstraint(['left'], 'forced-cycle');
+
+            const layout = createLayout(
+                [a, b, c],
+                [createLeftConstraint(a, b), createLeftConstraint(b, c)],
+                [new DisjunctiveConstraint(src, [
+                    [createLeftConstraint(c, a, src)], // Only option → cycle
+                ])]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).not.toBeNull();
+            expect(error!.type).toBe('positional-conflict');
+        });
+
+        it('should handle independent H and V cycles correctly (only H cycles)', () => {
+            // H: A < B < A (cycle on H) but V: A above B (no cycle on V)
+            const a = createNode('A');
+            const b = createNode('B');
+
+            const layout = createLayout(
+                [a, b],
+                [
+                    createLeftConstraint(a, b),
+                    createLeftConstraint(b, a), // H cycle
+                    createTopConstraint(a, b),  // V ok
+                ]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            // Should fail because H has a cycle
+            expect(error).not.toBeNull();
+        });
+
+        it('should handle mixed H/V constraints with no cycles (star topology)', () => {
+            // Center node with 4 satellites: left, right, above, below
+            const center = createNode('Center');
+            const left = createNode('Left');
+            const right = createNode('Right');
+            const top = createNode('Top');
+            const bottom = createNode('Bottom');
+
+            const layout = createLayout(
+                [center, left, right, top, bottom],
+                [
+                    createLeftConstraint(left, center),
+                    createLeftConstraint(center, right),
+                    createTopConstraint(top, center),
+                    createTopConstraint(center, bottom),
+                ]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).toBeNull();
+        });
+
+        it('should survive a diamond dependency (no cycle)', () => {
+            //   A
+            //  / \
+            // B   C
+            //  \ /
+            //   D
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+            const d = createNode('D');
+
+            const layout = createLayout(
+                [a, b, c, d],
+                [
+                    createLeftConstraint(a, b),
+                    createLeftConstraint(a, c),
+                    createLeftConstraint(b, d),
+                    createLeftConstraint(c, d),
+                ]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).toBeNull();
+        });
+    });
+
+    describe('Pathological: Alignment edge cases', () => {
+
+        it('should detect x-align + left constraint conflict', () => {
+            const a = createNode('A');
+            const b = createNode('B');
+
+            // x-aligned (same x) + A left of B → contradiction
+            const layout = createLayout(
+                [a, b],
+                [createAlignConstraint(a, b, 'x'), createLeftConstraint(a, b)]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).not.toBeNull();
+        });
+
+        it('should detect y-align + top constraint conflict', () => {
+            const a = createNode('A');
+            const b = createNode('B');
+
+            // y-aligned (same y) + A above B → contradiction
+            const layout = createLayout(
+                [a, b],
+                [createAlignConstraint(a, b, 'y'), createTopConstraint(a, b)]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).not.toBeNull();
+        });
+
+        it('should allow x-align + top constraint (orthogonal axes)', () => {
+            const a = createNode('A');
+            const b = createNode('B');
+
+            // x-aligned (same x) + A above B → perfectly fine (column layout)
+            const layout = createLayout(
+                [a, b],
+                [createAlignConstraint(a, b, 'x'), createTopConstraint(a, b)]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).toBeNull();
+        });
+
+        it('should allow y-align + left constraint (orthogonal axes)', () => {
+            const a = createNode('A');
+            const b = createNode('B');
+
+            // y-aligned (same y) + A left of B → perfectly fine (row layout)
+            const layout = createLayout(
+                [a, b],
+                [createAlignConstraint(a, b, 'y'), createLeftConstraint(a, b)]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).toBeNull();
+        });
+
+        it('should handle transitive alignment chain (A=B, B=C on x)', () => {
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+
+            // All three share the same x. A above B above C.
+            const layout = createLayout(
+                [a, b, c],
+                [
+                    createAlignConstraint(a, b, 'x'),
+                    createAlignConstraint(b, c, 'x'),
+                    createTopConstraint(a, b),
+                    createTopConstraint(b, c),
+                ]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).toBeNull();
+        });
+
+        it('should detect conflict when alignment chain + ordering creates contradiction', () => {
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+
+            // A=B on x-axis, B=C on x-axis → all share x
+            // Then A left of C → contradiction (can't be left if same x)
+            const layout = createLayout(
+                [a, b, c],
+                [
+                    createAlignConstraint(a, b, 'x'),
+                    createAlignConstraint(b, c, 'x'),
+                    createLeftConstraint(a, c),
+                ]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).not.toBeNull();
+        });
+
+        it('should handle dual alignment (same x AND same y) → overlap detection', () => {
+            const a = createNode('A');
+            const b = createNode('B');
+
+            // Same x AND same y → nodes overlap (occupy same position)
+            const layout = createLayout(
+                [a, b],
+                [
+                    createAlignConstraint(a, b, 'x'),
+                    createAlignConstraint(a, b, 'y'),
+                ]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            // Should detect overlap — two nodes at the same position
+            expect(error).not.toBeNull();
+        });
+    });
+
+    describe('Pathological: Disjunction stress', () => {
+
+        it('should solve when only the last alternative works in every disjunction', () => {
+            // For each disjunction, all alternatives except the last create cycles.
+            // Forces the solver to exhaust bad options before finding the solution.
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+            const d = createNode('D');
+
+            // Conjunctive: A < B < C < D
+            const src = new RelativeOrientationConstraint(['left'], 'stress');
+            const layout = createLayout(
+                [a, b, c, d],
+                [createLeftConstraint(a, b), createLeftConstraint(b, c), createLeftConstraint(c, d)],
+                [
+                    // All would-cycle alternatives first, valid one last
+                    new DisjunctiveConstraint(src, [
+                        [createLeftConstraint(d, a, src)], // D<A → cycle D<A<B<C<D
+                        [createLeftConstraint(c, a, src)], // C<A → cycle C<A<B<C
+                        [createLeftConstraint(a, d, src)], // OK (already implied by transitivity)
+                    ]),
+                ]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).toBeNull();
+        });
+
+        it('should handle all-infeasible disjunction (UNSAT)', () => {
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+            const src = new RelativeOrientationConstraint(['left'], 'all-bad');
+
+            // Conjunctive: A < B < C
+            // Disjunction: every alternative creates a cycle
+            const layout = createLayout(
+                [a, b, c],
+                [createLeftConstraint(a, b), createLeftConstraint(b, c)],
+                [
+                    new DisjunctiveConstraint(src, [
+                        [createLeftConstraint(c, a, src)], // C<A → cycle
+                        [createLeftConstraint(b, a, src)], // B<A → cycle
+                        [createLeftConstraint(c, b, src)], // C<B → cycle
+                    ]),
+                ]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).not.toBeNull();
+            expect(error!.type).toBe('positional-conflict');
+        });
+
+        it('should handle chained disjunctions where choice in D1 constrains D2', () => {
+            // D1: A<B or B<A
+            // D2: B<C or C<B
+            // D3: C<A or A<C
+            // Only 2 of the 8 combos are acyclic: (A<B, B<C, A<C) or (B<A, C<B, C<A)
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+            const src = new RelativeOrientationConstraint(['left'], 'chained');
+
+            const layout = createLayout(
+                [a, b, c],
+                [],
+                [
+                    new DisjunctiveConstraint(src, [
+                        [createLeftConstraint(a, b, src)],
+                        [createLeftConstraint(b, a, src)],
+                    ]),
+                    new DisjunctiveConstraint(src, [
+                        [createLeftConstraint(b, c, src)],
+                        [createLeftConstraint(c, b, src)],
+                    ]),
+                    new DisjunctiveConstraint(src, [
+                        [createLeftConstraint(c, a, src)],
+                        [createLeftConstraint(a, c, src)],
+                    ]),
+                ]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).toBeNull();
+        });
+
+        it('should handle disjunction with multi-constraint alternatives', () => {
+            // Each alternative commits 2 constraints simultaneously
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+            const d = createNode('D');
+            const src = new RelativeOrientationConstraint(['left'], 'multi');
+
+            const layout = createLayout(
+                [a, b, c, d],
+                [],
+                [
+                    new DisjunctiveConstraint(src, [
+                        // Alt 1: A<B and C<D (both horizontal)
+                        [createLeftConstraint(a, b, src), createLeftConstraint(c, d, src)],
+                        // Alt 2: A above B and C above D (both vertical)
+                        [createTopConstraint(a, b, src), createTopConstraint(c, d, src)],
+                    ]),
+                ]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).toBeNull();
+        });
+    });
+
+    describe('Pathological: Group edge cases', () => {
+
+        it('should handle a node that belongs to no group with multiple groups present', () => {
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+            const d = createNode('D');
+            const e = createNode('E');
+            const orphan = createNode('Orphan');
+
+            const gbf = new GroupByField('type', 0, 1, 'type');
+            const g1: LayoutGroup = {
+                name: 'G1', nodeIds: ['A', 'B', 'C'],
+                keyNodeId: 'A', showLabel: true, sourceConstraint: gbf,
+            };
+            const g2: LayoutGroup = {
+                name: 'G2', nodeIds: ['D', 'E'],
+                keyNodeId: 'D', showLabel: true, sourceConstraint: gbf,
+            };
+
+            // Orphan must be outside both groups
+            const layout = createLayout([a, b, c, d, e, orphan], [], [], [g1, g2]);
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).toBeNull();
+        });
+
+        it('should handle nested groups (subgroup relationship)', () => {
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+
+            const gbf = new GroupByField('type', 0, 1, 'type');
+            const outer: LayoutGroup = {
+                name: 'Outer', nodeIds: ['A', 'B', 'C'],
+                keyNodeId: 'A', showLabel: true, sourceConstraint: gbf,
+            };
+            const inner: LayoutGroup = {
+                name: 'Inner', nodeIds: ['A', 'B'], // subset of Outer
+                keyNodeId: 'A', showLabel: true, sourceConstraint: gbf,
+            };
+
+            const layout = createLayout([a, b, c], [], [], [outer, inner]);
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            // Subgroup relationship → no overlap error
+            expect(error).toBeNull();
+        });
+
+        it('should detect partially overlapping groups (not subgroups)', () => {
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+
+            const gbf = new GroupByField('type', 0, 1, 'type');
+            const g1: LayoutGroup = {
+                name: 'G1', nodeIds: ['A', 'B'],
+                keyNodeId: 'A', showLabel: true, sourceConstraint: gbf,
+            };
+            const g2: LayoutGroup = {
+                name: 'G2', nodeIds: ['B', 'C'], // B shared, neither is subgroup
+                keyNodeId: 'B', showLabel: true, sourceConstraint: gbf,
+            };
+
+            const layout = createLayout([a, b, c], [], [], [g1, g2]);
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).not.toBeNull();
+            expect(error!.type).toBe('group-overlap');
+        });
+
+        it('should handle single-node group (degenerate)', () => {
+            const a = createNode('A');
+            const b = createNode('B');
+
+            const gbf = new GroupByField('type', 0, 1, 'type');
+            const g: LayoutGroup = {
+                name: 'Singleton', nodeIds: ['A'],
+                keyNodeId: 'A', showLabel: true, sourceConstraint: gbf,
+            };
+
+            const layout = createLayout([a, b], [], [], [g]);
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            // Single-node groups shouldn't generate bounding box disjunctions
+            expect(error).toBeNull();
+        });
+
+        it('should handle group with ordering constraints between members', () => {
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+            const d = createNode('D');
+
+            const gbf = new GroupByField('type', 0, 1, 'type');
+            const g: LayoutGroup = {
+                name: 'G1', nodeIds: ['A', 'B', 'C'],
+                keyNodeId: 'A', showLabel: true, sourceConstraint: gbf,
+            };
+
+            // Ordering between group members + non-member D
+            const layout = createLayout(
+                [a, b, c, d],
+                [createLeftConstraint(a, b), createLeftConstraint(b, c)],
+                [],
+                [g]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).toBeNull();
+        });
+    });
+
+    describe('Pathological: Contradictory constraint combinations', () => {
+
+        it('should detect mutual exclusion: A<B required by two unit disjunctions', () => {
+            const a = createNode('A');
+            const b = createNode('B');
+            const src1 = new RelativeOrientationConstraint(['left'], 'must-left');
+            const src2 = new RelativeOrientationConstraint(['left'], 'must-right');
+
+            const layout = createLayout(
+                [a, b],
+                [],
+                [
+                    new DisjunctiveConstraint(src1, [[createLeftConstraint(a, b, src1)]]),
+                    new DisjunctiveConstraint(src2, [[createLeftConstraint(b, a, src2)]]),
+                ]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).not.toBeNull();
+        });
+
+        it('should detect conflict: conjunctive ordering + disjunction forcing reverse', () => {
+            const a = createNode('A');
+            const b = createNode('B');
+            const src = new RelativeOrientationConstraint(['left'], 'reverse');
+
+            // Conjunctive: A < B
+            // Disjunction (unit): B < A → cycle
+            const layout = createLayout(
+                [a, b],
+                [createLeftConstraint(a, b)],
+                [new DisjunctiveConstraint(src, [[createLeftConstraint(b, a, src)]])]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).not.toBeNull();
+        });
+
+        it('should handle 4-node complete tournament (total order exists)', () => {
+            // Every pair must be ordered on H axis. One of the 24 permutations should work.
+            const nodes = Array.from({ length: 4 }, (_, i) =>
+                createNode(`N${i}`)
+            );
+            const src = new RelativeOrientationConstraint(['left'], 'tournament');
+            const disjunctions: DisjunctiveConstraint[] = [];
+
+            for (let i = 0; i < 4; i++) {
+                for (let j = i + 1; j < 4; j++) {
+                    disjunctions.push(new DisjunctiveConstraint(src, [
+                        [createLeftConstraint(nodes[i], nodes[j], src)],
+                        [createLeftConstraint(nodes[j], nodes[i], src)],
+                    ]));
+                }
+            }
+
+            const layout = createLayout(nodes, [], disjunctions);
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            // A total order always exists → SAT
+            expect(error).toBeNull();
+        });
+
+        it('should handle cross-axis interactions (H ordering + V ordering + alignment)', () => {
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+
+            // A left of B (H), A above C (V), B and C y-aligned (same y)
+            // This is valid: A is top-left, B is right, C is below-left, B and C share a row
+            const layout = createLayout(
+                [a, b, c],
+                [
+                    createLeftConstraint(a, b),
+                    createTopConstraint(a, c),
+                    createAlignConstraint(b, c, 'y'),
+                ]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).toBeNull();
+        });
+    });
+
+    describe('Pathological: Scale and performance edge cases', () => {
+
+        it('should handle 20-node total ordering (long chain, no disjunctions)', () => {
+            const nodes = Array.from({ length: 20 }, (_, i) => createNode(`N${i}`));
+            const constraints = nodes.slice(0, -1).map((n, i) =>
+                createLeftConstraint(n, nodes[i + 1])
+            );
+
+            const layout = createLayout(nodes, constraints);
+            const start = performance.now();
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            const elapsed = performance.now() - start;
+
+            expect(error).toBeNull();
+            expect(elapsed).toBeLessThan(100); // Long chain should be instant
+        });
+
+        it('should handle wide fan-out (1 node left of 20 others)', () => {
+            const root = createNode('Root');
+            const children = Array.from({ length: 20 }, (_, i) => createNode(`C${i}`));
+
+            const constraints = children.map(c => createLeftConstraint(root, c));
+
+            const layout = createLayout([root, ...children], constraints);
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).toBeNull();
+        });
+
+        it('should handle grid topology (5×4 nodes, row + column constraints)', () => {
+            const nodes: LayoutNode[][] = [];
+            const allNodes: LayoutNode[] = [];
+            const constraints: any[] = [];
+
+            for (let r = 0; r < 5; r++) {
+                nodes.push([]);
+                for (let c = 0; c < 4; c++) {
+                    const n = createNode(`R${r}C${c}`);
+                    nodes[r].push(n);
+                    allNodes.push(n);
+                }
+            }
+
+            // Row ordering: left to right within each row
+            for (let r = 0; r < 5; r++) {
+                for (let c = 0; c < 3; c++) {
+                    constraints.push(createLeftConstraint(nodes[r][c], nodes[r][c + 1]));
+                }
+            }
+
+            // Column ordering: top to bottom within each column
+            for (let c = 0; c < 4; c++) {
+                for (let r = 0; r < 4; r++) {
+                    constraints.push(createTopConstraint(nodes[r][c], nodes[r + 1][c]));
+                }
+            }
+
+            const layout = createLayout(allNodes, constraints);
+            const start = performance.now();
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            const elapsed = performance.now() - start;
+
+            expect(error).toBeNull();
+            expect(elapsed).toBeLessThan(200);
+        });
+
+        it('should handle 8 disjunctions × 4 alternatives (search space = 4^8 = 65536)', () => {
+            const nodes = Array.from({ length: 20 }, (_, i) =>
+                createNode(`N${i}`, { width: 50, height: 30 })
+            );
+            const src = new RelativeOrientationConstraint(['left'], 'big');
+            const disjunctions: DisjunctiveConstraint[] = [];
+
+            for (let i = 0; i < 8; i++) {
+                const n1 = nodes[i * 2];
+                const n2 = nodes[i * 2 + 1];
+                disjunctions.push(new DisjunctiveConstraint(src, [
+                    [createLeftConstraint(n1, n2, src)],
+                    [createLeftConstraint(n2, n1, src)],
+                    [createTopConstraint(n1, n2, src)],
+                    [createTopConstraint(n2, n1, src)],
+                ]));
+            }
+
+            const layout = createLayout(nodes, [], disjunctions);
+            const start = performance.now();
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            const elapsed = performance.now() - start;
+
+            expect(error).toBeNull();
+            expect(elapsed).toBeLessThan(2000);
+        });
+    });
+
+    describe('Pathological: BoundingBox and GroupBoundary constraints', () => {
+
+        it('should handle explicit BoundingBoxConstraint with left side', () => {
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+
+            const gbf = new GroupByField('type', 0, 1, 'type');
+            const g: LayoutGroup = {
+                name: 'G1', nodeIds: ['A', 'B'],
+                keyNodeId: 'A', showLabel: true, sourceConstraint: gbf,
+            };
+
+            const bc: BoundingBoxConstraint = {
+                group: g, node: c, side: 'left',
+                minDistance: 15, sourceConstraint: gbf,
+            };
+
+            const layout = createLayout([a, b, c], [bc], [], [g]);
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).toBeNull();
+        });
+
+        it('should handle BoundingBoxConstraints on all four sides', () => {
+            const members = Array.from({ length: 3 }, (_, i) => createNode(`M${i}`));
+            const outside = Array.from({ length: 4 }, (_, i) => createNode(`Out${i}`));
+
+            const gbf = new GroupByField('type', 0, 1, 'type');
+            const g: LayoutGroup = {
+                name: 'G', nodeIds: members.map(m => m.id),
+                keyNodeId: members[0].id, showLabel: true, sourceConstraint: gbf,
+            };
+
+            const constraints: BoundingBoxConstraint[] = [
+                { group: g, node: outside[0], side: 'left', minDistance: 15, sourceConstraint: gbf },
+                { group: g, node: outside[1], side: 'right', minDistance: 15, sourceConstraint: gbf },
+                { group: g, node: outside[2], side: 'top', minDistance: 15, sourceConstraint: gbf },
+                { group: g, node: outside[3], side: 'bottom', minDistance: 15, sourceConstraint: gbf },
+            ];
+
+            const layout = createLayout([...members, ...outside], constraints, [], [g]);
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).toBeNull();
+        });
+
+        it('should detect cycle through virtual group node', () => {
+            // Out1 is left of group, and right of group → cycle through virtual node
+            const a = createNode('A');
+            const b = createNode('B');
+            const out = createNode('Out');
+
+            const gbf = new GroupByField('type', 0, 1, 'type');
+            const g: LayoutGroup = {
+                name: 'G', nodeIds: ['A', 'B'],
+                keyNodeId: 'A', showLabel: true, sourceConstraint: gbf,
+            };
+
+            const constraints: BoundingBoxConstraint[] = [
+                { group: g, node: out, side: 'left', minDistance: 15, sourceConstraint: gbf },  // Out < _group_G
+                { group: g, node: out, side: 'right', minDistance: 15, sourceConstraint: gbf }, // _group_G < Out → cycle
+            ];
+
+            const layout = createLayout([a, b, out], constraints, [], [g]);
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).not.toBeNull();
+        });
+    });
+
+    describe('Pathological: CyclicOrientationConstraint', () => {
+
+        it('should handle all rotations of a 4-node cyclic constraint', () => {
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+            const d = createNode('D');
+            const src = new CyclicOrientationConstraint('clockwise', 'A->B->C->D');
+
+            // 4 rotations of clockwise ordering
+            const disj = new DisjunctiveConstraint(src, [
+                [createLeftConstraint(a, b, src), createLeftConstraint(b, c, src), createLeftConstraint(c, d, src)],
+                [createLeftConstraint(b, c, src), createLeftConstraint(c, d, src), createLeftConstraint(d, a, src)],
+                [createLeftConstraint(c, d, src), createLeftConstraint(d, a, src), createLeftConstraint(a, b, src)],
+                [createLeftConstraint(d, a, src), createLeftConstraint(a, b, src), createLeftConstraint(b, c, src)],
+            ]);
+
+            const layout = createLayout([a, b, c, d], [], [disj]);
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).toBeNull();
+        });
+
+        it('should handle cyclic constraint conflicting with conjunctive', () => {
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+            const src = new CyclicOrientationConstraint('clockwise', 'A->B->C');
+
+            // Conjunctive: C < A (fixed)
+            // Cyclic: tries rotations, but all would need some ordering that conflicts
+            // Rotation 1: A<B, B<C → implies A<C, but C<A is conjunctive → cycle
+            // Rotation 2: B<C, C<A → C<A is consistent with conjunctive, B<C ok → WORKS
+            // Rotation 3: C<A, A<B → C<A consistent, A<B ok → WORKS
+            const disj = new DisjunctiveConstraint(src, [
+                [createLeftConstraint(a, b, src), createLeftConstraint(b, c, src)], // A<B<C but C<A → cycle
+                [createLeftConstraint(b, c, src), createLeftConstraint(c, a, src)], // OK: B<C, C<A
+                [createLeftConstraint(c, a, src), createLeftConstraint(a, b, src)], // OK: C<A, A<B
+            ]);
+
+            const layout = createLayout(
+                [a, b, c],
+                [createLeftConstraint(c, a)], // Conjunctive: C < A
+                [disj]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).toBeNull();
         });
     });
 });

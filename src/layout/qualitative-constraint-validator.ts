@@ -1,86 +1,43 @@
 /**
- * QualitativeConstraintValidatorV2 — a geometry-aware constraint validator that
- * operates entirely on qualitative relations between **boxes** (axis-aligned
- * rectangles with known dimensions).
+ * QualitativeConstraintValidator — merged best-of-both constraint validator.
  *
- * ─── Key domain invariant ───
+ * Takes V1's fast architecture (virtual group nodes, lightweight snapshot/restore,
+ * single-edge group encoding) and adds geometry-aware reasoning:
  *
- * The only first-class spatial entities are **boxes** (LayoutNodes). Group
- * rectangles are not independent regions — they are bounding envelopes derived
- * from their members:
+ * ─── From V1 (speed) ───
  *
- *   L(group) = min { L(m) : m ∈ group }
- *   R(group) = max { R(m) : m ∈ group }
- *   T(group) = min { T(m) : m ∈ group }
- *   B(group) = max { B(m) : m ∈ group }
+ *   • Virtual group nodes in H/V graphs: one node `_group_G` per group,
+ *     one edge per non-member per side. This is O(non-members) per group,
+ *     not O(non-members × members).
  *
- * Therefore "x is left of group G" is really a *conjunction* over members:
+ *   • UnionFind with snapshot/restore for cheap checkpointing.
  *
- *   leftof(x, G)  ≡  ∀ m ∈ G : leftof(x, m)
+ *   • CDCL search with clause learning, VSIDS branching, Luby restarts.
  *
- * because R(x) + gap ≤ L(G) = min L(m) ≤ L(m) for each m.
+ * ─── Added geometry insights ───
  *
- * And "x is right of group G" means:
+ *   1. **Dimension-aware partial orders**: Each node in the H/V graph carries
+ *      its box dimension (width for H, height for V). We compute the longest
+ *      weighted chain (= minimum canvas span needed) via topological DP.
+ *      If any chain exceeds MAX_SPAN, we reject early.
  *
- *   rightof(x, G)  ≡  ∀ m ∈ G : leftof(m, x)
+ *   2. **Pigeonhole on alignment classes**: If K nodes share the same
+ *      x-coordinate, they need Σ heights + (K-1)·gap vertical space.
+ *      Checked immediately after conjunctive constraints, before any search.
  *
- * because R(m) ≤ R(G) = max R(m) ≤ L(x) - gap, so L(x) ≥ R(m) + gap.
+ *   3. **Interval decomposition pre-solver**: For 4-way non-overlap
+ *      disjunctions, we try to resolve them before entering CDCL by checking
+ *      if the pair is already separated, or if all but one alternative is
+ *      infeasible (including dimension overflow).
  *
- * Non-member exclusion ("x must be outside group G") becomes:
- *
- *   (∀m: leftof(x,m))  ∨  (∀m: leftof(m,x))  ∨  (∀m: above(x,m))  ∨  (∀m: above(m,x))
- *
- * Each alternative is a conjunction of box-to-box constraints. The H and V
- * partial-order graphs contain ONLY box nodes — no virtual group nodes.
- *
- * This is more faithful to the geometry and naturally gives us "containment
- * propagation" for free: the edges ARE between boxes, so transitivity in the
- * partial-order graph already propagates through members.
- *
- * ═══════════════════════════════════════════════════════════════════════════════
- *  Insight 1 — Box-only encoding of group constraints
- * ═══════════════════════════════════════════════════════════════════════════════
- *
- *   By encoding group exclusion directly as box-to-box constraints, we get
- *   transitive propagation for free. If leftof(x, m₁) is chosen and later
- *   leftof(m₁, y) is added, then leftof(x, y) follows by transitivity —
- *   which may satisfy other disjunctions without any search.
- *
- * ═══════════════════════════════════════════════════════════════════════════════
- *  Insight 2 — Dimension-aware feasibility bounds
- * ═══════════════════════════════════════════════════════════════════════════════
- *
- *   We know box dimensions (width, height). A chain a₁ <_H a₂ <_H ... <_H aₖ
- *   requires at least Σᵢ W(aᵢ) + (k−1)·gap horizontal space. Similarly for V.
- *
- *   We set a generous canvas bound (MAX_SPAN = 100,000 px) and:
- *   - Reject infeasible chains early
- *   - Score branching alternatives by slack (room left on the canvas)
- *   - Prune alternatives that would exceed the bound
- *
- * ═══════════════════════════════════════════════════════════════════════════════
- *  Insight 3 — Pigeonhole on alignment classes
- * ═══════════════════════════════════════════════════════════════════════════════
- *
- *   If K nodes are x-aligned (same x-coordinate) and must be vertically
- *   separated, they need at least  Σᵢ H(nᵢ) + (K−1)·gap  vertical space.
- *
- * ═══════════════════════════════════════════════════════════════════════════════
- *  Insight 4 — Interval-graph non-overlap decomposition
- * ═══════════════════════════════════════════════════════════════════════════════
- *
- *   For 4-way non-overlap disjunctions, try to commit pairs to one axis
- *   based on existing orderings, slack analysis, and aspect ratios before
- *   entering the CDCL search.
- *
- * ═══════════════════════════════════════════════════════════════════════════════
+ *   4. **Dimension-aware alternative pruning**: When checking if an alternative
+ *      is feasible, we also verify the resulting chain wouldn't exceed
+ *      MAX_SPAN. This prunes alternatives that are acyclic but geometrically
+ *      impossible.
  *
  * Architecture:
- *   QualitativeConstraintValidatorV2 (this file)
- *     → feasibility check + ordering selection via CDCL with geometry
- *     → produces a consistent InstanceLayout with resolved orderings
- *   Then:
- *     → Kiwi/WebCola assigns actual numeric coordinates (one LP solve, no backtracking)
+ *   This validator → feasibility check + ordering selection
+ *   Then → Kiwi/WebCola assigns actual numeric coordinates (no backtracking)
  */
 
 import {
@@ -117,7 +74,6 @@ import {
     orientationConstraintToString,
 } from './constraint-validator';
 
-// Re-export error types so callers can use any validator interchangeably
 export {
     type ConstraintError,
     type ErrorMessages,
@@ -166,23 +122,25 @@ export { type PositionalConstraintError, type GroupOverlapError };
 // Constants
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/** Max canvas span in pixels — any chain exceeding this is infeasible. */
+/** Generous canvas bound. Chains exceeding this are infeasible. */
 const MAX_SPAN = 100_000;
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Weighted Partial-Order Graph (boxes only, dimension-aware)
+// Weighted Partial-Order Graph
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * DAG representing a strict partial order over boxes, augmented with per-node
- * dimensions (width for H, height for V) so we can compute minimum chain spans.
+ * DAG representing a strict partial order. Each node carries a dimension
+ * (width for H-graph, height for V-graph) so we can compute minimum chain
+ * spans without a numeric solver.
  *
- * Invariant: all nodes are boxes. No virtual/group nodes.
+ * Includes both box nodes AND virtual group nodes (from V1's encoding).
  */
 class WeightedPartialOrderGraph {
     private adj: Map<string, Set<string>> = new Map();
     private radj: Map<string, Set<string>> = new Map();
     private nodes: Set<string> = new Set();
+    /** Per-node size on this axis. Boxes have their width/height; group nodes have 0. */
     private nodeSize: Map<string, number> = new Map();
     private gap: number;
 
@@ -208,21 +166,15 @@ class WeightedPartialOrderGraph {
         }
     }
 
-    setNodeSize(id: string, size: number): void {
-        this.nodeSize.set(id, size);
-    }
-
-    getNodeSize(id: string): number {
-        return this.nodeSize.get(id) ?? 0;
-    }
-
+    /**
+     * Add edge (a → b) meaning a < b. Returns false if it would create a cycle.
+     */
     addEdge(a: string, b: string): boolean {
         this.ensureNode(a);
         this.ensureNode(b);
         if (a === b) return false;
         if (this.adj.get(a)!.has(b)) return true;
         if (this.canReach(b, a)) return false;
-
         this.adj.get(a)!.add(b);
         this.radj.get(b)!.add(a);
         return true;
@@ -274,14 +226,10 @@ class WeightedPartialOrderGraph {
         const inDeg = new Map<string, number>();
         for (const n of this.nodes) inDeg.set(n, 0);
         for (const [, succs] of this.adj) {
-            for (const s of succs) {
-                inDeg.set(s, (inDeg.get(s) ?? 0) + 1);
-            }
+            for (const s of succs) inDeg.set(s, (inDeg.get(s) ?? 0) + 1);
         }
         const queue: string[] = [];
-        for (const [n, d] of inDeg) {
-            if (d === 0) queue.push(n);
-        }
+        for (const [n, d] of inDeg) { if (d === 0) queue.push(n); }
         const order: string[] = [];
         while (queue.length > 0) {
             const n = queue.shift()!;
@@ -296,12 +244,15 @@ class WeightedPartialOrderGraph {
     }
 
     /**
-     * Minimum canvas span = longest weighted chain.
-     * dist[n] = size(n) + max over predecessors p of (dist[p] + gap)
+     * Minimum canvas span = longest weighted chain through the graph.
+     *
+     *   dist[n] = size(n) + max over predecessors p of (dist[p] + gap)
+     *
+     * Group virtual nodes have size 0, so they contribute only gap.
      */
     longestChainSpan(): number {
         const order = this.topologicalSort();
-        if (!order) return Infinity;
+        if (!order) return Infinity; // Cycle
 
         const dist = new Map<string, number>();
         let maxSpan = 0;
@@ -310,8 +261,7 @@ class WeightedPartialOrderGraph {
             const mySize = this.nodeSize.get(n) ?? 0;
             let bestPred = 0;
             for (const p of this.radj.get(n) ?? []) {
-                const pd = dist.get(p) ?? 0;
-                bestPred = Math.max(bestPred, pd + this.gap);
+                bestPred = Math.max(bestPred, (dist.get(p) ?? 0) + this.gap);
             }
             const d = bestPred + mySize;
             dist.set(n, d);
@@ -322,53 +272,20 @@ class WeightedPartialOrderGraph {
     }
 
     /**
-     * Slack for adding edge (a → b): MAX_SPAN minus the longest chain that
-     * would pass through the a→b edge. Negative = would exceed canvas.
+     * Would adding edge (a → b) cause the longest chain to exceed maxSpan?
+     * Temporarily adds the edge, computes span, removes it.
+     * Returns true if the chain would overflow.
      */
-    slackForEdge(a: string, b: string, maxSpan: number): number {
-        if (this.canReach(b, a)) return -Infinity;
+    wouldOverflow(a: string, b: string, maxSpan: number): boolean {
+        if (this.canReach(b, a)) return true; // Cycle
 
         this.adj.get(a)!.add(b);
         this.radj.get(b)!.add(a);
-
-        const pathFromA = this.longestPathFrom(a);
-        const pathToA = this.longestPathTo(a);
-        const span = pathToA + this.gap + pathFromA - (this.nodeSize.get(a) ?? 0);
-
+        const span = this.longestChainSpan();
         this.adj.get(a)!.delete(b);
         this.radj.get(b)!.delete(a);
 
-        return maxSpan - span;
-    }
-
-    private longestPathFrom(start: string): number {
-        const visited = new Map<string, number>();
-        const dfs = (n: string): number => {
-            if (visited.has(n)) return visited.get(n)!;
-            const mySize = this.nodeSize.get(n) ?? 0;
-            let best = mySize;
-            for (const s of this.adj.get(n) ?? []) {
-                best = Math.max(best, mySize + this.gap + dfs(s));
-            }
-            visited.set(n, best);
-            return best;
-        };
-        return dfs(start);
-    }
-
-    private longestPathTo(end: string): number {
-        const visited = new Map<string, number>();
-        const dfs = (n: string): number => {
-            if (visited.has(n)) return visited.get(n)!;
-            const mySize = this.nodeSize.get(n) ?? 0;
-            let best = mySize;
-            for (const p of this.radj.get(n) ?? []) {
-                best = Math.max(best, mySize + this.gap + dfs(p));
-            }
-            visited.set(n, best);
-            return best;
-        };
-        return dfs(end);
+        return span > maxSpan;
     }
 
     edgeCount(): number {
@@ -391,24 +308,20 @@ class WeightedPartialOrderGraph {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Union-Find for alignment equivalence classes
+// Union-Find with snapshot/restore (from V1)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class UnionFind {
     private parent: Map<string, string> = new Map();
     private rank: Map<string, number> = new Map();
-    private members: Map<string, Set<string>> = new Map();
 
     find(x: string): string {
         if (!this.parent.has(x)) {
             this.parent.set(x, x);
             this.rank.set(x, 0);
-            this.members.set(x, new Set([x]));
         }
         let root = x;
-        while (this.parent.get(root) !== root) {
-            root = this.parent.get(root)!;
-        }
+        while (this.parent.get(root) !== root) root = this.parent.get(root)!;
         let cur = x;
         while (cur !== root) {
             const next = this.parent.get(cur)!;
@@ -422,37 +335,16 @@ class UnionFind {
         const ra = this.find(a);
         const rb = this.find(b);
         if (ra === rb) return false;
-
         const rankA = this.rank.get(ra)!;
         const rankB = this.rank.get(rb)!;
-        let newRoot: string;
-        let absorbed: string;
-        if (rankA < rankB) {
-            this.parent.set(ra, rb);
-            newRoot = rb; absorbed = ra;
-        } else if (rankA > rankB) {
-            this.parent.set(rb, ra);
-            newRoot = ra; absorbed = rb;
-        } else {
-            this.parent.set(rb, ra);
-            this.rank.set(ra, rankA + 1);
-            newRoot = ra; absorbed = rb;
-        }
-
-        const newMembers = this.members.get(newRoot) ?? new Set();
-        for (const m of this.members.get(absorbed) ?? []) newMembers.add(m);
-        this.members.set(newRoot, newMembers);
-        this.members.delete(absorbed);
+        if (rankA < rankB) { this.parent.set(ra, rb); }
+        else if (rankA > rankB) { this.parent.set(rb, ra); }
+        else { this.parent.set(rb, ra); this.rank.set(ra, rankA + 1); }
         return true;
     }
 
     connected(a: string, b: string): boolean {
         return this.find(a) === this.find(b);
-    }
-
-    classMembers(x: string): ReadonlySet<string> {
-        const root = this.find(x);
-        return this.members.get(root) ?? new Set();
     }
 
     classes(): Map<string, string[]> {
@@ -465,11 +357,22 @@ class UnionFind {
         return cls;
     }
 
+    snapshot(): { parent: [string, string][]; rank: [string, number][] } {
+        return {
+            parent: Array.from(this.parent.entries()),
+            rank: Array.from(this.rank.entries()),
+        };
+    }
+
+    restore(snap: { parent: [string, string][]; rank: [string, number][] }): void {
+        this.parent = new Map(snap.parent);
+        this.rank = new Map(snap.rank);
+    }
+
     clone(): UnionFind {
         const uf = new UnionFind();
         uf.parent = new Map(this.parent);
         uf.rank = new Map(this.rank);
-        for (const [k, v] of this.members) uf.members.set(k, new Set(v));
         return uf;
     }
 }
@@ -496,75 +399,17 @@ interface Assignment {
 interface SolverCheckpoint {
     hGraph: WeightedPartialOrderGraph;
     vGraph: WeightedPartialOrderGraph;
-    xAlignUF: UnionFind;
-    yAlignUF: UnionFind;
+    hAlignUF: UnionFind;
+    vAlignUF: UnionFind;
     assignmentTrailLength: number;
     addedConstraintsLength: number;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Group containment index
+// QualitativeConstraintValidator
 // ═══════════════════════════════════════════════════════════════════════════════
 
-class GroupContainmentIndex {
-    private nodeToGroups: Map<string, Set<string>> = new Map();
-    private groupToMembers: Map<string, Set<string>> = new Map();
-    private groupByName: Map<string, LayoutGroup> = new Map();
-
-    constructor(nodes: LayoutNode[], groups: LayoutGroup[]) {
-        for (const node of nodes) this.nodeToGroups.set(node.id, new Set());
-        for (const group of groups) {
-            this.groupByName.set(group.name, group);
-            this.groupToMembers.set(group.name, new Set(group.nodeIds));
-            for (const nodeId of group.nodeIds) {
-                this.nodeToGroups.get(nodeId)?.add(group.name);
-            }
-        }
-    }
-
-    isMember(nodeId: string, groupName: string): boolean {
-        return this.groupToMembers.get(groupName)?.has(nodeId) ?? false;
-    }
-
-    groupsOf(nodeId: string): ReadonlySet<string> {
-        return this.nodeToGroups.get(nodeId) ?? new Set();
-    }
-
-    membersOf(groupName: string): ReadonlySet<string> {
-        return this.groupToMembers.get(groupName) ?? new Set();
-    }
-
-    getGroup(name: string): LayoutGroup | undefined {
-        return this.groupByName.get(name);
-    }
-
-    isSubGroup(groupA: string, groupB: string): boolean {
-        const membersA = this.groupToMembers.get(groupA);
-        const membersB = this.groupToMembers.get(groupB);
-        if (!membersA || !membersB) return false;
-        for (const m of membersA) {
-            if (!membersB.has(m)) return false;
-        }
-        return true;
-    }
-
-    intersection(groupA: string, groupB: string): string[] {
-        const membersA = this.groupToMembers.get(groupA);
-        const membersB = this.groupToMembers.get(groupB);
-        if (!membersA || !membersB) return [];
-        const result: string[] = [];
-        for (const m of membersA) {
-            if (membersB.has(m)) result.push(m);
-        }
-        return result;
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// QualitativeConstraintValidatorV2
-// ═══════════════════════════════════════════════════════════════════════════════
-
-class QualitativeConstraintValidatorV2 {
+class QualitativeConstraintValidator {
     // ─── Input ───
     layout: InstanceLayout;
     nodes: LayoutNode[];
@@ -573,14 +418,11 @@ class QualitativeConstraintValidatorV2 {
     orientationConstraints: LayoutConstraint[];
     minPadding: number = 15;
 
-    // ─── Qualitative state (boxes only, dimension-weighted) ───
+    // ─── Qualitative state ───
     private hGraph: WeightedPartialOrderGraph;
     private vGraph: WeightedPartialOrderGraph;
     private xAlignUF: UnionFind = new UnionFind();
     private yAlignUF: UnionFind = new UnionFind();
-
-    // ─── Group containment ───
-    private containment: GroupContainmentIndex;
 
     // ─── Output alignment groups ───
     public horizontallyAligned: LayoutNode[][] = [];
@@ -604,10 +446,10 @@ class QualitativeConstraintValidatorV2 {
     private nodeMap: Map<string, LayoutNode> = new Map();
 
     // ─── Statistics ───
-    private prunedByContainment: number = 0;
+    private prunedByTransitivity: number = 0;
     private prunedByDimension: number = 0;
     private prunedByPigeonhole: number = 0;
-    private prunedByIntervalDecomp: number = 0;
+    private prunedByDecomposition: number = 0;
 
     constructor(layout: InstanceLayout) {
         this.layout = layout;
@@ -621,11 +463,10 @@ class QualitativeConstraintValidatorV2 {
 
         for (const node of this.nodes) {
             this.nodeMap.set(node.id, node);
+            // Register box dimensions
             this.hGraph.ensureNode(node.id, node.width);
             this.vGraph.ensureNode(node.id, node.height);
         }
-
-        this.containment = new GroupContainmentIndex(this.nodes, this.groups);
     }
 
     // ─── Public API ──────────────────────────────────────────────────────────
@@ -641,41 +482,39 @@ class QualitativeConstraintValidatorV2 {
             if (error) return error;
         }
 
-        // Phase 1.5: Dimension feasibility check
+        // Phase 2: Dimension feasibility on conjunctive constraints alone
         const dimError = this.checkDimensionFeasibility();
         if (dimError) return dimError;
 
-        // Phase 1.6: Pigeonhole check on alignment classes (Insight 3)
+        // Phase 3: Pigeonhole on alignment classes
         const pigeonholeError = this.checkPigeonhole();
         if (pigeonholeError) return pigeonholeError;
 
         const constraintsBeforeDisjunctions = this.addedConstraints.length;
 
-        // Phase 2: Build group non-member disjunctions as box-to-box constraints
-        const groupError = this.addGroupExclusionDisjunctions();
+        // Phase 4: Group bounding box disjunctions (virtual group nodes, from V1)
+        const groupError = this.addGroupBoundingBoxDisjunctions();
         if (groupError) return groupError;
 
-        // Phase 3: Collect all disjunctions
+        // Phase 5: Collect all disjunctions
         this.allDisjunctions = [...(this.layout.disjunctiveConstraints || [])];
 
-        // Phase 4: Interval-graph decomposition (Insight 4)
-        this.applyIntervalDecomposition();
+        // Phase 6: Interval decomposition — resolve what we can before CDCL
+        this.presolveDisjunctions();
 
-        // Phase 5: Solve remaining disjunctions with CDCL
+        // Phase 7: CDCL search on remaining disjunctions
         if (this.allDisjunctions.length > 0) {
             const result = this.solveCDCL();
-            if (!result.satisfiable) {
-                return result.error || null;
-            }
+            if (!result.satisfiable) return result.error || null;
 
             const chosenConstraints = this.addedConstraints.slice(constraintsBeforeDisjunctions);
             this.layout.constraints = this.layout.constraints.concat(chosenConstraints);
         }
 
-        // Phase 6: Compute alignment orders
+        // Phase 8: Alignment orders
         const implicitConstraints = this.computeAlignmentOrders();
 
-        // Phase 7: Check for node overlaps
+        // Phase 9: Node overlap detection
         const overlapError = this.detectNodeOverlaps();
         if (overlapError) return overlapError;
 
@@ -684,209 +523,14 @@ class QualitativeConstraintValidatorV2 {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // Insight 1: Box-only group exclusion (no virtual group nodes)
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    /**
-     * Build disjunctions for non-member exclusion using ONLY box-to-box
-     * constraints. No virtual group nodes.
-     *
-     * For each non-member x of group G with members {m₁, m₂, …, mₖ}:
-     *
-     *   (leftof(x,m₁) ∧ leftof(x,m₂) ∧ … ∧ leftof(x,mₖ))     // x left of all
-     *   ∨ (leftof(m₁,x) ∧ leftof(m₂,x) ∧ … ∧ leftof(mₖ,x))   // all left of x
-     *   ∨ (above(x,m₁) ∧ above(x,m₂) ∧ … ∧ above(x,mₖ))      // x above all
-     *   ∨ (above(m₁,x) ∧ above(m₂,x) ∧ … ∧ above(mₖ,x))      // all above x
-     *
-     * Key optimization: if x is already ordered w.r.t. ALL members on some
-     * axis (by transitivity in the H/V graph), the disjunction is trivially
-     * satisfied and we skip it entirely. This is "containment propagation
-     * for free" — because the edges are between boxes, transitivity handles it.
-     */
-    private addGroupExclusionDisjunctions(): PositionalConstraintError | null {
-        // Pre-compute node → groups for "free node" detection
-        const nodeToGroups = new Map<string, Set<LayoutGroup>>();
-        for (const node of this.nodes) nodeToGroups.set(node.id, new Set());
-
-        for (const group of this.groups) {
-            if (group.nodeIds.length > 1 && group.sourceConstraint) {
-                for (const nodeId of group.nodeIds) {
-                    nodeToGroups.get(nodeId)?.add(group);
-                }
-            }
-        }
-
-        for (const group of this.groups) {
-            if (group.nodeIds.length <= 1 || !group.sourceConstraint) continue;
-
-            const memberIds = group.nodeIds;
-            const memberSet = new Set(memberIds);
-            const memberNodes = memberIds
-                .map(id => this.nodeMap.get(id))
-                .filter((n): n is LayoutNode => n !== undefined);
-
-            if (memberNodes.length === 0) continue;
-
-            for (const node of this.nodes) {
-                if (memberSet.has(node.id)) continue;
-
-                // Skip nodes in other groups
-                const ng = nodeToGroups.get(node.id);
-                if (ng && ng.size > 0) continue;
-
-                // Check if x is already separated from ALL members on some axis.
-                // If leftof(x, m) or leftof(m, x) holds for ALL m, done.
-                if (this.isSeparatedFromAllMembers(node.id, memberIds)) {
-                    this.prunedByContainment++;
-                    continue;
-                }
-
-                const sourceConstraint = group.sourceConstraint;
-
-                // Build 4 alternatives, each a conjunction over all members
-                const leftOfAll: LayoutConstraint[] = memberNodes.map(m =>
-                    ({ left: node, right: m, minDistance: this.minPadding, sourceConstraint } as LeftConstraint));
-
-                const rightOfAll: LayoutConstraint[] = memberNodes.map(m =>
-                    ({ left: m, right: node, minDistance: this.minPadding, sourceConstraint } as LeftConstraint));
-
-                const aboveAll: LayoutConstraint[] = memberNodes.map(m =>
-                    ({ top: node, bottom: m, minDistance: this.minPadding, sourceConstraint } as TopConstraint));
-
-                const belowAll: LayoutConstraint[] = memberNodes.map(m =>
-                    ({ top: m, bottom: node, minDistance: this.minPadding, sourceConstraint } as TopConstraint));
-
-                // Pre-filter: only keep alternatives where no edge would cycle
-                const alts: LayoutConstraint[][] = [];
-                for (const alt of [leftOfAll, rightOfAll, aboveAll, belowAll]) {
-                    if (this.isAlternativeFeasible(alt)) {
-                        alts.push(alt);
-                    }
-                }
-
-                if (alts.length === 0) {
-                    // All alternatives pruned — add all 4 for CDCL error reporting
-                    const disj = new DisjunctiveConstraint(sourceConstraint,
-                        [leftOfAll, rightOfAll, aboveAll, belowAll]);
-                    if (!this.layout.disjunctiveConstraints) this.layout.disjunctiveConstraints = [];
-                    this.layout.disjunctiveConstraints.push(disj);
-                } else if (alts.length === 1) {
-                    // Unit — commit directly
-                    for (const constraint of alts[0]) {
-                        const error = this.addConjunctiveConstraint(constraint);
-                        if (error) return error;
-                    }
-                } else {
-                    const disj = new DisjunctiveConstraint(sourceConstraint, alts);
-                    if (!this.layout.disjunctiveConstraints) this.layout.disjunctiveConstraints = [];
-                    this.layout.disjunctiveConstraints.push(disj);
-                }
-            }
-        }
-
-        // Group-to-group separation: for disjoint groups that aren't subgroups,
-        // ensure their member sets don't overlap spatially.
-        // With box-only encoding: "group A left of group B" means
-        // every member of A is left of every member of B.
-        for (let i = 0; i < this.groups.length; i++) {
-            for (let j = i + 1; j < this.groups.length; j++) {
-                const gA = this.groups[i];
-                const gB = this.groups[j];
-                if (gA.nodeIds.length <= 1 || gB.nodeIds.length <= 1) continue;
-                if (this.containment.isSubGroup(gA.name, gB.name) ||
-                    this.containment.isSubGroup(gB.name, gA.name)) continue;
-                if (this.containment.intersection(gA.name, gB.name).length > 0) continue;
-
-                // Check if already separated
-                if (this.areGroupsSeparated(gA, gB)) {
-                    this.prunedByContainment++;
-                    continue;
-                }
-
-                const membersA = gA.nodeIds.map(id => this.nodeMap.get(id)).filter((n): n is LayoutNode => !!n);
-                const membersB = gB.nodeIds.map(id => this.nodeMap.get(id)).filter((n): n is LayoutNode => !!n);
-                const src = gA.sourceConstraint || gB.sourceConstraint!;
-
-                // A left of B: every a ∈ A is left of every b ∈ B
-                const aLeftB: LayoutConstraint[] = [];
-                const bLeftA: LayoutConstraint[] = [];
-                const aAboveB: LayoutConstraint[] = [];
-                const bAboveA: LayoutConstraint[] = [];
-                for (const a of membersA) {
-                    for (const b of membersB) {
-                        aLeftB.push({ left: a, right: b, minDistance: this.minPadding, sourceConstraint: src } as LeftConstraint);
-                        bLeftA.push({ left: b, right: a, minDistance: this.minPadding, sourceConstraint: src } as LeftConstraint);
-                        aAboveB.push({ top: a, bottom: b, minDistance: this.minPadding, sourceConstraint: src } as TopConstraint);
-                        bAboveA.push({ top: b, bottom: a, minDistance: this.minPadding, sourceConstraint: src } as TopConstraint);
-                    }
-                }
-
-                const alts = [aLeftB, bLeftA, aAboveB, bAboveA].filter(alt =>
-                    this.isAlternativeFeasible(alt)
-                );
-
-                if (alts.length > 0) {
-                    const disj = new DisjunctiveConstraint(src, alts.length === 0
-                        ? [aLeftB, bLeftA, aAboveB, bAboveA]
-                        : alts);
-                    if (!this.layout.disjunctiveConstraints) this.layout.disjunctiveConstraints = [];
-                    this.layout.disjunctiveConstraints.push(disj);
-                }
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Check if node x is separated from ALL members of a group on some axis.
-     * This means the group exclusion constraint is already satisfied.
-     *
-     * x is "left of all members" if leftof(x, m) for every m.
-     * x is "right of all members" if leftof(m, x) for every m.
-     * Similarly for V axis.
-     */
-    private isSeparatedFromAllMembers(nodeId: string, memberIds: string[]): boolean {
-        // Check: x left of all?
-        if (memberIds.every(m => this.hGraph.isOrdered(nodeId, m))) return true;
-        // Check: all left of x?
-        if (memberIds.every(m => this.hGraph.isOrdered(m, nodeId))) return true;
-        // Check: x above all?
-        if (memberIds.every(m => this.vGraph.isOrdered(nodeId, m))) return true;
-        // Check: all above x?
-        if (memberIds.every(m => this.vGraph.isOrdered(m, nodeId))) return true;
-
-        return false;
-    }
-
-    /**
-     * Check if two groups are already separated (all members of A separated
-     * from all members of B on some axis).
-     */
-    private areGroupsSeparated(gA: LayoutGroup, gB: LayoutGroup): boolean {
-        // A left of B: every a <_H every b
-        const aLeftB = gA.nodeIds.every(a => gB.nodeIds.every(b => this.hGraph.isOrdered(a, b)));
-        if (aLeftB) return true;
-        const bLeftA = gB.nodeIds.every(b => gA.nodeIds.every(a => this.hGraph.isOrdered(b, a)));
-        if (bLeftA) return true;
-        const aAboveB = gA.nodeIds.every(a => gB.nodeIds.every(b => this.vGraph.isOrdered(a, b)));
-        if (aAboveB) return true;
-        const bAboveA = gB.nodeIds.every(b => gA.nodeIds.every(a => this.vGraph.isOrdered(b, a)));
-        if (bAboveA) return true;
-        return false;
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    // Insight 2: Dimension-aware feasibility
+    // Dimension feasibility (Insight 1)
     // ═══════════════════════════════════════════════════════════════════════════
 
     private checkDimensionFeasibility(): PositionalConstraintError | null {
         const hSpan = this.hGraph.longestChainSpan();
         if (hSpan > MAX_SPAN) return this.buildDimensionError('horizontal', hSpan);
-
         const vSpan = this.vGraph.longestChainSpan();
         if (vSpan > MAX_SPAN) return this.buildDimensionError('vertical', vSpan);
-
         return null;
     }
 
@@ -911,13 +555,12 @@ class QualitativeConstraintValidatorV2 {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // Insight 3: Pigeonhole on alignment classes
+    // Pigeonhole on alignment classes (Insight 2)
     // ═══════════════════════════════════════════════════════════════════════════
 
     private checkPigeonhole(): PositionalConstraintError | null {
-        // x-aligned nodes must separate on y
-        const xClasses = this.xAlignUF.classes();
-        for (const [, members] of xClasses) {
+        // x-aligned nodes must separate vertically
+        for (const [, members] of this.xAlignUF.classes()) {
             if (members.length < 2) continue;
             let totalHeight = 0;
             for (const id of members) {
@@ -931,9 +574,8 @@ class QualitativeConstraintValidatorV2 {
             }
         }
 
-        // y-aligned nodes must separate on x
-        const yClasses = this.yAlignUF.classes();
-        for (const [, members] of yClasses) {
+        // y-aligned nodes must separate horizontally
+        for (const [, members] of this.yAlignUF.classes()) {
             if (members.length < 2) continue;
             let totalWidth = 0;
             for (const id of members) {
@@ -970,162 +612,85 @@ class QualitativeConstraintValidatorV2 {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // Insight 4: Interval-graph non-overlap decomposition
+    // Pre-solver disjunction resolution (Insight 3)
     // ═══════════════════════════════════════════════════════════════════════════
 
-    private applyIntervalDecomposition(): void {
+    /**
+     * Before entering CDCL, try to resolve disjunctions using:
+     * 1. Already separated → skip entirely
+     * 2. Prune infeasible alternatives (cycle, alignment, dimension overflow)
+     * 3. If only one alternative remains → commit as conjunctive
+     */
+    private presolveDisjunctions(): void {
         const remaining: DisjunctiveConstraint[] = [];
 
         for (const disj of this.allDisjunctions) {
-            // Only try decomposition on multi-alternative disjunctions
-            if (disj.alternatives.length <= 1) {
-                remaining.push(disj);
-                continue;
-            }
+            const regionPair = this.getDisjunctionRegionPair(disj);
 
-            // Check if already satisfied by existing orderings
-            if (this.isDisjunctionAlreadySatisfied(disj)) {
-                this.prunedByIntervalDecomp++;
-                continue;
-            }
-
-            // Try aspect-ratio / slack-based commit
-            if (disj.alternatives.length >= 4) {
-                const committed = this.trySlackBasedCommit(disj);
-                if (committed) {
-                    this.prunedByIntervalDecomp++;
+            // Already separated?
+            if (regionPair && this.areSeparated(regionPair[0], regionPair[1])) {
+                const satisfyingAlt = this.findSatisfyingAlternative(disj, regionPair);
+                if (satisfyingAlt !== null) {
+                    for (const constraint of disj.alternatives[satisfyingAlt]) {
+                        this.addedConstraints.push(constraint);
+                    }
+                    this.prunedByTransitivity++;
                     continue;
                 }
             }
 
-            // Reduce by pruning infeasible alternatives
-            const reduced = this.reduceDisjunction(disj);
-            if (reduced === 'committed') {
-                this.prunedByIntervalDecomp++;
-            } else if (reduced !== null) {
-                remaining.push(reduced);
-            } else {
+            // Prune infeasible alternatives
+            const validAlternatives: LayoutConstraint[][] = [];
+            for (const alt of disj.alternatives) {
+                if (this.isAlternativeFeasible(alt)) {
+                    validAlternatives.push(alt);
+                }
+            }
+
+            if (validAlternatives.length === 0) {
                 remaining.push(disj);
+            } else if (validAlternatives.length === 1) {
+                // Unit — commit directly
+                let committed = true;
+                for (const constraint of validAlternatives[0]) {
+                    const error = this.addConjunctiveConstraint(constraint);
+                    if (error) { committed = false; remaining.push(disj); break; }
+                }
+                if (committed) this.prunedByDecomposition++;
+            } else {
+                if (validAlternatives.length < disj.alternatives.length) {
+                    remaining.push(new DisjunctiveConstraint(disj.sourceConstraint, validAlternatives));
+                } else {
+                    remaining.push(disj);
+                }
             }
         }
 
         this.allDisjunctions = remaining;
     }
 
-    /**
-     * Check if a disjunction is already satisfied because at least one
-     * alternative's edges are all consistent with existing orderings.
-     */
-    private isDisjunctionAlreadySatisfied(disj: DisjunctiveConstraint): boolean {
-        for (const alt of disj.alternatives) {
-            let allAlreadyOrdered = true;
-            for (const constraint of alt) {
-                const edge = this.constraintToBoxEdge(constraint);
-                if (!edge) continue;
-                const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
-                if (!graph.isOrdered(edge.from, edge.to)) {
-                    allAlreadyOrdered = false;
-                    break;
-                }
-            }
-            if (allAlreadyOrdered) {
-                // This alternative is already satisfied — record it
-                for (const constraint of alt) {
-                    this.addedConstraints.push(constraint);
-                }
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Try to commit a disjunction to the axis with more slack.
-     */
-    private trySlackBasedCommit(disj: DisjunctiveConstraint): boolean {
-        // Score each alternative by minimum slack
-        const scored: { alt: LayoutConstraint[]; slack: number }[] = [];
-
-        for (const alt of disj.alternatives) {
-            if (!this.isAlternativeFeasible(alt)) continue;
-
-            let minSlack = Infinity;
-            for (const constraint of alt) {
-                const edge = this.constraintToBoxEdge(constraint);
-                if (!edge) continue;
-                const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
-                const slack = graph.slackForEdge(edge.from, edge.to, MAX_SPAN);
-                minSlack = Math.min(minSlack, slack);
-            }
-            scored.push({ alt, slack: minSlack });
-        }
-
-        if (scored.length === 0) return false;
-
-        // Sort by slack descending
-        scored.sort((a, b) => b.slack - a.slack);
-
-        // If the best alternative has vastly more slack (3x) than the next,
-        // or if only one alternative is feasible, commit to it
-        if (scored.length === 1 ||
-            (scored.length >= 2 && scored[0].slack > 3 * Math.max(scored[1].slack, 1))) {
-            return this.tryCommitAlternative(scored[0].alt);
-        }
-
-        return false;
-    }
-
-    private tryCommitAlternative(alternative: LayoutConstraint[]): boolean {
-        for (const constraint of alternative) {
-            const edge = this.constraintToBoxEdge(constraint);
-            if (!edge) continue;
-            const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
-            if (graph.isOrdered(edge.to, edge.from)) return false;
-        }
-        for (const constraint of alternative) {
-            this.addQualitativeEdge(constraint);
-            this.addedConstraints.push(constraint);
-        }
-        return true;
-    }
-
-    private reduceDisjunction(disj: DisjunctiveConstraint): DisjunctiveConstraint | 'committed' | null {
-        const validAlternatives: LayoutConstraint[][] = [];
-        for (const alt of disj.alternatives) {
-            if (this.isAlternativeFeasible(alt)) {
-                validAlternatives.push(alt);
-            }
-        }
-
-        if (validAlternatives.length === 0) return null;
-
-        if (validAlternatives.length === 1) {
-            for (const constraint of validAlternatives[0]) {
-                if (!this.addQualitativeEdge(constraint)) return null;
-                this.addedConstraints.push(constraint);
-            }
-            return 'committed';
-        }
-
-        if (validAlternatives.length < disj.alternatives.length) {
-            return new DisjunctiveConstraint(disj.sourceConstraint, validAlternatives);
-        }
-
-        return null; // No reduction possible
-    }
-
     // ═══════════════════════════════════════════════════════════════════════════
-    // Conjunctive constraint addition
+    // Conjunctive constraint addition (from V1, with virtual group nodes)
     // ═══════════════════════════════════════════════════════════════════════════
 
     private addConjunctiveConstraint(constraint: LayoutConstraint): PositionalConstraintError | null {
         if (isLeftConstraint(constraint)) {
-            const ok = this.hGraph.addEdge(constraint.left.id, constraint.right.id);
-            if (!ok) return this.buildConjunctiveError(constraint);
+            // Check if nodes are x-aligned (same x) — can't be left/right of each other
+            if (this.xAlignUF.connected(constraint.left.id, constraint.right.id)) {
+                return this.buildConjunctiveError(constraint);
+            }
+            if (!this.hGraph.addEdge(constraint.left.id, constraint.right.id)) {
+                return this.buildConjunctiveError(constraint);
+            }
             this.addedConstraints.push(constraint);
         } else if (isTopConstraint(constraint)) {
-            const ok = this.vGraph.addEdge(constraint.top.id, constraint.bottom.id);
-            if (!ok) return this.buildConjunctiveError(constraint);
+            // Check if nodes are y-aligned (same y) — can't be above/below each other
+            if (this.yAlignUF.connected(constraint.top.id, constraint.bottom.id)) {
+                return this.buildConjunctiveError(constraint);
+            }
+            if (!this.vGraph.addEdge(constraint.top.id, constraint.bottom.id)) {
+                return this.buildConjunctiveError(constraint);
+            }
             this.addedConstraints.push(constraint);
         } else if (isAlignmentConstraint(constraint)) {
             const ac = constraint as AlignmentConstraint;
@@ -1139,74 +704,131 @@ class QualitativeConstraintValidatorV2 {
             const alignError = this.checkAlignmentConsistency(ac);
             if (alignError) return alignError;
             this.addedConstraints.push(constraint);
-        } else if (isBoundingBoxConstraint(constraint)) {
-            // Legacy: decompose BoundingBoxConstraint into box-to-box edges
-            const bc = constraint as BoundingBoxConstraint;
-            const members = this.containment.membersOf(bc.group.name);
-            for (const memberId of members) {
-                if (memberId === bc.node.id) continue;
-                const edge = this.bbcToBoxEdge(bc, memberId);
-                if (edge) {
-                    const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
-                    if (!graph.addEdge(edge.from, edge.to)) {
-                        return this.buildConjunctiveError(constraint);
-                    }
-                }
-            }
-            this.addedConstraints.push(constraint);
-        } else if (isGroupBoundaryConstraint(constraint)) {
-            // Legacy: decompose GroupBoundaryConstraint into box-to-box edges
-            const gc = constraint as GroupBoundaryConstraint;
-            const membersA = this.containment.membersOf(gc.groupA.name);
-            const membersB = this.containment.membersOf(gc.groupB.name);
-            for (const a of membersA) {
-                for (const b of membersB) {
-                    const edge = this.gbcToBoxEdge(gc, a, b);
-                    if (edge) {
-                        const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
-                        if (!graph.addEdge(edge.from, edge.to)) {
-                            return this.buildConjunctiveError(constraint);
-                        }
-                    }
-                }
-            }
+        } else if (isBoundingBoxConstraint(constraint) || isGroupBoundaryConstraint(constraint)) {
+            const error = this.addSpatialConstraint(constraint);
+            if (error) return error;
             this.addedConstraints.push(constraint);
         }
         return null;
     }
 
-    /** Decompose a BoundingBoxConstraint into a box-to-box edge for one member. */
-    private bbcToBoxEdge(bc: BoundingBoxConstraint, memberId: string): { axis: 'h' | 'v'; from: string; to: string } | null {
-        switch (bc.side) {
-            case 'left':  return { axis: 'h', from: bc.node.id, to: memberId };   // node left of member
-            case 'right': return { axis: 'h', from: memberId, to: bc.node.id };   // member left of node
-            case 'top':   return { axis: 'v', from: bc.node.id, to: memberId };   // node above member
-            case 'bottom': return { axis: 'v', from: memberId, to: bc.node.id };  // member above node
+    /**
+     * Add BoundingBoxConstraint or GroupBoundaryConstraint as edges to/from
+     * virtual group nodes (V1's encoding — single edge, not per-member).
+     */
+    private addSpatialConstraint(constraint: LayoutConstraint): PositionalConstraintError | null {
+        if (isBoundingBoxConstraint(constraint)) {
+            const bc = constraint as BoundingBoxConstraint;
+            const groupId = `_group_${bc.group.name}`;
+            this.hGraph.ensureNode(groupId);
+            this.vGraph.ensureNode(groupId);
+            let ok: boolean;
+            switch (bc.side) {
+                case 'left':   ok = this.hGraph.addEdge(bc.node.id, groupId); break;
+                case 'right':  ok = this.hGraph.addEdge(groupId, bc.node.id); break;
+                case 'top':    ok = this.vGraph.addEdge(bc.node.id, groupId); break;
+                case 'bottom': ok = this.vGraph.addEdge(groupId, bc.node.id); break;
+                default: ok = true;
+            }
+            if (!ok) return this.buildConjunctiveError(constraint);
+        } else if (isGroupBoundaryConstraint(constraint)) {
+            const gc = constraint as GroupBoundaryConstraint;
+            const gAId = `_group_${gc.groupA.name}`;
+            const gBId = `_group_${gc.groupB.name}`;
+            this.hGraph.ensureNode(gAId);
+            this.hGraph.ensureNode(gBId);
+            this.vGraph.ensureNode(gAId);
+            this.vGraph.ensureNode(gBId);
+            let ok: boolean;
+            switch (gc.side) {
+                case 'left':   ok = this.hGraph.addEdge(gAId, gBId); break;
+                case 'right':  ok = this.hGraph.addEdge(gBId, gAId); break;
+                case 'top':    ok = this.vGraph.addEdge(gAId, gBId); break;
+                case 'bottom': ok = this.vGraph.addEdge(gBId, gAId); break;
+                default: ok = true;
+            }
+            if (!ok) return this.buildConjunctiveError(constraint);
         }
-    }
-
-    /** Decompose a GroupBoundaryConstraint into a box-to-box edge for one (a,b) pair. */
-    private gbcToBoxEdge(gc: GroupBoundaryConstraint, aId: string, bId: string): { axis: 'h' | 'v'; from: string; to: string } | null {
-        switch (gc.side) {
-            case 'left':  return { axis: 'h', from: aId, to: bId };  // A left of B
-            case 'right': return { axis: 'h', from: bId, to: aId };  // B left of A
-            case 'top':   return { axis: 'v', from: aId, to: bId };  // A above B
-            case 'bottom': return { axis: 'v', from: bId, to: aId }; // B above A
-        }
+        return null;
     }
 
     private checkAlignmentConsistency(ac: AlignmentConstraint): PositionalConstraintError | null {
         const id1 = ac.node1.id;
         const id2 = ac.node2.id;
         if (ac.axis === 'x') {
-            if (this.hGraph.hasEdge(id1, id2) || this.hGraph.hasEdge(id2, id1)) {
+            if (this.hGraph.hasEdge(id1, id2) || this.hGraph.hasEdge(id2, id1))
                 return this.buildConjunctiveError(ac);
-            }
         } else {
-            if (this.vGraph.hasEdge(id1, id2) || this.vGraph.hasEdge(id2, id1)) {
+            if (this.vGraph.hasEdge(id1, id2) || this.vGraph.hasEdge(id2, id1))
                 return this.buildConjunctiveError(ac);
+        }
+        return null;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Group bounding box disjunctions (from V1 — virtual group nodes)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    private addGroupBoundingBoxDisjunctions(): PositionalConstraintError | null {
+        const nodeToGroups = new Map<string, Set<LayoutGroup>>();
+        for (const node of this.nodes) nodeToGroups.set(node.id, new Set());
+
+        for (const group of this.groups) {
+            if (group.nodeIds.length > 1 && group.sourceConstraint) {
+                for (const nodeId of group.nodeIds) {
+                    nodeToGroups.get(nodeId)?.add(group);
+                }
             }
         }
+
+        for (const group of this.groups) {
+            if (group.nodeIds.length <= 1 || !group.sourceConstraint) continue;
+
+            const memberIds = new Set(group.nodeIds);
+            const groupId = `_group_${group.name}`;
+            this.hGraph.ensureNode(groupId);
+            this.vGraph.ensureNode(groupId);
+
+            for (const node of this.nodes) {
+                if (memberIds.has(node.id)) continue;
+                const nodeGroups = nodeToGroups.get(node.id);
+                if (nodeGroups && nodeGroups.size > 0) continue;
+
+                const sourceConstraint = group.sourceConstraint;
+                const alts: LayoutConstraint[][] = [
+                    [{ group, node, side: 'left' as const, minDistance: this.minPadding, sourceConstraint } as BoundingBoxConstraint],
+                    [{ group, node, side: 'right' as const, minDistance: this.minPadding, sourceConstraint } as BoundingBoxConstraint],
+                    [{ group, node, side: 'top' as const, minDistance: this.minPadding, sourceConstraint } as BoundingBoxConstraint],
+                    [{ group, node, side: 'bottom' as const, minDistance: this.minPadding, sourceConstraint } as BoundingBoxConstraint],
+                ];
+                const disj = new DisjunctiveConstraint(sourceConstraint, alts);
+                if (!this.layout.disjunctiveConstraints) this.layout.disjunctiveConstraints = [];
+                this.layout.disjunctiveConstraints.push(disj);
+            }
+        }
+
+        // Group-to-group separation
+        for (let i = 0; i < this.groups.length; i++) {
+            for (let j = i + 1; j < this.groups.length; j++) {
+                const gA = this.groups[i];
+                const gB = this.groups[j];
+                if (gA.nodeIds.length <= 1 || gB.nodeIds.length <= 1) continue;
+                if (this.isSubGroup(gA, gB) || this.isSubGroup(gB, gA)) continue;
+                if (this.groupIntersection(gA, gB).length > 0) continue;
+
+                const src = gA.sourceConstraint || gB.sourceConstraint!;
+                const alts: LayoutConstraint[][] = [
+                    [{ groupA: gA, groupB: gB, side: 'left' as const, minDistance: this.minPadding, sourceConstraint: src } as GroupBoundaryConstraint],
+                    [{ groupA: gA, groupB: gB, side: 'right' as const, minDistance: this.minPadding, sourceConstraint: src } as GroupBoundaryConstraint],
+                    [{ groupA: gA, groupB: gB, side: 'top' as const, minDistance: this.minPadding, sourceConstraint: src } as GroupBoundaryConstraint],
+                    [{ groupA: gA, groupB: gB, side: 'bottom' as const, minDistance: this.minPadding, sourceConstraint: src } as GroupBoundaryConstraint],
+                ];
+                const disj = new DisjunctiveConstraint(src, alts);
+                if (!this.layout.disjunctiveConstraints) this.layout.disjunctiveConstraints = [];
+                this.layout.disjunctiveConstraints.push(disj);
+            }
+        }
+
         return null;
     }
 
@@ -1221,9 +843,15 @@ class QualitativeConstraintValidatorV2 {
         );
     }
 
+    /**
+     * Check if an alternative is feasible:
+     * 1. No cycle (transitivity check)
+     * 2. No alignment conflict
+     * 3. No dimension overflow (Insight 4)
+     */
     private isAlternativeFeasible(alternative: LayoutConstraint[]): boolean {
         for (const constraint of alternative) {
-            const edge = this.constraintToBoxEdge(constraint);
+            const edge = this.constraintToEdge(constraint);
             if (!edge) continue;
             const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
 
@@ -1234,9 +862,8 @@ class QualitativeConstraintValidatorV2 {
             if (edge.axis === 'h' && this.xAlignUF.connected(edge.from, edge.to)) return false;
             if (edge.axis === 'v' && this.yAlignUF.connected(edge.from, edge.to)) return false;
 
-            // Insight 2: dimension overflow?
-            const slack = graph.slackForEdge(edge.from, edge.to, MAX_SPAN);
-            if (slack < 0) {
+            // Dimension overflow? (Insight 4)
+            if (graph.wouldOverflow(edge.from, edge.to, MAX_SPAN)) {
                 this.prunedByDimension++;
                 return false;
             }
@@ -1244,42 +871,38 @@ class QualitativeConstraintValidatorV2 {
         return true;
     }
 
-    /**
-     * Convert any constraint to a box-to-box edge. For BoundingBoxConstraint
-     * and GroupBoundaryConstraint, returns the edge for the first member pair
-     * (representative — used for heuristic scoring, not for completeness).
-     */
-    private constraintToBoxEdge(constraint: LayoutConstraint): { axis: 'h' | 'v'; from: string; to: string } | null {
-        if (isLeftConstraint(constraint)) {
-            return { axis: 'h', from: constraint.left.id, to: constraint.right.id };
-        }
-        if (isTopConstraint(constraint)) {
-            return { axis: 'v', from: constraint.top.id, to: constraint.bottom.id };
-        }
-        if (isBoundingBoxConstraint(constraint)) {
-            const bc = constraint as BoundingBoxConstraint;
-            // Use first member as representative
-            const firstMember = bc.group.nodeIds.find(id => id !== bc.node.id);
-            if (!firstMember) return null;
-            return this.bbcToBoxEdge(bc, firstMember);
-        }
-        if (isGroupBoundaryConstraint(constraint)) {
-            const gc = constraint as GroupBoundaryConstraint;
-            const aFirst = gc.groupA.nodeIds[0];
-            const bFirst = gc.groupB.nodeIds[0];
-            if (!aFirst || !bFirst) return null;
-            return this.gbcToBoxEdge(gc, aFirst, bFirst);
+    private getDisjunctionRegionPair(disj: DisjunctiveConstraint): [string, string] | null {
+        if (disj.alternatives.length === 0) return null;
+        const first = disj.alternatives[0][0];
+        if (isBoundingBoxConstraint(first)) return [first.node.id, `_group_${first.group.name}`];
+        if (isGroupBoundaryConstraint(first)) return [`_group_${first.groupA.name}`, `_group_${first.groupB.name}`];
+        if (isLeftConstraint(first)) return [first.left.id, first.right.id];
+        if (isTopConstraint(first)) return [first.top.id, first.bottom.id];
+        return null;
+    }
+
+    private findSatisfyingAlternative(disj: DisjunctiveConstraint, pair: [string, string]): number | null {
+        for (let i = 0; i < disj.alternatives.length; i++) {
+            let matches = true;
+            for (const constraint of disj.alternatives[i]) {
+                const edge = this.constraintToEdge(constraint);
+                if (!edge) continue;
+                const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
+                if (graph.isOrdered(edge.to, edge.from)) { matches = false; break; }
+            }
+            if (matches) return i;
         }
         return null;
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // CDCL solver
+    // CDCL solver (from V1, unchanged core)
     // ═══════════════════════════════════════════════════════════════════════════
 
     private solveCDCL(): { satisfiable: boolean; error?: PositionalConstraintError } {
         if (this.allDisjunctions.length === 0) return { satisfiable: true };
 
+        // Geometric pruning pass
         this.pruneDisjunctions();
         if (this.allDisjunctions.length === 0) return { satisfiable: true };
 
@@ -1321,10 +944,7 @@ class QualitativeConstraintValidatorV2 {
         return this.buildUnsatResult(new Int32Array(this.allDisjunctions.length).fill(-1));
     }
 
-    private cdclSearchLoop(assigned: Int32Array): {
-        satisfiable: boolean;
-        provedUnsat?: boolean;
-    } {
+    private cdclSearchLoop(assigned: Int32Array): { satisfiable: boolean; provedUnsat?: boolean } {
         const numDisjunctions = this.allDisjunctions.length;
         let conflictsSinceRestart = 0;
 
@@ -1343,9 +963,7 @@ class QualitativeConstraintValidatorV2 {
                 conflictsSinceRestart++;
                 this.backtrackTo(backtrackLevel, assigned);
 
-                if (conflictsSinceRestart >= this.restartThreshold) {
-                    return { satisfiable: false, provedUnsat: false };
-                }
+                if (conflictsSinceRestart >= this.restartThreshold) return { satisfiable: false, provedUnsat: false };
                 continue;
             }
 
@@ -1370,9 +988,7 @@ class QualitativeConstraintValidatorV2 {
                 conflictsSinceRestart++;
                 this.backtrackTo(backtrackLevel, assigned);
 
-                if (conflictsSinceRestart >= this.restartThreshold) {
-                    return { satisfiable: false, provedUnsat: false };
-                }
+                if (conflictsSinceRestart >= this.restartThreshold) return { satisfiable: false, provedUnsat: false };
             }
         }
     }
@@ -1385,6 +1001,7 @@ class QualitativeConstraintValidatorV2 {
             changed = false;
             for (const clause of this.learnedClauses) {
                 let numSat = 0;
+                let numUnsat = 0;
                 let lastUnresolved: Literal | null = null;
                 let unresolvedCount = 0;
 
@@ -1397,6 +1014,8 @@ class QualitativeConstraintValidatorV2 {
                         numSat++;
                     } else if (!lit.sign && curAssign !== lit.alternativeIndex) {
                         numSat++;
+                    } else {
+                        numUnsat++;
                     }
                 }
 
@@ -1406,16 +1025,20 @@ class QualitativeConstraintValidatorV2 {
                 if (unresolvedCount === 1 && lastUnresolved) {
                     const lit = lastUnresolved;
                     if (lit.sign) {
-                        if (!this.tryAssign(lit.disjunctionIndex, lit.alternativeIndex, assigned, false)) return 'conflict';
+                        if (!this.tryAssign(lit.disjunctionIndex, lit.alternativeIndex, assigned, false))
+                            return 'conflict';
+                        changed = true; // Assignment made
                     } else {
                         const remaining = this.getRemainingAlternatives(lit.disjunctionIndex, assigned);
                         const filtered = remaining.filter(a => a !== lit.alternativeIndex);
                         if (filtered.length === 0) return 'conflict';
                         if (filtered.length === 1) {
-                            if (!this.tryAssign(lit.disjunctionIndex, filtered[0], assigned, false)) return 'conflict';
+                            if (!this.tryAssign(lit.disjunctionIndex, filtered[0], assigned, false))
+                                return 'conflict';
+                            changed = true; // Assignment made
                         }
+                        // If filtered.length > 1, no propagation — don't set changed
                     }
-                    changed = true;
                 }
             }
         }
@@ -1451,60 +1074,50 @@ class QualitativeConstraintValidatorV2 {
 
     private tryAssign(dIdx: number, aIdx: number, assigned: Int32Array, isDecision: boolean): boolean {
         const alternative = this.allDisjunctions[dIdx].alternatives[aIdx];
-
         for (const constraint of alternative) {
             if (!this.addQualitativeEdge(constraint)) {
                 this.undoAlternativeEdges(alternative, constraint);
                 return false;
             }
         }
-
         assigned[dIdx] = aIdx;
         this.assignmentTrail.push({ disjunctionIndex: dIdx, alternativeIndex: aIdx, decisionLevel: this.decisionLevel, isDecision });
         for (const constraint of alternative) this.addedConstraints.push(constraint);
         return true;
     }
 
-    /**
-     * Add a constraint as edge(s) in the qualitative graph.
-     * For LeftConstraint/TopConstraint: single box-to-box edge.
-     * For BoundingBoxConstraint: edges to ALL members.
-     * For GroupBoundaryConstraint: edges for ALL member pairs.
-     */
     private addQualitativeEdge(constraint: LayoutConstraint): boolean {
         if (isLeftConstraint(constraint)) {
+            if (this.xAlignUF.connected(constraint.left.id, constraint.right.id)) return false;
             return this.hGraph.addEdge(constraint.left.id, constraint.right.id);
         }
         if (isTopConstraint(constraint)) {
+            if (this.yAlignUF.connected(constraint.top.id, constraint.bottom.id)) return false;
             return this.vGraph.addEdge(constraint.top.id, constraint.bottom.id);
         }
         if (isBoundingBoxConstraint(constraint)) {
             const bc = constraint as BoundingBoxConstraint;
-            const members = this.containment.membersOf(bc.group.name);
-            for (const memberId of members) {
-                if (memberId === bc.node.id) continue;
-                const edge = this.bbcToBoxEdge(bc, memberId);
-                if (edge) {
-                    const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
-                    if (!graph.addEdge(edge.from, edge.to)) return false;
-                }
+            const groupId = `_group_${bc.group.name}`;
+            this.hGraph.ensureNode(groupId); this.vGraph.ensureNode(groupId);
+            switch (bc.side) {
+                case 'left':   return this.hGraph.addEdge(bc.node.id, groupId);
+                case 'right':  return this.hGraph.addEdge(groupId, bc.node.id);
+                case 'top':    return this.vGraph.addEdge(bc.node.id, groupId);
+                case 'bottom': return this.vGraph.addEdge(groupId, bc.node.id);
             }
-            return true;
         }
         if (isGroupBoundaryConstraint(constraint)) {
             const gc = constraint as GroupBoundaryConstraint;
-            const membersA = this.containment.membersOf(gc.groupA.name);
-            const membersB = this.containment.membersOf(gc.groupB.name);
-            for (const a of membersA) {
-                for (const b of membersB) {
-                    const edge = this.gbcToBoxEdge(gc, a, b);
-                    if (edge) {
-                        const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
-                        if (!graph.addEdge(edge.from, edge.to)) return false;
-                    }
-                }
+            const gAId = `_group_${gc.groupA.name}`;
+            const gBId = `_group_${gc.groupB.name}`;
+            this.hGraph.ensureNode(gAId); this.hGraph.ensureNode(gBId);
+            this.vGraph.ensureNode(gAId); this.vGraph.ensureNode(gBId);
+            switch (gc.side) {
+                case 'left':   return this.hGraph.addEdge(gAId, gBId);
+                case 'right':  return this.hGraph.addEdge(gBId, gAId);
+                case 'top':    return this.vGraph.addEdge(gAId, gBId);
+                case 'bottom': return this.vGraph.addEdge(gBId, gAId);
             }
-            return true;
         }
         if (isAlignmentConstraint(constraint)) {
             const ac = constraint as AlignmentConstraint;
@@ -1529,27 +1142,22 @@ class QualitativeConstraintValidatorV2 {
             this.vGraph.removeEdge(constraint.top.id, constraint.bottom.id);
         } else if (isBoundingBoxConstraint(constraint)) {
             const bc = constraint as BoundingBoxConstraint;
-            const members = this.containment.membersOf(bc.group.name);
-            for (const memberId of members) {
-                if (memberId === bc.node.id) continue;
-                const edge = this.bbcToBoxEdge(bc, memberId);
-                if (edge) {
-                    const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
-                    graph.removeEdge(edge.from, edge.to);
-                }
+            const groupId = `_group_${bc.group.name}`;
+            switch (bc.side) {
+                case 'left':   this.hGraph.removeEdge(bc.node.id, groupId); break;
+                case 'right':  this.hGraph.removeEdge(groupId, bc.node.id); break;
+                case 'top':    this.vGraph.removeEdge(bc.node.id, groupId); break;
+                case 'bottom': this.vGraph.removeEdge(groupId, bc.node.id); break;
             }
         } else if (isGroupBoundaryConstraint(constraint)) {
             const gc = constraint as GroupBoundaryConstraint;
-            const membersA = this.containment.membersOf(gc.groupA.name);
-            const membersB = this.containment.membersOf(gc.groupB.name);
-            for (const a of membersA) {
-                for (const b of membersB) {
-                    const edge = this.gbcToBoxEdge(gc, a, b);
-                    if (edge) {
-                        const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
-                        graph.removeEdge(edge.from, edge.to);
-                    }
-                }
+            const gAId = `_group_${gc.groupA.name}`;
+            const gBId = `_group_${gc.groupB.name}`;
+            switch (gc.side) {
+                case 'left':   this.hGraph.removeEdge(gAId, gBId); break;
+                case 'right':  this.hGraph.removeEdge(gBId, gAId); break;
+                case 'top':    this.vGraph.removeEdge(gAId, gBId); break;
+                case 'bottom': this.vGraph.removeEdge(gBId, gAId); break;
             }
         }
     }
@@ -1558,40 +1166,28 @@ class QualitativeConstraintValidatorV2 {
 
     private analyzeConflict(assigned: Int32Array): { learnedClause: LearnedClause | null; backtrackLevel: number } {
         const clause: LearnedClause = [];
-        let maxLevel = 0;
-        let secondMaxLevel = 0;
+        let maxLevel = 0, secondMaxLevel = 0;
 
-        for (const assignment of this.assignmentTrail) {
-            if (assignment.isDecision) {
-                clause.push({ disjunctionIndex: assignment.disjunctionIndex, alternativeIndex: assignment.alternativeIndex, sign: false });
-                if (assignment.decisionLevel > maxLevel) {
-                    secondMaxLevel = maxLevel;
-                    maxLevel = assignment.decisionLevel;
-                } else if (assignment.decisionLevel > secondMaxLevel && assignment.decisionLevel < maxLevel) {
-                    secondMaxLevel = assignment.decisionLevel;
-                }
+        for (const a of this.assignmentTrail) {
+            if (a.isDecision) {
+                clause.push({ disjunctionIndex: a.disjunctionIndex, alternativeIndex: a.alternativeIndex, sign: false });
+                if (a.decisionLevel > maxLevel) { secondMaxLevel = maxLevel; maxLevel = a.decisionLevel; }
+                else if (a.decisionLevel > secondMaxLevel && a.decisionLevel < maxLevel) { secondMaxLevel = a.decisionLevel; }
             }
         }
-
         if (clause.length === 0) return { learnedClause: null, backtrackLevel: 0 };
         return { learnedClause: clause, backtrackLevel: Math.max(0, secondMaxLevel) };
     }
 
     private analyzeConflictForDecision(dIdx: number, aIdx: number, assigned: Int32Array): { learnedClause: LearnedClause | null; backtrackLevel: number } {
         const clause: LearnedClause = [{ disjunctionIndex: dIdx, alternativeIndex: aIdx, sign: false }];
-        let maxLevel = 0;
-        let secondMaxLevel = 0;
+        let maxLevel = 0, secondMaxLevel = 0;
 
-        for (const assignment of this.assignmentTrail) {
-            clause.push({ disjunctionIndex: assignment.disjunctionIndex, alternativeIndex: assignment.alternativeIndex, sign: false });
-            if (assignment.decisionLevel > maxLevel) {
-                secondMaxLevel = maxLevel;
-                maxLevel = assignment.decisionLevel;
-            } else if (assignment.decisionLevel > secondMaxLevel && assignment.decisionLevel < maxLevel) {
-                secondMaxLevel = assignment.decisionLevel;
-            }
+        for (const a of this.assignmentTrail) {
+            clause.push({ disjunctionIndex: a.disjunctionIndex, alternativeIndex: a.alternativeIndex, sign: false });
+            if (a.decisionLevel > maxLevel) { secondMaxLevel = maxLevel; maxLevel = a.decisionLevel; }
+            else if (a.decisionLevel > secondMaxLevel && a.decisionLevel < maxLevel) { secondMaxLevel = a.decisionLevel; }
         }
-
         return { learnedClause: clause, backtrackLevel: Math.max(0, secondMaxLevel) };
     }
 
@@ -1601,7 +1197,6 @@ class QualitativeConstraintValidatorV2 {
         while (this.assignmentTrail.length > 0) {
             const last = this.assignmentTrail[this.assignmentTrail.length - 1];
             if (last.decisionLevel <= level) break;
-
             const alternative = this.allDisjunctions[last.disjunctionIndex].alternatives[last.alternativeIndex];
             for (const constraint of alternative) this.removeQualitativeEdge(constraint);
             this.addedConstraints.length -= alternative.length;
@@ -1611,40 +1206,26 @@ class QualitativeConstraintValidatorV2 {
         this.decisionLevel = level;
     }
 
-    // ─── Decision heuristic (VSIDS + slack) ──────────────────────────────────
+    // ─── Decision heuristic (VSIDS + simplicity, from V1) ───────────────────
 
     private pickBranch(assigned: Int32Array): { dIdx: number; aIdx: number } {
-        let bestDIdx = -1;
-        let bestAIdx = -1;
-        let bestScore = -Infinity;
+        let bestDIdx = -1, bestAIdx = -1, bestScore = -1;
 
         for (let d = 0; d < this.allDisjunctions.length; d++) {
             if (assigned[d] !== -1) continue;
+            // Only consider alternatives not eliminated by learned clauses
+            const remaining = this.getRemainingAlternatives(d, assigned);
             const disj = this.allDisjunctions[d];
-
-            for (let a = 0; a < disj.alternatives.length; a++) {
-                const vsids = this.activity.get(`d${d}a${a}`) ?? 0;
-                const simplicityBonus = 1.0 / (1 + disj.alternatives[a].length);
-
-                let slackBonus = 0;
-                for (const constraint of disj.alternatives[a]) {
-                    const edge = this.constraintToBoxEdge(constraint);
-                    if (edge) {
-                        const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
-                        const slack = graph.slackForEdge(edge.from, edge.to, MAX_SPAN);
-                        slackBonus += Math.max(0, Math.min(1, slack / MAX_SPAN));
-                    }
-                }
-
-                const totalScore = vsids + simplicityBonus + slackBonus * 0.5;
-                if (totalScore > bestScore) {
-                    bestScore = totalScore;
+            for (const a of remaining) {
+                const score = (this.activity.get(`d${d}a${a}`) ?? 0)
+                    + 1.0 / (1 + disj.alternatives[a].length);
+                if (score > bestScore) {
+                    bestScore = score;
                     bestDIdx = d;
                     bestAIdx = a;
                 }
             }
         }
-
         return { dIdx: bestDIdx, aIdx: bestAIdx };
     }
 
@@ -1658,9 +1239,7 @@ class QualitativeConstraintValidatorV2 {
     }
 
     private decayActivity(): void {
-        for (const [key, val] of this.activity) {
-            this.activity.set(key, val * this.activityDecay);
-        }
+        for (const [key, val] of this.activity) this.activity.set(key, val * this.activityDecay);
     }
 
     // ─── Restart management ──────────────────────────────────────────────────
@@ -1671,21 +1250,26 @@ class QualitativeConstraintValidatorV2 {
     }
 
     private luby(i: number): number {
-        let size = 1;
-        let seq = 1;
+        let size = 1, seq = 1;
         while (size < i + 1) { size = 2 * size + 1; seq *= 2; }
         while (size - 1 !== i) { size = (size - 1) / 2; seq = seq / 2; if (i >= size) i -= size; }
         return seq;
     }
 
-    // ─── Disjunction pruning ─────────────────────────────────────────────────
+    // ─── Disjunction pruning (during CDCL restarts) ─────────────────────────
 
     private pruneDisjunctions(): void {
         const pruned: DisjunctiveConstraint[] = [];
 
         for (const disj of this.allDisjunctions) {
-            // Check if already satisfied
-            if (this.isDisjunctionAlreadySatisfied(disj)) continue;
+            const regionPair = this.getDisjunctionRegionPair(disj);
+            if (regionPair && this.areSeparated(regionPair[0], regionPair[1])) {
+                const satisfyingAlt = this.findSatisfyingAlternative(disj, regionPair);
+                if (satisfyingAlt !== null) {
+                    for (const c of disj.alternatives[satisfyingAlt]) this.addedConstraints.push(c);
+                    continue;
+                }
+            }
 
             const validAlternatives: LayoutConstraint[][] = [];
             for (const alt of disj.alternatives) {
@@ -1718,8 +1302,8 @@ class QualitativeConstraintValidatorV2 {
         return {
             hGraph: this.hGraph.clone(),
             vGraph: this.vGraph.clone(),
-            xAlignUF: this.xAlignUF.clone(),
-            yAlignUF: this.yAlignUF.clone(),
+            hAlignUF: this.xAlignUF.clone(),
+            vAlignUF: this.yAlignUF.clone(),
             assignmentTrailLength: this.assignmentTrail.length,
             addedConstraintsLength: this.addedConstraints.length,
         };
@@ -1728,8 +1312,37 @@ class QualitativeConstraintValidatorV2 {
     private restoreCheckpoint(cp: SolverCheckpoint): void {
         this.hGraph = cp.hGraph.clone();
         this.vGraph = cp.vGraph.clone();
-        this.xAlignUF = cp.xAlignUF.clone();
-        this.yAlignUF = cp.yAlignUF.clone();
+        this.xAlignUF = cp.hAlignUF.clone();
+        this.yAlignUF = cp.vAlignUF.clone();
+    }
+
+    private constraintToEdge(constraint: LayoutConstraint): { axis: 'h' | 'v'; from: string; to: string } | null {
+        if (isLeftConstraint(constraint))
+            return { axis: 'h', from: constraint.left.id, to: constraint.right.id };
+        if (isTopConstraint(constraint))
+            return { axis: 'v', from: constraint.top.id, to: constraint.bottom.id };
+        if (isBoundingBoxConstraint(constraint)) {
+            const bc = constraint as BoundingBoxConstraint;
+            const groupId = `_group_${bc.group.name}`;
+            switch (bc.side) {
+                case 'left':   return { axis: 'h', from: bc.node.id, to: groupId };
+                case 'right':  return { axis: 'h', from: groupId, to: bc.node.id };
+                case 'top':    return { axis: 'v', from: bc.node.id, to: groupId };
+                case 'bottom': return { axis: 'v', from: groupId, to: bc.node.id };
+            }
+        }
+        if (isGroupBoundaryConstraint(constraint)) {
+            const gc = constraint as GroupBoundaryConstraint;
+            const gAId = `_group_${gc.groupA.name}`;
+            const gBId = `_group_${gc.groupB.name}`;
+            switch (gc.side) {
+                case 'left':   return { axis: 'h', from: gAId, to: gBId };
+                case 'right':  return { axis: 'h', from: gBId, to: gAId };
+                case 'top':    return { axis: 'v', from: gAId, to: gBId };
+                case 'bottom': return { axis: 'v', from: gBId, to: gAId };
+            }
+        }
+        return null;
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -1747,10 +1360,16 @@ class QualitativeConstraintValidatorV2 {
             freshH.ensureNode(node.id, node.width);
             freshV.ensureNode(node.id, node.height);
         }
+        for (const group of this.groups) {
+            const gid = `_group_${group.name}`;
+            freshH.ensureNode(gid);
+            freshV.ensureNode(gid);
+        }
 
         for (const constraint of this.orientationConstraints) {
             if (isLeftConstraint(constraint)) freshH.addEdge(constraint.left.id, constraint.right.id);
             else if (isTopConstraint(constraint)) freshV.addEdge(constraint.top.id, constraint.bottom.id);
+            else if (isAlignmentConstraint(constraint)) { /* skip for MFS graph */ }
         }
 
         const feasibleConstraints: LayoutConstraint[] = [...this.orientationConstraints];
@@ -1791,34 +1410,29 @@ class QualitativeConstraintValidatorV2 {
     private addEdgeToGraphs(constraint: LayoutConstraint, hGraph: WeightedPartialOrderGraph, vGraph: WeightedPartialOrderGraph): boolean {
         if (isLeftConstraint(constraint)) return hGraph.addEdge(constraint.left.id, constraint.right.id);
         if (isTopConstraint(constraint)) return vGraph.addEdge(constraint.top.id, constraint.bottom.id);
-        // For bounding box / group boundary constraints, decompose to box edges
         if (isBoundingBoxConstraint(constraint)) {
             const bc = constraint as BoundingBoxConstraint;
-            const members = this.containment.membersOf(bc.group.name);
-            for (const memberId of members) {
-                if (memberId === bc.node.id) continue;
-                const edge = this.bbcToBoxEdge(bc, memberId);
-                if (edge) {
-                    const graph = edge.axis === 'h' ? hGraph : vGraph;
-                    if (!graph.addEdge(edge.from, edge.to)) return false;
-                }
+            const groupId = `_group_${bc.group.name}`;
+            hGraph.ensureNode(groupId); vGraph.ensureNode(groupId);
+            switch (bc.side) {
+                case 'left':   return hGraph.addEdge(bc.node.id, groupId);
+                case 'right':  return hGraph.addEdge(groupId, bc.node.id);
+                case 'top':    return vGraph.addEdge(bc.node.id, groupId);
+                case 'bottom': return vGraph.addEdge(groupId, bc.node.id);
             }
-            return true;
         }
         if (isGroupBoundaryConstraint(constraint)) {
             const gc = constraint as GroupBoundaryConstraint;
-            const membersA = this.containment.membersOf(gc.groupA.name);
-            const membersB = this.containment.membersOf(gc.groupB.name);
-            for (const a of membersA) {
-                for (const b of membersB) {
-                    const edge = this.gbcToBoxEdge(gc, a, b);
-                    if (edge) {
-                        const graph = edge.axis === 'h' ? hGraph : vGraph;
-                        if (!graph.addEdge(edge.from, edge.to)) return false;
-                    }
-                }
+            const gAId = `_group_${gc.groupA.name}`;
+            const gBId = `_group_${gc.groupB.name}`;
+            hGraph.ensureNode(gAId); hGraph.ensureNode(gBId);
+            vGraph.ensureNode(gAId); vGraph.ensureNode(gBId);
+            switch (gc.side) {
+                case 'left':   return hGraph.addEdge(gAId, gBId);
+                case 'right':  return hGraph.addEdge(gBId, gAId);
+                case 'top':    return vGraph.addEdge(gAId, gBId);
+                case 'bottom': return vGraph.addEdge(gBId, gAId);
             }
-            return true;
         }
         return true;
     }
@@ -1849,12 +1463,12 @@ class QualitativeConstraintValidatorV2 {
             representativeConstraint = this.orientationConstraints[0] || this.allDisjunctions[0]?.alternatives[0]?.[0];
         }
 
-        const firstConstraintString = orientationConstraintToString(representativeConstraint);
-        const sourceConstraintHTMLToLayoutConstraintsHTML = new Map<string, string[]>();
+        const firstString = orientationConstraintToString(representativeConstraint);
+        const htmlMap = new Map<string, string[]>();
         for (const [source, constraints] of minimalConflictingSet.entries()) {
-            const sourceHTML = source.toHTML();
-            if (!sourceConstraintHTMLToLayoutConstraintsHTML.has(sourceHTML)) sourceConstraintHTMLToLayoutConstraintsHTML.set(sourceHTML, []);
-            constraints.forEach(c => sourceConstraintHTMLToLayoutConstraintsHTML.get(sourceHTML)!.push(orientationConstraintToString(c)));
+            const html = source.toHTML();
+            if (!htmlMap.has(html)) htmlMap.set(html, []);
+            constraints.forEach(c => htmlMap.get(html)!.push(orientationConstraintToString(c)));
         }
 
         const conflictSource = infeasibleDisjunctions.length > 0
@@ -1864,17 +1478,16 @@ class QualitativeConstraintValidatorV2 {
         return {
             satisfiable: false,
             error: {
-                name: 'PositionalConstraintError',
-                type: 'positional-conflict',
-                message: `Constraint "${firstConstraintString}" conflicts with existing constraints`,
+                name: 'PositionalConstraintError', type: 'positional-conflict',
+                message: `Constraint "${firstString}" conflicts with existing constraints`,
                 conflictingConstraint: representativeConstraint,
                 conflictingSourceConstraint: conflictSource,
                 minimalConflictingSet,
                 maximalFeasibleSubset: feasibleConstraints,
                 errorMessages: {
-                    conflictingConstraint: firstConstraintString,
+                    conflictingConstraint: firstString,
                     conflictingSourceConstraint: conflictSource.toHTML(),
-                    minimalConflictingConstraints: sourceConstraintHTMLToLayoutConstraintsHTML,
+                    minimalConflictingConstraints: htmlMap,
                 },
             },
         };
@@ -1882,44 +1495,44 @@ class QualitativeConstraintValidatorV2 {
 
     private buildConjunctiveError(constraint: LayoutConstraint): PositionalConstraintError {
         const minimalSet = this.findMinimalConflictSet(constraint);
-        const sourceConstraintToLayoutConstraints = new Map<SourceConstraint, LayoutConstraint[]>();
-        const sourceConstraintHTMLToLayoutConstraintsHTML = new Map<string, string[]>();
+        const srcToLayout = new Map<SourceConstraint, LayoutConstraint[]>();
+        const htmlMap = new Map<string, string[]>();
 
         for (const c of minimalSet) {
-            const source = c.sourceConstraint;
-            if (!sourceConstraintToLayoutConstraints.has(source)) sourceConstraintToLayoutConstraints.set(source, []);
-            if (!sourceConstraintHTMLToLayoutConstraintsHTML.has(source.toHTML())) sourceConstraintHTMLToLayoutConstraintsHTML.set(source.toHTML(), []);
-            sourceConstraintToLayoutConstraints.get(source)!.push(c);
-            sourceConstraintHTMLToLayoutConstraintsHTML.get(source.toHTML())!.push(orientationConstraintToString(c));
+            const src = c.sourceConstraint;
+            if (!srcToLayout.has(src)) srcToLayout.set(src, []);
+            if (!htmlMap.has(src.toHTML())) htmlMap.set(src.toHTML(), []);
+            srcToLayout.get(src)!.push(c);
+            htmlMap.get(src.toHTML())!.push(orientationConstraintToString(c));
         }
 
         return {
-            name: 'PositionalConstraintError',
-            type: 'positional-conflict',
+            name: 'PositionalConstraintError', type: 'positional-conflict',
             message: `Constraint "${orientationConstraintToString(constraint)}" conflicts with existing constraints`,
             conflictingConstraint: constraint,
             conflictingSourceConstraint: constraint.sourceConstraint,
-            minimalConflictingSet: sourceConstraintToLayoutConstraints,
+            minimalConflictingSet: srcToLayout,
             errorMessages: {
                 conflictingConstraint: orientationConstraintToString(constraint),
                 conflictingSourceConstraint: constraint.sourceConstraint.toHTML(),
-                minimalConflictingConstraints: sourceConstraintHTMLToLayoutConstraintsHTML,
+                minimalConflictingConstraints: htmlMap,
             },
         };
     }
 
     private findMinimalConflictSet(failedConstraint: LayoutConstraint): LayoutConstraint[] {
-        const edge = this.constraintToBoxEdge(failedConstraint);
+        const edge = this.constraintToEdge(failedConstraint);
         if (!edge) return [];
-
         const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
         const path = this.findPath(graph, edge.to, edge.from);
         if (!path) return [];
-
         const result: LayoutConstraint[] = [];
         for (const [a, b] of path) {
-            const constraint = this.findConstraintForEdge(edge.axis, a, b);
-            if (constraint) result.push(constraint);
+            const c = this.addedConstraints.find(c => {
+                const e = this.constraintToEdge(c);
+                return e && e.axis === edge.axis && e.from === a && e.to === b;
+            });
+            if (c) result.push(c);
         }
         return result;
     }
@@ -1929,7 +1542,6 @@ class QualitativeConstraintValidatorV2 {
         const visited = new Set<string>();
         const queue: { node: string; path: [string, string][] }[] = [{ node: from, path: [] }];
         visited.add(from);
-
         while (queue.length > 0) {
             const { node, path } = queue.shift()!;
             for (const succ of graph.successors(node)) {
@@ -1943,35 +1555,22 @@ class QualitativeConstraintValidatorV2 {
         return null;
     }
 
-    private findConstraintForEdge(axis: 'h' | 'v', from: string, to: string): LayoutConstraint | undefined {
-        return this.addedConstraints.find(c => {
-            const edge = this.constraintToBoxEdge(c);
-            return edge && edge.axis === axis && edge.from === from && edge.to === to;
-        });
-    }
-
     // ─── Group overlap validation ────────────────────────────────────────────
 
     public validateGroupConstraints(): GroupOverlapError | null {
         for (let i = 0; i < this.groups.length; i++) {
-            const group = this.groups[i];
             for (let j = i + 1; j < this.groups.length; j++) {
-                const otherGroup = this.groups[j];
-                if (this.containment.isSubGroup(group.name, otherGroup.name) ||
-                    this.containment.isSubGroup(otherGroup.name, group.name)) continue;
-
-                const intersection = this.containment.intersection(group.name, otherGroup.name);
+                const g = this.groups[i], o = this.groups[j];
+                if (this.isSubGroup(g, o) || this.isSubGroup(o, g)) continue;
+                const intersection = this.groupIntersection(g, o);
                 if (intersection.length > 0) {
                     const overlappingNodes = intersection
-                        .map(nodeId => this.nodes.find(n => n.id === nodeId))
-                        .filter((node): node is LayoutNode => node !== undefined);
+                        .map(id => this.nodes.find(n => n.id === id))
+                        .filter((n): n is LayoutNode => n !== undefined);
                     return {
-                        name: 'GroupOverlapError',
-                        type: 'group-overlap',
-                        message: `Groups "${group.name}" and "${otherGroup.name}" overlap with nodes: ${intersection.join(', ')}`,
-                        group1: group,
-                        group2: otherGroup,
-                        overlappingNodes,
+                        name: 'GroupOverlapError', type: 'group-overlap',
+                        message: `Groups "${g.name}" and "${o.name}" overlap with nodes: ${intersection.join(', ')}`,
+                        group1: g, group2: o, overlappingNodes,
                     };
                 }
             }
@@ -1979,7 +1578,7 @@ class QualitativeConstraintValidatorV2 {
         return null;
     }
 
-    // ─── Alignment order computation ─────────────────────────────────────────
+    // ─── Alignment orders ────────────────────────────────────────────────────
 
     private computeAlignmentOrders(): LayoutConstraint[] {
         this.horizontallyAligned = this.normalizeAlignment(this.horizontallyAligned);
@@ -2016,38 +1615,33 @@ class QualitativeConstraintValidatorV2 {
         return implicitConstraints;
     }
 
-    // ─── Node overlap detection ──────────────────────────────────────────────
-
     private detectNodeOverlaps(): PositionalConstraintError | null {
         for (const hGroup of this.horizontallyAligned) {
             const hSet = new Set(hGroup.map(n => n.id));
             for (const vGroup of this.verticallyAligned) {
                 const overlapping = vGroup.filter(n => hSet.has(n.id));
                 if (overlapping.length >= 2) {
-                    const n1 = overlapping[0];
-                    const n2 = overlapping[1];
+                    const n1 = overlapping[0], n2 = overlapping[1];
                     const minimalConflictingSet = new Map<SourceConstraint, LayoutConstraint[]>();
                     for (const c of this.addedConstraints) {
                         if (isAlignmentConstraint(c)) {
                             const ac = c as AlignmentConstraint;
                             if ([n1.id, n2.id].includes(ac.node1.id) || [n1.id, n2.id].includes(ac.node2.id)) {
-                                const source = ac.sourceConstraint;
-                                if (!minimalConflictingSet.has(source)) minimalConflictingSet.set(source, []);
-                                minimalConflictingSet.get(source)!.push(c);
+                                const src = ac.sourceConstraint;
+                                if (!minimalConflictingSet.has(src)) minimalConflictingSet.set(src, []);
+                                minimalConflictingSet.get(src)!.push(c);
                             }
                         }
                     }
-                    const firstConstraint = this.addedConstraints.find(c => isAlignmentConstraint(c)) || this.addedConstraints[0];
+                    const first = this.addedConstraints.find(c => isAlignmentConstraint(c)) || this.addedConstraints[0];
                     return {
-                        name: 'PositionalConstraintError',
-                        type: 'positional-conflict',
+                        name: 'PositionalConstraintError', type: 'positional-conflict',
                         message: `Alignment constraints force ${n1.id} and ${n2.id} to occupy the same position`,
-                        conflictingConstraint: firstConstraint,
-                        conflictingSourceConstraint: firstConstraint.sourceConstraint,
+                        conflictingConstraint: first, conflictingSourceConstraint: first.sourceConstraint,
                         minimalConflictingSet,
                         errorMessages: {
-                            conflictingConstraint: orientationConstraintToString(firstConstraint),
-                            conflictingSourceConstraint: firstConstraint.sourceConstraint.toHTML(),
+                            conflictingConstraint: orientationConstraintToString(first),
+                            conflictingSourceConstraint: first.sourceConstraint.toHTML(),
                             minimalConflictingConstraints: new Map(),
                         },
                     };
@@ -2074,7 +1668,6 @@ class QualitativeConstraintValidatorV2 {
             }
             if (!mergedWithExisting) merged.push([...group]);
         }
-
         let changed = true;
         while (changed) {
             changed = false;
@@ -2095,6 +1688,14 @@ class QualitativeConstraintValidatorV2 {
         return merged;
     }
 
+    private isSubGroup(sub: LayoutGroup, group: LayoutGroup): boolean {
+        return sub.nodeIds.every(id => group.nodeIds.includes(id));
+    }
+
+    private groupIntersection(g1: LayoutGroup, g2: LayoutGroup): string[] {
+        return g1.nodeIds.filter(id => g2.nodeIds.includes(id));
+    }
+
     public dispose(): void {
         this.hGraph = new WeightedPartialOrderGraph(this.minPadding);
         this.vGraph = new WeightedPartialOrderGraph(this.minPadding);
@@ -2106,8 +1707,8 @@ class QualitativeConstraintValidatorV2 {
     public getStats(): {
         hEdges: number; vEdges: number;
         learnedClauses: number; conflicts: number; addedConstraints: number;
-        prunedByContainment: number; prunedByDimension: number;
-        prunedByPigeonhole: number; prunedByIntervalDecomp: number;
+        prunedByTransitivity: number; prunedByDimension: number;
+        prunedByPigeonhole: number; prunedByDecomposition: number;
     } {
         return {
             hEdges: this.hGraph.edgeCount(),
@@ -2115,12 +1716,12 @@ class QualitativeConstraintValidatorV2 {
             learnedClauses: this.learnedClauses.length,
             conflicts: this.conflictCount,
             addedConstraints: this.addedConstraints.length,
-            prunedByContainment: this.prunedByContainment,
+            prunedByTransitivity: this.prunedByTransitivity,
             prunedByDimension: this.prunedByDimension,
             prunedByPigeonhole: this.prunedByPigeonhole,
-            prunedByIntervalDecomp: this.prunedByIntervalDecomp,
+            prunedByDecomposition: this.prunedByDecomposition,
         };
     }
 }
 
-export { QualitativeConstraintValidatorV2 };
+export { QualitativeConstraintValidator };

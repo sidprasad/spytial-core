@@ -1,12 +1,11 @@
 /**
  * Validator Comparator — lightweight correctness and performance comparison
- * between the three constraint validators:
+ * between the two constraint validators:
  *
  *   1. ConstraintValidator (Kiwi/Cassowary-based, original)
- *   2. QualitativeConstraintValidator (V1, qualitative CDCL)
- *   3. QualitativeConstraintValidatorV2 (V2, box-only + geometry insights)
+ *   2. QualitativeConstraintValidator (qualitative CDCL + geometry insights)
  *
- * For each test scenario we run all three validators on identical inputs and
+ * For each test scenario we run both validators on identical inputs and
  * compare:
  *   - Correctness: do they agree on SAT/UNSAT?
  *   - Error shape: when UNSAT, do they both report the same error type?
@@ -19,7 +18,6 @@
 import { describe, it, expect } from 'vitest';
 import { ConstraintValidator } from '../src/layout/constraint-validator';
 import { QualitativeConstraintValidator } from '../src/layout/qualitative-constraint-validator';
-import { QualitativeConstraintValidatorV2 } from '../src/layout/qualitative-constraint-validator-v2';
 import {
     DisjunctiveConstraint,
     InstanceLayout,
@@ -96,7 +94,7 @@ interface ValidatorResult {
     errorType?: string;
 }
 
-function runAll(layout: InstanceLayout): { kiwi: ValidatorResult; v1: ValidatorResult; v2: ValidatorResult } {
+function runAll(layout: InstanceLayout): { kiwi: ValidatorResult; qualitative: ValidatorResult } {
     // Kiwi (original)
     const layoutKiwi = cloneLayout(layout);
     const t0k = performance.now();
@@ -104,29 +102,21 @@ function runAll(layout: InstanceLayout): { kiwi: ValidatorResult; v1: ValidatorR
     const errorKiwi = validatorKiwi.validateConstraints();
     const t1k = performance.now();
 
-    // V1
-    const layoutV1 = cloneLayout(layout);
-    const t0v1 = performance.now();
-    const validatorV1 = new QualitativeConstraintValidator(layoutV1);
-    const errorV1 = validatorV1.validateConstraints();
-    const t1v1 = performance.now();
-
-    // V2
-    const layoutV2 = cloneLayout(layout);
-    const t0v2 = performance.now();
-    const validatorV2 = new QualitativeConstraintValidatorV2(layoutV2);
-    const errorV2 = validatorV2.validateConstraints();
-    const t1v2 = performance.now();
+    // Qualitative
+    const layoutQ = cloneLayout(layout);
+    const t0q = performance.now();
+    const validatorQ = new QualitativeConstraintValidator(layoutQ);
+    const errorQ = validatorQ.validateConstraints();
+    const t1q = performance.now();
 
     return {
-        kiwi: { name: 'Kiwi', error: errorKiwi, timeMs: t1k - t0k, isSat: errorKiwi === null, errorType: errorKiwi?.type },
-        v1:   { name: 'V1',   error: errorV1,   timeMs: t1v1 - t0v1, isSat: errorV1 === null,   errorType: errorV1?.type },
-        v2:   { name: 'V2',   error: errorV2,   timeMs: t1v2 - t0v2, isSat: errorV2 === null,   errorType: errorV2?.type },
+        kiwi:        { name: 'Kiwi',        error: errorKiwi, timeMs: t1k - t0k, isSat: errorKiwi === null, errorType: errorKiwi?.type },
+        qualitative: { name: 'Qualitative',  error: errorQ,   timeMs: t1q - t0q, isSat: errorQ === null,    errorType: errorQ?.type },
     };
 }
 
-function logTiming(label: string, results: { kiwi: ValidatorResult; v1: ValidatorResult; v2: ValidatorResult }) {
-    console.log(`  [${label}] Kiwi: ${results.kiwi.timeMs.toFixed(1)}ms | V1: ${results.v1.timeMs.toFixed(1)}ms | V2: ${results.v2.timeMs.toFixed(1)}ms`);
+function logTiming(label: string, results: { kiwi: ValidatorResult; qualitative: ValidatorResult }) {
+    console.log(`  [${label}] Kiwi: ${results.kiwi.timeMs.toFixed(1)}ms | Qualitative: ${results.qualitative.timeMs.toFixed(1)}ms`);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -149,8 +139,7 @@ describe('Validator Comparator', () => {
             logTiming('simple-chain', results);
 
             expect(results.kiwi.isSat).toBe(true);
-            expect(results.v1.isSat).toBe(true);
-            expect(results.v2.isSat).toBe(true);
+            expect(results.qualitative.isSat).toBe(true);
         });
 
         it('simple cycle (UNSAT)', () => {
@@ -172,8 +161,7 @@ describe('Validator Comparator', () => {
             logTiming('simple-cycle', results);
 
             expect(results.kiwi.isSat).toBe(false);
-            expect(results.v1.isSat).toBe(false);
-            expect(results.v2.isSat).toBe(false);
+            expect(results.qualitative.isSat).toBe(false);
         });
 
         it('alignment + ordering conflict (UNSAT)', () => {
@@ -193,8 +181,7 @@ describe('Validator Comparator', () => {
             logTiming('align-conflict', results);
 
             expect(results.kiwi.isSat).toBe(false);
-            expect(results.v1.isSat).toBe(false);
-            expect(results.v2.isSat).toBe(false);
+            expect(results.qualitative.isSat).toBe(false);
         });
 
         it('disjunction with backtracking (SAT)', () => {
@@ -224,8 +211,7 @@ describe('Validator Comparator', () => {
             logTiming('disjunction-backtrack', results);
 
             expect(results.kiwi.isSat).toBe(true);
-            expect(results.v1.isSat).toBe(true);
-            expect(results.v2.isSat).toBe(true);
+            expect(results.qualitative.isSat).toBe(true);
         });
 
         it('contradictory unit disjunctions (UNSAT)', () => {
@@ -249,8 +235,7 @@ describe('Validator Comparator', () => {
             logTiming('contradict-unit', results);
 
             expect(results.kiwi.isSat).toBe(false);
-            expect(results.v1.isSat).toBe(false);
-            expect(results.v2.isSat).toBe(false);
+            expect(results.qualitative.isSat).toBe(false);
         });
 
         it('group with non-members (SAT)', () => {
@@ -275,8 +260,7 @@ describe('Validator Comparator', () => {
             logTiming('group-nonmembers', results);
 
             expect(results.kiwi.isSat).toBe(true);
-            expect(results.v1.isSat).toBe(true);
-            expect(results.v2.isSat).toBe(true);
+            expect(results.qualitative.isSat).toBe(true);
         });
 
         it('overlapping groups (UNSAT)', () => {
@@ -294,11 +278,9 @@ describe('Validator Comparator', () => {
 
             // All should detect the group overlap
             expect(results.kiwi.isSat).toBe(false);
-            expect(results.v1.isSat).toBe(false);
-            expect(results.v2.isSat).toBe(false);
+            expect(results.qualitative.isSat).toBe(false);
             expect(results.kiwi.errorType).toBe('group-overlap');
-            expect(results.v1.errorType).toBe('group-overlap');
-            expect(results.v2.errorType).toBe('group-overlap');
+            expect(results.qualitative.errorType).toBe('group-overlap');
         });
     });
 
@@ -333,8 +315,7 @@ describe('Validator Comparator', () => {
 
             // All should find SAT
             expect(results.kiwi.isSat).toBe(true);
-            expect(results.v1.isSat).toBe(true);
-            expect(results.v2.isSat).toBe(true);
+            expect(results.qualitative.isSat).toBe(true);
         });
 
         it('6 disjunctions × 3 alternatives (search space = 3^6 = 729)', () => {
@@ -362,8 +343,7 @@ describe('Validator Comparator', () => {
             logTiming('6disj-3alt', results);
 
             expect(results.kiwi.isSat).toBe(true);
-            expect(results.v1.isSat).toBe(true);
-            expect(results.v2.isSat).toBe(true);
+            expect(results.qualitative.isSat).toBe(true);
         });
 
         it('10 nodes pairwise non-overlap (45 4-way disjunctions)', () => {
@@ -392,13 +372,11 @@ describe('Validator Comparator', () => {
             logTiming('10-pairwise', results);
 
             expect(results.kiwi.isSat).toBe(true);
-            expect(results.v1.isSat).toBe(true);
-            expect(results.v2.isSat).toBe(true);
+            expect(results.qualitative.isSat).toBe(true);
 
             // All should complete in < 5 seconds
             expect(results.kiwi.timeMs).toBeLessThan(5000);
-            expect(results.v1.timeMs).toBeLessThan(5000);
-            expect(results.v2.timeMs).toBeLessThan(5000);
+            expect(results.qualitative.timeMs).toBeLessThan(5000);
         });
 
         it('10 groups × 5 members (50 nodes total)', () => {
@@ -429,8 +407,7 @@ describe('Validator Comparator', () => {
 
             // All should complete (SAT or UNSAT doesn't matter for perf)
             expect(results.kiwi.timeMs).toBeLessThan(10000);
-            expect(results.v1.timeMs).toBeLessThan(10000);
-            expect(results.v2.timeMs).toBeLessThan(10000);
+            expect(results.qualitative.timeMs).toBeLessThan(10000);
         });
 
         it('chain of 20 + 5 disjunctions (constrained + branching)', () => {
@@ -465,8 +442,7 @@ describe('Validator Comparator', () => {
             logTiming('chain20-disj5', results);
 
             expect(results.kiwi.isSat).toBe(true);
-            expect(results.v1.isSat).toBe(true);
-            expect(results.v2.isSat).toBe(true);
+            expect(results.qualitative.isSat).toBe(true);
         });
 
         it('3 groups × 3 members + 6 free nodes (group exclusion stress)', () => {
@@ -494,14 +470,13 @@ describe('Validator Comparator', () => {
             logTiming('3grp-6free', results);
 
             expect(results.kiwi.isSat).toBe(true);
-            expect(results.v1.isSat).toBe(true);
-            expect(results.v2.isSat).toBe(true);
+            expect(results.qualitative.isSat).toBe(true);
         });
     });
 
-    // ─── V2-specific geometry insight validation ─────────────────────────────
+    // ─── Geometry insight validation ────────────────────────────────────────
 
-    describe('V2 geometry insights effectiveness', () => {
+    describe('Geometry insights effectiveness', () => {
 
         it('transitivity eliminates redundant disjunctions (containment-for-free)', () => {
             const a = createNode('A');
@@ -535,11 +510,10 @@ describe('Validator Comparator', () => {
             logTiming('transitivity', results);
 
             expect(results.kiwi.isSat).toBe(true);
-            expect(results.v1.isSat).toBe(true);
-            expect(results.v2.isSat).toBe(true);
+            expect(results.qualitative.isSat).toBe(true);
         });
 
-        it('V2 stats show pruning activity', () => {
+        it('stats show pruning activity', () => {
             const nodes = Array.from({ length: 8 }, (_, i) => createNode(`N${i}`, { width: 60, height: 40 }));
             const src = new RelativeOrientationConstraint(['left'], 'test');
             const disjunctions: DisjunctiveConstraint[] = [];
@@ -559,24 +533,24 @@ describe('Validator Comparator', () => {
                 ]));
             }
 
-            const layoutV2 = {
+            const layoutQ = {
                 nodes, edges: [], constraints: [...constraints], groups: [],
                 disjunctiveConstraints: disjunctions.map(d =>
                     new DisjunctiveConstraint(d.sourceConstraint, d.alternatives.map(a => [...a]))),
             };
 
-            const validator = new QualitativeConstraintValidatorV2(layoutV2);
+            const validator = new QualitativeConstraintValidator(layoutQ);
             const error = validator.validateConstraints();
             expect(error).toBeNull();
 
             const stats = validator.getStats();
-            console.log('  [V2 stats]', JSON.stringify(stats));
+            console.log('  [Qualitative stats]', JSON.stringify(stats));
 
-            // V2 should have done some kind of pruning or decomposition
-            const totalPruned = stats.prunedByContainment
+            // Should have done some kind of pruning or decomposition
+            const totalPruned = stats.prunedByTransitivity
                 + stats.prunedByDimension
                 + stats.prunedByPigeonhole
-                + stats.prunedByIntervalDecomp;
+                + stats.prunedByDecomposition;
 
             // At minimum, stats should be tracked (non-negative)
             expect(totalPruned).toBeGreaterThanOrEqual(0);

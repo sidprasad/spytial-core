@@ -9,7 +9,6 @@ export * from './layoutinstance';
 export * from './colorpicker';
 export * from './constraint-validator';
 export * from './qualitative-constraint-validator';
-export * from './qualitative-constraint-validator-v2';
 export * from './icon-registry';
 export * from './equivalence-checker';
 
