@@ -509,8 +509,13 @@ class QualitativeConstraintValidator {
         if (this.allDisjunctions.length > 0) {
             const result = this.solveCDCL();
             if (!result.satisfiable) return result.error || null;
+        }
 
-            const chosenConstraints = this.addedConstraints.slice(constraintsBeforeDisjunctions);
+        // Persist all constraints added during presolve + CDCL to the layout.
+        // Previously this was inside the CDCL block, so presolve-committed
+        // constraints were dropped when presolve resolved everything.
+        const chosenConstraints = this.addedConstraints.slice(constraintsBeforeDisjunctions);
+        if (chosenConstraints.length > 0) {
             this.layout.constraints = this.layout.constraints.concat(chosenConstraints);
         }
 
@@ -685,6 +690,11 @@ class QualitativeConstraintValidator {
             if (!this.hGraph.addEdge(constraint.left.id, constraint.right.id)) {
                 return this.buildConjunctiveError(constraint);
             }
+            // Check if this new edge creates ordering between any x-aligned pair
+            if (this.hasAlignmentOrderingConflict(constraint.left.id, constraint.right.id, 'x')) {
+                this.hGraph.removeEdge(constraint.left.id, constraint.right.id);
+                return this.buildConjunctiveError(constraint);
+            }
             this.addedConstraints.push(constraint);
         } else if (isTopConstraint(constraint)) {
             // Check if nodes are y-aligned (same y) — can't be above/below each other
@@ -692,6 +702,11 @@ class QualitativeConstraintValidator {
                 return this.buildConjunctiveError(constraint);
             }
             if (!this.vGraph.addEdge(constraint.top.id, constraint.bottom.id)) {
+                return this.buildConjunctiveError(constraint);
+            }
+            // Check if this new edge creates ordering between any y-aligned pair
+            if (this.hasAlignmentOrderingConflict(constraint.top.id, constraint.bottom.id, 'y')) {
+                this.vGraph.removeEdge(constraint.top.id, constraint.bottom.id);
                 return this.buildConjunctiveError(constraint);
             }
             this.addedConstraints.push(constraint);
@@ -756,18 +771,158 @@ class QualitativeConstraintValidator {
     }
 
     private checkAlignmentConsistency(ac: AlignmentConstraint): PositionalConstraintError | null {
-        const id1 = ac.node1.id;
-        const id2 = ac.node2.id;
-        if (ac.axis === 'x') {
-            // Use isOrdered (transitive reachability) not hasEdge (direct only).
-            // A < B < C in H means A and C are ordered even without a direct edge.
-            if (this.hGraph.isOrdered(id1, id2) || this.hGraph.isOrdered(id2, id1))
-                return this.buildConjunctiveError(ac);
-        } else {
-            if (this.vGraph.isOrdered(id1, id2) || this.vGraph.isOrdered(id2, id1))
-                return this.buildConjunctiveError(ac);
+        // After union, any two members of the merged equivalence class that are
+        // ordered on the same axis is a contradiction. We must check all cross-class
+        // pairs because the union may have just merged two previously separate classes.
+        const uf = ac.axis === 'x' ? this.xAlignUF : this.yAlignUF;
+        const graph = ac.axis === 'x' ? this.hGraph : this.vGraph;
+        const root = uf.find(ac.node1.id);
+
+        // Collect all members of the merged class
+        const members: string[] = [];
+        for (const [, cls] of uf.classes()) {
+            if (cls.length > 0 && uf.find(cls[0]) === root) {
+                members.push(...cls);
+                break;
+            }
         }
+
+        // Check all pairs for ordering conflicts
+        for (let i = 0; i < members.length; i++) {
+            for (let j = i + 1; j < members.length; j++) {
+                if (graph.isOrdered(members[i], members[j]) || graph.isOrdered(members[j], members[i])) {
+                    return this.buildConjunctiveError(ac);
+                }
+            }
+        }
+
+        // Cross-class alignment cycle: if two distinct alignment classes are
+        // ordered in both directions (transitively), that's unsatisfiable.
+        if (this.hasAlignmentClassCycle(ac.axis === 'x' ? 'x' : 'y')) {
+            return this.buildConjunctiveError(ac);
+        }
+
         return null;
+    }
+
+    /**
+     * After adding an ordering edge A→B on a given axis, check if this creates
+     * a transitive ordering between any pair of nodes that are aligned on that axis.
+     * E.g., if X is x-aligned with Y, and after adding A→B there's a path X→...→Y,
+     * that's a contradiction.
+     */
+    private hasAlignmentOrderingConflict(a: string, b: string, axis: 'x' | 'y'): boolean {
+        const uf = axis === 'x' ? this.xAlignUF : this.yAlignUF;
+        const graph = axis === 'x' ? this.hGraph : this.vGraph;
+
+        // Collect the alignment classes that contain a or b
+        const classA = uf.find(a);
+        const classB = uf.find(b);
+
+        // Get members of each relevant class
+        const classes = uf.classes();
+        const checkClasses: string[][] = [];
+        for (const [, members] of classes) {
+            if (members.length < 2) continue;
+            const root = uf.find(members[0]);
+            if (root === classA || root === classB) {
+                checkClasses.push(members);
+            }
+        }
+
+        // Check all pairs within each affected class for ordering
+        for (const members of checkClasses) {
+            for (let i = 0; i < members.length; i++) {
+                for (let j = i + 1; j < members.length; j++) {
+                    if (graph.isOrdered(members[i], members[j]) || graph.isOrdered(members[j], members[i])) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // Cross-class alignment cycle check
+        if (this.hasAlignmentClassCycle(axis)) return true;
+
+        return false;
+    }
+
+    /**
+     * Detect cycles in the alignment-class-contracted ordering graph.
+     *
+     * Contract the ordering graph by replacing each multi-member alignment class
+     * with a single super-node. If class A has a member that is ordered before a
+     * member of class B (transitively), that's an edge A→B in the contracted graph.
+     * A cycle in this contracted graph (e.g. A→B and B→A) means aligned nodes
+     * would need to be both before and after each other — unsatisfiable.
+     */
+    private hasAlignmentClassCycle(axis: 'x' | 'y'): boolean {
+        const uf = axis === 'x' ? this.xAlignUF : this.yAlignUF;
+        const graph = axis === 'x' ? this.hGraph : this.vGraph;
+
+        // Collect multi-member alignment classes
+        const classMembers = new Map<string, string[]>();
+        for (const [, members] of uf.classes()) {
+            if (members.length < 2) continue;
+            const root = uf.find(members[0]);
+            classMembers.set(root, members);
+        }
+
+        if (classMembers.size < 2) return false;
+
+        // Build contracted graph edges using transitive reachability
+        const roots = [...classMembers.keys()];
+        const contractedAdj = new Map<string, Set<string>>();
+        for (const r of roots) contractedAdj.set(r, new Set());
+
+        for (const fromRoot of roots) {
+            const fromMembers = classMembers.get(fromRoot)!;
+            for (const toRoot of roots) {
+                if (fromRoot === toRoot) continue;
+                const toMembers = classMembers.get(toRoot)!;
+                let found = false;
+                for (const fm of fromMembers) {
+                    for (const tm of toMembers) {
+                        if (graph.isOrdered(fm, tm)) {
+                            contractedAdj.get(fromRoot)!.add(toRoot);
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (found) break;
+                }
+            }
+        }
+
+        // DFS cycle detection (white/gray/black coloring)
+        const WHITE = 0, GRAY = 1, BLACK = 2;
+        const color = new Map<string, number>();
+        for (const r of roots) color.set(r, WHITE);
+
+        for (const startRoot of roots) {
+            if (color.get(startRoot) !== WHITE) continue;
+            const stack: { node: string; iter: IterableIterator<string> }[] = [];
+            color.set(startRoot, GRAY);
+            stack.push({ node: startRoot, iter: contractedAdj.get(startRoot)!.values() });
+
+            while (stack.length > 0) {
+                const top = stack[stack.length - 1];
+                const next = top.iter.next();
+                if (next.done) {
+                    color.set(top.node, BLACK);
+                    stack.pop();
+                } else {
+                    const neighbor = next.value;
+                    if (color.get(neighbor) === GRAY) return true;
+                    if (color.get(neighbor) === WHITE) {
+                        color.set(neighbor, GRAY);
+                        stack.push({ node: neighbor, iter: contractedAdj.get(neighbor)!.values() });
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -856,16 +1011,34 @@ class QualitativeConstraintValidator {
      */
     private isAlternativeFeasible(alternative: LayoutConstraint[]): boolean {
         for (const constraint of alternative) {
+            // BoundingBoxConstraint: check if node is aligned with a group member
+            // on the constraint's axis. If so, the node can't be on that side.
+            if (isBoundingBoxConstraint(constraint)) {
+                const bc = constraint as BoundingBoxConstraint;
+                const isHorizontalSide = bc.side === 'left' || bc.side === 'right';
+                const uf = isHorizontalSide ? this.xAlignUF : this.yAlignUF;
+                const memberIds = bc.group.nodeIds;
+                for (const memberId of memberIds) {
+                    if (uf.connected(bc.node.id, memberId)) return false;
+                }
+            }
+
             const edge = this.constraintToEdge(constraint);
             if (!edge) continue;
             const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
+            const uf = edge.axis === 'h' ? this.xAlignUF : this.yAlignUF;
 
             // Would cycle?
             if (graph.isOrdered(edge.to, edge.from)) return false;
 
-            // Alignment conflict?
-            if (edge.axis === 'h' && this.xAlignUF.connected(edge.from, edge.to)) return false;
-            if (edge.axis === 'v' && this.yAlignUF.connected(edge.from, edge.to)) return false;
+            // Alignment conflict (direct)?
+            if (uf.connected(edge.from, edge.to)) return false;
+
+            // Alignment conflict (transitive): adding edge from→to would create
+            // ordering between aligned nodes. Check if 'to' can reach any member
+            // of 'from's alignment class (making from→...→member ordered),
+            // or if any member of 'to's class can reach 'from' (making member→...→from→to ordered).
+            if (this.wouldCreateAlignmentOrderingConflict(edge.from, edge.to, uf, graph)) return false;
 
             // Dimension overflow? (Insight 4)
             if (graph.wouldOverflow(edge.from, edge.to, MAX_SPAN)) {
@@ -874,6 +1047,42 @@ class QualitativeConstraintValidator {
             }
         }
         return true;
+    }
+
+    /**
+     * Would adding edge from→to create a transitive ordering between two aligned nodes?
+     * Check without actually adding the edge.
+     */
+    private wouldCreateAlignmentOrderingConflict(
+        from: string, to: string, uf: UnionFind, graph: WeightedPartialOrderGraph
+    ): boolean {
+        // Collect alignment class members for 'from' and 'to'
+        const fromClass = this.getClassMembers(from, uf);
+        const toClass = this.getClassMembers(to, uf);
+
+        // Check: any member of from's class reachable from 'to'?
+        // That would mean: from → to → ... → member (from and member are aligned)
+        for (const m of fromClass) {
+            if (m !== from && graph.canReach(to, m)) return true;
+        }
+
+        // Check: any member of to's class can reach 'from'?
+        // That would mean: member → ... → from → to (to and member are aligned)
+        for (const m of toClass) {
+            if (m !== to && graph.canReach(m, from)) return true;
+        }
+
+        return false;
+    }
+
+    private getClassMembers(id: string, uf: UnionFind): string[] {
+        const root = uf.find(id);
+        for (const [, members] of uf.classes()) {
+            if (members.length > 0 && uf.find(members[0]) === root) {
+                return members;
+            }
+        }
+        return [id];
     }
 
     private getDisjunctionRegionPair(disj: DisjunctiveConstraint): [string, string] | null {
@@ -887,15 +1096,40 @@ class QualitativeConstraintValidator {
     }
 
     private findSatisfyingAlternative(disj: DisjunctiveConstraint, pair: [string, string]): number | null {
+        // Find an alternative whose constraints are all actually implied by
+        // the current ordering graphs (forward direction is ordered or alignment
+        // already holds). Previously this only checked "not contradicted" which
+        // could pick an alternative that wasn't actually satisfied, injecting
+        // wrong constraints into the output.
         for (let i = 0; i < disj.alternatives.length; i++) {
-            let matches = true;
+            let allImplied = true;
+            for (const constraint of disj.alternatives[i]) {
+                if (isAlignmentConstraint(constraint)) {
+                    const ac = constraint as AlignmentConstraint;
+                    const uf = ac.axis === 'x' ? this.xAlignUF : this.yAlignUF;
+                    if (!uf.connected(ac.node1.id, ac.node2.id)) { allImplied = false; break; }
+                    continue;
+                }
+                const edge = this.constraintToEdge(constraint);
+                if (!edge) continue;
+                const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
+                // Must be actually ordered in the forward direction
+                if (!graph.isOrdered(edge.from, edge.to)) { allImplied = false; break; }
+            }
+            if (allImplied) return i;
+        }
+        // Fallback: if no alternative is fully implied, find one that's at least
+        // not contradicted (original behavior). This can happen when the pair is
+        // separated but through edges not captured in any single alternative.
+        for (let i = 0; i < disj.alternatives.length; i++) {
+            let feasible = true;
             for (const constraint of disj.alternatives[i]) {
                 const edge = this.constraintToEdge(constraint);
                 if (!edge) continue;
                 const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
-                if (graph.isOrdered(edge.to, edge.from)) { matches = false; break; }
+                if (graph.isOrdered(edge.to, edge.from)) { feasible = false; break; }
             }
-            if (matches) return i;
+            if (feasible) return i;
         }
         return null;
     }
@@ -1107,14 +1341,30 @@ class QualitativeConstraintValidator {
     private addQualitativeEdge(constraint: LayoutConstraint): boolean {
         if (isLeftConstraint(constraint)) {
             if (this.xAlignUF.connected(constraint.left.id, constraint.right.id)) return false;
-            return this.hGraph.addEdge(constraint.left.id, constraint.right.id);
+            if (!this.hGraph.addEdge(constraint.left.id, constraint.right.id)) return false;
+            if (this.hasAlignmentOrderingConflict(constraint.left.id, constraint.right.id, 'x')) {
+                this.hGraph.removeEdge(constraint.left.id, constraint.right.id);
+                return false;
+            }
+            return true;
         }
         if (isTopConstraint(constraint)) {
             if (this.yAlignUF.connected(constraint.top.id, constraint.bottom.id)) return false;
-            return this.vGraph.addEdge(constraint.top.id, constraint.bottom.id);
+            if (!this.vGraph.addEdge(constraint.top.id, constraint.bottom.id)) return false;
+            if (this.hasAlignmentOrderingConflict(constraint.top.id, constraint.bottom.id, 'y')) {
+                this.vGraph.removeEdge(constraint.top.id, constraint.bottom.id);
+                return false;
+            }
+            return true;
         }
         if (isBoundingBoxConstraint(constraint)) {
             const bc = constraint as BoundingBoxConstraint;
+            // Check if node is aligned with any group member on this axis
+            const isHSide = bc.side === 'left' || bc.side === 'right';
+            const uf = isHSide ? this.xAlignUF : this.yAlignUF;
+            for (const memberId of bc.group.nodeIds) {
+                if (uf.connected(bc.node.id, memberId)) return false;
+            }
             const groupId = `_group_${bc.group.name}`;
             this.hGraph.ensureNode(groupId); this.vGraph.ensureNode(groupId);
             switch (bc.side) {
