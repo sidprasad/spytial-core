@@ -394,6 +394,9 @@ interface Assignment {
     alternativeIndex: number;
     decisionLevel: number;
     isDecision: boolean;
+    /** UF snapshots saved before alignment mutations, for undo on backtrack. */
+    xAlignSnapshot?: { parent: [string, string][]; rank: [string, number][] };
+    yAlignSnapshot?: { parent: [string, string][]; rank: [string, number][] };
 }
 
 interface SolverCheckpoint {
@@ -756,10 +759,12 @@ class QualitativeConstraintValidator {
         const id1 = ac.node1.id;
         const id2 = ac.node2.id;
         if (ac.axis === 'x') {
-            if (this.hGraph.hasEdge(id1, id2) || this.hGraph.hasEdge(id2, id1))
+            // Use isOrdered (transitive reachability) not hasEdge (direct only).
+            // A < B < C in H means A and C are ordered even without a direct edge.
+            if (this.hGraph.isOrdered(id1, id2) || this.hGraph.isOrdered(id2, id1))
                 return this.buildConjunctiveError(ac);
         } else {
-            if (this.vGraph.hasEdge(id1, id2) || this.vGraph.hasEdge(id2, id1))
+            if (this.vGraph.isOrdered(id1, id2) || this.vGraph.isOrdered(id2, id1))
                 return this.buildConjunctiveError(ac);
         }
         return null;
@@ -1074,14 +1079,27 @@ class QualitativeConstraintValidator {
 
     private tryAssign(dIdx: number, aIdx: number, assigned: Int32Array, isDecision: boolean): boolean {
         const alternative = this.allDisjunctions[dIdx].alternatives[aIdx];
+
+        // Snapshot UF state before alignment mutations so backtrack can undo them
+        const hasAlignment = alternative.some(c => isAlignmentConstraint(c));
+        const xSnap = hasAlignment ? this.xAlignUF.snapshot() : undefined;
+        const ySnap = hasAlignment ? this.yAlignUF.snapshot() : undefined;
+
         for (const constraint of alternative) {
             if (!this.addQualitativeEdge(constraint)) {
                 this.undoAlternativeEdges(alternative, constraint);
+                // Also restore UF if we snapshotted
+                if (xSnap) this.xAlignUF.restore(xSnap);
+                if (ySnap) this.yAlignUF.restore(ySnap);
                 return false;
             }
         }
         assigned[dIdx] = aIdx;
-        this.assignmentTrail.push({ disjunctionIndex: dIdx, alternativeIndex: aIdx, decisionLevel: this.decisionLevel, isDecision });
+        this.assignmentTrail.push({
+            disjunctionIndex: dIdx, alternativeIndex: aIdx,
+            decisionLevel: this.decisionLevel, isDecision,
+            xAlignSnapshot: xSnap, yAlignSnapshot: ySnap,
+        });
         for (const constraint of alternative) this.addedConstraints.push(constraint);
         return true;
     }
@@ -1199,6 +1217,9 @@ class QualitativeConstraintValidator {
             if (last.decisionLevel <= level) break;
             const alternative = this.allDisjunctions[last.disjunctionIndex].alternatives[last.alternativeIndex];
             for (const constraint of alternative) this.removeQualitativeEdge(constraint);
+            // Restore UF state if this assignment mutated alignment classes
+            if (last.xAlignSnapshot) this.xAlignUF.restore(last.xAlignSnapshot);
+            if (last.yAlignSnapshot) this.yAlignUF.restore(last.yAlignSnapshot);
             this.addedConstraints.length -= alternative.length;
             assigned[last.disjunctionIndex] = -1;
             this.assignmentTrail.pop();

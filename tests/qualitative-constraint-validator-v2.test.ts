@@ -988,6 +988,132 @@ describe('QualitativeConstraintValidator', () => {
         });
     });
 
+    describe('Pathological: Alignment backtracking (BUG 2 regression)', () => {
+
+        it('should not retain stale alignment state after CDCL backtracks alignment alternative', () => {
+            // D1: align-x(A,B) OR A left of B
+            // D2: A left of B OR B left of A
+            // If CDCL tries align-x(A,B) first for D1, then D2 must pick B<A or A<B.
+            // If it picks A<B, that conflicts with x-align → backtrack D1 to "A left of B".
+            // BUG: If the x-align union isn't undone on backtrack, A and B remain
+            // in the same x-class, and "A left of B" is spuriously rejected.
+            const a = createNode('A');
+            const b = createNode('B');
+            const src = new RelativeOrientationConstraint(['left'], 'align-bt');
+
+            const layout = createLayout(
+                [a, b],
+                [],
+                [
+                    new DisjunctiveConstraint(src, [
+                        [createAlignConstraint(a, b, 'x', src)],
+                        [createLeftConstraint(a, b, src)],
+                    ]),
+                    new DisjunctiveConstraint(src, [
+                        [createLeftConstraint(a, b, src)],
+                        [createLeftConstraint(b, a, src)],
+                    ]),
+                ]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            // Should be SAT: pick "A left of B" for both D1 and D2
+            expect(error).toBeNull();
+        });
+
+        it('should correctly backtrack y-alignment and allow subsequent vertical ordering', () => {
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+            const src = new RelativeOrientationConstraint(['left'], 'y-align-bt');
+
+            // Conjunctive: A above C
+            // D1: align-y(A,B) OR A above B — if y-align tried first, A above C is OK
+            //     but then if B needs to be ordered vs C, the stale y-align could cause issues
+            // D2: B above C OR C above B
+            const layout = createLayout(
+                [a, b, c],
+                [createTopConstraint(a, c)],
+                [
+                    new DisjunctiveConstraint(src, [
+                        [createAlignConstraint(a, b, 'y', src)], // y-align: same row
+                        [createTopConstraint(a, b, src)],        // A above B
+                    ]),
+                    new DisjunctiveConstraint(src, [
+                        [createTopConstraint(b, c, src)],
+                        [createTopConstraint(c, b, src)],
+                    ]),
+                ]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).toBeNull();
+        });
+    });
+
+    describe('Pathological: Transitive alignment consistency (BUG 1 regression)', () => {
+
+        it('should detect transitive ordering conflict with alignment via intermediate node', () => {
+            // A < B < C (conjunctive, transitive ordering through B)
+            // align-x(A, C) → conflict: A and C are ordered on H transitively
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+
+            const layout = createLayout(
+                [a, b, c],
+                [
+                    createLeftConstraint(a, b),
+                    createLeftConstraint(b, c),
+                    createAlignConstraint(a, c, 'x'),
+                ]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).not.toBeNull();
+        });
+
+        it('should detect transitive V-ordering conflict with y-alignment', () => {
+            // A above B, B above C → A transitively above C
+            // align-y(A, C) → conflict
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+
+            const layout = createLayout(
+                [a, b, c],
+                [
+                    createTopConstraint(a, b),
+                    createTopConstraint(b, c),
+                    createAlignConstraint(a, c, 'y'),
+                ]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).not.toBeNull();
+        });
+
+        it('should detect 4-hop transitive ordering conflict with alignment', () => {
+            // A < B < C < D < E, then align-x(A, E)
+            const nodes = Array.from({ length: 5 }, (_, i) =>
+                createNode(String.fromCharCode(65 + i))
+            );
+            const constraints = [
+                ...nodes.slice(0, -1).map((n, i) => createLeftConstraint(n, nodes[i + 1])),
+                createAlignConstraint(nodes[0], nodes[4], 'x'),
+            ];
+
+            const layout = createLayout(nodes, constraints);
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).not.toBeNull();
+        });
+    });
+
     describe('Pathological: Disjunction stress', () => {
 
         it('should solve when only the last alternative works in every disjunction', () => {
