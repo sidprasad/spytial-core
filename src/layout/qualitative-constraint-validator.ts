@@ -798,8 +798,9 @@ class QualitativeConstraintValidator {
 
         // Cross-class alignment cycle: if two distinct alignment classes are
         // ordered in both directions (transitively), that's unsatisfiable.
-        if (this.hasAlignmentClassCycle(ac.axis === 'x' ? 'x' : 'y')) {
-            return this.buildConjunctiveError(ac);
+        const cycleAxis = ac.axis === 'x' ? 'x' as const : 'y' as const;
+        if (this.hasAlignmentClassCycle(cycleAxis)) {
+            return this.buildAlignmentCycleError(ac, cycleAxis);
         }
 
         return null;
@@ -1824,6 +1825,152 @@ class QualitativeConstraintValidator {
             }
         }
         return null;
+    }
+
+    /**
+     * Build an error for cross-class alignment cycle conflicts.
+     * The IIS contains:
+     *   - Alignment constraints that form the two cyclic classes
+     *   - Ordering constraints along the inter-class paths
+     * The MFS is all addedConstraints minus the last constraint in the IIS
+     * (removing any one constraint from the cycle breaks it).
+     */
+    private buildAlignmentCycleError(
+        triggerConstraint: LayoutConstraint,
+        axis: 'x' | 'y',
+    ): PositionalConstraintError {
+        const conflictSet = this.findAlignmentClassCycleConflictSet(axis);
+
+        // Always include the trigger
+        if (!conflictSet.includes(triggerConstraint)) {
+            conflictSet.push(triggerConstraint);
+        }
+
+        const srcToLayout = new Map<SourceConstraint, LayoutConstraint[]>();
+        const htmlMap = new Map<string, string[]>();
+        for (const c of conflictSet) {
+            const src = c.sourceConstraint;
+            if (!srcToLayout.has(src)) srcToLayout.set(src, []);
+            if (!htmlMap.has(src.toHTML())) htmlMap.set(src.toHTML(), []);
+            srcToLayout.get(src)!.push(c);
+            htmlMap.get(src.toHTML())!.push(orientationConstraintToString(c));
+        }
+
+        // MFS: all committed constraints that aren't in the conflict set
+        const conflictSetIds = new Set(conflictSet);
+        const maxFeasible = this.addedConstraints.filter(c => !conflictSetIds.has(c));
+
+        return {
+            name: 'PositionalConstraintError', type: 'positional-conflict',
+            message: `Constraint "${orientationConstraintToString(triggerConstraint)}" creates a cycle between alignment classes`,
+            conflictingConstraint: triggerConstraint,
+            conflictingSourceConstraint: triggerConstraint.sourceConstraint,
+            minimalConflictingSet: srcToLayout,
+            maximalFeasibleSubset: maxFeasible,
+            errorMessages: {
+                conflictingConstraint: orientationConstraintToString(triggerConstraint),
+                conflictingSourceConstraint: triggerConstraint.sourceConstraint.toHTML(),
+                minimalConflictingConstraints: htmlMap,
+            },
+        };
+    }
+
+    /**
+     * Find the minimal set of constraints causing an alignment-class cycle.
+     *
+     * 1. Find two classes A, B that are mutually ordered (A→B and B→A).
+     * 2. Collect the alignment constraints that form each class.
+     * 3. Find ordering paths A-member → B-member and B-member → A-member,
+     *    map path edges back to addedConstraints.
+     */
+    private findAlignmentClassCycleConflictSet(axis: 'x' | 'y'): LayoutConstraint[] {
+        const uf = axis === 'x' ? this.xAlignUF : this.yAlignUF;
+        const graph = axis === 'x' ? this.hGraph : this.vGraph;
+
+        // Collect multi-member classes
+        const classMembers = new Map<string, string[]>();
+        for (const [, members] of uf.classes()) {
+            if (members.length < 2) continue;
+            classMembers.set(uf.find(members[0]), members);
+        }
+
+        // Find a cyclic pair of classes
+        const roots = [...classMembers.keys()];
+        let cycleA: string | null = null, cycleB: string | null = null;
+        outer: for (let i = 0; i < roots.length; i++) {
+            for (let j = i + 1; j < roots.length; j++) {
+                const aMembers = classMembers.get(roots[i])!;
+                const bMembers = classMembers.get(roots[j])!;
+                let aToB = false, bToA = false;
+                for (const am of aMembers) {
+                    for (const bm of bMembers) {
+                        if (graph.isOrdered(am, bm)) aToB = true;
+                        if (graph.isOrdered(bm, am)) bToA = true;
+                    }
+                }
+                if (aToB && bToA) {
+                    cycleA = roots[i]; cycleB = roots[j];
+                    break outer;
+                }
+            }
+        }
+
+        if (!cycleA || !cycleB) return [];
+
+        const result: LayoutConstraint[] = [];
+        const aMembers = classMembers.get(cycleA)!;
+        const bMembers = classMembers.get(cycleB)!;
+        const axisEdge = axis === 'x' ? 'h' : 'v';
+
+        // 1. Alignment constraints forming each class
+        for (const c of this.addedConstraints) {
+            if (!isAlignmentConstraint(c)) continue;
+            const ac = c as AlignmentConstraint;
+            if (ac.axis !== axis) continue;
+            const r1 = uf.find(ac.node1.id), r2 = uf.find(ac.node2.id);
+            if (r1 === cycleA || r1 === cycleB || r2 === cycleA || r2 === cycleB) {
+                result.push(c);
+            }
+        }
+
+        // 2. Ordering constraints along paths A→B and B→A
+        // Find a specific path for each direction and collect its edges
+        for (const am of aMembers) {
+            for (const bm of bMembers) {
+                if (graph.isOrdered(am, bm)) {
+                    const path = this.findPath(graph, am, bm);
+                    if (path) {
+                        for (const [a, b] of path) {
+                            const c = this.addedConstraints.find(c => {
+                                const e = this.constraintToEdge(c);
+                                return e && e.axis === axisEdge && e.from === a && e.to === b;
+                            });
+                            if (c && !result.includes(c)) result.push(c);
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        for (const bm of bMembers) {
+            for (const am of aMembers) {
+                if (graph.isOrdered(bm, am)) {
+                    const path = this.findPath(graph, bm, am);
+                    if (path) {
+                        for (const [a, b] of path) {
+                            const c = this.addedConstraints.find(c => {
+                                const e = this.constraintToEdge(c);
+                                return e && e.axis === axisEdge && e.from === a && e.to === b;
+                            });
+                            if (c && !result.includes(c)) result.push(c);
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        return result;
     }
 
     // ─── Group overlap validation ────────────────────────────────────────────
