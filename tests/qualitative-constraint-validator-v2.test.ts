@@ -1114,6 +1114,79 @@ describe('QualitativeConstraintValidator', () => {
         });
     });
 
+    describe('Pathological: IIS and MFS for alignment conflicts', () => {
+
+        it('should produce non-empty IIS for within-class alignment-ordering conflict', () => {
+            // A < B < C, align-x(A, C) → conflict
+            // IIS should include: align-x(A,C) + ordering path A→B→C
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+
+            const layout = createLayout(
+                [a, b, c],
+                [
+                    createLeftConstraint(a, b),
+                    createLeftConstraint(b, c),
+                    createAlignConstraint(a, c, 'x'),
+                ]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).not.toBeNull();
+
+            const pe = error as any;
+            // IIS should be non-empty and include alignment + ordering constraints
+            expect(pe.minimalConflictingSet.size).toBeGreaterThan(0);
+            let iisCount = 0;
+            for (const [, constraints] of pe.minimalConflictingSet) {
+                iisCount += constraints.length;
+            }
+            expect(iisCount).toBeGreaterThanOrEqual(2); // at least alignment + one ordering
+
+            // MFS should exist and exclude the conflicting constraints
+            expect(pe.maximalFeasibleSubset).toBeDefined();
+            expect(Array.isArray(pe.maximalFeasibleSubset)).toBe(true);
+        });
+
+        it('should produce non-empty IIS for cross-class alignment cycle', () => {
+            // align-y(N1,N4), above(N2,N1), above(N4,N3), align-y(N3,N2)
+            // Two y-alignment classes {N1,N4} and {N3,N2} with V-ordering in both directions
+            const n0 = createNode('N0');
+            const n1 = createNode('N1');
+            const n2 = createNode('N2');
+            const n3 = createNode('N3');
+            const n4 = createNode('N4');
+
+            const layout = createLayout(
+                [n0, n1, n2, n3, n4],
+                [
+                    createAlignConstraint(n1, n4, 'y'),
+                    createTopConstraint(n2, n1),
+                    createTopConstraint(n4, n3),
+                    createAlignConstraint(n3, n2, 'y'),
+                ]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).not.toBeNull();
+
+            const pe = error as any;
+            expect(pe.minimalConflictingSet.size).toBeGreaterThan(0);
+            let iisCount = 0;
+            for (const [, constraints] of pe.minimalConflictingSet) {
+                iisCount += constraints.length;
+            }
+            // IIS should include 2 alignments + 2 orderings = 4 constraints
+            expect(iisCount).toBeGreaterThanOrEqual(3);
+
+            expect(pe.maximalFeasibleSubset).toBeDefined();
+            expect(Array.isArray(pe.maximalFeasibleSubset)).toBe(true);
+        });
+    });
+
     describe('Pathological: Disjunction stress', () => {
 
         it('should solve when only the last alternative works in every disjunction', () => {
