@@ -8,8 +8,12 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./tests/setup.ts'],
     include: [
-      'src/**/*.{test,spec}.{js,ts,tsx,tsx}', 
+      'src/**/*.{test,spec}.{js,ts,tsx,tsx}',
       'tests/**/*.{test,spec}.{js,ts,tsx,tsx}'
+    ],
+    exclude: [
+      'benchmarks/**',
+      'node_modules/**',
     ],
     css: true,  // Enable CSS support for tests
     coverage: {

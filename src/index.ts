@@ -28,7 +28,7 @@ export {
 export type { SchemaDescriptorOptions } from './data-instance/schema-descriptor';
 
 // Direct exports of key classes for convenience
-export { LayoutInstance } from './layout/layoutinstance';
+export { LayoutInstance, ConstraintValidatorStrategy, AlignmentEdgeStrategy } from './layout/layoutinstance';
 export { parseLayoutSpec } from './layout/layoutspec';
 export { setupLayout } from './layout';
 export { type default as IEvaluator, SelectorArityError } from './evaluators/interfaces';

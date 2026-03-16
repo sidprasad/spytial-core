@@ -8,7 +8,9 @@ export * from './layoutspec';
 export * from './layoutinstance';
 export * from './colorpicker';
 export * from './constraint-validator';
+export * from './qualitative-constraint-validator';
 export * from './icon-registry';
+export * from './equivalence-checker';
 
 // Utility functions
 import { LayoutInstance } from './layoutinstance';

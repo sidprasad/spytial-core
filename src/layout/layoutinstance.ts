@@ -26,6 +26,7 @@ import { SelectorArityError } from '../evaluators/interfaces';
 import type { IEvaluatorResult } from '../evaluators/interfaces';
 import { ColorPicker } from './colorpicker';
 import { type ConstraintError, type ErrorMessages, ConstraintValidator, orientationConstraintToString } from './constraint-validator';
+import { QualitativeConstraintValidator } from './qualitative-constraint-validator';
 const UNIVERSAL_TYPE = "univ";
 
 type ConstraintSource = RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint;
@@ -64,6 +65,24 @@ export enum AlignmentEdgeStrategy {
     DIRECT = 'direct',
     /** Add alignment edges only when nodes are not connected via any path (default) */
     CONNECTED = 'connected'
+}
+
+/**
+ * Strategy for which constraint validator to use.
+ *
+ * - `kiwi` (default): The original Kiwi-based backtracking validator.
+ *   Mature and battle-tested.
+ *
+ * - `qualitative` (beta): CDCL-based validator that reasons purely over
+ *   qualitative partial-order constraints before handing off to Kiwi for
+ *   coordinate assignment. Faster on large/group-heavy instances but still
+ *   under active development.
+ */
+export enum ConstraintValidatorStrategy {
+    /** Original Kiwi-based backtracking validator (default, stable) */
+    KIWI = 'kiwi',
+    /** CDCL-based qualitative validator (beta) */
+    QUALITATIVE = 'qualitative'
 }
 
 
@@ -195,6 +214,7 @@ export class LayoutInstance {
     private instanceNum: number;
 
     private readonly alignmentEdgeStrategy: AlignmentEdgeStrategy;
+    private readonly validatorStrategy: ConstraintValidatorStrategy;
 
     /**
      * Collector for selector errors encountered during layout generation.
@@ -315,30 +335,34 @@ export class LayoutInstance {
      * @param instNum - The instance number (default is 0), used to differentiate between multiple instances of the same layout.
      * @param addAlignmentEdges - Deprecated. Use alignmentEdgeStrategy instead. A boolean flag indicating whether alignment edges should be added (default is `true`, equivalent to 'connected' strategy).
      * @param alignmentEdgeStrategy - Strategy for adding alignment edges (default is `AlignmentEdgeStrategy.CONNECTED`). Takes precedence over addAlignmentEdges if provided.
+     * @param validatorStrategy - Which constraint validator to use (default is `ConstraintValidatorStrategy.KIWI`). Set to `QUALITATIVE` to use the beta CDCL-based validator.
      *
      * The `LayoutInstance` class is responsible for generating a layout for a given data instance based on the provided layout specification.
      * It applies constraints, directives, and projections to produce a structured layout that can be rendered using a graph visualization library.
      */
     constructor(
-        layoutSpec: LayoutSpec, 
-        evaluator: IEvaluator, 
-        instNum: number = 0, 
+        layoutSpec: LayoutSpec,
+        evaluator: IEvaluator,
+        instNum: number = 0,
         addAlignmentEdges: boolean = true,
-        alignmentEdgeStrategy?: AlignmentEdgeStrategy
+        alignmentEdgeStrategy?: AlignmentEdgeStrategy,
+        validatorStrategy?: ConstraintValidatorStrategy
     ) {
         this.instanceNum = instNum;
         this.evaluator = evaluator;
         this._layoutSpec = layoutSpec;
-        
+
         // Handle backward compatibility: if alignmentEdgeStrategy is provided, use it
         // Otherwise, convert boolean addAlignmentEdges to strategy
         if (alignmentEdgeStrategy !== undefined) {
             this.alignmentEdgeStrategy = alignmentEdgeStrategy;
         } else {
-            this.alignmentEdgeStrategy = addAlignmentEdges 
-                ? AlignmentEdgeStrategy.CONNECTED 
+            this.alignmentEdgeStrategy = addAlignmentEdges
+                ? AlignmentEdgeStrategy.CONNECTED
                 : AlignmentEdgeStrategy.NEVER;
         }
+
+        this.validatorStrategy = validatorStrategy ?? ConstraintValidatorStrategy.KIWI;
     }
 
     get hideDisconnected(): boolean {
@@ -1192,7 +1216,9 @@ export class LayoutInstance {
         }
 
         // Validate all constraints (conjunctive + disjunctive) in one pass
-        const validator = new ConstraintValidator(layout);
+        const validator = this.validatorStrategy === ConstraintValidatorStrategy.QUALITATIVE
+            ? new QualitativeConstraintValidator(layout)
+            : new ConstraintValidator(layout);
         const constraintError = validator.validateConstraints();
 
         if (constraintError) {
