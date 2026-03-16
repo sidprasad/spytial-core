@@ -1014,6 +1014,8 @@ class QualitativeConstraintValidator {
         for (const constraint of alternative) {
             // BoundingBoxConstraint: check if node is aligned with a group member
             // on the constraint's axis. If so, the node can't be on that side.
+            // Also check containment: "node left of group" means node is left of
+            // ALL members — infeasible if any member is already left of node.
             if (isBoundingBoxConstraint(constraint)) {
                 const bc = constraint as BoundingBoxConstraint;
                 const isHorizontalSide = bc.side === 'left' || bc.side === 'right';
@@ -1022,6 +1024,10 @@ class QualitativeConstraintValidator {
                 for (const memberId of memberIds) {
                     if (uf.connected(bc.node.id, memberId)) return false;
                 }
+                // Containment check: the bounding box must encompass all members.
+                // "node left of group" implies node left of every member.
+                // If any member is already ordered before node (same axis), contradiction.
+                if (!this.isBoundingBoxFeasible(bc)) return false;
             }
 
             const edge = this.constraintToEdge(constraint);
@@ -1048,6 +1054,49 @@ class QualitativeConstraintValidator {
             }
         }
         return true;
+    }
+
+    /**
+     * Check if a BoundingBox constraint is feasible given current orderings.
+     * "node on side X of group" implies the node is on that side of ALL members.
+     *   - left:   node left of all members → infeasible if any member→node in hGraph
+     *   - right:  node right of all members → infeasible if node→member in hGraph
+     *   - top:    node above all members → infeasible if any member→node in vGraph
+     *   - bottom: node below all members → infeasible if node→member in vGraph
+     */
+    private isBoundingBoxFeasible(bc: BoundingBoxConstraint): boolean {
+        const nodeId = bc.node.id;
+        const members = bc.group.nodeIds;
+        switch (bc.side) {
+            case 'left':
+                // node is left of group → node must be left of every member
+                // infeasible if any member is already ordered left of node
+                for (const m of members) {
+                    if (this.hGraph.isOrdered(m, nodeId)) return false;
+                }
+                return true;
+            case 'right':
+                // node is right of group → node must be right of every member
+                // infeasible if node is already ordered left of any member
+                for (const m of members) {
+                    if (this.hGraph.isOrdered(nodeId, m)) return false;
+                }
+                return true;
+            case 'top':
+                // node is above group → node must be above every member
+                // infeasible if any member is already ordered above node
+                for (const m of members) {
+                    if (this.vGraph.isOrdered(m, nodeId)) return false;
+                }
+                return true;
+            case 'bottom':
+                // node is below group → node must be below every member
+                // infeasible if node is already ordered above any member
+                for (const m of members) {
+                    if (this.vGraph.isOrdered(nodeId, m)) return false;
+                }
+                return true;
+        }
     }
 
     /**
@@ -1366,6 +1415,8 @@ class QualitativeConstraintValidator {
             for (const memberId of bc.group.nodeIds) {
                 if (uf.connected(bc.node.id, memberId)) return false;
             }
+            // Containment: node on this side must not contradict ordering with members
+            if (!this.isBoundingBoxFeasible(bc)) return false;
             const groupId = `_group_${bc.group.name}`;
             this.hGraph.ensureNode(groupId); this.vGraph.ensureNode(groupId);
             switch (bc.side) {

@@ -107,7 +107,7 @@ When a conflict occurs at decision level > 0:
 
 1. **Analyze**: build a **learned clause** — a conjunction of negative literals recording which assignments (from the assignment trail) contributed to the conflict. This clause prevents the same combination from recurring.
 2. **Bump activity** of all variables in the clause (VSIDS).
-3. **Backtrack** to the second-highest decision level in the clause (1-UIP backjumping). Undo all assignments above that level, restore graph and union-find state from checkpoint.
+3. **Backtrack** to the second-highest decision level in the clause (1-UIP backjumping). Undo all assignments above that level, restore graph state from checkpoint. If any undone assignments involved alignment constraints, **restore the alignment Union-Find** from per-assignment snapshots (each assignment on the trail records `xAlignSnapshot`/`yAlignSnapshot` if it touched alignments).
 
 When a conflict occurs at decision level 0 → **proved UNSAT**. No amount of different choices can satisfy the constraints.
 
@@ -155,12 +155,26 @@ This often eliminates a large fraction of disjunctions — especially group boun
 
 ### 4.4 Alignment-Ordering Mutual Exclusion
 
-The solver enforces that alignment and ordering on the same axis are contradictory:
+The solver enforces that alignment and ordering on the same axis are contradictory at three levels:
 
-- Adding `LeftConstraint(a, b)` checks `Xeq(a, b)` first — if they share the same x-coordinate, they can't be left/right of each other.
-- Adding `AlignmentConstraint(a, b, 'x')` checks for existing H-edges between `a` and `b`.
+1. **Within-class**: Adding `LeftConstraint(a, b)` checks `Xeq(a, b)` first — if they share the same x-coordinate, they can't be left/right of each other. Adding `AlignmentConstraint(a, b, 'x')` checks all pairs in the merged alignment class for existing H-ordering.
 
-This bidirectional check catches conflicts regardless of constraint processing order.
+2. **Transitive**: After adding any ordering edge `a → b`, the solver checks whether this creates a transitive ordering path between any two nodes in the same alignment class. For example, `align-x(A, C), leftOf(A, B), leftOf(B, C)` creates a transitive path `A → B → C`, and since A and C are x-aligned, this is a contradiction.
+
+3. **Cross-class cycles**: Two distinct alignment classes can become mutually ordered — class A has a member ordered before a member of class B, and vice versa. Since aligned nodes must share a coordinate, this creates a cycle in the "alignment-class-contracted graph" and is unsatisfiable. Example: `align-y(N1, N4), above(N2, N1), above(N4, N3), align-y(N3, N2)` — classes {N1,N4} and {N2,N3} are V-ordered in both directions. The solver detects this via `hasAlignmentClassCycle`, which contracts the ordering graph by alignment equivalence classes and checks for cycles among super-nodes.
+
+### 4.5 Bounding-Box Containment Semantics
+
+A `BoundingBoxConstraint(node=X, group=G, side='left')` asserts that X is to the left of the group's bounding box. Since the bounding box must **contain all members** of G, this implicitly means X must be to the left of **every member** of G. The solver checks this containment invariant:
+
+- `side=left`: X left of group → infeasible if any member M is already ordered left of X (`M → X` in H-graph)
+- `side=right`: X right of group → infeasible if X is already ordered left of any member M (`X → M` in H-graph)
+- `side=top`: X above group → infeasible if any member M is already ordered above X (`M → X` in V-graph)
+- `side=bottom`: X below group → infeasible if X is already ordered above any member M (`X → M` in V-graph)
+
+This check fires in both `isAlternativeFeasible` (pre-solve pruning) and `addQualitativeEdge` (CDCL commit). Without it, the qualitative abstraction is unsound for cases where a non-member node has both alignment and ordering relationships with group members — the virtual group node alone doesn't capture the containment geometry.
+
+**Example**: `align-x(N2, N5), above(N2, N5), above(N5, N0), Group G0={N0, N1, N2}`. N5 is x-aligned with member N2 (can't be left/right of G0), must be below N2 (can't be above G0), and must be above N0 (can't be below G0). All four BoundingBox sides are infeasible → UNSAT. The containment check detects the above/below infeasibility that the virtual-node cycle check alone would miss.
 
 ---
 
@@ -173,6 +187,8 @@ For a group G with members {m1, m2, m3}, a virtual node `_group_G` is created in
 Virtual nodes have **size 0** in the weighted graph, so they contribute only gap spacing to chain computations. The members' individual dimensions are accounted for through their own edges.
 
 Group-to-group separation uses edges between virtual nodes: `_group_A → _group_B`.
+
+**Important**: the virtual group node is a lightweight proxy — it does **not** have edges to/from its own members in the ordering graph. Containment semantics (the group box must encompass all members) are enforced separately via the `isBoundingBoxFeasible` check (Section 4.5), which verifies that placing a node on a given side of the group is consistent with the node's ordering relationships to individual members.
 
 ---
 
@@ -232,3 +248,31 @@ The qualitative validator replaces only the **search and feasibility** portion:
 | Conflict diagnosis | Last failing LP constraint | Learned clauses + minimal conflict set |
 
 The qualitative approach is faster when the problem has many disjunctions (group exclusion, non-overlap) because graph operations (BFS reachability, union-find) are much cheaper than LP cloning, and CDCL avoids redundant exploration through clause learning.
+
+---
+
+## 10. Conflict Diagnosis: IIS and Maximal Feasible Subsets
+
+When the solver proves UNSAT, it produces two diagnostic artifacts:
+
+### Irreducible Infeasible Subsystem (IIS)
+
+A **minimal set of constraints** that is itself infeasible — removing any single constraint from the IIS would make it feasible. The solver computes this differently depending on the conflict type:
+
+- **Ordering cycle** (conjunctive phase): `findMinimalConflictSet` finds the cycle path in the H/V graph via BFS from the conflicting edge's target back to its source, then maps each path edge back to the `addedConstraints` that created it.
+
+- **Alignment-ordering conflict** (within-class or cross-class): `findAlignmentConflictSet` identifies the conflicting alignment classes and ordering paths:
+  - *Within-class*: finds two aligned nodes `(a, b)` that are transitively ordered, collects the alignment constraints forming their class + the ordering path `a → ... → b`.
+  - *Cross-class cycle*: finds two alignment classes mutually ordered (A→B and B→A), collects alignment constraints forming both classes + one ordering path in each direction.
+
+- **CDCL UNSAT** (disjunctive phase): `buildUnsatResult` uses `computeMaximalFeasibleSubset` (see below) to identify which disjunctions are infeasible.
+
+### Maximal Feasible Subset (MFS)
+
+The **largest subset of constraints that can be simultaneously satisfied**. This tells the user "here's what we *can* keep."
+
+- For **CDCL UNSAT**: `computeMaximalFeasibleSubset` builds a fresh pair of H/V graphs, greedily adds disjunctions (prioritizing low-activity ones — i.e., those least involved in conflicts), and reports which disjunctions couldn't be added.
+
+- For **alignment conflicts**: the MFS is `addedConstraints \ IIS` — all committed constraints not in the irreducible infeasible set. Since any single removal from the IIS breaks the cycle, this is a valid maximal feasible subset.
+
+Both are exposed on the `PositionalConstraintError` return type as `minimalConflictingSet` (IIS, grouped by source constraint) and `maximalFeasibleSubset` (MFS, flat list of layout constraints).
