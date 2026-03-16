@@ -149,6 +149,13 @@
                     <option value="sql">SQL</option>
                 </select>
             </div>
+            <div class="mb-3">
+                <label for="validator-select">Constraint Validator:</label>
+                <select id="validator-select" class="form-select form-select-sm" aria-label="Validator selection">
+                    <option value="kiwi" selected>Kiwi (default, stable)</option>
+                    <option value="qualitative">Qualitative CDCL (beta)</option>
+                </select>
+            </div>
             <div id="evaluator-repl-mount"></div>
             <div id="sql-schemas-container" style="display: none;" class="mb-3">
                 <details>
@@ -499,14 +506,17 @@
             // Step 4: Create LayoutInstance with evaluator
             updateStatus(`Creating layout for instance ${currentInstanceIndex + 1}...`, 'info');
             const ENABLE_ALIGNMENT_EDGES = true;
-            
+            const validatorChoice = document.getElementById('validator-select')?.value || 'kiwi';
+
             const layoutInstance = new CndCore.LayoutInstance(
-                cachedLayoutSpec, 
-                cachedEvaluator, 
-                currentInstanceIndex, 
-                ENABLE_ALIGNMENT_EDGES
+                cachedLayoutSpec,
+                cachedEvaluator,
+                currentInstanceIndex,
+                ENABLE_ALIGNMENT_EDGES,
+                undefined, // alignmentEdgeStrategy (use default)
+                validatorChoice // 'kiwi' or 'qualitative'
             );
-            console.log('Created Layout Instance with evaluator:', layoutInstance);
+            console.log('Created Layout Instance with evaluator:', layoutInstance, 'validator:', validatorChoice);
 
             // Step 5: Generate layout using Alloy data instance
             updateStatus('Generating layout with Alloy data...', 'info');

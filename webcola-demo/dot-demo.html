@@ -197,6 +197,13 @@
                     <option value="sql">SQL</option>
                 </select>
             </div>
+            <div class="mb-3">
+                <label for="validator-select">Constraint Validator:</label>
+                <select id="validator-select" class="form-select form-select-sm" aria-label="Validator selection">
+                    <option value="kiwi" selected>Kiwi (default, stable)</option>
+                    <option value="qualitative">Qualitative CDCL (beta)</option>
+                </select>
+            </div>
 
             <div id="status" class="status info">Ready to load DOT graph...</div>
             <div id="error-messages"></div>
@@ -538,12 +545,15 @@
 
             updateStatus('Creating layout...', 'info');
             const ENABLE_ALIGNMENT_EDGES = true;
+            const validatorChoice = document.getElementById('validator-select')?.value || 'kiwi';
 
             const layoutInstance = new CndCore.LayoutInstance(
                 cachedLayoutSpec,
                 cachedEvaluator,
                 0,
-                ENABLE_ALIGNMENT_EDGES
+                ENABLE_ALIGNMENT_EDGES,
+                undefined, // alignmentEdgeStrategy (use default)
+                validatorChoice // 'kiwi' or 'qualitative'
             );
 
             updateStatus('Generating layout with DOT data...', 'info');
