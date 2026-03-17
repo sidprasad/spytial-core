@@ -1778,4 +1778,169 @@ describe('QualitativeConstraintValidator', () => {
             expect(error).toBeNull();
         });
     });
+
+    // ─── Transitive alignment-ordering through intermediate nodes ────────────
+
+    describe('Transitive alignment-ordering through intermediate nodes', () => {
+
+        it('align-x(N2,N3) + leftOf chain N3→N0→N1→N2 should be UNSAT (CI counterexample)', () => {
+            // Counterexample from PBT CI: Kiwi=UNSAT, Qual=SAT
+            // N3→N0→N1→N2 means N3.x < N2.x, but align-x(N2,N3) requires N2.x == N3.x
+            const n0 = createNode('N0', { width: 38, height: 25 });
+            const n1 = createNode('N1', { width: 159, height: 28 });
+            const n2 = createNode('N2', { width: 96, height: 21 });
+            const n3 = createNode('N3', { width: 179, height: 97 });
+
+            const layout = createLayout(
+                [n0, n1, n2, n3],
+                [
+                    createLeftConstraint(n1, n2),       // N1 → N2
+                    createAlignConstraint(n2, n3, 'x'),  // N2 ≡x N3
+                    createLeftConstraint(n3, n0),       // N3 → N0
+                    createLeftConstraint(n0, n1),       // N0 → N1
+                ]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).not.toBeNull();
+            expect(error!.type).toBe('positional-conflict');
+        });
+
+        it('align-x through 2 intermediates: align-x(A,D) + A→B→C→D should be UNSAT', () => {
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+            const d = createNode('D');
+
+            const layout = createLayout(
+                [a, b, c, d],
+                [
+                    createAlignConstraint(a, d, 'x'),
+                    createLeftConstraint(a, b),
+                    createLeftConstraint(b, c),
+                    createLeftConstraint(c, d),
+                ]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).not.toBeNull();
+        });
+
+        it('align-y through intermediate: align-y(A,C) + above(A,B) + above(B,C) should be UNSAT', () => {
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+
+            const layout = createLayout(
+                [a, b, c],
+                [
+                    createAlignConstraint(a, c, 'y'),
+                    createTopConstraint(a, b),
+                    createTopConstraint(b, c),
+                ]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).not.toBeNull();
+        });
+
+        it('alignment added BEFORE ordering chain completes: align first, then build path', () => {
+            // Order: align-x(A,D), then A→B, B→C, C→D
+            // The conflict is only detectable after the last edge completes the path
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+            const d = createNode('D');
+
+            const layout = createLayout(
+                [a, b, c, d],
+                [
+                    createAlignConstraint(a, d, 'x'),
+                    createLeftConstraint(a, b),
+                    createLeftConstraint(b, c),
+                    createLeftConstraint(c, d), // completes path A→B→C→D, but A≡xD
+                ]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).not.toBeNull();
+        });
+
+        it('alignment added AFTER ordering chain: chain first, then align endpoints', () => {
+            // Order: A→B, B→C, C→D, then align-x(A,D)
+            // checkAlignmentConsistency should catch this
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+            const d = createNode('D');
+
+            const layout = createLayout(
+                [a, b, c, d],
+                [
+                    createLeftConstraint(a, b),
+                    createLeftConstraint(b, c),
+                    createLeftConstraint(c, d),
+                    createAlignConstraint(a, d, 'x'), // A≡xD but A→B→C→D
+                ]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).not.toBeNull();
+        });
+
+        it('non-conflicting case: align-x(A,B) + leftOf(C,D) with no path between aligned nodes', () => {
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+            const d = createNode('D');
+
+            const layout = createLayout(
+                [a, b, c, d],
+                [
+                    createAlignConstraint(a, b, 'x'),
+                    createLeftConstraint(c, d),
+                    createLeftConstraint(a, c), // A→C→D, but B is not on this path
+                ]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).toBeNull(); // SAT: no ordering between aligned A and B
+        });
+
+        it('IIS includes alignment + ordering constraints for intermediate-node conflict', () => {
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+
+            const layout = createLayout(
+                [a, b, c],
+                [
+                    createAlignConstraint(a, c, 'x'),
+                    createLeftConstraint(a, b),
+                    createLeftConstraint(b, c),
+                ]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).not.toBeNull();
+            // IIS should contain the alignment and the ordering path
+            const mcs = error!.minimalConflictingSet;
+            expect(mcs).toBeDefined();
+            const allIISConstraints: any[] = [];
+            for (const [, cs] of mcs!) {
+                allIISConstraints.push(...cs);
+            }
+            // IIS should include alignment + both ordering edges = 3 constraints
+            expect(allIISConstraints.length).toBeGreaterThanOrEqual(2);
+            // MFS should exist
+            expect(error!.maximalFeasibleSubset).toBeDefined();
+        });
+    });
 });

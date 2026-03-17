@@ -27,6 +27,7 @@
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
+    "test:perf": "vitest run --config vitest.bench.config.ts",
     "bench": "vitest run --config vitest.bench.config.ts",
     "lint": "eslint src --ext .ts,.tsx",
     "lint:fix": "eslint src --ext .ts,.tsx --fix",
