@@ -31,6 +31,18 @@ const UNIVERSAL_TYPE = "univ";
 
 type ConstraintSource = RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint;
 
+/**
+ * Result of layout generation. When constraints are unsatisfiable, `layout`
+ * contains a counterfactual diagram built from the maximal feasible subset
+ * of constraints, annotated with error metadata (conflictingConstraints,
+ * overlappingNodes) for visual highlighting. `error` is non-null on conflict.
+ */
+type CounterfactualLayoutResult = {
+    layout: InstanceLayout;
+    error: ConstraintError | null;
+    selectorErrors: SelectorErrorDetail[];
+};
+
 class MissingNodeConstraintError extends Error implements ConstraintError {
     readonly type = 'unknown-constraint';
     readonly missingNodeId: string;
@@ -1064,11 +1076,7 @@ export class LayoutInstance {
      */
     public generateLayout(
         a: IDataInstance
-    ): {
-        layout: InstanceLayout,
-        error: ConstraintError | null,
-        selectorErrors: SelectorErrorDetail[]
-    } {
+    ): CounterfactualLayoutResult {
         // Reset selector errors at the start of each layout generation
         this.selectorErrors = [];
         // Reset hidden-node tracking at the start of each layout generation
@@ -1222,18 +1230,12 @@ export class LayoutInstance {
         const constraintError = validator.validateConstraints();
 
         if (constraintError) {
-            if ((constraintError as PositionalConstraintError).minimalConflictingSet) {
-                return this.handlePositionalConstraintError(
-                    constraintError as PositionalConstraintError,
-                    layout
-                );
+            if (isPositionalConstraintError(constraintError)) {
+                return this.handlePositionalConstraintError(constraintError, layout);
             }
 
-            if ((constraintError as GroupOverlapError).overlappingNodes) {
-                return this.handleGroupOverlapError(
-                    constraintError as GroupOverlapError,
-                    layout
-                );
+            if (isGroupOverlapError(constraintError)) {
+                return this.handleGroupOverlapError(constraintError, layout);
             }
 
             throw constraintError;
@@ -1258,8 +1260,9 @@ export class LayoutInstance {
     }
 
     /**
-     * Handles missing-node constraint errors (e.g., when a constraint references a hidden node)
-     * by surfacing them as constraint-level errors with the best-effort layout.
+     * Handles errors where a constraint references a node missing from the graph
+     * (e.g., hidden by a hideAtom directive). Returns a counterfactual layout
+     * built from the constraints that could be applied.
      */
     private handleMissingNodeConstraintError(
         error: MissingNodeConstraintError,
@@ -1270,17 +1273,13 @@ export class LayoutInstance {
             disconnectedNodes: string[],
             constraints: LayoutConstraint[],
         }
-    ): {
-        layout: InstanceLayout,
-        error: ConstraintError,
-        selectorErrors: SelectorErrorDetail[]
-    } {
+    ): CounterfactualLayoutResult {
         const layoutEdges = this.filterHiddenEdges(
             this.buildLayoutEdges(context.graph, context.layoutNodes)
         );
         const layoutGroups = context.groups;
 
-        const layoutWithErrorMetadata: InstanceLayout = {
+        const counterfactualLayout: InstanceLayout = {
             nodes: context.layoutNodes,
             edges: layoutEdges,
             constraints: context.constraints,
@@ -1289,25 +1288,20 @@ export class LayoutInstance {
         };
 
         return {
-            layout: layoutWithErrorMetadata,
+            layout: counterfactualLayout,
             error,
             selectorErrors: this.selectorErrors
         };
     }
 
     /**
-     * Handles conflicts where hideAtom directives hide nodes that are also referenced
-     * by layout constraints. Reports the conflict in the same IIS-like table format
-     * (Source Constraints | Diagram Elements) and returns the layout with the conflicting
-     * constraints already dropped (the counterfactual).
+     * Handles conflicts where hideAtom directives hide nodes referenced by layout
+     * constraints. Reports the conflict in IIS-like table format and returns a
+     * counterfactual layout with the conflicting constraints already dropped.
      */
     private handleHiddenNodeConflictError(
         layout: InstanceLayout
-    ): {
-        layout: InstanceLayout,
-        error: ConstraintError,
-        selectorErrors: SelectorErrorDetail[]
-    } {
+    ): CounterfactualLayoutResult {
         // Build the IIS-like error messages map:
         //   Source Constraint HTML → list of dropped pairwise constraint descriptions
         // Also add a synthetic entry for each hideAtom directive involved
@@ -1366,34 +1360,27 @@ export class LayoutInstance {
         // The layout already has the conflicting constraints dropped (they were skipped
         // during generation), so it serves as the counterfactual diagram.
         // Apply the same edge-visibility post-processing that the normal path performs.
-        const filteredLayout: InstanceLayout = {
+        const counterfactualLayout: InstanceLayout = {
             ...layout,
             edges: this.filterHiddenEdges(layout.edges)
         };
 
         return {
-            layout: filteredLayout,
+            layout: counterfactualLayout,
             error,
             selectorErrors: this.selectorErrors
         };
     }
 
     /**
-     * Helper function to handle positional constraint errors by creating a layout
-     * that enforces the maximal feasible subset of constraints.
-     *
-     * The qualitative validator computes the MFS during conflict analysis and
-     * applies it to layout.constraints. We use that directly when available,
-     * falling back to the old IIS-removal heuristic for the Kiwi validator.
+     * Handles positional constraint conflicts (unsatisfiable ordering/alignment).
+     * Returns a counterfactual layout enforcing the maximal feasible subset of
+     * constraints, with conflicting constraints annotated for visual highlighting.
      */
     private handlePositionalConstraintError(
         error: PositionalConstraintError,
         layout: InstanceLayout
-    ): {
-        layout: InstanceLayout,
-        error: ConstraintError,
-        selectorErrors: SelectorErrorDetail[]
-    } {
+    ): CounterfactualLayoutResult {
         const minimalConflictingSet = error.minimalConflictingSet;
 
         // The qualitative validator enforces the MFS on layout.constraints
@@ -1405,7 +1392,7 @@ export class LayoutInstance {
                 ![...minimalConflictingSet.values()].flat().includes(c)
             );
 
-        const layoutWithErrorMetadata: InstanceLayout = {
+        const counterfactualLayout: InstanceLayout = {
             nodes: layout.nodes,
             edges: layout.edges,
             constraints,
@@ -1413,33 +1400,21 @@ export class LayoutInstance {
             conflictingConstraints: [...minimalConflictingSet.values()].flat()
         };
         return {
-            layout: layoutWithErrorMetadata,
+            layout: counterfactualLayout,
             error: error,
             selectorErrors: this.selectorErrors
         };
     }
 
     /**
-     * Helper function to handle group overlap errors by creating a layout with overlapping nodes metadata
-     * @returns An object containing the layout with error metadata and the error itself.
+     * Handles group overlap errors where nodes belong to multiple non-overlapping
+     * groups. Returns a counterfactual layout scoped to the overlapping groups
+     * and their nodes, with overlapping nodes annotated for visual highlighting.
      */
     private handleGroupOverlapError(
         error: GroupOverlapError,
         layout: InstanceLayout
-    ): {
-        layout: InstanceLayout,
-        error: ConstraintError,
-        selectorErrors: SelectorErrorDetail[]
-    } {
-        // If the error is a group overlap error, we can return the error as is.
-        // const layoutWithErrorMetadata: InstanceLayout = {
-        //     nodes: layout.nodes,
-        //     edges: layout.edges,
-        //     constraints: layout.constraints,
-        //     groups: layout.groups,
-        //     overlappingNodes: error.overlappingNodes,
-        // }
-
+    ): CounterfactualLayoutResult {
         // Get overlapping groups
         const overlappingGroupNames = error.overlappingNodes.map(node => node.groups).flat();
         const overlappingGroups = layout.groups.filter(group =>
@@ -1455,7 +1430,7 @@ export class LayoutInstance {
             relevantNodes.some(node => edge.source.id === node.id) && relevantNodes.some(node => edge.target.id === node.id)
         );
         
-        const layoutWithErrorMetadata: InstanceLayout = {
+        const counterfactualLayout: InstanceLayout = {
             nodes: relevantNodes,
             edges: edgesWithRelevantNodes,
             constraints: layout.constraints,
@@ -1463,7 +1438,7 @@ export class LayoutInstance {
             overlappingNodes: error.overlappingNodes,
         }
         return { 
-            layout: layoutWithErrorMetadata, 
+            layout: counterfactualLayout, 
             error: error,
             selectorErrors: this.selectorErrors
         };
