@@ -482,22 +482,22 @@ class QualitativeConstraintValidator {
         // Phase 1: Add all conjunctive constraints
         for (const constraint of this.orientationConstraints) {
             const error = this.addConjunctiveConstraint(constraint);
-            if (error) return error;
+            if (error) return this.enforceMaximalFeasibleSubset(error);
         }
 
         // Phase 2: Dimension feasibility on conjunctive constraints alone
         const dimError = this.checkDimensionFeasibility();
-        if (dimError) return dimError;
+        if (dimError) return this.enforceMaximalFeasibleSubset(dimError);
 
         // Phase 3: Pigeonhole on alignment classes
         const pigeonholeError = this.checkPigeonhole();
-        if (pigeonholeError) return pigeonholeError;
+        if (pigeonholeError) return this.enforceMaximalFeasibleSubset(pigeonholeError);
 
         const constraintsBeforeDisjunctions = this.addedConstraints.length;
 
         // Phase 4: Group bounding box disjunctions (virtual group nodes, from V1)
         const groupError = this.addGroupBoundingBoxDisjunctions();
-        if (groupError) return groupError;
+        if (groupError) return this.enforceMaximalFeasibleSubset(groupError);
 
         // Phase 5: Collect all disjunctions
         this.allDisjunctions = [...(this.layout.disjunctiveConstraints || [])];
@@ -508,7 +508,11 @@ class QualitativeConstraintValidator {
         // Phase 7: CDCL search on remaining disjunctions
         if (this.allDisjunctions.length > 0) {
             const result = this.solveCDCL();
-            if (!result.satisfiable) return result.error || null;
+            if (!result.satisfiable) {
+                const error = result.error;
+                if (error) return this.enforceMaximalFeasibleSubset(error);
+                return null;
+            }
         }
 
         // Persist all constraints added during presolve + CDCL to the layout.
@@ -524,10 +528,25 @@ class QualitativeConstraintValidator {
 
         // Phase 9: Node overlap detection
         const overlapError = this.detectNodeOverlaps();
-        if (overlapError) return overlapError;
+        if (overlapError) return this.enforceMaximalFeasibleSubset(overlapError);
 
         this.layout.constraints = this.layout.constraints.concat(implicitConstraints);
         return null;
+    }
+
+    /**
+     * Enforce the maximal feasible subset on the layout before returning an error.
+     *
+     * When a conflict is detected, we still want the layout to use the largest
+     * satisfiable subset of constraints so that the "counterfactual" diagram is
+     * as close to the user's intent as possible. Each error builder populates
+     * `maximalFeasibleSubset`; this method applies it to `layout.constraints`.
+     */
+    private enforceMaximalFeasibleSubset(error: PositionalConstraintError): PositionalConstraintError {
+        if (error.maximalFeasibleSubset) {
+            this.layout.constraints = error.maximalFeasibleSubset;
+        }
+        return error;
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -552,6 +571,7 @@ class QualitativeConstraintValidator {
             conflictingConstraint: constraint,
             conflictingSourceConstraint: constraint.sourceConstraint,
             minimalConflictingSet: new Map([[constraint.sourceConstraint, [constraint]]]),
+            maximalFeasibleSubset: [...this.addedConstraints],
             errorMessages: {
                 conflictingConstraint: orientationConstraintToString(constraint),
                 conflictingSourceConstraint: constraint.sourceConstraint.toHTML(),
@@ -611,6 +631,7 @@ class QualitativeConstraintValidator {
             conflictingConstraint: constraint,
             conflictingSourceConstraint: constraint.sourceConstraint,
             minimalConflictingSet: new Map([[constraint.sourceConstraint, [constraint]]]),
+            maximalFeasibleSubset: [...this.addedConstraints],
             errorMessages: {
                 conflictingConstraint: orientationConstraintToString(constraint),
                 conflictingSourceConstraint: constraint.sourceConstraint.toHTML(),
@@ -692,8 +713,10 @@ class QualitativeConstraintValidator {
             }
             // Check if this new edge creates ordering between any x-aligned pair
             if (this.hasAlignmentOrderingConflict(constraint.left.id, constraint.right.id, 'x')) {
+                // Build error while edge is still in graph (so path-finding works)
+                const error = this.buildAlignmentConflictError(constraint, 'x');
                 this.hGraph.removeEdge(constraint.left.id, constraint.right.id);
-                return this.buildAlignmentConflictError(constraint, 'x');
+                return error;
             }
             this.addedConstraints.push(constraint);
         } else if (isTopConstraint(constraint)) {
@@ -706,8 +729,9 @@ class QualitativeConstraintValidator {
             }
             // Check if this new edge creates ordering between any y-aligned pair
             if (this.hasAlignmentOrderingConflict(constraint.top.id, constraint.bottom.id, 'y')) {
+                const error = this.buildAlignmentConflictError(constraint, 'y');
                 this.vGraph.removeEdge(constraint.top.id, constraint.bottom.id);
-                return this.buildAlignmentConflictError(constraint, 'y');
+                return error;
             }
             this.addedConstraints.push(constraint);
         } else if (isAlignmentConstraint(constraint)) {
@@ -811,28 +835,21 @@ class QualitativeConstraintValidator {
      * a transitive ordering between any pair of nodes that are aligned on that axis.
      * E.g., if X is x-aligned with Y, and after adding A→B there's a path X→...→Y,
      * that's a contradiction.
+     *
+     * Important: we must check ALL multi-member alignment classes, not just those
+     * containing the edge endpoints. The new edge may complete a transitive path
+     * between aligned nodes in a class that doesn't contain either endpoint.
+     * Example: align-x(N2,N3), leftOf(N1,N2), leftOf(N3,N0), leftOf(N0,N1)
+     * — adding N0→N1 completes the path N3→N0→N1→N2, but neither N0 nor N1
+     * is in the {N2,N3} alignment class.
      */
     private hasAlignmentOrderingConflict(a: string, b: string, axis: 'x' | 'y'): boolean {
         const uf = axis === 'x' ? this.xAlignUF : this.yAlignUF;
         const graph = axis === 'x' ? this.hGraph : this.vGraph;
 
-        // Collect the alignment classes that contain a or b
-        const classA = uf.find(a);
-        const classB = uf.find(b);
-
-        // Get members of each relevant class
-        const classes = uf.classes();
-        const checkClasses: string[][] = [];
-        for (const [, members] of classes) {
+        // Check ALL multi-member alignment classes for ordering between members
+        for (const [, members] of uf.classes()) {
             if (members.length < 2) continue;
-            const root = uf.find(members[0]);
-            if (root === classA || root === classB) {
-                checkClasses.push(members);
-            }
-        }
-
-        // Check all pairs within each affected class for ordering
-        for (const members of checkClasses) {
             for (let i = 0; i < members.length; i++) {
                 for (let j = i + 1; j < members.length; j++) {
                     if (graph.isOrdered(members[i], members[j]) || graph.isOrdered(members[j], members[i])) {
@@ -1171,13 +1188,24 @@ class QualitativeConstraintValidator {
         // Fallback: if no alternative is fully implied, find one that's at least
         // not contradicted (original behavior). This can happen when the pair is
         // separated but through edges not captured in any single alternative.
+        // Must also check alignment conflicts — an ordering between aligned nodes
+        // is contradicted even if no reverse edge exists.
         for (let i = 0; i < disj.alternatives.length; i++) {
             let feasible = true;
             for (const constraint of disj.alternatives[i]) {
+                if (isAlignmentConstraint(constraint)) {
+                    // Alignment is never "contradicted" by existing state,
+                    // only ordering constraints can be.
+                    continue;
+                }
                 const edge = this.constraintToEdge(constraint);
                 if (!edge) continue;
                 const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
+                const uf = edge.axis === 'h' ? this.xAlignUF : this.yAlignUF;
+                // Contradicted by reverse ordering?
                 if (graph.isOrdered(edge.to, edge.from)) { feasible = false; break; }
+                // Contradicted by alignment? (can't order aligned nodes)
+                if (uf.connected(edge.from, edge.to)) { feasible = false; break; }
             }
             if (feasible) return i;
         }
@@ -1835,6 +1863,7 @@ class QualitativeConstraintValidator {
             conflictingConstraint: constraint,
             conflictingSourceConstraint: constraint.sourceConstraint,
             minimalConflictingSet: srcToLayout,
+            maximalFeasibleSubset: [...this.addedConstraints],
             errorMessages: {
                 conflictingConstraint: orientationConstraintToString(constraint),
                 conflictingSourceConstraint: constraint.sourceConstraint.toHTML(),
@@ -1891,7 +1920,13 @@ class QualitativeConstraintValidator {
         triggerConstraint: LayoutConstraint,
         axis: 'x' | 'y',
     ): PositionalConstraintError {
+        // Temporarily include the trigger in addedConstraints so
+        // findAlignmentConflictSet can map its graph edge back to a constraint.
+        // (The trigger's edge is already in the graph but it hasn't been pushed
+        // to addedConstraints yet since we're about to fail.)
+        this.addedConstraints.push(triggerConstraint);
         const conflictSet = this.findAlignmentConflictSet(axis);
+        this.addedConstraints.pop();
 
         // Always include the trigger
         if (!conflictSet.includes(triggerConstraint)) {

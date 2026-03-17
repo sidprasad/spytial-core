@@ -1,6 +1,6 @@
 {
   "name": "spytial-core",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "A fully client-side application for SpyTial.",
   "main": "./dist/browser/spytial-core-complete.global.js",
   "types": "./dist/browser/spytial-core-complete.global.d.ts",
@@ -27,6 +27,7 @@
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
+    "test:perf": "vitest run --config vitest.bench.config.ts",
     "bench": "vitest run --config vitest.bench.config.ts",
     "lint": "eslint src --ext .ts,.tsx",
     "lint:fix": "eslint src --ext .ts,.tsx --fix",

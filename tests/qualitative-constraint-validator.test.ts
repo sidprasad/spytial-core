@@ -396,6 +396,68 @@ describe('QualitativeConstraintValidator', () => {
             // The MFS should contain at least one of the two conflicting constraints
             expect(posError.maximalFeasibleSubset!.length).toBeGreaterThan(0);
         });
+
+        it('should break both cores when there are 2 independent infeasible cores', () => {
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+            const d = createNode('D');
+
+            // Core 1 (H-axis): A<B and B<A — contradictory
+            const src1 = new RelativeOrientationConstraint(['left'], 'core1-AB');
+            const src2 = new RelativeOrientationConstraint(['left'], 'core1-BA');
+
+            // Core 2 (V-axis): C above D and D above C — contradictory
+            const src3 = new RelativeOrientationConstraint(['above'], 'core2-CD');
+            const src4 = new RelativeOrientationConstraint(['above'], 'core2-DC');
+
+            const layout = createLayout(
+                [a, b, c, d],
+                [],
+                [
+                    new DisjunctiveConstraint(src1, [[createLeftConstraint(a, b, src1)]]),
+                    new DisjunctiveConstraint(src2, [[createLeftConstraint(b, a, src2)]]),
+                    new DisjunctiveConstraint(src3, [[createTopConstraint(c, d, src3)]]),
+                    new DisjunctiveConstraint(src4, [[createTopConstraint(d, c, src4)]]),
+                ]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).not.toBeNull();
+
+            const posError = error as PositionalConstraintError;
+            expect(posError.maximalFeasibleSubset).toBeDefined();
+            const mfs = posError.maximalFeasibleSubset!;
+
+            // MFS should be non-empty — it should keep one constraint from each core
+            expect(mfs.length).toBeGreaterThan(0);
+
+            // Core 1 must be broken: cannot have both A<B and B<A
+            const hasALeftB = mfs.some(c =>
+                isLeftConstraint(c) && c.left.id === 'A' && c.right.id === 'B'
+            );
+            const hasBLeftA = mfs.some(c =>
+                isLeftConstraint(c) && c.left.id === 'B' && c.right.id === 'A'
+            );
+            expect(hasALeftB && hasBLeftA).toBe(false);
+
+            // Core 2 must be broken: cannot have both C above D and D above C
+            const hasCAboveD = mfs.some(c =>
+                isTopConstraint(c) && c.top.id === 'C' && c.bottom.id === 'D'
+            );
+            const hasDAboveC = mfs.some(c =>
+                isTopConstraint(c) && c.top.id === 'D' && c.bottom.id === 'C'
+            );
+            expect(hasCAboveD && hasDAboveC).toBe(false);
+
+            // MFS should be maximal — at least one from each core survives
+            expect(hasALeftB || hasBLeftA).toBe(true);
+            expect(hasCAboveD || hasDAboveC).toBe(true);
+
+            // The MFS should also be enforced on the layout
+            expect(layout.constraints).toEqual(mfs);
+        });
     });
 
     describe('Group constraints', () => {
