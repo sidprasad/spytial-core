@@ -731,11 +731,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Initialize the Shadow DOM structure
    */
   private initializeDOM(): void {
-    // Get actual container dimensions for responsive sizing
-    const containerRect = this.getBoundingClientRect();
-    const containerWidth = containerRect.width || 800;
-    const containerHeight = containerRect.height || 600;
-    
     this.shadowRoot!.innerHTML = `
       <style>
       ${this.getCSS()}
@@ -763,7 +758,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         <span class="loading-dot" aria-hidden="true"></span>
         <span id="loading-progress">Computing layout...</span>
       </div>
-      <svg id="svg" viewBox="0 0 ${containerWidth} ${containerHeight}" preserveAspectRatio="xMidYMid meet">
+      <svg id="svg">
         <defs>
         <marker id="end-arrow" markerWidth="15" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse">
           <polygon points="0 0, 15 5, 0 10" fill="context-stroke" />
