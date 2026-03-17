@@ -374,6 +374,61 @@ describe('QualitativeConstraintValidator', () => {
             expect(posError.maximalFeasibleSubset).toBeDefined();
             expect(posError.maximalFeasibleSubset!.length).toBeGreaterThan(0);
         });
+
+        it('should exclude constraints from two independent infeasible cores', () => {
+            // Core 1 (horizontal): A<B conjunctive + B<A disjunctive → H-cycle
+            // Core 2 (vertical): C^D conjunctive + D^C disjunctive → V-cycle
+            // The two cores share no nodes and are completely independent.
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+            const d = createNode('D');
+
+            const srcAB = new RelativeOrientationConstraint(['left'], 'A->B');
+            const srcBA = new RelativeOrientationConstraint(['left'], 'B->A');
+            const srcCD = new RelativeOrientationConstraint(['above'], 'C->D');
+            const srcDC = new RelativeOrientationConstraint(['above'], 'D->C');
+
+            const conjAB = createLeftConstraint(a, b, srcAB);
+            const conjCD = createTopConstraint(c, d, srcCD);
+            const disjBA = createLeftConstraint(b, a, srcBA);
+            const disjDC = createTopConstraint(d, c, srcDC);
+
+            const layout = createLayout(
+                [a, b, c, d],
+                [conjAB, conjCD],  // conjunctive: A<B, C^D
+                [
+                    // each disjunction has a single alternative that conflicts with its core's conjunctive
+                    new DisjunctiveConstraint(srcBA, [[disjBA]]),  // only option: B<A → cycle with A<B
+                    new DisjunctiveConstraint(srcDC, [[disjDC]]),  // only option: D^C → cycle with C^D
+                ]
+            );
+
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+            expect(error).not.toBeNull();
+            expect(error!.type).toBe('positional-conflict');
+
+            const posError = error as PositionalConstraintError;
+            expect(posError.maximalFeasibleSubset).toBeDefined();
+            const mfs = posError.maximalFeasibleSubset!;
+
+            // MFS must not contain the full infeasible core 1: {A<B, B<A}
+            const hasFullCore1 = mfs.includes(conjAB) && mfs.includes(disjBA);
+            expect(hasFullCore1).toBe(false);
+
+            // MFS must not contain the full infeasible core 2: {C^D, D^C}
+            const hasFullCore2 = mfs.includes(conjCD) && mfs.includes(disjDC);
+            expect(hasFullCore2).toBe(false);
+
+            // MFS should still contain the individually-satisfiable conjunctive constraints
+            expect(mfs.includes(conjAB)).toBe(true);
+            expect(mfs.includes(conjCD)).toBe(true);
+
+            // MFS should exclude the conflicting disjunctive constraints from both cores
+            expect(mfs.includes(disjBA)).toBe(false);
+            expect(mfs.includes(disjDC)).toBe(false);
+        });
     });
 
     describe('Group constraints', () => {

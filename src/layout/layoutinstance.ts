@@ -1379,8 +1379,12 @@ export class LayoutInstance {
     }
 
     /**
-     * Helper function to handle positional constraint errors by creating a layout with conflicting constraints removed
-     * @returns An object containing the layout with error metadata and the error itself.
+     * Helper function to handle positional constraint errors by creating a layout
+     * that enforces the maximal feasible subset of constraints.
+     *
+     * The qualitative validator computes the MFS during conflict analysis and
+     * applies it to layout.constraints. We use that directly when available,
+     * falling back to the old IIS-removal heuristic for the Kiwi validator.
      */
     private handlePositionalConstraintError(
         error: PositionalConstraintError,
@@ -1391,15 +1395,20 @@ export class LayoutInstance {
         selectorErrors: SelectorErrorDetail[]
     } {
         const minimalConflictingSet = error.minimalConflictingSet;
-        // If the error is a positional constraint error, we can try to return the last known good layout by removing all conflicting constraints.
+
+        // The qualitative validator enforces the MFS on layout.constraints
+        // before returning the error. Use the layout as-is in that case.
+        // For the Kiwi validator (no MFS), fall back to removing the IIS.
+        const constraints = error.maximalFeasibleSubset
+            ? layout.constraints
+            : layout.constraints.filter(c =>
+                ![...minimalConflictingSet.values()].flat().includes(c)
+            );
+
         const layoutWithErrorMetadata: InstanceLayout = {
             nodes: layout.nodes,
             edges: layout.edges,
-            // FIXME: This is a hacky way to remove the conflicting constraints.
-            // There is some inconsistency between what the graph shows and what the error message shows.
-            constraints: layout.constraints.filter(c =>
-                ![...minimalConflictingSet.values()].flat().includes(c)
-            ),
+            constraints,
             groups: layout.groups,
             conflictingConstraints: [...minimalConflictingSet.values()].flat()
         };

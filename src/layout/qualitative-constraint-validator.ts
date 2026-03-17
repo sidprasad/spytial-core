@@ -482,22 +482,22 @@ class QualitativeConstraintValidator {
         // Phase 1: Add all conjunctive constraints
         for (const constraint of this.orientationConstraints) {
             const error = this.addConjunctiveConstraint(constraint);
-            if (error) return error;
+            if (error) return this.enforceMaximalFeasibleSubset(error);
         }
 
         // Phase 2: Dimension feasibility on conjunctive constraints alone
         const dimError = this.checkDimensionFeasibility();
-        if (dimError) return dimError;
+        if (dimError) return this.enforceMaximalFeasibleSubset(dimError);
 
         // Phase 3: Pigeonhole on alignment classes
         const pigeonholeError = this.checkPigeonhole();
-        if (pigeonholeError) return pigeonholeError;
+        if (pigeonholeError) return this.enforceMaximalFeasibleSubset(pigeonholeError);
 
         const constraintsBeforeDisjunctions = this.addedConstraints.length;
 
         // Phase 4: Group bounding box disjunctions (virtual group nodes, from V1)
         const groupError = this.addGroupBoundingBoxDisjunctions();
-        if (groupError) return groupError;
+        if (groupError) return this.enforceMaximalFeasibleSubset(groupError);
 
         // Phase 5: Collect all disjunctions
         this.allDisjunctions = [...(this.layout.disjunctiveConstraints || [])];
@@ -508,7 +508,11 @@ class QualitativeConstraintValidator {
         // Phase 7: CDCL search on remaining disjunctions
         if (this.allDisjunctions.length > 0) {
             const result = this.solveCDCL();
-            if (!result.satisfiable) return result.error || null;
+            if (!result.satisfiable) {
+                const error = result.error;
+                if (error) return this.enforceMaximalFeasibleSubset(error);
+                return null;
+            }
         }
 
         // Persist all constraints added during presolve + CDCL to the layout.
@@ -524,10 +528,25 @@ class QualitativeConstraintValidator {
 
         // Phase 9: Node overlap detection
         const overlapError = this.detectNodeOverlaps();
-        if (overlapError) return overlapError;
+        if (overlapError) return this.enforceMaximalFeasibleSubset(overlapError);
 
         this.layout.constraints = this.layout.constraints.concat(implicitConstraints);
         return null;
+    }
+
+    /**
+     * Enforce the maximal feasible subset on the layout before returning an error.
+     *
+     * When a conflict is detected, we still want the layout to use the largest
+     * satisfiable subset of constraints so that the "counterfactual" diagram is
+     * as close to the user's intent as possible. Each error builder populates
+     * `maximalFeasibleSubset`; this method applies it to `layout.constraints`.
+     */
+    private enforceMaximalFeasibleSubset(error: PositionalConstraintError): PositionalConstraintError {
+        if (error.maximalFeasibleSubset) {
+            this.layout.constraints = error.maximalFeasibleSubset;
+        }
+        return error;
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -552,6 +571,7 @@ class QualitativeConstraintValidator {
             conflictingConstraint: constraint,
             conflictingSourceConstraint: constraint.sourceConstraint,
             minimalConflictingSet: new Map([[constraint.sourceConstraint, [constraint]]]),
+            maximalFeasibleSubset: [...this.addedConstraints],
             errorMessages: {
                 conflictingConstraint: orientationConstraintToString(constraint),
                 conflictingSourceConstraint: constraint.sourceConstraint.toHTML(),
@@ -611,6 +631,7 @@ class QualitativeConstraintValidator {
             conflictingConstraint: constraint,
             conflictingSourceConstraint: constraint.sourceConstraint,
             minimalConflictingSet: new Map([[constraint.sourceConstraint, [constraint]]]),
+            maximalFeasibleSubset: [...this.addedConstraints],
             errorMessages: {
                 conflictingConstraint: orientationConstraintToString(constraint),
                 conflictingSourceConstraint: constraint.sourceConstraint.toHTML(),
@@ -1835,6 +1856,7 @@ class QualitativeConstraintValidator {
             conflictingConstraint: constraint,
             conflictingSourceConstraint: constraint.sourceConstraint,
             minimalConflictingSet: srcToLayout,
+            maximalFeasibleSubset: [...this.addedConstraints],
             errorMessages: {
                 conflictingConstraint: orientationConstraintToString(constraint),
                 conflictingSourceConstraint: constraint.sourceConstraint.toHTML(),

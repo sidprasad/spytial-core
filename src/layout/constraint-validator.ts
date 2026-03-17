@@ -38,6 +38,7 @@ interface PositionalConstraintError extends ConstraintError {
     conflictingConstraint: LayoutConstraint;
     conflictingSourceConstraint: SourceConstraint;
     minimalConflictingSet: Map<SourceConstraint, LayoutConstraint[]>;
+    maximalFeasibleSubset?: LayoutConstraint[];
     errorMessages?: ErrorMessages;
 }
 
