@@ -861,44 +861,6 @@ export function getCurrentInstanceFromReact(): IInputDataInstance | undefined {
   }
 }
 
-/**
- * Get current CND specification from React component state
- * This function provides access to the most current specification
- * 
- * @returns Current CND specification string or undefined if not available
- * 
- * @example
- * ```javascript
- * // In your demo page JavaScript:
- * const cndSpec = getCurrentCNDSpecFromReact();
- * if (cndSpec) {
- *   console.log('Current spec:', cndSpec);
- * }
- * ```
- */
-
-// FIXME: Can this be deleted? It seems to be unused.
-export function getCurrentCNDSpecFromReact(): string | undefined {
-  try {
-    const stateManager = CndLayoutStateManager.getInstance();
-    const currentSpec = stateManager.generateCurrentYamlSpec();
-
-    if (currentSpec.trim()) {
-      return currentSpec;
-    }
-  
-    // Fallback: Try to get value from the DOM
-    const reactTextarea = document.querySelector('#webcola-cnd-container textarea');
-    if (reactTextarea && reactTextarea instanceof HTMLTextAreaElement) {
-      return reactTextarea.value.trim();
-    }
-  
-    // Error handling if React component is not found
-    console.warn('CndLayoutInterface textarea not found');
-  } catch (error) {
-    console.error('Error accessing CndLayoutInterface instance:', error);
-  }
-}
 
 /**
  * Mount PyretReplInterface component into specified container
