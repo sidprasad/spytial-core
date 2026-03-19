@@ -402,8 +402,13 @@ The `<webcola-cnd-graph>` custom element provides methods for interacting with t
 
 #### Layout Management
 - **`renderLayout(instanceLayout, options?)`** - Render a layout with optional prior positions
-  - `options.priorState`: prior layout state for visual continuity (use `getLayoutState()` to capture)
-  - Prior state enables reduced iterations to preserve positions across renders.
+  - `options.priorPositions`: prior layout state for visual continuity (use `getLayoutState()` to capture)
+  - `options.transitionMode`: `"morph"` (default) | `"replace"`
+  - In `"morph"` mode, re-renders warm-start from current positions by default and cross-fade frames.
+  - In `"replace"` mode, re-renders clear and redraw immediately (legacy behavior).
+- **`setTransitionMode(mode)`** - Set default transition mode for future renders (`"morph"` | `"replace"`)
+- **`transition-mode` attribute** - Custom element attribute for default transition mode:
+  - `<webcola-cnd-graph transition-mode="replace"></webcola-cnd-graph>`
 - **`generateSequenceLayouts({ instances, spytialSpec, mode? })`** - Generate layouts for a sequence of instances with inter-step continuity.
   - `mode`: `"ignore_history"` (default) | `"stability"` | `"change_emphasis"` | `"random_positioning"`
 - **`clear()`** - Clear the graph and reset state

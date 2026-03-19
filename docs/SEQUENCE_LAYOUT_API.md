@@ -8,7 +8,8 @@ Sequence continuity is handled **inside** `renderLayout()`. When you pass a `pol
 
 1. Captures the current layout state (or uses the explicit `priorPositions` you provide)
 2. Calls `policy.apply()` with the prior state and instance pair
-3. Passes the resolved positions to the translator
+3. Applies transition behavior (`morph`/`replace`)
+4. Passes the resolved positions to the translator
 
 ```
 ┌──────────────────────────────────────────────────┐
@@ -18,19 +19,23 @@ Sequence continuity is handled **inside** `renderLayout()`. When you pass a `pol
 │    policy,                                       │
 │    prevInstance,                                  │
 │    currInstance,                                  │
-│    priorPositions   (optional override)           │
+│    priorPositions   (optional override),          │
+│    transitionMode  (optional override)            │
 │  })                                              │
 │    ↓                                             │
 │    • calls policy.apply() internally             │
+│    • applies transition mode for frame swap      │
 │    • passes resolved positions to translator     │
 │    • tunes solver iterations when positions      │
 │      are present                                 │
 └──────────────────────────────────────────────────┘
 ```
 
-**Key design principle:** The policy is the sole gateway to continuity.
-Without a policy, `renderLayout()` produces a fresh layout. With a policy,
-it threads position hints between steps automatically.
+**Key design principle:** Policies control semantic continuity between
+`prevInstance`/`currInstance`. Transition mode controls visual continuity of
+frame swaps. By default (`morph`), `renderLayout()` cross-fades frames and
+warm-starts from current positions when available. Use `replace` for legacy
+clear-and-redraw behavior.
 
 ## SequencePolicy Interface
 
@@ -127,8 +132,12 @@ async renderLayout(
 | `prevInstance` | `IDataInstance` | No | Previous step's data instance (required if `policy` is set) |
 | `currInstance` | `IDataInstance` | No | Current step's data instance (required if `policy` is set) |
 | `priorPositions` | `LayoutState` | No | Explicit prior positions override; if omitted, `getLayoutState()` is used |
+| `transitionMode` | `'morph' \| 'replace'` | No | Frame-swap behavior. `morph` (default) cross-fades and warm-starts positions; `replace` clears/redraws immediately |
 
-When `policy`, `prevInstance`, and `currInstance` are all provided, `renderLayout` calls `policy.apply()` internally and passes the resolved positions to the translator. When no policy is provided, a fresh layout is produced.
+When `policy`, `prevInstance`, and `currInstance` are all provided, `renderLayout`
+calls `policy.apply()` internally and passes the resolved positions to the
+translator. Without a policy, `morph` mode still preserves visual continuity by
+warm-starting from current on-screen positions when available.
 
 **Example — stepping through instances:**
 
@@ -147,9 +156,32 @@ for (const instance of instances) {
     options.currInstance = instance;
   }
 
+  // Optional explicit frame-swap behavior
+  // options.transitionMode = 'replace';
+
   await graphElement.renderLayout(layout, options);
   prevInstance = instance;
 }
+```
+
+## Render Transition Modes
+
+`WebColaCnDGraph` supports two transition modes:
+
+| Mode | Behavior |
+|---|---|
+| `morph` (default) | Fade previous frame out and fade new frame in. If no explicit prior state is provided, warm-start from current positions when possible. |
+| `replace` | Clear the previous frame immediately and draw the new frame directly (legacy behavior). |
+
+You can configure mode either via render options or the custom element attribute:
+
+```typescript
+await graph.renderLayout(layout, { transitionMode: 'morph' });
+await graph.renderLayout(layout, { transitionMode: 'replace' });
+```
+
+```html
+<webcola-cnd-graph transition-mode="replace"></webcola-cnd-graph>
 ```
 
 ### `getSequencePolicy(name)`
