@@ -129,6 +129,14 @@ export interface LayoutState {
 }
 
 /**
+ * Rendering transition mode used when applying a new layout.
+ * - `replace`: clear previous frame immediately (legacy behavior)
+ * - `morph`: animate individual elements — exiting nodes/edges fade out,
+ *   entering ones fade in, and continuing ones slide to new positions.
+ */
+export type WebColaRenderTransitionMode = 'replace' | 'morph';
+
+/**
  * Options for `renderLayout`.
  *
  * There are two modes:
@@ -157,6 +165,7 @@ export interface LayoutState {
  *   prevInstance: instanceA,
  *   currInstance: instanceB,
  *   priorPositions: graph.getLayoutState(),
+ *   transitionMode: 'morph',
  * });
  * ```
  */
@@ -180,6 +189,12 @@ export interface WebColaLayoutOptions {
    * includes any drag the user may have performed.
    */
   priorPositions?: LayoutState;
+
+  /**
+   * Optional transition behavior when swapping frames.
+   * If omitted, the element-level `transition-mode` attribute is used.
+   */
+  transitionMode?: WebColaRenderTransitionMode;
 }
 
 // WebCola constraint types
