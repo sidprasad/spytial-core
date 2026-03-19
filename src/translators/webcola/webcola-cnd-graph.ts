@@ -135,13 +135,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private static readonly LOADING_INDICATOR_DELAY_MS = 180;
 
   /**
-   * Morph transition timing.
+   * Base morph transition timing (at speed = 1.0).
    * Exit duration is longer so departing elements have time to fade gracefully.
    * Enter starts after a short delay so exits are underway first.
+   * Actual durations are `base * morphSpeed`.
    */
-  private static readonly MORPH_EXIT_DURATION_MS = 400;
-  private static readonly MORPH_ENTER_DURATION_MS = 350;
-  private static readonly MORPH_ENTER_DELAY_MS = 80;
+  private static readonly MORPH_BASE_EXIT_DURATION_MS = 400;
+  private static readonly MORPH_BASE_ENTER_DURATION_MS = 350;
+  private static readonly MORPH_BASE_ENTER_DELAY_MS = 80;
 
   /**
    * Counter for edge routing iterations (for performance tracking)
@@ -297,6 +298,31 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private get transitionMode(): WebColaRenderTransitionMode {
     const attrMode = this.getAttribute('transition-mode');
     return attrMode === 'replace' ? 'replace' : 'morph';
+  }
+
+  /**
+   * Morph speed multiplier (0 – 1).
+   *  • 0   = instant (no animation, equivalent to 'replace')
+   *  • 0.5 = half the base duration
+   *  • 1   = full base duration (default)
+   *
+   * Read from the `morph-speed` attribute; defaults to 1.
+   */
+  private get morphSpeed(): number {
+    const raw = parseFloat(this.getAttribute('morph-speed') ?? '');
+    if (Number.isFinite(raw)) return Math.max(0, Math.min(raw, 1));
+    return 1;
+  }
+
+  /** Convenience helpers that apply the speed multiplier to base timings. */
+  private get morphExitDurationMs(): number {
+    return Math.round(WebColaCnDGraph.MORPH_BASE_EXIT_DURATION_MS * this.morphSpeed);
+  }
+  private get morphEnterDurationMs(): number {
+    return Math.round(WebColaCnDGraph.MORPH_BASE_ENTER_DURATION_MS * this.morphSpeed);
+  }
+  private get morphEnterDelayMs(): number {
+    return Math.round(WebColaCnDGraph.MORPH_BASE_ENTER_DELAY_MS * this.morphSpeed);
   }
 
   /**
@@ -1888,7 +1914,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     d3.select(snapshotGroup)
       .attr('opacity', 1)
       .transition()
-      .duration(WebColaCnDGraph.MORPH_EXIT_DURATION_MS)
+      .duration(this.morphExitDurationMs)
       .ease(d3.easeCubicOut)
       .attr('opacity', 0)
       .on('end', function(this: SVGGElement) {
@@ -1921,8 +1947,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         .filter((d: any) => enterNodeIds.has(d.id))
         .attr('opacity', 0)
         .transition()
-        .delay(WebColaCnDGraph.MORPH_ENTER_DELAY_MS)
-        .duration(WebColaCnDGraph.MORPH_ENTER_DURATION_MS)
+        .delay(this.morphEnterDelayMs)
+        .duration(this.morphEnterDurationMs)
         .ease(d3.easeCubicOut)
         .attr('opacity', 1);
     }
@@ -1939,8 +1965,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         })
         .attr('opacity', 0)
         .transition()
-        .delay(WebColaCnDGraph.MORPH_ENTER_DELAY_MS)
-        .duration(WebColaCnDGraph.MORPH_ENTER_DURATION_MS)
+        .delay(this.morphEnterDelayMs)
+        .duration(this.morphEnterDurationMs)
         .ease(d3.easeCubicOut)
         .attr('opacity', 1);
     }
@@ -1966,6 +1992,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   public setTransitionMode(mode: WebColaRenderTransitionMode): void {
     this.setAttribute('transition-mode', mode);
+  }
+
+  /**
+   * Set the morph animation speed.
+   * @param speed 0 (instant) – 1 (full duration, default)
+   */
+  public setMorphSpeed(speed: number): void {
+    this.setAttribute('morph-speed', String(Math.max(0, Math.min(speed, 1))));
   }
 
   /**
