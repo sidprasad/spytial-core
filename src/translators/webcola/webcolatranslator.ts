@@ -129,6 +129,13 @@ export interface LayoutState {
 }
 
 /**
+ * Rendering transition mode used when applying a new layout.
+ * - `replace`: clear previous frame immediately (legacy behavior)
+ * - `morph`: fade previous frame out while fading new frame in
+ */
+export type WebColaRenderTransitionMode = 'replace' | 'morph';
+
+/**
  * Options for `renderLayout`.
  *
  * There are two modes:
@@ -180,6 +187,12 @@ export interface WebColaLayoutOptions {
    * includes any drag the user may have performed.
    */
   priorPositions?: LayoutState;
+
+  /**
+   * Optional transition behavior when swapping frames.
+   * If omitted, the element-level `transition-mode` attribute is used.
+   */
+  transitionMode?: WebColaRenderTransitionMode;
 }
 
 // WebCola constraint types

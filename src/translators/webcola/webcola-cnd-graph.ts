@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator, NodePositionHint, TransformInfo, LayoutState, WebColaLayoutOptions } from './webcolatranslator';
+import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator, NodePositionHint, TransformInfo, LayoutState, WebColaLayoutOptions, WebColaRenderTransitionMode } from './webcolatranslator';
 import { InstanceLayout, isAlignmentConstraint, isInstanceLayout, isLeftConstraint, isTopConstraint, LayoutNode } from '../../layout/interfaces';
 import type { GridRouter, Group, Layout, Node, Link } from 'webcola';
 import { IInputDataInstance, ITuple, IAtom } from '../../data-instance/interfaces';
@@ -133,6 +133,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private static readonly INITIAL_ALL_CONSTRAINTS_ITERATIONS = 200;
   private static readonly GRID_SNAP_ITERATIONS = 1; // Reduced from 5 for performance, but kept at 1 for alignment
   private static readonly LOADING_INDICATOR_DELAY_MS = 180;
+  private static readonly MORPH_EXIT_DURATION_MS = 220;
+  private static readonly MORPH_ENTER_DURATION_MS = 180;
 
   /**
    * Counter for edge routing iterations (for performance tracking)
@@ -275,6 +277,17 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private get isUnsatCore(): boolean {
     return this.hasAttribute('unsat');
+  }
+
+  /**
+   * Access transition mode for layout swaps.
+   * Supported values:
+   * - "morph": fade old frame out while fading new frame in
+   * - "replace": clear and redraw immediately
+   */
+  private get transitionMode(): WebColaRenderTransitionMode {
+    const attrMode = this.getAttribute('transition-mode');
+    return attrMode === 'replace' ? 'replace' : 'morph';
   }
 
   /**
@@ -1402,6 +1415,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     }
   }
 
+  private resolveTransitionMode(options?: WebColaLayoutOptions): WebColaRenderTransitionMode {
+    if (options?.transitionMode === 'replace') return 'replace';
+    if (options?.transitionMode === 'morph') return 'morph';
+    return this.transitionMode;
+  }
+
   /**
    * Render layout using WebCola constraint solver.
    *
@@ -1427,6 +1446,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    *   prevInstance: prev,
    *   currInstance: curr,
    *   priorPositions: graph.getLayoutState(),
+   *   transitionMode: 'morph',
    * });
    * ```
    */
@@ -1435,6 +1455,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     if (! isInstanceLayout(instanceLayout)) {
       throw new Error('Invalid instance layout provided. Expected an InstanceLayout instance.');
     }
+
+    const transitionMode = this.resolveTransitionMode(options);
+    const shouldMorphTransition = transitionMode === 'morph';
 
     // ── Resolve effective prior state via policy ────────────────────────
     // If a policy + instance pair is provided, run the policy to decide
@@ -1462,6 +1485,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       // the solver handles the new element and re-satisfies constraints.
       resolvedState = options.priorPositions;
       useReducedIterations = true;
+    } else if (shouldMorphTransition && this.currentLayout?.nodes?.length) {
+      // Default continuity path: when callers re-render without explicitly passing
+      // prior state, warm-start from the current on-screen layout so transitions
+      // can morph instead of popping to a fresh solve.
+      const liveState = this.getLayoutState();
+      if (liveState.positions.length > 0) {
+        resolvedState = liveState;
+        useReducedIterations = true;
+      }
     }
 
     const hasPriorPositions = !!(resolvedState && resolvedState.positions.length > 0);
@@ -1604,13 +1636,19 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       this.currentLayout = webcolaLayout;
       this.colaLayout = layout;
 
-      // Clear existing visualization
+      // Snapshot and fade out the previous frame, then clear the active layer.
+      if (shouldMorphTransition) {
+        this.captureMorphExitSnapshot();
+      }
       this.container.selectAll('*').remove();
 
       // Create D3 selections for data binding
       this.renderGroups(webcolaLayout.groups, layout);
       this.renderLinks(webcolaLayout.links, layout);
       this.renderNodes(webcolaLayout.nodes, layout);
+      if (shouldMorphTransition) {
+        this.applyMorphEnterTransition();
+      }
 
       // Track iteration progress
       let tickCount = 0;
@@ -1694,6 +1732,52 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
+   * Captures the current rendered graph as a temporary snapshot layer and
+   * fades it out. This creates a visual morph instead of an abrupt teardown.
+   */
+  private captureMorphExitSnapshot(): void {
+    if (!this.svg || !this.container) return;
+
+    // Keep only one exit snapshot at a time.
+    this.svg.selectAll('.morph-exit-layer').interrupt().remove();
+
+    const containerNode = this.container.node() as SVGGElement | null;
+    const svgNode = this.svg.node() as SVGSVGElement | null;
+    if (!containerNode || !svgNode || containerNode.childElementCount === 0) return;
+
+    const snapshotNode = containerNode.cloneNode(true) as SVGGElement;
+    snapshotNode.setAttribute('class', 'morph-exit-layer');
+    snapshotNode.style.pointerEvents = 'none';
+    svgNode.appendChild(snapshotNode);
+
+    d3.select(snapshotNode)
+      .attr('opacity', 1)
+      .transition()
+      .duration(WebColaCnDGraph.MORPH_EXIT_DURATION_MS)
+      .ease(d3.easeCubicOut)
+      .attr('opacity', 0)
+      .on('end', function(this: SVGGElement) {
+        d3.select(this).remove();
+      });
+  }
+
+  /**
+   * Fades in the new render layer so updates appear as smooth morphs.
+   */
+  private applyMorphEnterTransition(): void {
+    [this.svgGroups, this.svgGroupLabels, this.svgLinkGroups, this.svgNodes]
+      .filter(Boolean)
+      .forEach((selection: any) => {
+        selection
+          .attr('opacity', 0)
+          .transition()
+          .duration(WebColaCnDGraph.MORPH_ENTER_DURATION_MS)
+          .ease(d3.easeCubicOut)
+          .attr('opacity', 1);
+      });
+  }
+
+  /**
    * Clear the current graph visualization and reset internal state.
    * This is useful when switching between temporal states to ensure a clean slate.
    */
@@ -1710,6 +1794,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // Clear the SVG container
     if (this.container) {
       this.container.selectAll('*').remove();
+    }
+    if (this.svg) {
+      this.svg.selectAll('.morph-exit-layer').interrupt().remove();
     }
 
     // Reset internal state
@@ -1811,6 +1898,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   public getToolbar(): any {
     return this.shadowRoot?.querySelector('#graph-toolbar') || null;
+  }
+
+  /**
+   * Configure how subsequent render calls transition between frames.
+   */
+  public setTransitionMode(mode: WebColaRenderTransitionMode): void {
+    this.setAttribute('transition-mode', mode);
   }
 
   /**

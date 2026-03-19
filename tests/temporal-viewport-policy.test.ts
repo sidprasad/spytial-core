@@ -85,4 +85,24 @@ describe('Temporal viewport continuity policy', () => {
     const result = proto.buildPolicyRawState.call(fakeThis, options);
     expect(result).toEqual(suppliedState);
   });
+
+  it('defaults transition mode to morph', () => {
+    const fakeThis: any = {
+      getAttribute: () => null,
+      transitionMode: 'morph',
+    };
+
+    const mode = proto.resolveTransitionMode.call(fakeThis, undefined);
+    expect(mode).toBe('morph');
+  });
+
+  it('allows render options to override transition mode', () => {
+    const fakeThis: any = {
+      getAttribute: () => 'morph',
+      transitionMode: 'morph',
+    };
+
+    const mode = proto.resolveTransitionMode.call(fakeThis, { transitionMode: 'replace' });
+    expect(mode).toBe('replace');
+  });
 });
