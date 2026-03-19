@@ -204,6 +204,13 @@
                     <option value="qualitative">Qualitative CDCL (beta)</option>
                 </select>
             </div>
+            <div class="mb-3">
+                <label for="transition-mode-select">Render Transition:</label>
+                <select id="transition-mode-select" class="form-select form-select-sm" aria-label="Render transition mode selection">
+                    <option value="morph" selected>Morph (default)</option>
+                    <option value="replace">Replace (legacy)</option>
+                </select>
+            </div>
 
             <div id="status" class="status info">Ready to load DOT graph...</div>
             <div id="error-messages"></div>
@@ -222,6 +229,7 @@
                     width="800"
                     height="600"
                     layoutFormat="default"
+                    transition-mode="morph"
                     aria-label="Interactive graph visualization">
                 </webcola-cnd-graph>
             </div>
@@ -371,6 +379,18 @@
 
         function getSelectedEvaluatorType() {
             return document.getElementById('evaluator-select')?.value || 'sgq';
+        }
+
+        function getTransitionMode() {
+            const transitionSelect = document.getElementById('transition-mode-select');
+            return transitionSelect?.value === 'replace' ? 'replace' : 'morph';
+        }
+
+        function syncGraphTransitionMode() {
+            const graphElement = document.getElementById('graph-container');
+            if (graphElement) {
+                graphElement.setAttribute('transition-mode', getTransitionMode());
+            }
         }
 
         function handleEvaluatorChange() {
@@ -628,20 +648,10 @@
                     }
                 }
 
-                if (graphElement.clear) {
-                    graphElement.clear();
-                } else {
-                    const svg = graphElement.shadowRoot?.querySelector('svg');
-                    if (svg) {
-                        const container = svg.querySelector('.zoomable');
-                        if (container) {
-                            container.innerHTML = '';
-                        }
-                    }
-                }
-
                 updateStatus('Rendering DOT graph with WebCola...', 'info');
-                await graphElement.renderLayout(currentInstanceLayout);
+                const transitionMode = getTransitionMode();
+                syncGraphTransitionMode();
+                await graphElement.renderLayout(currentInstanceLayout, { transitionMode });
 
                 updateStatus('Graph rendered successfully!', 'success');
             } catch (error) {
@@ -688,12 +698,17 @@
         // ─── Init ───────────────────────────────────────────────────────────
         window.addEventListener('load', () => {
             initializePipeline();
+            syncGraphTransitionMode();
             if (window.mountCndLayoutInterface) {
                 window.mountCndLayoutInterface();
             }
             if (window.mountErrorMessageModal) {
                 window.mountErrorMessageModal();
             }
+        });
+
+        document.getElementById('transition-mode-select')?.addEventListener('change', function() {
+            syncGraphTransitionMode();
         });
 
         window.loadGraph = loadGraph;

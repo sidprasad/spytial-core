@@ -156,6 +156,13 @@
                     <option value="qualitative">Qualitative CDCL (beta)</option>
                 </select>
             </div>
+            <div class="mb-3">
+                <label for="transition-mode-select">Render Transition:</label>
+                <select id="transition-mode-select" class="form-select form-select-sm" aria-label="Render transition mode selection">
+                    <option value="morph" selected>Morph (default)</option>
+                    <option value="replace">Replace (legacy)</option>
+                </select>
+            </div>
             <div id="evaluator-repl-mount"></div>
             <div id="sql-schemas-container" style="display: none;" class="mb-3">
                 <details>
@@ -173,6 +180,7 @@
                     width="800" 
                     height="600"
                     layoutFormat="default"
+                    transition-mode="morph"
                     aria-label="Interactive graph visualization">
                 </webcola-cnd-graph>
             </div>
@@ -287,9 +295,24 @@
             return policySelect.value;
         }
 
+        function getTransitionMode() {
+            const transitionSelect = document.getElementById('transition-mode-select');
+            return transitionSelect?.value === 'replace' ? 'replace' : 'morph';
+        }
+
+        function syncGraphTransitionMode() {
+            const graphElement = document.getElementById('graph-container');
+            if (graphElement) {
+                graphElement.setAttribute('transition-mode', getTransitionMode());
+            }
+        }
+
         // No stepper needed — renderLayout handles policy directly
         document.getElementById('sequencePolicy')?.addEventListener('change', function() {
             updateSequenceExplorer();
+        });
+        document.getElementById('transition-mode-select')?.addEventListener('change', function() {
+            syncGraphTransitionMode();
         });
 
         function getCurrentExportInstance() {
@@ -686,42 +709,19 @@
                     }
                 }
                 
-                // Capture layout state BEFORE clearing so the policy has positions to work with.
-                // After clear(), the DOM is empty and getLayoutState() returns nothing.
-                let capturedPositions = null;
-                if (prevInstance && graphElement.getLayoutState) {
-                    capturedPositions = graphElement.getLayoutState();
-                }
-
-                // Clear the graph before rendering the new layout
-                console.log('renderGraph: Clearing graph before render');
-                if (graphElement.clear) {
-                    graphElement.clear();
-                } else {
-                    const svg = graphElement.shadowRoot?.querySelector('svg');
-                    if (svg) {
-                        const container = svg.querySelector('.zoomable');
-                        if (container) {
-                            container.innerHTML = '';
-                        }
-                    }
-                }
-
                 updateStatus('Rendering Alloy graph with WebCola...', 'info');
                 
                 // Build render options: pass policy + instance pair directly.
-                // Supply the captured positions since we cleared the DOM above.
                 const currInstance = new CndCore.AlloyDataInstance(alloyInstances[currentInstanceIndex]);
-                const renderOptions = {};
+                const transitionMode = getTransitionMode();
+                syncGraphTransitionMode();
+                const renderOptions = { transitionMode };
 
                 if (prevInstance) {
                     const policyName = getSequencePolicyName();
                     renderOptions.policy = CndCore.getSequencePolicy(policyName);
                     renderOptions.prevInstance = prevInstance;
                     renderOptions.currInstance = currInstance;
-                    if (capturedPositions && capturedPositions.positions.length > 0) {
-                        renderOptions.priorPositions = capturedPositions;
-                    }
                 }
 
                 await graphElement.renderLayout(currentInstanceLayout, renderOptions);
@@ -838,6 +838,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             // Mount the window.mountRelationHighlighter
             const graphElement = document.getElementById('graph-container');
+            syncGraphTransitionMode();
             if (graphElement && window.mountRelationHighlighter) {
                 window.mountRelationHighlighter('relation-highlighter-mount', 'graph-container');
             }
