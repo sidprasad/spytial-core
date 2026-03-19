@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator, NodePositionHint, TransformInfo, LayoutState, WebColaLayoutOptions } from './webcolatranslator';
+import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator, NodePositionHint, TransformInfo, LayoutState, WebColaLayoutOptions, WebColaRenderTransitionMode } from './webcolatranslator';
 import { InstanceLayout, isAlignmentConstraint, isInstanceLayout, isLeftConstraint, isTopConstraint, LayoutNode } from '../../layout/interfaces';
 import type { GridRouter, Group, Layout, Node, Link } from 'webcola';
 import { IInputDataInstance, ITuple, IAtom } from '../../data-instance/interfaces';
@@ -133,6 +133,16 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private static readonly INITIAL_ALL_CONSTRAINTS_ITERATIONS = 200;
   private static readonly GRID_SNAP_ITERATIONS = 1; // Reduced from 5 for performance, but kept at 1 for alignment
   private static readonly LOADING_INDICATOR_DELAY_MS = 180;
+
+  /**
+   * Base morph transition timing (at speed = 1.0 ≈ 1.1 s total).
+   * Exit duration is longer so departing elements have time to fade gracefully.
+   * Enter starts after a short delay so exits are underway first.
+   * Actual durations are `base × morphSpeed`; default speed is 0.5.
+   */
+  private static readonly MORPH_BASE_EXIT_DURATION_MS = 1100;
+  private static readonly MORPH_BASE_ENTER_DURATION_MS = 1000;
+  private static readonly MORPH_BASE_ENTER_DELAY_MS = 200;
 
   /**
    * Counter for edge routing iterations (for performance tracking)
@@ -275,6 +285,48 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private get isUnsatCore(): boolean {
     return this.hasAttribute('unsat');
+  }
+
+  /**
+   * Access transition mode for layout swaps.
+   * Supported values:
+   * - "morph": exiting elements fade out, entering fade in, continuing slide
+   * - "replace": clear and redraw immediately (legacy behavior)
+   *
+   * Defaults to 'morph' when the attribute is absent.
+   */
+  private get transitionMode(): WebColaRenderTransitionMode {
+    const attrMode = this.getAttribute('transition-mode');
+    return attrMode === 'replace' ? 'replace' : 'morph';
+  }
+
+  /**
+   * Morph speed multiplier (0 – 1).
+   *  • 0   = instant (no animation, equivalent to 'replace')
+   *  • 0.5 = default (~550 ms exit, ~500 ms enter)
+   *  • 1   = slow / dramatic (~1.1 s exit, ~1 s enter)
+   *
+   * Read from the `morph-speed` attribute; defaults to 0.5.
+   */
+  private get morphSpeed(): number {
+    const raw = parseFloat(this.getAttribute('morph-speed') ?? '');
+    if (Number.isFinite(raw)) return Math.max(0, Math.min(raw, 1));
+    return 0.5;
+  }
+
+  /** Convenience helpers that apply the speed multiplier to base timings. */
+  private get morphExitDurationMs(): number {
+    return Math.round(WebColaCnDGraph.MORPH_BASE_EXIT_DURATION_MS * this.morphSpeed);
+  }
+  private get morphEnterDurationMs(): number {
+    return Math.round(WebColaCnDGraph.MORPH_BASE_ENTER_DURATION_MS * this.morphSpeed);
+  }
+  private get morphEnterDelayMs(): number {
+    return Math.round(WebColaCnDGraph.MORPH_BASE_ENTER_DELAY_MS * this.morphSpeed);
+  }
+  /** Duration for the slide animation of continuing nodes (same scale as enter). */
+  private get morphSlideDurationMs(): number {
+    return Math.round(WebColaCnDGraph.MORPH_BASE_ENTER_DURATION_MS * this.morphSpeed);
   }
 
   /**
@@ -1403,6 +1455,26 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
+   * Resolve the effective transition mode for a given render call.
+   *
+   * Priority order:
+   * 1. Explicit `options.transitionMode`
+   * 2. Element-level `transition-mode` attribute
+   * 3. Auto-detect: if a sequence policy is provided, default to 'morph'; else 'replace'
+   */
+  private resolveTransitionMode(options?: WebColaLayoutOptions): WebColaRenderTransitionMode {
+    if (options?.transitionMode === 'replace') return 'replace';
+    if (options?.transitionMode === 'morph') return 'morph';
+
+    const attrMode = this.getAttribute('transition-mode');
+    if (attrMode === 'replace') return 'replace';
+    if (attrMode === 'morph') return 'morph';
+
+    // Auto: morph when a sequence policy is provided, replace otherwise.
+    return options?.policy ? 'morph' : 'replace';
+  }
+
+  /**
    * Render layout using WebCola constraint solver.
    *
    * @param instanceLayout - The layout instance to render
@@ -1436,6 +1508,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       throw new Error('Invalid instance layout provided. Expected an InstanceLayout instance.');
     }
 
+    const transitionMode = this.resolveTransitionMode(options);
+    const shouldMorph = transitionMode === 'morph';
+    const shouldShowLoadingOverlay = transitionMode === 'replace';
+
     // ── Resolve effective prior state via policy ────────────────────────
     // If a policy + instance pair is provided, run the policy to decide
     // what prior positions (if any) reach the solver.
@@ -1462,6 +1538,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       // the solver handles the new element and re-satisfies constraints.
       resolvedState = options.priorPositions;
       useReducedIterations = true;
+    } else if (shouldMorph && this.currentLayout?.nodes?.length) {
+      // Default continuity path: when callers re-render without explicitly passing
+      // prior state, warm-start from the current on-screen layout so transitions
+      // can morph instead of popping to a fresh solve.
+      const liveState = this.getLayoutState();
+      if (liveState.positions.length > 0) {
+        resolvedState = liveState;
+        useReducedIterations = true;
+      }
     }
 
     const hasPriorPositions = !!(resolvedState && resolvedState.positions.length > 0);
@@ -1518,8 +1603,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         throw new Error('Failed to initialize D3 container. SVG elements may not be available.');
       }
 
-      this.showLoading();
-      this.updateLoadingProgress('Translating layout...');
+      if (shouldShowLoadingOverlay) {
+        this.showLoading();
+        this.updateLoadingProgress('Translating layout...');
+      } else {
+        // Ensure any stale loading state from a prior render is fully cleared.
+        this.hideLoading();
+      }
 
       // Get actual container dimensions for responsive layout
       const svgContainer = this.shadowRoot!.querySelector('#svg-container') as HTMLElement;
@@ -1531,7 +1621,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       const translator = new WebColaTranslator();
       const webcolaLayout = await translator.translate(instanceLayout, containerWidth, containerHeight, translatorOptions);
 
-      this.updateLoadingProgress(`Computing layout for ${webcolaLayout.nodes.length} nodes...`);
+      if (shouldShowLoadingOverlay) {
+        this.updateLoadingProgress(`Computing layout for ${webcolaLayout.nodes.length} nodes...`);
+      }
 
       // Adaptive iteration counts based on graph size for better performance
       // For small graphs, use default values. For large graphs, reduce iterations.
@@ -1581,7 +1673,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         webcolaLayout.links
       );
 
-      this.updateLoadingProgress('Applying constraints and initializing...');
+      if (shouldShowLoadingOverlay) {
+        this.updateLoadingProgress('Applying constraints and initializing...');
+      }
 
       // Use a higher convergence threshold when prior state exists.
       // This allows the layout to converge faster, preserving prior positions better.
@@ -1600,17 +1694,42 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         .groupCompactness(groupCompactness)
         .size([webcolaLayout.FIG_WIDTH, webcolaLayout.FIG_HEIGHT]);
 
+      // ── Morph transition: element-level enter / exit / continue ──────
+      // Instead of cross-fading the entire graph (which makes continuing
+      // elements blink), we diff the old and new layouts by ID and:
+      //   • Exiting elements  → clone to a snapshot layer, fade out in place
+      //   • Continuing elements → stay visible; slide from old pos to new pos
+      //   • Entering elements  → created normally, then faded in from opacity 0
+      if (shouldMorph && this.currentLayout?.nodes?.length) {
+        // Capture old positions BEFORE anything is cleared — needed for the
+        // slide animation that runs after the solver converges.
+        this.morphOldPositions = new Map();
+        for (const n of this.currentLayout.nodes) {
+          if (n.x != null && n.y != null) {
+            this.morphOldPositions.set((n as any).id, { x: n.x, y: n.y });
+          }
+        }
+        this.applyMorphExitSnapshot(webcolaLayout);
+      } else {
+        this.morphOldPositions = null;
+      }
+
       // Store current layout
       this.currentLayout = webcolaLayout;
       this.colaLayout = layout;
 
-      // Clear existing visualization
+      // Clear the active layer (snapshot layer is separate and keeps fading)
       this.container.selectAll('*').remove();
 
       // Create D3 selections for data binding
       this.renderGroups(webcolaLayout.groups, layout);
       this.renderLinks(webcolaLayout.links, layout);
       this.renderNodes(webcolaLayout.nodes, layout);
+
+      // Apply morph enter: fade in only truly new (entering) elements
+      if (shouldMorph) {
+        this.applyMorphEnterTransition();
+      }
 
       // Track iteration progress
       let tickCount = 0;
@@ -1623,7 +1742,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           if (tickCount % 20 === 0) {
             // Update progress every 20 ticks to avoid excessive DOM updates
             const progress = Math.min(95, Math.round((tickCount / totalIterations) * 100));
-            this.updateLoadingProgress(`Computing layout... ${progress}%`);
+            if (shouldShowLoadingOverlay) {
+              this.updateLoadingProgress(`Computing layout... ${progress}%`);
+            }
           }
           
           if (this.layoutFormat === 'default' || !this.layoutFormat || this.layoutFormat === null) {
@@ -1635,7 +1756,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           }
         })
         .on('end', () => {
-          this.updateLoadingProgress('Finalizing...');
+          if (shouldShowLoadingOverlay) {
+            this.updateLoadingProgress('Finalizing...');
+          }
 
           // Call advanced edge routing after layout converges
           if (this.layoutFormat === 'default' || !this.layoutFormat ) {
@@ -1644,6 +1767,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
             this.gridify(10, 25, 10);
           } else {
             console.warn(`Unknown layout format: ${this.layoutFormat}. Skipping edge routing.`);
+          }
+
+          // ── Morph slide: animate continuing nodes from old → new ────
+          // The solver has converged — nodes are at their FINAL positions.
+          // For continuing nodes we snap them back to their OLD position
+          // and animate the slide.  When the slide finishes, we re-run
+          // routeEdges for clean final paths.
+          if (shouldMorph && this.morphOldPositions && this.morphOldPositions.size > 0) {
+            this.animateMorphSlide();
           }
 
           // Check if it's an unsat core layout
@@ -1665,7 +1797,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           // Update routing dropdown to match current layout format
           this.updateRoutingModeDropdown();
 
-          this.hideLoading();
+          if (shouldShowLoadingOverlay) {
+            this.hideLoading();
+          }
         });
 
       // Start the layout with error handling for D3/WebCola compatibility issues
@@ -1693,6 +1827,318 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     }
   }
 
+  // ═══════════════════════════════════════════════════════════════════════
+  //  Morph transition helpers
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /**
+   * IDs that were present in the previous layout but absent from the current
+   * one.  Populated by `applyMorphExitSnapshot` and consumed by
+   * `applyMorphEnterTransition` so it knows what counts as "entering".
+   */
+  private morphEnteringNodeIds: Set<string> = new Set();
+  private morphEnteringEdgeIds: Set<string> = new Set();
+
+  /**
+   * Old positions of nodes captured before the morph, keyed by node ID.
+   * Used by `animateMorphSlide` to slide continuing nodes from their
+   * previous position to their new solver-converged position.
+   */
+  private morphOldPositions: Map<string, { x: number; y: number }> | null = null;
+
+  /** Active d3.timer for the slide animation — kept so `clear()` can stop it. */
+  private morphSlideTimer: any = null;
+
+  /**
+   * Create a snapshot layer containing **only** the elements that are being
+   * removed (exiting) between the old and new layouts, then fade them out.
+   *
+   * Elements that continue in the new layout are NOT included in the
+   * snapshot — they stay fully visible in the active container and slide
+   * to their new positions via the solver.
+   */
+  private applyMorphExitSnapshot(newLayout: WebColaLayout): void {
+    if (!this.svg || !this.container) return;
+
+    // Remove any leftover exit layer from a prior morph.
+    this.svg.selectAll('.morph-exit-layer').interrupt().remove();
+
+    const oldNodes = this.currentLayout?.nodes || [];
+    const oldLinks = (this.currentLayout as any)?.links || [];
+    const newNodeIds = new Set(newLayout.nodes.map((n: any) => n.id));
+    const newEdgeIds = new Set(newLayout.links.map((e: any) => e.id));
+    const oldNodeIds = new Set(oldNodes.map((n: any) => n.id));
+    const oldEdgeIds = new Set(oldLinks.map((e: any) => e.id));
+
+    // Compute entering IDs (used later by applyMorphEnterTransition)
+    this.morphEnteringNodeIds = new Set(
+      [...newNodeIds].filter(id => !oldNodeIds.has(id))
+    );
+    this.morphEnteringEdgeIds = new Set(
+      [...newEdgeIds].filter(id => !oldEdgeIds.has(id))
+    );
+
+    // Compute exiting IDs
+    const exitingNodeIds = new Set(
+      [...oldNodeIds].filter(id => !newNodeIds.has(id))
+    );
+    const exitingEdgeIds = new Set(
+      [...oldEdgeIds].filter(id => !newEdgeIds.has(id))
+    );
+
+    // Nothing to fade out → skip
+    if (exitingNodeIds.size === 0 && exitingEdgeIds.size === 0) return;
+
+    const svgNode = this.svg.node() as SVGSVGElement | null;
+    if (!svgNode) return;
+
+    // Build a lightweight snapshot group containing only the exiting elements.
+    const snapshotGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    snapshotGroup.setAttribute('class', 'morph-exit-layer');
+    snapshotGroup.style.pointerEvents = 'none';
+
+    // Preserve the current zoom/pan transform on the snapshot so it aligns
+    // visually with the container.
+    const containerTransform = this.container.attr('transform');
+    if (containerTransform) {
+      snapshotGroup.setAttribute('transform', containerTransform);
+    }
+
+    // Clone exiting nodes
+    if (this.svgNodes) {
+      this.svgNodes.each(function(this: SVGGElement, d: any) {
+        if (exitingNodeIds.has(d.id)) {
+          snapshotGroup.appendChild(this.cloneNode(true));
+        }
+      });
+    }
+
+    // Clone exiting edges (edge exits if its own ID is gone, OR if either
+    // endpoint node is gone — because a dangling edge is meaningless).
+    if (this.svgLinkGroups) {
+      this.svgLinkGroups.each(function(this: SVGGElement, d: any) {
+        const edgeId: string = d.id;
+        const srcId: string = d.source?.id ?? '';
+        const tgtId: string = d.target?.id ?? '';
+        if (
+          exitingEdgeIds.has(edgeId) ||
+          exitingNodeIds.has(srcId) ||
+          exitingNodeIds.has(tgtId)
+        ) {
+          snapshotGroup.appendChild(this.cloneNode(true));
+        }
+      });
+    }
+
+    // Clone exiting group rects
+    if (this.svgGroups) {
+      this.svgGroups.each(function(this: SVGRectElement, d: any) {
+        if (d.id && !newLayout.groups.some((g: any) => g.id === d.id)) {
+          snapshotGroup.appendChild(this.cloneNode(true));
+        }
+      });
+    }
+
+    if (snapshotGroup.childElementCount === 0) return;
+
+    svgNode.appendChild(snapshotGroup);
+
+    // Fade the snapshot out.
+    d3.select(snapshotGroup)
+      .attr('opacity', 1)
+      .transition()
+      .duration(this.morphExitDurationMs)
+      .ease(d3.easeCubicOut)
+      .attr('opacity', 0)
+      .on('end', function(this: SVGGElement) {
+        d3.select(this).remove();
+      });
+  }
+
+  /**
+   * Fade in only the **entering** elements (nodes/edges that did not exist
+   * in the previous layout).  Continuing elements stay at full opacity so
+   * there is no visual blink — they simply slide to their new position.
+   */
+  private applyMorphEnterTransition(): void {
+    const enterNodeIds = this.morphEnteringNodeIds;
+    const enterEdgeIds = this.morphEnteringEdgeIds;
+
+    // If there is no diff info (first render, or replace mode), treat
+    // everything as entering for a gentle fade-in.
+    const hasEntryInfo = enterNodeIds.size > 0 || enterEdgeIds.size > 0;
+
+    if (!hasEntryInfo && this.morphEnteringNodeIds.size === 0 && this.morphEnteringEdgeIds.size === 0) {
+      // First render with morph — nothing was "old" so nothing enters;
+      // just show everything immediately.
+      return;
+    }
+
+    // Fade in entering nodes
+    if (this.svgNodes && enterNodeIds.size > 0) {
+      this.svgNodes
+        .filter((d: any) => enterNodeIds.has(d.id))
+        .attr('opacity', 0)
+        .transition()
+        .delay(this.morphEnterDelayMs)
+        .duration(this.morphEnterDurationMs)
+        .ease(d3.easeCubicOut)
+        .attr('opacity', 1);
+    }
+
+    // Fade in entering edges — an edge enters if its own ID is new, OR
+    // if either endpoint is an entering node.
+    if (this.svgLinkGroups && (enterEdgeIds.size > 0 || enterNodeIds.size > 0)) {
+      this.svgLinkGroups
+        .filter((d: any) => {
+          if (enterEdgeIds.has(d.id)) return true;
+          const srcId: string = d.source?.id ?? '';
+          const tgtId: string = d.target?.id ?? '';
+          return enterNodeIds.has(srcId) || enterNodeIds.has(tgtId);
+        })
+        .attr('opacity', 0)
+        .transition()
+        .delay(this.morphEnterDelayMs)
+        .duration(this.morphEnterDurationMs)
+        .ease(d3.easeCubicOut)
+        .attr('opacity', 1);
+    }
+
+    // Fade in entering groups
+    if (this.svgGroups && this.svgGroupLabels) {
+      const newGroupIds = new Set(
+        (this.currentLayout?.groups || []).map((g: any) => g.id).filter(Boolean)
+      );
+      // Groups whose ID was not in the old layout (approximation: if morphEnteringNodeIds
+      // contains ANY leaf of the group, the group is visually new).
+      // For simplicity we let groups appear instantly — they're background rects
+      // and the visual weight is in the nodes/edges.
+    }
+
+    // Clear the diff sets so they don't leak into the next render.
+    this.morphEnteringNodeIds = new Set();
+    this.morphEnteringEdgeIds = new Set();
+  }
+
+  /**
+   * Animate continuing nodes from their old positions to their new
+   * solver-converged positions.
+   *
+   * Called in the layout 'end' handler after the solver has written final
+   * coordinates into `d.x / d.y`.  We:
+   *  1. Capture each continuing node's final position.
+   *  2. Override `d.x / d.y` to the OLD position and call `updatePositions()`
+   *     so the node visually starts where it used to be.
+   *  3. Run a `d3.timer` that interpolates `d.x / d.y` from old → final and
+   *     calls `updatePositions()` every frame, producing a smooth slide.
+   *  4. When done, restore exact final positions and re-run `routeEdges()`
+   *     for clean edge paths.
+   */
+  private animateMorphSlide(): void {
+    const oldPositions = this.morphOldPositions;
+    if (!oldPositions || oldPositions.size === 0 || !this.currentLayout?.nodes) {
+      this.morphOldPositions = null;
+      return;
+    }
+
+    const nodes = this.currentLayout.nodes as any[];
+    const duration = this.morphSlideDurationMs;
+
+    // If speed is effectively 0, skip animation entirely.
+    if (duration <= 0) {
+      this.morphOldPositions = null;
+      return;
+    }
+
+    // Identify continuing nodes (present in both old and new)
+    const continuingNodes: Array<{
+      node: any;
+      oldX: number; oldY: number;
+      finalX: number; finalY: number;
+    }> = [];
+
+    for (const node of nodes) {
+      const old = oldPositions.get(node.id);
+      if (old) {
+        continuingNodes.push({
+          node,
+          oldX: old.x, oldY: old.y,
+          finalX: node.x, finalY: node.y,
+        });
+      }
+    }
+
+    if (continuingNodes.length === 0) {
+      this.morphOldPositions = null;
+      return;
+    }
+
+    // Snap continuing nodes back to their OLD positions for the first frame.
+    for (const c of continuingNodes) {
+      c.node.x = c.oldX;
+      c.node.y = c.oldY;
+    }
+    this.updatePositions();
+
+    // Cubic ease-out for a natural deceleration feel.
+    const ease = (t: number) => 1 - Math.pow(1 - t, 3);
+
+    const t0 = performance.now();
+
+    // Stop any previous slide timer (e.g. if the user navigates quickly).
+    if (this.morphSlideTimer) {
+      this.morphSlideTimer.stop();
+      this.morphSlideTimer = null;
+    }
+
+    this.morphSlideTimer = d3.timer(() => {
+      const elapsed = performance.now() - t0;
+      const progress = Math.min(1, elapsed / duration);
+      const eased = ease(progress);
+
+      for (const c of continuingNodes) {
+        c.node.x = c.oldX + (c.finalX - c.oldX) * eased;
+        c.node.y = c.oldY + (c.finalY - c.oldY) * eased;
+      }
+
+      this.updatePositions();
+
+      if (progress >= 1) {
+        this.morphSlideTimer.stop();
+        this.morphSlideTimer = null;
+
+        // Ensure exact final positions.
+        for (const c of continuingNodes) {
+          c.node.x = c.finalX;
+          c.node.y = c.finalY;
+        }
+        this.updatePositions();
+
+        // Re-run advanced edge routing now that nodes are at final positions.
+        if (this.layoutFormat === 'default' || !this.layoutFormat) {
+          this.routeEdges();
+        }
+
+        this.morphOldPositions = null;
+      }
+    });
+  }
+
+  /**
+   * Configure how subsequent render calls transition between frames.
+   */
+  public setTransitionMode(mode: WebColaRenderTransitionMode): void {
+    this.setAttribute('transition-mode', mode);
+  }
+
+  /**
+   * Set the morph animation speed.
+   * @param speed 0 (instant) – 1 (full duration, default)
+   */
+  public setMorphSpeed(speed: number): void {
+    this.setAttribute('morph-speed', String(Math.max(0, Math.min(speed, 1))));
+  }
+
   /**
    * Clear the current graph visualization and reset internal state.
    * This is useful when switching between temporal states to ensure a clean slate.
@@ -1711,6 +2157,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     if (this.container) {
       this.container.selectAll('*').remove();
     }
+    // Clean up any in-progress morph transitions
+    if (this.svg) {
+      this.svg.selectAll('.morph-exit-layer').interrupt().remove();
+    }
+    if (this.morphSlideTimer) {
+      this.morphSlideTimer.stop();
+      this.morphSlideTimer = null;
+    }
+    this.morphOldPositions = null;
 
     // Reset internal state
     this.currentLayout = null as any;

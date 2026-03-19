@@ -220,6 +220,13 @@
                     <option value="random_positioning">Random positioning</option>
                 </select>
             </div>
+            <div class="mb-2">
+                <label class="form-label form-label-sm mb-1" for="morphSpeed">
+                    Morph Speed: <span id="morphSpeedValue">0.50</span>
+                </label>
+                <input type="range" id="morphSpeed" class="form-range form-range-sm"
+                       min="0" max="1" step="0.05" value="0.5">
+            </div>
             <div id="priorPositionsInfo" class="small text-muted mt-1"></div>
         </div>
         
@@ -290,6 +297,18 @@
         // No stepper needed — renderLayout handles policy directly
         document.getElementById('sequencePolicy')?.addEventListener('change', function() {
             updateSequenceExplorer();
+        });
+
+        // Morph speed slider → push value to the graph element attribute
+        document.getElementById('morphSpeed')?.addEventListener('input', function() {
+            const val = parseFloat(this.value);
+            document.getElementById('morphSpeedValue').textContent = val.toFixed(2);
+            const graph = document.getElementById('graph-container');
+            if (graph && graph.setMorphSpeed) {
+                graph.setMorphSpeed(val);
+            } else if (graph) {
+                graph.setAttribute('morph-speed', String(val));
+            }
         });
 
         function getCurrentExportInstance() {
@@ -686,31 +705,14 @@
                     }
                 }
                 
-                // Capture layout state BEFORE clearing so the policy has positions to work with.
-                // After clear(), the DOM is empty and getLayoutState() returns nothing.
-                let capturedPositions = null;
-                if (prevInstance && graphElement.getLayoutState) {
-                    capturedPositions = graphElement.getLayoutState();
-                }
-
-                // Clear the graph before rendering the new layout
-                console.log('renderGraph: Clearing graph before render');
-                if (graphElement.clear) {
-                    graphElement.clear();
-                } else {
-                    const svg = graphElement.shadowRoot?.querySelector('svg');
-                    if (svg) {
-                        const container = svg.querySelector('.zoomable');
-                        if (container) {
-                            container.innerHTML = '';
-                        }
-                    }
-                }
-
                 updateStatus('Rendering Alloy graph with WebCola...', 'info');
-                
+
                 // Build render options: pass policy + instance pair directly.
-                // Supply the captured positions since we cleared the DOM above.
+                // When a policy is provided, renderLayout uses morph transitions
+                // automatically — it diffs old vs new nodes/edges, fades out what's
+                // leaving, slides what continues, and fades in what's new.
+                // Do NOT call clear() beforehand; the old layout must be intact so
+                // the morph can snapshot exiting elements.
                 const currInstance = new CndCore.AlloyDataInstance(alloyInstances[currentInstanceIndex]);
                 const renderOptions = {};
 
@@ -719,8 +721,10 @@
                     renderOptions.policy = CndCore.getSequencePolicy(policyName);
                     renderOptions.prevInstance = prevInstance;
                     renderOptions.currInstance = currInstance;
-                    if (capturedPositions && capturedPositions.positions.length > 0) {
-                        renderOptions.priorPositions = capturedPositions;
+                } else {
+                    // First render — no old state to morph from; clear any stale DOM.
+                    if (graphElement.clear) {
+                        graphElement.clear();
                     }
                 }
 
