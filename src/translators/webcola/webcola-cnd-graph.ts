@@ -1458,6 +1458,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
     const transitionMode = this.resolveTransitionMode(options);
     const shouldMorphTransition = transitionMode === 'morph';
+    const shouldShowLoadingOverlay = transitionMode === 'replace';
 
     // ── Resolve effective prior state via policy ────────────────────────
     // If a policy + instance pair is provided, run the policy to decide
@@ -1550,8 +1551,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         throw new Error('Failed to initialize D3 container. SVG elements may not be available.');
       }
 
-      this.showLoading();
-      this.updateLoadingProgress('Translating layout...');
+      if (shouldShowLoadingOverlay) {
+        this.showLoading();
+        this.updateLoadingProgress('Translating layout...');
+      } else {
+        // Ensure any stale loading state from a prior render is fully cleared.
+        this.hideLoading();
+      }
 
       // Get actual container dimensions for responsive layout
       const svgContainer = this.shadowRoot!.querySelector('#svg-container') as HTMLElement;
@@ -1563,7 +1569,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       const translator = new WebColaTranslator();
       const webcolaLayout = await translator.translate(instanceLayout, containerWidth, containerHeight, translatorOptions);
 
-      this.updateLoadingProgress(`Computing layout for ${webcolaLayout.nodes.length} nodes...`);
+      if (shouldShowLoadingOverlay) {
+        this.updateLoadingProgress(`Computing layout for ${webcolaLayout.nodes.length} nodes...`);
+      }
 
       // Adaptive iteration counts based on graph size for better performance
       // For small graphs, use default values. For large graphs, reduce iterations.
@@ -1613,7 +1621,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         webcolaLayout.links
       );
 
-      this.updateLoadingProgress('Applying constraints and initializing...');
+      if (shouldShowLoadingOverlay) {
+        this.updateLoadingProgress('Applying constraints and initializing...');
+      }
 
       // Use a higher convergence threshold when prior state exists.
       // This allows the layout to converge faster, preserving prior positions better.
@@ -1661,7 +1671,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           if (tickCount % 20 === 0) {
             // Update progress every 20 ticks to avoid excessive DOM updates
             const progress = Math.min(95, Math.round((tickCount / totalIterations) * 100));
-            this.updateLoadingProgress(`Computing layout... ${progress}%`);
+            if (shouldShowLoadingOverlay) {
+              this.updateLoadingProgress(`Computing layout... ${progress}%`);
+            }
           }
           
           if (this.layoutFormat === 'default' || !this.layoutFormat || this.layoutFormat === null) {
@@ -1673,7 +1685,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           }
         })
         .on('end', () => {
-          this.updateLoadingProgress('Finalizing...');
+          if (shouldShowLoadingOverlay) {
+            this.updateLoadingProgress('Finalizing...');
+          }
 
           // Call advanced edge routing after layout converges
           if (this.layoutFormat === 'default' || !this.layoutFormat ) {
@@ -1703,7 +1717,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           // Update routing dropdown to match current layout format
           this.updateRoutingModeDropdown();
 
-          this.hideLoading();
+          if (shouldShowLoadingOverlay) {
+            this.hideLoading();
+          }
         });
 
       // Start the layout with error handling for D3/WebCola compatibility issues
