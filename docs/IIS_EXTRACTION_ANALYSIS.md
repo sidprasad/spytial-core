@@ -35,7 +35,6 @@ function findIIS(constraints):
 
 ### What the algorithm does NOT guarantee:
 ❌ **Global minimality**: May not find the SMALLEST possible IIS
-❌ **Uniqueness**: Different orderings may produce different IIS results
 
 ### Example of Non-Global Minimality
 
@@ -58,7 +57,7 @@ All are irreducible, but there could theoretically exist smaller IIS in more com
 
 2. **User-Facing Quality**: For error reporting, an irreducible set is sufficient - it shows users a concrete set of conflicting constraints without overwhelming them with redundant information.
 
-3. **Consistency**: The backward iteration order provides deterministic results for a given constraint ordering.
+3. **Determinism**: The IIS is fully deterministic — the same (input, spec) pair always produces the same IIS. This is enforced by sorting at every decision point: BFS successors are sorted lexicographically in `findPath`, alignment class roots and members are sorted before iteration, and the MFS greedy sort uses a stable tiebreaker by original index. See `tests/iis-determinism.test.ts` for coverage.
 
 4. **Deduplication**: The addition of semantic deduplication (this PR) ensures no duplicate constraints appear, addressing the main user-facing issue.
 
@@ -69,6 +68,7 @@ The implementation includes tests that verify:
 - IIS has no duplicate constraints
 - IIS correctly handles cycles
 - IIS correctly handles disjunctive constraints (grouping)
+- IIS is deterministic across repeated runs for all conflict types: ordering cycles, alignment-ordering within-class, cross-class alignment cycles, and CDCL UNSAT (`tests/iis-determinism.test.ts`)
 
 ## Future Improvements
 
