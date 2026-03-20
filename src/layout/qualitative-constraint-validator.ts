@@ -354,6 +354,10 @@ class UnionFind {
             if (!cls.has(r)) cls.set(r, []);
             cls.get(r)!.push(x);
         }
+        // Sort members within each class for deterministic iteration
+        for (const [k, members] of cls) {
+            members.sort();
+        }
         return cls;
     }
 
@@ -889,7 +893,8 @@ class QualitativeConstraintValidator {
         if (classMembers.size < 2) return false;
 
         // Build contracted graph edges using transitive reachability
-        const roots = [...classMembers.keys()];
+        // Sort roots lexicographically for deterministic cycle detection
+        const roots = [...classMembers.keys()].sort();
         const contractedAdj = new Map<string, Set<string>>();
         for (const r of roots) contractedAdj.set(r, new Set());
 
@@ -1731,7 +1736,8 @@ class QualitativeConstraintValidator {
             const bIdx = this.allDisjunctions.indexOf(b);
             const aMax = Math.max(...a.alternatives.map((_, ai) => this.activity.get(`d${aIdx}a${ai}`) ?? 0));
             const bMax = Math.max(...b.alternatives.map((_, bi) => this.activity.get(`d${bIdx}a${bi}`) ?? 0));
-            return aMax - bMax;
+            // Stable tiebreaker: use original index when activity scores are equal
+            return aMax - bMax || aIdx - bIdx;
         });
 
         for (const disj of sortedDisjunctions) {
@@ -1896,7 +1902,9 @@ class QualitativeConstraintValidator {
         visited.add(from);
         while (queue.length > 0) {
             const { node, path } = queue.shift()!;
-            for (const succ of graph.successors(node)) {
+            // Sort successors lexicographically for deterministic BFS path selection
+            const sortedSuccs = [...graph.successors(node)].sort();
+            for (const succ of sortedSuccs) {
                 if (succ === to) return [...path, [node, succ]];
                 if (!visited.has(succ)) {
                     visited.add(succ);
@@ -2017,7 +2025,8 @@ class QualitativeConstraintValidator {
         }
 
         // --- Check 2: Cross-class cycle ---
-        const roots = [...classMembers.keys()];
+        // Sort roots lexicographically for deterministic conflict selection
+        const roots = [...classMembers.keys()].sort();
         for (let i = 0; i < roots.length; i++) {
             for (let j = i + 1; j < roots.length; j++) {
                 const aMembers = classMembers.get(roots[i])!;

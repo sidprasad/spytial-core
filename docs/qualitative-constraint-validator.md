@@ -276,3 +276,14 @@ The **largest subset of constraints that can be simultaneously satisfied**. This
 - For **alignment conflicts**: the MFS is `addedConstraints \ IIS` — all committed constraints not in the irreducible infeasible set. Since any single removal from the IIS breaks the cycle, this is a valid maximal feasible subset.
 
 Both are exposed on the `PositionalConstraintError` return type as `minimalConflictingSet` (IIS, grouped by source constraint) and `maximalFeasibleSubset` (MFS, flat list of layout constraints).
+
+### Determinism
+
+IIS extraction is **deterministic**: the same (input, spec) pair always produces the same IIS. This is important for UX consistency — users should not see different error explanations on repeated runs.
+
+Determinism is enforced by canonical ordering at every decision point in the IIS computation:
+
+- **`findPath` BFS**: successors are sorted lexicographically before exploration, so the same shortest path is always selected when multiple exist.
+- **`UnionFind.classes()`**: members within each equivalence class are sorted, ensuring alignment class iteration order is stable.
+- **`findAlignmentConflictSet` / `hasAlignmentClassCycle`**: alignment class roots are sorted before iterating, so the same conflict is found first when multiple exist.
+- **`computeMaximalFeasibleSubset`**: the VSIDS activity sort uses the original disjunction index as a stable tiebreaker for equal scores.
