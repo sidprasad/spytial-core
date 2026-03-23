@@ -1,6 +1,6 @@
 {
   "name": "spytial-core",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "A fully client-side application for SpyTial.",
   "main": "./dist/browser/spytial-core-complete.global.js",
   "types": "./dist/browser/spytial-core-complete.global.d.ts",
@@ -84,6 +84,7 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
+    "@rollup/rollup-darwin-arm64": "^4.60.0",
     "@types/d3": "^4.13.12",
     "@types/graphlib-dot": "^0.6.4",
     "@types/react": "^19.1.8",
