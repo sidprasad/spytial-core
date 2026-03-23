@@ -1746,36 +1746,36 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
               this.updateLoadingProgress(`Computing layout... ${progress}%`);
             }
           }
-          
-          if (this.layoutFormat === 'default' || !this.layoutFormat || this.layoutFormat === null) {
-            this.updatePositions();
-          } else if (this.layoutFormat === 'grid') {
-            this.gridUpdatePositions();
-          } else {
-            console.warn(`Unknown layout format: ${this.layoutFormat}. Skipping position updates.`);
-          }
+
+          // Skip intermediate position updates — only show final converged
+          // positions.  Rendering every solver tick is visually noisy and
+          // provides no user value; the loading overlay already communicates
+          // progress.  The 'end' handler applies positions once the solver
+          // is done (or kicks off the morph slide animation).
         })
         .on('end', () => {
           if (shouldShowLoadingOverlay) {
             this.updateLoadingProgress('Finalizing...');
           }
 
-          // Call advanced edge routing after layout converges
-          if (this.layoutFormat === 'default' || !this.layoutFormat ) {
-            this.routeEdges();
-          } else if (this.layoutFormat === 'grid') {
-            this.gridify(10, 25, 10);
-          } else {
-            console.warn(`Unknown layout format: ${this.layoutFormat}. Skipping edge routing.`);
-          }
-
           // ── Morph slide: animate continuing nodes from old → new ────
           // The solver has converged — nodes are at their FINAL positions.
           // For continuing nodes we snap them back to their OLD position
-          // and animate the slide.  When the slide finishes, we re-run
-          // routeEdges for clean final paths.
+          // and animate the slide.  When the slide finishes, it re-runs
+          // updatePositions + routeEdges for clean final paths.
           if (shouldMorph && this.morphOldPositions && this.morphOldPositions.size > 0) {
             this.animateMorphSlide();
+          } else {
+            // Non-morph: apply final converged positions once, then route edges.
+            if (this.layoutFormat === 'default' || !this.layoutFormat ) {
+              this.updatePositions();
+              this.routeEdges();
+            } else if (this.layoutFormat === 'grid') {
+              this.gridUpdatePositions();
+              this.gridify(10, 25, 10);
+            } else {
+              console.warn(`Unknown layout format: ${this.layoutFormat}. Skipping position updates.`);
+            }
           }
 
           // Check if it's an unsat core layout
