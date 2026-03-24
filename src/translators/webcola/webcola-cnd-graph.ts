@@ -138,7 +138,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Base morph transition timing (at speed = 1.0 ≈ 1.1 s total).
    * Exit duration is longer so departing elements have time to fade gracefully.
    * Enter starts after a short delay so exits are underway first.
-   * Actual durations are `base × morphSpeed`; default speed is 0.5.
+   * Actual durations are `base × morphSpeed`; default speed is 0.2.
    */
   private static readonly MORPH_BASE_EXIT_DURATION_MS = 1100;
   private static readonly MORPH_BASE_ENTER_DURATION_MS = 1000;
@@ -306,12 +306,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    *  • 0.5 = default (~550 ms exit, ~500 ms enter)
    *  • 1   = slow / dramatic (~1.1 s exit, ~1 s enter)
    *
-   * Read from the `morph-speed` attribute; defaults to 0.5.
+   * Read from the `morph-speed` attribute; defaults to 0.2.
    */
   private get morphSpeed(): number {
     const raw = parseFloat(this.getAttribute('morph-speed') ?? '');
     if (Number.isFinite(raw)) return Math.max(0, Math.min(raw, 1));
-    return 0.5;
+    return 0.2;
   }
 
   /** Convenience helpers that apply the speed multiplier to base timings. */
