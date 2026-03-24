@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Structured Input Graph - Validation Demo</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .graph-container {
+            width: 100%;
+            height: 700px;
+            border: 2px solid #0078d4;
+            border-radius: 8px;
+            position: relative;
+            background: #fafafa;
+        }
+        #status {
+            margin-top: 10px;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+    </style>
+</head>
+<body>
+    <h2>Structured Input - Validation Demo</h2>
+    <p style="color:#666; font-size:14px;">
+        Pre-loaded with sample data. Use the side panel, floating + button, right-click nodes, or click-to-select + Delete.
+    </p>
+
+    <div class="graph-container">
+        <structured-input-graph
+            id="structured-graph"
+            show-export="true"
+            style="width: 100%; height: 100%;">
+        </structured-input-graph>
+    </div>
+    <div id="status">Initializing...</div>
+
+    <!-- D3 v4 and WebCola -->
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="../vendor/cola.js"></script>
+
+    <!-- Complete CND-Core browser bundle -->
+    <script src="../dist/browser/spytial-core-complete.global.js"></script>
+
+    <script>
+        const statusEl = document.getElementById('status');
+        function log(msg) {
+            statusEl.textContent = msg;
+            console.log('[demo]', msg);
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                const graph = document.getElementById('structured-graph');
+                if (!graph) { log('ERROR: graph element not found'); return; }
+
+                // Set an empty data instance first, then load spec, then add data
+                const instance = spytialcore.createEmptyAlloyDataInstance();
+                graph.setDataInstance(instance);
+
+                // Load a minimal spec so the layout pipeline is active
+                graph.setCnDSpec('constraints: []');
+
+                instance.addAtom({ id: 'Person-1', type: 'Person', label: 'Alice' });
+                instance.addAtom({ id: 'Person-2', type: 'Person', label: 'Bob' });
+                instance.addAtom({ id: 'City-1',   type: 'City',   label: 'Boston' });
+
+                instance.addRelationTuple('lives_in', {
+                    atoms: ['Person-1', 'City-1'],
+                    types: ['Person', 'City']
+                });
+                instance.addRelationTuple('knows', {
+                    atoms: ['Person-1', 'Person-2'],
+                    types: ['Person', 'Person']
+                });
+
+                // Listen for events
+                graph.addEventListener('atom-added', (e) => log('atom-added: ' + e.detail.atom.label));
+                graph.addEventListener('constraint-error', (e) => log('constraint-error: ' + e.detail.error.message));
+
+                log('Ready - 3 atoms, 2 relations loaded');
+            }, 500);
+        });
+    </script>
+</body>
+</html>
