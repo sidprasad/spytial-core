@@ -1722,13 +1722,22 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       this.container.selectAll('*').remove();
 
       // Create D3 selections for data binding
+      // For morph transitions: snapshot the entire old graph as a visual
+      // overlay before replacing DOM elements.  The overlay stays visible
+      // while the solver runs behind the scenes, then gets removed when
+      // the morph animation starts.
+      if (shouldMorph && this.container) {
+        this.snapshotOldGraph();
+      }
+
       this.renderGroups(webcolaLayout.groups, layout);
       this.renderLinks(webcolaLayout.links, layout);
       this.renderNodes(webcolaLayout.nodes, layout);
 
-      // Apply morph enter: fade in only truly new (entering) elements
-      if (shouldMorph) {
-        this.applyMorphEnterTransition();
+      // Hide the new elements while the solver runs — the old-graph
+      // snapshot keeps the display stable.
+      if (shouldMorph && this.container) {
+        this.container.attr('opacity', 0);
       }
 
       // Track iteration progress
@@ -1768,23 +1777,38 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
             this.updateLoadingProgress('Finalizing...');
           }
 
-          // ── Morph slide: animate continuing nodes from old → new ────
-          // The solver has converged — nodes are at their FINAL positions.
-          // For continuing nodes we snap them back to their OLD position
-          // and animate the slide.  When the slide finishes, it re-runs
-          // updatePositions + routeEdges for clean final paths.
           if (shouldMorph && this.morphOldPositions && this.morphOldPositions.size > 0) {
+            // Unhide the real container — solver has converged, nodes
+            // are at final positions.
+            if (this.container) {
+              this.container.attr('opacity', 1);
+            }
+
+            // Remove the old-graph overlay and start exit animations.
+            this.startMorphExitAnimation();
+
+            // Apply final positions to the real DOM, then hide entering
+            // elements before the slide starts.
+            if (this.layoutFormat === 'default' || !this.layoutFormat) {
+              this.updatePositions();
+            } else if (this.layoutFormat === 'grid') {
+              this.gridUpdatePositions();
+            }
+            this.hideEnteringElements();
+
+            // Animate continuing nodes from old → new positions.
             this.animateMorphSlide();
           } else {
-            // Non-morph: apply final converged positions once, then route edges.
-            if (this.layoutFormat === 'default' || !this.layoutFormat ) {
+            // Non-morph: unhide container, apply final positions, route.
+            if (this.container) {
+              this.container.attr('opacity', 1);
+            }
+            if (this.layoutFormat === 'default' || !this.layoutFormat) {
               this.updatePositions();
               this.routeEdges();
             } else if (this.layoutFormat === 'grid') {
               this.gridUpdatePositions();
               this.gridify(10, 25, 10);
-            } else {
-              console.warn(`Unknown layout format: ${this.layoutFormat}. Skipping position updates.`);
             }
           }
 
@@ -1867,6 +1891,32 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * snapshot — they stay fully visible in the active container and slide
    * to their new positions via the solver.
    */
+
+  /**
+   * Clone the entire current graph (`.zoomable` container) into a
+   * `.morph-old-graph` overlay.  This dumb visual copy stays on screen
+   * while the solver runs behind the scenes so the user sees the old
+   * graph until the morph animation starts.
+   */
+  private snapshotOldGraph(): void {
+    if (!this.svg || !this.container) return;
+
+    // Remove any prior snapshot.
+    this.svg.selectAll('.morph-old-graph').interrupt().remove();
+
+    const containerNode = this.container.node() as SVGGElement | null;
+    if (!containerNode) return;
+
+    const clone = containerNode.cloneNode(true) as SVGGElement;
+    clone.setAttribute('class', 'morph-old-graph');
+    clone.style.pointerEvents = 'none';
+
+    const svgNode = this.svg.node() as SVGSVGElement | null;
+    if (svgNode) {
+      svgNode.appendChild(clone);
+    }
+  }
+
   private applyMorphExitSnapshot(newLayout: WebColaLayout): void {
     if (!this.svg || !this.container) return;
 
@@ -1953,13 +2003,60 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
     svgNode.appendChild(snapshotGroup);
 
-    // Fade the snapshot out.
-    d3.select(snapshotGroup)
-      .attr('opacity', 1)
+    // Don't animate yet — the snapshot stays visible at full opacity
+    // while the solver runs so the user still sees the old graph.
+    // Call `startMorphExitAnimation()` from the layout end handler
+    // once the solver has converged.
+  }
+
+  /**
+   * Begin the exit animation on the morph-exit-layer snapshot.
+   * Called from the layout 'end' handler after the solver converges,
+   * so the old graph remains visible during the solve phase.
+   */
+  private startMorphExitAnimation(): void {
+    if (!this.svg) return;
+
+    // Remove the full old-graph snapshot immediately — the real
+    // container is now unhidden and positioned at final coordinates.
+    this.svg.selectAll('.morph-old-graph').remove();
+
+    const snapshotSel = this.svg.select('.morph-exit-layer');
+    if (snapshotSel.empty()) return;
+
+    const exitDuration = this.morphExitDurationMs;
+
+    // Animate exiting edge paths with stroke-dashoffset (draw-out effect).
+    snapshotSel.selectAll('g.link-group, g.inferredLinkGroup, g.alignmentLinkGroup')
+      .each(function(this: SVGGElement) {
+        const pathEl = this.querySelector('path') as SVGPathElement | null;
+        if (!pathEl) return;
+        const totalLength = pathEl.getTotalLength();
+        if (!totalLength || totalLength <= 0) return;
+
+        pathEl.setAttribute('stroke-dasharray', String(totalLength));
+        pathEl.setAttribute('stroke-dashoffset', '0');
+
+        d3.select(this).selectAll('.linklabel, .arrowhead').attr('opacity', 0);
+
+        d3.select(pathEl)
+          .transition()
+          .duration(exitDuration)
+          .ease(d3.easeCubicIn)
+          .attr('stroke-dashoffset', totalLength);
+      });
+
+    // Fade out exiting nodes and groups normally.
+    snapshotSel.selectAll('g.node, rect.group')
       .transition()
-      .duration(this.morphExitDurationMs)
+      .duration(exitDuration)
       .ease(d3.easeCubicOut)
-      .attr('opacity', 0)
+      .attr('opacity', 0);
+
+    // Remove the snapshot layer once the transition finishes.
+    snapshotSel
+      .transition()
+      .duration(exitDuration)
       .on('end', function(this: SVGGElement) {
         d3.select(this).remove();
       });
@@ -1970,6 +2067,35 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * in the previous layout).  Continuing elements stay at full opacity so
    * there is no visual blink — they simply slide to their new position.
    */
+
+  /**
+   * Immediately hide all entering nodes and edges (opacity 0) so they are
+   * invisible during the morph slide.  `applyMorphEnterTransition` is
+   * called later to reveal them with animation.
+   */
+  private hideEnteringElements(): void {
+    const enterNodeIds = this.morphEnteringNodeIds;
+    const enterEdgeIds = this.morphEnteringEdgeIds;
+    if (enterNodeIds.size === 0 && enterEdgeIds.size === 0) return;
+
+    if (this.svgNodes && enterNodeIds.size > 0) {
+      this.svgNodes
+        .filter((d: any) => enterNodeIds.has(d.id))
+        .attr('opacity', 0);
+    }
+
+    if (this.svgLinkGroups && (enterEdgeIds.size > 0 || enterNodeIds.size > 0)) {
+      this.svgLinkGroups
+        .filter((d: any) => {
+          if (enterEdgeIds.has(d.id)) return true;
+          const srcId: string = d.source?.id ?? '';
+          const tgtId: string = d.target?.id ?? '';
+          return enterNodeIds.has(srcId) || enterNodeIds.has(tgtId);
+        })
+        .attr('opacity', 0);
+    }
+  }
+
   private applyMorphEnterTransition(): void {
     const enterNodeIds = this.morphEnteringNodeIds;
     const enterEdgeIds = this.morphEnteringEdgeIds;
@@ -1996,8 +2122,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         .attr('opacity', 1);
     }
 
-    // Fade in entering edges — an edge enters if its own ID is new, OR
+    // Draw in entering edges — an edge enters if its own ID is new, OR
     // if either endpoint is an entering node.
+    // Uses stroke-dashoffset animation so the path visually "draws" from
+    // the continuing endpoint toward the entering node.
     if (this.svgLinkGroups && (enterEdgeIds.size > 0 || enterNodeIds.size > 0)) {
       this.svgLinkGroups
         .filter((d: any) => {
@@ -2006,12 +2134,45 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           const tgtId: string = d.target?.id ?? '';
           return enterNodeIds.has(srcId) || enterNodeIds.has(tgtId);
         })
-        .attr('opacity', 0)
+        .each(function(this: SVGGElement) {
+          const pathEl = this.querySelector('path') as SVGPathElement | null;
+          if (!pathEl) return;
+          const totalLength = pathEl.getTotalLength();
+          if (!totalLength || totalLength <= 0) return;
+
+          d3.select(pathEl)
+            .attr('stroke-dasharray', totalLength)
+            .attr('stroke-dashoffset', totalLength);
+
+          // Also hide the link label and arrowheads during draw-in
+          d3.select(this).selectAll('.linklabel, .arrowhead')
+            .attr('opacity', 0);
+        })
+        .attr('opacity', 1) // edge group visible — dash hides the stroke
         .transition()
         .delay(this.morphEnterDelayMs)
         .duration(this.morphEnterDurationMs)
         .ease(d3.easeCubicOut)
-        .attr('opacity', 1);
+        .tween('draw-in', function(this: SVGGElement) {
+          const pathEl = this.querySelector('path') as SVGPathElement | null;
+          if (!pathEl) return () => {};
+          const totalLength = pathEl.getTotalLength();
+          if (!totalLength || totalLength <= 0) return () => {};
+          const interpolate = d3.interpolateNumber(totalLength, 0);
+          return (t: number) => {
+            pathEl.setAttribute('stroke-dashoffset', String(interpolate(t)));
+          };
+        })
+        .on('end', function(this: SVGGElement) {
+          // Clean up dash attributes and show labels/arrows
+          const pathEl = this.querySelector('path');
+          if (pathEl) {
+            pathEl.removeAttribute('stroke-dasharray');
+            pathEl.removeAttribute('stroke-dashoffset');
+          }
+          d3.select(this).selectAll('.linklabel, .arrowhead')
+            .attr('opacity', 1);
+        });
     }
 
     // Fade in entering groups
@@ -2128,6 +2289,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         if (this.layoutFormat === 'default' || !this.layoutFormat) {
           this.routeEdges();
         }
+
+        // Now that the slide is done, reveal entering nodes/edges.
+        this.applyMorphEnterTransition();
 
         this.morphOldPositions = null;
       }
@@ -3434,6 +3598,52 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Implements the complete WebCola tick behavior with proper bounds handling,
    * group edge routing, and element layering.
    */
+
+  /**
+   * Position only node rects, icons, and labels — skipping groups and edges
+   * whose bounds/endpoints may not be initialized yet.
+   * Used to show continuing nodes at their old positions while the solver
+   * runs, before groups and edge data are available.
+   */
+  private updateNodePositionsOnly(): void {
+    if (!this.svgNodes) return;
+
+    this.svgNodes.select('rect')
+      .attr('x', (d: any) => d.x != null ? d.x - (d.visualWidth ?? d.width) / 2 : 0)
+      .attr('y', (d: any) => d.y != null ? d.y - (d.visualHeight ?? d.height) / 2 : 0)
+      .attr('width', (d: any) => d.visualWidth ?? d.width)
+      .attr('height', (d: any) => d.visualHeight ?? d.height);
+
+    this.svgNodes.select('image')
+      .attr('x', (d: any) => {
+        if (d.x == null) return 0;
+        const vw = d.visualWidth ?? d.width;
+        return d.showLabels ? d.x + vw / 2 - (vw * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR) : d.x - vw / 2;
+      })
+      .attr('y', (d: any) => {
+        if (d.y == null) return 0;
+        const vh = d.visualHeight ?? d.height;
+        return d.y - vh / 2;
+      });
+
+    this.svgNodes.select('.mostSpecificTypeLabel')
+      .attr('x', (d: any) => d.x != null ? d.x - ((d as any).visualWidth ?? d.width ?? 0) / 2 + 5 : 0)
+      .attr('y', (d: any) => d.y != null ? d.y - ((d as any).visualHeight ?? d.height ?? 0) / 2 + 10 : 0);
+
+    this.svgNodes.select('.label')
+      .attr('x', (d: any) => d.x ?? 0)
+      .attr('y', (d: any) => d.y ?? 0)
+      .each((d: any, i: number, nodes: Array<any>) => {
+        if (d.x == null) return;
+        const verticalOffset = d._labelVerticalOffset || 0;
+        const lineHeight = d._labelLineHeight || 12;
+        d3.select(nodes[i])
+          .selectAll('tspan')
+          .attr('x', d.x)
+          .attr('dy', (_: any, tspanIdx: number) => tspanIdx === 0 ? `${verticalOffset}px` : `${lineHeight}px`);
+      });
+  }
+
   private updatePositions(): void {
 
     
