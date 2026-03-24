@@ -303,7 +303,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   /**
    * Morph speed multiplier (0 – 1).
    *  • 0   = instant (no animation, equivalent to 'replace')
-   *  • 0.5 = default (~550 ms exit, ~500 ms enter)
+   *  • 0.2 = default (~220 ms exit, ~200 ms enter)
    *  • 1   = slow / dramatic (~1.1 s exit, ~1 s enter)
    *
    * Read from the `morph-speed` attribute; defaults to 0.2.
