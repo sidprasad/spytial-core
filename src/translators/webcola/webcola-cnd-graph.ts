@@ -1718,17 +1718,16 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       this.currentLayout = webcolaLayout;
       this.colaLayout = layout;
 
-      // Clear the active layer (snapshot layer is separate and keeps fading)
-      this.container.selectAll('*').remove();
-
-      // Create D3 selections for data binding
       // For morph transitions: snapshot the entire old graph as a visual
-      // overlay before replacing DOM elements.  The overlay stays visible
-      // while the solver runs behind the scenes, then gets removed when
-      // the morph animation starts.
+      // overlay BEFORE clearing.  The overlay stays visible while the
+      // solver runs behind the scenes, then gets removed when the morph
+      // animation starts.
       if (shouldMorph && this.container) {
         this.snapshotOldGraph();
       }
+
+      // Clear the active layer (snapshot layer is separate and keeps visible)
+      this.container.selectAll('*').remove();
 
       this.renderGroups(webcolaLayout.groups, layout);
       this.renderLinks(webcolaLayout.links, layout);
