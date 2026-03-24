@@ -1734,26 +1734,36 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       // Track iteration progress
       let tickCount = 0;
       const totalIterations = unconstrainedIters + userConstraintIters + allConstraintIters;
+      // Suppress intermediate position rendering during initial layout solve.
+      // Once the solver converges (end handler), this flag is cleared so that
+      // subsequent tick events (e.g. from drag → layout.resume()) still render.
+      let isInitialSolve = true;
 
       // Start the layout with specific iteration counts and proper event handling
       layout
         .on('tick', () => {
-          tickCount++;
-          if (tickCount % 20 === 0) {
-            // Update progress every 20 ticks to avoid excessive DOM updates
-            const progress = Math.min(95, Math.round((tickCount / totalIterations) * 100));
-            if (shouldShowLoadingOverlay) {
-              this.updateLoadingProgress(`Computing layout... ${progress}%`);
+          if (isInitialSolve) {
+            tickCount++;
+            if (tickCount % 20 === 0) {
+              const progress = Math.min(95, Math.round((tickCount / totalIterations) * 100));
+              if (shouldShowLoadingOverlay) {
+                this.updateLoadingProgress(`Computing layout... ${progress}%`);
+              }
             }
+            // Skip DOM updates during initial solve — the end handler
+            // applies final positions once.
+            return;
           }
 
-          // Skip intermediate position updates — only show final converged
-          // positions.  Rendering every solver tick is visually noisy and
-          // provides no user value; the loading overlay already communicates
-          // progress.  The 'end' handler applies positions once the solver
-          // is done (or kicks off the morph slide animation).
+          // Drag-triggered ticks: render position updates normally.
+          if (this.layoutFormat === 'default' || !this.layoutFormat || this.layoutFormat === null) {
+            this.updatePositions();
+          } else if (this.layoutFormat === 'grid') {
+            this.gridUpdatePositions();
+          }
         })
         .on('end', () => {
+          isInitialSolve = false;
           if (shouldShowLoadingOverlay) {
             this.updateLoadingProgress('Finalizing...');
           }
