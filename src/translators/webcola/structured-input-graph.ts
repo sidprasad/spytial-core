@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+const d3: any = (window as any).d3v4 || (window as any).d3;
 import { WebColaCnDGraph } from './webcola-cnd-graph';
 import { IInputDataInstance, IAtom, ITuple, IRelation, DataInstanceEventListener } from '../../data-instance/interfaces';
 import { JSONDataInstance } from '../../data-instance/json-data-instance';
@@ -48,6 +49,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   private customTypes: Set<string> = new Set();
   private relationAtomPositions: string[] = ['', '']; // Default to 2 positions
   private currentConstraintError: ConstraintError | null = null; // Track current constraint validation error
+  private selectedNodeId: string | null = null;
 
   // When true, data-instance event handlers skip their enforceConstraintsAndRegenerate
   // call so that multi-step operations (remove + add) only trigger a single re-render.
@@ -126,134 +128,36 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   private createControlsInterface(): void {
     if (!this.shadowRoot) return;
 
-    // Create controls container
-    this.controlsContainer = document.createElement('div');
-    this.controlsContainer.className = 'structured-input-controls';
-    this.controlsContainer.innerHTML = this.getControlsHTML();
-
     // Add styles
     const style = document.createElement('style');
     style.textContent = this.getControlsCSS();
     this.shadowRoot.appendChild(style);
 
-    // Add controls to shadow DOM
-    this.shadowRoot.appendChild(this.controlsContainer);
+    // Inject toolbar buttons into the existing #graph-toolbar
+    const toolbar = this.shadowRoot.querySelector('#graph-toolbar');
+    if (toolbar) {
+      this.controlsContainer = document.createElement('div');
+      this.controlsContainer.style.display = 'contents'; // wrapper for querying
+      this.controlsContainer.innerHTML = this.getControlsHTML();
+      toolbar.appendChild(this.controlsContainer);
+    }
 
     // Bind event handlers
     this.bindControlEvents();
+
+    // Set up canvas interactions (context menu, click-to-select)
+    this.setupCanvasInteractions();
   }
 
   /**
-   * Generate HTML for the controls interface
+   * Generate HTML for the toolbar controls (injected into #graph-toolbar)
    */
   private getControlsHTML(): string {
     return `
-      <div class="structured-input-panel">
-        <div class="panel-header">
-          <h3>Data Editor</h3>
-          <button class="toggle-panel" aria-label="Toggle panel">▼</button>
-        </div>
-        <div class="panel-content">
-          <div class="atom-creation-section section-card">
-            <div class="section-header" data-section="atoms">
-              <h4>Atoms</h4>
-              <button class="section-toggle" aria-label="Toggle section">▼</button>
-            </div>
-            <div class="section-content">
-              <div class="atom-form">
-                <div class="form-group">
-                  <label class="form-label">Type</label>
-                  <select class="atom-type-select form-control" aria-label="Select atom type">
-                    <option value="">Select type...</option>
-                  </select>
-                  <span class="label-divider">or</span>
-                  <textarea class="custom-type-input form-control" placeholder="Enter custom type..."></textarea>
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Label</label>
-                  <input type="text" class="atom-label-input form-control" placeholder="Enter label..." aria-label="Atom label">
-                  <small class="form-hint">ID will be auto-generated</small>
-                </div>
-                <button class="add-atom-btn btn-primary" disabled>Add Atom</button>
-              </div>
-            </div>
-          </div>
-          
-          <div class="relation-creation-section section-card">
-            <div class="section-header" data-section="relations">
-              <h4>Relations</h4>
-              <button class="section-toggle" aria-label="Toggle section">▼</button>
-            </div>
-            <div class="section-content">
-              <div class="relation-form">
-                <div class="form-group">
-                  <label class="form-label">Relation Name</label>
-                  <input type="text" class="relation-type-input form-control" placeholder="e.g., friend, knows, parent" />
-                </div>
-                <div class="relation-atoms">
-                  <label class="form-label">Atoms (Arity: <span class="arity-display">2</span>)</label>
-                  <div class="atom-positions"></div>
-                  <div class="arity-controls">
-                    <button type="button" class="add-position-btn btn-sm">+ Add Position</button>
-                    <button type="button" class="remove-position-btn btn-sm">- Remove Position</button>
-                  </div>
-                </div>
-                <button class="add-relation-btn btn-primary" disabled>Create Relation</button>
-              </div>
-            </div>
-          </div>
-          
-          <div class="deletion-section section-card">
-            <div class="section-header" data-section="delete">
-              <h4>Delete</h4>
-              <button class="section-toggle" aria-label="Toggle section">▼</button>
-            </div>
-            <div class="section-content">
-              <div class="deletion-controls">
-                <div class="form-group">
-                  <label class="form-label">Delete Atom</label>
-                  <select class="atom-delete-select form-control" aria-label="Select atom to delete">
-                    <option value="">Select atom...</option>
-                  </select>
-                  <button class="delete-atom-btn btn-danger" disabled>Delete Atom</button>
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Delete Relation</label>
-                  <select class="relation-delete-select form-control" aria-label="Select relation to delete">
-                    <option value="">Select relation...</option>
-                  </select>
-                  <button class="delete-relation-btn btn-danger" disabled>Delete Relation</button>
-                </div>
-              </div>
-              <div class="bulk-delete">
-                <button class="clear-all-btn btn-danger-outline">Clear All Data</button>
-            </div>
-          </div>
-          
-          <div class="export-section section-card">
-            <div class="section-header" data-section="export">
-              <h4>Export</h4>
-              <button class="section-toggle" aria-label="Toggle section">▼</button>
-            </div>
-            <div class="section-content">
-              <button class="export-json-btn btn-secondary">Export (Reify)</button>
-              <textarea class="export-output" readonly placeholder="Exported data will appear here..."></textarea>
-            </div>
-          </div>
-          
-          <div class="spec-info-section section-card">
-            <div class="section-header" data-section="spec">
-              <h4>Spec Info</h4>
-              <button class="section-toggle" aria-label="Toggle section">▼</button>
-            </div>
-            <div class="section-content">
-              <div class="spec-details">
-                <div class="spec-status">No spec loaded</div>
-                <div class="type-list"></div>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div class="si-toolbar-group">
+        <button class="si-tb-btn" data-action="add-atom" title="Add Node">+ Node</button>
+        <button class="si-tb-btn" data-action="add-relation" title="Add Relation">+ Relation</button>
+        <button class="si-tb-btn si-tb-danger" data-action="delete" title="Delete selected node (or right-click)">Delete</button>
       </div>
     `;
   }
@@ -263,610 +167,585 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    */
   private getControlsCSS(): string {
     return `
-      .structured-input-controls {
-        position: absolute;
-        top: 12px;
-        right: 12px;
-        width: 320px;
-        background: #ffffff;
-        border: 1px solid #d0d7de;
-        border-radius: 6px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        z-index: 1000;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-        overflow: hidden;
-      }
-
-      .panel-header {
-        background: #0078d4;
-        color: white;
-        padding: 10px 12px;
+      /* Toolbar button group */
+      .si-toolbar-group {
         display: flex;
-        justify-content: space-between;
         align-items: center;
-        border-bottom: 1px solid rgba(255,255,255,0.1);
+        gap: 6px;
+        margin-left: 16px;
+        padding-left: 16px;
+        border-left: 1px solid #e5e7eb;
       }
-
-      .panel-header h3 {
-        margin: 0;
-        font-size: 14px;
-        font-weight: 600;
-      }
-
-      .toggle-panel, .section-toggle {
-        background: rgba(255,255,255,0.2);
-        border: none;
-        color: white;
+      .si-tb-btn {
+        padding: 4px 10px;
+        border: 1px solid #d1d5db;
+        background: #f9fafb;
+        color: #374151;
+        border-radius: 4px;
         cursor: pointer;
         font-size: 12px;
-        padding: 4px 8px;
-        border-radius: 3px;
-        transition: background 0.2s ease;
-      }
-
-      .toggle-panel:hover, .section-toggle:hover {
-        background: rgba(255,255,255,0.3);
-      }
-
-      .panel-content {
-        padding: 12px;
-        max-height: 600px;
-        overflow-y: auto;
-        overflow-x: hidden;
-      }
-
-      .panel-content::-webkit-scrollbar {
-        width: 8px;
-      }
-
-      .panel-content::-webkit-scrollbar-track {
-        background: #f5f5f5;
-      }
-
-      .panel-content::-webkit-scrollbar-thumb {
-        background: #c1c1c1;
-        border-radius: 4px;
-      }
-
-      .panel-content::-webkit-scrollbar-thumb:hover {
-        background: #a8a8a8;
-      }
-
-      .panel-content.collapsed {
-        display: none;
-      }
-
-      .section-card {
-        background: #fafbfc;
-        border: 1px solid #d0d7de;
-        border-radius: 4px;
-        padding: 0;
-        margin-bottom: 10px;
-      }
-
-      .section-card:last-child {
-        margin-bottom: 0;
-      }
-
-      .section-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 8px 10px;
-        background: #f6f8fa;
-        border-bottom: 1px solid #d0d7de;
-        cursor: pointer;
+        font-weight: 500;
+        white-space: nowrap;
+        transition: all 0.15s ease;
         user-select: none;
       }
+      .si-tb-btn:hover { background: #f3f4f6; border-color: #9ca3af; color: #111827; }
+      .si-tb-btn:active { background: #e5e7eb; transform: translateY(0.5px); }
+      .si-tb-btn.active { background: #0078d4; color: white; border-color: #0078d4; }
+      .si-tb-btn.si-tb-danger:hover { background: #fff5f5; color: #dc3545; border-color: #dc3545; }
+      .si-tb-btn:disabled { background: #f9fafb; color: #9ca3af; border-color: #e5e7eb; cursor: not-allowed; }
 
-      .section-header:hover {
-        background: #eef2f5;
-      }
-
-      .section-toggle {
-        background: transparent;
-        color: #57606a;
-        font-size: 10px;
-        padding: 2px 6px;
-      }
-
-      .section-toggle:hover {
-        background: rgba(0,0,0,0.05);
-      }
-
-      .section-content {
+      /* Toolbar dropdown popover */
+      .si-popover {
+        position: absolute;
+        background: white;
+        border: 1px solid #d0d7de;
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         padding: 12px;
+        z-index: 5000;
+        min-width: 240px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       }
-
-      .section-content.collapsed {
-        display: none;
-      }
-
-      h4 {
-        margin: 0;
-        font-size: 13px;
-        font-weight: 600;
-        color: #24292e;
-      }
-
-      .atom-form, .relation-form {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-      }
-
-      .form-group {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-      }
-
-      .form-label {
+      .si-popover .si-field { margin-bottom: 8px; }
+      .si-popover .si-field label {
+        display: block;
         font-size: 11px;
         font-weight: 600;
         color: #57606a;
         text-transform: uppercase;
         letter-spacing: 0.3px;
+        margin-bottom: 3px;
       }
-
-      .label-divider {
-        text-align: center;
-        color: #8b949e;
-        font-size: 10px;
-        font-weight: 500;
-        margin: 2px 0;
-      }
-
-      .form-control {
+      .si-popover input, .si-popover select {
+        display: block;
+        width: 100%;
         padding: 6px 8px;
         border: 1px solid #d0d7de;
         border-radius: 4px;
         font-size: 12px;
+        box-sizing: border-box;
         background: white;
-        transition: border-color 0.15s ease;
       }
-
-      .form-control:focus {
+      .si-popover input:focus, .si-popover select:focus {
         outline: none;
         border-color: #0078d4;
-        box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.1);
+        box-shadow: 0 0 0 2px rgba(0,120,212,0.1);
       }
-
-      .custom-type-input {
-        resize: vertical;
-        min-height: 60px;
-        font-family: 'SF Mono', Monaco, 'Consolas', 'Courier New', monospace;
-        font-size: 11px;
-        line-height: 1.4;
-      }
-
-      .form-hint {
+      .si-popover .si-hint {
         font-size: 10px;
-        color: #8b949e;
-        font-style: italic;
-      }
-
-      .btn-primary, .btn-secondary, .btn-danger, .btn-danger-outline {
-        padding: 7px 12px;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 12px;
-        font-weight: 500;
-        transition: background-color 0.15s ease;
-        width: 100%;
-      }
-
-      .btn-primary {
-        background: #0078d4;
-        color: white;
-      }
-
-      .btn-primary:hover:not(:disabled) {
-        background: #106ebe;
-      }
-
-      .btn-secondary {
-        background: #6c757d;
-        color: white;
-      }
-
-      .btn-secondary:hover {
-        background: #5a6268;
-      }
-
-      .btn-danger {
-        background: #dc3545;
-        color: white;
-      }
-
-      .btn-danger:hover:not(:disabled) {
-        background: #c82333;
-      }
-
-      .btn-danger-outline {
-        background: white;
         color: #dc3545;
-        border: 1px solid #dc3545;
+        font-style: italic;
+        margin-top: 2px;
+        display: none;
       }
-
-      .btn-danger-outline:hover {
-        background: #dc3545;
-        color: white;
-      }
-
-      .btn-primary:disabled, .btn-danger:disabled {
-        background: #e9ecef;
-        color: #adb5bd;
-        cursor: not-allowed;
-      }
-
-      .btn-sm {
-        padding: 5px 10px;
-        font-size: 11px;
-        border-radius: 3px;
-        border: 1px solid #d0d7de;
-        background: white;
-        cursor: pointer;
-        font-weight: 400;
-        transition: background-color 0.15s ease;
-      }
-
-      .btn-sm:hover:not(:disabled) {
-        background: #f6f8fa;
-        border-color: #0078d4;
-      }
-
-      .atom-selector {
-        margin-top: 8px;
-      }
-
-      .atom-checkboxes {
-        max-height: 120px;
-        overflow-y: auto;
-        border: 1px solid #d0d7de;
-        border-radius: 6px;
-        padding: 8px;
-        background: white;
-      }
-
-      .atom-checkbox-item {
+      .si-popover .si-actions {
         display: flex;
-        align-items: center;
         gap: 8px;
-        padding: 4px 0;
+        justify-content: flex-end;
+        margin-top: 10px;
+      }
+      .si-popover .si-actions button {
+        padding: 5px 12px;
+        border-radius: 4px;
         font-size: 12px;
-      }
-
-      .atom-checkbox-item input[type="checkbox"] {
-        margin: 0;
-        width: 16px;
-        height: 16px;
-      }
-
-      .relation-atoms {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-      }
-
-      .atom-positions {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        padding: 8px;
-        background: white;
+        cursor: pointer;
         border: 1px solid #d0d7de;
-        border-radius: 4px;
-      }
-
-      .atom-position {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-      }
-
-      .atom-position label {
-        font-size: 10px;
-        font-weight: 600;
-        color: #57606a;
-      }
-
-      .atom-position select {
-        padding: 5px 8px;
-        border: 1px solid #d0d7de;
-        border-radius: 3px;
-        font-size: 11px;
-        background: white;
-      }
-
-      .arity-controls {
-        display: flex;
-        gap: 6px;
-      }
-
-      .arity-display {
-        font-weight: 700;
-        color: #0078d4;
-      }
-
-      .deletion-controls {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-      }
-
-      .bulk-delete {
-        border-top: 1px solid #d0d7de;
-        padding-top: 10px;
-        margin-top: 4px;
-      }
-
-      .export-output {
-        width: 100%;
-        height: 100px;
-        margin-top: 8px;
-        padding: 8px;
-        border: 1px solid #d0d7de;
-        border-radius: 4px;
-        font-family: 'SF Mono', Monaco, 'Consolas', 'Courier New', monospace;
-        font-size: 10px;
-        line-height: 1.4;
-        resize: vertical;
         background: #f6f8fa;
         color: #24292e;
       }
-
-      .export-output:focus {
-        outline: none;
+      .si-popover .si-actions .si-btn-primary {
+        background: #0078d4;
+        color: white;
         border-color: #0078d4;
-        box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.1);
       }
-
-      .spec-status {
+      .si-popover .si-actions .si-btn-primary:disabled {
+        background: #ccc;
+        border-color: #ccc;
+        cursor: not-allowed;
+      }
+      .si-popover .si-actions .si-btn-danger {
+        background: #dc3545;
+        color: white;
+        border-color: #dc3545;
+      }
+      .si-popover .si-success {
+        color: #28a745;
         font-size: 11px;
-        padding: 6px 8px;
-        border-radius: 3px;
-        background: #f6f8fa;
-        border: 1px solid #d0d7de;
         font-weight: 500;
+        text-align: center;
+        padding: 4px 0;
+        display: none;
       }
 
-      .spec-status.loaded {
-        background: #d4edda;
-        border-color: #c3e6cb;
-        color: #155724;
-      }
-
-      .spec-status.error {
-        background: #f8d7da;
-        border-color: #f5c6cb;
-        color: #721c24;
-      }
-
-      .type-list {
-        margin-top: 8px;
+      /* Relation arity controls inside popover */
+      .si-popover .si-arity-controls {
         display: flex;
-        flex-wrap: wrap;
-        gap: 4px;
+        gap: 6px;
+        margin-top: 6px;
       }
-
-      .type-item {
-        background: #e7f3ff;
-        color: #0969da;
+      .si-popover .si-arity-controls button {
         padding: 3px 8px;
+        font-size: 11px;
+        border: 1px solid #d0d7de;
+        background: white;
         border-radius: 3px;
-        font-size: 10px;
-        font-weight: 500;
-        border: 1px solid #b6d7f0;
+        cursor: pointer;
       }
+      .si-popover .si-arity-controls button:hover { background: #f6f8fa; }
+      .si-popover .si-position-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+
+      /* Node context menu */
+      .node-context-menu {
+        position: absolute;
+        background: white;
+        border: 1px solid #d0d7de;
+        border-radius: 4px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        z-index: 5000;
+        min-width: 120px;
+        padding: 4px 0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      }
+      .node-context-menu .menu-item {
+        padding: 6px 12px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .node-context-menu .menu-item:hover { background: #f6f8fa; }
+      .node-context-menu .menu-item.danger { color: #dc3545; }
+      .node-context-menu .menu-item.danger:hover { background: #fff5f5; }
     `;
   }
 
   /**
-   * Bind event handlers to control elements
+   * Bind event handlers to toolbar buttons
    */
   private bindControlEvents(): void {
     if (!this.controlsContainer) return;
 
-    // Toggle panel
-    const toggleBtn = this.controlsContainer.querySelector('.toggle-panel') as HTMLButtonElement;
-    const panelContent = this.controlsContainer.querySelector('.panel-content') as HTMLDivElement;
-    
-    toggleBtn?.addEventListener('click', () => {
-      const isCollapsed = panelContent.classList.contains('collapsed');
-      panelContent.classList.toggle('collapsed');
-      toggleBtn.textContent = isCollapsed ? '▲' : '▼';
+    const toolbar = this.controlsContainer.closest('#graph-toolbar') || this.controlsContainer;
+    const buttons = this.controlsContainer.querySelectorAll('.si-tb-btn');
+
+    buttons.forEach(btn => {
+      // Prevent mousedown on toolbar buttons from triggering global dismiss
+      btn.addEventListener('mousedown', (e) => e.stopPropagation());
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const action = (btn as HTMLElement).dataset.action;
+        // Close any existing popover first
+        this.dismissOverlays();
+
+        if (action === 'add-atom') this.showAddAtomPopover(btn as HTMLElement);
+        else if (action === 'add-relation') this.showAddRelationPopover(btn as HTMLElement);
+        else if (action === 'delete') this.handleDeleteAction();
+      });
     });
+  }
 
-    // Toggle individual sections
-    const sectionHeaders = this.controlsContainer.querySelectorAll('.section-header');
-    sectionHeaders.forEach(header => {
-      const toggleBtn = header.querySelector('.section-toggle') as HTMLButtonElement;
-      const sectionCard = header.closest('.section-card') as HTMLElement;
-      const sectionContent = sectionCard?.querySelector('.section-content') as HTMLElement;
-      
-      if (toggleBtn && sectionContent) {
-        header.addEventListener('click', (e) => {
-          // Don't toggle if clicking on the toggle button itself (it has its own handler)
-          if (e.target === toggleBtn) return;
-          
-          const isCollapsed = sectionContent.classList.contains('collapsed');
-          sectionContent.classList.toggle('collapsed');
-          toggleBtn.textContent = isCollapsed ? '▲' : '▼';
-        });
-        
-        // Also allow clicking the toggle button directly
-        toggleBtn.addEventListener('click', (e) => {
-          e.stopPropagation(); // Prevent header click
-          const isCollapsed = sectionContent.classList.contains('collapsed');
-          sectionContent.classList.toggle('collapsed');
-          toggleBtn.textContent = isCollapsed ? '▲' : '▼';
-        });
-      }
-    });
+  /**
+   * Show add-atom popover anchored to a toolbar button
+   */
+  private showAddAtomPopover(anchor: HTMLElement): void {
+    const allTypes = new Set<string>();
+    this.getAvailableAtomTypes().forEach(t => allTypes.add(t));
+    this.customTypes.forEach(t => allTypes.add(t));
+    const datalistOpts = Array.from(allTypes).map(t => `<option value="${t}">`).join('');
 
-    // Atom creation
-    const typeSelect = this.controlsContainer.querySelector('.atom-type-select') as HTMLSelectElement;
-    const customTypeInput = this.controlsContainer.querySelector('.custom-type-input') as HTMLTextAreaElement;
-    const labelInput = this.controlsContainer.querySelector('.atom-label-input') as HTMLInputElement;
-    const addBtn = this.controlsContainer.querySelector('.add-atom-btn') as HTMLButtonElement;
+    const popover = document.createElement('div');
+    popover.className = 'si-popover';
+    popover.innerHTML = `
+      <div class="si-field">
+        <label>Type</label>
+        <input type="text" class="si-type-input" list="si-type-dl" placeholder="e.g. Person, Org..." />
+        <datalist id="si-type-dl">${datalistOpts}</datalist>
+        <div class="si-hint si-type-hint"></div>
+      </div>
+      <div class="si-field">
+        <label>Label</label>
+        <input type="text" class="si-label-input" placeholder="Enter label..." />
+        <div class="si-hint si-label-hint"></div>
+      </div>
+      <div class="si-success">Added!</div>
+      <div class="si-actions">
+        <button class="si-btn-primary" disabled>Add</button>
+      </div>
+    `;
 
-    const updateAddButtonState = () => {
-      const selectedType = typeSelect.value;
-      const customType = customTypeInput.value.trim();
-      // Use custom type if provided, otherwise use dropdown selection
-      const effectiveType = customType || selectedType;
-      addBtn.disabled = !effectiveType || !labelInput.value.trim();
+    this.positionPopover(popover, anchor);
+
+    const typeIn = popover.querySelector('.si-type-input') as HTMLInputElement;
+    const labelIn = popover.querySelector('.si-label-input') as HTMLInputElement;
+    const addBtn = popover.querySelector('.si-btn-primary') as HTMLButtonElement;
+    const typeHint = popover.querySelector('.si-type-hint') as HTMLElement;
+    const labelHint = popover.querySelector('.si-label-hint') as HTMLElement;
+    const successMsg = popover.querySelector('.si-success') as HTMLElement;
+
+    const updateState = () => {
+      const hasType = typeIn.value.trim();
+      const hasLabel = labelIn.value.trim();
+      addBtn.disabled = !hasType || !hasLabel;
+      typeHint.style.display = hasLabel && !hasType ? 'block' : 'none';
+      typeHint.textContent = 'Type is required';
+      labelHint.style.display = hasType && !hasLabel ? 'block' : 'none';
+      labelHint.textContent = 'Label is required';
     };
 
-    typeSelect?.addEventListener('change', () => {
-      // Clear custom type input when a dropdown option is selected (unless it's "Select type...")
-      if (typeSelect.value && typeSelect.value !== 'Other...') {
-        customTypeInput.value = '';
+    typeIn.addEventListener('input', updateState);
+    labelIn.addEventListener('input', updateState);
+
+    const doAdd = async () => {
+      const type = typeIn.value.trim();
+      const label = labelIn.value.trim();
+      if (!type || !label) return;
+      this.customTypes.add(type);
+      this.updateTypeDatalist();
+      const atom = await this.addAtomFromForm(type, label);
+      if (atom) {
+        successMsg.style.display = 'block';
+        this.highlightNodes([atom.id]);
+        setTimeout(() => { successMsg.style.display = 'none'; this.clearNodeHighlights(); }, 1500);
       }
-      updateAddButtonState();
-    });
-
-    customTypeInput?.addEventListener('input', () => {
-      // Clear dropdown selection when custom type is entered
-      if (customTypeInput.value.trim()) {
-        typeSelect.value = '';
-      }
-      updateAddButtonState();
-    });
-
-    labelInput?.addEventListener('input', updateAddButtonState);
-
-    addBtn?.addEventListener('click', async () => {
-      // Use custom type if provided, otherwise use dropdown selection
-      const customType = customTypeInput.value.trim();
-      let selectedType = customType || typeSelect.value;
-      
-      if (customType) {
-        // Add to custom types set for future reference
-        this.customTypes.add(customType);
-        
-        // Remove "Other..." temporarily to add it back at the end
-        const otherOption = Array.from(typeSelect.options).find(opt => opt.value === 'Other...');
-        if (otherOption) {
-          typeSelect.removeChild(otherOption);
-        }
-        
-        // Add to dropdown for future use if not already there
-        const existingOption = Array.from(typeSelect.options).find(opt => opt.value === customType);
-        if (!existingOption) {
-          const option = document.createElement('option');
-          option.value = customType;
-          option.textContent = customType;
-          typeSelect.appendChild(option);
-        }
-        
-        // Re-add "Other..." at the end to keep it always available
-        if (otherOption) {
-          typeSelect.appendChild(otherOption);
-        }
-        
-        // Reset selections
-        typeSelect.value = '';
-        customTypeInput.value = '';
-      } else if (!selectedType) {
-        return; // Don't proceed if no type selected
-      }
-      
-      await this.addAtomFromForm(selectedType, labelInput.value.trim());
-      labelInput.value = '';
-      updateAddButtonState();
-      this.updateDeletionSelects(); // Update deletion dropdowns
-      this.updateAtomPositions(); // Update relation creation positions
-    });
-
-    // Relation creation
-    const relationTypeInput = this.controlsContainer.querySelector('.relation-type-input') as HTMLInputElement;
-    const addRelationBtn = this.controlsContainer.querySelector('.add-relation-btn') as HTMLButtonElement;
-    const addPositionBtn = this.controlsContainer.querySelector('.add-position-btn') as HTMLButtonElement;
-    const removePositionBtn = this.controlsContainer.querySelector('.remove-position-btn') as HTMLButtonElement;
-
-    const updateAddRelationButtonState = () => {
-      const filledPositions = this.relationAtomPositions.filter(pos => pos.trim() !== '').length;
-      const hasEnoughPositions = filledPositions >= 2;
-      const hasType = relationTypeInput.value.trim();
-      addRelationBtn.disabled = !hasEnoughPositions || !hasType;
-    };
-
-    relationTypeInput?.addEventListener('input', updateAddRelationButtonState);
-
-    // Initialize atom position selectors
-    this.updateAtomPositions();
-
-    addPositionBtn?.addEventListener('click', () => {
-      this.relationAtomPositions.push('');
+      typeIn.value = '';
+      labelIn.value = '';
+      updateState();
+      this.updateDeletionSelects();
       this.updateAtomPositions();
-      updateAddRelationButtonState();
+    };
+
+    addBtn.addEventListener('click', doAdd);
+    labelIn.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !addBtn.disabled) doAdd(); });
+    typeIn.addEventListener('keydown', (e) => { if (e.key === 'Escape') this.dismissOverlays(); });
+    labelIn.addEventListener('keydown', (e) => { if (e.key === 'Escape') this.dismissOverlays(); });
+    typeIn.focus();
+
+    this.setupPopoverDismiss(popover);
+  }
+
+  /**
+   * Show add-relation popover anchored to a toolbar button
+   */
+  private showAddRelationPopover(anchor: HTMLElement): void {
+    const popover = document.createElement('div');
+    popover.className = 'si-popover';
+
+    const buildPositionSelectors = () => {
+      const atoms = this.dataInstance.getAtoms();
+      if (atoms.length === 0) return '<div style="color:#666;font-size:11px;">No atoms yet</div>';
+      return this.relationAtomPositions.map((sel, i) => {
+        const opts = atoms.map(a =>
+          `<option value="${a.id}" ${a.id === sel ? 'selected' : ''}>${a.label} (${a.type})</option>`
+        ).join('');
+        return `<div><label style="font-size:10px;color:#57606a;">Position ${i + 1}</label><select data-pos="${i}"><option value="">Select...</option>${opts}</select></div>`;
+      }).join('');
+    };
+
+    popover.innerHTML = `
+      <div class="si-field">
+        <label>Relation Name</label>
+        <input type="text" class="si-rel-name" placeholder="e.g. friend, knows..." />
+      </div>
+      <div class="si-field">
+        <label>Atoms (Arity: <strong class="si-arity">${this.relationAtomPositions.length}</strong>)</label>
+        <div class="si-position-list">${buildPositionSelectors()}</div>
+        <div class="si-arity-controls">
+          <button class="si-add-pos">+ Position</button>
+          <button class="si-rm-pos">- Position</button>
+        </div>
+      </div>
+      <div class="si-success">Created!</div>
+      <div class="si-actions">
+        <button class="si-btn-primary" disabled>Create</button>
+      </div>
+    `;
+
+    this.positionPopover(popover, anchor);
+
+    const nameIn = popover.querySelector('.si-rel-name') as HTMLInputElement;
+    const createBtn = popover.querySelector('.si-btn-primary') as HTMLButtonElement;
+    const successMsg = popover.querySelector('.si-success') as HTMLElement;
+    const posList = popover.querySelector('.si-position-list') as HTMLElement;
+    const aritySpan = popover.querySelector('.si-arity') as HTMLElement;
+
+    const updateCreateState = () => {
+      const filled = this.relationAtomPositions.filter(p => p.trim()).length;
+      createBtn.disabled = !nameIn.value.trim() || filled < 2;
+    };
+
+    nameIn.addEventListener('input', updateCreateState);
+
+    // Delegated change handler for position selects
+    posList.addEventListener('change', (e) => {
+      const sel = e.target as HTMLSelectElement;
+      const pos = parseInt(sel.dataset.pos || '0');
+      this.relationAtomPositions[pos] = sel.value;
+      updateCreateState();
     });
 
-    removePositionBtn?.addEventListener('click', () => {
+    popover.querySelector('.si-add-pos')?.addEventListener('click', () => {
+      this.relationAtomPositions.push('');
+      aritySpan.textContent = this.relationAtomPositions.length.toString();
+      posList.innerHTML = buildPositionSelectors();
+      updateCreateState();
+    });
+
+    popover.querySelector('.si-rm-pos')?.addEventListener('click', () => {
       if (this.relationAtomPositions.length > 2) {
         this.relationAtomPositions.pop();
-        this.updateAtomPositions();
-        updateAddRelationButtonState();
+        aritySpan.textContent = this.relationAtomPositions.length.toString();
+        posList.innerHTML = buildPositionSelectors();
+        updateCreateState();
       }
     });
 
-    addRelationBtn?.addEventListener('click', async () => {
-      await this.addRelationFromForm();
-      relationTypeInput.value = '';
-      // Reset positions to default (2 empty positions)
+    createBtn.addEventListener('click', async () => {
+      await this.addRelationFromForm(nameIn.value.trim());
+      nameIn.value = '';
       this.relationAtomPositions = ['', ''];
-      this.updateAtomPositions();
-      updateAddRelationButtonState();
+      aritySpan.textContent = '2';
+      posList.innerHTML = buildPositionSelectors();
+      updateCreateState();
       this.updateDeletionSelects();
+      this.updateAtomPositions();
+      successMsg.style.display = 'block';
+      setTimeout(() => { successMsg.style.display = 'none'; }, 1500);
     });
 
-    // Deletion controls
-    const atomDeleteSelect = this.controlsContainer.querySelector('.atom-delete-select') as HTMLSelectElement;
-    const relationDeleteSelect = this.controlsContainer.querySelector('.relation-delete-select') as HTMLSelectElement;
-    const deleteAtomBtn = this.controlsContainer.querySelector('.delete-atom-btn') as HTMLButtonElement;
-    const deleteRelationBtn = this.controlsContainer.querySelector('.delete-relation-btn') as HTMLButtonElement;
-    const clearAllBtn = this.controlsContainer.querySelector('.clear-all-btn') as HTMLButtonElement;
+    nameIn.focus();
+    this.setupPopoverDismiss(popover);
+  }
 
-    // Update deletion button states
-    const updateDeleteButtonStates = () => {
-      deleteAtomBtn.disabled = !atomDeleteSelect.value;
-      deleteRelationBtn.disabled = !relationDeleteSelect.value;
+  /**
+   * Handle delete toolbar action — deletes selected node or shows a popover to select one
+   */
+  private handleDeleteAction(): void {
+    if (this.selectedNodeId) {
+      const id = this.selectedNodeId;
+      this.selectedNodeId = null;
+      this.clearNodeHighlights();
+      this.deleteAtom(id);
+      this.updateDeletionSelects();
+      this.updateAtomPositions();
+      return;
+    }
+
+    // No node selected — show a delete popover with atom/relation select
+    const anchor = this.controlsContainer?.querySelector('[data-action="delete"]') as HTMLElement;
+    if (!anchor) return;
+
+    const atoms = this.dataInstance.getAtoms();
+    const relations = this.dataInstance.getRelations();
+    const atomOpts = atoms.map(a => `<option value="${a.id}">${a.label} (${a.type})</option>`).join('');
+    const relOpts = relations.flatMap(r =>
+      r.tuples.map((t, i) => `<option value="${r.id}::${i}">${r.name}(${t.atoms.join(', ')})</option>`)
+    ).join('');
+
+    const popover = document.createElement('div');
+    popover.className = 'si-popover';
+    popover.innerHTML = `
+      <div class="si-field">
+        <label>Delete Atom</label>
+        <select class="si-del-atom"><option value="">Select atom...</option>${atomOpts}</select>
+      </div>
+      <div class="si-field">
+        <label>Delete Relation</label>
+        <select class="si-del-rel"><option value="">Select relation...</option>${relOpts}</select>
+      </div>
+      <div class="si-actions">
+        <button class="si-btn-danger" disabled>Delete</button>
+      </div>
+    `;
+
+    this.positionPopover(popover, anchor);
+
+    const atomSel = popover.querySelector('.si-del-atom') as HTMLSelectElement;
+    const relSel = popover.querySelector('.si-del-rel') as HTMLSelectElement;
+    const delBtn = popover.querySelector('.si-btn-danger') as HTMLButtonElement;
+
+    const updateState = () => { delBtn.disabled = !atomSel.value && !relSel.value; };
+    atomSel.addEventListener('change', () => { if (atomSel.value) relSel.value = ''; updateState(); });
+    relSel.addEventListener('change', () => { if (relSel.value) atomSel.value = ''; updateState(); });
+
+    delBtn.addEventListener('click', async () => {
+      if (atomSel.value) {
+        await this.deleteAtom(atomSel.value);
+      } else if (relSel.value) {
+        const [relId] = relSel.value.split('::');
+        await this.deleteRelation(relId);
+      }
+      this.dismissOverlays();
+      this.updateDeletionSelects();
+      this.updateAtomPositions();
+    });
+
+    this.setupPopoverDismiss(popover);
+  }
+
+  /**
+   * Position a popover below an anchor element
+   */
+  private positionPopover(popover: HTMLElement, anchor: HTMLElement): void {
+    if (!this.shadowRoot) return;
+    // Append to shadow root and position absolutely relative to the host element
+    const hostRect = this.getBoundingClientRect();
+    const anchorRect = anchor.getBoundingClientRect();
+    popover.style.position = 'absolute';
+    popover.style.top = `${anchorRect.bottom - hostRect.top + 4}px`;
+    popover.style.left = `${anchorRect.left - hostRect.left}px`;
+    popover.style.zIndex = '10001'; // Above everything including modals
+    this.shadowRoot.appendChild(popover);
+  }
+
+  /**
+   * Set up click-outside dismiss for a popover
+   */
+  private _activePopover: HTMLElement | null = null;
+
+  private setupPopoverDismiss(popover: HTMLElement): void {
+    this._activePopover = popover;
+    // Prevent mousedown inside popover from reaching global dismiss handler
+    popover.addEventListener('mousedown', (e) => e.stopPropagation());
+  }
+
+  // ── Canvas interactions (context menu, click-to-select) ──
+
+  /**
+   * Set up canvas-level interactions: right-click menu, click-to-select + keyboard delete
+   */
+  private setupCanvasInteractions(): void {
+    const svgContainer = this.shadowRoot?.querySelector('#svg-container') as HTMLElement;
+    const svgEl = this.shadowRoot?.querySelector('#svg') as SVGSVGElement;
+    if (!svgContainer || !svgEl) return;
+
+    // Make host focusable for keyboard events and position context for popovers
+    this.setAttribute('tabindex', '0');
+    this.style.outline = 'none';
+    this.style.position = 'relative';
+
+    // ── Global click-outside dismiss for popovers ──
+    // Uses bubble phase so popover's stopPropagation prevents this from firing
+    this.shadowRoot?.addEventListener('mousedown', () => {
+      if (this._activePopover) this.dismissOverlays();
+    });
+
+    // Also dismiss on clicks outside the shadow root
+    document.addEventListener('mousedown', () => {
+      if (this._activePopover) this.dismissOverlays();
+    });
+
+    // ── SVG click: node selection ──
+    svgEl.addEventListener('click', (e: MouseEvent) => {
+      if (e.ctrlKey || e.metaKey) return; // input mode
+
+      const target = e.target as SVGElement;
+      const nodeGroup = target.closest('.node') || target.closest('.error-node');
+
+      this.clearNodeHighlights();
+      this.selectedNodeId = null;
+
+      if (nodeGroup) {
+        const nodeData = d3.select(nodeGroup).datum() as any;
+        if (nodeData?.id) {
+          this.selectedNodeId = nodeData.id;
+          this.highlightNodes([nodeData.id]);
+          this.focus();
+        }
+      }
+    });
+
+    // ── Right-click context menu on nodes ──
+    svgEl.addEventListener('contextmenu', (e: MouseEvent) => {
+      const target = e.target as SVGElement;
+      const nodeGroup = target.closest('.node') || target.closest('.error-node');
+      if (!nodeGroup) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const nodeData = d3.select(nodeGroup).datum() as any;
+      if (!nodeData?.id) return;
+
+      const rect = svgContainer.getBoundingClientRect();
+      const menuX = e.clientX - rect.left;
+      const menuY = e.clientY - rect.top;
+      this.showNodeContextMenu(svgContainer, nodeData, menuX, menuY);
+    });
+
+    // ── Keyboard: Delete/Backspace to delete selected node, Escape to deselect ──
+    this.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        this.selectedNodeId = null;
+        this.clearNodeHighlights();
+        this.dismissOverlays();
+        return;
+      }
+
+      if (!this.selectedNodeId) return;
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        // Don't delete if user is typing in an input
+        const active = this.shadowRoot?.activeElement;
+        if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT')) return;
+
+        e.preventDefault();
+        const atomId = this.selectedNodeId;
+        this.selectedNodeId = null;
+        this.clearNodeHighlights();
+        this.deleteAtom(atomId);
+        this.updateDeletionSelects();
+        this.updateAtomPositions();
+      }
+    });
+  }
+
+  /**
+   * Show a context menu for a node
+   */
+  private showNodeContextMenu(container: HTMLElement, nodeData: any, x: number, y: number): void {
+    this.dismissOverlays();
+
+    const menu = document.createElement('div');
+    menu.className = 'node-context-menu';
+    menu.style.left = `${x}px`;
+    menu.style.top = `${y}px`;
+
+    const label = nodeData.name || nodeData.label || nodeData.id;
+    menu.innerHTML = `
+      <div class="menu-item danger" data-action="delete">Delete "${label}"</div>
+    `;
+
+    container.appendChild(menu);
+
+    menu.addEventListener('click', async (e) => {
+      const target = e.target as HTMLElement;
+      if (target.dataset.action === 'delete') {
+        this.dismissOverlays();
+        await this.deleteAtom(nodeData.id);
+        this.updateDeletionSelects();
+        this.updateAtomPositions();
+      }
+    });
+
+    // Dismiss on next click anywhere
+    const dismiss = (e: Event) => {
+      if (!menu.contains(e.target as Node)) {
+        this.dismissOverlays();
+      }
+      this.shadowRoot?.removeEventListener('click', dismiss);
+      document.removeEventListener('click', dismiss);
     };
+    // Delay so the current click doesn't immediately dismiss
+    setTimeout(() => {
+      this.shadowRoot?.addEventListener('click', dismiss);
+      document.addEventListener('click', dismiss);
+    }, 0);
+  }
 
-    atomDeleteSelect?.addEventListener('change', updateDeleteButtonStates);
-    relationDeleteSelect?.addEventListener('change', updateDeleteButtonStates);
-
-    deleteAtomBtn?.addEventListener('click', async () => {
-      await this.deleteAtom(atomDeleteSelect.value);
-      this.updateDeletionSelects();
-      this.updateAtomPositions();
-      updateDeleteButtonStates();
-    });
-
-    deleteRelationBtn?.addEventListener('click', async () => {
-      await this.deleteRelation(relationDeleteSelect.value);
-      this.updateDeletionSelects();
-      updateDeleteButtonStates();
-    });
-
-    clearAllBtn?.addEventListener('click', async () => {
-      await this.clearAllItems();
-      this.updateDeletionSelects();
-      this.updateAtomPositions();
-      updateDeleteButtonStates();
-    });
-
-    // Export
-    const exportBtn = this.controlsContainer.querySelector('.export-json-btn') as HTMLButtonElement;
-    exportBtn?.addEventListener('click', () => {
-      this.exportDataAsJSON();
-    });
-
-    // Initial update of deletion selects
-    this.updateDeletionSelects();
+  /**
+   * Dismiss any open popovers or context menus
+   */
+  private dismissOverlays(): void {
+    this._activePopover = null;
+    this.shadowRoot?.querySelectorAll('.si-popover, .node-context-menu').forEach(el => el.remove());
   }
 
   /**
@@ -985,7 +864,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       // Initialize the full CnD pipeline
       await this.initializeCnDPipeline(specString);
       
-      this.updateTypeSelector();
+      this.updateTypeDatalist();
       this.updateSpecInfo();
       
       // Trigger constraint enforcement and layout regeneration
@@ -1135,10 +1014,11 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   }
 
   /**
-   * Update the type selector based on current data instance
+   * No-op: Previously refreshed the type datalist from the data instance.
+   * Now that updateTypeDatalist() is a no-op, this is too.
    */
   private refreshTypesFromDataInstance(): void {
-    this.updateTypeSelector();
+    // Intentionally empty — call sites retained for clarity.
   }
 
   /**
@@ -1180,78 +1060,27 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   }
 
   /**
-   * Update export section visibility
+   * No-op: Previously toggled .export-section visibility in the old side
+   * panel. That element no longer exists.
    */
-  private updateExportVisibility(show: boolean): void {
-    const exportSection = this.controlsContainer?.querySelector('.export-section') as HTMLElement;
-    if (exportSection) {
-      exportSection.style.display = show ? 'block' : 'none';
-    }
+  private updateExportVisibility(_show: boolean): void {
+    // Intentionally empty — call sites retained for clarity.
   }
 
   /**
-   * Update the type selector with available types
+   * No-op: Previously updated #atom-type-suggestions datalist in the old
+   * side panel. The add-atom popover now builds its own datalist on demand.
    */
-  private updateTypeSelector(): void {
-    const typeSelect = this.controlsContainer?.querySelector('.atom-type-select') as HTMLSelectElement;
-    if (!typeSelect) return;
-
-    // Clear existing options (except the first one)
-    while (typeSelect.children.length > 1) {
-      typeSelect.removeChild(typeSelect.lastChild!);
-    }
-
-    // Add atom types from data instance
-    const atomTypes = this.getAvailableAtomTypes();
-    atomTypes.forEach(type => {
-      const option = document.createElement('option');
-      option.value = type;
-      option.textContent = type;
-      typeSelect.appendChild(option);
-    });
-
-    // Add custom types that have been created
-    this.customTypes.forEach(type => {
-      // Only add if not already in the list
-      const existingOption = Array.from(typeSelect.options).find(opt => opt.value === type);
-      if (!existingOption) {
-        const option = document.createElement('option');
-        option.value = type;
-        option.textContent = type;
-        typeSelect.appendChild(option);
-      }
-    });
-
-    // Add "Other..." option at the end
-    const otherOption = document.createElement('option');
-    otherOption.value = 'Other...';
-    otherOption.textContent = 'Other...';
-    typeSelect.appendChild(otherOption);
+  private updateTypeDatalist(): void {
+    // Intentionally empty — call sites retained for clarity.
   }
 
   /**
-   * Update spec information display
+   * No-op: Previously updated .spec-status and .type-list elements in the
+   * old side panel. Those elements no longer exist.
    */
-  private updateSpecInfo(status: 'loaded' | 'error' = 'loaded', message?: string): void {
-    const specStatus = this.controlsContainer?.querySelector('.spec-status') as HTMLElement;
-    const typeList = this.controlsContainer?.querySelector('.type-list') as HTMLElement;
-    
-    if (!specStatus || !typeList) return;
-
-    specStatus.className = `spec-status ${status}`;
-    
-    if (status === 'error') {
-      specStatus.textContent = message || 'Error loading spec';
-      typeList.innerHTML = '';
-      return;
-    }
-
-    const atomTypes = this.getAvailableAtomTypes();
-    specStatus.textContent = `Loaded: ${atomTypes.length} atom types available`;
-    
-    typeList.innerHTML = atomTypes.map(type => 
-      `<span class="type-item">${type}</span>`
-    ).join('');
+  private updateSpecInfo(_status?: 'loaded' | 'error', _message?: string): void {
+    // Intentionally empty — call sites retained for clarity.
   }
 
   /**
@@ -1277,12 +1106,12 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   /**
    * Add an atom from the form inputs
    */
-  private async addAtomFromForm(type: string, label: string): Promise<void> {
-    if (!type || !label) return;
+  private async addAtomFromForm(type: string, label: string): Promise<IAtom | null> {
+    if (!type || !label) return null;
 
     try {
       console.log(`🔵 Adding atom: ${label} (${type})`);
-      
+
       const atomId = this.generateAtomId(type);
       const atom: IAtom = {
         id: atomId,
@@ -1305,109 +1134,38 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       }));
 
       console.log(`🎉 Atom addition completed: ${atom.label} (${atom.id}:${atom.type})`);
+      return atom;
     } catch (error) {
       console.error('❌ Failed to add atom:', error);
+      return null;
     }
   }
 
   /**
-   * Update atom position selectors for relation creation
+   * No-op: Previously updated .atom-positions, .arity-display, and
+   * .remove-position-btn elements in the old side panel. Those elements no
+   * longer exist; the relation popover builds position selectors on demand.
    */
   private updateAtomPositions(): void {
-    if (!this.controlsContainer) return;
-
-    const positionsContainer = this.controlsContainer.querySelector('.atom-positions') as HTMLDivElement;
-    const arityDisplay = this.controlsContainer.querySelector('.arity-display') as HTMLSpanElement;
-    const removePositionBtn = this.controlsContainer.querySelector('.remove-position-btn') as HTMLButtonElement;
-    
-    if (!positionsContainer) return;
-
-    // Update arity display
-    if (arityDisplay) {
-      arityDisplay.textContent = this.relationAtomPositions.length.toString();
-    }
-
-    // Update remove button state
-    if (removePositionBtn) {
-      removePositionBtn.disabled = this.relationAtomPositions.length <= 2;
-    }
-
-    // Clear existing positions
-    positionsContainer.innerHTML = '';
-
-    const atoms = this.dataInstance.getAtoms();
-    if (atoms.length === 0) {
-      positionsContainer.innerHTML = '<div style="color: #666; font-size: 11px;">No atoms available</div>';
-      return;
-    }
-
-    // Create position selectors
-    this.relationAtomPositions.forEach((selectedAtomId, index) => {
-      const positionDiv = document.createElement('div');
-      positionDiv.className = 'atom-position';
-      
-      const label = document.createElement('label');
-      label.textContent = `Position ${index + 1}:`;
-      
-      const select = document.createElement('select');
-      select.dataset.position = index.toString();
-      
-      // Add default option
-      const defaultOption = document.createElement('option');
-      defaultOption.value = '';
-      defaultOption.textContent = 'Select Atom';
-      select.appendChild(defaultOption);
-      
-      // Add atom options
-      atoms.forEach(atom => {
-        const option = document.createElement('option');
-        option.value = atom.id;
-        option.textContent = `${atom.label} (${atom.type})`;
-        if (atom.id === selectedAtomId) {
-          option.selected = true;
-        }
-        select.appendChild(option);
-      });
-      
-      // Add event listener
-      select.addEventListener('change', () => {
-        this.relationAtomPositions[index] = select.value;
-        this.updateRelationButtonState();
-      });
-      
-      positionDiv.appendChild(label);
-      positionDiv.appendChild(select);
-      positionsContainer.appendChild(positionDiv);
-    });
+    // Intentionally empty — call sites retained for clarity.
   }
 
   /**
-   * Update the add relation button state based on current positions
+   * No-op: Previously updated .relation-type-input and .add-relation-btn in
+   * the old side panel. The relation popover manages its own button state.
    */
   private updateRelationButtonState(): void {
-    if (!this.controlsContainer) return;
-    
-    const relationTypeInput = this.controlsContainer.querySelector('.relation-type-input') as HTMLInputElement;
-    const addRelationBtn = this.controlsContainer.querySelector('.add-relation-btn') as HTMLButtonElement;
-    
-    const filledPositions = this.relationAtomPositions.filter(pos => pos.trim() !== '').length;
-    const hasEnoughPositions = filledPositions >= 2;
-    const hasType = relationTypeInput?.value.trim();
-    
-    if (addRelationBtn) {
-      addRelationBtn.disabled = !hasEnoughPositions || !hasType;
-    }
+    // Intentionally empty — call sites retained for clarity.
   }
 
   /**
    * Add a relation from the form inputs
    */
-  private async addRelationFromForm(): Promise<void> {
-    if (!this.controlsContainer) return;
-
+  private async addRelationFromForm(relationName?: string): Promise<void> {
     try {
-      const relationTypeInput = this.controlsContainer.querySelector('.relation-type-input') as HTMLInputElement;
-      const relationType = relationTypeInput.value.trim();
+      // Accept name directly or try to read from popover input
+      const relationType = relationName?.trim() ||
+        (this.shadowRoot?.querySelector('.si-rel-name') as HTMLInputElement)?.value?.trim() || '';
 
       if (!relationType) return;
 
@@ -1462,22 +1220,16 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       
       // Convert to string - if it's already a string (like Pyret or Alloy), use as-is
       // If it's an object (like JSON), stringify it
-      const exportString = typeof reified === 'string' 
-        ? reified 
+      const exportString = typeof reified === 'string'
+        ? reified
         : JSON.stringify(reified, null, 2);
-      
-      // Update export output
-      const exportOutput = this.controlsContainer?.querySelector('.export-output') as HTMLTextAreaElement;
-      if (exportOutput) {
-        exportOutput.value = exportString;
-      }
 
       // Dispatch event with the reified data
       this.dispatchEvent(new CustomEvent('data-exported', {
-        detail: { 
-          data: exportString, 
+        detail: {
+          data: exportString,
           format: typeof reified === 'string' ? 'text' : 'json',
-          reified: reified 
+          reified: reified
         }
       }));
 
@@ -1488,24 +1240,20 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   }
 
   /**
-   * Common handler for data changes that updates UI components
-   * @param includeAtomPositions - Whether to update atom position selectors (needed for atom changes)
+   * No-op: Previously refreshed types, deletion selects, and atom positions.
+   * All three delegate methods are now no-ops since the old side panel was
+   * removed; the popover UI builds its option lists on demand.
    */
-  private handleDataChangeUIUpdate(includeAtomPositions: boolean = false): void {
-    this.refreshTypesFromDataInstance();
-    this.updateDeletionSelects();
-    if (includeAtomPositions) {
-      this.updateAtomPositions();
-    }
+  private handleDataChangeUIUpdate(_includeAtomPositions: boolean = false): void {
+    // Intentionally empty — call sites retained for clarity.
   }
 
   /**
-   * Common handler for data deletions that updates UI and triggers constraint validation
-   * @param includeAtomPositions - Whether to update atom position selectors (needed for atom deletions)
+   * Handler for data deletions that triggers constraint validation.
+   * The old side-panel UI updates (handleDataChangeUIUpdate) are now no-ops,
+   * so only constraint enforcement remains.
    */
-  private async handleDataDeletionWithValidation(includeAtomPositions: boolean = false): Promise<void> {
-    this.handleDataChangeUIUpdate(includeAtomPositions);
-    // Trigger constraint enforcement and layout regeneration
+  private async handleDataDeletionWithValidation(_includeAtomPositions: boolean = false): Promise<void> {
     await this.enforceConstraintsAndRegenerate();
   }
 
@@ -1588,60 +1336,12 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   }
 
   /**
-   * Update the deletion dropdown selects with current atoms and relations
+   * No-op: Previously updated .atom-delete-select and .relation-delete-select
+   * elements in the old side panel. Those elements no longer exist; deletion
+   * is now handled via popovers that build their option lists on demand.
    */
   private updateDeletionSelects(): void {
-    if (!this.controlsContainer) return;
-
-    const atomDeleteSelect = this.controlsContainer.querySelector('.atom-delete-select') as HTMLSelectElement;
-    const relationDeleteSelect = this.controlsContainer.querySelector('.relation-delete-select') as HTMLSelectElement;
-
-    if (atomDeleteSelect) {
-      // Clear existing options (except first)
-      while (atomDeleteSelect.children.length > 1) {
-        atomDeleteSelect.removeChild(atomDeleteSelect.lastChild!);
-      }
-
-      // Add current atoms with user-friendly labels
-      const atoms = this.dataInstance.getAtoms();
-      atoms.forEach(atom => {
-        const option = document.createElement('option');
-        option.value = atom.id;
-        // Show label first, then type and ID for context
-        option.textContent = `${atom.label} (${atom.type})`;
-        atomDeleteSelect.appendChild(option);
-      });
-    }
-
-    if (relationDeleteSelect) {
-      // Clear existing options (except first)
-      while (relationDeleteSelect.children.length > 1) {
-        relationDeleteSelect.removeChild(relationDeleteSelect.lastChild!);
-      }
-
-      // Add current relation tuples (not relations) with user-friendly labels
-      const relations = this.dataInstance.getRelations();
-      let tupleIndex = 0;
-      relations.forEach((relation) => {
-        relation.tuples.forEach((tuple) => {
-          const option = document.createElement('option');
-          // Use tupleIndex as value to uniquely identify each tuple
-          option.value = tupleIndex.toString();
-          
-          // Convert atom IDs to labels for better UX
-          const atomLabels = tuple.atoms.map((atomId: string) => {
-            const atom = this.dataInstance!.getAtoms().find(a => a.id === atomId);
-            return atom ? atom.label : atomId;
-          });
-          
-          // Use relation ID and source-target format instead of just type
-          const relationDisplayName = relation.id || relation.name || 'relation';
-          option.textContent = `${relationDisplayName}: ${atomLabels.join(' → ')}`;
-          relationDeleteSelect.appendChild(option);
-          tupleIndex++;
-        });
-      });
-    }
+    // Intentionally empty — call sites retained for clarity.
   }
 
   /**
