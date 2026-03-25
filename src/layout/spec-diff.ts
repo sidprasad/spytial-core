@@ -1,14 +1,15 @@
 /**
- * Spec Diff — computes the symmetric difference between two InstanceLayouts.
+ * Spec Diff — syntactic property-level diff between two InstanceLayouts.
  *
  * Given two specs applied to the same IDataInstance, `generateLayout()` produces
  * two concrete InstanceLayouts. This module compares them element-by-element:
  * nodes, edges, constraints, and groups. The result tells you exactly WHERE and
- * HOW the two specs disagree on this data — the foundation for PICK-like
- * specification generation.
+ * HOW the two specs disagree on this data.
  *
- * No solver reasoning required: we compare concrete outputs, not abstract
- * constraint systems.
+ * This is a *syntactic* comparison of generated layouts — it compares properties
+ * like colors, sizes, constraint directions, and group membership. For the
+ * *semantic* denotation-level comparison (finding concrete realizations in
+ * ⟦A⟧ \ ⟦B⟧), see equivalence-checker.ts and `findDistinguishingRealization`.
  */
 
 import { IDataInstance } from '../data-instance/interfaces';

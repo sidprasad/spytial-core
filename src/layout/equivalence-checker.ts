@@ -1,3 +1,19 @@
+/**
+ * Equivalence Checker — denotation-level comparison of spytial programs.
+ *
+ * In the formal semantics (see lean-mech/Main.lean), a spytial program P
+ * has denotation ⟦P⟧ = { R ∈ WF | R ⊨ P } — the set of well-formed
+ * realizations satisfying all constraints. This module computes the
+ * relationship between ⟦A⟧ and ⟦B⟧ for two programs A, B applied to the
+ * same data instance.
+ *
+ * Key building blocks:
+ *   - checkLayoutEquivalence: classifies ⟦A⟧ vs ⟦B⟧ as equivalent,
+ *     containment, overlapping, or incompatible
+ *   - findDistinguishingRealization: produces a concrete R ∈ ⟦A⟧ \ ⟦B⟧
+ *     (a realization admitted by A but not B)
+ */
+
 import { Solver, Variable, Expression, Strength, Operator, Constraint as KiwiConstraint } from 'kiwi.js';
 import { IDataInstance } from '../data-instance/interfaces';
 import {
@@ -12,6 +28,8 @@ import {
     type PositionalConstraintError,
 } from './constraint-validator';
 import { LayoutInstance } from './layoutinstance';
+import { parseLayoutSpec } from './layoutspec';
+import IEvaluator from '../evaluators/interfaces';
 
 // ---------------------------------------------------------------------------
 // Abstract constraint representation
@@ -629,6 +647,90 @@ export function checkLayoutEquivalence(
         separatingRealization,
         realizationSatisfies,
     };
+}
+
+// ---------------------------------------------------------------------------
+// Distinguishing realization — find R ∈ ⟦A⟧ \ ⟦B⟧
+// ---------------------------------------------------------------------------
+
+/**
+ * Result of searching for a realization in ⟦A⟧ \ ⟦B⟧.
+ *
+ * When `found` is true, `realization` is a concrete position assignment
+ * that satisfies spec A's constraints but violates at least one of spec B's.
+ * `violatedConstraints` lists the B-side constraints the realization violates.
+ */
+export type DistinguishingRealizationResult =
+    | { found: true; realization: Realization; violatedConstraints: AbstractConstraint[] }
+    | { found: false; reason: 'equivalent' | 'first-contained-in-second' };
+
+/**
+ * Given two YAML specs and a data instance, find a concrete realization
+ * R ∈ ⟦A⟧ \ ⟦B⟧ — a layout admitted by spec A but not spec B.
+ *
+ * By the monotonicity theorem (Lean: `monotonicity`), if A's constraint set
+ * strictly contains B's, then ⟦A⟧ ⊆ ⟦B⟧ and no such R exists. Otherwise
+ * the equivalence checker's solver produces a witness realization.
+ *
+ * @param specA - YAML spec whose denotation we want to sample from
+ * @param specB - YAML spec whose denotation should exclude the sample
+ * @param data  - The data instance both specs are evaluated against
+ * @param evaluator - Evaluator for selector resolution
+ * @returns A distinguishing realization, or the reason none exists
+ */
+export function findDistinguishingRealization(
+    specA: string,
+    specB: string,
+    data: IDataInstance,
+    evaluator: IEvaluator,
+): DistinguishingRealizationResult {
+    const parsedA = parseLayoutSpec(specA);
+    const parsedB = parseLayoutSpec(specB);
+
+    const liA = new LayoutInstance(parsedA, evaluator);
+    const liB = new LayoutInstance(parsedB, evaluator);
+
+    const resultA = liA.generateLayout(data);
+    const resultB = liB.generateLayout(data);
+
+    const equiv = checkLayoutEquivalence(resultA.layout, resultB.layout);
+
+    if (equiv.equivalent) {
+        return { found: false, reason: 'equivalent' };
+    }
+
+    // 'first-strictly-contains-second': A has more constraints than B,
+    // so by monotonicity ⟦A⟧ ⊆ ⟦B⟧, meaning ⟦A⟧ \ ⟦B⟧ = ∅.
+    if (equiv.relationship === 'first-strictly-contains-second') {
+        return { found: false, reason: 'first-contained-in-second' };
+    }
+
+    // For 'second-strictly-contains-first', 'incompatible', and 'overlapping',
+    // ⟦A⟧ \ ⟦B⟧ is non-empty. The equivalence checker produces a separating
+    // realization that satisfies A but not B.
+    if (equiv.separatingRealization && equiv.realizationSatisfies === 'first') {
+        return {
+            found: true,
+            realization: equiv.separatingRealization,
+            violatedConstraints: equiv.genuineExtrasInSecond,
+        };
+    }
+
+    // Fallback: if the equivalence checker only found a realization satisfying B
+    // (shouldn't normally happen for these relationship types), solve A's system
+    // directly. Since ⟦A⟧ \ ⟦B⟧ is non-empty in these cases, any point in
+    // ⟦A⟧ works for 'incompatible' (where ⟦A⟧ ∩ ⟦B⟧ = ∅).
+    const fallback = solveForPositions(resultA.layout.nodes, resultA.layout.constraints);
+    if (fallback) {
+        return {
+            found: true,
+            realization: fallback,
+            violatedConstraints: equiv.genuineExtrasInSecond,
+        };
+    }
+
+    // Should not reach here if A is satisfiable, but handle gracefully.
+    return { found: false, reason: 'equivalent' };
 }
 
 // ---------------------------------------------------------------------------

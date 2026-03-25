@@ -71,7 +71,7 @@ export {
 } from './synthesis/selector-synthesizer';
 export type { SynthesisWhy } from 'simple-graph-query';
 
-// Spec diff — symmetric difference between two specs applied to the same data instance
+// Spec diff — syntactic property-level diff between two specs applied to the same data instance
 export {
   computeSpecDiff,
   computeSpecDiffFromYAML,
@@ -84,6 +84,21 @@ export type {
   GroupDiff,
   PropertyDiff,
 } from './layout/spec-diff';
+
+// Denotation-level comparison — finding realizations in ⟦A⟧ \ ⟦B⟧
+// See lean-mech/Main.lean: ⟦P⟧ = { R ∈ WF | R ⊨ P }
+export {
+  checkEquivalence,
+  checkLayoutEquivalence,
+  findDistinguishingRealization,
+} from './layout/equivalence-checker';
+export type {
+  Realization,
+  EquivalenceResult,
+  DistinguishingRealizationResult,
+  AbstractConstraint,
+  ConflictDetail,
+} from './layout/equivalence-checker';
 
 // Browser-specific exports and initialization
 if (typeof window !== 'undefined') {
