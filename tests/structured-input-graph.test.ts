@@ -160,6 +160,76 @@ describe('StructuredInputGraph', () => {
       expect(relation?.tuples).toHaveLength(0);
     });
 
+    it('should handle group edge deletion by removing all implied tuples', async () => {
+      // Set up: add more tuples so 'knows' has atom1->atom2, atom1->atom3
+      // (simulating a group edge from atom1 to a group containing atom2 and atom3)
+      dataInstance.addRelationTuple('knows', { atoms: ['atom1', 'atom2'], types: ['Person', 'Person'] });
+      dataInstance.addRelationTuple('knows', { atoms: ['atom1', 'atom3'], types: ['Person', 'Person'] });
+
+      const knowsRelation = dataInstance.getRelations().find(r => r.id === 'knows');
+      const initialCount = knowsRelation?.tuples.length;
+      expect(initialCount).toBeGreaterThanOrEqual(2);
+
+      // Delete using tuples array (as group edge deletion does)
+      const tuples: ITuple[] = [
+        { atoms: ['atom1', 'atom2'], types: ['Person', 'Person'] },
+        { atoms: ['atom1', 'atom3'], types: ['Person', 'Person'] }
+      ];
+      const modificationEvent = {
+        detail: {
+          oldRelationId: 'knows',
+          newRelationId: '',
+          sourceNodeId: 'atom1',
+          targetNodeId: 'atom2',
+          tuples: tuples
+        }
+      } as CustomEvent;
+
+      await (graph as any).handleEdgeModificationRequest(modificationEvent);
+
+      // Verify ALL tuples matching the group members were removed
+      const relation = dataInstance.getRelations().find(r => r.id === 'knows');
+      const remainingGroupTuples = relation?.tuples.filter(
+        (t: ITuple) => t.atoms[0] === 'atom1' && (t.atoms[1] === 'atom2' || t.atoms[1] === 'atom3')
+      );
+      expect(remainingGroupTuples).toHaveLength(0);
+    });
+
+    it('should handle group edge move by moving all implied tuples to new relation', async () => {
+      // Set up: 'knows' has atom1->atom2 and atom1->atom3
+      dataInstance.addRelationTuple('knows', { atoms: ['atom1', 'atom2'], types: ['Person', 'Person'] });
+      dataInstance.addRelationTuple('knows', { atoms: ['atom1', 'atom3'], types: ['Person', 'Person'] });
+
+      // Move all group tuples from 'knows' to 'likes'
+      const tuples: ITuple[] = [
+        { atoms: ['atom1', 'atom2'], types: ['Person', 'Person'] },
+        { atoms: ['atom1', 'atom3'], types: ['Person', 'Person'] }
+      ];
+      const modificationEvent = {
+        detail: {
+          oldRelationId: 'knows',
+          newRelationId: 'likes',
+          sourceNodeId: 'atom1',
+          targetNodeId: 'atom2',
+          tuples: tuples
+        }
+      } as CustomEvent;
+
+      await (graph as any).handleEdgeModificationRequest(modificationEvent);
+
+      // Verify tuples were removed from 'knows'
+      const knowsRelation = dataInstance.getRelations().find(r => r.id === 'knows');
+      const remainingGroupTuples = knowsRelation?.tuples.filter(
+        (t: ITuple) => t.atoms[0] === 'atom1' && (t.atoms[1] === 'atom2' || t.atoms[1] === 'atom3')
+      );
+      expect(remainingGroupTuples).toHaveLength(0);
+
+      // Verify tuples were added to 'likes'
+      const likesRelation = dataInstance.getRelations().find(r => r.id === 'likes');
+      expect(likesRelation).toBeDefined();
+      expect(likesRelation?.tuples).toHaveLength(2);
+    });
+
     it('should handle edge-modification-requested with same relation name (no-op)', async () => {
       // Initial state
       const initialTupleCount = dataInstance.getRelations().find(r => r.id === 'friendship')?.tuples.length;
