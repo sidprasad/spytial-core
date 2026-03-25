@@ -2792,14 +2792,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private async deleteEdge(edgeData: EdgeWithMetadata): Promise<void> {
     const sourceNode = this.getNodeFromEdge(edgeData, 'source');
     const targetNode = this.getNodeFromEdge(edgeData, 'target');
-    
+
     if (!sourceNode || !targetNode) {
       console.error('Could not find source or target node for edge deletion');
       return;
     }
 
     const relationName = edgeData.label || edgeData.relName || '';
-    
+
     if (!relationName.trim()) {
       console.warn('Edge has no relation name, cannot delete from data instance');
       // Still remove from visualization
@@ -2807,12 +2807,39 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       return;
     }
 
-    const tuple: ITuple = {
-      atoms: [sourceNode.id, targetNode.id],
-      types: [sourceNode.type || 'untyped', targetNode.type || 'untyped']
-    };
+    // For group edges, collect tuples for ALL member nodes in the group.
+    // A group edge from KeyNode to GroupA (containing N1, N2, N3) visually
+    // represents the tuples (KeyNode,N1), (KeyNode,N2), (KeyNode,N3).
+    const tuples: ITuple[] = [];
 
-    console.log(`🗑️ Deleting edge: ${relationName}(${sourceNode.id}, ${targetNode.id})`);
+    if (edgeData.groupId && edgeData.keyNodeId && this.currentLayout) {
+      const group = (this.currentLayout.groups || []).find((g: any) => g.id === edgeData.groupId);
+      if (group) {
+        const allGroups = this.currentLayout.groups || [];
+        const memberIndices = this.collectGroupNodeIndices(group, allGroups);
+        const keyNode = this.currentLayout.nodes.find((n: NodeWithMetadata) => n.id === edgeData.keyNodeId);
+
+        for (const idx of memberIndices) {
+          const memberNode = this.currentLayout.nodes[idx];
+          if (memberNode && keyNode) {
+            tuples.push({
+              atoms: [keyNode.id, memberNode.id],
+              types: [keyNode.type || 'untyped', memberNode.type || 'untyped']
+            });
+          }
+        }
+      }
+    }
+
+    // Fallback: if no group tuples were found, use the direct source/target
+    if (tuples.length === 0) {
+      tuples.push({
+        atoms: [sourceNode.id, targetNode.id],
+        types: [sourceNode.type || 'untyped', targetNode.type || 'untyped']
+      });
+    }
+
+    console.log(`🗑️ Deleting edge: ${relationName} (${tuples.length} tuple(s))`);
 
     // Dispatch edge deletion event (using modification with empty new name)
     const edgeDeletionEvent = new CustomEvent('edge-modification-requested', {
@@ -2821,7 +2848,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         newRelationId: '', // Empty string signals deletion
         sourceNodeId: sourceNode.id,
         targetNodeId: targetNode.id,
-        tuple: tuple
+        tuples: tuples
       },
       bubbles: true
     });

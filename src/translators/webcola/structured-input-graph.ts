@@ -777,19 +777,24 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    */
   private async handleEdgeModificationRequest(event: CustomEvent): Promise<void> {
     console.log('🔗 Handling edge modification request:', event.detail);
-    
-    const { oldRelationId, newRelationId, sourceNodeId, targetNodeId, tuple } = event.detail;
-    
+
+    const { oldRelationId, newRelationId, sourceNodeId, targetNodeId, tuple, tuples } = event.detail;
+
+    // Support both single `tuple` and array `tuples` (group edges send multiple).
+    const allTuples: ITuple[] = tuples ?? (tuple ? [tuple] : []);
+
     try {
       // Suppress data-instance events for all mutations; single re-render at the end.
       this._suppressDataChangeRerender = true;
       try {
         // If the new relation name is empty, delete the edge
         if (!newRelationId || newRelationId.trim() === '') {
-          console.log('🗑️ Deleting edge (empty new relation name)');
+          console.log(`🗑️ Deleting edge (${allTuples.length} tuple(s))`);
           if (oldRelationId && oldRelationId.trim()) {
-            this.dataInstance.removeRelationTuple(oldRelationId, tuple);
-            console.log(`✅ Removed relation tuple from ${oldRelationId}`);
+            for (const t of allTuples) {
+              this.dataInstance.removeRelationTuple(oldRelationId, t);
+            }
+            console.log(`✅ Removed ${allTuples.length} relation tuple(s) from ${oldRelationId}`);
           }
         }
         // If the names are the same, no change needed
@@ -797,19 +802,23 @@ export class StructuredInputGraph extends WebColaCnDGraph {
           console.log('⏭️ Same relation name, no data changes needed');
           return;
         }
-        // Otherwise, move the tuple from old relation to new relation
+        // Otherwise, move the tuple(s) from old relation to new relation
         else {
           if (oldRelationId && oldRelationId.trim()) {
-            try {
-              this.dataInstance.removeRelationTuple(oldRelationId, tuple);
-              console.log(`🗑️ Removed from ${oldRelationId}`);
-            } catch (error) {
-              const errorMsg = error instanceof Error ? error.message : String(error);
-              console.log(`⚠️ Could not remove from ${oldRelationId}: ${errorMsg}`);
+            for (const t of allTuples) {
+              try {
+                this.dataInstance.removeRelationTuple(oldRelationId, t);
+                console.log(`🗑️ Removed from ${oldRelationId}`);
+              } catch (error) {
+                const errorMsg = error instanceof Error ? error.message : String(error);
+                console.log(`⚠️ Could not remove from ${oldRelationId}: ${errorMsg}`);
+              }
             }
           }
-          this.dataInstance.addRelationTuple(newRelationId, tuple);
-          console.log(`➕ Added to ${newRelationId}`);
+          for (const t of allTuples) {
+            this.dataInstance.addRelationTuple(newRelationId, t);
+          }
+          console.log(`➕ Added ${allTuples.length} tuple(s) to ${newRelationId}`);
         }
       } finally {
         this._suppressDataChangeRerender = false;
