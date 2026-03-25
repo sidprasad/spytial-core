@@ -75,8 +75,6 @@ export type { SynthesisWhy } from 'simple-graph-query';
 export {
   computeSpecDiff,
   computeSpecDiffFromYAML,
-  createSymmetricDiffLayout,
-  createSymmetricDiffLayoutFromYAML,
 } from './layout/spec-diff';
 export type {
   SpecDiff,
@@ -85,7 +83,6 @@ export type {
   ConstraintDiff,
   GroupDiff,
   PropertyDiff,
-  DiffStatus,
 } from './layout/spec-diff';
 
 // Browser-specific exports and initialization
