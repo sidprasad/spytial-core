@@ -71,6 +71,23 @@ export {
 } from './synthesis/selector-synthesizer';
 export type { SynthesisWhy } from 'simple-graph-query';
 
+// Spec diff — symmetric difference between two specs applied to the same data instance
+export {
+  computeSpecDiff,
+  computeSpecDiffFromYAML,
+  createSymmetricDiffLayout,
+  createSymmetricDiffLayoutFromYAML,
+} from './layout/spec-diff';
+export type {
+  SpecDiff,
+  NodeDiff,
+  EdgeDiff,
+  ConstraintDiff,
+  GroupDiff,
+  PropertyDiff,
+  DiffStatus,
+} from './layout/spec-diff';
+
 // Browser-specific exports and initialization
 if (typeof window !== 'undefined') {
   // Import and register WebCola custom element for browser environments

@@ -11,6 +11,8 @@ export * from './constraint-validator';
 export * from './qualitative-constraint-validator';
 export * from './icon-registry';
 export * from './equivalence-checker';
+export * from './spec-diff';
+export * from './diff-visualization';
 
 // Utility functions
 import { LayoutInstance } from './layoutinstance';
