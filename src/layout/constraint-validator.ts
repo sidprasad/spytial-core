@@ -592,12 +592,29 @@ class ConstraintValidator {
 
         // All alternatives exhausted for this disjunction
         // Return failure to trigger backtracking at previous disjunction level
-        
+
         // IMPORTANT: If we have a recursive error that went deeper, use that error instead
         // This ensures that when two disjunctions conflict with each other, we report the IIS
         // from the deeper level which contains constraints from BOTH disjunctions
         if (bestRecursiveError && bestRecursionDepth > 0) {
             return { satisfiable: false, error: bestRecursiveError };
+        }
+
+        // Handle empty disjunctions (0 alternatives) — trivially unsatisfiable
+        // This occurs e.g. for NOT GROUP where all nodes are members (no witness exists).
+        if (alternatives.length === 0) {
+            const sourceHTML = currentDisjunction.sourceConstraint?.toHTML?.() ?? 'unknown constraint';
+            const minimalConflictingSet = new Map<string, string[]>();
+            minimalConflictingSet.set(sourceHTML, ['No valid alternative exists (empty disjunction)']);
+            return {
+                satisfiable: false,
+                error: {
+                    type: 'positional-conflict' as const,
+                    conflictingConstraint: 'No valid alternative exists',
+                    conflictingSourceConstraint: sourceHTML,
+                    minimalConflictingConstraints: minimalConflictingSet,
+                }
+            };
         }
 
         // Find the minimal set of existing constraints that conflict with this disjunction
@@ -934,6 +951,9 @@ class ConstraintValidator {
             // Skip groups without a source constraint (e.g., singleton groups for disconnected nodes)
             if (!group.sourceConstraint) continue;
 
+            // Skip negated groups — they don't create bounding boxes; handled below
+            if (group.negated) continue;
+
             // Get all member nodes
             const memberNodes = group.nodeIds
                 .map(id => this.nodes.find(n => n.id === id))
@@ -1114,6 +1134,47 @@ class ConstraintValidator {
                 }
                 this.layout.disjunctiveConstraints.push(disjunction);
             }
+        }
+
+        // ── Negated groups ──────────────────────────────────────────────────
+        // NOT GROUP(members) = "any rectangle containing all members also contains a non-member"
+        // Encoding: ∃ non-member N, ∃ members mL,mR,mT,mB such that
+        //   mL ≤_x N ≤_x mR  AND  mT ≤_y N ≤_y mB
+        // One flat DisjunctiveConstraint over all (N, mL, mR, mT, mB) tuples.
+        for (const group of this.groups) {
+            if (!group.negated || !group.sourceConstraint) continue;
+
+            const memberIds = new Set(group.nodeIds);
+            const members = group.nodeIds
+                .map(id => this.nodes.find(n => n.id === id))
+                .filter((n): n is LayoutNode => n !== undefined);
+            const nonMembers = this.nodes.filter(n => !memberIds.has(n.id));
+
+            const sourceConstraint = group.sourceConstraint;
+            const alternatives: LayoutConstraint[][] = [];
+
+            for (const n of nonMembers) {
+                for (const mL of members) {
+                    for (const mR of members) {
+                        for (const mT of members) {
+                            for (const mB of members) {
+                                alternatives.push([
+                                    { left: mL, right: n, minDistance: 0, sourceConstraint } as LeftConstraint,
+                                    { left: n, right: mR, minDistance: 0, sourceConstraint } as LeftConstraint,
+                                    { top: mT, bottom: n, minDistance: 0, sourceConstraint } as TopConstraint,
+                                    { top: n, bottom: mB, minDistance: 0, sourceConstraint } as TopConstraint,
+                                ]);
+                            }
+                        }
+                    }
+                }
+            }
+
+            const disj = new DisjunctiveConstraint(sourceConstraint, alternatives);
+            if (!this.layout.disjunctiveConstraints) {
+                this.layout.disjunctiveConstraints = [];
+            }
+            this.layout.disjunctiveConstraints.push(disj);
         }
 
         return null;

@@ -168,16 +168,21 @@ export class GroupByField  {
 
     // And this is what gets grouped
     addToGroup : number;
-    constructor(field: string, groupOn: number, addToGroup: number, selector?: string) {
+
+    negated : boolean;
+
+    constructor(field: string, groupOn: number, addToGroup: number, selector?: string, negated: boolean = false) {
         this.field = field;
         this.groupOn = groupOn;
         this.addToGroup = addToGroup;
         this.selector = selector;
+        this.negated = negated;
     }
 
     toHTML(): string {
+        const prefix = this.negated ? 'NOT ' : '';
         const selectorText = this.selector ? ` with selector <pre>${this.selector}</pre>` : '';
-        return `GroupByField on field <pre>${this.field}</pre> grouping field index <pre>${this.groupOn}</pre> 
+        return `${prefix}GroupByField on field <pre>${this.field}</pre> grouping field index <pre>${this.groupOn}</pre>
         adding to group index <pre>${this.addToGroup}</pre>${selectorText}.`;
     }
 }
@@ -666,10 +671,6 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
         .filter(c => c.group.field)
         .map(c => {
 
-            if (c._negated) {
-                throw new Error("NOT group constraints are not yet supported");
-            }
-
             // If not, we parse from the CORE constraint
             if(c.group.groupOn == undefined) {
                 throw new Error("Grouping constraint must have groupOn field");
@@ -688,7 +689,8 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
                 c.group.field,
                 c.group.groupOn,
                 c.group.addToGroup,
-                c.group.selector
+                c.group.selector,
+                c._negated
             );
 
             // return {
@@ -704,16 +706,13 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
     let byselector: GroupBySelector[] = typedConstraints.filter(c => c.group)
         .filter(c => c.group.selector && c.group.name && !c.group.field)
         .map(c => {
-            if (c._negated) {
-                throw new Error("NOT group constraints are not yet supported");
-            }
             if(!c.group.selector) {
                 throw new Error("Grouping constraint must have a selector.");
             }
             if(!c.group.name) {
                 throw new Error("Grouping constraint must have a name.");
             }
-            return new GroupBySelector(c.group.selector, c.group.name, c.group.addEdge);
+            return new GroupBySelector(c.group.selector, c.group.name, c.group.addEdge, c._negated);
         });
 
     // Remove duplicate group by selector constraints

@@ -285,8 +285,8 @@ Negation of an orientation constraint compiles to a **reversed inequality with z
 ```
 
 **Restrictions:**
-- `NOT group` is not yet supported.
 - Double negation (`not: not:`) is not supported; the parser will not recognize it.
+- `NOT group` is supported: it asserts that no axis-aligned rectangle can contain exactly the group's members without also containing a non-member. Negated groups do not draw a visual rectangle.
 
 ---
 

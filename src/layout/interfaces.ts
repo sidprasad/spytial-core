@@ -17,6 +17,10 @@ export interface LayoutGroup {
 
     // The source constraint that created this group (GroupByField or GroupBySelector)
     sourceConstraint?: GroupByField | GroupBySelector;
+
+    // If true, this is a negated group: "no clean rectangle can contain exactly these members."
+    // Negated groups don't draw a visual rectangle; they generate anti-containment disjunctions.
+    negated?: boolean;
 }
 
 export interface LayoutNode {

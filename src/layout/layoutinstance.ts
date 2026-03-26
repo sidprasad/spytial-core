@@ -649,8 +649,9 @@ export class LayoutInstance {
                             name: groupName,
                             nodeIds: [addToGroup],
                             keyNodeId: groupOn,
-                            showLabel: true,
-                            sourceConstraint: gc
+                            showLabel: !gc.negated,
+                            sourceConstraint: gc,
+                            negated: gc.negated
                         };
                         groups.push(newGroup);
 
@@ -684,8 +685,9 @@ export class LayoutInstance {
                     name: gc.name,
                     nodeIds: selectedElements,
                     keyNodeId: keyNode, //// TODO: I think introducing this random keynode could be a problem. Not sure why or when though.
-                    showLabel: true,
-                    sourceConstraint: gc
+                    showLabel: !gc.negated,
+                    sourceConstraint: gc,
+                    negated: gc.negated
                 };
                 groups.push(newGroup);
             }
@@ -761,8 +763,9 @@ export class LayoutInstance {
                             name: groupName,
                             nodeIds: [toAdd],
                             keyNodeId: key, // What if the key is in the graph?
-                            showLabel: true, // For now
-                            sourceConstraint: c
+                            showLabel: !c.negated,
+                            sourceConstraint: c,
+                            negated: c.negated
                         };
                         groups.push(newGroup);
 
@@ -1259,10 +1262,12 @@ export class LayoutInstance {
         layoutEdges = this.filterHiddenEdges(layoutEdges);
 
         // Update the layout with final groups
+        // Filter out negated groups — they don't produce visual rectangles;
+        // their disjunctions were already added to the solver by the validators.
         layout.nodes = layoutNodes;
         layout.edges = layoutEdges;
         layout.constraints = constraints;
-        layout.groups = groups;
+        layout.groups = groups.filter(g => !g.negated);
 
         // Return layout with selectorErrors (if any) - these don't block the layout
         // but callers should check and display them to the user

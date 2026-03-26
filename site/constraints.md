@@ -333,7 +333,7 @@ constraints:
         directions: [above]
 ```
 
-> **Note:** `NOT group` is not yet supported. Negation is available for orientation, alignment, and cyclic constraints.
+> **Note:** `NOT group` is supported for selector-based groups. It asserts that no axis-aligned rectangle can contain exactly the group's members without also containing a non-member. `NOT group` does not draw a visual rectangle.
 
 ---
 

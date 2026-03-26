@@ -966,6 +966,7 @@ class QualitativeConstraintValidator {
 
         for (const group of this.groups) {
             if (group.nodeIds.length <= 1 || !group.sourceConstraint) continue;
+            if (group.negated) continue; // Negated groups handled below
 
             const memberIds = new Set(group.nodeIds);
             const groupId = `_group_${group.name}`;
@@ -988,6 +989,52 @@ class QualitativeConstraintValidator {
                 if (!this.layout.disjunctiveConstraints) this.layout.disjunctiveConstraints = [];
                 this.layout.disjunctiveConstraints.push(disj);
             }
+        }
+
+        // ── Negated groups ──────────────────────────────────────────────────
+        // NOT GROUP(members) = "any rectangle containing all members also contains a non-member"
+        // Encoding: ∃ non-member N, ∃ members mL,mR,mT,mB such that
+        //   mL ≤_x N ≤_x mR  AND  mT ≤_y N ≤_y mB
+        // One flat DisjunctiveConstraint over all (N, mL, mR, mT, mB) tuples.
+        const nodeById = new Map<string, LayoutNode>();
+        for (const node of this.nodes) nodeById.set(node.id, node);
+
+        for (const group of this.groups) {
+            if (!group.negated || !group.sourceConstraint) continue;
+
+
+
+            const memberIds = new Set(group.nodeIds);
+            const members = group.nodeIds
+                .map(id => nodeById.get(id))
+                .filter((n): n is LayoutNode => n !== undefined);
+            const nonMembers = this.nodes.filter(n => !memberIds.has(n.id));
+
+            const sourceConstraint = group.sourceConstraint;
+            const alternatives: LayoutConstraint[][] = [];
+
+            for (const n of nonMembers) {
+                for (const mL of members) {
+                    for (const mR of members) {
+                        for (const mT of members) {
+                            for (const mB of members) {
+                                alternatives.push([
+                                    { left: mL, right: n, minDistance: 0, sourceConstraint } as LeftConstraint,
+                                    { left: n, right: mR, minDistance: 0, sourceConstraint } as LeftConstraint,
+                                    { top: mT, bottom: n, minDistance: 0, sourceConstraint } as TopConstraint,
+                                    { top: n, bottom: mB, minDistance: 0, sourceConstraint } as TopConstraint,
+                                ]);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 0 alternatives → unsatisfiable (no non-members exist or no members)
+            // The solver will detect this as a failed disjunction.
+            const disj = new DisjunctiveConstraint(sourceConstraint, alternatives);
+            if (!this.layout.disjunctiveConstraints) this.layout.disjunctiveConstraints = [];
+            this.layout.disjunctiveConstraints.push(disj);
         }
 
         // Group-to-group separation
