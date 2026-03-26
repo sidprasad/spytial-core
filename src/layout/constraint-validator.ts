@@ -603,16 +603,20 @@ class ConstraintValidator {
         // Handle empty disjunctions (0 alternatives) — trivially unsatisfiable
         // This occurs e.g. for NOT GROUP where all nodes are members (no witness exists).
         if (alternatives.length === 0) {
-            const sourceHTML = currentDisjunction.sourceConstraint?.toHTML?.() ?? 'unknown constraint';
-            const minimalConflictingSet = new Map<string, string[]>();
-            minimalConflictingSet.set(sourceHTML, ['No valid alternative exists (empty disjunction)']);
+            const source = currentDisjunction.sourceConstraint;
+            const minimalConflictingSet = new Map<SourceConstraint, LayoutConstraint[]>();
+            minimalConflictingSet.set(source, []);
+            // Use last added constraint as the conflicting constraint for error display
+            const lastConstraint = this.added_constraints[this.added_constraints.length - 1];
             return {
                 satisfiable: false,
                 error: {
+                    name: 'PositionalConstraintError',
                     type: 'positional-conflict' as const,
-                    conflictingConstraint: 'No valid alternative exists',
-                    conflictingSourceConstraint: sourceHTML,
-                    minimalConflictingConstraints: minimalConflictingSet,
+                    message: `No valid alternative for disjunction from ${source?.toHTML?.() ?? 'unknown'} (empty disjunction)`,
+                    conflictingConstraint: lastConstraint,
+                    conflictingSourceConstraint: source,
+                    minimalConflictingSet,
                 }
             };
         }
@@ -862,10 +866,12 @@ class ConstraintValidator {
     public validateGroupConstraints(): GroupOverlapError | null {
         for (let i = 0; i < this.groups.length; i++) {
             const group = this.groups[i];
-            
+            if (group.negated) continue; // Negated groups have no visual rectangle
+
             for (let j = i + 1; j < this.groups.length; j++) {
                 const otherGroup = this.groups[j];
-                
+                if (otherGroup.negated) continue;
+
                 // Skip if one group is a subgroup of the other
                 if (this.isSubGroup(group, otherGroup) || this.isSubGroup(otherGroup, group)) {
                     continue;

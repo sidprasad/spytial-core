@@ -2305,7 +2305,9 @@ class QualitativeConstraintValidator {
 
     public validateGroupConstraints(): GroupOverlapError | null {
         for (let i = 0; i < this.groups.length; i++) {
+            if (this.groups[i].negated) continue; // Negated groups have no visual rectangle
             for (let j = i + 1; j < this.groups.length; j++) {
+                if (this.groups[j].negated) continue;
                 const g = this.groups[i], o = this.groups[j];
                 if (this.isSubGroup(g, o) || this.isSubGroup(o, g)) continue;
                 const intersection = this.groupIntersection(g, o);
