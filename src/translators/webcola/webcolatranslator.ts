@@ -195,6 +195,20 @@ export interface WebColaLayoutOptions {
    * If omitted, the element-level `transition-mode` attribute is used.
    */
   transitionMode?: WebColaRenderTransitionMode;
+
+  /**
+   * When true, nodes with prior positions that are NOT involved in any
+   * constraint get fixed=1.  Webcola respects this at two levels:
+   *   - gradient descent (Hessian inflation keeps locked nodes nearly still)
+   *   - constraint projection (variable weight=1000 vs 1 for unlocked nodes)
+   *
+   * Constraints on non-fixed nodes still work because `toColaConstraint()`
+   * sets fixed=0 on every node involved in a constraint.
+   *
+   * Only intended for stability mode — morph transitions need all nodes
+   * free so the solver can find a new configuration.
+   */
+  lockUnconstrainedNodes?: boolean;
 }
 
 // WebCola constraint types
@@ -255,6 +269,9 @@ export class WebColaLayout {
    */
   private priorPositionMap: Map<string, NodePositionHint>;
 
+  /** When true, lock nodes with prior positions unless a constraint unlocks them. */
+  private lockUnconstrainedNodes: boolean;
+
   constructor(instanceLayout: InstanceLayout, fig_height: number = 800, fig_width: number = 800, options?: WebColaLayoutOptions) {
 
     this.FIG_HEIGHT = fig_height;
@@ -275,6 +292,8 @@ export class WebColaLayout {
         this.priorPositionMap.set(hint.id, hint);
       }
     }
+
+    this.lockUnconstrainedNodes = options?.lockUnconstrainedNodes ?? false;
 
     // Can I create a DAGRE graph here.
     try {
@@ -567,10 +586,10 @@ export class WebColaLayout {
    * 2. DAGRE-computed positions (if DAGRE graph is available)
    * 3. Default center position (DEFAULT_X, DEFAULT_Y)
    * 
-   * Note: When using prior positions, we don't set fixed=1 because we want
-   * the layout to still optimize positions while using prior positions as
-   * initial values. This allows the layout engine to make adjustments as needed
-   * while starting from a known good position.
+   * When `lockUnconstrainedNodes` is true (stability mode), nodes with
+   * prior positions are locked (fixed=1) so the solver cannot drift them.
+   * `toColaConstraint()` later sets fixed=0 on any node involved in a
+   * constraint, so only truly unconstrained nodes stay locked.
    * 
    * @param node - The LayoutNode to convert
    * @returns NodeWithMetadata for WebCola
@@ -587,6 +606,9 @@ export class WebColaLayout {
     if (priorPosition) {
       x = priorPosition.x;
       y = priorPosition.y;
+      if (this.lockUnconstrainedNodes) {
+        fixed = 1; // Lock at prior position; toColaConstraint() unlocks if constrained
+      }
       //console.log(`Node ${node.id}: Using prior position (${x.toFixed(2)}, ${y.toFixed(2)})`);
     } else if (this.priorPositionMap.size > 0) {
       // We have prior positions but this node wasn't found - log for debugging
