@@ -671,7 +671,7 @@ constraints:
         expect(zeroDistConstraints.length).toBeGreaterThan(0);
     });
 
-    it('negated "directlyAbove" produces flipped top constraint', () => {
+    it('negated "directlyAbove" produces disjunction: NOT(above) OR NOT(x-aligned)', () => {
         const instance = new JSONDataInstance(twoNodeData);
         const evaluator = createEvaluator(instance);
         const spec = parseLayoutSpec(`
@@ -686,9 +686,89 @@ constraints:
         const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
         const { layout } = layoutInstance.generateLayout(instance);
 
-        const topConstraints = layout.constraints.filter(isTopConstraint) as TopConstraint[];
-        const zeroDistConstraints = topConstraints.filter(c => c.minDistance === 0);
-        expect(zeroDistConstraints.length).toBeGreaterThan(0);
+        // directlyAbove = above AND x-aligned
+        // NOT(directlyAbove) = NOT(above) OR NOT(x-aligned) → disjunction with 3 alternatives:
+        //   [flipped-top(0)] OR [left(A,B)] OR [left(B,A)]
+        expect(layout.disjunctiveConstraints).toBeDefined();
+        expect(layout.disjunctiveConstraints!.length).toBeGreaterThan(0);
+
+        const disj = layout.disjunctiveConstraints![0];
+        expect(disj.alternatives).toHaveLength(3);
+    });
+
+    it('negated "directlyLeft" produces disjunction: NOT(left) OR NOT(y-aligned)', () => {
+        const instance = new JSONDataInstance(twoNodeData);
+        const evaluator = createEvaluator(instance);
+        const spec = parseLayoutSpec(`
+constraints:
+  - not:
+      orientation:
+        selector: r
+        directions:
+          - directlyLeft
+`);
+
+        const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
+        const { layout } = layoutInstance.generateLayout(instance);
+
+        expect(layout.disjunctiveConstraints).toBeDefined();
+        const disj = layout.disjunctiveConstraints![0];
+        // NOT(left AND same-Y) = NOT(left) OR NOT(same-Y)
+        //   = [flipped-left(0)] OR [top(A,B)] OR [top(B,A)]
+        expect(disj.alternatives).toHaveLength(3);
+    });
+
+    it('negated multi-direction [above, left] produces disjunction (De Morgan)', () => {
+        // Positive: above AND left (conjunctive)
+        // Negated: NOT(above AND left) = NOT(above) OR NOT(left) → disjunction
+        const instance = new JSONDataInstance(twoNodeData);
+        const evaluator = createEvaluator(instance);
+        const spec = parseLayoutSpec(`
+constraints:
+  - not:
+      orientation:
+        selector: r
+        directions:
+          - above
+          - left
+`);
+
+        const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
+        const { layout } = layoutInstance.generateLayout(instance);
+
+        // Should produce a DisjunctiveConstraint, NOT conjunctive constraints
+        expect(layout.disjunctiveConstraints).toBeDefined();
+        expect(layout.disjunctiveConstraints!.length).toBe(1);
+
+        const disj = layout.disjunctiveConstraints![0];
+        // Two alternatives: NOT(above) or NOT(left)
+        expect(disj.alternatives).toHaveLength(2);
+    });
+
+    it('negated [above, left] with positive [left] is satisfiable', () => {
+        // orientation [left] + NOT orientation [above, left]
+        // = (A left of B) AND (NOT above OR NOT left)
+        // Satisfiable: A is left of B but at same level → NOT above is true
+        const instance = new JSONDataInstance(twoNodeData);
+        const evaluator = createEvaluator(instance);
+        const spec = parseLayoutSpec(`
+constraints:
+  - orientation:
+      selector: r
+      directions: [left]
+  - not:
+      orientation:
+        selector: r
+        directions: [above, left]
+`);
+
+        const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
+        const { layout } = layoutInstance.generateLayout(instance);
+
+        // This should NOT produce an error — the Codex review flagged the old
+        // code as making this incorrectly unsatisfiable
+        expect(layout.constraints.length).toBeGreaterThan(0);
+        expect(layout.disjunctiveConstraints).toBeDefined();
     });
 
     it('positive + negated orientation compose on same data', () => {

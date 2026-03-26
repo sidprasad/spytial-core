@@ -1178,7 +1178,9 @@ export class LayoutInstance {
         let allDisjunctions: DisjunctiveConstraint[] = [];
 
         try {
-            constraints = this.applyRelativeOrientationConstraints(layoutNodes, g);
+            const orientationResult = this.applyRelativeOrientationConstraints(layoutNodes, g);
+            constraints = orientationResult.conjunctive;
+            allDisjunctions.push(...orientationResult.disjunctive);
             orientationConstraintCount = constraints.length;
 
             const alignResult = this.applyAlignConstraints(layoutNodes, g);
@@ -1688,11 +1690,15 @@ export class LayoutInstance {
      * Applies the relative orientation constraints to the layout nodes.
      * Includes transitive reduction: if a < b and b < c exist, don't add a < c.
      * @param layoutNodes - The layout nodes to which the constraints will be applied.
-     * @returns An array of layout constraints.
+     * @returns Conjunctive constraints and disjunctive constraints (from negation).
      */
-    applyRelativeOrientationConstraints(layoutNodes: LayoutNode[], g: Graph): LayoutConstraint[] {
+    applyRelativeOrientationConstraints(layoutNodes: LayoutNode[], g: Graph): {
+        conjunctive: LayoutConstraint[];
+        disjunctive: DisjunctiveConstraint[];
+    } {
 
         let constraints: LayoutConstraint[] = [];
+        let disjunctions: DisjunctiveConstraint[] = [];
         let relativeOrientationConstraints = this._layoutSpec.constraints.orientation.relative;
         
         // Track generated constraints to avoid duplicates
@@ -1739,21 +1745,51 @@ export class LayoutInstance {
                     return; // Skip this tuple
                 }
 
-                directions.forEach((direction) => {
-                    // Add alignment edge for ALL orientation constraints if enabled AND edge doesn't already exist in the graph
+                // For negated multi-direction constraints, De Morgan applies:
+                // NOT(dir1 AND dir2) = NOT(dir1) OR NOT(dir2)
+                // We collect all negated alternatives across directions for this tuple
+                // and wrap them in a single DisjunctiveConstraint.
+                if (c.negated) {
+                    // Add alignment edge
                     if (this.shouldAddAlignmentEdge(g, sourceNodeId, targetNodeId)) {
                         const alignmentEdgeLabel = `_alignment_${sourceNodeId}_${targetNodeId}_`;
                         g.setEdge(sourceNodeId, targetNodeId, alignmentEdgeLabel, alignmentEdgeLabel);
                     }
 
-                    // For negated constraints, emit flipped inequality with minDistance=0.
-                    // NOT(A above B) = A.y ≤ B.y = TopConstraint(B, A, 0)
-                    // Negated constraints skip transitive reduction (they express ≤, not strict ordering).
-                    if (c.negated) {
-                        constraints.push(
-                            ...this.negateOrientationDirection(direction, sourceNodeId, targetNodeId, layoutNodes, c)
+                    if (directions.length === 1) {
+                        // Single direction: negation is a single conjunctive constraint
+                        // (or a disjunction for directly* variants)
+                        const negated = this.negateOrientationDirection(
+                            directions[0], sourceNodeId, targetNodeId, layoutNodes, c
                         );
-                        return; // Skip positive constraint logic
+                        if (negated.length === 1) {
+                            // Single flipped constraint — add conjunctively
+                            constraints.push(negated[0][0]);
+                        } else {
+                            // Disjunction (directly* variants produce NOT(order) OR NOT(align))
+                            disjunctions.push(new DisjunctiveConstraint(c, negated));
+                        }
+                    } else {
+                        // Multiple directions: NOT(d1 AND d2 AND ...) = NOT(d1) OR NOT(d2) OR ...
+                        // Each negated direction may itself produce multiple alternatives
+                        // (e.g., directly* variants), so we flatten them all into one disjunction.
+                        const allAlternatives: LayoutConstraint[][] = [];
+                        for (const direction of directions) {
+                            const negated = this.negateOrientationDirection(
+                                direction, sourceNodeId, targetNodeId, layoutNodes, c
+                            );
+                            allAlternatives.push(...negated);
+                        }
+                        disjunctions.push(new DisjunctiveConstraint(c, allAlternatives));
+                    }
+                    return; // Skip positive constraint logic for this tuple
+                }
+
+                directions.forEach((direction) => {
+                    // Add alignment edge for ALL orientation constraints if enabled AND edge doesn't already exist in the graph
+                    if (this.shouldAddAlignmentEdge(g, sourceNodeId, targetNodeId)) {
+                        const alignmentEdgeLabel = `_alignment_${sourceNodeId}_${targetNodeId}_`;
+                        g.setEdge(sourceNodeId, targetNodeId, alignmentEdgeLabel, alignmentEdgeLabel);
                     }
 
                     if (direction == "left") {
@@ -1845,52 +1881,68 @@ export class LayoutInstance {
             });
         });
 
-        return constraints;
+        return { conjunctive: constraints, disjunctive: disjunctions };
     }
 
     /**
-     * Produces the negated constraint(s) for a single orientation direction on a tuple.
+     * Produces the negated constraint alternatives for a single orientation direction on a tuple.
      *
-     * NOT(direction) flips the ordering and uses minDistance=0.
-     * For cardinal directions: a single flipped constraint.
-     * For "directly" variants: NOT(ordering AND alignment) = NOT(ordering) OR NOT(alignment),
-     * which is a disjunction — but we approximate with just the flipped ordering (minDist=0),
-     * since NOT(directlyAbove) ≈ "not above" is the dominant useful interpretation.
+     * Returns LayoutConstraint[][] — an array of alternatives for a DisjunctiveConstraint.
+     *
+     * For cardinal directions (above/below/left/right):
+     *   NOT(ordering) = single flipped constraint → [[flipped]]
+     *
+     * For "directly" variants (directlyAbove = ordering AND alignment):
+     *   NOT(ordering AND alignment) = NOT(ordering) OR NOT(alignment)
+     *   → [[flipped-ordering], [misalignment-alt1], [misalignment-alt2]]
+     *   where misalignment is expressed as two alternatives (one for each side).
      */
     private negateOrientationDirection(
         direction: RelativeDirection,
         sourceNodeId: string, targetNodeId: string,
         layoutNodes: LayoutNode[], sourceConstraint: ConstraintSource
-    ): LayoutConstraint[] {
-        // The positive constraint mapping is:
-        //   "left"  → leftConstraint(target, source, D)    [target left of source]
-        //   "right" → leftConstraint(source, target, D)    [source left of target]
-        //   "above" → topConstraint(target, source, D)     [target above source]
-        //   "below" → topConstraint(source, target, D)     [source above target]
-        //
-        // NOT flips and uses 0:
-        //   NOT "left"  → leftConstraint(source, target, 0)  [source left-or-equal of target]
-        //   NOT "right" → leftConstraint(target, source, 0)
-        //   NOT "above" → topConstraint(source, target, 0)
-        //   NOT "below" → topConstraint(target, source, 0)
+    ): LayoutConstraint[][] {
+        // Cardinal directions: single flipped constraint
         switch (direction) {
             case "left":
-                return [this.leftConstraint(sourceNodeId, targetNodeId, 0, layoutNodes, sourceConstraint)];
+                return [[this.leftConstraint(sourceNodeId, targetNodeId, 0, layoutNodes, sourceConstraint)]];
             case "right":
-                return [this.leftConstraint(targetNodeId, sourceNodeId, 0, layoutNodes, sourceConstraint)];
+                return [[this.leftConstraint(targetNodeId, sourceNodeId, 0, layoutNodes, sourceConstraint)]];
             case "above":
-                return [this.topConstraint(sourceNodeId, targetNodeId, 0, layoutNodes, sourceConstraint)];
+                return [[this.topConstraint(sourceNodeId, targetNodeId, 0, layoutNodes, sourceConstraint)]];
             case "below":
-                return [this.topConstraint(targetNodeId, sourceNodeId, 0, layoutNodes, sourceConstraint)];
+                return [[this.topConstraint(targetNodeId, sourceNodeId, 0, layoutNodes, sourceConstraint)]];
+
+            // directly* variants: NOT(ordering AND alignment) = NOT(ordering) OR NOT(alignment)
             case "directlyLeft":
-                // NOT(target left of source AND same Y) ≈ source left-or-equal of target
-                return [this.leftConstraint(sourceNodeId, targetNodeId, 0, layoutNodes, sourceConstraint)];
+                // Positive: target left of source AND same Y
+                // NOT = (source left-or-equal of target) OR (different Y)
+                return [
+                    [this.leftConstraint(sourceNodeId, targetNodeId, 0, layoutNodes, sourceConstraint)],
+                    [this.topConstraint(sourceNodeId, targetNodeId, this.minSepHeight, layoutNodes, sourceConstraint)],
+                    [this.topConstraint(targetNodeId, sourceNodeId, this.minSepHeight, layoutNodes, sourceConstraint)],
+                ];
             case "directlyRight":
-                return [this.leftConstraint(targetNodeId, sourceNodeId, 0, layoutNodes, sourceConstraint)];
+                // Positive: source left of target AND same Y
+                return [
+                    [this.leftConstraint(targetNodeId, sourceNodeId, 0, layoutNodes, sourceConstraint)],
+                    [this.topConstraint(sourceNodeId, targetNodeId, this.minSepHeight, layoutNodes, sourceConstraint)],
+                    [this.topConstraint(targetNodeId, sourceNodeId, this.minSepHeight, layoutNodes, sourceConstraint)],
+                ];
             case "directlyAbove":
-                return [this.topConstraint(sourceNodeId, targetNodeId, 0, layoutNodes, sourceConstraint)];
+                // Positive: target above source AND same X
+                return [
+                    [this.topConstraint(sourceNodeId, targetNodeId, 0, layoutNodes, sourceConstraint)],
+                    [this.leftConstraint(sourceNodeId, targetNodeId, this.minSepWidth, layoutNodes, sourceConstraint)],
+                    [this.leftConstraint(targetNodeId, sourceNodeId, this.minSepWidth, layoutNodes, sourceConstraint)],
+                ];
             case "directlyBelow":
-                return [this.topConstraint(targetNodeId, sourceNodeId, 0, layoutNodes, sourceConstraint)];
+                // Positive: source above target AND same X
+                return [
+                    [this.topConstraint(targetNodeId, sourceNodeId, 0, layoutNodes, sourceConstraint)],
+                    [this.leftConstraint(sourceNodeId, targetNodeId, this.minSepWidth, layoutNodes, sourceConstraint)],
+                    [this.leftConstraint(targetNodeId, sourceNodeId, this.minSepWidth, layoutNodes, sourceConstraint)],
+                ];
             default:
                 return [];
         }
