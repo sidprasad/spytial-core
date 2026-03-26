@@ -9,12 +9,14 @@ import type { SelectorErrorDetail } from '../components/ErrorMessageModal/ErrorS
 import {
     LayoutNode, LayoutEdge, LayoutConstraint, InstanceLayout,
     LeftConstraint, TopConstraint, AlignmentConstraint, LayoutGroup,
-    ImplicitConstraint, DisjunctiveConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint
+    ImplicitConstraint, DisjunctiveConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint,
+    negateDisjunction
 } from './interfaces';
 
 import {
     LayoutSpec,
     RelativeOrientationConstraint, CyclicOrientationConstraint,
+    RelativeDirection,
     GroupByField, GroupBySelector, AlignConstraint,
     EdgeColorDirective, InferredEdgeDirective, TagDirective,
     AtomHidingDirective
@@ -647,8 +649,9 @@ export class LayoutInstance {
                             name: groupName,
                             nodeIds: [addToGroup],
                             keyNodeId: groupOn,
-                            showLabel: true,
-                            sourceConstraint: gc
+                            showLabel: !gc.negated,
+                            sourceConstraint: gc,
+                            negated: gc.negated
                         };
                         groups.push(newGroup);
 
@@ -682,8 +685,9 @@ export class LayoutInstance {
                     name: gc.name,
                     nodeIds: selectedElements,
                     keyNodeId: keyNode, //// TODO: I think introducing this random keynode could be a problem. Not sure why or when though.
-                    showLabel: true,
-                    sourceConstraint: gc
+                    showLabel: !gc.negated,
+                    sourceConstraint: gc,
+                    negated: gc.negated
                 };
                 groups.push(newGroup);
             }
@@ -759,8 +763,9 @@ export class LayoutInstance {
                             name: groupName,
                             nodeIds: [toAdd],
                             keyNodeId: key, // What if the key is in the graph?
-                            showLabel: true, // For now
-                            sourceConstraint: c
+                            showLabel: !c.negated,
+                            sourceConstraint: c,
+                            negated: c.negated
                         };
                         groups.push(newGroup);
 
@@ -1172,24 +1177,32 @@ export class LayoutInstance {
         let layoutEdges: LayoutEdge[] = [];
         let cyclicDisjunctions: DisjunctiveConstraint[] = [];
 
+        // Collect disjunctive constraints from negated alignment and cyclic
+        let allDisjunctions: DisjunctiveConstraint[] = [];
+
         try {
-            constraints = this.applyRelativeOrientationConstraints(layoutNodes, g);
+            const orientationResult = this.applyRelativeOrientationConstraints(layoutNodes, g);
+            constraints = orientationResult.conjunctive;
+            allDisjunctions.push(...orientationResult.disjunctive);
             orientationConstraintCount = constraints.length;
-            
-            constraints = constraints.concat(this.applyAlignConstraints(layoutNodes, g));
-            alignConstraintCount = constraints.length - orientationConstraintCount;
-            
+
+            const alignResult = this.applyAlignConstraints(layoutNodes, g);
+            constraints = constraints.concat(alignResult.conjunctive);
+            allDisjunctions.push(...alignResult.disjunctive);
+            alignConstraintCount = alignResult.conjunctive.length;
+
             console.log(`Generated ${orientationConstraintCount} orientation constraints and ${alignConstraintCount} alignment constraints (deduped + transitive reduction applied)`);
-            
+
             // Prune redundant alignment edges after all have been added
             this.pruneRedundantAlignmentEdges(g);
-            
+
             // Constraints NOW holds the conjuctive CORE of layout constraints.
             constraints = removeDuplicateConstraints(constraints);
 
             // Build cyclic constraint disjunctions (must happen before buildLayoutEdges
             // so that alignment edges added for cyclic pairs are included in the edge list)
             cyclicDisjunctions = this.buildCyclicDisjunctions(layoutNodes, g);
+            allDisjunctions.push(...cyclicDisjunctions);
 
             layoutEdges = this.buildLayoutEdges(g, layoutNodes);
         } catch (error) {
@@ -1209,12 +1222,12 @@ export class LayoutInstance {
         }
 
         // Create layout with conjunctive constraints and disjunctive constraints
-        let layout: InstanceLayout = { 
-            nodes: layoutNodes, 
-            edges: layoutEdges, 
-            constraints: constraints, 
+        let layout: InstanceLayout = {
+            nodes: layoutNodes,
+            edges: layoutEdges,
+            constraints: constraints,
             groups: groups,
-            disjunctiveConstraints: cyclicDisjunctions 
+            disjunctiveConstraints: allDisjunctions.length > 0 ? allDisjunctions : undefined
         };
 
         // Check for hidden-node conflicts: constraints that were dropped because they
@@ -1249,10 +1262,12 @@ export class LayoutInstance {
         layoutEdges = this.filterHiddenEdges(layoutEdges);
 
         // Update the layout with final groups
+        // Filter out negated groups — they don't produce visual rectangles;
+        // their disjunctions were already added to the solver by the validators.
         layout.nodes = layoutNodes;
         layout.edges = layoutEdges;
         layout.constraints = constraints;
-        layout.groups = groups;
+        layout.groups = groups.filter(g => !g.negated);
 
         // Return layout with selectorErrors (if any) - these don't block the layout
         // but callers should check and display them to the user
@@ -1535,9 +1550,17 @@ export class LayoutInstance {
                     alternatives.push(constraintsForPerturbation);
                 }
 
-                // Create the disjunctive constraint
-                const disjunction = new DisjunctiveConstraint(c, alternatives);
-                disjunctions.push(disjunction);
+                if (c.negated) {
+                    // NOT(cyclic) via De Morgan: NOT(alt1 ∨ alt2 ∨ ...) = ¬alt1 ∧ ¬alt2 ∧ ...
+                    // Build the positive disjunction, then negate it.
+                    const positiveDisjunction = new DisjunctiveConstraint(c, alternatives);
+                    const negatedDisjunctions = negateDisjunction(positiveDisjunction, c);
+                    disjunctions.push(...negatedDisjunctions);
+                } else {
+                    // Create the disjunctive constraint
+                    const disjunction = new DisjunctiveConstraint(c, alternatives);
+                    disjunctions.push(disjunction);
+                }
             });
         }
 
@@ -1672,11 +1695,15 @@ export class LayoutInstance {
      * Applies the relative orientation constraints to the layout nodes.
      * Includes transitive reduction: if a < b and b < c exist, don't add a < c.
      * @param layoutNodes - The layout nodes to which the constraints will be applied.
-     * @returns An array of layout constraints.
+     * @returns Conjunctive constraints and disjunctive constraints (from negation).
      */
-    applyRelativeOrientationConstraints(layoutNodes: LayoutNode[], g: Graph): LayoutConstraint[] {
+    applyRelativeOrientationConstraints(layoutNodes: LayoutNode[], g: Graph): {
+        conjunctive: LayoutConstraint[];
+        disjunctive: DisjunctiveConstraint[];
+    } {
 
         let constraints: LayoutConstraint[] = [];
+        let disjunctions: DisjunctiveConstraint[] = [];
         let relativeOrientationConstraints = this._layoutSpec.constraints.orientation.relative;
         
         // Track generated constraints to avoid duplicates
@@ -1721,6 +1748,46 @@ export class LayoutInstance {
                         this.recordHiddenNodeConflict(c, description, hiddenId);
                     }
                     return; // Skip this tuple
+                }
+
+                // For negated multi-direction constraints, De Morgan applies:
+                // NOT(dir1 AND dir2) = NOT(dir1) OR NOT(dir2)
+                // We collect all negated alternatives across directions for this tuple
+                // and wrap them in a single DisjunctiveConstraint.
+                if (c.negated) {
+                    // Add alignment edge
+                    if (this.shouldAddAlignmentEdge(g, sourceNodeId, targetNodeId)) {
+                        const alignmentEdgeLabel = `_alignment_${sourceNodeId}_${targetNodeId}_`;
+                        g.setEdge(sourceNodeId, targetNodeId, alignmentEdgeLabel, alignmentEdgeLabel);
+                    }
+
+                    if (directions.length === 1) {
+                        // Single direction: negation is a single conjunctive constraint
+                        // (or a disjunction for directly* variants)
+                        const negated = this.negateOrientationDirection(
+                            directions[0], sourceNodeId, targetNodeId, layoutNodes, c
+                        );
+                        if (negated.length === 1) {
+                            // Single flipped constraint — add conjunctively
+                            constraints.push(negated[0][0]);
+                        } else {
+                            // Disjunction (directly* variants produce NOT(order) OR NOT(align))
+                            disjunctions.push(new DisjunctiveConstraint(c, negated));
+                        }
+                    } else {
+                        // Multiple directions: NOT(d1 AND d2 AND ...) = NOT(d1) OR NOT(d2) OR ...
+                        // Each negated direction may itself produce multiple alternatives
+                        // (e.g., directly* variants), so we flatten them all into one disjunction.
+                        const allAlternatives: LayoutConstraint[][] = [];
+                        for (const direction of directions) {
+                            const negated = this.negateOrientationDirection(
+                                direction, sourceNodeId, targetNodeId, layoutNodes, c
+                            );
+                            allAlternatives.push(...negated);
+                        }
+                        disjunctions.push(new DisjunctiveConstraint(c, allAlternatives));
+                    }
+                    return; // Skip positive constraint logic for this tuple
                 }
 
                 directions.forEach((direction) => {
@@ -1819,9 +1886,73 @@ export class LayoutInstance {
             });
         });
 
-        return constraints;
+        return { conjunctive: constraints, disjunctive: disjunctions };
     }
-    
+
+    /**
+     * Produces the negated constraint alternatives for a single orientation direction on a tuple.
+     *
+     * Returns LayoutConstraint[][] — an array of alternatives for a DisjunctiveConstraint.
+     *
+     * For cardinal directions (above/below/left/right):
+     *   NOT(ordering) = single flipped constraint → [[flipped]]
+     *
+     * For "directly" variants (directlyAbove = ordering AND alignment):
+     *   NOT(ordering AND alignment) = NOT(ordering) OR NOT(alignment)
+     *   → [[flipped-ordering], [misalignment-alt1], [misalignment-alt2]]
+     *   where misalignment is expressed as two alternatives (one for each side).
+     */
+    private negateOrientationDirection(
+        direction: RelativeDirection,
+        sourceNodeId: string, targetNodeId: string,
+        layoutNodes: LayoutNode[], sourceConstraint: ConstraintSource
+    ): LayoutConstraint[][] {
+        // Cardinal directions: single flipped constraint
+        switch (direction) {
+            case "left":
+                return [[this.leftConstraint(sourceNodeId, targetNodeId, 0, layoutNodes, sourceConstraint)]];
+            case "right":
+                return [[this.leftConstraint(targetNodeId, sourceNodeId, 0, layoutNodes, sourceConstraint)]];
+            case "above":
+                return [[this.topConstraint(sourceNodeId, targetNodeId, 0, layoutNodes, sourceConstraint)]];
+            case "below":
+                return [[this.topConstraint(targetNodeId, sourceNodeId, 0, layoutNodes, sourceConstraint)]];
+
+            // directly* variants: NOT(ordering AND alignment) = NOT(ordering) OR NOT(alignment)
+            case "directlyLeft":
+                // Positive: target left of source AND same Y
+                // NOT = (source left-or-equal of target) OR (different Y)
+                return [
+                    [this.leftConstraint(sourceNodeId, targetNodeId, 0, layoutNodes, sourceConstraint)],
+                    [this.topConstraint(sourceNodeId, targetNodeId, this.minSepHeight, layoutNodes, sourceConstraint)],
+                    [this.topConstraint(targetNodeId, sourceNodeId, this.minSepHeight, layoutNodes, sourceConstraint)],
+                ];
+            case "directlyRight":
+                // Positive: source left of target AND same Y
+                return [
+                    [this.leftConstraint(targetNodeId, sourceNodeId, 0, layoutNodes, sourceConstraint)],
+                    [this.topConstraint(sourceNodeId, targetNodeId, this.minSepHeight, layoutNodes, sourceConstraint)],
+                    [this.topConstraint(targetNodeId, sourceNodeId, this.minSepHeight, layoutNodes, sourceConstraint)],
+                ];
+            case "directlyAbove":
+                // Positive: target above source AND same X
+                return [
+                    [this.topConstraint(sourceNodeId, targetNodeId, 0, layoutNodes, sourceConstraint)],
+                    [this.leftConstraint(sourceNodeId, targetNodeId, this.minSepWidth, layoutNodes, sourceConstraint)],
+                    [this.leftConstraint(targetNodeId, sourceNodeId, this.minSepWidth, layoutNodes, sourceConstraint)],
+                ];
+            case "directlyBelow":
+                // Positive: source above target AND same X
+                return [
+                    [this.topConstraint(targetNodeId, sourceNodeId, 0, layoutNodes, sourceConstraint)],
+                    [this.leftConstraint(sourceNodeId, targetNodeId, this.minSepWidth, layoutNodes, sourceConstraint)],
+                    [this.leftConstraint(targetNodeId, sourceNodeId, this.minSepWidth, layoutNodes, sourceConstraint)],
+                ];
+            default:
+                return [];
+        }
+    }
+
     /**
      * Checks if there's a transitive path from source to target in the graph.
      * Used to detect redundant constraints via transitivity.
@@ -1893,10 +2024,14 @@ export class LayoutInstance {
      * @param layoutNodes - The layout nodes to which the constraints will be applied.
      * @returns An array of layout constraints.
      */
-    applyAlignConstraints(layoutNodes: LayoutNode[], g: Graph): LayoutConstraint[] {
+    applyAlignConstraints(layoutNodes: LayoutNode[], g: Graph): {
+        conjunctive: LayoutConstraint[];
+        disjunctive: DisjunctiveConstraint[];
+    } {
         let constraints: LayoutConstraint[] = [];
+        let disjunctions: DisjunctiveConstraint[] = [];
         let alignConstraints = this._layoutSpec.constraints.alignment;
-        
+
         // Track generated alignment constraints to avoid duplicates
         // Use normalized key (sorted node IDs) since alignment is symmetric
         const generatedAlignments = new Set<string>();
@@ -1939,6 +2074,27 @@ export class LayoutInstance {
                     g.setEdge(sourceNodeId, targetNodeId, alignmentEdgeLabel, alignmentEdgeLabel);
                 }
 
+                // For negated alignment: NOT(same-Y) = must differ on Y = above OR below (disjunction)
+                if (c.negated) {
+                    const [node1, node2] = [sourceNodeId, targetNodeId].sort();
+                    const key = `not-align-${direction === 'horizontal' ? 'y' : 'x'}:${node1}:${node2}`;
+                    if (!generatedAlignments.has(key)) {
+                        generatedAlignments.add(key);
+                        if (direction === "horizontal") {
+                            // NOT same-Y → source above target OR target above source
+                            const alt1 = [this.topConstraint(sourceNodeId, targetNodeId, this.minSepHeight, layoutNodes, c)];
+                            const alt2 = [this.topConstraint(targetNodeId, sourceNodeId, this.minSepHeight, layoutNodes, c)];
+                            disjunctions.push(new DisjunctiveConstraint(c, [alt1, alt2]));
+                        } else {
+                            // NOT same-X → source left of target OR target left of source
+                            const alt1 = [this.leftConstraint(sourceNodeId, targetNodeId, this.minSepWidth, layoutNodes, c)];
+                            const alt2 = [this.leftConstraint(targetNodeId, sourceNodeId, this.minSepWidth, layoutNodes, c)];
+                            disjunctions.push(new DisjunctiveConstraint(c, [alt1, alt2]));
+                        }
+                    }
+                    return; // Skip positive alignment logic
+                }
+
                 if (direction === "horizontal") {
                     // Horizontal alignment means same Y coordinate
                     // Normalize node order for key (alignment is symmetric)
@@ -1960,7 +2116,7 @@ export class LayoutInstance {
             });
         });
 
-        return constraints;
+        return { conjunctive: constraints, disjunctive: disjunctions };
     }
 
 

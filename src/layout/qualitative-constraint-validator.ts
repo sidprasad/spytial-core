@@ -277,6 +277,7 @@ class WeightedPartialOrderGraph {
      * Returns true if the chain would overflow.
      */
     wouldOverflow(a: string, b: string, maxSpan: number): boolean {
+        if (!this.adj.has(a) || !this.adj.has(b)) return false; // Unknown node — can't overflow
         if (this.canReach(b, a)) return true; // Cycle
 
         this.adj.get(a)!.add(b);
@@ -447,6 +448,7 @@ class QualitativeConstraintValidator {
     private activityDecay: number = 0.95;
     private conflictCount: number = 0;
     private restartThreshold: number = 32;
+    private emptyDisjunctionError: PositionalConstraintError | null = null;
     private lubyIndex: number = 0;
 
     // ─── Node lookup ───
@@ -508,6 +510,11 @@ class QualitativeConstraintValidator {
 
         // Phase 6: Interval decomposition — resolve what we can before CDCL
         this.presolveDisjunctions();
+
+        // Phase 6b: Handle truly empty disjunctions (no alternatives at all)
+        if (this.emptyDisjunctionError) {
+            return this.enforceMaximalFeasibleSubset(this.emptyDisjunctionError);
+        }
 
         // Phase 7: CDCL search on remaining disjunctions
         if (this.allDisjunctions.length > 0) {
@@ -681,13 +688,27 @@ class QualitativeConstraintValidator {
             }
 
             if (validAlternatives.length === 0) {
-                remaining.push(disj);
+                if (disj.alternatives.length === 0) {
+                    // Truly empty disjunction (e.g. NOT GROUP with all nodes as members).
+                    // No alternatives exist at all — CDCL can't handle this, so mark as failed.
+                    remaining.push(disj);
+                    this.emptyDisjunctionError = this.buildDisjunctiveError(disj);
+                } else {
+                    // All alternatives pruned — pass to CDCL for proper conflict analysis.
+                    remaining.push(disj);
+                }
             } else if (validAlternatives.length === 1) {
                 // Unit — commit directly
                 let committed = true;
                 for (const constraint of validAlternatives[0]) {
                     const error = this.addConjunctiveConstraint(constraint);
-                    if (error) { committed = false; remaining.push(disj); break; }
+                    if (error) {
+                        // The only valid alternative failed to commit.
+                        // Pass the original disjunction to CDCL for proper error reporting.
+                        committed = false;
+                        remaining.push(disj);
+                        break;
+                    }
                 }
                 if (committed) this.prunedByDecomposition++;
             } else {
@@ -700,6 +721,34 @@ class QualitativeConstraintValidator {
         }
 
         this.allDisjunctions = remaining;
+    }
+
+    /**
+     * Builds a PositionalConstraintError for a disjunction that has no satisfiable alternatives.
+     */
+    private buildDisjunctiveError(disj: DisjunctiveConstraint): PositionalConstraintError {
+        const constraint = disj.alternatives[0]?.[0]
+            ?? this.addedConstraints[this.addedConstraints.length - 1]
+            ?? this.orientationConstraints[0];
+        const minimalConflictingSet = new Map();
+        minimalConflictingSet.set(disj.sourceConstraint, disj.alternatives[0] ?? []);
+        // Include existing constraints that may contribute to the conflict
+        for (const c of this.addedConstraints) {
+            if (!minimalConflictingSet.has(c.sourceConstraint)) {
+                minimalConflictingSet.set(c.sourceConstraint, []);
+            }
+            minimalConflictingSet.get(c.sourceConstraint)!.push(c);
+        }
+
+        return {
+            name: 'PositionalConstraintError',
+            type: 'positional-conflict',
+            message: `No satisfiable alternative for disjunction from ${disj.sourceConstraint?.toHTML?.() ?? 'unknown'}`,
+            conflictingConstraint: constraint,
+            conflictingSourceConstraint: disj.sourceConstraint,
+            minimalConflictingSet,
+            maximalFeasibleSubset: [...this.addedConstraints],
+        } as PositionalConstraintError;
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -956,6 +1005,9 @@ class QualitativeConstraintValidator {
         const nodeToGroups = new Map<string, Set<LayoutGroup>>();
         for (const node of this.nodes) nodeToGroups.set(node.id, new Set());
 
+        const nodeById = new Map<string, LayoutNode>();
+        for (const node of this.nodes) nodeById.set(node.id, node);
+
         for (const group of this.groups) {
             if (group.nodeIds.length > 1 && group.sourceConstraint) {
                 for (const nodeId of group.nodeIds) {
@@ -966,6 +1018,7 @@ class QualitativeConstraintValidator {
 
         for (const group of this.groups) {
             if (group.nodeIds.length <= 1 || !group.sourceConstraint) continue;
+            if (group.negated) continue; // Negated groups handled below
 
             const memberIds = new Set(group.nodeIds);
             const groupId = `_group_${group.name}`;
@@ -990,9 +1043,62 @@ class QualitativeConstraintValidator {
             }
         }
 
-        // Group-to-group separation
+        // ── Negated groups ──────────────────────────────────────────────────
+        // NOT GROUP(members) = "any rectangle containing all members also contains a non-member"
+        // Encoding: ∃ non-member N, ∃ members mL,mR,mT,mB such that
+        //   mL ≤_x N ≤_x mR  AND  mT ≤_y N ≤_y mB
+        // One flat DisjunctiveConstraint over all (N, mL, mR, mT, mB) tuples.
+        for (const group of this.groups) {
+            if (!group.negated || !group.sourceConstraint) continue;
+
+
+
+            const memberIds = new Set(group.nodeIds);
+            const members = group.nodeIds
+                .map(id => nodeById.get(id))
+                .filter((n): n is LayoutNode => n !== undefined);
+            const nonMembers = this.nodes.filter(n => !memberIds.has(n.id));
+
+            const sourceConstraint = group.sourceConstraint;
+            const alternatives: LayoutConstraint[][] = [];
+
+            for (const n of nonMembers) {
+                for (const mL of members) {
+                    for (const mR of members) {
+                        // Skip same horizontal brackets: Left(M,N,0) ∧ Left(N,M,0) is a cycle
+                        if (mL.id === mR.id) continue;
+                        for (const mT of members) {
+                            for (const mB of members) {
+                                // Skip same vertical brackets: Top(M,N,0) ∧ Top(N,M,0) is a cycle
+                                if (mT.id === mB.id) continue;
+                                alternatives.push([
+                                    { left: mL, right: n, minDistance: 0, sourceConstraint } as LeftConstraint,
+                                    { left: n, right: mR, minDistance: 0, sourceConstraint } as LeftConstraint,
+                                    { top: mT, bottom: n, minDistance: 0, sourceConstraint } as TopConstraint,
+                                    { top: n, bottom: mB, minDistance: 0, sourceConstraint } as TopConstraint,
+                                ]);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 0 alternatives → unsatisfiable (no non-members exist or no members)
+            // The solver will detect this as a failed disjunction.
+            const disj = new DisjunctiveConstraint(sourceConstraint, alternatives);
+            if (!this.layout.disjunctiveConstraints) this.layout.disjunctiveConstraints = [];
+            this.layout.disjunctiveConstraints.push(disj);
+        }
+
+        // NOTE: GROUP + NOT GROUP on identical member sets is a direct contradiction,
+        // but we rely on the solver to detect it via ordering cycles rather than
+        // a static check. See #378 for CDCL completeness improvements needed.
+
+        // Group-to-group separation (only between positive groups with visual boundaries)
         for (let i = 0; i < this.groups.length; i++) {
+            if (this.groups[i].negated) continue;
             for (let j = i + 1; j < this.groups.length; j++) {
+                if (this.groups[j].negated) continue;
                 const gA = this.groups[i];
                 const gB = this.groups[j];
                 if (gA.nodeIds.length <= 1 || gB.nodeIds.length <= 1) continue;
@@ -1289,6 +1395,19 @@ class QualitativeConstraintValidator {
                 continue;
             }
 
+            // Graph-based propagation: re-check ordering-only disjunctions
+            // for feasibility after each assignment. Skips alignment disjunctions
+            // to avoid stale UF state.
+            const graphPropResult = this.graphPropagate(assigned);
+            if (graphPropResult === 'conflict') {
+                if (this.decisionLevel === 0) return { satisfiable: false, provedUnsat: true };
+                this.conflictCount++;
+                conflictsSinceRestart++;
+                this.backtrackTo(this.decisionLevel - 1, assigned);
+                if (conflictsSinceRestart >= this.restartThreshold) return { satisfiable: false, provedUnsat: false };
+                continue;
+            }
+
             if (this.allAssigned(assigned, numDisjunctions)) return { satisfiable: true };
 
             const { dIdx, aIdx } = this.pickBranch(assigned);
@@ -1365,6 +1484,78 @@ class QualitativeConstraintValidator {
             }
         }
         return 'ok';
+    }
+
+    /**
+     * Graph-based propagation: re-check unassigned disjunctions against the
+     * current ordering graphs (hGraph/vGraph). For each unassigned disjunction,
+     * prune alternatives that are infeasible given committed edges. If a
+     * disjunction is pruned to 0 alternatives → conflict. If pruned to 1 →
+     * force-assign (with cascade). Runs to fixpoint.
+     *
+     * This implements Rules T (transitivity), S (candidate pruning), and F
+     * (forced choice) from the reference solver.
+     *
+     * IMPORTANT: Only processes disjunctions whose alternatives are pure ordering
+     * constraints (Left/Top). Disjunctions containing alignment constraints are
+     * skipped — those need the CDCL's proper UF-undo backtracking to avoid stale
+     * alignment state (see alignment backtracking regression).
+     */
+    private graphPropagate(assigned: Int32Array): 'ok' | 'conflict' {
+        // Only run when groups are present — this propagation is specifically
+        // needed for GROUP + NOT GROUP contradiction detection, where BBox
+        // exclusion disjunctions interact with NOT group bracketing disjunctions.
+        // Without groups, skip entirely to avoid interfering with the CDCL's
+        // alignment backtracking.
+        if (this.groups.length === 0) return 'ok';
+
+        let changed = true;
+        while (changed) {
+            changed = false;
+            for (let d = 0; d < this.allDisjunctions.length; d++) {
+                if (assigned[d] !== -1) continue;
+
+                const disj = this.allDisjunctions[d];
+
+                // Skip disjunctions that contain any alignment constraint —
+                // those need CDCL's proper UF-undo backtracking.
+                if (this.disjunctionHasAlignment(disj)) continue;
+
+                let feasibleCount = 0;
+                let lastFeasibleIdx = -1;
+
+                for (let a = 0; a < disj.alternatives.length; a++) {
+                    if (this.isAlternativeFeasible(disj.alternatives[a])) {
+                        feasibleCount++;
+                        lastFeasibleIdx = a;
+                    }
+                }
+
+                if (feasibleCount === 0) {
+                    return 'conflict';
+                }
+
+                if (feasibleCount === 1) {
+                    if (!this.tryAssign(d, lastFeasibleIdx, assigned, false)) {
+                        return 'conflict';
+                    }
+                    changed = true;
+                }
+            }
+        }
+        return 'ok';
+    }
+
+    /**
+     * Returns true if any alternative in the disjunction contains an alignment constraint.
+     */
+    private disjunctionHasAlignment(disj: DisjunctiveConstraint): boolean {
+        for (const alt of disj.alternatives) {
+            for (const c of alt) {
+                if (isAlignmentConstraint(c)) return true;
+            }
+        }
+        return false;
     }
 
     private getRemainingAlternatives(dIdx: number, assigned: Int32Array): number[] {
@@ -1452,11 +1643,38 @@ class QualitativeConstraintValidator {
             if (!this.isBoundingBoxFeasible(bc)) return false;
             const groupId = `_group_${bc.group.name}`;
             this.hGraph.ensureNode(groupId); this.vGraph.ensureNode(groupId);
+            // Rule C (Containment propagation): BBox "node on side of group" implies
+            // ordering between node and ALL group members. Add edges directly to
+            // members so NOT group's member-by-member constraints can see them.
             switch (bc.side) {
-                case 'left':   return this.hGraph.addEdge(bc.node.id, groupId);
-                case 'right':  return this.hGraph.addEdge(groupId, bc.node.id);
-                case 'top':    return this.vGraph.addEdge(bc.node.id, groupId);
-                case 'bottom': return this.vGraph.addEdge(groupId, bc.node.id);
+                case 'left':
+                    if (!this.hGraph.addEdge(bc.node.id, groupId)) return false;
+                    for (const mId of bc.group.nodeIds) {
+                        this.hGraph.ensureNode(mId);
+                        this.hGraph.addEdge(bc.node.id, mId); // C < member
+                    }
+                    return true;
+                case 'right':
+                    if (!this.hGraph.addEdge(groupId, bc.node.id)) return false;
+                    for (const mId of bc.group.nodeIds) {
+                        this.hGraph.ensureNode(mId);
+                        this.hGraph.addEdge(mId, bc.node.id); // member < C
+                    }
+                    return true;
+                case 'top':
+                    if (!this.vGraph.addEdge(bc.node.id, groupId)) return false;
+                    for (const mId of bc.group.nodeIds) {
+                        this.vGraph.ensureNode(mId);
+                        this.vGraph.addEdge(bc.node.id, mId); // C < member
+                    }
+                    return true;
+                case 'bottom':
+                    if (!this.vGraph.addEdge(groupId, bc.node.id)) return false;
+                    for (const mId of bc.group.nodeIds) {
+                        this.vGraph.ensureNode(mId);
+                        this.vGraph.addEdge(mId, bc.node.id); // member < C
+                    }
+                    return true;
             }
         }
         if (isGroupBoundaryConstraint(constraint)) {
@@ -2089,7 +2307,9 @@ class QualitativeConstraintValidator {
 
     public validateGroupConstraints(): GroupOverlapError | null {
         for (let i = 0; i < this.groups.length; i++) {
+            if (this.groups[i].negated) continue; // Negated groups have no visual rectangle
             for (let j = i + 1; j < this.groups.length; j++) {
+                if (this.groups[j].negated) continue;
                 const g = this.groups[i], o = this.groups[j];
                 if (this.isSubGroup(g, o) || this.isSubGroup(o, g)) continue;
                 const intersection = this.groupIntersection(g, o);

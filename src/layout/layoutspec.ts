@@ -16,8 +16,10 @@ export interface Operation {}
 
 class ConstraintOperation implements Operation {
     selector: string;
-    constructor(selector: string) {
+    negated: boolean;
+    constructor(selector: string, negated: boolean = false) {
         this.selector = selector;
+        this.negated = negated;
     }
     isInternallyConsistent(): boolean {
         // Default implementation, can be overridden by subclasses
@@ -25,11 +27,12 @@ class ConstraintOperation implements Operation {
     }
 
     inconsistencyMessage(): string {
-        return `Inconsistent Constraint Operation: ${this.selector}`;  
+        return `Inconsistent Constraint Operation: ${this.selector}`;
     }
 
     toHTML(): string {
-        return `ConstraintOperation with selector <code>${this.selector} </code>.`;
+        const prefix = this.negated ? 'NOT ' : '';
+        return `${prefix}ConstraintOperation with selector <code>${this.selector} </code>.`;
     }
 }
 
@@ -40,8 +43,8 @@ class ConstraintOperation implements Operation {
 export class RelativeOrientationConstraint extends ConstraintOperation {
     directions : RelativeDirection[];
 
-    constructor(directions: RelativeDirection[], selector: string) {
-        super(selector);
+    constructor(directions: RelativeDirection[], selector: string, negated: boolean = false) {
+        super(selector, negated);
         this.directions = directions;
     }
     
@@ -98,17 +101,17 @@ export class RelativeOrientationConstraint extends ConstraintOperation {
     }
 
     override toHTML(): string {
-
+        const prefix = this.negated ? 'NOT ' : '';
         let directions = this.directions.join(", ");
-        return `OrientationConstraint with directions [${directions}] and selector <code>${this.selector}</code>`;
+        return `${prefix}OrientationConstraint with directions [${directions}] and selector <code>${this.selector}</code>`;
     }
 }
 
 export class AlignConstraint extends ConstraintOperation {
     direction: AlignDirection;
 
-    constructor(direction: AlignDirection, selector: string) {
-        super(selector);
+    constructor(direction: AlignDirection, selector: string, negated: boolean = false) {
+        super(selector, negated);
         this.direction = direction;
     }
     
@@ -122,7 +125,8 @@ export class AlignConstraint extends ConstraintOperation {
     }
 
     override toHTML(): string {
-        return `AlignConstraint with direction [${this.direction}] and selector <code>${this.selector}</code>`;
+        const prefix = this.negated ? 'NOT ' : '';
+        return `${prefix}AlignConstraint with direction [${this.direction}] and selector <code>${this.selector}</code>`;
     }
 }
 
@@ -133,15 +137,15 @@ export class GroupBySelector extends ConstraintOperation{
     name: string;
     addEdge: boolean;
 
-    constructor(selector : string, name: string, addEdge: boolean = false) {
-        super(selector);
+    constructor(selector : string, name: string, addEdge: boolean = false, negated: boolean = false) {
+        super(selector, negated);
         this.name = name;
         this.addEdge = addEdge;
     }
 
     override toHTML(): string {
-
-        return `GroupBySelector with selector <code>${this.selector}</code> 
+        const prefix = this.negated ? 'NOT ' : '';
+        return `${prefix}GroupBySelector with selector <code>${this.selector}</code>
         and name <code>${this.name}</code>.`;
     }
 }
@@ -164,16 +168,21 @@ export class GroupByField  {
 
     // And this is what gets grouped
     addToGroup : number;
-    constructor(field: string, groupOn: number, addToGroup: number, selector?: string) {
+
+    negated : boolean;
+
+    constructor(field: string, groupOn: number, addToGroup: number, selector?: string, negated: boolean = false) {
         this.field = field;
         this.groupOn = groupOn;
         this.addToGroup = addToGroup;
         this.selector = selector;
+        this.negated = negated;
     }
 
     toHTML(): string {
+        const prefix = this.negated ? 'NOT ' : '';
         const selectorText = this.selector ? ` with selector <pre>${this.selector}</pre>` : '';
-        return `GroupByField on field <pre>${this.field}</pre> grouping field index <pre>${this.groupOn}</pre> 
+        return `${prefix}GroupByField on field <pre>${this.field}</pre> grouping field index <pre>${this.groupOn}</pre>
         adding to group index <pre>${this.addToGroup}</pre>${selectorText}.`;
     }
 }
@@ -187,17 +196,18 @@ export class GroupByField  {
 export class CyclicOrientationConstraint extends ConstraintOperation {
     direction : RotationDirection;
 
-    constructor(direction: RotationDirection, selector: string) {
-        super(selector);
+    constructor(direction: RotationDirection, selector: string, negated: boolean = false) {
+        super(selector, negated);
         this.direction = direction;
     }
 
     override inconsistencyMessage(): string {
-        return `Cyclic constraint with direction [${this.direction}] with selector <code>${this.selector}</code> is inconsistent.`;  
+        return `Cyclic constraint with direction [${this.direction}] with selector <code>${this.selector}</code> is inconsistent.`;
     }
 
     override toHTML(): string {
-        return `Cyclic constraint with direction [${this.direction}] and selector <code>${this.selector}</code>`;
+        const prefix = this.negated ? 'NOT ' : '';
+        return `${prefix}Cyclic constraint with direction [${this.direction}] and selector <code>${this.selector}</code>`;
     }
 }
 
@@ -481,13 +491,13 @@ function removeDuplicateCyclicConstraints(constraints: CyclicOrientationConstrai
     const result: CyclicOrientationConstraint[] = [];
     
     for (const constraint of constraints) {
-        const key = `${constraint.selector.trim()}|${constraint.direction}`;
+        const key = `${constraint.selector.trim()}|${constraint.direction}|${constraint.negated}`;
         if (!seen.has(key)) {
             seen.set(key, constraint);
             result.push(constraint);
         }
     }
-    
+
     return result;
 }
 
@@ -499,9 +509,9 @@ function removeDuplicateCyclicConstraints(constraints: CyclicOrientationConstrai
 function removeDuplicateRelativeOrientationConstraints(constraints: RelativeOrientationConstraint[]): RelativeOrientationConstraint[] {
     const seen = new Map<string, RelativeOrientationConstraint>();
     const result: RelativeOrientationConstraint[] = [];
-    
+
     for (const constraint of constraints) {
-        const key = `${constraint.selector.trim()}|${constraint.directions.sort().join(',')}`;
+        const key = `${constraint.selector.trim()}|${constraint.directions.sort().join(',')}|${constraint.negated}`;
         if (!seen.has(key)) {
             seen.set(key, constraint);
             result.push(constraint);
@@ -521,13 +531,13 @@ function removeDuplicateAlignConstraints(constraints: AlignConstraint[]): AlignC
     const result: AlignConstraint[] = [];
     
     for (const constraint of constraints) {
-        const key = `${constraint.selector.trim()}|${constraint.direction}`;
+        const key = `${constraint.selector.trim()}|${constraint.direction}|${constraint.negated}`;
         if (!seen.has(key)) {
             seen.set(key, constraint);
             result.push(constraint);
         }
     }
-    
+
     return result;
 }
 
@@ -580,19 +590,29 @@ function removeDuplicateGroupByFieldConstraints(constraints: GroupByField[]): Gr
 function parseConstraints(constraints: unknown[]):   ConstraintsBlock
 {
     // Type assertion since we expect specific structure from YAML
-    const typedConstraints = constraints as Record<string, any>[];
+    const rawConstraints = constraints as Record<string, any>[];
+
+    // Pre-process: determine negation from "hold: never" field
+    const typedConstraints = rawConstraints.map(c => {
+        const inner = c.orientation || c.cyclic || c.align || c.group;
+        if (inner && inner.hold === 'never') {
+            return { ...c, _negated: true };
+        }
+        return { ...c, _negated: false };
+    });
 
     // All cyclic orientation constraints should start with 'cyclic'
     let cyclicConstraints: CyclicOrientationConstraint[] = typedConstraints.filter(c => c.cyclic)
         .map(c => {
-            
+
             if(!c.cyclic.selector) {
                 throw new Error("Cyclic constraint must have a selector");
             }
 
             return new CyclicOrientationConstraint(
                 c.cyclic.direction || "clockwise",
-                c.cyclic.selector
+                c.cyclic.selector,
+                c._negated
             );
         });
 
@@ -633,7 +653,8 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
 
             let roc = new RelativeOrientationConstraint(
                 constr.directions,
-                constr.selector
+                constr.selector,
+                c._negated
             );
             isInternallyConsistent = roc.isInternallyConsistent();
             if(!isInternallyConsistent) {
@@ -668,7 +689,8 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
                 c.group.field,
                 c.group.groupOn,
                 c.group.addToGroup,
-                c.group.selector
+                c.group.selector,
+                c._negated
             );
 
             // return {
@@ -682,15 +704,17 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
     byfield = removeDuplicateGroupByFieldConstraints(byfield);
 
     let byselector: GroupBySelector[] = typedConstraints.filter(c => c.group)
-        .filter(c => c.group.selector && c.group.name && !c.group.field)
+        .filter(c => c.group.selector && !c.group.field)
         .map(c => {
             if(!c.group.selector) {
                 throw new Error("Grouping constraint must have a selector.");
             }
-            if(!c.group.name) {
+            if(!c.group.name && !c._negated) {
                 throw new Error("Grouping constraint must have a name.");
             }
-            return new GroupBySelector(c.group.selector, c.group.name, c.group.addEdge);
+            // Auto-generate name for negated groups without one
+            const name = c.group.name || `_not_group_${c.group.selector}`;
+            return new GroupBySelector(c.group.selector, name, c.group.addEdge, c._negated);
         });
 
     // Remove duplicate group by selector constraints
@@ -708,7 +732,8 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
 
             let alignConstraint = new AlignConstraint(
                 c.align.direction,
-                c.align.selector
+                c.align.selector,
+                c._negated
             );
             
             if(!alignConstraint.isInternallyConsistent()) {

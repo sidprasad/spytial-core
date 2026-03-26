@@ -225,6 +225,84 @@ Groups elements based on a relational field (tuple-based grouping).
 
 ---
 
+### Negation (`hold: never`)
+
+Any constraint can be negated by adding `hold: never`. By default, all constraints implicitly have `hold: always`. A negated constraint asserts that the relationship must **never** hold.
+
+```yaml
+- orientation:
+    selector: <binary-selector>
+    directions: [<direction>, ...]
+    hold: never
+
+- align:
+    selector: <binary-selector>
+    direction: <alignment>
+    hold: never
+
+- cyclic:
+    selector: <binary-selector>
+    direction: <rotation>
+    hold: never
+
+- group:
+    selector: <n-ary-selector>   # name is optional for hold: never
+    hold: never
+```
+
+**Fields:**
+
+| Field | Required | Type | Default | Description |
+|-------|----------|------|---------|-------------|
+| `hold` | No | string | `always` | `always` (constraint must hold) or `never` (constraint must not hold) |
+
+**Semantics:**
+
+| Positive | `hold: never` meaning |
+|----------|----------------------|
+| `above` | A.y ≤ B.y (at same level or below) |
+| `below` | A.y ≥ B.y (at same level or above) |
+| `left` | A.x ≥ B.x (at same position or right) |
+| `right` | A.x ≤ B.x (at same position or left) |
+| `align horizontal` | Must have different Y coordinates (disjunction: one above the other) |
+| `align vertical` | Must have different X coordinates (disjunction: one left of the other) |
+| `cyclic clockwise` | No valid clockwise rotation holds (De Morgan over rotational alternatives) |
+| `group` | No clean bounding rectangle can contain exactly these members |
+
+For groups, `hold: never` asserts that no axis-aligned rectangle can contain exactly the group's members without also containing a non-member. No visual rectangle is drawn. The `name` field is optional (auto-generated if omitted).
+
+**Examples:**
+
+```yaml
+# Ensure children NEVER appear above parents
+- orientation:
+    selector: parent
+    directions: [above]
+    hold: never
+
+# Nodes must NEVER be horizontally aligned
+- align:
+    selector: A->B
+    direction: horizontal
+    hold: never
+
+# Do NOT arrange states clockwise
+- cyclic:
+    selector: nextState
+    direction: clockwise
+    hold: never
+
+# No clean rectangle can contain just these nodes
+- group:
+    selector: Alpha
+    hold: never
+```
+
+**Restrictions:**
+- Double negation is not supported.
+
+---
+
 ### Size Constraint
 
 Sets the width and height of nodes matching a selector. (Can also be used as a directive.)
@@ -692,6 +770,12 @@ constraints:
   - cyclic:
       selector: nextState
       direction: clockwise
+
+  # Negation: siblings must NEVER be vertically stacked
+  - orientation:
+      selector: siblings
+      directions: [above]
+      hold: never
 
 directives:
   # Visual styling
