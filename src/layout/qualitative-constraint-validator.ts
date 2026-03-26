@@ -277,6 +277,7 @@ class WeightedPartialOrderGraph {
      * Returns true if the chain would overflow.
      */
     wouldOverflow(a: string, b: string, maxSpan: number): boolean {
+        if (!this.adj.has(a) || !this.adj.has(b)) return false; // Unknown node — can't overflow
         if (this.canReach(b, a)) return true; // Cycle
 
         this.adj.get(a)!.add(b);
@@ -1020,11 +1021,9 @@ class QualitativeConstraintValidator {
             if (group.negated) continue; // Negated groups handled below
 
             const memberIds = new Set(group.nodeIds);
-
-            // Resolve member LayoutNodes for member-by-member encoding
-            const members = group.nodeIds
-                .map(id => nodeById.get(id))
-                .filter((n): n is LayoutNode => n !== undefined);
+            const groupId = `_group_${group.name}`;
+            this.hGraph.ensureNode(groupId);
+            this.vGraph.ensureNode(groupId);
 
             for (const node of this.nodes) {
                 if (memberIds.has(node.id)) continue;
@@ -1032,22 +1031,11 @@ class QualitativeConstraintValidator {
                 if (nodeGroups && nodeGroups.size > 0) continue;
 
                 const sourceConstraint = group.sourceConstraint;
-
-                // Encode exclusion using direct member-by-member constraints.
-                // "N is outside the group" = N is on one side of ALL members:
-                //   left:   Left(N, M, D) for every M  — N is left of every member
-                //   right:  Left(M, N, D) for every M  — N is right of every member
-                //   top:    Top(N, M, D) for every M   — N is above every member
-                //   bottom: Top(M, N, D) for every M   — N is below every member
-                //
-                // This member-by-member encoding establishes direct ordering edges
-                // between N and members, ensuring transitivity with NOT group's
-                // member-bracketing constraints (which also use direct edges).
                 const alts: LayoutConstraint[][] = [
-                    members.map(m => ({ left: node, right: m, minDistance: this.minPadding, sourceConstraint } as LeftConstraint)),
-                    members.map(m => ({ left: m, right: node, minDistance: this.minPadding, sourceConstraint } as LeftConstraint)),
-                    members.map(m => ({ top: node, bottom: m, minDistance: this.minPadding, sourceConstraint } as TopConstraint)),
-                    members.map(m => ({ top: m, bottom: node, minDistance: this.minPadding, sourceConstraint } as TopConstraint)),
+                    [{ group, node, side: 'left' as const, minDistance: this.minPadding, sourceConstraint } as BoundingBoxConstraint],
+                    [{ group, node, side: 'right' as const, minDistance: this.minPadding, sourceConstraint } as BoundingBoxConstraint],
+                    [{ group, node, side: 'top' as const, minDistance: this.minPadding, sourceConstraint } as BoundingBoxConstraint],
+                    [{ group, node, side: 'bottom' as const, minDistance: this.minPadding, sourceConstraint } as BoundingBoxConstraint],
                 ];
                 const disj = new DisjunctiveConstraint(sourceConstraint, alts);
                 if (!this.layout.disjunctiveConstraints) this.layout.disjunctiveConstraints = [];
@@ -1405,24 +1393,6 @@ class QualitativeConstraintValidator {
                 continue;
             }
 
-            // Graph-based propagation: re-check unassigned disjunctions against
-            // current ordering graphs. Prune alternatives that would create cycles
-            // or alignment conflicts, and force-assign unit disjunctions.
-            // This implements Rules T, S, F from the reference solver.
-            const graphPropResult = this.graphPropagate(assigned);
-            if (graphPropResult === 'conflict') {
-                if (this.decisionLevel === 0) return { satisfiable: false, provedUnsat: true };
-
-                // Graph-propagation conflicts don't fit neatly into CDCL clause
-                // analysis, so we simply backtrack to the previous decision level.
-                this.conflictCount++;
-                conflictsSinceRestart++;
-                this.backtrackTo(this.decisionLevel - 1, assigned);
-
-                if (conflictsSinceRestart >= this.restartThreshold) return { satisfiable: false, provedUnsat: false };
-                continue;
-            }
-
             if (this.allAssigned(assigned, numDisjunctions)) return { satisfiable: true };
 
             const { dIdx, aIdx } = this.pickBranch(assigned);
@@ -1510,46 +1480,10 @@ class QualitativeConstraintValidator {
      *
      * This implements Rules T (transitivity), S (candidate pruning), and F
      * (forced choice) from the reference solver.
+     * NOTE: Currently disabled — causes regressions with alignment backtracking.
+     * See #378 for the proper implementation plan.
      */
-    private graphPropagate(assigned: Int32Array): 'ok' | 'conflict' {
-        let changed = true;
-        let iteration = 0;
-        while (changed) {
-            changed = false;
-            iteration++;
-            for (let d = 0; d < this.allDisjunctions.length; d++) {
-                if (assigned[d] !== -1) continue; // Already assigned
-
-                const disj = this.allDisjunctions[d];
-                let feasibleCount = 0;
-                let lastFeasibleIdx = -1;
-
-                for (let a = 0; a < disj.alternatives.length; a++) {
-                    if (this.isAlternativeFeasible(disj.alternatives[a])) {
-                        feasibleCount++;
-                        lastFeasibleIdx = a;
-                    }
-                }
-
-                if (feasibleCount === 0) {
-                    this.lastConflictDisjunction = d;
-                    return 'conflict';
-                }
-
-                if (feasibleCount === 1) {
-                    if (!this.tryAssign(d, lastFeasibleIdx, assigned, false)) {
-                        this.lastConflictDisjunction = d;
-                        return 'conflict';
-                    }
-                    changed = true;
-                }
-            }
-        }
-        return 'ok';
-    }
-
-    /** Index of the disjunction that caused the last graph-propagation conflict */
-    private lastConflictDisjunction: number = -1;
+    // private graphPropagate — removed pending #378
 
     private getRemainingAlternatives(dIdx: number, assigned: Int32Array): number[] {
         const disj = this.allDisjunctions[dIdx];
