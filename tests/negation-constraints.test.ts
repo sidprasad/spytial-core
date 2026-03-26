@@ -1029,10 +1029,10 @@ const fourNodeGroupData: IJsonDataInstance = {
 };
 
 describe('NOT group constraint integration', () => {
-    it('NOT GROUP with 1 member parses and generates negated group', () => {
-        // 1-member group: the encoding creates 1 alternative with 4 constraints
-        // that forces the non-member to the same position as the member.
-        // The qualitative solver treats this as a cycle (strict ordering A<B and B<A).
+    it('NOT GROUP with 1 member is unsatisfiable (cycle: non-member forced to same position)', () => {
+        // 1-member group {A}, non-member B: the only alternative forces B at same
+        // position as A (Left(A,B,0) ∧ Left(B,A,0) ∧ Top(A,B,0) ∧ Top(B,A,0)).
+        // The qualitative solver detects the cycle (A<B and B<A on both axes).
         const data: IJsonDataInstance = {
             atoms: [
                 { id: 'A', type: 'Small', label: 'A' },
@@ -1050,15 +1050,16 @@ constraints:
         name: singleGroup
 `);
 
-        // Verify the spec parsed correctly with negated=true
-        const groupConstraints = spec.constraints.grouping.byselector;
-        expect(groupConstraints).toHaveLength(1);
-        expect(groupConstraints[0].negated).toBe(true);
-        expect(groupConstraints[0].name).toBe('singleGroup');
+        const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
+        const { error } = layoutInstance.generateLayout(instance);
+
+        expect(error).not.toBeNull();
     });
 
-    it('NOT GROUP where all nodes are members creates empty disjunction', () => {
+    it('NOT GROUP where all nodes are members is unsatisfiable (no witness)', () => {
         // All 3 atoms are type Node → all are members → no non-members → 0 alternatives
+        const instance = new JSONDataInstance(threeNodeGroupData);
+        const evaluator = createEvaluator(instance);
         const spec = parseLayoutSpec(`
 constraints:
   - not:
@@ -1067,10 +1068,11 @@ constraints:
         name: everyoneGroup
 `);
 
-        // Verify the spec parsed correctly
-        const groupConstraints = spec.constraints.grouping.byselector;
-        expect(groupConstraints).toHaveLength(1);
-        expect(groupConstraints[0].negated).toBe(true);
+        const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
+        const { error } = layoutInstance.generateLayout(instance);
+
+        // No non-members → 0 alternatives → unsatisfiable
+        expect(error).not.toBeNull();
     });
 
     it('NOT GROUP with 2 members and 2 non-members generates correct alternative count', () => {

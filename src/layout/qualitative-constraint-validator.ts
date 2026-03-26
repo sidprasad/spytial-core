@@ -447,6 +447,7 @@ class QualitativeConstraintValidator {
     private activityDecay: number = 0.95;
     private conflictCount: number = 0;
     private restartThreshold: number = 32;
+    private emptyDisjunctionError: PositionalConstraintError | null = null;
     private lubyIndex: number = 0;
 
     // ─── Node lookup ───
@@ -508,6 +509,11 @@ class QualitativeConstraintValidator {
 
         // Phase 6: Interval decomposition — resolve what we can before CDCL
         this.presolveDisjunctions();
+
+        // Phase 6b: Handle truly empty disjunctions (no alternatives at all)
+        if (this.emptyDisjunctionError) {
+            return this.enforceMaximalFeasibleSubset(this.emptyDisjunctionError);
+        }
 
         // Phase 7: CDCL search on remaining disjunctions
         if (this.allDisjunctions.length > 0) {
@@ -681,13 +687,27 @@ class QualitativeConstraintValidator {
             }
 
             if (validAlternatives.length === 0) {
-                remaining.push(disj);
+                if (disj.alternatives.length === 0) {
+                    // Truly empty disjunction (e.g. NOT GROUP with all nodes as members).
+                    // No alternatives exist at all — CDCL can't handle this, so mark as failed.
+                    remaining.push(disj);
+                    this.emptyDisjunctionError = this.buildDisjunctiveError(disj);
+                } else {
+                    // All alternatives pruned — pass to CDCL for proper conflict analysis.
+                    remaining.push(disj);
+                }
             } else if (validAlternatives.length === 1) {
                 // Unit — commit directly
                 let committed = true;
                 for (const constraint of validAlternatives[0]) {
                     const error = this.addConjunctiveConstraint(constraint);
-                    if (error) { committed = false; remaining.push(disj); break; }
+                    if (error) {
+                        // The only valid alternative failed to commit.
+                        // Pass the original disjunction to CDCL for proper error reporting.
+                        committed = false;
+                        remaining.push(disj);
+                        break;
+                    }
                 }
                 if (committed) this.prunedByDecomposition++;
             } else {
@@ -700,6 +720,34 @@ class QualitativeConstraintValidator {
         }
 
         this.allDisjunctions = remaining;
+    }
+
+    /**
+     * Builds a PositionalConstraintError for a disjunction that has no satisfiable alternatives.
+     */
+    private buildDisjunctiveError(disj: DisjunctiveConstraint): PositionalConstraintError {
+        const constraint = disj.alternatives[0]?.[0]
+            ?? this.addedConstraints[this.addedConstraints.length - 1]
+            ?? this.orientationConstraints[0];
+        const minimalConflictingSet = new Map();
+        minimalConflictingSet.set(disj.sourceConstraint, disj.alternatives[0] ?? []);
+        // Include existing constraints that may contribute to the conflict
+        for (const c of this.addedConstraints) {
+            if (!minimalConflictingSet.has(c.sourceConstraint)) {
+                minimalConflictingSet.set(c.sourceConstraint, []);
+            }
+            minimalConflictingSet.get(c.sourceConstraint)!.push(c);
+        }
+
+        return {
+            name: 'PositionalConstraintError',
+            type: 'positional-conflict',
+            message: `No satisfiable alternative for disjunction from ${disj.sourceConstraint?.toHTML?.() ?? 'unknown'}`,
+            conflictingConstraint: constraint,
+            conflictingSourceConstraint: disj.sourceConstraint,
+            minimalConflictingSet,
+            maximalFeasibleSubset: [...this.addedConstraints],
+        } as PositionalConstraintError;
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
