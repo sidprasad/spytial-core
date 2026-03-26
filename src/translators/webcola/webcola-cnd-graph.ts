@@ -1551,9 +1551,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
     const hasPriorPositions = !!(resolvedState && resolvedState.positions.length > 0);
     const hasPriorTransform = this.hasValidTransform(resolvedState?.transform);
-    // Build the options the translator will see (only priorPositions)
+    // Build the options the translator will see.
+    // lockUnconstrainedNodes is gated on useReducedIterations so that only
+    // stability-mode layouts lock nodes; morph transitions keep nodes free.
     const translatorOptions: WebColaLayoutOptions | undefined = hasPriorPositions
-      ? { priorPositions: resolvedState }
+      ? { priorPositions: resolvedState, lockUnconstrainedNodes: useReducedIterations }
       : undefined;
 
     this.applyViewportRenderPolicy(hasPriorPositions, hasPriorTransform);

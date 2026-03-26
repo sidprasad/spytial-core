@@ -195,6 +195,22 @@ export interface WebColaLayoutOptions {
    * If omitted, the element-level `transition-mode` attribute is used.
    */
   transitionMode?: WebColaRenderTransitionMode;
+
+  /**
+   * When true, nodes with prior positions that are NOT involved in any
+   * constraint get fixed=1 (locked at their prior position).
+   *
+   * Webcola's gradient descent inflates the Hessian diagonal for locked
+   * nodes, creating a strong spring toward the prior position.
+   * `toColaConstraint()` sets fixed=0 on every node involved in a
+   * constraint so that alignment-edge spring forces and gradient descent
+   * can freely position them.
+   *
+   * Seeding prior positions on all nodes (including constrained ones)
+   * still helps: it gives gradient descent a good starting neighborhood,
+   * reducing drift even for unlocked nodes.
+   */
+  lockUnconstrainedNodes?: boolean;
 }
 
 // WebCola constraint types
@@ -255,6 +271,9 @@ export class WebColaLayout {
    */
   private priorPositionMap: Map<string, NodePositionHint>;
 
+  /** When true, lock unconstrained nodes with prior positions via fixed=1. */
+  private lockUnconstrainedNodes: boolean;
+
   constructor(instanceLayout: InstanceLayout, fig_height: number = 800, fig_width: number = 800, options?: WebColaLayoutOptions) {
 
     this.FIG_HEIGHT = fig_height;
@@ -275,6 +294,8 @@ export class WebColaLayout {
         this.priorPositionMap.set(hint.id, hint);
       }
     }
+
+    this.lockUnconstrainedNodes = options?.lockUnconstrainedNodes ?? false;
 
     // Can I create a DAGRE graph here.
     try {
@@ -567,10 +588,12 @@ export class WebColaLayout {
    * 2. DAGRE-computed positions (if DAGRE graph is available)
    * 3. Default center position (DEFAULT_X, DEFAULT_Y)
    * 
-   * Note: When using prior positions, we don't set fixed=1 because we want
-   * the layout to still optimize positions while using prior positions as
-   * initial values. This allows the layout engine to make adjustments as needed
-   * while starting from a known good position.
+   * When `lockUnconstrainedNodes` is true (stability mode), nodes with
+   * prior positions are initially locked (fixed=1).  `toColaConstraint()`
+   * later sets fixed=0 on any node involved in a constraint, so only
+   * truly unconstrained nodes stay locked.  Seeding the prior position
+   * on constrained nodes still helps by giving gradient descent a good
+   * starting neighborhood.
    * 
    * @param node - The LayoutNode to convert
    * @returns NodeWithMetadata for WebCola
@@ -587,6 +610,9 @@ export class WebColaLayout {
     if (priorPosition) {
       x = priorPosition.x;
       y = priorPosition.y;
+      if (this.lockUnconstrainedNodes) {
+        fixed = 1; // Lock at prior position; toColaConstraint() unlocks if constrained
+      }
       //console.log(`Node ${node.id}: Using prior position (${x.toFixed(2)}, ${y.toFixed(2)})`);
     } else if (this.priorPositionMap.size > 0) {
       // We have prior positions but this node wasn't found - log for debugging
@@ -710,13 +736,17 @@ export class WebColaLayout {
 
   private toColaConstraint(constraint: LayoutConstraint): ColaConstraint {
 
-    // Switch on the type of constraint
+    // Switch on the type of constraint.
+    // Nodes involved in constraints get fixed=0 so that gradient descent
+    // (and alignment-edge spring forces) can freely position them.
+    // Unconstrained nodes keep fixed=1 from toColaNode() so they stay
+    // anchored at their prior positions.
     if (isLeftConstraint(constraint)) {
 
       // Get the two nodes that are being constrained
       let node1 = this.colaNodes[this.getNodeIndex(constraint.left.id)];
       let node2 = this.colaNodes[this.getNodeIndex(constraint.right.id)];
-      //      // Set fixed to 0 here.
+      // Free constrained nodes so alignment edges and gradient descent work
       node1.fixed = 0;
       node2.fixed = 0;
 
@@ -731,10 +761,10 @@ export class WebColaLayout {
       // Get the two nodes that are being constrained
       let node1 = this.colaNodes[this.getNodeIndex(constraint.top.id)];
       let node2 = this.colaNodes[this.getNodeIndex(constraint.bottom.id)];
-      //      // Set fixed to 0 here.
+      // Free constrained nodes so alignment edges and gradient descent work
       node1.fixed = 0;
       node2.fixed = 0;
-      
+
       // Use improved vertical separation calculation based on actual node dimensions
       let distance = this.computeVerticalSeparation(node1, node2, constraint.minDistance);
 
@@ -742,7 +772,6 @@ export class WebColaLayout {
     }
 
     if (isAlignmentConstraint(constraint)) {
-      // Is this right or do I have to switch axes. Check.
       const alignmentConstraint = {
         type: "separation",
         axis: constraint.axis,
@@ -752,10 +781,9 @@ export class WebColaLayout {
         'equality': true
       }
 
-      // FInd the two cola nodes that are being aligned
+      // Free constrained nodes so alignment edges and gradient descent work
       let node1 = this.colaNodes[this.getNodeIndex(constraint.node1.id)];
       let node2 = this.colaNodes[this.getNodeIndex(constraint.node2.id)];
-      //      // Set fixed to 0 here.
       node1.fixed = 0;
       node2.fixed = 0;
 
