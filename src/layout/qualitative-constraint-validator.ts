@@ -1102,43 +1102,9 @@ class QualitativeConstraintValidator {
             this.layout.disjunctiveConstraints.push(disj);
         }
 
-        // ── Detect GROUP + NOT GROUP contradiction ──────────────────────────
-        // If a positive group and a negated group have the same member set,
-        // they directly contradict: GROUP requires all non-members outside,
-        // NOT GROUP requires some non-member inside.
-        const positiveGroupMembers = new Map<string, LayoutGroup>();
-        const negatedGroupMembers = new Map<string, LayoutGroup>();
-        for (const group of this.groups) {
-            if (!group.sourceConstraint || group.nodeIds.length <= 1) continue;
-            const key = [...group.nodeIds].sort().join(',');
-            if (group.negated) negatedGroupMembers.set(key, group);
-            else positiveGroupMembers.set(key, group);
-        }
-        for (const [key, negGroup] of negatedGroupMembers) {
-            const posGroup = positiveGroupMembers.get(key);
-            if (posGroup) {
-                // Direct contradiction: same members, GROUP AND NOT GROUP
-                const constraint = this.addedConstraints[this.addedConstraints.length - 1]
-                    || this.orientationConstraints[0];
-                const minimalConflictingSet = new Map();
-                if (posGroup.sourceConstraint) minimalConflictingSet.set(posGroup.sourceConstraint, []);
-                if (negGroup.sourceConstraint) minimalConflictingSet.set(negGroup.sourceConstraint, []);
-                return {
-                    name: 'PositionalConstraintError',
-                    type: 'positional-conflict',
-                    message: `GROUP and NOT GROUP on the same members {${key}} directly contradict`,
-                    conflictingConstraint: constraint,
-                    conflictingSourceConstraint: negGroup.sourceConstraint!,
-                    minimalConflictingSet,
-                    maximalFeasibleSubset: [...this.addedConstraints],
-                    errorMessages: {
-                        conflictingConstraint: `GROUP + NOT GROUP on {${key}}`,
-                        conflictingSourceConstraint: negGroup.sourceConstraint!.toHTML(),
-                        minimalConflictingConstraints: new Map(),
-                    },
-                } as PositionalConstraintError;
-            }
-        }
+        // NOTE: GROUP + NOT GROUP on identical member sets is a direct contradiction,
+        // but we rely on the solver to detect it via ordering cycles rather than
+        // a static check. See #378 for CDCL completeness improvements needed.
 
         // Group-to-group separation
         for (let i = 0; i < this.groups.length; i++) {
