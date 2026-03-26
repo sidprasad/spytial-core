@@ -98,14 +98,14 @@ function createLayout(
 // ─── YAML Parsing Tests ─────────────────────────────────────────────────────
 
 describe('NOT constraint YAML parsing', () => {
-    it('parses not: orientation with negated=true', () => {
+    it('parses orientation with hold: never', () => {
         const spec = parseLayoutSpec(`
 constraints:
-  - not:
-      orientation:
-        selector: r
-        directions:
-          - above
+  - orientation:
+      selector: r
+      directions:
+        - above
+      hold: never
 `);
         const relConstraints = spec.constraints.orientation.relative;
         expect(relConstraints).toHaveLength(1);
@@ -114,13 +114,13 @@ constraints:
         expect(relConstraints[0].selector).toBe('r');
     });
 
-    it('parses not: align with negated=true', () => {
+    it('parses align with hold: never', () => {
         const spec = parseLayoutSpec(`
 constraints:
-  - not:
-      align:
-        selector: r
-        direction: horizontal
+  - align:
+      selector: r
+      direction: horizontal
+      hold: never
 `);
         const alignConstraints = spec.constraints.alignment;
         expect(alignConstraints).toHaveLength(1);
@@ -128,13 +128,13 @@ constraints:
         expect(alignConstraints[0].direction).toBe('horizontal');
     });
 
-    it('parses not: cyclic with negated=true', () => {
+    it('parses cyclic with hold: never', () => {
         const spec = parseLayoutSpec(`
 constraints:
-  - not:
-      cyclic:
-        selector: next
-        direction: clockwise
+  - cyclic:
+      selector: next
+      direction: clockwise
+      hold: never
 `);
         const cyclicConstraints = spec.constraints.orientation.cyclic;
         expect(cyclicConstraints).toHaveLength(1);
@@ -142,13 +142,13 @@ constraints:
         expect(cyclicConstraints[0].direction).toBe('clockwise');
     });
 
-    it('parses not: group with negated=true', () => {
+    it('parses group with hold: never', () => {
         const spec = parseLayoutSpec(`
 constraints:
-  - not:
-      group:
-        selector: nodes
-        name: myGroup
+  - group:
+      selector: nodes
+      name: myGroup
+      hold: never
 `);
         const groupConstraints = spec.constraints.grouping.byselector;
         expect(groupConstraints).toHaveLength(1);
@@ -156,14 +156,14 @@ constraints:
         expect(groupConstraints[0].name).toBe('myGroup');
     });
 
-    it('parses not: group by field with negated=true', () => {
+    it('parses group by field with hold: never', () => {
         const spec = parseLayoutSpec(`
 constraints:
-  - not:
-      group:
-        field: r
-        groupOn: 0
-        addToGroup: 1
+  - group:
+      field: r
+      groupOn: 0
+      addToGroup: 1
+      hold: never
 `);
         const groupConstraints = spec.constraints.grouping.byfield;
         expect(groupConstraints).toHaveLength(1);
@@ -188,11 +188,11 @@ constraints:
       selector: r
       directions:
         - above
-  - not:
-      orientation:
-        selector: r
-        directions:
-          - above
+  - orientation:
+      selector: r
+      directions:
+        - above
+      hold: never
 `);
         const relConstraints = spec.constraints.orientation.relative;
         expect(relConstraints).toHaveLength(2);
@@ -200,15 +200,15 @@ constraints:
         expect(relConstraints.filter(c => !c.negated)).toHaveLength(1);
     });
 
-    it('parses not: orientation with multiple directions', () => {
+    it('parses orientation with hold: never and multiple directions', () => {
         const spec = parseLayoutSpec(`
 constraints:
-  - not:
-      orientation:
-        selector: r
-        directions:
-          - above
-          - left
+  - orientation:
+      selector: r
+      directions:
+        - above
+        - left
+      hold: never
 `);
         const relConstraints = spec.constraints.orientation.relative;
         expect(relConstraints).toHaveLength(1);
@@ -216,13 +216,13 @@ constraints:
         expect(relConstraints[0].directions).toEqual(['above', 'left']);
     });
 
-    it('parses not: cyclic with counterclockwise', () => {
+    it('parses cyclic with hold: never and counterclockwise', () => {
         const spec = parseLayoutSpec(`
 constraints:
-  - not:
-      cyclic:
-        selector: next
-        direction: counterclockwise
+  - cyclic:
+      selector: next
+      direction: counterclockwise
+      hold: never
 `);
         const cyclicConstraints = spec.constraints.orientation.cyclic;
         expect(cyclicConstraints).toHaveLength(1);
@@ -230,13 +230,13 @@ constraints:
         expect(cyclicConstraints[0].direction).toBe('counterclockwise');
     });
 
-    it('parses not: align vertical', () => {
+    it('parses align vertical with hold: never', () => {
         const spec = parseLayoutSpec(`
 constraints:
-  - not:
-      align:
-        selector: r
-        direction: vertical
+  - align:
+      selector: r
+      direction: vertical
+      hold: never
 `);
         const alignConstraints = spec.constraints.alignment;
         expect(alignConstraints).toHaveLength(1);
@@ -247,16 +247,16 @@ constraints:
     it('deduplicates identical negated constraints', () => {
         const spec = parseLayoutSpec(`
 constraints:
-  - not:
-      orientation:
-        selector: r
-        directions:
-          - above
-  - not:
-      orientation:
-        selector: r
-        directions:
-          - above
+  - orientation:
+      selector: r
+      directions:
+        - above
+      hold: never
+  - orientation:
+      selector: r
+      directions:
+        - above
+      hold: never
 `);
         const relConstraints = spec.constraints.orientation.relative;
         expect(relConstraints).toHaveLength(1);
@@ -268,17 +268,17 @@ constraints:
   - orientation:
       selector: r
       directions: [left]
-  - not:
-      orientation:
-        selector: r
-        directions: [above]
+  - orientation:
+      selector: r
+      directions: [above]
+      hold: never
   - align:
       selector: r
       direction: horizontal
-  - not:
-      align:
-        selector: r
-        direction: vertical
+  - align:
+      selector: r
+      direction: vertical
+      hold: never
 `);
         const relConstraints = spec.constraints.orientation.relative;
         expect(relConstraints).toHaveLength(2);
@@ -405,25 +405,6 @@ constraints:
         expect(byfield[0].negated).toBe(true);
     });
 
-    it('hold: never and not: wrapper both produce negated=true', () => {
-        const spec1 = parseLayoutSpec(`
-constraints:
-  - orientation:
-      selector: r
-      directions: [above]
-      hold: never
-`);
-        const spec2 = parseLayoutSpec(`
-constraints:
-  - not:
-      orientation:
-        selector: r
-        directions:
-          - above
-`);
-        expect(spec1.constraints.orientation.relative[0].negated).toBe(true);
-        expect(spec2.constraints.orientation.relative[0].negated).toBe(true);
-    });
 });
 
 // ─── Negation Utility Function Tests ────────────────────────────────────────
@@ -733,11 +714,11 @@ describe('NOT orientation constraint integration', () => {
         const evaluator = createEvaluator(instance);
         const spec = parseLayoutSpec(`
 constraints:
-  - not:
-      orientation:
-        selector: r
-        directions:
-          - above
+  - orientation:
+      selector: r
+      directions:
+        - above
+      hold: never
 `);
 
         const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
@@ -757,11 +738,11 @@ constraints:
         const evaluator = createEvaluator(instance);
         const spec = parseLayoutSpec(`
 constraints:
-  - not:
-      orientation:
-        selector: r
-        directions:
-          - below
+  - orientation:
+      selector: r
+      directions:
+        - below
+      hold: never
 `);
 
         const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
@@ -777,11 +758,11 @@ constraints:
         const evaluator = createEvaluator(instance);
         const spec = parseLayoutSpec(`
 constraints:
-  - not:
-      orientation:
-        selector: r
-        directions:
-          - left
+  - orientation:
+      selector: r
+      directions:
+        - left
+      hold: never
 `);
 
         const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
@@ -797,11 +778,11 @@ constraints:
         const evaluator = createEvaluator(instance);
         const spec = parseLayoutSpec(`
 constraints:
-  - not:
-      orientation:
-        selector: r
-        directions:
-          - right
+  - orientation:
+      selector: r
+      directions:
+        - right
+      hold: never
 `);
 
         const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
@@ -817,11 +798,11 @@ constraints:
         const evaluator = createEvaluator(instance);
         const spec = parseLayoutSpec(`
 constraints:
-  - not:
-      orientation:
-        selector: r
-        directions:
-          - directlyAbove
+  - orientation:
+      selector: r
+      directions:
+        - directlyAbove
+      hold: never
 `);
 
         const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
@@ -842,11 +823,11 @@ constraints:
         const evaluator = createEvaluator(instance);
         const spec = parseLayoutSpec(`
 constraints:
-  - not:
-      orientation:
-        selector: r
-        directions:
-          - directlyLeft
+  - orientation:
+      selector: r
+      directions:
+        - directlyLeft
+      hold: never
 `);
 
         const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
@@ -866,12 +847,12 @@ constraints:
         const evaluator = createEvaluator(instance);
         const spec = parseLayoutSpec(`
 constraints:
-  - not:
-      orientation:
-        selector: r
-        directions:
-          - above
-          - left
+  - orientation:
+      selector: r
+      directions:
+        - above
+        - left
+      hold: never
 `);
 
         const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
@@ -897,10 +878,10 @@ constraints:
   - orientation:
       selector: r
       directions: [left]
-  - not:
-      orientation:
-        selector: r
-        directions: [above, left]
+  - orientation:
+      selector: r
+      directions: [above, left]
+      hold: never
 `);
 
         const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
@@ -920,10 +901,10 @@ constraints:
   - orientation:
       selector: r
       directions: [left]
-  - not:
-      orientation:
-        selector: r
-        directions: [above]
+  - orientation:
+      selector: r
+      directions: [above]
+      hold: never
 `);
 
         const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
@@ -944,11 +925,11 @@ constraints:
         const evaluator = createEvaluator(instance);
         const spec = parseLayoutSpec(`
 constraints:
-  - not:
-      orientation:
-        selector: r
-        directions:
-          - above
+  - orientation:
+      selector: r
+      directions:
+        - above
+      hold: never
 `);
 
         const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
@@ -967,10 +948,10 @@ describe('NOT alignment constraint integration', () => {
         const evaluator = createEvaluator(instance);
         const spec = parseLayoutSpec(`
 constraints:
-  - not:
-      align:
-        selector: r
-        direction: horizontal
+  - align:
+      selector: r
+      direction: horizontal
+      hold: never
 `);
 
         const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
@@ -989,10 +970,10 @@ constraints:
         const evaluator = createEvaluator(instance);
         const spec = parseLayoutSpec(`
 constraints:
-  - not:
-      align:
-        selector: r
-        direction: vertical
+  - align:
+      selector: r
+      direction: vertical
+      hold: never
 `);
 
         const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
@@ -1016,10 +997,10 @@ constraints:
         const evaluator = createEvaluator(instance);
         const spec = parseLayoutSpec(`
 constraints:
-  - not:
-      align:
-        selector: r
-        direction: horizontal
+  - align:
+      selector: r
+      direction: horizontal
+      hold: never
 `);
 
         const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
@@ -1037,10 +1018,10 @@ describe('NOT cyclic constraint integration', () => {
         const evaluator = createEvaluator(instance);
         const spec = parseLayoutSpec(`
 constraints:
-  - not:
-      cyclic:
-        selector: next
-        direction: clockwise
+  - cyclic:
+      selector: next
+      direction: clockwise
+      hold: never
 `);
 
         const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
@@ -1073,10 +1054,10 @@ constraints:
         const evaluator = createEvaluator(instance);
         const spec = parseLayoutSpec(`
 constraints:
-  - not:
-      cyclic:
-        selector: next
-        direction: counterclockwise
+  - cyclic:
+      selector: next
+      direction: counterclockwise
+      hold: never
 `);
 
         const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
@@ -1104,10 +1085,10 @@ constraints:
         // Now generate negated — should produce that many DisjunctiveConstraints
         const negSpec = parseLayoutSpec(`
 constraints:
-  - not:
-      cyclic:
-        selector: next
-        direction: clockwise
+  - cyclic:
+      selector: next
+      direction: clockwise
+      hold: never
 `);
         const negLayout = new LayoutInstance(negSpec, createEvaluator(new JSONDataInstance(threeNodeData)), 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
         const { layout: negResult } = negLayout.generateLayout(new JSONDataInstance(threeNodeData));
@@ -1178,10 +1159,10 @@ describe('NOT group constraint integration', () => {
         const evaluator = createEvaluator(instance);
         const spec = parseLayoutSpec(`
 constraints:
-  - not:
-      group:
-        selector: Small
-        name: singleGroup
+  - group:
+      selector: Small
+      name: singleGroup
+      hold: never
 `);
 
         const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
@@ -1196,10 +1177,10 @@ constraints:
         const evaluator = createEvaluator(instance);
         const spec = parseLayoutSpec(`
 constraints:
-  - not:
-      group:
-        selector: Node
-        name: everyoneGroup
+  - group:
+      selector: Node
+      name: everyoneGroup
+      hold: never
 `);
 
         const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
@@ -1214,10 +1195,10 @@ constraints:
         const evaluator = createEvaluator(instance);
         const spec = parseLayoutSpec(`
 constraints:
-  - not:
-      group:
-        selector: "A + B"
-        name: negGroup
+  - group:
+      selector: "A + B"
+      name: negGroup
+      hold: never
 `);
 
         const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
@@ -1249,10 +1230,10 @@ constraints:
         const evaluator = createEvaluator(instance);
         const spec = parseLayoutSpec(`
 constraints:
-  - not:
-      group:
-        selector: "A + B"
-        name: negGroup
+  - group:
+      selector: "A + B"
+      name: negGroup
+      hold: never
 `);
 
         const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
@@ -1280,10 +1261,10 @@ constraints:
   - group:
       selector: Alpha
       name: posGroup
-  - not:
-      group:
-        selector: Alpha
-        name: negGroup
+  - group:
+      selector: Alpha
+      name: negGroup
+      hold: never
 `);
 
         const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
@@ -1303,10 +1284,10 @@ constraints:
   - group:
       selector: "A + B"
       name: myGroup
-  - not:
-      group:
-        selector: "A + B"
-        name: myNegGroup
+  - group:
+      selector: "A + B"
+      name: myNegGroup
+      hold: never
 `);
 
         const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);

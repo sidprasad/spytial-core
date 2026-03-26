@@ -592,22 +592,13 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
     // Type assertion since we expect specific structure from YAML
     const rawConstraints = constraints as Record<string, any>[];
 
-    // Pre-process: determine negation from either:
-    //   1. "hold: never" field on the constraint itself (preferred)
-    //   2. "not:" wrapper (backward compat)
+    // Pre-process: determine negation from "hold: never" field
     const typedConstraints = rawConstraints.map(c => {
-        if (c.not && typeof c.not === 'object') {
-            // Legacy: unwrap the not: wrapper and mark as negated
-            return { ...c.not, _negated: true };
-        }
-        return { ...c, _negated: false };
-    }).map(c => {
-        // Check for "hold: never" inside each constraint type
         const inner = c.orientation || c.cyclic || c.align || c.group;
         if (inner && inner.hold === 'never') {
             return { ...c, _negated: true };
         }
-        return c;
+        return { ...c, _negated: false };
     });
 
     // All cyclic orientation constraints should start with 'cyclic'

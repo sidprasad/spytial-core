@@ -273,7 +273,7 @@ if (error) {
 
 ## Constraint Negation
 
-The `not:` YAML wrapper produces negated constraints. Negation maps onto the existing disjunctive framework via two mechanisms:
+The `hold: never` field produces negated constraints. Negation maps onto the existing disjunctive framework via two mechanisms:
 
 ### Orientation Negation — Conjunctive (No Disjunction)
 

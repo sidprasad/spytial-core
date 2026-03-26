@@ -299,9 +299,7 @@ For groups, `hold: never` asserts that no axis-aligned rectangle can contain exa
 ```
 
 **Restrictions:**
-- Double negation (`hold: never` combined with `not:` wrapper) is not supported.
-
-**Backward compatibility:** The `not:` wrapper syntax is still supported as an alternative to `hold: never`.
+- Double negation is not supported.
 
 ---
 

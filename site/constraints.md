@@ -339,7 +339,6 @@ constraints:
       hold: never
 ```
 
-> **Backward compatibility:** The `not:` wrapper syntax from earlier versions is still supported.
 
 ---
 
