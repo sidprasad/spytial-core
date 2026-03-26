@@ -1129,9 +1129,7 @@ constraints:
         expect(negatedGroups).toHaveLength(0);
     });
 
-    // Known limitation: GROUP + NOT GROUP contradiction detection requires
-    // containment propagation (Rule C from #378) which is not yet implemented.
-    it.skip('positive GROUP and NOT GROUP (3 nodes) is unsatisfiable', () => {
+    it('positive GROUP and NOT GROUP (3 nodes) is unsatisfiable', () => {
         // Minimal case: 2 members {A, B}, 1 non-member {C}
         const data: IJsonDataInstance = {
             atoms: [
@@ -1160,7 +1158,7 @@ constraints:
         expect(error).not.toBeNull();
     });
 
-    it.skip('positive GROUP and NOT GROUP on same members is unsatisfiable', () => {
+    it('positive GROUP and NOT GROUP on same members is unsatisfiable', () => {
         // GROUP requires all non-members outside; NOT GROUP requires some non-member inside.
         // Graph-based propagation (Rule T+S+F) detects the contradiction:
         // exclusion commits C < A, C < B → NOT group alt Left(A,C) creates cycle.

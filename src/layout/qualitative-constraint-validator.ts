@@ -1393,6 +1393,19 @@ class QualitativeConstraintValidator {
                 continue;
             }
 
+            // Graph-based propagation: re-check ordering-only disjunctions
+            // for feasibility after each assignment. Skips alignment disjunctions
+            // to avoid stale UF state.
+            const graphPropResult = this.graphPropagate(assigned);
+            if (graphPropResult === 'conflict') {
+                if (this.decisionLevel === 0) return { satisfiable: false, provedUnsat: true };
+                this.conflictCount++;
+                conflictsSinceRestart++;
+                this.backtrackTo(this.decisionLevel - 1, assigned);
+                if (conflictsSinceRestart >= this.restartThreshold) return { satisfiable: false, provedUnsat: false };
+                continue;
+            }
+
             if (this.allAssigned(assigned, numDisjunctions)) return { satisfiable: true };
 
             const { dIdx, aIdx } = this.pickBranch(assigned);
@@ -1480,10 +1493,68 @@ class QualitativeConstraintValidator {
      *
      * This implements Rules T (transitivity), S (candidate pruning), and F
      * (forced choice) from the reference solver.
-     * NOTE: Currently disabled — causes regressions with alignment backtracking.
-     * See #378 for the proper implementation plan.
+     *
+     * IMPORTANT: Only processes disjunctions whose alternatives are pure ordering
+     * constraints (Left/Top). Disjunctions containing alignment constraints are
+     * skipped — those need the CDCL's proper UF-undo backtracking to avoid stale
+     * alignment state (see alignment backtracking regression).
      */
-    // private graphPropagate — removed pending #378
+    private graphPropagate(assigned: Int32Array): 'ok' | 'conflict' {
+        // Only run when groups are present — this propagation is specifically
+        // needed for GROUP + NOT GROUP contradiction detection, where BBox
+        // exclusion disjunctions interact with NOT group bracketing disjunctions.
+        // Without groups, skip entirely to avoid interfering with the CDCL's
+        // alignment backtracking.
+        if (this.groups.length === 0) return 'ok';
+
+        let changed = true;
+        while (changed) {
+            changed = false;
+            for (let d = 0; d < this.allDisjunctions.length; d++) {
+                if (assigned[d] !== -1) continue;
+
+                const disj = this.allDisjunctions[d];
+
+                // Skip disjunctions that contain any alignment constraint —
+                // those need CDCL's proper UF-undo backtracking.
+                if (this.disjunctionHasAlignment(disj)) continue;
+
+                let feasibleCount = 0;
+                let lastFeasibleIdx = -1;
+
+                for (let a = 0; a < disj.alternatives.length; a++) {
+                    if (this.isAlternativeFeasible(disj.alternatives[a])) {
+                        feasibleCount++;
+                        lastFeasibleIdx = a;
+                    }
+                }
+
+                if (feasibleCount === 0) {
+                    return 'conflict';
+                }
+
+                if (feasibleCount === 1) {
+                    if (!this.tryAssign(d, lastFeasibleIdx, assigned, false)) {
+                        return 'conflict';
+                    }
+                    changed = true;
+                }
+            }
+        }
+        return 'ok';
+    }
+
+    /**
+     * Returns true if any alternative in the disjunction contains an alignment constraint.
+     */
+    private disjunctionHasAlignment(disj: DisjunctiveConstraint): boolean {
+        for (const alt of disj.alternatives) {
+            for (const c of alt) {
+                if (isAlignmentConstraint(c)) return true;
+            }
+        }
+        return false;
+    }
 
     private getRemainingAlternatives(dIdx: number, assigned: Int32Array): number[] {
         const disj = this.allDisjunctions[dIdx];
@@ -1570,11 +1641,38 @@ class QualitativeConstraintValidator {
             if (!this.isBoundingBoxFeasible(bc)) return false;
             const groupId = `_group_${bc.group.name}`;
             this.hGraph.ensureNode(groupId); this.vGraph.ensureNode(groupId);
+            // Rule C (Containment propagation): BBox "node on side of group" implies
+            // ordering between node and ALL group members. Add edges directly to
+            // members so NOT group's member-by-member constraints can see them.
             switch (bc.side) {
-                case 'left':   return this.hGraph.addEdge(bc.node.id, groupId);
-                case 'right':  return this.hGraph.addEdge(groupId, bc.node.id);
-                case 'top':    return this.vGraph.addEdge(bc.node.id, groupId);
-                case 'bottom': return this.vGraph.addEdge(groupId, bc.node.id);
+                case 'left':
+                    if (!this.hGraph.addEdge(bc.node.id, groupId)) return false;
+                    for (const mId of bc.group.nodeIds) {
+                        this.hGraph.ensureNode(mId);
+                        this.hGraph.addEdge(bc.node.id, mId); // C < member
+                    }
+                    return true;
+                case 'right':
+                    if (!this.hGraph.addEdge(groupId, bc.node.id)) return false;
+                    for (const mId of bc.group.nodeIds) {
+                        this.hGraph.ensureNode(mId);
+                        this.hGraph.addEdge(mId, bc.node.id); // member < C
+                    }
+                    return true;
+                case 'top':
+                    if (!this.vGraph.addEdge(bc.node.id, groupId)) return false;
+                    for (const mId of bc.group.nodeIds) {
+                        this.vGraph.ensureNode(mId);
+                        this.vGraph.addEdge(bc.node.id, mId); // C < member
+                    }
+                    return true;
+                case 'bottom':
+                    if (!this.vGraph.addEdge(groupId, bc.node.id)) return false;
+                    for (const mId of bc.group.nodeIds) {
+                        this.vGraph.ensureNode(mId);
+                        this.vGraph.addEdge(mId, bc.node.id); // member < C
+                    }
+                    return true;
             }
         }
         if (isGroupBoundaryConstraint(constraint)) {
