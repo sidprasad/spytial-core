@@ -593,7 +593,7 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
     const rawConstraints = constraints as Record<string, any>[];
 
     // Pre-process: determine negation from "hold: never" field
-    const typedConstraints = rawConstraints.map(c => {
+    const typedConstraints = rawConstraints.map((c): Record<string, any> & { _negated: boolean } => {
         const inner = c.orientation || c.cyclic || c.align || c.group;
         if (inner && inner.hold === 'never') {
             return { ...c, _negated: true };
