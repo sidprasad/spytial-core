@@ -271,6 +271,67 @@ if (error) {
 - Better error messages: Validator knows full constraint context
 - Extensible: Easy to add more disjunctive constraint types
 
+## Constraint Negation
+
+The `not:` YAML wrapper produces negated constraints. Negation maps onto the existing disjunctive framework via two mechanisms:
+
+### Orientation Negation — Conjunctive (No Disjunction)
+
+Negated orientation constraints compile to a **flipped inequality with `minDistance=0`**, not a disjunction:
+
+```
+Positive:  "A above B" → TopConstraint(A, B, D)    [A.y + D ≤ B.y]
+Negated:   "NOT A above B" → TopConstraint(B, A, 0) [B.y + 0 ≤ A.y, i.e., A.y ≤ B.y]
+```
+
+These are added directly to conjunctive constraints — no backtracking needed.
+
+### Alignment Negation — Disjunctive
+
+`NOT align horizontal` on (A, B) means A and B must **not** share the same Y coordinate. This becomes a `DisjunctiveConstraint` with two alternatives:
+
+```
+NOT(sameY(A, B)) = TopConstraint(A, B, D) OR TopConstraint(B, A, D)
+```
+
+The solver handles this like any other disjunction.
+
+### Cyclic Negation — De Morgan's Law
+
+A positive cyclic constraint is a `DisjunctiveConstraint` with N rotational alternatives:
+
+```
+Positive: Alt_1 ∨ Alt_2 ∨ ... ∨ Alt_N
+```
+
+Negation applies De Morgan's law:
+
+```
+NOT(Alt_1 ∨ ... ∨ Alt_N) = NOT(Alt_1) ∧ NOT(Alt_2) ∧ ... ∧ NOT(Alt_N)
+```
+
+Each `NOT(Alt_i)` negates a conjunction of pairwise ordering constraints:
+
+```
+NOT(c_1 ∧ c_2 ∧ ... ∧ c_k) = ¬c_1 ∨ ¬c_2 ∨ ... ∨ ¬c_k
+```
+
+Where each `¬c_j` is a flipped-0-gap constraint (per the orientation negation rule).
+
+The result: N new `DisjunctiveConstraint`s (one per original alternative), each containing k alternatives (the negated atomic constraints). The solver's conjunction of disjunctions representation handles this naturally since `disjunctiveConstraints[]` is implicitly conjunctive.
+
+### Negation Utility Functions (`interfaces.ts`)
+
+Three functions implement the algebraic negation:
+
+| Function | Input | Output | De Morgan |
+|----------|-------|--------|-----------|
+| `negateAtomicConstraint(c)` | Single `LayoutConstraint` | Flipped constraint(s) | Atom-level flip |
+| `negateConjunction(cs)` | `LayoutConstraint[]` | `LayoutConstraint[][]` | NOT(A ∧ B) = ¬A ∨ ¬B |
+| `negateDisjunction(d)` | `DisjunctiveConstraint` | `DisjunctiveConstraint[]` | NOT(A ∨ B) = ¬A ∧ ¬B |
+
+---
+
 ## Error Reporting
 
 When no satisfiable combination exists:

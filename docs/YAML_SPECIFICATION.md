@@ -225,6 +225,71 @@ Groups elements based on a relational field (tuple-based grouping).
 
 ---
 
+### Negation (`not`)
+
+Any `orientation`, `align`, or `cyclic` constraint can be negated by wrapping it in `not:`. A negated constraint asserts that the relationship must **not** hold.
+
+```yaml
+- not:
+    orientation:
+      selector: <binary-selector>
+      directions: [<direction>, ...]
+
+- not:
+    align:
+      selector: <binary-selector>
+      direction: <alignment>
+
+- not:
+    cyclic:
+      selector: <binary-selector>
+      direction: <rotation>
+```
+
+**Semantics:**
+
+Negation of an orientation constraint compiles to a **reversed inequality with zero separation**:
+- `NOT (A above B)` becomes `A.y ≤ B.y` — A is at the same level or below B.
+- This is **not** a disjunction of other directions. It is the direct negation of the ordering inequality.
+
+| Positive | Negated meaning |
+|----------|----------------|
+| `above` | A.y ≤ B.y (at same level or below) |
+| `below` | A.y ≥ B.y (at same level or above) |
+| `left` | A.x ≥ B.x (at same position or right) |
+| `right` | A.x ≤ B.x (at same position or left) |
+| `align horizontal` | Must have different Y coordinates (disjunction: one above the other) |
+| `align vertical` | Must have different X coordinates (disjunction: one left of the other) |
+| `cyclic clockwise` | No valid clockwise rotation holds (De Morgan over rotational alternatives) |
+
+**Examples:**
+
+```yaml
+# Ensure children do NOT appear above parents
+- not:
+    orientation:
+      selector: parent
+      directions: [above]
+
+# Nodes must NOT be horizontally aligned
+- not:
+    align:
+      selector: A->B
+      direction: horizontal
+
+# Do NOT arrange states clockwise
+- not:
+    cyclic:
+      selector: nextState
+      direction: clockwise
+```
+
+**Restrictions:**
+- `NOT group` is not yet supported.
+- Double negation (`not: not:`) is not supported; the parser will not recognize it.
+
+---
+
 ### Size Constraint
 
 Sets the width and height of nodes matching a selector. (Can also be used as a directive.)
@@ -692,6 +757,12 @@ constraints:
   - cyclic:
       selector: nextState
       direction: clockwise
+
+  # Negation: siblings must NOT be vertically stacked
+  - not:
+      orientation:
+        selector: siblings
+        directions: [above]
 
 directives:
   # Visual styling

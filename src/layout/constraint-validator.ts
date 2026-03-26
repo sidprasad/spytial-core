@@ -1800,7 +1800,9 @@ class ConstraintValidator {
 
             let top = tc.top;
             let bottom = tc.bottom;
-            let minDistance = top.height;
+            // For negated constraints (minDistance=0), use 0 separation;
+            // otherwise use node height to prevent visual overlap.
+            let minDistance = tc.minDistance === 0 ? 0 : top.height;
 
             const topId = this.getNodeIndex(top.id);
             const bottomId = this.getNodeIndex(bottom.id);
@@ -1820,7 +1822,9 @@ class ConstraintValidator {
 
             let left = lc.left;
             let right = lc.right;
-            let minDistance = left.width;
+            // For negated constraints (minDistance=0), use 0 separation;
+            // otherwise use node width to prevent visual overlap.
+            let minDistance = lc.minDistance === 0 ? 0 : left.width;
 
             const leftId = this.getNodeIndex(left.id);
             const rightId = this.getNodeIndex(right.id);

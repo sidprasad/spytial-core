@@ -1,5 +1,5 @@
 import { Group } from "webcola";
-import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint, GroupByField, GroupBySelector } from "./layoutspec";
+import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint, GroupByField, GroupBySelector, RelativeDirection } from "./layoutspec";
 import { EdgeStyle } from "./edge-style";
 
 export interface LayoutGroup {
@@ -212,7 +212,7 @@ export class DisjunctiveConstraint {
      * @param alternatives - An array of alternatives, where each alternative is an array of constraints that must be satisfied together.
      */
     constructor(
-        public sourceConstraint:  CyclicOrientationConstraint | GroupByField | GroupBySelector | ImplicitConstraint,
+        public sourceConstraint:  CyclicOrientationConstraint | GroupByField | GroupBySelector | ImplicitConstraint | AlignConstraint | RelativeOrientationConstraint,
         public alternatives: LayoutConstraint[][]
     ) {}
 
@@ -241,4 +241,125 @@ export class DisjunctiveConstraint {
  */
 export function isDisjunctiveConstraint(constraint: LayoutConstraint | DisjunctiveConstraint): constraint is DisjunctiveConstraint {
     return constraint instanceof DisjunctiveConstraint;
+}
+
+
+// ==================== Constraint Negation Utilities ====================
+//
+// NOT is implemented as a reversed inequality with minDistance=0:
+//   NOT TopConstraint(A, B, D) → TopConstraint(B, A, 0)
+//   NOT LeftConstraint(A, B, D) → LeftConstraint(B, A, 0)
+//   NOT AlignmentConstraint(A, B, axis) → disjunction: must differ on axis
+//
+// For compound constraints, De Morgan's law applies:
+//   NOT(C1 ∧ C2 ∧ ...) = ¬C1 ∨ ¬C2 ∨ ...   (negateConjunction)
+//   NOT(A1 ∨ A2 ∨ ...) = ¬A1 ∧ ¬A2 ∧ ...   (negateDisjunction)
+
+/**
+ * Negates a single atomic LayoutConstraint.
+ *
+ * For ordering constraints (Top/Left), negation flips the direction
+ * and sets minDistance=0, expressing the reversed ≤ inequality.
+ * e.g. NOT(A above B) = A.y ≤ B.y = TopConstraint(B, A, 0).
+ *
+ * For alignment constraints, negation produces a disjunction (the two
+ * nodes must differ on the aligned axis), returned as multiple alternatives.
+ *
+ * @returns An array of alternatives. Each alternative is a LayoutConstraint[].
+ *          For ordering constraints this is [[flipped]], for alignment [[alt1],[alt2]].
+ */
+export function negateAtomicConstraint(
+    constraint: LayoutConstraint,
+    sourceConstraint: LayoutConstraint['sourceConstraint']
+): LayoutConstraint[][] {
+    if (isTopConstraint(constraint)) {
+        // NOT (top above bottom by D) → bottom.y ≤ top.y → TopConstraint(bottom, top, 0)
+        const flipped: TopConstraint = {
+            top: constraint.bottom,
+            bottom: constraint.top,
+            minDistance: 0,
+            sourceConstraint
+        };
+        return [[flipped]];
+    }
+
+    if (isLeftConstraint(constraint)) {
+        // NOT (left left-of right by D) → right.x ≤ left.x → LeftConstraint(right, left, 0)
+        const flipped: LeftConstraint = {
+            left: constraint.right,
+            right: constraint.left,
+            minDistance: 0,
+            sourceConstraint
+        };
+        return [[flipped]];
+    }
+
+    if (isAlignmentConstraint(constraint)) {
+        // NOT (same axis) → must differ on that axis → disjunction
+        if (constraint.axis === 'y') {
+            // NOT same-Y → node1 above node2 OR node2 above node1
+            const alt1: TopConstraint = {
+                top: constraint.node1, bottom: constraint.node2,
+                minDistance: 1, sourceConstraint
+            };
+            const alt2: TopConstraint = {
+                top: constraint.node2, bottom: constraint.node1,
+                minDistance: 1, sourceConstraint
+            };
+            return [[alt1], [alt2]];
+        } else {
+            // NOT same-X → node1 left-of node2 OR node2 left-of node1
+            const alt1: LeftConstraint = {
+                left: constraint.node1, right: constraint.node2,
+                minDistance: 1, sourceConstraint
+            };
+            const alt2: LeftConstraint = {
+                left: constraint.node2, right: constraint.node1,
+                minDistance: 1, sourceConstraint
+            };
+            return [[alt1], [alt2]];
+        }
+    }
+
+    // Fallback: return original unchanged (BoundingBox, GroupBoundary — not yet supported)
+    return [[constraint]];
+}
+
+/**
+ * Negates a conjunction of constraints using De Morgan's law.
+ * NOT(C1 ∧ C2 ∧ ... ∧ Cn) = ¬C1 ∨ ¬C2 ∨ ... ∨ ¬Cn
+ *
+ * Each ¬Ci may itself produce multiple alternatives (e.g. negated alignment).
+ * All are flattened into a single set of alternatives for a DisjunctiveConstraint.
+ */
+export function negateConjunction(
+    conjunction: LayoutConstraint[],
+    sourceConstraint: LayoutConstraint['sourceConstraint']
+): LayoutConstraint[][] {
+    const alternatives: LayoutConstraint[][] = [];
+    for (const c of conjunction) {
+        const negatedAlts = negateAtomicConstraint(c, sourceConstraint);
+        alternatives.push(...negatedAlts);
+    }
+    return alternatives;
+}
+
+/**
+ * Negates a DisjunctiveConstraint using De Morgan's law.
+ * NOT(A1 ∨ A2 ∨ ... ∨ An) = ¬A1 ∧ ¬A2 ∧ ... ∧ ¬An
+ *
+ * Each ¬Ai = negateConjunction(Ai) produces a new DisjunctiveConstraint.
+ * The returned array of DisjunctiveConstraints is implicitly conjunctive
+ * (all must be satisfied), matching the existing solver contract.
+ */
+export function negateDisjunction(
+    disjunction: DisjunctiveConstraint,
+    sourceConstraint: DisjunctiveConstraint['sourceConstraint']
+): DisjunctiveConstraint[] {
+    const result: DisjunctiveConstraint[] = [];
+    for (const alternative of disjunction.alternatives) {
+        const negatedAlternatives = negateConjunction(alternative, sourceConstraint);
+        result.push(new DisjunctiveConstraint(sourceConstraint, negatedAlternatives));
+    }
+    return result;
 }
