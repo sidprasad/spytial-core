@@ -1090,7 +1090,8 @@ constraints:
         const { layout } = layoutInstance.generateLayout(instance);
 
         // Negated group should produce disjunctive constraints
-        // 2 non-members (C, D) × 2^4 member tuples = 2 × 16 = 32 alternatives
+        // 2 non-members × 2 members: with mL≠mR and mT≠mB filter,
+        // each non-member has 2P2 × 2P2 = 2×2 = 4 alternatives. Total = 2 × 4 = 8.
         expect(layout.disjunctiveConstraints).toBeDefined();
         expect(layout.disjunctiveConstraints!.length).toBeGreaterThan(0);
 
@@ -1101,7 +1102,7 @@ constraints:
             (isLeftConstraint(d.alternatives[0][0]) || isTopConstraint(d.alternatives[0][0]))
         );
         expect(negGroupDisj).toBeDefined();
-        expect(negGroupDisj!.alternatives).toHaveLength(32); // 2 non-members × 2^4
+        expect(negGroupDisj!.alternatives).toHaveLength(8); // 2 non-members × (2×1) × (2×1)
 
         // Each alternative should have exactly 4 constraints (mL≤N, N≤mR, mT≤N, N≤mB)
         for (const alt of negGroupDisj!.alternatives) {
@@ -1128,7 +1129,39 @@ constraints:
         expect(negatedGroups).toHaveLength(0);
     });
 
-    it('positive GROUP and NOT GROUP on same selector both generate disjunctions', () => {
+    it('positive GROUP and NOT GROUP (3 nodes) is unsatisfiable', () => {
+        // Minimal case: 2 members {A, B}, 1 non-member {C}
+        const data: IJsonDataInstance = {
+            atoms: [
+                { id: 'A', type: 'Alpha', label: 'A' },
+                { id: 'B', type: 'Alpha', label: 'B' },
+                { id: 'C', type: 'Beta', label: 'C' }
+            ],
+            relations: []
+        };
+        const instance = new JSONDataInstance(data);
+        const evaluator = createEvaluator(instance);
+        const spec = parseLayoutSpec(`
+constraints:
+  - group:
+      selector: Alpha
+      name: posGroup
+  - not:
+      group:
+        selector: Alpha
+        name: negGroup
+`);
+
+        const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
+        const { layout, error } = layoutInstance.generateLayout(instance);
+
+        expect(error).not.toBeNull();
+    });
+
+    it('positive GROUP and NOT GROUP on same members is unsatisfiable', () => {
+        // GROUP says: all non-members must be outside the bounding box
+        // NOT GROUP says: some non-member must be inside the bounding box
+        // These directly contradict.
         const instance = new JSONDataInstance(fourNodeGroupData);
         const evaluator = createEvaluator(instance);
         const spec = parseLayoutSpec(`
@@ -1143,16 +1176,11 @@ constraints:
 `);
 
         const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
-        const { layout } = layoutInstance.generateLayout(instance);
+        const { layout, error } = layoutInstance.generateLayout(instance);
 
-        // Both positive and negated groups should generate disjunctive constraints.
-        // The positive group generates per-non-member BoundingBoxConstraint disjunctions.
-        // The negated group generates the member-bracketing disjunction.
-        // Note: conflict detection between these depends on bounding box minimality,
-        // which is not enforced in the Kiwi solver. The qualitative solver may detect
-        // it via strict ordering cycles.
-        expect(layout.disjunctiveConstraints).toBeDefined();
-        // Should have at least the positive group's exclusion disjunctions + the negated group's
-        expect(layout.disjunctiveConstraints!.length).toBeGreaterThanOrEqual(2);
+        // The qualitative solver should detect this contradiction:
+        // NOT group places N between members (M < N < M'), which makes all 4
+        // BoundingBox exclusion sides infeasible for N.
+        expect(error).not.toBeNull();
     });
 });

@@ -1004,6 +1004,9 @@ class QualitativeConstraintValidator {
         const nodeToGroups = new Map<string, Set<LayoutGroup>>();
         for (const node of this.nodes) nodeToGroups.set(node.id, new Set());
 
+        const nodeById = new Map<string, LayoutNode>();
+        for (const node of this.nodes) nodeById.set(node.id, node);
+
         for (const group of this.groups) {
             if (group.nodeIds.length > 1 && group.sourceConstraint) {
                 for (const nodeId of group.nodeIds) {
@@ -1017,9 +1020,11 @@ class QualitativeConstraintValidator {
             if (group.negated) continue; // Negated groups handled below
 
             const memberIds = new Set(group.nodeIds);
-            const groupId = `_group_${group.name}`;
-            this.hGraph.ensureNode(groupId);
-            this.vGraph.ensureNode(groupId);
+
+            // Resolve member LayoutNodes for member-by-member encoding
+            const members = group.nodeIds
+                .map(id => nodeById.get(id))
+                .filter((n): n is LayoutNode => n !== undefined);
 
             for (const node of this.nodes) {
                 if (memberIds.has(node.id)) continue;
@@ -1027,11 +1032,22 @@ class QualitativeConstraintValidator {
                 if (nodeGroups && nodeGroups.size > 0) continue;
 
                 const sourceConstraint = group.sourceConstraint;
+
+                // Encode exclusion using direct member-by-member constraints.
+                // "N is outside the group" = N is on one side of ALL members:
+                //   left:   Left(N, M, D) for every M  — N is left of every member
+                //   right:  Left(M, N, D) for every M  — N is right of every member
+                //   top:    Top(N, M, D) for every M   — N is above every member
+                //   bottom: Top(M, N, D) for every M   — N is below every member
+                //
+                // This member-by-member encoding establishes direct ordering edges
+                // between N and members, ensuring transitivity with NOT group's
+                // member-bracketing constraints (which also use direct edges).
                 const alts: LayoutConstraint[][] = [
-                    [{ group, node, side: 'left' as const, minDistance: this.minPadding, sourceConstraint } as BoundingBoxConstraint],
-                    [{ group, node, side: 'right' as const, minDistance: this.minPadding, sourceConstraint } as BoundingBoxConstraint],
-                    [{ group, node, side: 'top' as const, minDistance: this.minPadding, sourceConstraint } as BoundingBoxConstraint],
-                    [{ group, node, side: 'bottom' as const, minDistance: this.minPadding, sourceConstraint } as BoundingBoxConstraint],
+                    members.map(m => ({ left: node, right: m, minDistance: this.minPadding, sourceConstraint } as LeftConstraint)),
+                    members.map(m => ({ left: m, right: node, minDistance: this.minPadding, sourceConstraint } as LeftConstraint)),
+                    members.map(m => ({ top: node, bottom: m, minDistance: this.minPadding, sourceConstraint } as TopConstraint)),
+                    members.map(m => ({ top: m, bottom: node, minDistance: this.minPadding, sourceConstraint } as TopConstraint)),
                 ];
                 const disj = new DisjunctiveConstraint(sourceConstraint, alts);
                 if (!this.layout.disjunctiveConstraints) this.layout.disjunctiveConstraints = [];
@@ -1044,9 +1060,6 @@ class QualitativeConstraintValidator {
         // Encoding: ∃ non-member N, ∃ members mL,mR,mT,mB such that
         //   mL ≤_x N ≤_x mR  AND  mT ≤_y N ≤_y mB
         // One flat DisjunctiveConstraint over all (N, mL, mR, mT, mB) tuples.
-        const nodeById = new Map<string, LayoutNode>();
-        for (const node of this.nodes) nodeById.set(node.id, node);
-
         for (const group of this.groups) {
             if (!group.negated || !group.sourceConstraint) continue;
 
@@ -1064,8 +1077,12 @@ class QualitativeConstraintValidator {
             for (const n of nonMembers) {
                 for (const mL of members) {
                     for (const mR of members) {
+                        // Skip same horizontal brackets: Left(M,N,0) ∧ Left(N,M,0) is a cycle
+                        if (mL.id === mR.id) continue;
                         for (const mT of members) {
                             for (const mB of members) {
+                                // Skip same vertical brackets: Top(M,N,0) ∧ Top(N,M,0) is a cycle
+                                if (mT.id === mB.id) continue;
                                 alternatives.push([
                                     { left: mL, right: n, minDistance: 0, sourceConstraint } as LeftConstraint,
                                     { left: n, right: mR, minDistance: 0, sourceConstraint } as LeftConstraint,
@@ -1083,6 +1100,44 @@ class QualitativeConstraintValidator {
             const disj = new DisjunctiveConstraint(sourceConstraint, alternatives);
             if (!this.layout.disjunctiveConstraints) this.layout.disjunctiveConstraints = [];
             this.layout.disjunctiveConstraints.push(disj);
+        }
+
+        // ── Detect GROUP + NOT GROUP contradiction ──────────────────────────
+        // If a positive group and a negated group have the same member set,
+        // they directly contradict: GROUP requires all non-members outside,
+        // NOT GROUP requires some non-member inside.
+        const positiveGroupMembers = new Map<string, LayoutGroup>();
+        const negatedGroupMembers = new Map<string, LayoutGroup>();
+        for (const group of this.groups) {
+            if (!group.sourceConstraint || group.nodeIds.length <= 1) continue;
+            const key = [...group.nodeIds].sort().join(',');
+            if (group.negated) negatedGroupMembers.set(key, group);
+            else positiveGroupMembers.set(key, group);
+        }
+        for (const [key, negGroup] of negatedGroupMembers) {
+            const posGroup = positiveGroupMembers.get(key);
+            if (posGroup) {
+                // Direct contradiction: same members, GROUP AND NOT GROUP
+                const constraint = this.addedConstraints[this.addedConstraints.length - 1]
+                    || this.orientationConstraints[0];
+                const minimalConflictingSet = new Map();
+                if (posGroup.sourceConstraint) minimalConflictingSet.set(posGroup.sourceConstraint, []);
+                if (negGroup.sourceConstraint) minimalConflictingSet.set(negGroup.sourceConstraint, []);
+                return {
+                    name: 'PositionalConstraintError',
+                    type: 'positional-conflict',
+                    message: `GROUP and NOT GROUP on the same members {${key}} directly contradict`,
+                    conflictingConstraint: constraint,
+                    conflictingSourceConstraint: negGroup.sourceConstraint!,
+                    minimalConflictingSet,
+                    maximalFeasibleSubset: [...this.addedConstraints],
+                    errorMessages: {
+                        conflictingConstraint: `GROUP + NOT GROUP on {${key}}`,
+                        conflictingSourceConstraint: negGroup.sourceConstraint!.toHTML(),
+                        minimalConflictingConstraints: new Map(),
+                    },
+                } as PositionalConstraintError;
+            }
         }
 
         // Group-to-group separation
