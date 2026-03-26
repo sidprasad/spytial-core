@@ -292,6 +292,140 @@ constraints:
     });
 });
 
+// ─── hold: always | never Syntax Tests ──────────────────────────────────────
+
+describe('hold: never YAML parsing', () => {
+    it('parses orientation with hold: never as negated', () => {
+        const spec = parseLayoutSpec(`
+constraints:
+  - orientation:
+      selector: r
+      directions: [above]
+      hold: never
+`);
+        const relConstraints = spec.constraints.orientation.relative;
+        expect(relConstraints).toHaveLength(1);
+        expect(relConstraints[0].negated).toBe(true);
+        expect(relConstraints[0].directions).toEqual(['above']);
+    });
+
+    it('parses orientation without hold as positive (default always)', () => {
+        const spec = parseLayoutSpec(`
+constraints:
+  - orientation:
+      selector: r
+      directions: [above]
+`);
+        expect(spec.constraints.orientation.relative[0].negated).toBe(false);
+    });
+
+    it('parses orientation with hold: always as positive', () => {
+        const spec = parseLayoutSpec(`
+constraints:
+  - orientation:
+      selector: r
+      directions: [above]
+      hold: always
+`);
+        expect(spec.constraints.orientation.relative[0].negated).toBe(false);
+    });
+
+    it('parses align with hold: never as negated', () => {
+        const spec = parseLayoutSpec(`
+constraints:
+  - align:
+      selector: r
+      direction: horizontal
+      hold: never
+`);
+        const alignConstraints = spec.constraints.alignment;
+        expect(alignConstraints).toHaveLength(1);
+        expect(alignConstraints[0].negated).toBe(true);
+    });
+
+    it('parses cyclic with hold: never as negated', () => {
+        const spec = parseLayoutSpec(`
+constraints:
+  - cyclic:
+      selector: next
+      direction: clockwise
+      hold: never
+`);
+        const cyclicConstraints = spec.constraints.orientation.cyclic;
+        expect(cyclicConstraints).toHaveLength(1);
+        expect(cyclicConstraints[0].negated).toBe(true);
+    });
+
+    it('parses group with hold: never (name optional)', () => {
+        const spec = parseLayoutSpec(`
+constraints:
+  - group:
+      selector: Alpha
+      hold: never
+`);
+        const groupConstraints = spec.constraints.grouping.byselector;
+        expect(groupConstraints).toHaveLength(1);
+        expect(groupConstraints[0].negated).toBe(true);
+        expect(groupConstraints[0].selector).toBe('Alpha');
+    });
+
+    it('parses group with hold: never and explicit name', () => {
+        const spec = parseLayoutSpec(`
+constraints:
+  - group:
+      selector: Alpha
+      name: myGroup
+      hold: never
+`);
+        const groupConstraints = spec.constraints.grouping.byselector;
+        expect(groupConstraints).toHaveLength(1);
+        expect(groupConstraints[0].negated).toBe(true);
+        expect(groupConstraints[0].name).toBe('myGroup');
+    });
+
+    it('positive group still requires name', () => {
+        expect(() => parseLayoutSpec(`
+constraints:
+  - group:
+      selector: Alpha
+`)).toThrow();
+    });
+
+    it('hold: never on group by field is negated', () => {
+        const spec = parseLayoutSpec(`
+constraints:
+  - group:
+      field: worksIn
+      groupOn: 1
+      addToGroup: 0
+      hold: never
+`);
+        const byfield = spec.constraints.grouping.byfield;
+        expect(byfield).toHaveLength(1);
+        expect(byfield[0].negated).toBe(true);
+    });
+
+    it('hold: never and not: wrapper both produce negated=true', () => {
+        const spec1 = parseLayoutSpec(`
+constraints:
+  - orientation:
+      selector: r
+      directions: [above]
+      hold: never
+`);
+        const spec2 = parseLayoutSpec(`
+constraints:
+  - not:
+      orientation:
+        selector: r
+        directions:
+          - above
+`);
+        expect(spec1.constraints.orientation.relative[0].negated).toBe(true);
+        expect(spec2.constraints.orientation.relative[0].negated).toBe(true);
+    });
+});
+
 // ─── Negation Utility Function Tests ────────────────────────────────────────
 
 describe('negateAtomicConstraint', () => {

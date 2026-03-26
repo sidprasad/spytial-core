@@ -267,21 +267,19 @@ Removes atoms from the visualization entirely. The atom and all its edges disapp
 
 ---
 
-## Negation (`not`)
+## Negation (`hold: never`)
 
-Any orientation, alignment, or cyclic constraint can be negated by wrapping it in `not:`. A negated constraint says "this relationship must **not** hold."
+Any constraint can be negated by adding `hold: never`. By default, all constraints have `hold: always` (implicit). A negated constraint says "this relationship must **never** hold."
 
 ```yaml
-- not:
-    <constraint-type>:
-      # ... same fields as the positive version
+- <constraint-type>:
+    # ... same fields as the positive version
+    hold: never
 ```
 
 ### Semantics
 
-Negation compiles to a **reversed inequality** — not a disjunction of alternatives.
-
-| Positive constraint | Meaning | Negated meaning |
+| Positive constraint | Meaning | `hold: never` meaning |
 |---|---|---|
 | `above` | A.y > B.y (A strictly above B) | A.y ≤ B.y (A at same level or below B) |
 | `below` | A.y < B.y | A.y ≥ B.y |
@@ -289,51 +287,59 @@ Negation compiles to a **reversed inequality** — not a disjunction of alternat
 | `right` | A.x > B.x | A.x ≤ B.x |
 | `align horizontal` | Same Y coordinate | Different Y coordinates |
 | `cyclic clockwise` | Clockwise arrangement | No valid clockwise rotation holds |
+| `group` | Clean bounding rectangle exists | No clean rectangle possible |
 
-For orientation, `NOT above` does **not** mean "below or left or right." It means the weaker claim: "A's y-coordinate is less than or equal to B's y-coordinate." This allows A and B to be at the same level (aligned) or for B to be above A.
+For orientation, `hold: never` on `above` does **not** mean "below or left or right." It means the weaker claim: "A's y-coordinate is less than or equal to B's y-coordinate." This allows A and B to be at the same level (aligned) or for B to be above A.
 
-For alignment, negation requires a disjunction — `NOT horizontal` means "one must be above the other."
+For alignment, negation requires a disjunction — `hold: never` on horizontal means "one must be above the other."
 
-For cyclic constraints, negation uses **De Morgan's law**: if the positive cyclic constraint is a disjunction of rotational alternatives, `NOT cyclic` becomes a conjunction where each rotation has at least one violated ordering.
+For cyclic constraints, negation uses **De Morgan's law**: if the positive cyclic constraint is a disjunction of rotational alternatives, `hold: never` becomes a conjunction where each rotation has at least one violated ordering.
+
+For groups, `hold: never` asserts that no axis-aligned rectangle can contain exactly the group's members without also containing a non-member. No visual rectangle is drawn. The `name` field is optional for negated groups.
 
 ### Examples
 
 ```yaml
-# Children must NOT appear above parents
-- not:
-    orientation:
-      selector: parent
-      directions: [above]
+# Children must NEVER appear above parents
+- orientation:
+    selector: parent
+    directions: [above]
+    hold: never
 
-# These two nodes must NOT be horizontally aligned
-- not:
-    align:
-      selector: A->B
-      direction: horizontal
+# These two nodes must NEVER be horizontally aligned
+- align:
+    selector: A->B
+    direction: horizontal
+    hold: never
 
 # Do NOT arrange states in a clockwise cycle
-- not:
-    cyclic:
-      selector: nextState
-      direction: clockwise
+- cyclic:
+    selector: nextState
+    direction: clockwise
+    hold: never
+
+# No clean rectangle can contain just these nodes
+- group:
+    selector: Alpha
+    hold: never
 ```
 
 ### Combining with Positive Constraints
 
-Positive and negated constraints compose naturally. For example, you can say "A is left of B but NOT above B":
+Positive and negated constraints compose naturally. For example, you can say "A is left of B but NEVER above B":
 
 ```yaml
 constraints:
   - orientation:
       selector: r
       directions: [left]
-  - not:
-      orientation:
-        selector: r
-        directions: [above]
+  - orientation:
+      selector: r
+      directions: [above]
+      hold: never
 ```
 
-> **Note:** `NOT group` is supported for selector-based groups. It asserts that no axis-aligned rectangle can contain exactly the group's members without also containing a non-member. `NOT group` does not draw a visual rectangle.
+> **Backward compatibility:** The `not:` wrapper syntax from earlier versions is still supported.
 
 ---
 

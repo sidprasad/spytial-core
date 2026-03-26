@@ -225,35 +225,41 @@ Groups elements based on a relational field (tuple-based grouping).
 
 ---
 
-### Negation (`not`)
+### Negation (`hold: never`)
 
-Any `orientation`, `align`, or `cyclic` constraint can be negated by wrapping it in `not:`. A negated constraint asserts that the relationship must **not** hold.
+Any constraint can be negated by adding `hold: never`. By default, all constraints implicitly have `hold: always`. A negated constraint asserts that the relationship must **never** hold.
 
 ```yaml
-- not:
-    orientation:
-      selector: <binary-selector>
-      directions: [<direction>, ...]
+- orientation:
+    selector: <binary-selector>
+    directions: [<direction>, ...]
+    hold: never
 
-- not:
-    align:
-      selector: <binary-selector>
-      direction: <alignment>
+- align:
+    selector: <binary-selector>
+    direction: <alignment>
+    hold: never
 
-- not:
-    cyclic:
-      selector: <binary-selector>
-      direction: <rotation>
+- cyclic:
+    selector: <binary-selector>
+    direction: <rotation>
+    hold: never
+
+- group:
+    selector: <n-ary-selector>   # name is optional for hold: never
+    hold: never
 ```
+
+**Fields:**
+
+| Field | Required | Type | Default | Description |
+|-------|----------|------|---------|-------------|
+| `hold` | No | string | `always` | `always` (constraint must hold) or `never` (constraint must not hold) |
 
 **Semantics:**
 
-Negation of an orientation constraint compiles to a **reversed inequality with zero separation**:
-- `NOT (A above B)` becomes `A.y ≤ B.y` — A is at the same level or below B.
-- This is **not** a disjunction of other directions. It is the direct negation of the ordering inequality.
-
-| Positive | Negated meaning |
-|----------|----------------|
+| Positive | `hold: never` meaning |
+|----------|----------------------|
 | `above` | A.y ≤ B.y (at same level or below) |
 | `below` | A.y ≥ B.y (at same level or above) |
 | `left` | A.x ≥ B.x (at same position or right) |
@@ -261,32 +267,41 @@ Negation of an orientation constraint compiles to a **reversed inequality with z
 | `align horizontal` | Must have different Y coordinates (disjunction: one above the other) |
 | `align vertical` | Must have different X coordinates (disjunction: one left of the other) |
 | `cyclic clockwise` | No valid clockwise rotation holds (De Morgan over rotational alternatives) |
+| `group` | No clean bounding rectangle can contain exactly these members |
+
+For groups, `hold: never` asserts that no axis-aligned rectangle can contain exactly the group's members without also containing a non-member. No visual rectangle is drawn. The `name` field is optional (auto-generated if omitted).
 
 **Examples:**
 
 ```yaml
-# Ensure children do NOT appear above parents
-- not:
-    orientation:
-      selector: parent
-      directions: [above]
+# Ensure children NEVER appear above parents
+- orientation:
+    selector: parent
+    directions: [above]
+    hold: never
 
-# Nodes must NOT be horizontally aligned
-- not:
-    align:
-      selector: A->B
-      direction: horizontal
+# Nodes must NEVER be horizontally aligned
+- align:
+    selector: A->B
+    direction: horizontal
+    hold: never
 
 # Do NOT arrange states clockwise
-- not:
-    cyclic:
-      selector: nextState
-      direction: clockwise
+- cyclic:
+    selector: nextState
+    direction: clockwise
+    hold: never
+
+# No clean rectangle can contain just these nodes
+- group:
+    selector: Alpha
+    hold: never
 ```
 
 **Restrictions:**
-- Double negation (`not: not:`) is not supported; the parser will not recognize it.
-- `NOT group` is supported: it asserts that no axis-aligned rectangle can contain exactly the group's members without also containing a non-member. Negated groups do not draw a visual rectangle.
+- Double negation (`hold: never` combined with `not:` wrapper) is not supported.
+
+**Backward compatibility:** The `not:` wrapper syntax is still supported as an alternative to `hold: never`.
 
 ---
 
@@ -758,11 +773,11 @@ constraints:
       selector: nextState
       direction: clockwise
 
-  # Negation: siblings must NOT be vertically stacked
-  - not:
-      orientation:
-        selector: siblings
-        directions: [above]
+  # Negation: siblings must NEVER be vertically stacked
+  - orientation:
+      selector: siblings
+      directions: [above]
+      hold: never
 
 directives:
   # Visual styling

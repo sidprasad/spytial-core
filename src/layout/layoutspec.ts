@@ -592,13 +592,22 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
     // Type assertion since we expect specific structure from YAML
     const rawConstraints = constraints as Record<string, any>[];
 
-    // Pre-process: unwrap "not:" wrappers and mark as negated
+    // Pre-process: determine negation from either:
+    //   1. "hold: never" field on the constraint itself (preferred)
+    //   2. "not:" wrapper (backward compat)
     const typedConstraints = rawConstraints.map(c => {
         if (c.not && typeof c.not === 'object') {
-            // Unwrap the not: wrapper and add a _negated flag
+            // Legacy: unwrap the not: wrapper and mark as negated
             return { ...c.not, _negated: true };
         }
         return { ...c, _negated: false };
+    }).map(c => {
+        // Check for "hold: never" inside each constraint type
+        const inner = c.orientation || c.cyclic || c.align || c.group;
+        if (inner && inner.hold === 'never') {
+            return { ...c, _negated: true };
+        }
+        return c;
     });
 
     // All cyclic orientation constraints should start with 'cyclic'
@@ -704,15 +713,17 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
     byfield = removeDuplicateGroupByFieldConstraints(byfield);
 
     let byselector: GroupBySelector[] = typedConstraints.filter(c => c.group)
-        .filter(c => c.group.selector && c.group.name && !c.group.field)
+        .filter(c => c.group.selector && !c.group.field)
         .map(c => {
             if(!c.group.selector) {
                 throw new Error("Grouping constraint must have a selector.");
             }
-            if(!c.group.name) {
+            if(!c.group.name && !c._negated) {
                 throw new Error("Grouping constraint must have a name.");
             }
-            return new GroupBySelector(c.group.selector, c.group.name, c.group.addEdge, c._negated);
+            // Auto-generate name for negated groups without one
+            const name = c.group.name || `_not_group_${c.group.selector}`;
+            return new GroupBySelector(c.group.selector, name, c.group.addEdge, c._negated);
         });
 
     // Remove duplicate group by selector constraints
