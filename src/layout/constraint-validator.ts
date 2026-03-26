@@ -606,8 +606,10 @@ class ConstraintValidator {
             const source = currentDisjunction.sourceConstraint;
             const minimalConflictingSet = new Map<SourceConstraint, LayoutConstraint[]>();
             minimalConflictingSet.set(source, []);
-            // Use last added constraint as the conflicting constraint for error display
-            const lastConstraint = this.added_constraints[this.added_constraints.length - 1];
+            // Use last added constraint as the conflicting constraint for error display.
+            // Fall back to a minimal placeholder if no constraints have been added yet.
+            const lastConstraint = this.added_constraints[this.added_constraints.length - 1]
+                ?? { sourceConstraint: source };
             return {
                 satisfiable: false,
                 error: {
@@ -1075,20 +1077,22 @@ class ConstraintValidator {
         // For each pair of non-overlapping groups, ensure they are separated in one direction
         
         for (let i = 0; i < this.groups.length; i++) {
+            if (this.groups[i].negated) continue; // Negated groups have no visual boundary
             for (let j = i + 1; j < this.groups.length; j++) {
+                if (this.groups[j].negated) continue;
                 const groupA = this.groups[i];
                 const groupB = this.groups[j];
-                
+
                 // Skip singletons
                 if (groupA.nodeIds.length <= 1 || groupB.nodeIds.length <= 1) {
                     continue;
                 }
-                
+
                 // Skip if one subsumes the other
                 if (this.isSubGroup(groupA, groupB) || this.isSubGroup(groupB, groupA)) {
                     continue;
                 }
-                
+
                 // Skip if groups share members - they're allowed to overlap
                 const intersection = this.groupIntersection(groupA, groupB);
                 if (intersection.length > 0) {

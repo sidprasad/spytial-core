@@ -1094,9 +1094,11 @@ class QualitativeConstraintValidator {
         // but we rely on the solver to detect it via ordering cycles rather than
         // a static check. See #378 for CDCL completeness improvements needed.
 
-        // Group-to-group separation
+        // Group-to-group separation (only between positive groups with visual boundaries)
         for (let i = 0; i < this.groups.length; i++) {
+            if (this.groups[i].negated) continue;
             for (let j = i + 1; j < this.groups.length; j++) {
+                if (this.groups[j].negated) continue;
                 const gA = this.groups[i];
                 const gB = this.groups[j];
                 if (gA.nodeIds.length <= 1 || gB.nodeIds.length <= 1) continue;
