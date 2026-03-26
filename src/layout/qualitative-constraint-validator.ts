@@ -1405,6 +1405,24 @@ class QualitativeConstraintValidator {
                 continue;
             }
 
+            // Graph-based propagation: re-check unassigned disjunctions against
+            // current ordering graphs. Prune alternatives that would create cycles
+            // or alignment conflicts, and force-assign unit disjunctions.
+            // This implements Rules T, S, F from the reference solver.
+            const graphPropResult = this.graphPropagate(assigned);
+            if (graphPropResult === 'conflict') {
+                if (this.decisionLevel === 0) return { satisfiable: false, provedUnsat: true };
+
+                // Graph-propagation conflicts don't fit neatly into CDCL clause
+                // analysis, so we simply backtrack to the previous decision level.
+                this.conflictCount++;
+                conflictsSinceRestart++;
+                this.backtrackTo(this.decisionLevel - 1, assigned);
+
+                if (conflictsSinceRestart >= this.restartThreshold) return { satisfiable: false, provedUnsat: false };
+                continue;
+            }
+
             if (this.allAssigned(assigned, numDisjunctions)) return { satisfiable: true };
 
             const { dIdx, aIdx } = this.pickBranch(assigned);
@@ -1482,6 +1500,56 @@ class QualitativeConstraintValidator {
         }
         return 'ok';
     }
+
+    /**
+     * Graph-based propagation: re-check unassigned disjunctions against the
+     * current ordering graphs (hGraph/vGraph). For each unassigned disjunction,
+     * prune alternatives that are infeasible given committed edges. If a
+     * disjunction is pruned to 0 alternatives → conflict. If pruned to 1 →
+     * force-assign (with cascade). Runs to fixpoint.
+     *
+     * This implements Rules T (transitivity), S (candidate pruning), and F
+     * (forced choice) from the reference solver.
+     */
+    private graphPropagate(assigned: Int32Array): 'ok' | 'conflict' {
+        let changed = true;
+        let iteration = 0;
+        while (changed) {
+            changed = false;
+            iteration++;
+            for (let d = 0; d < this.allDisjunctions.length; d++) {
+                if (assigned[d] !== -1) continue; // Already assigned
+
+                const disj = this.allDisjunctions[d];
+                let feasibleCount = 0;
+                let lastFeasibleIdx = -1;
+
+                for (let a = 0; a < disj.alternatives.length; a++) {
+                    if (this.isAlternativeFeasible(disj.alternatives[a])) {
+                        feasibleCount++;
+                        lastFeasibleIdx = a;
+                    }
+                }
+
+                if (feasibleCount === 0) {
+                    this.lastConflictDisjunction = d;
+                    return 'conflict';
+                }
+
+                if (feasibleCount === 1) {
+                    if (!this.tryAssign(d, lastFeasibleIdx, assigned, false)) {
+                        this.lastConflictDisjunction = d;
+                        return 'conflict';
+                    }
+                    changed = true;
+                }
+            }
+        }
+        return 'ok';
+    }
+
+    /** Index of the disjunction that caused the last graph-propagation conflict */
+    private lastConflictDisjunction: number = -1;
 
     private getRemainingAlternatives(dIdx: number, assigned: Int32Array): number[] {
         const disj = this.allDisjunctions[dIdx];

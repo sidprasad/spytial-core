@@ -1158,10 +1158,10 @@ constraints:
         expect(error).not.toBeNull();
     });
 
-    // Known limitation (#378): GROUP + NOT GROUP on same members with 2+ non-members
-    // is not detected as UNSAT by the CDCL solver. The 3-node case (1 non-member)
-    // works correctly. Fixing this requires adopting reference solver propagation rules.
-    it.skip('positive GROUP and NOT GROUP on same members is unsatisfiable (needs #378)', () => {
+    it('positive GROUP and NOT GROUP on same members is unsatisfiable', () => {
+        // GROUP requires all non-members outside; NOT GROUP requires some non-member inside.
+        // Graph-based propagation (Rule T+S+F) detects the contradiction:
+        // exclusion commits C < A, C < B → NOT group alt Left(A,C) creates cycle.
         const instance = new JSONDataInstance(fourNodeGroupData);
         const evaluator = createEvaluator(instance);
         const spec = parseLayoutSpec(`
