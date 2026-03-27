@@ -16,23 +16,73 @@ import {
     TopConstraint,
     AlignmentConstraint,
     LayoutConstraint,
+    LayoutNode,
     isLeftConstraint,
     isTopConstraint,
     isAlignmentConstraint,
 } from '../src/layout/interfaces';
-import {
-    makeNode,
-    makeLeftConstraint,
-    makeTopConstraint,
-    makeAlignConstraint,
-    DEFAULT_SRC,
-} from './helpers/layout-test-helpers';
-import {
-    arbNodes,
-    arbLeftConstraint,
-    arbTopConstraint,
-    arbAlignmentConstraint,
-} from './generators/layout-generators';
+import { RelativeOrientationConstraint } from '../src/layout/layoutspec';
+
+// ─── Helpers & Generators ────────────────────────────────────────────────────
+
+const DEFAULT_SRC = new RelativeOrientationConstraint(['above'], 'pbt');
+
+function makeNode(id: string): LayoutNode {
+    return {
+        id, label: id, color: 'black',
+        groups: [], attributes: {},
+        width: 100, height: 60,
+        mostSpecificType: 'Node', types: ['Node'], showLabels: true,
+    };
+}
+
+/** Generate an array of N distinct LayoutNodes. */
+function arbNodes(n: number): fc.Arbitrary<LayoutNode[]> {
+    return fc.constant(
+        Array.from({ length: n }, (_, i) => makeNode(String.fromCharCode(65 + i)))
+    );
+}
+
+/** Pick two distinct nodes from the array and build a LeftConstraint. */
+function arbLeftConstraint(nodes: LayoutNode[]): fc.Arbitrary<LeftConstraint> {
+    return fc.tuple(
+        fc.integer({ min: 0, max: nodes.length - 1 }),
+        fc.integer({ min: 0, max: nodes.length - 1 }),
+        fc.integer({ min: 0, max: 50 }),
+    ).filter(([i, j]) => i !== j)
+     .map(([i, j, d]) => ({
+        left: nodes[i], right: nodes[j],
+        minDistance: d, sourceConstraint: DEFAULT_SRC,
+     }));
+}
+
+/** Pick two distinct nodes from the array and build a TopConstraint. */
+function arbTopConstraint(nodes: LayoutNode[]): fc.Arbitrary<TopConstraint> {
+    return fc.tuple(
+        fc.integer({ min: 0, max: nodes.length - 1 }),
+        fc.integer({ min: 0, max: nodes.length - 1 }),
+        fc.integer({ min: 0, max: 50 }),
+    ).filter(([i, j]) => i !== j)
+     .map(([i, j, d]) => ({
+        top: nodes[i], bottom: nodes[j],
+        minDistance: d, sourceConstraint: DEFAULT_SRC,
+     }));
+}
+
+/** Pick two distinct nodes and a random axis for an AlignmentConstraint. */
+function arbAlignmentConstraint(nodes: LayoutNode[]): fc.Arbitrary<AlignmentConstraint> {
+    return fc.tuple(
+        fc.integer({ min: 0, max: nodes.length - 1 }),
+        fc.integer({ min: 0, max: nodes.length - 1 }),
+        fc.constantFrom('x' as const, 'y' as const),
+    ).filter(([i, j]) => i !== j)
+     .map(([i, j, axis]) => ({
+        axis, node1: nodes[i], node2: nodes[j],
+        sourceConstraint: DEFAULT_SRC,
+     }));
+}
+
+// ─── Tests ───────────────────────────────────────────────────────────────────
 
 const NUM_RUNS = 200;
 const TIMEOUT = 30_000;
@@ -267,7 +317,7 @@ describe('Negation PBT', () => {
                     expect(result).toHaveLength(3);
                     for (const d of result) {
                         expect(d).toBeInstanceOf(DisjunctiveConstraint);
-                        // Each negated single-constraint alternative produces 1 alternative
+                        // Each negated single-constraint alternative produces 2 alternatives
                         expect(d.alternatives.length).toBeGreaterThanOrEqual(1);
                     }
                 }
