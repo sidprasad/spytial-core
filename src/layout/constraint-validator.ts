@@ -1147,40 +1147,45 @@ class ConstraintValidator {
         }
 
         // ── Negated groups ──────────────────────────────────────────────────
-        // NOT GROUP(members) = "any rectangle containing all members also contains a non-member"
-        // Encoding: ∃ non-member N, ∃ members mL,mR,mT,mB such that
-        //   mL ≤_x N ≤_x mR  AND  mT ≤_y N ≤_y mB
-        // One flat DisjunctiveConstraint over all (N, mL, mR, mT, mB) tuples.
+        // Pure ¬: all negated groups from the same sourceConstraint are merged
+        // into a SINGLE DisjunctiveConstraint (at least one key's group must fail).
+        const negatedBySource = new Map<LayoutGroup['sourceConstraint'], LayoutGroup[]>();
         for (const group of this.groups) {
             if (!group.negated || !group.sourceConstraint) continue;
+            const key = group.sourceConstraint;
+            if (!negatedBySource.has(key)) negatedBySource.set(key, []);
+            negatedBySource.get(key)!.push(group);
+        }
 
-            const memberIds = new Set(group.nodeIds);
-            const members = group.nodeIds
-                .map(id => this.nodes.find(n => n.id === id))
-                .filter((n): n is LayoutNode => n !== undefined);
-            const nonMembers = this.nodes.filter(n => !memberIds.has(n.id));
+        for (const [source, groups] of negatedBySource) {
+            const allAlternatives: LayoutConstraint[][] = [];
 
-            const sourceConstraint = group.sourceConstraint;
-            const alternatives: LayoutConstraint[][] = [];
+            for (const group of groups) {
+                const memberIds = new Set(group.nodeIds);
+                const members = group.nodeIds
+                    .map(id => this.nodes.find(n => n.id === id))
+                    .filter((n): n is LayoutNode => n !== undefined);
+                const nonMembers = this.nodes.filter(n => !memberIds.has(n.id));
 
-            for (const n of nonMembers) {
-                for (const mL of members) {
-                    for (const mR of members) {
-                        for (const mT of members) {
-                            for (const mB of members) {
-                                alternatives.push([
-                                    { left: mL, right: n, minDistance: 0, sourceConstraint } as LeftConstraint,
-                                    { left: n, right: mR, minDistance: 0, sourceConstraint } as LeftConstraint,
-                                    { top: mT, bottom: n, minDistance: 0, sourceConstraint } as TopConstraint,
-                                    { top: n, bottom: mB, minDistance: 0, sourceConstraint } as TopConstraint,
-                                ]);
+                for (const n of nonMembers) {
+                    for (const mL of members) {
+                        for (const mR of members) {
+                            for (const mT of members) {
+                                for (const mB of members) {
+                                    allAlternatives.push([
+                                        { left: mL, right: n, minDistance: 0, sourceConstraint: source } as LeftConstraint,
+                                        { left: n, right: mR, minDistance: 0, sourceConstraint: source } as LeftConstraint,
+                                        { top: mT, bottom: n, minDistance: 0, sourceConstraint: source } as TopConstraint,
+                                        { top: n, bottom: mB, minDistance: 0, sourceConstraint: source } as TopConstraint,
+                                    ]);
+                                }
                             }
                         }
                     }
                 }
             }
 
-            const disj = new DisjunctiveConstraint(sourceConstraint, alternatives);
+            const disj = new DisjunctiveConstraint(source!, allAlternatives);
             if (!this.layout.disjunctiveConstraints) {
                 this.layout.disjunctiveConstraints = [];
             }

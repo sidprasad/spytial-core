@@ -515,6 +515,169 @@ describe('QualitativeConstraintValidator', () => {
         });
     });
 
+    describe('Negated group₂ (pure ¬, not fiberwise)', () => {
+        // Pure ¬: at least one key's group must fail.
+        // Fiberwise: every key's group must independently fail.
+        // These tests verify we use pure ¬ by showing scenarios that are
+        // satisfiable under pure ¬ but would be unsatisfiable under fiberwise.
+
+        it('positive group on key X + NOT group₂ on {X, Y} is satisfiable (only Y must fail)', () => {
+            // Setup: 6 nodes. Positive group forces {A,B,C} together (key X).
+            // Negated group₂ on same sourceConstraint has two keys:
+            //   X → {A,B,C} and Y → {D,E,F}
+            // Under pure ¬: at least one key must fail. Since X is forced to
+            //   hold by the positive constraint, Y must fail — which is fine,
+            //   D,E,F just need to NOT all be groupable. Satisfiable.
+            // Under fiberwise: BOTH X and Y must fail. But X can't fail because
+            //   the positive group forces it. Would be unsatisfiable.
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+            const d = createNode('D');
+            const e = createNode('E');
+            const f = createNode('F');
+
+            const positiveSource = new GroupByField('type', 0, 1, 'keyX');
+            const negatedSource = new GroupByField('type', 0, 1, 'neg-group2');
+
+            // Positive group: X → {A, B, C}
+            const positiveGroup: LayoutGroup = {
+                name: 'group-X',
+                nodeIds: ['A', 'B', 'C'],
+                keyNodeId: 'A',
+                showLabel: true,
+                sourceConstraint: positiveSource,
+            };
+
+            // Negated group₂ key X → {A, B, C} (same members as positive, but negated)
+            const negGroupX: LayoutGroup = {
+                name: 'neg-group-X',
+                nodeIds: ['A', 'B', 'C'],
+                keyNodeId: 'A',
+                showLabel: false,
+                sourceConstraint: negatedSource,
+                negated: true,
+            };
+
+            // Negated group₂ key Y → {D, E, F}
+            const negGroupY: LayoutGroup = {
+                name: 'neg-group-Y',
+                nodeIds: ['D', 'E', 'F'],
+                keyNodeId: 'D',
+                showLabel: false,
+                sourceConstraint: negatedSource,
+                negated: true,
+            };
+
+            const layout = createLayout(
+                [a, b, c, d, e, f],
+                [],
+                [],
+                [positiveGroup, negGroupX, negGroupY],
+            );
+            const validator = new QualitativeConstraintValidator(layout);
+            const error = validator.validateConstraints();
+
+            // Should be satisfiable: the solver can satisfy the positive group
+            // on X and break Y's grouping to satisfy the negation.
+            expect(error).toBeNull();
+        });
+
+        it('negated group₂ merges keys into single DisjunctiveConstraint', () => {
+            // Two negated groups from the same sourceConstraint should produce
+            // ONE DisjunctiveConstraint (pure ¬), not two separate ones (fiberwise).
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+            const d = createNode('D');
+
+            const negatedSource = new GroupByField('type', 0, 1, 'neg-group2');
+
+            const negGroup1: LayoutGroup = {
+                name: 'neg-key1',
+                nodeIds: ['A', 'B'],
+                keyNodeId: 'A',
+                showLabel: false,
+                sourceConstraint: negatedSource,
+                negated: true,
+            };
+
+            const negGroup2: LayoutGroup = {
+                name: 'neg-key2',
+                nodeIds: ['C', 'D'],
+                keyNodeId: 'C',
+                showLabel: false,
+                sourceConstraint: negatedSource,
+                negated: true,
+            };
+
+            const layout = createLayout(
+                [a, b, c, d],
+                [],
+                [],
+                [negGroup1, negGroup2],
+            );
+            const validator = new QualitativeConstraintValidator(layout);
+            validator.validateConstraints();
+
+            // Pure ¬: both keys' alternatives should be merged into ONE disjunction
+            // Fiberwise would produce TWO separate DisjunctiveConstraints
+            const negGroupDisjs = layout.disjunctiveConstraints?.filter(d =>
+                d.sourceConstraint === negatedSource
+            ) ?? [];
+            expect(negGroupDisjs).toHaveLength(1);
+
+            // The single disjunction should contain alternatives from BOTH keys
+            // Key1 {A,B} has non-members {C,D}, Key2 {C,D} has non-members {A,B}
+            // So alternatives should come from both keys combined
+            expect(negGroupDisjs[0].alternatives.length).toBeGreaterThan(0);
+        });
+
+        it('negated group₂ with different sources produces separate disjunctions', () => {
+            // Groups from DIFFERENT sourceConstraints should still produce
+            // separate DisjunctiveConstraints (they are independent negations).
+            const a = createNode('A');
+            const b = createNode('B');
+            const c = createNode('C');
+
+            const source1 = new GroupByField('type', 0, 1, 'neg1');
+            const source2 = new GroupByField('color', 0, 1, 'neg2');
+
+            const negGroup1: LayoutGroup = {
+                name: 'neg-s1',
+                nodeIds: ['A', 'B'],
+                keyNodeId: 'A',
+                showLabel: false,
+                sourceConstraint: source1,
+                negated: true,
+            };
+
+            const negGroup2: LayoutGroup = {
+                name: 'neg-s2',
+                nodeIds: ['B', 'C'],
+                keyNodeId: 'B',
+                showLabel: false,
+                sourceConstraint: source2,
+                negated: true,
+            };
+
+            const layout = createLayout(
+                [a, b, c],
+                [],
+                [],
+                [negGroup1, negGroup2],
+            );
+            const validator = new QualitativeConstraintValidator(layout);
+            validator.validateConstraints();
+
+            // Different sources → separate disjunctions (both must hold)
+            const negGroupDisjs = layout.disjunctiveConstraints?.filter(d =>
+                d.sourceConstraint === source1 || d.sourceConstraint === source2
+            ) ?? [];
+            expect(negGroupDisjs).toHaveLength(2);
+        });
+    });
+
     describe('Alignment order computation', () => {
         it('should produce implicit ordering constraints for aligned nodes', () => {
             const a = createNode('A');
