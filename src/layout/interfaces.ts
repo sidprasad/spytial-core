@@ -270,32 +270,44 @@ export function isDisjunctiveConstraint(constraint: LayoutConstraint | Disjuncti
  * nodes must differ on the aligned axis), returned as multiple alternatives.
  *
  * @returns An array of alternatives. Each alternative is a LayoutConstraint[].
- *          For ordering constraints this is [[flipped]], for alignment [[alt1],[alt2]].
+ *          For ordering constraints this is [[reversed],[aligned]], for alignment [[alt1],[alt2]].
  */
 export function negateAtomicConstraint(
     constraint: LayoutConstraint,
     sourceConstraint: LayoutConstraint['sourceConstraint']
 ): LayoutConstraint[][] {
     if (isTopConstraint(constraint)) {
-        // NOT (top above bottom by D) → bottom.y ≤ top.y → TopConstraint(bottom, top, 0)
-        const flipped: TopConstraint = {
+        // ¬(top < bottom on y) = (bottom < top on y) ∨ (top ≡ bottom on y)
+        const reversed: TopConstraint = {
             top: constraint.bottom,
             bottom: constraint.top,
             minDistance: 0,
             sourceConstraint
         };
-        return [[flipped]];
+        const aligned: AlignmentConstraint = {
+            axis: 'y',
+            node1: constraint.top,
+            node2: constraint.bottom,
+            sourceConstraint
+        };
+        return [[reversed], [aligned]];
     }
 
     if (isLeftConstraint(constraint)) {
-        // NOT (left left-of right by D) → right.x ≤ left.x → LeftConstraint(right, left, 0)
-        const flipped: LeftConstraint = {
+        // ¬(left < right on x) = (right < left on x) ∨ (left ≡ right on x)
+        const reversed: LeftConstraint = {
             left: constraint.right,
             right: constraint.left,
             minDistance: 0,
             sourceConstraint
         };
-        return [[flipped]];
+        const aligned: AlignmentConstraint = {
+            axis: 'x',
+            node1: constraint.left,
+            node2: constraint.right,
+            sourceConstraint
+        };
+        return [[reversed], [aligned]];
     }
 
     if (isAlignmentConstraint(constraint)) {

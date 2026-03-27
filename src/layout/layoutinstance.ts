@@ -1898,55 +1898,72 @@ export class LayoutInstance {
      *   NOT(ordering) = single flipped constraint → [[flipped]]
      *
      * For "directly" variants (directlyAbove = ordering AND alignment):
-     *   NOT(ordering AND alignment) = NOT(ordering) OR NOT(alignment)
-     *   → [[flipped-ordering], [misalignment-alt1], [misalignment-alt2]]
-     *   where misalignment is expressed as two alternatives (one for each side).
+     *   ¬(ordering ∧ alignment) = ¬ordering ∨ ¬alignment
+     *   ¬ordering = (reverse ∨ align) → 2 alternatives
+     *   ¬alignment = (differ-alt1 ∨ differ-alt2) → 2 alternatives
+     *   Total: 4 alternatives.
      */
     private negateOrientationDirection(
         direction: RelativeDirection,
         sourceNodeId: string, targetNodeId: string,
         layoutNodes: LayoutNode[], sourceConstraint: ConstraintSource
     ): LayoutConstraint[][] {
-        // Cardinal directions: single flipped constraint
+        // Cardinal directions: ¬(A < B) = (B < A) ∨ (A ≡ B)  →  2-alternative disjunction
         switch (direction) {
             case "left":
-                return [[this.leftConstraint(sourceNodeId, targetNodeId, 0, layoutNodes, sourceConstraint)]];
-            case "right":
-                return [[this.leftConstraint(targetNodeId, sourceNodeId, 0, layoutNodes, sourceConstraint)]];
-            case "above":
-                return [[this.topConstraint(sourceNodeId, targetNodeId, 0, layoutNodes, sourceConstraint)]];
-            case "below":
-                return [[this.topConstraint(targetNodeId, sourceNodeId, 0, layoutNodes, sourceConstraint)]];
-
-            // directly* variants: NOT(ordering AND alignment) = NOT(ordering) OR NOT(alignment)
-            case "directlyLeft":
-                // Positive: target left of source AND same Y
-                // NOT = (source left-or-equal of target) OR (different Y)
                 return [
                     [this.leftConstraint(sourceNodeId, targetNodeId, 0, layoutNodes, sourceConstraint)],
-                    [this.topConstraint(sourceNodeId, targetNodeId, this.minSepHeight, layoutNodes, sourceConstraint)],
-                    [this.topConstraint(targetNodeId, sourceNodeId, this.minSepHeight, layoutNodes, sourceConstraint)],
+                    [this.ensureSameXConstraint(sourceNodeId, targetNodeId, layoutNodes, sourceConstraint)],
                 ];
-            case "directlyRight":
-                // Positive: source left of target AND same Y
+            case "right":
                 return [
                     [this.leftConstraint(targetNodeId, sourceNodeId, 0, layoutNodes, sourceConstraint)],
-                    [this.topConstraint(sourceNodeId, targetNodeId, this.minSepHeight, layoutNodes, sourceConstraint)],
-                    [this.topConstraint(targetNodeId, sourceNodeId, this.minSepHeight, layoutNodes, sourceConstraint)],
+                    [this.ensureSameXConstraint(sourceNodeId, targetNodeId, layoutNodes, sourceConstraint)],
                 ];
-            case "directlyAbove":
-                // Positive: target above source AND same X
+            case "above":
                 return [
                     [this.topConstraint(sourceNodeId, targetNodeId, 0, layoutNodes, sourceConstraint)],
-                    [this.leftConstraint(sourceNodeId, targetNodeId, this.minSepWidth, layoutNodes, sourceConstraint)],
-                    [this.leftConstraint(targetNodeId, sourceNodeId, this.minSepWidth, layoutNodes, sourceConstraint)],
+                    [this.ensureSameYConstraint(sourceNodeId, targetNodeId, layoutNodes, sourceConstraint)],
                 ];
-            case "directlyBelow":
-                // Positive: source above target AND same X
+            case "below":
                 return [
                     [this.topConstraint(targetNodeId, sourceNodeId, 0, layoutNodes, sourceConstraint)],
-                    [this.leftConstraint(sourceNodeId, targetNodeId, this.minSepWidth, layoutNodes, sourceConstraint)],
-                    [this.leftConstraint(targetNodeId, sourceNodeId, this.minSepWidth, layoutNodes, sourceConstraint)],
+                    [this.ensureSameYConstraint(sourceNodeId, targetNodeId, layoutNodes, sourceConstraint)],
+                ];
+
+            // directly* variants: ¬(ordering ∧ alignment) = ¬ordering ∨ ¬alignment
+            // ¬ordering = 2 alternatives (reverse ∨ align), ¬alignment = 2 alternatives → 4 total
+            case "directlyLeft":
+                // Positive: target < source on x ∧ same Y
+                return [
+                    [this.leftConstraint(sourceNodeId, targetNodeId, 0, layoutNodes, sourceConstraint)],
+                    [this.ensureSameXConstraint(sourceNodeId, targetNodeId, layoutNodes, sourceConstraint)],
+                    [this.topConstraint(sourceNodeId, targetNodeId, 0, layoutNodes, sourceConstraint)],
+                    [this.topConstraint(targetNodeId, sourceNodeId, 0, layoutNodes, sourceConstraint)],
+                ];
+            case "directlyRight":
+                // Positive: source < target on x ∧ same Y
+                return [
+                    [this.leftConstraint(targetNodeId, sourceNodeId, 0, layoutNodes, sourceConstraint)],
+                    [this.ensureSameXConstraint(sourceNodeId, targetNodeId, layoutNodes, sourceConstraint)],
+                    [this.topConstraint(sourceNodeId, targetNodeId, 0, layoutNodes, sourceConstraint)],
+                    [this.topConstraint(targetNodeId, sourceNodeId, 0, layoutNodes, sourceConstraint)],
+                ];
+            case "directlyAbove":
+                // Positive: target < source on y ∧ same X
+                return [
+                    [this.topConstraint(sourceNodeId, targetNodeId, 0, layoutNodes, sourceConstraint)],
+                    [this.ensureSameYConstraint(sourceNodeId, targetNodeId, layoutNodes, sourceConstraint)],
+                    [this.leftConstraint(sourceNodeId, targetNodeId, 0, layoutNodes, sourceConstraint)],
+                    [this.leftConstraint(targetNodeId, sourceNodeId, 0, layoutNodes, sourceConstraint)],
+                ];
+            case "directlyBelow":
+                // Positive: source < target on y ∧ same X
+                return [
+                    [this.topConstraint(targetNodeId, sourceNodeId, 0, layoutNodes, sourceConstraint)],
+                    [this.ensureSameYConstraint(sourceNodeId, targetNodeId, layoutNodes, sourceConstraint)],
+                    [this.leftConstraint(sourceNodeId, targetNodeId, 0, layoutNodes, sourceConstraint)],
+                    [this.leftConstraint(targetNodeId, sourceNodeId, 0, layoutNodes, sourceConstraint)],
                 ];
             default:
                 return [];
@@ -2082,13 +2099,13 @@ export class LayoutInstance {
                         generatedAlignments.add(key);
                         if (direction === "horizontal") {
                             // NOT same-Y → source above target OR target above source
-                            const alt1 = [this.topConstraint(sourceNodeId, targetNodeId, this.minSepHeight, layoutNodes, c)];
-                            const alt2 = [this.topConstraint(targetNodeId, sourceNodeId, this.minSepHeight, layoutNodes, c)];
+                            const alt1 = [this.topConstraint(sourceNodeId, targetNodeId, 0, layoutNodes, c)];
+                            const alt2 = [this.topConstraint(targetNodeId, sourceNodeId, 0, layoutNodes, c)];
                             disjunctions.push(new DisjunctiveConstraint(c, [alt1, alt2]));
                         } else {
                             // NOT same-X → source left of target OR target left of source
-                            const alt1 = [this.leftConstraint(sourceNodeId, targetNodeId, this.minSepWidth, layoutNodes, c)];
-                            const alt2 = [this.leftConstraint(targetNodeId, sourceNodeId, this.minSepWidth, layoutNodes, c)];
+                            const alt1 = [this.leftConstraint(sourceNodeId, targetNodeId, 0, layoutNodes, c)];
+                            const alt2 = [this.leftConstraint(targetNodeId, sourceNodeId, 0, layoutNodes, c)];
                             disjunctions.push(new DisjunctiveConstraint(c, [alt1, alt2]));
                         }
                     }

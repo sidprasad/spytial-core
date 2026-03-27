@@ -415,32 +415,46 @@ describe('negateAtomicConstraint', () => {
     const nodeA = { id: 'A', label: 'A', color: 'red', width: 100, height: 60, mostSpecificType: 'Node', types: ['Node'], showLabels: true };
     const nodeB = { id: 'B', label: 'B', color: 'blue', width: 100, height: 60, mostSpecificType: 'Node', types: ['Node'], showLabels: true };
 
-    it('negates TopConstraint by flipping with minDistance=0', () => {
+    it('negates TopConstraint into 2 alternatives: reversed + aligned', () => {
         const top: TopConstraint = { top: nodeA, bottom: nodeB, minDistance: 15, sourceConstraint: dummySource };
         const result = negateAtomicConstraint(top, dummySource);
 
-        expect(result).toHaveLength(1); // Single alternative
-        expect(result[0]).toHaveLength(1); // Single constraint
-        const flipped = result[0][0];
-        expect(isTopConstraint(flipped)).toBe(true);
-        const tc = flipped as TopConstraint;
-        expect(tc.top.id).toBe('B'); // Flipped
+        expect(result).toHaveLength(2); // Two alternatives
+        // Alt 1: reversed TopConstraint
+        expect(result[0]).toHaveLength(1);
+        const reversed = result[0][0];
+        expect(isTopConstraint(reversed)).toBe(true);
+        const tc = reversed as TopConstraint;
+        expect(tc.top.id).toBe('B');
         expect(tc.bottom.id).toBe('A');
         expect(tc.minDistance).toBe(0);
+        // Alt 2: alignment on y
+        expect(result[1]).toHaveLength(1);
+        const aligned = result[1][0];
+        expect(isAlignmentConstraint(aligned)).toBe(true);
+        const ac = aligned as AlignmentConstraint;
+        expect(ac.axis).toBe('y');
     });
 
-    it('negates LeftConstraint by flipping with minDistance=0', () => {
+    it('negates LeftConstraint into 2 alternatives: reversed + aligned', () => {
         const left: LeftConstraint = { left: nodeA, right: nodeB, minDistance: 15, sourceConstraint: dummySource };
         const result = negateAtomicConstraint(left, dummySource);
 
-        expect(result).toHaveLength(1);
+        expect(result).toHaveLength(2); // Two alternatives
+        // Alt 1: reversed LeftConstraint
         expect(result[0]).toHaveLength(1);
-        const flipped = result[0][0];
-        expect(isLeftConstraint(flipped)).toBe(true);
-        const lc = flipped as LeftConstraint;
+        const reversed = result[0][0];
+        expect(isLeftConstraint(reversed)).toBe(true);
+        const lc = reversed as LeftConstraint;
         expect(lc.left.id).toBe('B');
         expect(lc.right.id).toBe('A');
         expect(lc.minDistance).toBe(0);
+        // Alt 2: alignment on x
+        expect(result[1]).toHaveLength(1);
+        const aligned = result[1][0];
+        expect(isAlignmentConstraint(aligned)).toBe(true);
+        const ac = aligned as AlignmentConstraint;
+        expect(ac.axis).toBe('x');
     });
 
     it('negates AlignmentConstraint (y-axis) into disjunction', () => {
@@ -498,32 +512,33 @@ describe('negateConjunction (De Morgan)', () => {
     const nodeA = { id: 'A', label: 'A', color: 'red', width: 100, height: 60, mostSpecificType: 'Node', types: ['Node'], showLabels: true };
     const nodeB = { id: 'B', label: 'B', color: 'blue', width: 100, height: 60, mostSpecificType: 'Node', types: ['Node'], showLabels: true };
 
-    it('negates conjunction of two constraints into disjunction of two', () => {
+    it('negates conjunction of two ordering constraints into disjunction of four', () => {
         const c1: TopConstraint = { top: nodeA, bottom: nodeB, minDistance: 15, sourceConstraint: dummySource };
         const c2: LeftConstraint = { left: nodeA, right: nodeB, minDistance: 15, sourceConstraint: dummySource };
 
         // NOT(A above B AND A left of B) = NOT(A above B) OR NOT(A left of B)
+        // Each ordering negation produces 2 alternatives → 2 + 2 = 4
         const alternatives = negateConjunction([c1, c2], dummySource);
-        expect(alternatives).toHaveLength(2);
-        // Alt 1: B above A (flipped top)
-        // Alt 2: B left of A (flipped left)
+        expect(alternatives).toHaveLength(4);
     });
 
-    it('negates single-element conjunction into single alternative', () => {
+    it('negates single-element conjunction into two alternatives', () => {
         const c1: TopConstraint = { top: nodeA, bottom: nodeB, minDistance: 15, sourceConstraint: dummySource };
         const alternatives = negateConjunction([c1], dummySource);
-        expect(alternatives).toHaveLength(1);
+        // Single ordering negation → 2 alternatives (reversed + aligned)
+        expect(alternatives).toHaveLength(2);
     });
 
     it('conjunction with alignment expands alternatives', () => {
-        // NOT(A above B AND A same-Y as B) should produce 3 alternatives:
-        //   ¬(A above B) OR ¬(sameY) = flip-top OR (A above B) OR (B above A)
+        // NOT(A above B AND A same-Y as B)
+        //   = ¬(A above B) OR ¬(sameY)
+        //   = (reversed + aligned) OR (topAlt1 + topAlt2) = 4 alternatives
         const c1: TopConstraint = { top: nodeA, bottom: nodeB, minDistance: 15, sourceConstraint: dummySource };
         const c2: AlignmentConstraint = { axis: 'y', node1: nodeA, node2: nodeB, sourceConstraint: dummySource };
 
         const alternatives = negateConjunction([c1, c2], dummySource);
-        // 1 from negating top + 2 from negating alignment = 3
-        expect(alternatives).toHaveLength(3);
+        // 2 from negating top + 2 from negating alignment = 4
+        expect(alternatives).toHaveLength(4);
     });
 
     it('negating empty conjunction produces empty result', () => {
@@ -562,7 +577,7 @@ describe('negateDisjunction (De Morgan)', () => {
     });
 
     it('multi-constraint alternatives produce multi-alternative negations', () => {
-        // One alternative with 3 constraints → negation should have 3 alternatives
+        // One alternative with 3 ordering constraints → negation via De Morgan
         const c1: TopConstraint = { top: nodeA, bottom: nodeB, minDistance: 15, sourceConstraint: dummySource };
         const c2: LeftConstraint = { left: nodeA, right: nodeB, minDistance: 15, sourceConstraint: dummySource };
         const c3: TopConstraint = { top: nodeB, bottom: nodeC, minDistance: 15, sourceConstraint: dummySource };
@@ -571,11 +586,11 @@ describe('negateDisjunction (De Morgan)', () => {
 
         const result = negateDisjunction(disj, dummySource);
         expect(result).toHaveLength(1); // Only 1 original alternative → 1 negated DisjunctiveConstraint
-        // That DisjunctiveConstraint should have 3 alternatives (one per negated atom)
-        expect(result[0].alternatives).toHaveLength(3);
+        // Each ordering negation produces 2 alternatives → 2 + 2 + 2 = 6
+        expect(result[0].alternatives).toHaveLength(6);
     });
 
-    it('all negated atoms in disjunction use minDistance=0', () => {
+    it('all negated ordering atoms use minDistance=0', () => {
         const c1: TopConstraint = { top: nodeA, bottom: nodeB, minDistance: 15, sourceConstraint: dummySource };
         const c2: LeftConstraint = { left: nodeB, right: nodeC, minDistance: 15, sourceConstraint: dummySource };
 
@@ -586,6 +601,7 @@ describe('negateDisjunction (De Morgan)', () => {
             for (const c of alt) {
                 if (isTopConstraint(c)) expect((c as TopConstraint).minDistance).toBe(0);
                 if (isLeftConstraint(c)) expect((c as LeftConstraint).minDistance).toBe(0);
+                // Alignment alternatives have no minDistance field
             }
         }
     });
@@ -709,7 +725,7 @@ describe('Negated constraints in ConstraintValidator', () => {
 // ─── Integration Tests: Layout Generation ───────────────────────────────────
 
 describe('NOT orientation constraint integration', () => {
-    it('negated orientation produces flipped constraints with minDistance=0', () => {
+    it('negated orientation produces 2-alternative disjunction', () => {
         const instance = new JSONDataInstance(twoNodeData);
         const evaluator = createEvaluator(instance);
         const spec = parseLayoutSpec(`
@@ -724,16 +740,14 @@ constraints:
         const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
         const { layout } = layoutInstance.generateLayout(instance);
 
-        // Should have conjunctive constraints (flipped with 0 min distance)
-        expect(layout.constraints.length).toBeGreaterThan(0);
-
-        // Find the negated constraint: should be TopConstraint with minDistance=0
-        const topConstraints = layout.constraints.filter(isTopConstraint) as TopConstraint[];
-        const zeroDistConstraints = topConstraints.filter(c => c.minDistance === 0);
-        expect(zeroDistConstraints.length).toBeGreaterThan(0);
+        // Cardinal negation now produces a disjunction: reversed ∨ aligned
+        expect(layout.disjunctiveConstraints).toBeDefined();
+        expect(layout.disjunctiveConstraints!.length).toBeGreaterThan(0);
+        const disj = layout.disjunctiveConstraints![0];
+        expect(disj.alternatives).toHaveLength(2);
     });
 
-    it('negated "below" produces flipped top constraint', () => {
+    it('negated "below" produces 2-alternative disjunction', () => {
         const instance = new JSONDataInstance(twoNodeData);
         const evaluator = createEvaluator(instance);
         const spec = parseLayoutSpec(`
@@ -748,12 +762,13 @@ constraints:
         const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
         const { layout } = layoutInstance.generateLayout(instance);
 
-        const topConstraints = layout.constraints.filter(isTopConstraint) as TopConstraint[];
-        const zeroDistConstraints = topConstraints.filter(c => c.minDistance === 0);
-        expect(zeroDistConstraints.length).toBeGreaterThan(0);
+        expect(layout.disjunctiveConstraints).toBeDefined();
+        expect(layout.disjunctiveConstraints!.length).toBeGreaterThan(0);
+        const disj = layout.disjunctiveConstraints![0];
+        expect(disj.alternatives).toHaveLength(2);
     });
 
-    it('negated "left" produces flipped left constraint', () => {
+    it('negated "left" produces 2-alternative disjunction', () => {
         const instance = new JSONDataInstance(twoNodeData);
         const evaluator = createEvaluator(instance);
         const spec = parseLayoutSpec(`
@@ -768,12 +783,13 @@ constraints:
         const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
         const { layout } = layoutInstance.generateLayout(instance);
 
-        const leftConstraints = layout.constraints.filter(isLeftConstraint) as LeftConstraint[];
-        const zeroDistConstraints = leftConstraints.filter(c => c.minDistance === 0);
-        expect(zeroDistConstraints.length).toBeGreaterThan(0);
+        expect(layout.disjunctiveConstraints).toBeDefined();
+        expect(layout.disjunctiveConstraints!.length).toBeGreaterThan(0);
+        const disj = layout.disjunctiveConstraints![0];
+        expect(disj.alternatives).toHaveLength(2);
     });
 
-    it('negated "right" produces flipped left constraint', () => {
+    it('negated "right" produces 2-alternative disjunction', () => {
         const instance = new JSONDataInstance(twoNodeData);
         const evaluator = createEvaluator(instance);
         const spec = parseLayoutSpec(`
@@ -788,12 +804,13 @@ constraints:
         const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
         const { layout } = layoutInstance.generateLayout(instance);
 
-        const leftConstraints = layout.constraints.filter(isLeftConstraint) as LeftConstraint[];
-        const zeroDistConstraints = leftConstraints.filter(c => c.minDistance === 0);
-        expect(zeroDistConstraints.length).toBeGreaterThan(0);
+        expect(layout.disjunctiveConstraints).toBeDefined();
+        expect(layout.disjunctiveConstraints!.length).toBeGreaterThan(0);
+        const disj = layout.disjunctiveConstraints![0];
+        expect(disj.alternatives).toHaveLength(2);
     });
 
-    it('negated "directlyAbove" produces disjunction: NOT(above) OR NOT(x-aligned)', () => {
+    it('negated "directlyAbove" produces disjunction with 4 alternatives', () => {
         const instance = new JSONDataInstance(twoNodeData);
         const evaluator = createEvaluator(instance);
         const spec = parseLayoutSpec(`
@@ -809,16 +826,18 @@ constraints:
         const { layout } = layoutInstance.generateLayout(instance);
 
         // directlyAbove = above AND x-aligned
-        // NOT(directlyAbove) = NOT(above) OR NOT(x-aligned) → disjunction with 3 alternatives:
-        //   [flipped-top(0)] OR [left(A,B)] OR [left(B,A)]
+        // ¬(directlyAbove) = ¬(above) ∨ ¬(x-aligned)
+        //   ¬(above) = [reversed-top] ∨ [align-y] → 2 alternatives
+        //   ¬(x-aligned) = [left(A,B)] ∨ [left(B,A)] → 2 alternatives
+        //   Total: 4 alternatives
         expect(layout.disjunctiveConstraints).toBeDefined();
         expect(layout.disjunctiveConstraints!.length).toBeGreaterThan(0);
 
         const disj = layout.disjunctiveConstraints![0];
-        expect(disj.alternatives).toHaveLength(3);
+        expect(disj.alternatives).toHaveLength(4);
     });
 
-    it('negated "directlyLeft" produces disjunction: NOT(left) OR NOT(y-aligned)', () => {
+    it('negated "directlyLeft" produces disjunction with 4 alternatives', () => {
         const instance = new JSONDataInstance(twoNodeData);
         const evaluator = createEvaluator(instance);
         const spec = parseLayoutSpec(`
@@ -835,9 +854,9 @@ constraints:
 
         expect(layout.disjunctiveConstraints).toBeDefined();
         const disj = layout.disjunctiveConstraints![0];
-        // NOT(left AND same-Y) = NOT(left) OR NOT(same-Y)
-        //   = [flipped-left(0)] OR [top(A,B)] OR [top(B,A)]
-        expect(disj.alternatives).toHaveLength(3);
+        // ¬(left ∧ same-Y) = ¬(left) ∨ ¬(same-Y)
+        //   = [reversed-left, align-x] ∨ [top(A,B), top(B,A)] → 4 alternatives
+        expect(disj.alternatives).toHaveLength(4);
     });
 
     it('negated multi-direction [above, left] produces disjunction (De Morgan)', () => {
@@ -863,8 +882,8 @@ constraints:
         expect(layout.disjunctiveConstraints!.length).toBe(1);
 
         const disj = layout.disjunctiveConstraints![0];
-        // Two alternatives: NOT(above) or NOT(left)
-        expect(disj.alternatives).toHaveLength(2);
+        // NOT(above) → 2 alternatives, NOT(left) → 2 alternatives → total 4
+        expect(disj.alternatives).toHaveLength(4);
     });
 
     it('negated [above, left] with positive [left] is satisfiable', () => {
