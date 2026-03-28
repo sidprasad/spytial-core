@@ -263,7 +263,7 @@ describe('Validator Comparator', () => {
             expect(results.qualitative.isSat).toBe(true);
         });
 
-        it('overlapping groups (UNSAT)', () => {
+        it('overlapping groups (now SAT — overlapping groups are supported)', () => {
             const a = createNode('A');
             const b = createNode('B');
             const c = createNode('C');
@@ -276,11 +276,9 @@ describe('Validator Comparator', () => {
             const results = runAll(layout);
             logTiming('overlap-groups', results);
 
-            // All should detect the group overlap
-            expect(results.kiwi.isSat).toBe(false);
-            expect(results.qualitative.isSat).toBe(false);
-            expect(results.kiwi.errorType).toBe('group-overlap');
-            expect(results.qualitative.errorType).toBe('group-overlap');
+            // Overlapping groups are now allowed — both validators should mark them and succeed
+            expect(results.kiwi.isSat).toBe(true);
+            expect(results.qualitative.isSat).toBe(true);
         });
     });
 
