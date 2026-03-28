@@ -1028,10 +1028,11 @@ class QualitativeConstraintValidator {
             for (const node of this.nodes) {
                 if (memberIds.has(node.id)) continue;
 
-                // Skip nodes whose every group has a hierarchical (subsumption) relationship
-                // with the current group. Nodes in overlapping groups need exclusion constraints.
+                // Skip nodes in other non-singleton groups. When no overlap exists this is
+                // always safe. For overlapping groups, check hierarchical relationships.
                 const nodeGroups = nodeToGroups.get(node.id);
                 if (nodeGroups && nodeGroups.size > 0) {
+                    if (!group.overlapping) continue;
                     const allHierarchical = [...nodeGroups].every(ng =>
                         ng === group ||
                         this.isSubGroup(ng, group) ||

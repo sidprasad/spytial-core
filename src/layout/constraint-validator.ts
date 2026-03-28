@@ -1003,11 +1003,13 @@ class ConstraintValidator {
                 // Skip if this node is a member of this group
                 if (memberIds.has(node.id)) continue;
 
-                // Skip if this node belongs to other non-singleton groups AND all those groups
-                // have a hierarchical relationship with the current group (subsumption in either direction).
-                // If the node is in a group that overlaps with this group, it needs exclusion constraints.
+                // Skip nodes that belong to other non-singleton groups.
+                // When no overlapping groups exist this is always safe (subsumption is the only
+                // relationship). When the current group IS overlapping we must check that every
+                // group the node belongs to has a hierarchical relationship with it.
                 const nodeGroups = nodeToGroups.get(node.id);
                 if (nodeGroups && nodeGroups.size > 0) {
+                    if (!group.overlapping) continue;
                     const allHierarchical = [...nodeGroups].every(ng =>
                         ng === group ||
                         this.isSubGroup(ng, group) ||
