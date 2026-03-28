@@ -1027,8 +1027,18 @@ class QualitativeConstraintValidator {
 
             for (const node of this.nodes) {
                 if (memberIds.has(node.id)) continue;
+
+                // Skip nodes whose every group has a hierarchical (subsumption) relationship
+                // with the current group. Nodes in overlapping groups need exclusion constraints.
                 const nodeGroups = nodeToGroups.get(node.id);
-                if (nodeGroups && nodeGroups.size > 0) continue;
+                if (nodeGroups && nodeGroups.size > 0) {
+                    const allHierarchical = [...nodeGroups].every(ng =>
+                        ng === group ||
+                        this.isSubGroup(ng, group) ||
+                        this.isSubGroup(group, ng)
+                    );
+                    if (allHierarchical) continue;
+                }
 
                 const sourceConstraint = group.sourceConstraint;
                 const alts: LayoutConstraint[][] = [
@@ -2312,22 +2322,19 @@ class QualitativeConstraintValidator {
     // ─── Group overlap validation ────────────────────────────────────────────
 
     public validateGroupConstraints(): GroupOverlapError | null {
+        // Detect overlapping group pairs and mark them.
+        // Overlapping groups (shared nodes, neither subsumes the other) are allowed
+        // but excluded from WebCola's native tree hierarchy and handled via Kiwi constraints.
         for (let i = 0; i < this.groups.length; i++) {
-            if (this.groups[i].negated) continue; // Negated groups have no visual rectangle
+            if (this.groups[i].negated) continue;
             for (let j = i + 1; j < this.groups.length; j++) {
                 if (this.groups[j].negated) continue;
                 const g = this.groups[i], o = this.groups[j];
                 if (this.isSubGroup(g, o) || this.isSubGroup(o, g)) continue;
                 const intersection = this.groupIntersection(g, o);
                 if (intersection.length > 0) {
-                    const overlappingNodes = intersection
-                        .map(id => this.nodes.find(n => n.id === id))
-                        .filter((n): n is LayoutNode => n !== undefined);
-                    return {
-                        name: 'GroupOverlapError', type: 'group-overlap',
-                        message: `Groups "${g.name}" and "${o.name}" overlap with nodes: ${intersection.join(', ')}`,
-                        group1: g, group2: o, overlappingNodes,
-                    };
+                    g.overlapping = true;
+                    o.overlapping = true;
                 }
             }
         }

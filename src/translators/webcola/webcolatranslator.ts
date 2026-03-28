@@ -863,11 +863,9 @@ export class WebColaLayout {
 
   private determineGroups(groups: LayoutGroup[]): { leaves: number[], padding: number, name: string, groups: number[] }[] {
 
-
-      // Do we actually have to do this? Can we just use the groups as they are?
-
-      // No we actually have to break this down into subgroups
-
+      // All groups (including overlapping ones) are passed to WebCola.
+      // WebCola handles overlapping groups via its VPSC solver — shared nodes
+      // appear as leaves in both groups, and both groups compute correct bounds.
 
       let groupsAsRecord: Record<string, string[]> = {};
       groups.forEach(group => {
@@ -877,8 +875,6 @@ export class WebColaLayout {
       let groupsAndSubgroups = this.determineGroupsAndSubgroups(groupsAsRecord);
 
       groupsAndSubgroups.forEach((group) => {
-
-
         let grp: LayoutGroup = groups.find(g => g.name === group.name);
         let keyNode = grp.keyNodeId;
         let keyIndex = this.getNodeIndex(keyNode);
@@ -1016,21 +1012,9 @@ export class WebColaLayout {
     return this.overlappingNodesData;
   }
 
-  get overlappingGroups(): any {
-    if (this.overlappingNodesData.length === 0) {
-      return [];
-    }
-
-    const uniqueGroups = new Set<any>();
-
-    this.groupDefinitions.forEach((g: any) => {
-      const hasOverlappingNode = g.leaves.some((leaf: any) => this.overlappingNodesData.some((node: LayoutNode) => node.id === leaf.id));
-      if (hasOverlappingNode) {
-        uniqueGroups.add(g);
-      }
-    });
-
-    return Array.from(uniqueGroups);
+  get overlappingGroups(): LayoutGroup[] {
+    // Return groups from the instance layout that are marked as overlapping
+    return (this.instanceLayout?.groups || []).filter(g => g.overlapping);
   }
 
   /**

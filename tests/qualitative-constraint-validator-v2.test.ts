@@ -1408,7 +1408,7 @@ describe('QualitativeConstraintValidator', () => {
             expect(error).toBeNull();
         });
 
-        it('should detect partially overlapping groups (not subgroups)', () => {
+        it('should allow partially overlapping groups (not subgroups)', () => {
             const a = createNode('A');
             const b = createNode('B');
             const c = createNode('C');
@@ -1426,8 +1426,10 @@ describe('QualitativeConstraintValidator', () => {
             const layout = createLayout([a, b, c], [], [], [g1, g2]);
             const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
-            expect(error).not.toBeNull();
-            expect(error!.type).toBe('group-overlap');
+            // Overlapping groups are now allowed — groups are marked as overlapping instead
+            expect(error).toBeNull();
+            expect(g1.overlapping).toBe(true);
+            expect(g2.overlapping).toBe(true);
         });
 
         it('should handle single-node group (degenerate)', () => {

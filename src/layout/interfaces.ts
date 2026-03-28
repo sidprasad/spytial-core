@@ -21,6 +21,10 @@ export interface LayoutGroup {
     // If true, this is a negated group: "no clean rectangle can contain exactly these members."
     // Negated groups don't draw a visual rectangle; they generate anti-containment disjunctions.
     negated?: boolean;
+
+    // If true, this group overlaps (shares nodes with) another group without subsumption.
+    // Shared nodes appear as leaves in both groups; WebCola handles bounds via its VPSC solver.
+    overlapping?: boolean;
 }
 
 export interface LayoutNode {

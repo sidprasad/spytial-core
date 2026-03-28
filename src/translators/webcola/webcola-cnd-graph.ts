@@ -457,13 +457,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     return 1;
   }
 
-  private isErrorGroup(group: {name: string}): boolean {
-    const overlappingGroups = this.currentLayout.overlappingGroups;
-    if (!overlappingGroups) {
-      console.error("Overlapping groups data not available in current layout");
-      throw new Error("Overlapping groups data not available in current layout");
-    }
-    return overlappingGroups.some((g: any) => g.name === group.name);
+  private isErrorGroup(_group: {name: string}): boolean {
+    // Overlapping groups are now supported and no longer treated as errors.
+    return false;
   }
 
   /**
@@ -2451,7 +2447,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       console.warn("Cannot render groups: nodes not available");
       return;
     }
-  
+
     this.svgGroups = this.setupGroups(groups, this.currentLayout.nodes, layout);
   }
 
@@ -3809,7 +3805,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // Ensure proper layering - raise important elements
     this.svgLinkGroups.selectAll('marker').raise();
     this.svgLinkGroups.selectAll('.linklabel').raise();
-    this.svgGroups.selectAll('.error-group').raise();
     this.svgNodes.selectAll('.error-node').raise();
   }
 

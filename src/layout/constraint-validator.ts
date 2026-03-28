@@ -866,49 +866,31 @@ class ConstraintValidator {
      * @returns GroupOverlapError if groups overlap, null otherwise
      */
     public validateGroupConstraints(): GroupOverlapError | null {
+        // Detect overlapping group pairs and mark them.
+        // Overlapping groups (shared nodes, neither subsumes the other) are allowed
+        // but excluded from WebCola's native tree hierarchy and handled via Kiwi constraints.
         for (let i = 0; i < this.groups.length; i++) {
             const group = this.groups[i];
-            if (group.negated) continue; // Negated groups have no visual rectangle
+            if (group.negated) continue;
 
             for (let j = i + 1; j < this.groups.length; j++) {
                 const otherGroup = this.groups[j];
                 if (otherGroup.negated) continue;
 
-                // Skip if one group is a subgroup of the other
                 if (this.isSubGroup(group, otherGroup) || this.isSubGroup(otherGroup, group)) {
                     continue;
                 }
-                
+
                 const intersection = this.groupIntersection(group, otherGroup);
-                
+
                 if (intersection.length > 0) {
-                    // Map node IDs to actual LayoutNode objects
-                    const overlappingNodes: LayoutNode[] = intersection
-                        .map(nodeId => this.nodes.find(n => n.id === nodeId))
-                        .filter((node): node is LayoutNode => node !== undefined);
-
-                    // Format intersection with labels if they differ from IDs
-                    const intersectionDisplay = overlappingNodes.map(node =>
-                        node.label && node.label !== node.id
-                            ? `${node.label} (${node.id})`
-                            : node.id
-                    );
-
-                    const groupOverlapError: GroupOverlapError = {
-                        name: 'GroupOverlapError',
-                        type: 'group-overlap',
-                        message: `Groups <b>"${group.name}"</b> and <b>"${otherGroup.name}"</b> overlap with nodes: ${intersectionDisplay.join(', ')}`,
-                        group1: group,
-                        group2: otherGroup,
-                        overlappingNodes: overlappingNodes
-                    };
-                    
-                    return groupOverlapError; 
+                    group.overlapping = true;
+                    otherGroup.overlapping = true;
                 }
             }
         }
-        
-        return null; // No overlaps found
+
+        return null;
     }
 
     /**
@@ -1012,16 +994,27 @@ class ConstraintValidator {
                 this.solver.addConstraint(bottomConstraint);
             }
 
-            // For each "free" node (not in any other non-singleton group), add disjunctive constraint
-            // This optimization leverages the fact that groups cannot overlap (except via subsumption)
+            // For each non-member node, add disjunctive constraint requiring it to be outside this group's bbox.
+            // Optimization: skip nodes whose every group has a hierarchical (subsumption) relationship
+            // with the current group — they're already constrained and can't violate this bbox.
+            // Nodes in overlapping groups DO need exclusion constraints since their group's bbox may
+            // intersect this group's bbox without subsumption.
             for (const node of this.nodes) {
                 // Skip if this node is a member of this group
                 if (memberIds.has(node.id)) continue;
-                
-                // Skip if this node belongs to other non-singleton groups
-                // (it's already constrained to be in those groups, so it can't be outside this one)
+
+                // Skip if this node belongs to other non-singleton groups AND all those groups
+                // have a hierarchical relationship with the current group (subsumption in either direction).
+                // If the node is in a group that overlaps with this group, it needs exclusion constraints.
                 const nodeGroups = nodeToGroups.get(node.id);
-                if (nodeGroups && nodeGroups.size > 0) continue;
+                if (nodeGroups && nodeGroups.size > 0) {
+                    const allHierarchical = [...nodeGroups].every(ng =>
+                        ng === group ||
+                        this.isSubGroup(ng, group) ||
+                        this.isSubGroup(group, ng)
+                    );
+                    if (allHierarchical) continue;
+                }
 
                 const sourceConstraint = group.sourceConstraint;
 
