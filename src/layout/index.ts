@@ -7,6 +7,7 @@ export * from './interfaces';
 export * from './layoutspec';
 export * from './layoutinstance';
 export * from './colorpicker';
+export * from './constraint-types';
 export * from './constraint-validator';
 export * from './qualitative-constraint-validator';
 export * from './icon-registry';

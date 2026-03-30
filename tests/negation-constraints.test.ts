@@ -1,3 +1,4 @@
+// Some tests in this file use the deprecated ConstraintValidator (Kiwi). See qualitative-constraint-validator*.test.ts for current validator.
 import { describe, it, expect } from 'vitest';
 import { JSONDataInstance, IJsonDataInstance } from '../src/data-instance/json-data-instance';
 import { parseLayoutSpec, RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint } from '../src/layout/layoutspec';

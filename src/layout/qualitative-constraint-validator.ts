@@ -71,52 +71,26 @@ import {
 import {
     type ConstraintError,
     type ErrorMessages,
+    type SourceConstraint,
+    type IConstraintValidator,
     orientationConstraintToString,
-} from './constraint-validator';
+} from './constraint-types';
 
 export {
     type ConstraintError,
     type ErrorMessages,
     orientationConstraintToString,
-} from './constraint-validator';
+} from './constraint-types';
 
-// ─── Source constraint type alias ────────────────────────────────────────────
+// Re-export error types and type guards from constraint-types
+export {
+    type PositionalConstraintError,
+    type GroupOverlapError,
+    isPositionalConstraintError,
+    isGroupOverlapError,
+} from './constraint-types';
 
-type SourceConstraint =
-    | RelativeOrientationConstraint
-    | CyclicOrientationConstraint
-    | AlignConstraint
-    | ImplicitConstraint
-    | GroupByField
-    | GroupBySelector;
-
-// ─── Error interfaces ────────────────────────────────────────────────────────
-
-interface PositionalConstraintError extends ConstraintError {
-    type: 'positional-conflict';
-    conflictingConstraint: LayoutConstraint;
-    conflictingSourceConstraint: SourceConstraint;
-    minimalConflictingSet: Map<SourceConstraint, LayoutConstraint[]>;
-    maximalFeasibleSubset?: LayoutConstraint[];
-    errorMessages?: ErrorMessages;
-}
-
-interface GroupOverlapError extends ConstraintError {
-    type: 'group-overlap';
-    group1: LayoutGroup;
-    group2: LayoutGroup;
-    overlappingNodes: LayoutNode[];
-}
-
-export function isPositionalConstraintError(error: unknown): error is PositionalConstraintError {
-    return (error as PositionalConstraintError)?.type === 'positional-conflict';
-}
-
-export function isGroupOverlapError(error: unknown): error is GroupOverlapError {
-    return (error as GroupOverlapError)?.type === 'group-overlap';
-}
-
-export { type PositionalConstraintError, type GroupOverlapError };
+import type { PositionalConstraintError, GroupOverlapError } from './constraint-types';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Constants
@@ -417,7 +391,7 @@ interface SolverCheckpoint {
 // QualitativeConstraintValidator
 // ═══════════════════════════════════════════════════════════════════════════════
 
-class QualitativeConstraintValidator {
+class QualitativeConstraintValidator implements IConstraintValidator {
     // ─── Input ───
     layout: InstanceLayout;
     nodes: LayoutNode[];
@@ -1175,6 +1149,18 @@ class QualitativeConstraintValidator {
                 if (!this.isBoundingBoxFeasible(bc)) return false;
             }
 
+            // AlignmentConstraint: aligning two nodes on the same axis is infeasible
+            // if they already have an ordering relationship on that axis.
+            if (isAlignmentConstraint(constraint)) {
+                const ac = constraint as AlignmentConstraint;
+                const graph = ac.axis === 'x' ? this.hGraph : this.vGraph;
+                // If either node is ordered before the other, alignment is impossible
+                if (graph.isOrdered(ac.node1.id, ac.node2.id) || graph.isOrdered(ac.node2.id, ac.node1.id)) {
+                    return false;
+                }
+                continue;
+            }
+
             const edge = this.constraintToEdge(constraint);
             if (!edge) continue;
             const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
@@ -1322,8 +1308,13 @@ class QualitativeConstraintValidator {
             let feasible = true;
             for (const constraint of disj.alternatives[i]) {
                 if (isAlignmentConstraint(constraint)) {
-                    // Alignment is never "contradicted" by existing state,
-                    // only ordering constraints can be.
+                    // Alignment is contradicted if the two nodes already have
+                    // an ordering relationship on the alignment axis.
+                    const ac = constraint as AlignmentConstraint;
+                    const graph = ac.axis === 'x' ? this.hGraph : this.vGraph;
+                    if (graph.isOrdered(ac.node1.id, ac.node2.id) || graph.isOrdered(ac.node2.id, ac.node1.id)) {
+                        feasible = false; break;
+                    }
                     continue;
                 }
                 const edge = this.constraintToEdge(constraint);
