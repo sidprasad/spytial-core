@@ -205,7 +205,9 @@ export class AlloyDataInstance implements IInputDataInstance {
     for (let typeId in instanceTypes) {
         let type = instanceTypes[typeId];
         let atoms = type.atoms;
-        typeAtoms[typeId] = atoms.map(atom => `\`${atom.id}`);
+        typeAtoms[typeId] = isBuiltin(type)
+            ? atoms.map(atom => atom.id)
+            : atoms.map(atom => `\`${atom.id}`);
     }
 
     // Then declare all the relations
@@ -216,7 +218,10 @@ export class AlloyDataInstance implements IInputDataInstance {
         let relation = instanceRelations[relationId];
         let tuples = relation.tuples;
         let tupleStrings = tuples.map(tuple => {
-            let tupleString = tuple.atoms.map(a => `\`${a}`).join("->");
+            let tupleString = tuple.atoms.map((a, i) => {
+                const atomType = instanceTypes[tuple.types[i]];
+                return atomType && isBuiltin(atomType) ? a : `\`${a}`;
+            }).join("->");
             return `(${tupleString})`;
         });
 
