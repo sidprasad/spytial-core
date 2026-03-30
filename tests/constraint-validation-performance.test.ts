@@ -1,3 +1,4 @@
+// Tests for deprecated ConstraintValidator (Kiwi). See qualitative-constraint-validator*.test.ts for current validator.
 import { describe, it, expect } from 'vitest';
 import { ConstraintValidator } from '../src/layout/constraint-validator';
 import { 

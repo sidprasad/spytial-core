@@ -7,10 +7,10 @@ import {
     isLeftConstraint, isTopConstraint, isAlignmentConstraint,
 } from './interfaces';
 import {
-    ConstraintValidator,
     isPositionalConstraintError,
     type PositionalConstraintError,
-} from './constraint-validator';
+} from './constraint-types';
+import { QualitativeConstraintValidator } from './qualitative-constraint-validator';
 import { LayoutInstance } from './layoutinstance';
 
 // ---------------------------------------------------------------------------
@@ -285,7 +285,7 @@ function checkImplication(
             constraints: allConstraints,
             groups: [],
         };
-        const validator = new ConstraintValidator(merged);
+        const validator = new QualitativeConstraintValidator(merged);
         const error = validator.validatePositionalConstraints();
         if (!error) {
             // This negation alternative is satisfiable → extra is NOT implied.
@@ -420,7 +420,7 @@ function findDirectionalConflict(
         groups: [],
     };
 
-    const validator = new ConstraintValidator(merged);
+    const validator = new QualitativeConstraintValidator(merged);
     const error = validator.validatePositionalConstraints();
 
     if (error && isPositionalConstraintError(error)) {
