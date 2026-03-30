@@ -12,10 +12,15 @@ import { useHighlight } from './hooks';
 import { ConstraintType } from './types';
 import { ConstraintData, DirectiveData } from './interfaces';
 
+/** Constraint types that support the hold: never (negation) modifier */
+const NEGATABLE_TYPES: ReadonlySet<ConstraintType> = new Set([
+    'orientation', 'cyclic', 'align', 'groupfield', 'groupselector'
+]);
+
 /**
  * Configuration options for constraint card component
  * Designed for tree-shaking optimization and client-side performance
- * 
+ *
  * @public
  * @interface ConstraintCardProps
  */
@@ -79,6 +84,8 @@ const ConstraintCard = (props: ConstraintCardProps) => {
     const [isEditingComment, setIsEditingComment] = useState(false);
 
     const isCollapsed = props.constraintData.collapsed ?? false;
+    const isNegated = props.constraintData.params.hold === 'never';
+    const isNegatable = NEGATABLE_TYPES.has(props.constraintData.type);
 
     /**
      * Toggle collapsed state
@@ -93,6 +100,16 @@ const ConstraintCard = (props: ConstraintCardProps) => {
     const handleCommentChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         props.onUpdate({ comment: e.target.value });
     }, [props.onUpdate]);
+
+    const handleHoldToggle = useCallback(() => {
+        const newParams = { ...props.constraintData.params };
+        if (newParams.hold === 'never') {
+            delete newParams.hold;
+        } else {
+            newParams.hold = 'never';
+        }
+        props.onUpdate({ params: newParams });
+    }, [props.constraintData.params, props.onUpdate]);
 
     /**
      * Handle constraint type change with proper event typing
@@ -152,12 +169,25 @@ const ConstraintCard = (props: ConstraintCardProps) => {
                     <option value="size" title={SIZE_DESCRIPTION}>Size</option>
                     <option value="hideAtom" title={HIDEATOM_DESCRIPTION}>Hide Atom</option>
                 </select>
+                {isNegated && (
+                    <span className="negation-badge" title="This constraint holds never (negated)">NOT</span>
+                )}
             </div>
             {!isCollapsed && (
                 <>
                     <div className="params">
                         { renderSelectorComponent(props.constraintData.type, props.constraintData, props.onUpdate) }
                     </div>
+                    {isNegatable && (
+                        <label className="inline-checkbox" title="When checked, the layout will try to avoid satisfying this constraint.">
+                            <input
+                                type="checkbox"
+                                checked={isNegated}
+                                onChange={handleHoldToggle}
+                            />
+                            <span>Holds never</span>
+                        </label>
+                    )}
                     {/* Comment section */}
                     <div className="commentSection">
                         {isEditingComment || props.constraintData.comment ? (
