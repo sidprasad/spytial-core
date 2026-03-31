@@ -19,3 +19,21 @@ jobs:
       - run: npm install
 
       - run: npm test -- --run
+
+  solver-oracle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install MiniZinc
+        run: |
+          curl -sL https://github.com/MiniZinc/MiniZincIDE/releases/download/2.9.5/MiniZincIDE-2.9.5-bundle-linux-x86_64.tgz | tar xz
+          echo "$PWD/MiniZincIDE-2.9.5-bundle-linux-x86_64/bin" >> $GITHUB_PATH
+
+      - run: npm install
+
+      - run: npx vitest run tests/minizinc-equivalence.test.ts
