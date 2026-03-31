@@ -2591,8 +2591,27 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     // ─── Alignment orders ────────────────────────────────────────────────────
 
     private computeAlignmentOrders(): LayoutConstraint[] {
-        this.horizontallyAligned = this.normalizeAlignment(this.horizontallyAligned);
-        this.verticallyAligned = this.normalizeAlignment(this.verticallyAligned);
+        // Derive alignment groups from graph SCCs (includes alignment from CDCL search,
+        // not just conjunctive constraints). Filter to real nodes only (skip virtual group nodes).
+        const realNodeIds = new Set(this.nodes.map(n => n.id));
+
+        // hGraph x-axis alignment classes → verticallyAligned (same column)
+        this.verticallyAligned = [];
+        for (const [, members] of this.hGraph.getAlignmentClasses()) {
+            const realMembers = members.filter(id => realNodeIds.has(id));
+            if (realMembers.length >= 2) {
+                this.verticallyAligned.push(realMembers.map(id => this.nodeMap.get(id)!));
+            }
+        }
+
+        // vGraph y-axis alignment classes → horizontallyAligned (same row)
+        this.horizontallyAligned = [];
+        for (const [, members] of this.vGraph.getAlignmentClasses()) {
+            const realMembers = members.filter(id => realNodeIds.has(id));
+            if (realMembers.length >= 2) {
+                this.horizontallyAligned.push(realMembers.map(id => this.nodeMap.get(id)!));
+            }
+        }
 
         const implicitConstraints: LayoutConstraint[] = [];
 
