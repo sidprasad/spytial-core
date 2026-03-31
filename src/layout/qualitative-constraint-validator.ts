@@ -2170,13 +2170,18 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             freshV.ensureNode(gid);
         }
 
+        const feasibleConstraints: LayoutConstraint[] = [];
         for (const constraint of this.orientationConstraints) {
-            if (isLeftConstraint(constraint)) freshH.addEdge(constraint.left.id, constraint.right.id, constraint.minDistance, constraint);
-            else if (isTopConstraint(constraint)) freshV.addEdge(constraint.top.id, constraint.bottom.id, constraint.minDistance, constraint);
-            else if (isAlignmentConstraint(constraint)) { /* skip for MFS graph */ }
+            let ok = true;
+            if (isLeftConstraint(constraint)) ok = freshH.addEdge(constraint.left.id, constraint.right.id, constraint.minDistance, constraint);
+            else if (isTopConstraint(constraint)) ok = freshV.addEdge(constraint.top.id, constraint.bottom.id, constraint.minDistance, constraint);
+            else if (isAlignmentConstraint(constraint)) {
+                const ac = constraint as AlignmentConstraint;
+                const graph = ac.axis === 'x' ? freshH : freshV;
+                ok = graph.addAlignmentEdges(ac.node1.id, ac.node2.id, constraint);
+            }
+            if (ok) feasibleConstraints.push(constraint);
         }
-
-        const feasibleConstraints: LayoutConstraint[] = [...this.orientationConstraints];
         const infeasibleDisjunctions: DisjunctiveConstraint[] = [];
 
         const sortedDisjunctions = [...this.allDisjunctions].sort((a, b) => {
@@ -2215,6 +2220,11 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     private addEdgeToGraphs(constraint: LayoutConstraint, hGraph: DifferenceConstraintGraph, vGraph: DifferenceConstraintGraph): boolean {
         if (isLeftConstraint(constraint)) return hGraph.addEdge(constraint.left.id, constraint.right.id, constraint.minDistance, constraint);
         if (isTopConstraint(constraint)) return vGraph.addEdge(constraint.top.id, constraint.bottom.id, constraint.minDistance, constraint);
+        if (isAlignmentConstraint(constraint)) {
+            const ac = constraint as AlignmentConstraint;
+            const graph = ac.axis === 'x' ? hGraph : vGraph;
+            return graph.addAlignmentEdges(ac.node1.id, ac.node2.id, constraint);
+        }
         if (isBoundingBoxConstraint(constraint)) {
             const bc = constraint as BoundingBoxConstraint;
             const groupId = `_group_${bc.group.name}`;

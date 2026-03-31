@@ -18,9 +18,13 @@ import {
     TopConstraint,
     AlignmentConstraint,
     DisjunctiveConstraint,
+    BoundingBoxConstraint,
+    GroupBoundaryConstraint,
     isLeftConstraint,
     isTopConstraint,
     isAlignmentConstraint,
+    isBoundingBoxConstraint,
+    isGroupBoundaryConstraint,
 } from '../../src/layout/interfaces';
 
 const MIN_PADDING = 15;
@@ -105,11 +109,34 @@ function compileAtomicConstraint(c: LayoutConstraint): string | null {
     if (isAlignmentConstraint(c)) {
         const ac = c as AlignmentConstraint;
         if (ac.axis === 'x') {
-            // Same x-coordinate (same column) → same x position
             return `constraint ${nodeXVar(ac.node1)} = ${nodeXVar(ac.node2)};`;
         } else {
-            // Same y-coordinate (same row) → same y position
             return `constraint ${nodeYVar(ac.node1)} = ${nodeYVar(ac.node2)};`;
+        }
+    }
+    if (isBoundingBoxConstraint(c)) {
+        const bc = c as BoundingBoxConstraint;
+        // Validator uses a single virtual node per group; match that encoding
+        const gx = groupVar(bc.group, 'x');
+        const gy = groupVar(bc.group, 'y');
+        switch (bc.side) {
+            case 'left':   return `constraint ${nodeXVar(bc.node)} + ${bc.node.width} + ${bc.minDistance} <= ${gx};`;
+            case 'right':  return `constraint ${gx} + ${bc.minDistance} <= ${nodeXVar(bc.node)};`;
+            case 'top':    return `constraint ${nodeYVar(bc.node)} + ${bc.node.height} + ${bc.minDistance} <= ${gy};`;
+            case 'bottom': return `constraint ${gy} + ${bc.minDistance} <= ${nodeYVar(bc.node)};`;
+        }
+    }
+    if (isGroupBoundaryConstraint(c)) {
+        const gc = c as GroupBoundaryConstraint;
+        const gAx = groupVar(gc.groupA, 'x');
+        const gBx = groupVar(gc.groupB, 'x');
+        const gAy = groupVar(gc.groupA, 'y');
+        const gBy = groupVar(gc.groupB, 'y');
+        switch (gc.side) {
+            case 'left':   return `constraint ${gAx} + ${gc.minDistance} <= ${gBx};`;
+            case 'right':  return `constraint ${gBx} + ${gc.minDistance} <= ${gAx};`;
+            case 'top':    return `constraint ${gAy} + ${gc.minDistance} <= ${gBy};`;
+            case 'bottom': return `constraint ${gBy} + ${gc.minDistance} <= ${gAy};`;
         }
     }
     return null;
@@ -130,6 +157,30 @@ function compileAtomicAsExpr(c: LayoutConstraint): string | null {
             return `${nodeXVar(ac.node1)} = ${nodeXVar(ac.node2)}`;
         } else {
             return `${nodeYVar(ac.node1)} = ${nodeYVar(ac.node2)}`;
+        }
+    }
+    if (isBoundingBoxConstraint(c)) {
+        const bc = c as BoundingBoxConstraint;
+        const gx = groupVar(bc.group, 'x');
+        const gy = groupVar(bc.group, 'y');
+        switch (bc.side) {
+            case 'left':   return `${nodeXVar(bc.node)} + ${bc.node.width} + ${bc.minDistance} <= ${gx}`;
+            case 'right':  return `${gx} + ${bc.minDistance} <= ${nodeXVar(bc.node)}`;
+            case 'top':    return `${nodeYVar(bc.node)} + ${bc.node.height} + ${bc.minDistance} <= ${gy}`;
+            case 'bottom': return `${gy} + ${bc.minDistance} <= ${nodeYVar(bc.node)}`;
+        }
+    }
+    if (isGroupBoundaryConstraint(c)) {
+        const gc = c as GroupBoundaryConstraint;
+        const gAx = groupVar(gc.groupA, 'x');
+        const gBx = groupVar(gc.groupB, 'x');
+        const gAy = groupVar(gc.groupA, 'y');
+        const gBy = groupVar(gc.groupB, 'y');
+        switch (gc.side) {
+            case 'left':   return `${gAx} + ${gc.minDistance} <= ${gBx}`;
+            case 'right':  return `${gBx} + ${gc.minDistance} <= ${gAx}`;
+            case 'top':    return `${gAy} + ${gc.minDistance} <= ${gBy}`;
+            case 'bottom': return `${gBy} + ${gc.minDistance} <= ${gAy}`;
         }
     }
     return null;
@@ -398,24 +449,84 @@ export async function solveMiniZinc(layout: InstanceLayout): Promise<boolean> {
 }
 
 /**
- * Verify that a subset of conjunctive constraints is feasible.
+ * Verify that a subset of constraints is feasible.
  * Used to check that a reported MFS is actually satisfiable.
  *
- * The MFS from the validator is a set of raw conjunctive constraints
- * (including any internally-generated group bounding box constraints).
- * We compile them directly without re-expanding groups, since the MFS
- * already contains the relevant group constraints.
+ * The MFS from the validator can include:
+ * - LeftConstraint, TopConstraint, AlignmentConstraint (atomic)
+ * - BoundingBoxConstraint (node-to-group-bbox, from group expansion)
+ * - GroupBoundaryConstraint (group-to-group separation)
+ * - Constraints from chosen disjunction alternatives
+ *
+ * We compile the MFS directly as conjunctive constraints, declaring
+ * group bounding-box variables as needed.
  */
 export async function verifyFeasibleSubset(
     layout: InstanceLayout,
     subset: LayoutConstraint[],
 ): Promise<boolean> {
-    const subsetLayout: InstanceLayout = {
-        nodes: layout.nodes,
-        edges: [],
-        constraints: subset,
-        groups: [],  // No groups — MFS already includes expanded group constraints
-        // No disjunctive constraints — MFS is conjunctive only
-    };
-    return solveMiniZinc(subsetLayout);
+    const lines: string[] = [];
+
+    // ── Node variable declarations ──────────────────────────────────
+    for (const node of layout.nodes) {
+        lines.push(`var 0..${MAX_COORD}: ${nodeXVar(node)};`);
+        lines.push(`var 0..${MAX_COORD}: ${nodeYVar(node)};`);
+    }
+
+    // ── Discover group bounding-box variables needed by the MFS ─────
+    const groupsReferenced = new Set<string>();
+    for (const c of subset) {
+        if (isBoundingBoxConstraint(c)) {
+            groupsReferenced.add((c as BoundingBoxConstraint).group.name);
+        }
+        if (isGroupBoundaryConstraint(c)) {
+            groupsReferenced.add((c as GroupBoundaryConstraint).groupA.name);
+            groupsReferenced.add((c as GroupBoundaryConstraint).groupB.name);
+        }
+    }
+    // Declare a single x,y variable per group virtual node (matching the
+    // validator's encoding — one virtual node per group, not 4 bbox edges)
+    for (const gName of groupsReferenced) {
+        const g = { name: gName } as LayoutGroup;
+        lines.push(`var 0..${MAX_COORD}: ${groupVar(g, 'x')};`);
+        lines.push(`var 0..${MAX_COORD}: ${groupVar(g, 'y')};`);
+    }
+    lines.push('');
+
+    // ── Pairwise non-overlap (same as full model) ───────────────────
+    for (let i = 0; i < layout.nodes.length; i++) {
+        for (let j = i + 1; j < layout.nodes.length; j++) {
+            const a = layout.nodes[i];
+            const b = layout.nodes[j];
+            lines.push(
+                `constraint ${nodeXVar(a)} + ${a.width} <= ${nodeXVar(b)}` +
+                ` \\/ ${nodeXVar(b)} + ${b.width} <= ${nodeXVar(a)}` +
+                ` \\/ ${nodeYVar(a)} + ${a.height} <= ${nodeYVar(b)}` +
+                ` \\/ ${nodeYVar(b)} + ${b.height} <= ${nodeYVar(a)};`
+            );
+        }
+    }
+    lines.push('');
+
+    // ── MFS constraints (all treated as conjunctive) ────────────────
+    for (const c of subset) {
+        const line = compileAtomicConstraint(c);
+        if (line) lines.push(line);
+    }
+
+    lines.push('');
+    lines.push('solve satisfy;');
+
+    const modelStr = lines.join('\n');
+    const model = new Model();
+    model.addString(modelStr);
+
+    const result: SolveResult = await model.solve({
+        options: {
+            solver: detectedSolver!,
+            'time-limit': 30000,
+        },
+    });
+
+    return result.status === 'SATISFIED' || result.status === 'ALL_SOLUTIONS';
 }
