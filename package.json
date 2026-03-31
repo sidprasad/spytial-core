@@ -76,6 +76,7 @@
     "eslint": "^9.29.0",
     "fast-check": "^4.6.0",
     "jsdom": "^26.1.0",
+    "minizinc": "^4.4.5",
     "prettier": "^3.5.3",
     "tsup": "^8.5.0",
     "typescript": "^5.8.3",
