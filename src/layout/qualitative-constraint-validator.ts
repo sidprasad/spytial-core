@@ -130,6 +130,8 @@ class DifferenceConstraintGraph {
     private nodeSize: Map<string, number> = new Map();
     /** Maps "from→to" to the LayoutConstraint that created the edge. */
     private edgeProvenance: Map<string, LayoutConstraint> = new Map();
+    /** Reference count for alignment edge pairs (key: "a\x00b" with a < b lexicographically). */
+    private alignmentRefCount: Map<string, number> = new Map();
     private gap: number;
 
     constructor(gap: number = 15) {
@@ -143,6 +145,7 @@ class DifferenceConstraintGraph {
         for (const [k, vs] of this.radj) g.radj.set(k, new Map(vs));
         g.nodeSize = new Map(this.nodeSize);
         g.edgeProvenance = new Map(this.edgeProvenance);
+        g.alignmentRefCount = new Map(this.alignmentRefCount);
         return g;
     }
 
@@ -177,8 +180,10 @@ class DifferenceConstraintGraph {
             return true;
         }
         // For new edges or tightening: check if a return path b→...→a exists.
-        // If so, adding/tightening a→b creates a cycle. With zero-weight alignment
-        // return paths, any positive weight on a→b makes the cycle infeasible.
+        // A cycle with positive total weight is infeasible (x_a - x_a ≥ w > 0).
+        // With non-negative edge weights, w > 0 + any return path ≥ 0 → infeasible.
+        // Zero-weight addEdge calls are only used internally via addAlignmentEdges
+        // which has its own reachability checks, so reject all canReach here.
         if (this.canReach(b, a)) return false;
         this.adj.get(a)!.set(b, w);
         this.radj.get(b)!.set(a, w);
@@ -344,11 +349,41 @@ class DifferenceConstraintGraph {
         const order = this.topologicalSort();
         if (!order) return Infinity; // Cycle
 
+        // Build alignment class lookup: node → representative
+        const classes = this.getAlignmentClasses();
+        const nodeToRep = new Map<string, string>();
+        for (const [rep, members] of classes) {
+            for (const m of members) nodeToRep.set(m, rep);
+        }
+
+        // For aligned nodes, their effective size on the aligned axis is the
+        // max of the class (they occupy the same coordinate, not separate ones).
+        const classMaxSize = new Map<string, number>();
+        for (const [rep, members] of classes) {
+            let maxSize = 0;
+            for (const m of members) maxSize = Math.max(maxSize, this.nodeSize.get(m) ?? 0);
+            classMaxSize.set(rep, maxSize);
+        }
+
         const dist = new Map<string, number>();
         let maxSpan = 0;
+        const counted = new Set<string>(); // Track which alignment classes contributed size
 
         for (const n of order) {
-            const mySize = this.nodeSize.get(n) ?? 0;
+            const rep = nodeToRep.get(n);
+            let mySize: number;
+            if (rep !== undefined) {
+                // Aligned node: only count the class's max size once
+                if (counted.has(rep)) {
+                    mySize = 0;
+                } else {
+                    mySize = classMaxSize.get(rep)!;
+                    counted.add(rep);
+                }
+            } else {
+                mySize = this.nodeSize.get(n) ?? 0;
+            }
+
             let bestPred = 0;
             const preds = this.radj.get(n);
             if (preds) {
@@ -402,13 +437,26 @@ class DifferenceConstraintGraph {
             this.radj.get(a)!.set(b, 0);
             if (constraint) this.edgeProvenance.set(DifferenceConstraintGraph.provenanceKey(b, a), constraint);
         }
+
+        // Increment reference count for this alignment pair
+        const pairKey = a < b ? `${a}\x00${b}` : `${b}\x00${a}`;
+        this.alignmentRefCount.set(pairKey, (this.alignmentRefCount.get(pairKey) ?? 0) + 1);
         return true;
     }
 
     /**
-     * Remove alignment edges (both directions).
+     * Remove alignment edges (both directions), but only if no other constraint
+     * still requires them (reference count drops to zero).
      */
     removeAlignmentEdges(a: string, b: string): void {
+        const pairKey = a < b ? `${a}\x00${b}` : `${b}\x00${a}`;
+        const count = (this.alignmentRefCount.get(pairKey) ?? 0) - 1;
+        if (count > 0) {
+            this.alignmentRefCount.set(pairKey, count);
+            return; // Another constraint still needs these edges
+        }
+        this.alignmentRefCount.delete(pairKey);
+
         // Only remove if zero-weight (don't remove ordering edges)
         if (this.adj.get(a)?.get(b) === 0) {
             this.adj.get(a)!.delete(b);
@@ -527,11 +575,22 @@ class DifferenceConstraintGraph {
         if (!this.adj.has(a) || !this.adj.has(b)) return false;
         if (this.canReach(b, a)) return true; // Cycle
 
+        // Save existing edge state before probing
+        const existingFwd = this.adj.get(a)!.get(b);
+        const existingRev = this.radj.get(b)!.get(a);
+
         this.adj.get(a)!.set(b, w);
         this.radj.get(b)!.set(a, w);
         const span = this.longestChainSpan();
-        this.adj.get(a)!.delete(b);
-        this.radj.get(b)!.delete(a);
+
+        // Restore original edge state
+        if (existingFwd !== undefined) {
+            this.adj.get(a)!.set(b, existingFwd);
+            this.radj.get(b)!.set(a, existingRev!);
+        } else {
+            this.adj.get(a)!.delete(b);
+            this.radj.get(b)!.delete(a);
+        }
 
         return span > maxSpan;
     }
