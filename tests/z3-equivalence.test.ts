@@ -315,6 +315,40 @@ describe.runIf(available)('Z3 Oracle Equivalence (Property-Based)', () => {
             expect(validatorSat).toBe(false);
         });
 
+        // ── Negated group cross-checks (bbox encoding, M > 5) ──────────
+
+        it('negated 6-member group with free non-member — SAT (Z3 cross-check)', async () => {
+            const layout = parseConstraintSpec('a1 <x x, {!G: a1, a2, a3, a4, a5, a6}');
+            const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+            assertAgreement(layout, validatorSat, oracleSat);
+            expect(validatorSat).toBe(true);
+        });
+
+        it('non-member between 6-member group members — SAT (Z3 cross-check)', async () => {
+            const layout = parseConstraintSpec('a1 <x x, x <x a2, a3 <y x, x <y a4, {!G: a1, a2, a3, a4, a5, a6}');
+            const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+            assertAgreement(layout, validatorSat, oracleSat);
+            expect(validatorSat).toBe(true);
+        });
+
+        it('sole non-member forced outside 6-member group — UNSAT (Z3 cross-check)', async () => {
+            const layout = parseConstraintSpec('x <x a1, x <x a2, x <x a3, x <x a4, x <x a5, x <x a6, {!G: a1, a2, a3, a4, a5, a6}');
+            const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+            assertAgreement(layout, validatorSat, oracleSat);
+            expect(validatorSat).toBe(false);
+        });
+
+        it('one non-member forced out, another free — SAT (Z3 cross-check)', async () => {
+            const layout = parseConstraintSpec('x <x a1, x <x a2, x <x a3, x <x a4, x <x a5, x <x a6, a1 <x y, {!G: a1, a2, a3, a4, a5, a6}');
+            const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+            assertAgreement(layout, validatorSat, oracleSat);
+            expect(validatorSat).toBe(true);
+        });
+
+        // NOTE: M=8 negated group Z3 cross-checks omitted — Z3 WASM OOMs on CI
+        // constructing the M⁴ formula (3136 alternatives + 36 pairwise non-overlap).
+        // Correctness at M=8 is covered by deterministic unit tests in constraint-dsl.test.ts.
+
         it('groups + ordering disjunctions on 6 nodes', async () => {
             const gbf = new GroupByField('type', 0, 1, 'type');
             const arbLayout = arbNodePool(6).chain(nodes => {

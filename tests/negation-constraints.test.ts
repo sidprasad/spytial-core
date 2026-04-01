@@ -1224,9 +1224,9 @@ constraints:
         const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
         const { layout } = layoutInstance.generateLayout(instance);
 
-        // Negated group should produce disjunctive constraints
-        // 2 non-members × 2 members: with mL≠mR and mT≠mB filter,
-        // each non-member has 2P2 × 2P2 = 2×2 = 4 alternatives. Total = 2 × 4 = 8.
+        // Negated group should produce disjunctive constraints.
+        // With 2 members (≤ BBOX_THRESHOLD), uses flat encoding:
+        // 2 non-members × 2P2 × 2P2 = 2 × 2 × 2 = 8 alternatives in 1 disjunction.
         expect(layout.disjunctiveConstraints).toBeDefined();
         expect(layout.disjunctiveConstraints!.length).toBeGreaterThan(0);
 

@@ -235,6 +235,70 @@ describe('group constraints', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Negated group constraints
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('negated group constraints', () => {
+    // ── Flat encoding (M ≤ 5) ───────────────────────────────────────────
+
+    it('negated 3-member group with free non-member is SAT', () => {
+        sat('a1 <x x, {!G: a1, a2, a3}');
+    });
+
+    it('non-member between 3-member group members on both axes is SAT', () => {
+        sat('a1 <x x, x <x a2, a1 <y x, x <y a3, {!G: a1, a2, a3}');
+    });
+
+    it('sole non-member forced left of all 3 members is UNSAT', () => {
+        unsat('x <x a1, x <x a2, x <x a3, {!G: a1, a2, a3}');
+    });
+
+    // ── Bbox encoding (M > 5) ───────────────────────────────────────────
+
+    it('negated 6-member group with free non-member is SAT', () => {
+        sat('a1 <x x, {!G: a1, a2, a3, a4, a5, a6}');
+    });
+
+    it('non-member between 6-member group members on both axes is SAT', () => {
+        sat('a1 <x x, x <x a2, a3 <y x, x <y a4, {!G: a1, a2, a3, a4, a5, a6}');
+    });
+
+    it('sole non-member forced left of all 6 members is UNSAT', () => {
+        unsat('x <x a1, x <x a2, x <x a3, x <x a4, x <x a5, x <x a6, {!G: a1, a2, a3, a4, a5, a6}');
+    });
+
+    it('one non-member forced out, another free — SAT (bbox encoding)', () => {
+        sat('x <x a1, x <x a2, x <x a3, x <x a4, x <x a5, x <x a6, a1 <x y, {!G: a1, a2, a3, a4, a5, a6}');
+    });
+
+    it('negated 8-member group with free non-member is SAT', () => {
+        sat('a1 <x x, {!G: a1, a2, a3, a4, a5, a6, a7, a8}');
+    });
+
+    it('sole non-member forced outside 8-member group is UNSAT', () => {
+        unsat('x <x a1, x <x a2, x <x a3, x <x a4, x <x a5, x <x a6, x <x a7, x <x a8, {!G: a1, a2, a3, a4, a5, a6, a7, a8}');
+    });
+
+    // ── Cross-encoding consistency ──────────────────────────────────────
+    // Same topology at M=3 (flat) and M=6 (bbox) must agree on SAT/UNSAT.
+
+    it('flat and bbox agree: free non-member is SAT', () => {
+        sat('a1 <x x, {!G: a1, a2, a3}');
+        sat('a1 <x x, {!G: a1, a2, a3, a4, a5, a6}');
+    });
+
+    it('flat and bbox agree: trapped non-member is SAT', () => {
+        sat('a1 <x x, x <x a2, a1 <y x, x <y a3, {!G: a1, a2, a3}');
+        sat('a1 <x x, x <x a2, a3 <y x, x <y a4, {!G: a1, a2, a3, a4, a5, a6}');
+    });
+
+    it('flat and bbox agree: forced-outside non-member is UNSAT', () => {
+        unsat('x <x a1, x <x a2, x <x a3, {!G: a1, a2, a3}');
+        unsat('x <x a1, x <x a2, x <x a3, x <x a4, x <x a5, x <x a6, {!G: a1, a2, a3, a4, a5, a6}');
+    });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Regression tests
 // ═══════════════════════════════════════════════════════════════════════════════
 

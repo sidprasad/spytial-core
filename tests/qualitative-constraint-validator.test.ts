@@ -621,7 +621,7 @@ describe('QualitativeConstraintValidator', () => {
             validator.validateConstraints();
 
             // Pure ¬: both keys' alternatives should be merged into ONE disjunction
-            // Fiberwise would produce TWO separate DisjunctiveConstraints
+            // (flat encoding for small groups ≤ BBOX_THRESHOLD)
             const negGroupDisjs = layout.disjunctiveConstraints?.filter(d =>
                 d.sourceConstraint === negatedSource
             ) ?? [];
@@ -671,6 +671,7 @@ describe('QualitativeConstraintValidator', () => {
             validator.validateConstraints();
 
             // Different sources → separate disjunctions (both must hold)
+            // Each source produces 1 disjunction (flat encoding for small groups)
             const negGroupDisjs = layout.disjunctiveConstraints?.filter(d =>
                 d.sourceConstraint === source1 || d.sourceConstraint === source2
             ) ?? [];
