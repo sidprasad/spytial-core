@@ -64,7 +64,7 @@ import {
 } from '../../src/layout/interfaces';
 
 const MIN_PADDING = 15;
-const MAX_COORD = 100000;
+const MAX_COORD = 10_000_000;
 
 // Preferred solvers: Gecode (CP, best for our constraints), then MIP fallbacks
 const PREFERRED_SOLVERS = ['gecode', 'cbc', 'coin-bc', 'coinbc', 'highs'];

@@ -121,39 +121,17 @@ After `restartThreshold` conflicts in a search episode, the solver **restarts**:
 
 The solver exploits the fact that all objects are axis-aligned rectangles with known dimensions, going beyond pure graph-theoretic feasibility.
 
-### 4.1 Dimension-Aware Partial Orders
-
-Each node in the H-graph carries its **width**; each node in the V-graph carries its **height**. The **longest weighted chain** through the DAG equals the minimum canvas span required to lay out those nodes:
-
-```
-span(chain) = Σ size(node_i) + (k-1) × gap
-```
-
-Computed via topological DP in O(V + E). If any chain exceeds `MAX_SPAN` (100,000px), the configuration is infeasible — detected before any search begins.
-
-This also enables **dimension-aware alternative pruning**: when evaluating a disjunctive alternative, the solver temporarily adds the edge and checks if the resulting chain overflows. Alternatives that are acyclic but geometrically impossible are pruned without backtracking.
-
-### 4.2 Pigeonhole on Alignment Classes
-
-If K nodes are x-aligned (share the same x-coordinate via transitive alignment), they must all fit in a vertical column:
-
-```
-required_height = Σ height(node_i) + (K-1) × gap
-```
-
-If this exceeds `MAX_SPAN`, infeasibility is detected immediately after processing conjunctive constraints, before any disjunctive search. Symmetric check for y-aligned nodes in a horizontal row.
-
-### 4.3 Pre-Solver Disjunction Resolution
+### 4.1 Pre-Solver Disjunction Resolution
 
 Before entering CDCL, a **pre-solve pass** attempts to resolve disjunctions cheaply:
 
 1. **Already separated**: if the pair of regions is already ordered in H or V (by transitivity through the conjunctive graph), the disjunction is trivially satisfied. Skip it.
-2. **Prune infeasible alternatives**: check each alternative for cycles, alignment conflicts, and dimension overflow. Remove provably-dead alternatives.
+2. **Prune infeasible alternatives**: check each alternative for cycles and alignment conflicts. Remove provably-dead alternatives.
 3. **Unit propagation**: if only one alternative survives, commit it as conjunctive (no search needed).
 
 This often eliminates a large fraction of disjunctions — especially group bounding-box disjunctions where existing orderings already separate most node-group pairs.
 
-### 4.4 Alignment-Ordering Mutual Exclusion
+### 4.2 Alignment-Ordering Mutual Exclusion
 
 The solver enforces that alignment and ordering on the same axis are contradictory at three levels:
 
@@ -163,7 +141,7 @@ The solver enforces that alignment and ordering on the same axis are contradicto
 
 3. **Cross-class cycles**: Two distinct alignment classes can become mutually ordered — class A has a member ordered before a member of class B, and vice versa. Since aligned nodes must share a coordinate, this creates a cycle in the "alignment-class-contracted graph" and is unsatisfiable. Example: `align-y(N1, N4), above(N2, N1), above(N4, N3), align-y(N3, N2)` — classes {N1,N4} and {N2,N3} are V-ordered in both directions. The solver detects this via `hasAlignmentClassCycle`, which contracts the ordering graph by alignment equivalence classes and checks for cycles among super-nodes.
 
-### 4.5 Bounding-Box Containment Semantics
+### 4.3 Bounding-Box Containment Semantics
 
 A `BoundingBoxConstraint(node=X, group=G, side='left')` asserts that X is to the left of the group's bounding box. Since the bounding box must **contain all members** of G, this implicitly means X must be to the left of **every member** of G. The solver checks this containment invariant:
 
@@ -188,27 +166,25 @@ Virtual nodes have **size 0** in the weighted graph, so they contribute only gap
 
 Group-to-group separation uses edges between virtual nodes: `_group_A → _group_B`.
 
-**Important**: the virtual group node is a lightweight proxy — it does **not** have edges to/from its own members in the ordering graph. Containment semantics (the group box must encompass all members) are enforced separately via the `isBoundingBoxFeasible` check (Section 4.5), which verifies that placing a node on a given side of the group is consistent with the node's ordering relationships to individual members.
+**Important**: the virtual group node is a lightweight proxy — it does **not** have edges to/from its own members in the ordering graph. Containment semantics (the group box must encompass all members) are enforced separately via the `isBoundingBoxFeasible` check (Section 4.3), which verifies that placing a node on a given side of the group is consistent with the node's ordering relationships to individual members.
 
 ---
 
 ## 6. Solver Phases
 
-The validator executes in 9 sequential phases:
+The validator executes in 7 sequential phases:
 
 | Phase | Action | Can fail? |
 |---|---|---|
 | 1 | Add all conjunctive constraints to H/V graphs and alignment UFs | Yes (cycle, alignment conflict) |
-| 2 | Check dimension feasibility (longest chain ≤ MAX_SPAN) | Yes |
-| 3 | Check pigeonhole on alignment classes | Yes |
-| 4 | Generate group bounding-box disjunctions (virtual group nodes) | No |
-| 5 | Collect all disjunctive constraints | No |
-| 6 | Pre-solve: resolve trivial disjunctions before CDCL | No (commits or prunes) |
-| 7 | CDCL search on remaining disjunctions | Yes (UNSAT) |
-| 8 | Compute implicit alignment ordering constraints | No |
-| 9 | Detect node overlaps (dual-aligned nodes occupying same position) | Yes |
+| 2 | Generate group bounding-box disjunctions (virtual group nodes) | No |
+| 3 | Collect all disjunctive constraints | No |
+| 4 | Pre-solve: resolve trivial disjunctions before CDCL | No (commits or prunes) |
+| 5 | CDCL search on remaining disjunctions | Yes (UNSAT) |
+| 6 | Compute implicit alignment ordering constraints | No |
+| 7 | Detect node overlaps (dual-aligned nodes occupying same position) | Yes |
 
-Early phases handle the cheap, deterministic checks. CDCL search (phase 7) only fires if disjunctions remain after pre-solving.
+Early phases handle the cheap, deterministic checks. CDCL search (phase 5) only fires if disjunctions remain after pre-solving.
 
 ---
 
@@ -216,7 +192,7 @@ Early phases handle the cheap, deterministic checks. CDCL search (phase 7) only 
 
 | Structure | Purpose | Operations |
 |---|---|---|
-| `WeightedPartialOrderGraph` | H and V strict partial orders as DAGs. Nodes carry axis dimensions. | `addEdge` (O(V+E) cycle check), `canReach` (BFS), `longestChainSpan` (topo DP), `wouldOverflow`, `clone` |
+| `WeightedPartialOrderGraph` | H and V strict partial orders as DAGs. Nodes carry axis dimensions. | `addEdge` (O(V+E) cycle check), `canReach` (BFS), `clone` |
 | `UnionFind` | Alignment equivalence classes (`Xeq`, `Yeq`). | `union`, `find`, `connected`, `snapshot`/`restore`, `clone` |
 | `LearnedClause[]` | Accumulated conflict-driven clauses across restarts. | Append, scan during unit propagation |
 | `Assignment[]` (trail) | Stack of decisions and propagations at each decision level. | Push on assign, truncate on backtrack |

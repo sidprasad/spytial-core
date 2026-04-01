@@ -616,36 +616,11 @@ describe('QualitativeConstraintValidator', () => {
 
             const stats = validator.getStats();
             expect(stats).toHaveProperty('prunedByTransitivity');
-            expect(stats).toHaveProperty('prunedByDimension');
-            expect(stats).toHaveProperty('prunedByPigeonhole');
             expect(stats).toHaveProperty('prunedByDecomposition');
         });
     });
 
-    // ─── V2-specific: Insight 3 — Pigeonhole on alignment classes ────────────
-
-    describe('Insight 3: Pigeonhole on alignment classes', () => {
-        it('should accept small alignment classes that fit', () => {
-            const a = createNode('A', { width: 100, height: 60 });
-            const b = createNode('B', { width: 100, height: 60 });
-            const c = createNode('C', { width: 100, height: 60 });
-
-            // All x-aligned (same x). Need 3*60 + 2*15 = 210px vertical → easily fits
-            const layout = createLayout(
-                [a, b, c],
-                [
-                    createAlignConstraint(a, b, 'x'),
-                    createAlignConstraint(b, c, 'x'),
-                ]
-            );
-
-            const validator = new QualitativeConstraintValidator(layout);
-            const error = validator.validateConstraints();
-            expect(error).toBeNull();
-        });
-    });
-
-    // ─── V2-specific: Insight 4 — Interval decomposition ────────────────────
+    // ─── V2-specific: Interval decomposition ─────────────────────────────────
 
     describe('Insight 4: Interval-graph decomposition', () => {
         it('should resolve 4-way disjunctions via aspect ratio when clear', () => {
@@ -741,8 +716,6 @@ describe('QualitativeConstraintValidator', () => {
             const stats = validator.getStats();
             // Verify the geometry insights helped
             const totalPruned = stats.prunedByTransitivity
-                + stats.prunedByDimension
-                + stats.prunedByPigeonhole
                 + stats.prunedByDecomposition;
             // At least some pruning should have happened
             expect(totalPruned + stats.conflicts).toBeGreaterThanOrEqual(0);
@@ -800,8 +773,6 @@ describe('QualitativeConstraintValidator', () => {
             expect(stats.conflicts).toBe(0);
             expect(stats.addedConstraints).toBeGreaterThanOrEqual(1);
             expect(typeof stats.prunedByTransitivity).toBe('number');
-            expect(typeof stats.prunedByDimension).toBe('number');
-            expect(typeof stats.prunedByPigeonhole).toBe('number');
             expect(typeof stats.prunedByDecomposition).toBe('number');
         });
     });
