@@ -1066,6 +1066,16 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             if (!graph.addAlignmentEdges(ac.node1.id, ac.node2.id, constraint)) {
                 return this.buildAlignmentConflictError(constraint, ac.axis);
             }
+            // Dual-axis alignment forces two nonzero-size nodes to the same
+            // position, guaranteeing overlap. Reject the second alignment.
+            // Skip for self-alignment (same node) — that's trivially SAT.
+            if (ac.node1.id !== ac.node2.id) {
+                const otherGraph = ac.axis === 'x' ? this.vGraph : this.hGraph;
+                if (otherGraph.areAligned(ac.node1.id, ac.node2.id)) {
+                    graph.removeAlignmentEdges(ac.node1.id, ac.node2.id);
+                    return this.buildAlignmentConflictError(constraint, ac.axis);
+                }
+            }
             if (ac.axis === 'x') {
                 this.verticallyAligned.push([ac.node1, ac.node2]);
             } else {
@@ -1305,6 +1315,12 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                 const bToA = graph.canReach(ac.node2.id, ac.node1.id);
                 // Asymmetric reachability = strict ordering = can't align
                 if (aToB !== bToA) return false;
+                // Dual-axis alignment forces nodes to same position (guaranteed overlap)
+                // Skip for self-alignment (same node) — that's trivially SAT.
+                if (ac.node1.id !== ac.node2.id) {
+                    const otherGraph = ac.axis === 'x' ? this.vGraph : this.hGraph;
+                    if (otherGraph.areAligned(ac.node1.id, ac.node2.id)) return false;
+                }
                 continue;
             }
 
@@ -2204,7 +2220,8 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                 ok = graph.addAlignmentEdges(ac.node1.id, ac.node2.id, constraint);
                 // Dual-axis alignment forces two nonzero-size nodes to the same
                 // position, guaranteeing overlap. Reject the second alignment.
-                if (ok) {
+                // Skip for self-alignment (same node) — that's trivially SAT.
+                if (ok && ac.node1.id !== ac.node2.id) {
                     const otherGraph = ac.axis === 'x' ? freshV : freshH;
                     if (otherGraph.areAligned(ac.node1.id, ac.node2.id)) {
                         graph.removeAlignmentEdges(ac.node1.id, ac.node2.id);
@@ -2257,10 +2274,13 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             const graph = ac.axis === 'x' ? hGraph : vGraph;
             if (!graph.addAlignmentEdges(ac.node1.id, ac.node2.id, constraint)) return false;
             // Dual-axis alignment forces overlap between nonzero-size nodes
-            const otherGraph = ac.axis === 'x' ? vGraph : hGraph;
-            if (otherGraph.areAligned(ac.node1.id, ac.node2.id)) {
-                graph.removeAlignmentEdges(ac.node1.id, ac.node2.id);
-                return false;
+            // Skip for self-alignment (same node) — that's trivially SAT.
+            if (ac.node1.id !== ac.node2.id) {
+                const otherGraph = ac.axis === 'x' ? vGraph : hGraph;
+                if (otherGraph.areAligned(ac.node1.id, ac.node2.id)) {
+                    graph.removeAlignmentEdges(ac.node1.id, ac.node2.id);
+                    return false;
+                }
             }
             return true;
         }

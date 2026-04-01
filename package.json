@@ -27,6 +27,7 @@
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
+    "test:validator-equivalence": "vitest run tests/minizinc-equivalence.test.ts",
     "test:perf": "vitest run --config vitest.bench.config.ts",
     "bench": "vitest run --config vitest.bench.config.ts",
     "lint": "eslint src --ext .ts,.tsx",
