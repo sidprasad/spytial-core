@@ -2465,33 +2465,137 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                 const overlapping = vGroup.filter(n => hSet.has(n.id));
                 if (overlapping.length >= 2) {
                     const n1 = overlapping[0], n2 = overlapping[1];
+
+                    // Find alignment chains connecting n1↔n2 on each axis.
+                    // Both chains together form the minimal conflicting set;
+                    // breaking either chain resolves the overlap.
+                    const xChain = this.findAlignmentPath(n1.id, n2.id, 'x');
+                    const yChain = this.findAlignmentPath(n1.id, n2.id, 'y');
+                    const allConflicting = [...xChain, ...yChain];
+
                     const minimalConflictingSet = new Map<SourceConstraint, LayoutConstraint[]>();
-                    for (const c of this.addedConstraints) {
-                        if (isAlignmentConstraint(c)) {
-                            const ac = c as AlignmentConstraint;
-                            if ([n1.id, n2.id].includes(ac.node1.id) || [n1.id, n2.id].includes(ac.node2.id)) {
-                                const src = ac.sourceConstraint;
-                                if (!minimalConflictingSet.has(src)) minimalConflictingSet.set(src, []);
-                                minimalConflictingSet.get(src)!.push(c);
-                            }
-                        }
+                    const htmlMap = new Map<string, string[]>();
+                    for (const c of allConflicting) {
+                        const src = c.sourceConstraint;
+                        if (!minimalConflictingSet.has(src)) minimalConflictingSet.set(src, []);
+                        minimalConflictingSet.get(src)!.push(c);
+                        const html = src.toHTML();
+                        if (!htmlMap.has(html)) htmlMap.set(html, []);
+                        htmlMap.get(html)!.push(orientationConstraintToString(c));
                     }
-                    const first = this.addedConstraints.find(c => isAlignmentConstraint(c)) || this.addedConstraints[0];
+
+                    // MFS: remove the minimum constraints from one axis to break
+                    // the dual-axis alignment. Pick the cheaper axis.
+                    const toRemove = xChain.length > 0 && xChain.length <= yChain.length
+                        ? this.findConstraintsToBreakAlignment(n1.id, n2.id, 'x')
+                        : this.findConstraintsToBreakAlignment(n1.id, n2.id, 'y');
+                    const removeSet = new Set(toRemove);
+                    const maxFeasible = this.addedConstraints.filter(c => !removeSet.has(c));
+
+                    const first = allConflicting[0] || this.addedConstraints[0];
                     return {
                         name: 'PositionalConstraintError', type: 'positional-conflict',
                         message: `Alignment constraints force ${n1.id} and ${n2.id} to occupy the same position`,
                         conflictingConstraint: first, conflictingSourceConstraint: first.sourceConstraint,
                         minimalConflictingSet,
+                        maximalFeasibleSubset: maxFeasible,
                         errorMessages: {
                             conflictingConstraint: orientationConstraintToString(first),
                             conflictingSourceConstraint: first.sourceConstraint.toHTML(),
-                            minimalConflictingConstraints: new Map(),
+                            minimalConflictingConstraints: htmlMap,
                         },
                     };
                 }
             }
         }
         return null;
+    }
+
+    /**
+     * BFS to find the alignment constraint path connecting two nodes on a given axis.
+     */
+    private findAlignmentPath(nodeA: string, nodeB: string, axis: 'x' | 'y'): LayoutConstraint[] {
+        const adj = new Map<string, { neighbor: string; constraint: LayoutConstraint }[]>();
+        for (const c of this.addedConstraints) {
+            if (!isAlignmentConstraint(c)) continue;
+            const ac = c as AlignmentConstraint;
+            if (ac.axis !== axis) continue;
+            const a = ac.node1.id, b = ac.node2.id;
+            if (!adj.has(a)) adj.set(a, []);
+            if (!adj.has(b)) adj.set(b, []);
+            adj.get(a)!.push({ neighbor: b, constraint: c });
+            adj.get(b)!.push({ neighbor: a, constraint: c });
+        }
+        const visited = new Set<string>([nodeA]);
+        const parent = new Map<string, { node: string; constraint: LayoutConstraint } | null>();
+        parent.set(nodeA, null);
+        const queue = [nodeA];
+        while (queue.length > 0) {
+            const current = queue.shift()!;
+            if (current === nodeB) {
+                const result: LayoutConstraint[] = [];
+                let node = nodeB;
+                while (parent.get(node) !== null) {
+                    const p = parent.get(node)!;
+                    result.push(p.constraint);
+                    node = p.node;
+                }
+                return result.reverse();
+            }
+            for (const { neighbor, constraint } of adj.get(current) || []) {
+                if (!visited.has(neighbor)) {
+                    visited.add(neighbor);
+                    parent.set(neighbor, { node: current, constraint });
+                    queue.push(neighbor);
+                }
+            }
+        }
+        return [];
+    }
+
+    /**
+     * Find the minimum set of alignment constraints to remove on one axis
+     * so that nodeA and nodeB are no longer aligned.
+     */
+    private findConstraintsToBreakAlignment(nodeA: string, nodeB: string, axis: 'x' | 'y'): LayoutConstraint[] {
+        const axisAlignments = this.addedConstraints.filter(c =>
+            isAlignmentConstraint(c) && (c as AlignmentConstraint).axis === axis
+        );
+
+        const connected = (excluded: Set<LayoutConstraint>): boolean => {
+            const adj = new Map<string, string[]>();
+            for (const c of axisAlignments) {
+                if (excluded.has(c)) continue;
+                const ac = c as AlignmentConstraint;
+                if (!adj.has(ac.node1.id)) adj.set(ac.node1.id, []);
+                if (!adj.has(ac.node2.id)) adj.set(ac.node2.id, []);
+                adj.get(ac.node1.id)!.push(ac.node2.id);
+                adj.get(ac.node2.id)!.push(ac.node1.id);
+            }
+            const visited = new Set<string>([nodeA]);
+            const queue = [nodeA];
+            while (queue.length > 0) {
+                const cur = queue.shift()!;
+                if (cur === nodeB) return true;
+                for (const nb of adj.get(cur) || []) {
+                    if (!visited.has(nb)) { visited.add(nb); queue.push(nb); }
+                }
+            }
+            return false;
+        };
+
+        // Try single-constraint removal first (covers tree-shaped alignment graphs)
+        for (const c of axisAlignments) {
+            if (!connected(new Set([c]))) return [c];
+        }
+
+        // Redundant alignment edges — greedily remove until disconnected
+        const toRemove = new Set<LayoutConstraint>();
+        for (const c of axisAlignments) {
+            toRemove.add(c);
+            if (!connected(toRemove)) return [...toRemove];
+        }
+        return [...toRemove];
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────

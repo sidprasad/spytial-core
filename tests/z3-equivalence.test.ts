@@ -460,13 +460,9 @@ describe.runIf(available)('Z3 Oracle Equivalence (Property-Based)', () => {
 
     // ─── MFS verification ───────────────────────────────────────────────
 
-    // TODO: The validator has a pre-existing bug where the reported MFS can
-    // include alignment constraints that force two nodes to the same position,
-    // violating pairwise non-overlap. This was masked in the MiniZinc oracle
-    // by different fast-check random seeds.
     describe('MFS correctness', () => {
 
-        it.skip('MFS reported by validator is feasible according to Z3', async () => {
+        it('MFS reported by validator is feasible according to Z3', async () => {
             await fc.assert(fc.asyncProperty(
                 arbFullSystem(5),
                 async (layout) => {
