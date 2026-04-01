@@ -38,11 +38,15 @@ import {
 } from './helpers/constraint-dsl';
 import {
     arbNodePool,
+    arbPair,
     arbOrdering,
     arbConjunctive,
     arbDisjunction,
     arbRichDisjunction,
     arbFullSystem,
+    arbNegativeOrdering,
+    arbMixedOrdering,
+    arbGroup,
 } from './helpers/constraint-arbitraries';
 import type { LayoutGroup } from '../src/layout/interfaces';
 
@@ -149,6 +153,62 @@ describe.runIf(available)('Z3 Oracle Equivalence (Property-Based)', () => {
                     fc.tuple(
                         fc.constant(nodes),
                         fc.array(arbConjunctive(nodes), { minLength: 2, maxLength: 8 })
+                    )
+                ),
+                async ([nodes, constraints]) => {
+                    const layout = buildLayout(nodes, constraints);
+                    const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+                    assertAgreement(layout, validatorSat, oracleSat);
+                }
+            ), { numRuns: NUM_RUNS, timeout: TIMEOUT });
+        });
+    });
+
+    // ─── Negative (zero-gap) orderings ───────────────────────────────────
+
+    describe('Negative orientation constraints (minDistance=0)', () => {
+
+        it('pure negative orderings on 4 nodes', async () => {
+            await fc.assert(fc.asyncProperty(
+                arbNodePool(4).chain(nodes =>
+                    fc.tuple(
+                        fc.constant(nodes),
+                        fc.array(arbNegativeOrdering(nodes), { minLength: 1, maxLength: 6 })
+                    )
+                ),
+                async ([nodes, constraints]) => {
+                    const layout = buildLayout(nodes, constraints);
+                    const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+                    assertAgreement(layout, validatorSat, oracleSat);
+                }
+            ), { numRuns: NUM_RUNS, timeout: TIMEOUT });
+        });
+
+        it('mixed positive + negative orderings on 5 nodes', async () => {
+            await fc.assert(fc.asyncProperty(
+                arbNodePool(5).chain(nodes =>
+                    fc.tuple(
+                        fc.constant(nodes),
+                        fc.array(arbMixedOrdering(nodes), { minLength: 2, maxLength: 8 })
+                    )
+                ),
+                async ([nodes, constraints]) => {
+                    const layout = buildLayout(nodes, constraints);
+                    const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+                    assertAgreement(layout, validatorSat, oracleSat);
+                }
+            ), { numRuns: NUM_RUNS, timeout: TIMEOUT });
+        });
+
+        it('mixed orderings + alignments on 4 nodes', async () => {
+            await fc.assert(fc.asyncProperty(
+                arbNodePool(4).chain(nodes =>
+                    fc.tuple(
+                        fc.constant(nodes),
+                        fc.array(fc.oneof(arbMixedOrdering(nodes), fc.oneof(
+                            fc.tuple(fc.constant(nodes), arbPair(nodes.length)).map(([ns, [i, j]]) => alignOnX(ns[i], ns[j])),
+                            fc.tuple(fc.constant(nodes), arbPair(nodes.length)).map(([ns, [i, j]]) => alignOnY(ns[i], ns[j])),
+                        )), { minLength: 2, maxLength: 6 })
                     )
                 ),
                 async ([nodes, constraints]) => {
@@ -348,6 +408,62 @@ describe.runIf(available)('Z3 Oracle Equivalence (Property-Based)', () => {
         // NOTE: M=8 negated group Z3 cross-checks omitted — Z3 WASM OOMs on CI
         // constructing the M⁴ formula (3136 alternatives + 36 pairwise non-overlap).
         // Correctness at M=8 is covered by deterministic unit tests in constraint-dsl.test.ts.
+
+        // ── Randomized negated group cross-checks (small M) ──────────
+
+        it('random negated group with 2 members on 4 nodes (Z3 cross-check)', async () => {
+            const gbf = new GroupByField('type', 0, 1, 'type');
+            await fc.assert(fc.asyncProperty(
+                arbNodePool(4).chain(nodes =>
+                    fc.tuple(
+                        fc.constant(nodes),
+                        fc.array(arbOrdering(nodes), { minLength: 0, maxLength: 3 }),
+                        fc.shuffledSubarray(
+                            Array.from({ length: 4 }, (_, i) => i),
+                            { minLength: 2, maxLength: 2 },
+                        ),
+                    )
+                ),
+                async ([nodes, constraints, memberIndices]) => {
+                    const memberIds = memberIndices.map(i => nodes[i].id);
+                    const group: LayoutGroup = {
+                        name: 'NG0', nodeIds: memberIds,
+                        keyNodeId: memberIds[0], showLabel: true,
+                        sourceConstraint: gbf, negated: true,
+                    };
+                    const layout = buildLayout(nodes, constraints, undefined, [group]);
+                    const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+                    assertAgreement(layout, validatorSat, oracleSat);
+                }
+            ), { numRuns: NUM_RUNS, timeout: TIMEOUT });
+        });
+
+        it('random negated group with 3 members on 5 nodes (Z3 cross-check)', async () => {
+            const gbf = new GroupByField('type', 0, 1, 'type');
+            await fc.assert(fc.asyncProperty(
+                arbNodePool(5).chain(nodes =>
+                    fc.tuple(
+                        fc.constant(nodes),
+                        fc.array(arbOrdering(nodes), { minLength: 0, maxLength: 4 }),
+                        fc.shuffledSubarray(
+                            Array.from({ length: 5 }, (_, i) => i),
+                            { minLength: 3, maxLength: 3 },
+                        ),
+                    )
+                ),
+                async ([nodes, constraints, memberIndices]) => {
+                    const memberIds = memberIndices.map(i => nodes[i].id);
+                    const group: LayoutGroup = {
+                        name: 'NG0', nodeIds: memberIds,
+                        keyNodeId: memberIds[0], showLabel: true,
+                        sourceConstraint: gbf, negated: true,
+                    };
+                    const layout = buildLayout(nodes, constraints, undefined, [group]);
+                    const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+                    assertAgreement(layout, validatorSat, oracleSat);
+                }
+            ), { numRuns: NUM_RUNS, timeout: TIMEOUT });
+        });
 
         it('groups + ordering disjunctions on 6 nodes', async () => {
             const gbf = new GroupByField('type', 0, 1, 'type');

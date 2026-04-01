@@ -13,7 +13,7 @@ import {
     LayoutGroup,
     LayoutConstraint,
 } from '../../src/layout/interfaces';
-import { makeNode, leftOf, aboveOf, alignOnX, alignOnY, SRC, GBF } from './constraint-dsl';
+import { makeNode, leftOf, aboveOf, alignOnX, alignOnY, negativeLeftOf, negativeAboveOf, SRC, GBF } from './constraint-dsl';
 
 // ─── Node pool ──────────────────────────────────────────────────────────────
 
@@ -54,6 +54,26 @@ export function arbOrdering(nodes: LayoutNode[]): fc.Arbitrary<LayoutConstraint>
             default: return leftOf(nodes[i], nodes[j]);
         }
     });
+}
+
+/** Random negative (zero-gap) ordering constraint. */
+export function arbNegativeOrdering(nodes: LayoutNode[]): fc.Arbitrary<LayoutConstraint> {
+    return fc.tuple(arbPair(nodes.length), fc.integer({ min: 0, max: 3 })).map(([[i, j], type]) => {
+        switch (type) {
+            case 0: return negativeLeftOf(nodes[i], nodes[j]);
+            case 1: return negativeLeftOf(nodes[j], nodes[i]);
+            case 2: return negativeAboveOf(nodes[i], nodes[j]);
+            case 3: return negativeAboveOf(nodes[j], nodes[i]);
+            default: return negativeLeftOf(nodes[i], nodes[j]);
+        }
+    });
+}
+
+/** Random ordering, positive or negative (zero-gap). */
+export function arbMixedOrdering(nodes: LayoutNode[]): fc.Arbitrary<LayoutConstraint> {
+    return fc.boolean().chain(positive =>
+        positive ? arbOrdering(nodes) : arbNegativeOrdering(nodes)
+    );
 }
 
 /** Random alignment constraint: =x or =y. */

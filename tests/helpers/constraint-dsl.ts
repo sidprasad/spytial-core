@@ -315,6 +315,17 @@ export function describeLayout(layout: InstanceLayout): string {
     return lines.join('\n  ');
 }
 
+// ─── Negative (zero-gap) constraint builders ────────────────────────────────
+
+/** Ordering with minDistance=0: no padding, just non-overlap by node width. */
+function negativeLeftOf(a: LayoutNode, b: LayoutNode): LeftConstraint {
+    return { left: a, right: b, minDistance: 0, sourceConstraint: SRC };
+}
+
+function negativeAboveOf(a: LayoutNode, b: LayoutNode): TopConstraint {
+    return { top: a, bottom: b, minDistance: 0, sourceConstraint: SRC };
+}
+
 // ─── Constraint builders (for PBT generators) ──────────────────────────────
 
-export { makeNode, leftOf, aboveOf, alignOnX, alignOnY, SRC, GBF };
+export { makeNode, leftOf, aboveOf, alignOnX, alignOnY, negativeLeftOf, negativeAboveOf, SRC, GBF };
