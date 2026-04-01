@@ -376,29 +376,46 @@ class DifferenceConstraintGraph {
 
         for (const n of order) {
             const rep = nodeToRep.get(n);
-            let mySize: number;
-            if (rep !== undefined) {
-                // Aligned node: only count the class's max size once
-                if (counted.has(rep)) {
-                    mySize = 0;
-                } else {
-                    mySize = classMaxSize.get(rep)!;
-                    counted.add(rep);
-                }
-            } else {
-                mySize = this.nodeSize.get(n) ?? 0;
-            }
 
-            let bestPred = 0;
-            const preds = this.radj.get(n);
-            if (preds) {
-                for (const [p, w] of preds) {
-                    bestPred = Math.max(bestPred, (dist.get(p) ?? 0) + w);
+            if (rep !== undefined && !counted.has(rep)) {
+                // First member of an alignment class — process the entire class
+                // as a single unit to avoid the ordering-dependent bug where the
+                // class size is assigned to a member without the best incoming dist.
+                counted.add(rep);
+                const members = classes.get(rep)!;
+                let bestIncoming = 0;
+                for (const m of members) {
+                    const preds = this.radj.get(m);
+                    if (!preds) continue;
+                    for (const [p, w] of preds) {
+                        if (nodeToRep.get(p) === rep) continue; // Skip intra-class edges
+                        // Edge weight w includes source nodeSize (addEdge folds it
+                        // in for cycle detection). Subtract it to avoid double-
+                        // counting, since dist[p] already includes p's own size.
+                        // Clamp to 0 for alignment edges (w=0, set directly).
+                        const minDist = Math.max(0, w - (this.nodeSize.get(p) ?? 0));
+                        bestIncoming = Math.max(bestIncoming, (dist.get(p) ?? 0) + minDist);
+                    }
                 }
+                const classDist = bestIncoming + classMaxSize.get(rep)!;
+                for (const m of members) dist.set(m, classDist);
+                maxSpan = Math.max(maxSpan, classDist);
+            } else if (rep === undefined) {
+                // Non-aligned node
+                const mySize = this.nodeSize.get(n) ?? 0;
+                let bestPred = 0;
+                const preds = this.radj.get(n);
+                if (preds) {
+                    for (const [p, w] of preds) {
+                        const minDist = Math.max(0, w - (this.nodeSize.get(p) ?? 0));
+                        bestPred = Math.max(bestPred, (dist.get(p) ?? 0) + minDist);
+                    }
+                }
+                const d = bestPred + mySize;
+                dist.set(n, d);
+                maxSpan = Math.max(maxSpan, d);
             }
-            const d = bestPred + mySize;
-            dist.set(n, d);
-            maxSpan = Math.max(maxSpan, d);
+            // else: alignment class member already processed, skip
         }
 
         return maxSpan;
