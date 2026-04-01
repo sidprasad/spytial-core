@@ -17,24 +17,10 @@
  *
  * ─── Added geometry insights ───
  *
- *   1. **Dimension-aware partial orders**: Each node in the H/V graph carries
- *      its box dimension (width for H, height for V). We compute the longest
- *      weighted chain (= minimum canvas span needed) via topological DP.
- *      If any chain exceeds MAX_SPAN, we reject early.
- *
- *   2. **Pigeonhole on alignment classes**: If K nodes share the same
- *      x-coordinate, they need Σ heights + (K-1)·gap vertical space.
- *      Checked immediately after conjunctive constraints, before any search.
- *
- *   3. **Interval decomposition pre-solver**: For 4-way non-overlap
+ *   1. **Interval decomposition pre-solver**: For 4-way non-overlap
  *      disjunctions, we try to resolve them before entering CDCL by checking
  *      if the pair is already separated, or if all but one alternative is
- *      infeasible (including dimension overflow).
- *
- *   4. **Dimension-aware alternative pruning**: When checking if an alternative
- *      is feasible, we also verify the resulting chain wouldn't exceed
- *      MAX_SPAN. This prunes alternatives that are acyclic but geometrically
- *      impossible.
+ *      infeasible.
  *
  * Architecture:
  *   This validator → feasibility check + ordering selection
@@ -96,9 +82,6 @@ import type { PositionalConstraintError, GroupOverlapError } from './constraint-
 // ═══════════════════════════════════════════════════════════════════════════════
 // Constants
 // ═══════════════════════════════════════════════════════════════════════════════
-
-/** Generous canvas bound. Chains exceeding this are infeasible. */
-const MAX_SPAN = 100_000;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Difference Constraint Graph
@@ -342,85 +325,6 @@ class DifferenceConstraintGraph {
         return order.length === this.nodes.size ? order : null;
     }
 
-    /**
-     * Minimum canvas span = longest weighted chain through the graph.
-     *
-     *   dist[n] = size(n) + max over predecessors p of (dist[p] + edgeWeight(p, n))
-     *
-     * Uses actual edge weights (minDistance values) instead of a uniform gap.
-     * Group virtual nodes have size 0, so they contribute only the edge weight.
-     */
-    longestChainSpan(): number {
-        const order = this.topologicalSort();
-        if (!order) return Infinity; // Cycle
-
-        // Build alignment class lookup: node → representative
-        const classes = this.getAlignmentClasses();
-        const nodeToRep = new Map<string, string>();
-        for (const [rep, members] of classes) {
-            for (const m of members) nodeToRep.set(m, rep);
-        }
-
-        // For aligned nodes, their effective size on the aligned axis is the
-        // max of the class (they occupy the same coordinate, not separate ones).
-        const classMaxSize = new Map<string, number>();
-        for (const [rep, members] of classes) {
-            let maxSize = 0;
-            for (const m of members) maxSize = Math.max(maxSize, this.nodeSize.get(m) ?? 0);
-            classMaxSize.set(rep, maxSize);
-        }
-
-        const dist = new Map<string, number>();
-        let maxSpan = 0;
-        const counted = new Set<string>(); // Track which alignment classes contributed size
-
-        for (const n of order) {
-            const rep = nodeToRep.get(n);
-
-            if (rep !== undefined && !counted.has(rep)) {
-                // First member of an alignment class — process the entire class
-                // as a single unit to avoid the ordering-dependent bug where the
-                // class size is assigned to a member without the best incoming dist.
-                counted.add(rep);
-                const members = classes.get(rep)!;
-                let bestIncoming = 0;
-                for (const m of members) {
-                    const preds = this.radj.get(m);
-                    if (!preds) continue;
-                    for (const [p, w] of preds) {
-                        if (nodeToRep.get(p) === rep) continue; // Skip intra-class edges
-                        // Edge weight w includes source nodeSize (addEdge folds it
-                        // in for cycle detection). Subtract it to avoid double-
-                        // counting, since dist[p] already includes p's own size.
-                        // Clamp to 0 for alignment edges (w=0, set directly).
-                        const minDist = Math.max(0, w - (this.nodeSize.get(p) ?? 0));
-                        bestIncoming = Math.max(bestIncoming, (dist.get(p) ?? 0) + minDist);
-                    }
-                }
-                const classDist = bestIncoming + classMaxSize.get(rep)!;
-                for (const m of members) dist.set(m, classDist);
-                maxSpan = Math.max(maxSpan, classDist);
-            } else if (rep === undefined) {
-                // Non-aligned node
-                const mySize = this.nodeSize.get(n) ?? 0;
-                let bestPred = 0;
-                const preds = this.radj.get(n);
-                if (preds) {
-                    for (const [p, w] of preds) {
-                        const minDist = Math.max(0, w - (this.nodeSize.get(p) ?? 0));
-                        bestPred = Math.max(bestPred, (dist.get(p) ?? 0) + minDist);
-                    }
-                }
-                const d = bestPred + mySize;
-                dist.set(n, d);
-                maxSpan = Math.max(maxSpan, d);
-            }
-            // else: alignment class member already processed, skip
-        }
-
-        return maxSpan;
-    }
-
     // ─── Alignment (zero-weight edge) support ─────────────────────────────
 
     /**
@@ -568,6 +472,18 @@ class DifferenceConstraintGraph {
         return classes;
     }
 
+    /** Get the alignment class (SCC) containing the given node. */
+    getAlignmentClassOf(nodeId: string): string[] {
+        const forward = this.reachableSet(nodeId);
+        const members: string[] = [];
+        for (const candidate of forward) {
+            if (this.canReach(candidate, nodeId)) {
+                members.push(candidate);
+            }
+        }
+        return members;
+    }
+
     /** Get all nodes reachable from `start` via any edges. */
     private reachableSet(start: string): Set<string> {
         const visited = new Set<string>();
@@ -585,37 +501,6 @@ class DifferenceConstraintGraph {
             }
         }
         return visited;
-    }
-
-    /**
-     * Would adding edge (a → b) with given weight cause the longest chain to
-     * exceed maxSpan? Temporarily adds the edge, computes span, removes it.
-     * Returns true if the chain would overflow.
-     */
-    wouldOverflow(a: string, b: string, maxSpan: number, weight?: number): boolean {
-        // Match addEdge's weight encoding: include source node's physical size
-        const w = (weight ?? this.gap) + (this.nodeSize.get(a) ?? 0);
-        if (!this.adj.has(a) || !this.adj.has(b)) return false;
-        if (this.canReach(b, a)) return true; // Cycle
-
-        // Save existing edge state before probing
-        const existingFwd = this.adj.get(a)!.get(b);
-        const existingRev = this.radj.get(b)!.get(a);
-
-        this.adj.get(a)!.set(b, w);
-        this.radj.get(b)!.set(a, w);
-        const span = this.longestChainSpan();
-
-        // Restore original edge state
-        if (existingFwd !== undefined) {
-            this.adj.get(a)!.set(b, existingFwd);
-            this.radj.get(b)!.set(a, existingRev!);
-        } else {
-            this.adj.get(a)!.delete(b);
-            this.radj.get(b)!.delete(a);
-        }
-
-        return span > maxSpan;
     }
 
     /**
@@ -749,8 +634,6 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
     // ─── Statistics ───
     private prunedByTransitivity: number = 0;
-    private prunedByDimension: number = 0;
-    private prunedByPigeonhole: number = 0;
     private prunedByDecomposition: number = 0;
 
     constructor(layout: InstanceLayout) {
@@ -784,32 +667,24 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             if (error) return this.enforceMaximalFeasibleSubset(error);
         }
 
-        // Phase 2: Dimension feasibility on conjunctive constraints alone
-        const dimError = this.checkDimensionFeasibility();
-        if (dimError) return this.enforceMaximalFeasibleSubset(dimError);
-
-        // Phase 3: Pigeonhole on alignment classes
-        const pigeonholeError = this.checkPigeonhole();
-        if (pigeonholeError) return this.enforceMaximalFeasibleSubset(pigeonholeError);
-
         const constraintsBeforeDisjunctions = this.addedConstraints.length;
 
-        // Phase 4: Group bounding box disjunctions (virtual group nodes, from V1)
+        // Phase 2: Group bounding box disjunctions (virtual group nodes, from V1)
         const groupError = this.addGroupBoundingBoxDisjunctions();
         if (groupError) return this.enforceMaximalFeasibleSubset(groupError);
 
-        // Phase 5: Collect all disjunctions
+        // Phase 3: Collect all disjunctions
         this.allDisjunctions = [...(this.layout.disjunctiveConstraints || [])];
 
-        // Phase 6: Interval decomposition — resolve what we can before CDCL
+        // Phase 4: Interval decomposition — resolve what we can before CDCL
         this.presolveDisjunctions();
 
-        // Phase 6b: Handle truly empty disjunctions (no alternatives at all)
+        // Phase 4b: Handle truly empty disjunctions (no alternatives at all)
         if (this.emptyDisjunctionError) {
             return this.enforceMaximalFeasibleSubset(this.emptyDisjunctionError);
         }
 
-        // Phase 7: CDCL search on remaining disjunctions
+        // Phase 5: CDCL search on remaining disjunctions
         if (this.allDisjunctions.length > 0) {
             const result = this.solveCDCL();
             if (!result.satisfiable) {
@@ -827,10 +702,10 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             this.layout.constraints = this.layout.constraints.concat(chosenConstraints);
         }
 
-        // Phase 8: Alignment orders
+        // Phase 6: Alignment orders
         const implicitConstraints = this.computeAlignmentOrders();
 
-        // Phase 9: Node overlap detection
+        // Phase 7: Node overlap detection
         const overlapError = this.detectNodeOverlaps();
         if (overlapError) return this.enforceMaximalFeasibleSubset(overlapError);
 
@@ -854,104 +729,13 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // Dimension feasibility (Insight 1)
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    private checkDimensionFeasibility(): PositionalConstraintError | null {
-        const hSpan = this.hGraph.longestChainSpan();
-        if (hSpan > MAX_SPAN) return this.buildDimensionError('horizontal', hSpan);
-        const vSpan = this.vGraph.longestChainSpan();
-        if (vSpan > MAX_SPAN) return this.buildDimensionError('vertical', vSpan);
-        return null;
-    }
-
-    private buildDimensionError(axis: string, span: number): PositionalConstraintError {
-        const constraint = this.addedConstraints[this.addedConstraints.length - 1]
-            || this.orientationConstraints[0];
-        return {
-            name: 'PositionalConstraintError',
-            type: 'positional-conflict',
-            message: `Chain on ${axis} axis requires ${span}px (max ${MAX_SPAN}px)`,
-            conflictingConstraint: constraint,
-            conflictingSourceConstraint: constraint.sourceConstraint,
-            minimalConflictingSet: new Map([[constraint.sourceConstraint, [constraint]]]),
-            maximalFeasibleSubset: [...this.addedConstraints],
-            errorMessages: {
-                conflictingConstraint: orientationConstraintToString(constraint),
-                conflictingSourceConstraint: constraint.sourceConstraint.toHTML(),
-                minimalConflictingConstraints: new Map([
-                    [constraint.sourceConstraint.toHTML(), [orientationConstraintToString(constraint)]]
-                ]),
-            },
-        };
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    // Pigeonhole on alignment classes (Insight 2)
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    private checkPigeonhole(): PositionalConstraintError | null {
-        // x-aligned nodes (same x-axis via hGraph) must separate vertically
-        for (const [, members] of this.hGraph.getAlignmentClasses()) {
-            if (members.length < 2) continue;
-            let totalHeight = 0;
-            for (const id of members) {
-                const node = this.nodeMap.get(id);
-                if (node) totalHeight += node.height;
-            }
-            const minSpan = totalHeight + (members.length - 1) * this.minPadding;
-            if (minSpan > MAX_SPAN) {
-                this.prunedByPigeonhole++;
-                return this.buildPigeonholeError(members, 'x', minSpan);
-            }
-        }
-
-        // y-aligned nodes (same y-axis via vGraph) must separate horizontally
-        for (const [, members] of this.vGraph.getAlignmentClasses()) {
-            if (members.length < 2) continue;
-            let totalWidth = 0;
-            for (const id of members) {
-                const node = this.nodeMap.get(id);
-                if (node) totalWidth += node.width;
-            }
-            const minSpan = totalWidth + (members.length - 1) * this.minPadding;
-            if (minSpan > MAX_SPAN) {
-                this.prunedByPigeonhole++;
-                return this.buildPigeonholeError(members, 'y', minSpan);
-            }
-        }
-
-        return null;
-    }
-
-    private buildPigeonholeError(members: string[], axis: 'x' | 'y', minSpan: number): PositionalConstraintError {
-        const perpAxis = axis === 'x' ? 'vertical' : 'horizontal';
-        const constraint = this.addedConstraints.find(c => isAlignmentConstraint(c))
-            || this.addedConstraints[0] || this.orientationConstraints[0];
-        return {
-            name: 'PositionalConstraintError',
-            type: 'positional-conflict',
-            message: `${members.length} nodes aligned on ${axis}-axis need ${minSpan}px ${perpAxis} space (max ${MAX_SPAN}px)`,
-            conflictingConstraint: constraint,
-            conflictingSourceConstraint: constraint.sourceConstraint,
-            minimalConflictingSet: new Map([[constraint.sourceConstraint, [constraint]]]),
-            maximalFeasibleSubset: [...this.addedConstraints],
-            errorMessages: {
-                conflictingConstraint: orientationConstraintToString(constraint),
-                conflictingSourceConstraint: constraint.sourceConstraint.toHTML(),
-                minimalConflictingConstraints: new Map(),
-            },
-        };
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    // Pre-solver disjunction resolution (Insight 3)
+    // Pre-solver disjunction resolution
     // ═══════════════════════════════════════════════════════════════════════════
 
     /**
      * Before entering CDCL, try to resolve disjunctions using:
      * 1. Already separated → skip entirely
-     * 2. Prune infeasible alternatives (cycle, alignment, dimension overflow)
+     * 2. Prune infeasible alternatives (cycle, alignment conflict)
      * 3. If only one alternative remains → commit as conjunctive
      */
     private presolveDisjunctions(): void {
@@ -1067,11 +851,14 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                 return this.buildAlignmentConflictError(constraint, ac.axis);
             }
             // Dual-axis alignment forces two nonzero-size nodes to the same
-            // position, guaranteeing overlap. Reject the second alignment.
-            // Skip for self-alignment (same node) — that's trivially SAT.
+            // position, guaranteeing overlap. Reject the alignment.
+            // Check the ENTIRE merged alignment class, not just the two
+            // constraint nodes, to catch transitive dual-axis overlaps.
             if (ac.node1.id !== ac.node2.id) {
                 const otherGraph = ac.axis === 'x' ? this.vGraph : this.hGraph;
-                if (otherGraph.areAligned(ac.node1.id, ac.node2.id)) {
+                if (QualitativeConstraintValidator.classHasDualAxisOverlap(
+                    graph, otherGraph, ac.node1.id, ac.node2.id, true,
+                )) {
                     graph.removeAlignmentEdges(ac.node1.id, ac.node2.id);
                     return this.buildAlignmentConflictError(constraint, ac.axis);
                 }
@@ -1290,7 +1077,6 @@ class QualitativeConstraintValidator implements IConstraintValidator {
      * Check if an alternative is feasible:
      * 1. No cycle (transitivity check)
      * 2. No alignment conflict
-     * 3. No dimension overflow (Insight 4)
      */
     private isAlternativeFeasible(alternative: LayoutConstraint[]): boolean {
         for (const constraint of alternative) {
@@ -1319,7 +1105,9 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                 // Skip for self-alignment (same node) — that's trivially SAT.
                 if (ac.node1.id !== ac.node2.id) {
                     const otherGraph = ac.axis === 'x' ? this.vGraph : this.hGraph;
-                    if (otherGraph.areAligned(ac.node1.id, ac.node2.id)) return false;
+                    if (QualitativeConstraintValidator.classHasDualAxisOverlap(
+                        graph, otherGraph, ac.node1.id, ac.node2.id, false,
+                    )) return false;
                 }
                 continue;
             }
@@ -1331,13 +1119,6 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             // Would cycle? (canReach catches both ordering cycles and
             // alignment-ordering conflicts via zero-weight edges)
             if (graph.canReach(edge.to, edge.from)) return false;
-
-            // Dimension overflow? (Insight 4) — use actual constraint weight
-            const weight = this.constraintToWeight(constraint);
-            if (graph.wouldOverflow(edge.from, edge.to, MAX_SPAN, weight)) {
-                this.prunedByDimension++;
-                return false;
-            }
         }
         return true;
     }
@@ -2150,15 +1931,6 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         this.vGraph = cp.vGraph.clone();
     }
 
-    /** Extract the minDistance (edge weight) from a constraint. Returns the default gap if not applicable. */
-    private constraintToWeight(constraint: LayoutConstraint): number {
-        if (isLeftConstraint(constraint)) return constraint.minDistance;
-        if (isTopConstraint(constraint)) return constraint.minDistance;
-        if (isBoundingBoxConstraint(constraint)) return (constraint as BoundingBoxConstraint).minDistance;
-        if (isGroupBoundaryConstraint(constraint)) return (constraint as GroupBoundaryConstraint).minDistance;
-        return this.minPadding;
-    }
-
     private constraintToEdge(constraint: LayoutConstraint): { axis: 'h' | 'v'; from: string; to: string } | null {
         if (isLeftConstraint(constraint))
             return { axis: 'h', from: constraint.left.id, to: constraint.right.id };
@@ -2219,11 +1991,12 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                 const graph = ac.axis === 'x' ? freshH : freshV;
                 ok = graph.addAlignmentEdges(ac.node1.id, ac.node2.id, constraint);
                 // Dual-axis alignment forces two nonzero-size nodes to the same
-                // position, guaranteeing overlap. Reject the second alignment.
-                // Skip for self-alignment (same node) — that's trivially SAT.
+                // position, guaranteeing overlap. Reject the alignment.
                 if (ok && ac.node1.id !== ac.node2.id) {
                     const otherGraph = ac.axis === 'x' ? freshV : freshH;
-                    if (otherGraph.areAligned(ac.node1.id, ac.node2.id)) {
+                    if (QualitativeConstraintValidator.classHasDualAxisOverlap(
+                        graph, otherGraph, ac.node1.id, ac.node2.id, true,
+                    )) {
                         graph.removeAlignmentEdges(ac.node1.id, ac.node2.id);
                         ok = false;
                     }
@@ -2274,10 +2047,11 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             const graph = ac.axis === 'x' ? hGraph : vGraph;
             if (!graph.addAlignmentEdges(ac.node1.id, ac.node2.id, constraint)) return false;
             // Dual-axis alignment forces overlap between nonzero-size nodes
-            // Skip for self-alignment (same node) — that's trivially SAT.
             if (ac.node1.id !== ac.node2.id) {
                 const otherGraph = ac.axis === 'x' ? vGraph : hGraph;
-                if (otherGraph.areAligned(ac.node1.id, ac.node2.id)) {
+                if (QualitativeConstraintValidator.classHasDualAxisOverlap(
+                    graph, otherGraph, ac.node1.id, ac.node2.id, true,
+                )) {
                     graph.removeAlignmentEdges(ac.node1.id, ac.node2.id);
                     return false;
                 }
@@ -2710,27 +2484,44 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                 const overlapping = vGroup.filter(n => hSet.has(n.id));
                 if (overlapping.length >= 2) {
                     const n1 = overlapping[0], n2 = overlapping[1];
+
+                    // Find alignment chains connecting n1↔n2 on each axis.
+                    // Both chains together form the minimal conflicting set;
+                    // breaking either chain resolves the overlap.
+                    const xChain = this.findAlignmentPath(n1.id, n2.id, 'x');
+                    const yChain = this.findAlignmentPath(n1.id, n2.id, 'y');
+                    const allConflicting = [...xChain, ...yChain];
+
                     const minimalConflictingSet = new Map<SourceConstraint, LayoutConstraint[]>();
-                    for (const c of this.addedConstraints) {
-                        if (isAlignmentConstraint(c)) {
-                            const ac = c as AlignmentConstraint;
-                            if ([n1.id, n2.id].includes(ac.node1.id) || [n1.id, n2.id].includes(ac.node2.id)) {
-                                const src = ac.sourceConstraint;
-                                if (!minimalConflictingSet.has(src)) minimalConflictingSet.set(src, []);
-                                minimalConflictingSet.get(src)!.push(c);
-                            }
-                        }
+                    const htmlMap = new Map<string, string[]>();
+                    for (const c of allConflicting) {
+                        const src = c.sourceConstraint;
+                        if (!minimalConflictingSet.has(src)) minimalConflictingSet.set(src, []);
+                        minimalConflictingSet.get(src)!.push(c);
+                        const html = src.toHTML();
+                        if (!htmlMap.has(html)) htmlMap.set(html, []);
+                        htmlMap.get(html)!.push(orientationConstraintToString(c));
                     }
-                    const first = this.addedConstraints.find(c => isAlignmentConstraint(c)) || this.addedConstraints[0];
+
+                    // MFS: remove the minimum constraints from one axis to break
+                    // the dual-axis alignment. Pick the cheaper axis.
+                    const toRemove = xChain.length > 0 && xChain.length <= yChain.length
+                        ? this.findConstraintsToBreakAlignment(n1.id, n2.id, 'x')
+                        : this.findConstraintsToBreakAlignment(n1.id, n2.id, 'y');
+                    const removeSet = new Set(toRemove);
+                    const maxFeasible = this.addedConstraints.filter(c => !removeSet.has(c));
+
+                    const first = allConflicting[0] || this.addedConstraints[0];
                     return {
                         name: 'PositionalConstraintError', type: 'positional-conflict',
                         message: `Alignment constraints force ${n1.id} and ${n2.id} to occupy the same position`,
                         conflictingConstraint: first, conflictingSourceConstraint: first.sourceConstraint,
                         minimalConflictingSet,
+                        maximalFeasibleSubset: maxFeasible,
                         errorMessages: {
                             conflictingConstraint: orientationConstraintToString(first),
                             conflictingSourceConstraint: first.sourceConstraint.toHTML(),
-                            minimalConflictingConstraints: new Map(),
+                            minimalConflictingConstraints: htmlMap,
                         },
                     };
                 }
@@ -2739,7 +2530,124 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         return null;
     }
 
+    /**
+     * BFS to find the alignment constraint path connecting two nodes on a given axis.
+     */
+    private findAlignmentPath(nodeA: string, nodeB: string, axis: 'x' | 'y'): LayoutConstraint[] {
+        const adj = new Map<string, { neighbor: string; constraint: LayoutConstraint }[]>();
+        for (const c of this.addedConstraints) {
+            if (!isAlignmentConstraint(c)) continue;
+            const ac = c as AlignmentConstraint;
+            if (ac.axis !== axis) continue;
+            const a = ac.node1.id, b = ac.node2.id;
+            if (!adj.has(a)) adj.set(a, []);
+            if (!adj.has(b)) adj.set(b, []);
+            adj.get(a)!.push({ neighbor: b, constraint: c });
+            adj.get(b)!.push({ neighbor: a, constraint: c });
+        }
+        const visited = new Set<string>([nodeA]);
+        const parent = new Map<string, { node: string; constraint: LayoutConstraint } | null>();
+        parent.set(nodeA, null);
+        const queue = [nodeA];
+        while (queue.length > 0) {
+            const current = queue.shift()!;
+            if (current === nodeB) {
+                const result: LayoutConstraint[] = [];
+                let node = nodeB;
+                while (parent.get(node) !== null) {
+                    const p = parent.get(node)!;
+                    result.push(p.constraint);
+                    node = p.node;
+                }
+                return result.reverse();
+            }
+            for (const { neighbor, constraint } of adj.get(current) || []) {
+                if (!visited.has(neighbor)) {
+                    visited.add(neighbor);
+                    parent.set(neighbor, { node: current, constraint });
+                    queue.push(neighbor);
+                }
+            }
+        }
+        return [];
+    }
+
+    /**
+     * Find the minimum set of alignment constraints to remove on one axis
+     * so that nodeA and nodeB are no longer aligned.
+     */
+    private findConstraintsToBreakAlignment(nodeA: string, nodeB: string, axis: 'x' | 'y'): LayoutConstraint[] {
+        const axisAlignments = this.addedConstraints.filter(c =>
+            isAlignmentConstraint(c) && (c as AlignmentConstraint).axis === axis
+        );
+
+        const connected = (excluded: Set<LayoutConstraint>): boolean => {
+            const adj = new Map<string, string[]>();
+            for (const c of axisAlignments) {
+                if (excluded.has(c)) continue;
+                const ac = c as AlignmentConstraint;
+                if (!adj.has(ac.node1.id)) adj.set(ac.node1.id, []);
+                if (!adj.has(ac.node2.id)) adj.set(ac.node2.id, []);
+                adj.get(ac.node1.id)!.push(ac.node2.id);
+                adj.get(ac.node2.id)!.push(ac.node1.id);
+            }
+            const visited = new Set<string>([nodeA]);
+            const queue = [nodeA];
+            while (queue.length > 0) {
+                const cur = queue.shift()!;
+                if (cur === nodeB) return true;
+                for (const nb of adj.get(cur) || []) {
+                    if (!visited.has(nb)) { visited.add(nb); queue.push(nb); }
+                }
+            }
+            return false;
+        };
+
+        // Try single-constraint removal first (covers tree-shaped alignment graphs)
+        for (const c of axisAlignments) {
+            if (!connected(new Set([c]))) return [c];
+        }
+
+        // Redundant alignment edges — greedily remove until disconnected
+        const toRemove = new Set<LayoutConstraint>();
+        for (const c of axisAlignments) {
+            toRemove.add(c);
+            if (!connected(toRemove)) return [...toRemove];
+        }
+        return [...toRemove];
+    }
+
     // ─── Helpers ─────────────────────────────────────────────────────────────
+
+    /**
+     * Check if an alignment class on `graph` has any node pair that is also
+     * aligned on `otherGraph`, creating a dual-axis overlap.
+     *
+     * When `alreadyAdded` is true, the alignment edges are already in `graph`.
+     * When false, compute the hypothetical merged class of node1 and node2.
+     */
+    private static classHasDualAxisOverlap(
+        graph: DifferenceConstraintGraph,
+        otherGraph: DifferenceConstraintGraph,
+        node1Id: string,
+        node2Id: string,
+        alreadyAdded: boolean,
+    ): boolean {
+        let cls: string[];
+        if (alreadyAdded) {
+            cls = graph.getAlignmentClassOf(node1Id);
+        } else {
+            const clsA = graph.getAlignmentClassOf(node1Id);
+            const clsB = graph.getAlignmentClassOf(node2Id);
+            cls = [...new Set([...clsA, ...clsB])];
+        }
+        for (let i = 0; i < cls.length; i++) {
+            for (let j = i + 1; j < cls.length; j++) {
+                if (otherGraph.areAligned(cls[i], cls[j])) return true;
+            }
+        }
+        return false;
+    }
 
     private normalizeAlignment(aligned: LayoutNode[][]): LayoutNode[][] {
         const merged: LayoutNode[][] = [];
@@ -2795,8 +2703,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     public getStats(): {
         hEdges: number; vEdges: number;
         learnedClauses: number; conflicts: number; addedConstraints: number;
-        prunedByTransitivity: number; prunedByDimension: number;
-        prunedByPigeonhole: number; prunedByDecomposition: number;
+        prunedByTransitivity: number; prunedByDecomposition: number;
     } {
         return {
             hEdges: this.hGraph.edgeCount(),
@@ -2805,8 +2712,6 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             conflicts: this.conflictCount,
             addedConstraints: this.addedConstraints.length,
             prunedByTransitivity: this.prunedByTransitivity,
-            prunedByDimension: this.prunedByDimension,
-            prunedByPigeonhole: this.prunedByPigeonhole,
             prunedByDecomposition: this.prunedByDecomposition,
         };
     }

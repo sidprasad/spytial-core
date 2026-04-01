@@ -546,8 +546,6 @@ describe('Validator Comparator', () => {
 
             // Should have done some kind of pruning or decomposition
             const totalPruned = stats.prunedByTransitivity
-                + stats.prunedByDimension
-                + stats.prunedByPigeonhole
                 + stats.prunedByDecomposition;
 
             // At minimum, stats should be tracked (non-negative)

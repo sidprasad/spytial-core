@@ -27,7 +27,7 @@
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
-    "test:validator-equivalence": "vitest run tests/minizinc-equivalence.test.ts",
+    "test:validator-equivalence": "vitest run tests/z3-equivalence.test.ts",
     "test:perf": "vitest run --config vitest.bench.config.ts",
     "bench": "vitest run --config vitest.bench.config.ts",
     "lint": "eslint src --ext .ts,.tsx",
@@ -77,13 +77,13 @@
     "eslint": "^9.29.0",
     "fast-check": "^4.6.0",
     "jsdom": "^26.1.0",
-    "minizinc": "^4.4.5",
     "prettier": "^3.5.3",
     "tsup": "^8.5.0",
     "typescript": "^5.8.3",
     "typescript-plugin-css-modules": "^5.1.0",
     "vite": "^6.3.5",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "z3-solver": "^4.16.0"
   },
   "dependencies": {
     "@types/d3": "^4.13.12",

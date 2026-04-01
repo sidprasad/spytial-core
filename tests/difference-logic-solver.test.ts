@@ -487,42 +487,6 @@ describe('Difference Logic Theory Solver', () => {
             expect(maxGroupSize).toBe(2); // A and B are x-aligned (vertical column)
         });
 
-        it('should not double-count aligned nodes in longestChainSpan', () => {
-            // Two wide nodes aligned on x-axis.
-            // If longestChainSpan double-counted, span would be ~160000 > MAX_SPAN (100000) → false rejection.
-            // Correct behavior: span is ~80000 (max of the alignment class), which is < MAX_SPAN.
-            const a = createNode('A', 80000, 60);
-            const b = createNode('B', 80000, 60);
-            const { error } = validate(layout([a, b], [alignX(a, b)]));
-            // Should be accepted: aligned nodes share the same x coordinate,
-            // so the horizontal span is max(80000, 80000) = 80000, not 160000.
-            expect(error).toBeNull();
-        });
-
-        it('should not corrupt committed edges when probing with wouldOverflow', () => {
-            // Committed: A → B with minDistance 10, B → C with minDistance 10.
-            // Disjunction: [leftOf(A, C, 90000)] or [above(A, C)].
-            // The first alternative (A→C at 90000) is probed by wouldOverflow.
-            // It should NOT corrupt the committed A→B edge (weight 10).
-            // After probing, the second alternative (above) should be chosen,
-            // and the committed A→B, B→C should still work correctly.
-            const [a, b, c] = ['A', 'B', 'C'].map(id => createNode(id));
-            const disj = new DisjunctiveConstraint(
-                src('d1'),
-                [
-                    [leftOf(a, c, 90000)],  // would push span near/over MAX_SPAN → pruned by dimension
-                    [above(a, c)],           // feasible on orthogonal axis
-                ]
-            );
-
-            const { error } = validate(layout([a, b, c], [
-                leftOf(a, b, 10),
-                leftOf(b, c, 10),
-            ], [disj]));
-            // Should be SAT — alt 1 (above) is chosen; committed edges still intact
-            expect(error).toBeNull();
-        });
-
         it('should detect UNSAT for alignment + same-direction ordering', () => {
             // align-x(A,B) means A.x = B.x
             // leftOf(A,B) means A.x + minDistance <= B.x (strict positive separation)

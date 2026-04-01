@@ -126,7 +126,7 @@ function bench(label: string, layout: InstanceLayout, warmup = 2, trials = 7) {
     if (qual.stats) {
         const s = qual.stats;
         console.log(`  │  Stats: ${s.hEdges}H + ${s.vEdges}V edges, ${s.conflicts} conflicts, ${s.learnedClauses} learned clauses`);
-        console.log(`  │  Pruned: ${s.prunedByTransitivity} transitivity, ${s.prunedByDimension} dimension, ${s.prunedByPigeonhole} pigeonhole, ${s.prunedByDecomposition} decomposition`);
+        console.log(`  │  Pruned: ${s.prunedByTransitivity} transitivity, ${s.prunedByDecomposition} decomposition`);
     }
     console.log(`  └─`);
 
