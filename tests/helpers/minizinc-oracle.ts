@@ -7,19 +7,32 @@
  * Install MiniZinc: `brew install minizinc` (macOS) or see https://www.minizinc.org/
  */
 
-// Dynamic import to avoid spawning MiniZinc child processes at module load
-// when the binary is not installed (causes unhandled SyntaxError in CI).
-import type { SolveResult } from 'minizinc';
+// Fully lazy import: the `minizinc` npm package spawns a child process at
+// module init time that throws an uncaught SyntaxError when the binary is
+// absent.  We gate the import behind a PATH check so the module is never
+// loaded in environments without the CLI (e.g. the CI `test` job).
+import { execSync } from 'child_process';
 
-type MznModule = typeof import('minizinc');
-let MznModel: MznModule['Model'];
-let mznInit: MznModule['init'];
-let mznShutdown: MznModule['shutdown'];
-let mznSolvers: MznModule['solvers'];
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let MznModel: any;
+let mznInit: () => Promise<void>;
+let mznShutdown: () => void;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let mznSolvers: () => Promise<any[]>;
 let mznLoaded = false;
+
+function isMiniZincBinaryAvailable(): boolean {
+    try {
+        execSync('minizinc --version', { stdio: 'pipe' });
+        return true;
+    } catch {
+        return false;
+    }
+}
 
 async function loadMiniZinc(): Promise<boolean> {
     if (mznLoaded) return true;
+    if (!isMiniZincBinaryAvailable()) return false;
     try {
         const mzn = await import('minizinc');
         MznModel = mzn.Model;
@@ -81,7 +94,7 @@ export async function isMiniZincAvailable(): Promise<boolean> {
         // Smoke test: solve a trivial model to confirm the solver works
         const m = new MznModel();
         m.addString('var 0..1: x; solve satisfy;');
-        const r: SolveResult = await m.solve({
+        const r: any= await m.solve({
             options: { solver: detectedSolver, 'time-limit': 5000 },
         });
         initialized = true;
@@ -463,7 +476,7 @@ export async function solveMiniZinc(layout: InstanceLayout): Promise<boolean> {
     const model = new MznModel();
     model.addString(modelStr);
 
-    const result: SolveResult = await model.solve({
+    const result: any= await model.solve({
         options: {
             solver: detectedSolver!,
             'time-limit': 30000,
@@ -546,7 +559,7 @@ export async function verifyFeasibleSubset(
     const model = new MznModel();
     model.addString(modelStr);
 
-    const result: SolveResult = await model.solve({
+    const result: any= await model.solve({
         options: {
             solver: detectedSolver!,
             'time-limit': 30000,
