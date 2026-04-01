@@ -33,6 +33,7 @@ import {
     aboveOf,
     alignOnX,
     alignOnY,
+    parseConstraintSpec,
     SRC,
 } from './helpers/constraint-dsl';
 import {
@@ -259,6 +260,59 @@ describe.runIf(available)('Z3 Oracle Equivalence (Property-Based)', () => {
                 const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
                 assertAgreement(layout, validatorSat, oracleSat);
             }), { numRuns: NUM_RUNS, timeout: TIMEOUT });
+        });
+
+        // ── Group containment invariants (deterministic, cross-checked with Z3) ──
+        // Being ordered relative to ONE member must NOT imply being ordered
+        // relative to the entire group.
+
+        it('x left of one member does not force x left of group (Z3 cross-check)', async () => {
+            const layout = parseConstraintSpec('x <x a1, {A: a1, a2, a3}');
+            const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+            assertAgreement(layout, validatorSat, oracleSat);
+            expect(validatorSat).toBe(true);
+        });
+
+        it('x right of one member does not force x right of group (Z3 cross-check)', async () => {
+            const layout = parseConstraintSpec('a1 <x x, {A: a1, a2, a3}');
+            const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+            assertAgreement(layout, validatorSat, oracleSat);
+            expect(validatorSat).toBe(true);
+        });
+
+        it('x left of two members (not all) does not force x left of group (Z3 cross-check)', async () => {
+            const layout = parseConstraintSpec('x <x a1, x <x a2, {A: a1, a2, a3}');
+            const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+            assertAgreement(layout, validatorSat, oracleSat);
+            expect(validatorSat).toBe(true);
+        });
+
+        it('x left of ALL members is outside group — SAT (Z3 cross-check)', async () => {
+            const layout = parseConstraintSpec('x <x a1, x <x a2, x <x a3, {A: a1, a2, a3}');
+            const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+            assertAgreement(layout, validatorSat, oracleSat);
+            expect(validatorSat).toBe(true);
+        });
+
+        it('x between members horizontally can escape vertically — SAT (Z3 cross-check)', async () => {
+            const layout = parseConstraintSpec('a1 <x x, x <x a2, {A: a1, a2, a3}');
+            const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+            assertAgreement(layout, validatorSat, oracleSat);
+            expect(validatorSat).toBe(true);
+        });
+
+        it('x trapped inside group on both axes — UNSAT (Z3 cross-check)', async () => {
+            const layout = parseConstraintSpec('a1 <x x, x <x a2, a1 <y x, x <y a2, {A: a1, a2, a3}');
+            const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+            assertAgreement(layout, validatorSat, oracleSat);
+            expect(validatorSat).toBe(false);
+        });
+
+        it('x trapped inside 4-member group on both axes — UNSAT (Z3 cross-check)', async () => {
+            const layout = parseConstraintSpec('a1 <x x, x <x a2, a3 <y x, x <y a4, {A: a1, a2, a3, a4}');
+            const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+            assertAgreement(layout, validatorSat, oracleSat);
+            expect(validatorSat).toBe(false);
         });
 
         it('groups + ordering disjunctions on 6 nodes', async () => {

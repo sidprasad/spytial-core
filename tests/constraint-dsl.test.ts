@@ -192,6 +192,46 @@ describe('group constraints', () => {
     it('group with three members is SAT', () => {
         sat('A <x B, B <x C, {G: A, B, C}');
     });
+
+    // ── Group containment invariants ─────────────────────────────────
+    // Being ordered relative to ONE member does NOT imply being ordered
+    // relative to the entire group. The group bbox is defined by the
+    // extreme members, not by any single member.
+
+    it('x left of one member does not mean x left of group', () => {
+        // x <x a1, but a2 or a3 could be further left than x,
+        // so x is inside the group's horizontal span and can escape vertically
+        sat('x <x a1, {A: a1, a2, a3}');
+    });
+
+    it('x right of one member does not mean x right of group', () => {
+        sat('a1 <x x, {A: a1, a2, a3}');
+    });
+
+    it('x left of two members (not all) does not mean x left of group', () => {
+        // a3 could still be further left than x
+        sat('x <x a1, x <x a2, {A: a1, a2, a3}');
+    });
+
+    it('x left of ALL members is outside the group (SAT)', () => {
+        sat('x <x a1, x <x a2, x <x a3, {A: a1, a2, a3}');
+    });
+
+    it('x between members horizontally can escape vertically (SAT)', () => {
+        // x is between a1 and a2 on x-axis, so it must escape top or bottom
+        sat('a1 <x x, x <x a2, {A: a1, a2, a3}');
+    });
+
+    it('x trapped inside group on both axes is UNSAT', () => {
+        // x is between a1 and a2 horizontally AND vertically — no escape
+        unsat('a1 <x x, x <x a2, a1 <y x, x <y a2, {A: a1, a2, a3}');
+    });
+
+    it('x trapped inside 4-member group on both axes is UNSAT', () => {
+        // a1 left of x, x left of a2 (horizontal trap)
+        // a3 above x, x above a4 (vertical trap)
+        unsat('a1 <x x, x <x a2, a3 <y x, x <y a4, {A: a1, a2, a3, a4}');
+    });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
