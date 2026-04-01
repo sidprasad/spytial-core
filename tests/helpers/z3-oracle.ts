@@ -122,26 +122,32 @@ function compileAtomicConstraint(c: LayoutConstraint, vars: VarMap): Bool | null
     }
     if (isBoundingBoxConstraint(c)) {
         const bc = c as BoundingBoxConstraint;
-        const gx = vars.get(varName(bc.group.name, 'gx'));
-        const gy = vars.get(varName(bc.group.name, 'gy'));
+        const gLeft   = vars.get(varName(bc.group.name, 'gleft'));
+        const gRight  = vars.get(varName(bc.group.name, 'gright'));
+        const gTop    = vars.get(varName(bc.group.name, 'gtop'));
+        const gBottom = vars.get(varName(bc.group.name, 'gbottom'));
         switch (bc.side) {
-            case 'left':   return vars.get(varName(bc.node.id, 'x')).add(bc.node.width + bc.minDistance).le(gx);
-            case 'right':  return gx.add(bc.minDistance).le(vars.get(varName(bc.node.id, 'x')));
-            case 'top':    return vars.get(varName(bc.node.id, 'y')).add(bc.node.height + bc.minDistance).le(gy);
-            case 'bottom': return gy.add(bc.minDistance).le(vars.get(varName(bc.node.id, 'y')));
+            case 'left':   return vars.get(varName(bc.node.id, 'x')).add(bc.node.width + bc.minDistance).le(gLeft);
+            case 'right':  return gRight.add(bc.minDistance).le(vars.get(varName(bc.node.id, 'x')));
+            case 'top':    return vars.get(varName(bc.node.id, 'y')).add(bc.node.height + bc.minDistance).le(gTop);
+            case 'bottom': return gBottom.add(bc.minDistance).le(vars.get(varName(bc.node.id, 'y')));
         }
     }
     if (isGroupBoundaryConstraint(c)) {
         const gc = c as GroupBoundaryConstraint;
-        const gAx = vars.get(varName(gc.groupA.name, 'gx'));
-        const gBx = vars.get(varName(gc.groupB.name, 'gx'));
-        const gAy = vars.get(varName(gc.groupA.name, 'gy'));
-        const gBy = vars.get(varName(gc.groupB.name, 'gy'));
+        const gARight  = vars.get(varName(gc.groupA.name, 'gright'));
+        const gBLeft   = vars.get(varName(gc.groupB.name, 'gleft'));
+        const gBRight  = vars.get(varName(gc.groupB.name, 'gright'));
+        const gALeft   = vars.get(varName(gc.groupA.name, 'gleft'));
+        const gABottom = vars.get(varName(gc.groupA.name, 'gbottom'));
+        const gBTop    = vars.get(varName(gc.groupB.name, 'gtop'));
+        const gBBottom = vars.get(varName(gc.groupB.name, 'gbottom'));
+        const gATop    = vars.get(varName(gc.groupA.name, 'gtop'));
         switch (gc.side) {
-            case 'left':   return gAx.add(gc.minDistance).le(gBx);
-            case 'right':  return gBx.add(gc.minDistance).le(gAx);
-            case 'top':    return gAy.add(gc.minDistance).le(gBy);
-            case 'bottom': return gBy.add(gc.minDistance).le(gAy);
+            case 'left':   return gARight.add(gc.minDistance).le(gBLeft);
+            case 'right':  return gBRight.add(gc.minDistance).le(gALeft);
+            case 'top':    return gABottom.add(gc.minDistance).le(gBTop);
+            case 'bottom': return gBBottom.add(gc.minDistance).le(gATop);
         }
     }
     return null;
