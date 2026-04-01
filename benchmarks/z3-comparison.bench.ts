@@ -735,6 +735,101 @@ describe('Custom solver vs Z3 oracle', () => {
         }
     });
 
+    // ─── Negated groups (flat vs bbox encoding) ─────────────────────────
+
+    describe('Negated groups', () => {
+        // Scaling member count to show where bbox encoding helps.
+        // M ≤ 5 uses flat encoding (1 disjunction, O(K×M⁴) alts).
+        // M > 5 uses bbox encoding (5 disjunctions, O(M+K) alts).
+        // M ≤ 10 for Z3 comparison (M=12+ causes Z3 WASM stack overflow
+        // from O(K×M⁴) alternatives in a single Or() call).
+        for (const [m, k] of [[3, 3], [5, 3], [6, 3], [8, 5], [10, 5]] as const) {
+            it(`negated group M=${m} members, K=${k} non-members`, async () => {
+                await resetZ3();
+                const members: LayoutNode[] = [];
+                const extras: LayoutNode[] = [];
+                const constraints: LayoutConstraint[] = [];
+
+                for (let i = 0; i < m; i++) members.push(makeNode(`M${i}`, 60, 40));
+                for (let i = 0; i < k; i++) extras.push(makeNode(`X${i}`, 50, 35));
+
+                // Partial chain among members for structure
+                const chainLen = Math.ceil(m / 2);
+                for (let i = 0; i < chainLen - 1; i++) {
+                    constraints.push(leftOf(members[i], members[i + 1]));
+                }
+                // One ordering involving first non-member (SAT: it can be placed between members)
+                constraints.push(leftOf(members[0], extras[0]));
+
+                const gbf = new GroupByField('neg', 0, 1);
+                const layout: InstanceLayout = {
+                    nodes: [...members, ...extras],
+                    edges: [],
+                    constraints,
+                    groups: [{
+                        name: 'NG',
+                        nodeIds: members.map(n => n.id),
+                        keyNodeId: members[0].id,
+                        showLabel: false,
+                        sourceConstraint: gbf,
+                        negated: true,
+                    }],
+                };
+
+                const r = await bench(`neg-group-${m}m-${k}k`, layout);
+                expect(r.agree).toBe(true);
+                expect(r.customSat).toBe(true);
+            });
+        }
+
+        // Larger groups (custom solver only — Z3 WASM stack-overflows at M≥12
+        // because O(K×M⁴) alternatives exceed ctx.Or() argument limits).
+        for (const [m, k] of [[12, 5], [15, 5], [20, 10]] as const) {
+            it(`negated group M=${m} members, K=${k} non-members (custom only)`, async () => {
+                const members: LayoutNode[] = [];
+                const extras: LayoutNode[] = [];
+                const constraints: LayoutConstraint[] = [];
+
+                for (let i = 0; i < m; i++) members.push(makeNode(`M${i}`, 60, 40));
+                for (let i = 0; i < k; i++) extras.push(makeNode(`X${i}`, 50, 35));
+
+                const chainLen = Math.ceil(m / 2);
+                for (let i = 0; i < chainLen - 1; i++) {
+                    constraints.push(leftOf(members[i], members[i + 1]));
+                }
+                constraints.push(leftOf(members[0], extras[0]));
+
+                const gbf = new GroupByField('neg', 0, 1);
+                const layout: InstanceLayout = {
+                    nodes: [...members, ...extras],
+                    edges: [],
+                    constraints,
+                    groups: [{
+                        name: 'NG',
+                        nodeIds: members.map(n => n.id),
+                        keyNodeId: members[0].id,
+                        showLabel: false,
+                        sourceConstraint: gbf,
+                        negated: true,
+                    }],
+                };
+
+                // Custom solver only (Z3 can't handle this size)
+                const l = cloneLayout(layout);
+                const t0 = performance.now();
+                const err = new QualitativeConstraintValidator(l).validateConstraints();
+                const ms = performance.now() - t0;
+                const sat = err === null;
+                console.log(
+                    `  neg-group-${m}m-${k}k (custom only)`.padEnd(52) +
+                    `${(m + k).toString().padStart(3)}N ` +
+                    `custom=${ms.toFixed(2).padStart(8)}ms  ${sat ? 'SAT' : 'UNS'}`
+                );
+                expect(sat).toBe(true);
+            });
+        }
+    });
+
     describe('Large-scale: full mix', () => {
         for (const [n, nDisj, nGroups] of [[50, 10, 3], [100, 20, 3]] as const) {
             it(`${n} nodes, all constraint types`, async () => {
