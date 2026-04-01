@@ -620,21 +620,17 @@ describe('QualitativeConstraintValidator', () => {
             const validator = new QualitativeConstraintValidator(layout);
             validator.validateConstraints();
 
-            // Pure ¬: decomposed bbox encoding produces:
-            //   4 member-selection disjunctions per group × 2 groups = 8
-            //   + 1 merged non-member-inclusion disjunction = 9 total
+            // Pure ¬: both keys' alternatives should be merged into ONE disjunction
+            // (flat encoding for small groups ≤ BBOX_THRESHOLD)
             const negGroupDisjs = layout.disjunctiveConstraints?.filter(d =>
                 d.sourceConstraint === negatedSource
             ) ?? [];
-            expect(negGroupDisjs).toHaveLength(9); // 4×2 member-sel + 1 inclusion
+            expect(negGroupDisjs).toHaveLength(1);
 
-            // The inclusion disjunction (last one) should contain alternatives
-            // from BOTH keys: Key1 {A,B} non-members {C,D} + Key2 {C,D} non-members {A,B}
-            const inclusionDisj = negGroupDisjs.find(d =>
-                d.alternatives.length > 0 && d.alternatives[0].length === 4
-            );
-            expect(inclusionDisj).toBeDefined();
-            expect(inclusionDisj!.alternatives.length).toBeGreaterThan(0);
+            // The single disjunction should contain alternatives from BOTH keys
+            // Key1 {A,B} has non-members {C,D}, Key2 {C,D} has non-members {A,B}
+            // So alternatives should come from both keys combined
+            expect(negGroupDisjs[0].alternatives.length).toBeGreaterThan(0);
         });
 
         it('negated group₂ with different sources produces separate disjunctions', () => {
@@ -674,12 +670,12 @@ describe('QualitativeConstraintValidator', () => {
             const validator = new QualitativeConstraintValidator(layout);
             validator.validateConstraints();
 
-            // Different sources → separate disjunction sets (both must hold)
-            // Each source produces: 4 member-selection + 1 inclusion = 5 disjunctions
+            // Different sources → separate disjunctions (both must hold)
+            // Each source produces 1 disjunction (flat encoding for small groups)
             const negGroupDisjs = layout.disjunctiveConstraints?.filter(d =>
                 d.sourceConstraint === source1 || d.sourceConstraint === source2
             ) ?? [];
-            expect(negGroupDisjs).toHaveLength(10); // 5 per source × 2 sources
+            expect(negGroupDisjs).toHaveLength(2);
         });
     });
 

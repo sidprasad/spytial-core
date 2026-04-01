@@ -1224,32 +1224,25 @@ constraints:
         const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
         const { layout } = layoutInstance.generateLayout(instance);
 
-        // Negated group should produce disjunctive constraints via decomposed
-        // bbox encoding: 4 member-selection disjunctions (2 alts each) +
-        // 1 non-member-inclusion disjunction (2 alts for 2 non-members).
+        // Negated group should produce disjunctive constraints.
+        // With 2 members (≤ BBOX_THRESHOLD), uses flat encoding:
+        // 2 non-members × 2P2 × 2P2 = 2 × 2 × 2 = 8 alternatives in 1 disjunction.
         expect(layout.disjunctiveConstraints).toBeDefined();
         expect(layout.disjunctiveConstraints!.length).toBeGreaterThan(0);
 
-        // Find the non-member-inclusion disjunction (alternatives with 4 constraints)
+        // Find the negated group disjunction
         const negGroupDisj = layout.disjunctiveConstraints!.find(d =>
             d.alternatives.length > 0 &&
             d.alternatives[0].length === 4 &&
             (isLeftConstraint(d.alternatives[0][0]) || isTopConstraint(d.alternatives[0][0]))
         );
         expect(negGroupDisj).toBeDefined();
-        expect(negGroupDisj!.alternatives).toHaveLength(2); // 2 non-members (bbox decomposition)
+        expect(negGroupDisj!.alternatives).toHaveLength(8); // 2 non-members × (2×1) × (2×1)
 
-        // Each alternative should have exactly 4 constraints (_ngl≤N, N≤_ngr, _ngt≤N, N≤_ngb)
+        // Each alternative should have exactly 4 constraints (mL≤N, N≤mR, mT≤N, N≤mB)
         for (const alt of negGroupDisj!.alternatives) {
             expect(alt).toHaveLength(4);
         }
-
-        // Also verify member-selection disjunctions exist (4 of them, 2 alts each)
-        const memberSelDisjs = layout.disjunctiveConstraints!.filter(d =>
-            d.alternatives.length === 2 &&
-            d.alternatives[0].length === 1
-        );
-        expect(memberSelDisjs.length).toBeGreaterThanOrEqual(4);
     });
 
     it('negated group does not draw a visual rectangle', () => {

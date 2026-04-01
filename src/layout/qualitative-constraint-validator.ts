@@ -983,14 +983,17 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         // NOT GROUP(members) per key = "any rectangle containing all members
         // also contains a non-member"
         //
-        // Decomposed bbox encoding (replaces O(N × M⁴) corner enumeration):
-        //   4 virtual proxy nodes per group (_ngl, _ngr, _ngt, _ngb) act as
-        //   intermediaries between member-selection and non-member-inclusion.
-        //   4 member-selection disjunctions (M alts each) pick which member
-        //   defines each bbox edge. 1 merged non-member-inclusion disjunction
-        //   connects a non-member to the proxies; transitivity through the
-        //   graph provides: mi.x+w ≤ proxy.x ≤ N.x (and vice versa).
-        //   Total: O(Σ M_i + Σ(N - M_i)) alternatives vs O(Σ(N-M_i)×M_i⁴).
+        // Two encodings, selected per-group by member count:
+        //
+        // FLAT encoding (M ≤ BBOX_THRESHOLD): enumerate all (mL,mR,mT,mB,N) tuples
+        //   into a single disjunction.  O(K × M²(M-1)²) alternatives, but only 1
+        //   disjunction per group → shallower CDCL search tree.
+        //
+        // BBOX encoding (M > BBOX_THRESHOLD): 4 virtual proxy nodes per group act
+        //   as intermediaries; 4 member-selection disjunctions (M alts each) + 1
+        //   merged inclusion disjunction. O(M + K) alternatives total but 5 extra
+        //   disjunctions → deeper search tree, worthwhile only when M⁴ is large.
+        const BBOX_THRESHOLD = 5; // use bbox encoding when M > 5
         const negatedBySource = new Map<ConstraintSource, LayoutGroup[]>();
         for (const group of this.groups) {
             if (!group.negated || !group.sourceConstraint) continue;
@@ -1011,49 +1014,69 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
                 if (members.length < 2 || nonMembers.length === 0) continue;
 
-                // Virtual bbox proxy nodes (zero-size, unique per group)
-                const mkProxy = (suffix: string): LayoutNode => ({
-                    id: `_ng_${group.name}_${suffix}`,
-                    label: '', color: '', groups: [], attributes: {},
-                    width: 0, height: 0,
-                    mostSpecificType: '', types: [], showLabels: false,
-                });
-                const ngl = mkProxy('l'), ngr = mkProxy('r');
-                const ngt = mkProxy('t'), ngb = mkProxy('b');
+                if (members.length > BBOX_THRESHOLD) {
+                    // ── BBOX encoding for large groups ──────────────────────
+                    // Virtual bbox proxy nodes (zero-size, unique per group)
+                    const mkProxy = (suffix: string): LayoutNode => ({
+                        id: `_ng_${group.name}_${suffix}`,
+                        label: '', color: '', groups: [], attributes: {},
+                        width: 0, height: 0,
+                        mostSpecificType: '', types: [], showLabels: false,
+                    });
+                    const ngl = mkProxy('l'), ngr = mkProxy('r');
+                    const ngt = mkProxy('t'), ngb = mkProxy('b');
 
-                const pushDisj = (alts: LayoutConstraint[][]) => {
-                    const d = new DisjunctiveConstraint(source, alts);
-                    if (!this.layout.disjunctiveConstraints) this.layout.disjunctiveConstraints = [];
-                    this.layout.disjunctiveConstraints.push(d);
-                };
+                    const pushDisj = (alts: LayoutConstraint[][]) => {
+                        const d = new DisjunctiveConstraint(source, alts);
+                        if (!this.layout.disjunctiveConstraints) this.layout.disjunctiveConstraints = [];
+                        this.layout.disjunctiveConstraints.push(d);
+                    };
 
-                // Member-selection disjunctions: which member defines each bbox edge.
-                // Left:   mi → _ngl (eff. weight mi.width) ⇒ _ngl.x ≥ mi.x + mi.width
-                pushDisj(members.map(m => [
-                    { left: m, right: ngl, minDistance: 0, sourceConstraint: source } as LeftConstraint,
-                ]));
-                // Right:  _ngr → mi (eff. weight 0) ⇒ mi.x ≥ _ngr.x
-                pushDisj(members.map(m => [
-                    { left: ngr, right: m, minDistance: 0, sourceConstraint: source } as LeftConstraint,
-                ]));
-                // Top:    mi → _ngt (eff. weight mi.height) ⇒ _ngt.y ≥ mi.y + mi.height
-                pushDisj(members.map(m => [
-                    { top: m, bottom: ngt, minDistance: 0, sourceConstraint: source } as TopConstraint,
-                ]));
-                // Bottom: _ngb → mi (eff. weight 0) ⇒ mi.y ≥ _ngb.y
-                pushDisj(members.map(m => [
-                    { top: ngb, bottom: m, minDistance: 0, sourceConstraint: source } as TopConstraint,
-                ]));
+                    // Member-selection disjunctions: which member defines each bbox edge.
+                    pushDisj(members.map(m => [
+                        { left: m, right: ngl, minDistance: 0, sourceConstraint: source } as LeftConstraint,
+                    ]));
+                    pushDisj(members.map(m => [
+                        { left: ngr, right: m, minDistance: 0, sourceConstraint: source } as LeftConstraint,
+                    ]));
+                    pushDisj(members.map(m => [
+                        { top: m, bottom: ngt, minDistance: 0, sourceConstraint: source } as TopConstraint,
+                    ]));
+                    pushDisj(members.map(m => [
+                        { top: ngb, bottom: m, minDistance: 0, sourceConstraint: source } as TopConstraint,
+                    ]));
 
-                // Non-member inclusion alternatives: N between proxies on both axes.
-                // Transitivity gives: mi.x+w ≤ _ngl.x ≤ N.x  AND  N.x+w ≤ _ngr.x ≤ mj.x
-                for (const n of nonMembers) {
-                    inclusionAlternatives.push([
-                        { left: ngl, right: n, minDistance: 0, sourceConstraint: source } as LeftConstraint,
-                        { left: n, right: ngr, minDistance: 0, sourceConstraint: source } as LeftConstraint,
-                        { top: ngt, bottom: n, minDistance: 0, sourceConstraint: source } as TopConstraint,
-                        { top: n, bottom: ngb, minDistance: 0, sourceConstraint: source } as TopConstraint,
-                    ]);
+                    // Non-member inclusion via proxy nodes
+                    for (const n of nonMembers) {
+                        inclusionAlternatives.push([
+                            { left: ngl, right: n, minDistance: 0, sourceConstraint: source } as LeftConstraint,
+                            { left: n, right: ngr, minDistance: 0, sourceConstraint: source } as LeftConstraint,
+                            { top: ngt, bottom: n, minDistance: 0, sourceConstraint: source } as TopConstraint,
+                            { top: n, bottom: ngb, minDistance: 0, sourceConstraint: source } as TopConstraint,
+                        ]);
+                    }
+                } else {
+                    // ── FLAT encoding for small groups ──────────────────────
+                    // Enumerate all (mL,mR,mT,mB,N) tuples into a single disjunction.
+                    // O(K × M²(M-1)²) alternatives but only 1 disjunction → shallow search.
+                    for (const n of nonMembers) {
+                        for (const mL of members) {
+                            for (const mR of members) {
+                                if (mL.id === mR.id) continue;
+                                for (const mT of members) {
+                                    for (const mB of members) {
+                                        if (mT.id === mB.id) continue;
+                                        inclusionAlternatives.push([
+                                            { left: mL, right: n, minDistance: 0, sourceConstraint: source } as LeftConstraint,
+                                            { left: n, right: mR, minDistance: 0, sourceConstraint: source } as LeftConstraint,
+                                            { top: mT, bottom: n, minDistance: 0, sourceConstraint: source } as TopConstraint,
+                                            { top: n, bottom: mB, minDistance: 0, sourceConstraint: source } as TopConstraint,
+                                        ]);
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
