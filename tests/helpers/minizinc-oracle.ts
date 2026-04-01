@@ -7,8 +7,31 @@
  * Install MiniZinc: `brew install minizinc` (macOS) or see https://www.minizinc.org/
  */
 
-import { Model, init as mznInit, shutdown as mznShutdown, solvers as mznSolvers } from 'minizinc';
+// Dynamic import to avoid spawning MiniZinc child processes at module load
+// when the binary is not installed (causes unhandled SyntaxError in CI).
 import type { SolveResult } from 'minizinc';
+
+type MznModule = typeof import('minizinc');
+let MznModel: MznModule['Model'];
+let mznInit: MznModule['init'];
+let mznShutdown: MznModule['shutdown'];
+let mznSolvers: MznModule['solvers'];
+let mznLoaded = false;
+
+async function loadMiniZinc(): Promise<boolean> {
+    if (mznLoaded) return true;
+    try {
+        const mzn = await import('minizinc');
+        MznModel = mzn.Model;
+        mznInit = mzn.init;
+        mznShutdown = mzn.shutdown;
+        mznSolvers = mzn.solvers;
+        mznLoaded = true;
+        return true;
+    } catch {
+        return false;
+    }
+}
 import {
     InstanceLayout,
     LayoutConstraint,
@@ -51,11 +74,12 @@ async function detectSolver(): Promise<string | null> {
 /** Check if the minizinc CLI and a solver are available. */
 export async function isMiniZincAvailable(): Promise<boolean> {
     try {
+        if (!await loadMiniZinc()) return false;
         await mznInit();
         detectedSolver = await detectSolver();
         if (!detectedSolver) return false;
         // Smoke test: solve a trivial model to confirm the solver works
-        const m = new Model();
+        const m = new MznModel();
         m.addString('var 0..1: x; solve satisfy;');
         const r: SolveResult = await m.solve({
             options: { solver: detectedSolver, 'time-limit': 5000 },
@@ -69,6 +93,7 @@ export async function isMiniZincAvailable(): Promise<boolean> {
 
 export async function initMiniZinc(): Promise<void> {
     if (!initialized) {
+        await loadMiniZinc();
         await mznInit();
         if (!detectedSolver) detectedSolver = await detectSolver();
         initialized = true;
@@ -435,7 +460,7 @@ function compileDisjunction(disj: DisjunctiveConstraint): string | null {
  */
 export async function solveMiniZinc(layout: InstanceLayout): Promise<boolean> {
     const modelStr = compileToMiniZinc(layout);
-    const model = new Model();
+    const model = new MznModel();
     model.addString(modelStr);
 
     const result: SolveResult = await model.solve({
@@ -518,7 +543,7 @@ export async function verifyFeasibleSubset(
     lines.push('solve satisfy;');
 
     const modelStr = lines.join('\n');
-    const model = new Model();
+    const model = new MznModel();
     model.addString(modelStr);
 
     const result: SolveResult = await model.solve({

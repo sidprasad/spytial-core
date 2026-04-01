@@ -170,7 +170,12 @@ class DifferenceConstraintGraph {
      * Optionally records the LayoutConstraint that created this edge for provenance.
      */
     addEdge(a: string, b: string, weight?: number, constraint?: LayoutConstraint): boolean {
-        const w = weight ?? this.gap;
+        // Include the source node's physical size (width for horizontal graph,
+        // height for vertical) so that ordering edges encode the full constraint:
+        //   LeftConstraint(a, b, d) ⇒ x_b ≥ x_a + a.width + d  ⇒ weight = a.width + d
+        // Alignment edges bypass addEdge (addAlignmentEdges writes adj directly)
+        // so they remain zero-weight. Group virtual nodes have size 0.
+        const w = (weight ?? this.gap) + (this.nodeSize.get(a) ?? 0);
         this.ensureNode(a);
         this.ensureNode(b);
         if (a === b) return false;
@@ -2179,6 +2184,15 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                 const ac = constraint as AlignmentConstraint;
                 const graph = ac.axis === 'x' ? freshH : freshV;
                 ok = graph.addAlignmentEdges(ac.node1.id, ac.node2.id, constraint);
+                // Dual-axis alignment forces two nonzero-size nodes to the same
+                // position, guaranteeing overlap. Reject the second alignment.
+                if (ok) {
+                    const otherGraph = ac.axis === 'x' ? freshV : freshH;
+                    if (otherGraph.areAligned(ac.node1.id, ac.node2.id)) {
+                        graph.removeAlignmentEdges(ac.node1.id, ac.node2.id);
+                        ok = false;
+                    }
+                }
             }
             if (ok) feasibleConstraints.push(constraint);
         }
@@ -2223,7 +2237,14 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         if (isAlignmentConstraint(constraint)) {
             const ac = constraint as AlignmentConstraint;
             const graph = ac.axis === 'x' ? hGraph : vGraph;
-            return graph.addAlignmentEdges(ac.node1.id, ac.node2.id, constraint);
+            if (!graph.addAlignmentEdges(ac.node1.id, ac.node2.id, constraint)) return false;
+            // Dual-axis alignment forces overlap between nonzero-size nodes
+            const otherGraph = ac.axis === 'x' ? vGraph : hGraph;
+            if (otherGraph.areAligned(ac.node1.id, ac.node2.id)) {
+                graph.removeAlignmentEdges(ac.node1.id, ac.node2.id);
+                return false;
+            }
+            return true;
         }
         if (isBoundingBoxConstraint(constraint)) {
             const bc = constraint as BoundingBoxConstraint;
