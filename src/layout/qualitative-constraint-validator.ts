@@ -10,7 +10,8 @@
  *     one edge per non-member per side. This is O(non-members) per group,
  *     not O(non-members × members).
  *
- *   • UnionFind with snapshot/restore for cheap checkpointing.
+ *   • DifferenceConstraintGraph with weighted edges, edge provenance,
+ *     and zero-weight alignment edges (replaces UnionFind).
  *
  *   • CDCL search with clause learning, VSIDS branching, Luby restarts.
  *
@@ -100,67 +101,118 @@ import type { PositionalConstraintError, GroupOverlapError } from './constraint-
 const MAX_SPAN = 100_000;
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Weighted Partial-Order Graph
+// Difference Constraint Graph
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * DAG representing a strict partial order. Each node carries a dimension
- * (width for H-graph, height for V-graph) so we can compute minimum chain
- * spans without a numeric solver.
+ * Weighted DAG representing difference constraints between spatial elements.
  *
- * Includes both box nodes AND virtual group nodes (from V1's encoding).
+ * Each edge (a → b, weight w) encodes the constraint "b must be at least w
+ * units after a" (where "after" means rightward for H-graph, downward for V-graph).
+ * The weight is the minDistance from the LayoutConstraint that created the edge.
+ *
+ * Each node carries a dimension (width for H-graph, height for V-graph) so we
+ * can compute minimum chain spans. Includes both box nodes and virtual group nodes.
+ *
+ * Key additions over the old unweighted graph:
+ *   - Edge weights: actual minDistance values instead of uniform gap
+ *   - Edge provenance: maps each edge back to the LayoutConstraint that created it,
+ *     enabling direct conflict explanation without linear scans
+ *   - findCyclePath: returns the edges forming a path (for IIS extraction)
  */
-class WeightedPartialOrderGraph {
-    private adj: Map<string, Set<string>> = new Map();
-    private radj: Map<string, Set<string>> = new Map();
+class DifferenceConstraintGraph {
+    /** Forward adjacency: node → Map<successor, weight> */
+    private adj: Map<string, Map<string, number>> = new Map();
+    /** Reverse adjacency: node → Map<predecessor, weight> */
+    private radj: Map<string, Map<string, number>> = new Map();
     private nodes: Set<string> = new Set();
     /** Per-node size on this axis. Boxes have their width/height; group nodes have 0. */
     private nodeSize: Map<string, number> = new Map();
+    /** Maps "from→to" to the LayoutConstraint that created the edge. */
+    private edgeProvenance: Map<string, LayoutConstraint> = new Map();
+    /** Reference count for alignment edge pairs (key: "a\x00b" with a < b lexicographically). */
+    private alignmentRefCount: Map<string, number> = new Map();
     private gap: number;
 
     constructor(gap: number = 15) {
         this.gap = gap;
     }
 
-    clone(): WeightedPartialOrderGraph {
-        const g = new WeightedPartialOrderGraph(this.gap);
+    clone(): DifferenceConstraintGraph {
+        const g = new DifferenceConstraintGraph(this.gap);
         for (const n of this.nodes) g.nodes.add(n);
-        for (const [k, vs] of this.adj) g.adj.set(k, new Set(vs));
-        for (const [k, vs] of this.radj) g.radj.set(k, new Set(vs));
+        for (const [k, vs] of this.adj) g.adj.set(k, new Map(vs));
+        for (const [k, vs] of this.radj) g.radj.set(k, new Map(vs));
         g.nodeSize = new Map(this.nodeSize);
+        g.edgeProvenance = new Map(this.edgeProvenance);
+        g.alignmentRefCount = new Map(this.alignmentRefCount);
         return g;
     }
 
     ensureNode(id: string, size: number = 0): void {
         if (!this.nodes.has(id)) {
             this.nodes.add(id);
-            this.adj.set(id, new Set());
-            this.radj.set(id, new Set());
+            this.adj.set(id, new Map());
+            this.radj.set(id, new Map());
             this.nodeSize.set(id, size);
         }
     }
 
+    private static provenanceKey(a: string, b: string): string {
+        return `${a}\x00${b}`;
+    }
+
     /**
-     * Add edge (a → b) meaning a < b. Returns false if it would create a cycle.
+     * Add edge (a → b) with given weight, meaning "b is at least `weight` units
+     * after a". Returns false if it would create a cycle.
+     *
+     * If an edge a→b already exists, keeps the larger weight (tighter constraint).
+     * Optionally records the LayoutConstraint that created this edge for provenance.
      */
-    addEdge(a: string, b: string): boolean {
+    addEdge(a: string, b: string, weight?: number, constraint?: LayoutConstraint): boolean {
+        // Include the source node's physical size (width for horizontal graph,
+        // height for vertical) so that ordering edges encode the full constraint:
+        //   LeftConstraint(a, b, d) ⇒ x_b ≥ x_a + a.width + d  ⇒ weight = a.width + d
+        // Alignment edges bypass addEdge (addAlignmentEdges writes adj directly)
+        // so they remain zero-weight. Group virtual nodes have size 0.
+        const w = (weight ?? this.gap) + (this.nodeSize.get(a) ?? 0);
         this.ensureNode(a);
         this.ensureNode(b);
         if (a === b) return false;
-        if (this.adj.get(a)!.has(b)) return true;
+        const existing = this.adj.get(a)!.get(b);
+        if (existing !== undefined && w <= existing) {
+            // Edge exists with equal or tighter weight — redundant, no change needed
+            return true;
+        }
+        // For new edges or tightening: check if a return path b→...→a exists.
+        // A cycle with positive total weight is infeasible (x_a - x_a ≥ w > 0).
+        // With non-negative edge weights, w > 0 + any return path ≥ 0 → infeasible.
+        // Zero-weight addEdge calls are only used internally via addAlignmentEdges
+        // which has its own reachability checks, so reject all canReach here.
         if (this.canReach(b, a)) return false;
-        this.adj.get(a)!.add(b);
-        this.radj.get(b)!.add(a);
+        this.adj.get(a)!.set(b, w);
+        this.radj.get(b)!.set(a, w);
+        if (constraint) this.edgeProvenance.set(DifferenceConstraintGraph.provenanceKey(a, b), constraint);
         return true;
     }
 
     removeEdge(a: string, b: string): void {
         this.adj.get(a)?.delete(b);
         this.radj.get(b)?.delete(a);
+        this.edgeProvenance.delete(DifferenceConstraintGraph.provenanceKey(a, b));
     }
 
     hasEdge(a: string, b: string): boolean {
         return this.adj.get(a)?.has(b) ?? false;
+    }
+
+    getEdgeWeight(a: string, b: string): number | undefined {
+        return this.adj.get(a)?.get(b);
+    }
+
+    /** Get the constraint that created edge a→b, if provenance was recorded. */
+    getEdgeProvenance(a: string, b: string): LayoutConstraint | undefined {
+        return this.edgeProvenance.get(DifferenceConstraintGraph.provenanceKey(a, b));
     }
 
     canReach(from: string, to: string): boolean {
@@ -172,7 +224,7 @@ class WeightedPartialOrderGraph {
             const cur = queue.shift()!;
             const succs = this.adj.get(cur);
             if (!succs) continue;
-            for (const s of succs) {
+            for (const s of succs.keys()) {
                 if (s === to) return true;
                 if (!visited.has(s)) {
                     visited.add(s);
@@ -183,24 +235,97 @@ class WeightedPartialOrderGraph {
         return false;
     }
 
+    /**
+     * Returns true if a is strictly ordered before b: there exists a path
+     * from a to b with at least one positive-weight edge. Aligned nodes
+     * (connected only through zero-weight edges) are NOT considered ordered.
+     */
     isOrdered(a: string, b: string): boolean {
-        if (a === b) return false;
-        return this.canReach(a, b);
+        return this.isStrictlyOrdered(a, b);
     }
 
     successors(id: string): ReadonlySet<string> {
-        return this.adj.get(id) ?? new Set();
+        const succs = this.adj.get(id);
+        return succs ? new Set(succs.keys()) : new Set();
     }
 
     predecessors(id: string): ReadonlySet<string> {
-        return this.radj.get(id) ?? new Set();
+        const preds = this.radj.get(id);
+        return preds ? new Set(preds.keys()) : new Set();
     }
 
+    /**
+     * Topological sort that handles zero-weight alignment cycles.
+     * Contracts alignment SCCs into super-nodes, sorts those, then expands.
+     * Returns null only if there's a positive-weight cycle (true infeasibility).
+     */
     topologicalSort(): string[] | null {
+        // First try standard topo sort (fast path for graphs without alignment cycles)
+        const standardResult = this.standardTopoSort();
+        if (standardResult) return standardResult;
+
+        // Graph has cycles — contract alignment SCCs into super-nodes
+        const classes = this.getAlignmentClasses();
+        const nodeToRep = new Map<string, string>();
+        for (const [rep, members] of classes) {
+            for (const m of members) nodeToRep.set(m, rep);
+        }
+        for (const n of this.nodes) {
+            if (!nodeToRep.has(n)) nodeToRep.set(n, n);
+        }
+
+        // Build contracted graph (super-nodes only)
+        const superNodes = new Set<string>();
+        for (const n of this.nodes) superNodes.add(nodeToRep.get(n)!);
+        const superAdj = new Map<string, Set<string>>();
+        for (const sn of superNodes) superAdj.set(sn, new Set());
+        for (const [src, succs] of this.adj) {
+            const srcRep = nodeToRep.get(src)!;
+            for (const [tgt] of succs) {
+                const tgtRep = nodeToRep.get(tgt)!;
+                if (srcRep !== tgtRep) superAdj.get(srcRep)!.add(tgtRep);
+            }
+        }
+
+        // Topo sort the contracted graph
+        const inDeg = new Map<string, number>();
+        for (const sn of superNodes) inDeg.set(sn, 0);
+        for (const [, succs] of superAdj) {
+            for (const s of succs) inDeg.set(s, (inDeg.get(s) ?? 0) + 1);
+        }
+        const queue: string[] = [];
+        for (const [n, d] of inDeg) { if (d === 0) queue.push(n); }
+        const superOrder: string[] = [];
+        while (queue.length > 0) {
+            const n = queue.shift()!;
+            superOrder.push(n);
+            for (const s of superAdj.get(n) ?? []) {
+                const nd = (inDeg.get(s) ?? 1) - 1;
+                inDeg.set(s, nd);
+                if (nd === 0) queue.push(s);
+            }
+        }
+
+        if (superOrder.length !== superNodes.size) return null; // Positive-weight cycle
+
+        // Expand super-nodes back to individual nodes
+        const order: string[] = [];
+        for (const rep of superOrder) {
+            const members = classes.get(rep);
+            if (members) {
+                order.push(...members);
+            } else {
+                order.push(rep);
+            }
+        }
+        return order;
+    }
+
+    private standardTopoSort(): string[] | null {
         const inDeg = new Map<string, number>();
         for (const n of this.nodes) inDeg.set(n, 0);
         for (const [, succs] of this.adj) {
-            for (const s of succs) inDeg.set(s, (inDeg.get(s) ?? 0) + 1);
+            for (const s of succs.keys()) inDeg.set(s, (inDeg.get(s) ?? 0) + 1);
         }
         const queue: string[] = [];
         for (const [n, d] of inDeg) { if (d === 0) queue.push(n); }
@@ -208,7 +333,7 @@ class WeightedPartialOrderGraph {
         while (queue.length > 0) {
             const n = queue.shift()!;
             order.push(n);
-            for (const s of this.adj.get(n) ?? []) {
+            for (const s of this.adj.get(n)?.keys() ?? []) {
                 const nd = (inDeg.get(s) ?? 1) - 1;
                 inDeg.set(s, nd);
                 if (nd === 0) queue.push(s);
@@ -220,47 +345,316 @@ class WeightedPartialOrderGraph {
     /**
      * Minimum canvas span = longest weighted chain through the graph.
      *
-     *   dist[n] = size(n) + max over predecessors p of (dist[p] + gap)
+     *   dist[n] = size(n) + max over predecessors p of (dist[p] + edgeWeight(p, n))
      *
-     * Group virtual nodes have size 0, so they contribute only gap.
+     * Uses actual edge weights (minDistance values) instead of a uniform gap.
+     * Group virtual nodes have size 0, so they contribute only the edge weight.
      */
     longestChainSpan(): number {
         const order = this.topologicalSort();
         if (!order) return Infinity; // Cycle
 
+        // Build alignment class lookup: node → representative
+        const classes = this.getAlignmentClasses();
+        const nodeToRep = new Map<string, string>();
+        for (const [rep, members] of classes) {
+            for (const m of members) nodeToRep.set(m, rep);
+        }
+
+        // For aligned nodes, their effective size on the aligned axis is the
+        // max of the class (they occupy the same coordinate, not separate ones).
+        const classMaxSize = new Map<string, number>();
+        for (const [rep, members] of classes) {
+            let maxSize = 0;
+            for (const m of members) maxSize = Math.max(maxSize, this.nodeSize.get(m) ?? 0);
+            classMaxSize.set(rep, maxSize);
+        }
+
         const dist = new Map<string, number>();
         let maxSpan = 0;
+        const counted = new Set<string>(); // Track which alignment classes contributed size
 
         for (const n of order) {
-            const mySize = this.nodeSize.get(n) ?? 0;
-            let bestPred = 0;
-            for (const p of this.radj.get(n) ?? []) {
-                bestPred = Math.max(bestPred, (dist.get(p) ?? 0) + this.gap);
+            const rep = nodeToRep.get(n);
+
+            if (rep !== undefined && !counted.has(rep)) {
+                // First member of an alignment class — process the entire class
+                // as a single unit to avoid the ordering-dependent bug where the
+                // class size is assigned to a member without the best incoming dist.
+                counted.add(rep);
+                const members = classes.get(rep)!;
+                let bestIncoming = 0;
+                for (const m of members) {
+                    const preds = this.radj.get(m);
+                    if (!preds) continue;
+                    for (const [p, w] of preds) {
+                        if (nodeToRep.get(p) === rep) continue; // Skip intra-class edges
+                        // Edge weight w includes source nodeSize (addEdge folds it
+                        // in for cycle detection). Subtract it to avoid double-
+                        // counting, since dist[p] already includes p's own size.
+                        // Clamp to 0 for alignment edges (w=0, set directly).
+                        const minDist = Math.max(0, w - (this.nodeSize.get(p) ?? 0));
+                        bestIncoming = Math.max(bestIncoming, (dist.get(p) ?? 0) + minDist);
+                    }
+                }
+                const classDist = bestIncoming + classMaxSize.get(rep)!;
+                for (const m of members) dist.set(m, classDist);
+                maxSpan = Math.max(maxSpan, classDist);
+            } else if (rep === undefined) {
+                // Non-aligned node
+                const mySize = this.nodeSize.get(n) ?? 0;
+                let bestPred = 0;
+                const preds = this.radj.get(n);
+                if (preds) {
+                    for (const [p, w] of preds) {
+                        const minDist = Math.max(0, w - (this.nodeSize.get(p) ?? 0));
+                        bestPred = Math.max(bestPred, (dist.get(p) ?? 0) + minDist);
+                    }
+                }
+                const d = bestPred + mySize;
+                dist.set(n, d);
+                maxSpan = Math.max(maxSpan, d);
             }
-            const d = bestPred + mySize;
-            dist.set(n, d);
-            maxSpan = Math.max(maxSpan, d);
+            // else: alignment class member already processed, skip
         }
 
         return maxSpan;
     }
 
+    // ─── Alignment (zero-weight edge) support ─────────────────────────────
+
     /**
-     * Would adding edge (a → b) cause the longest chain to exceed maxSpan?
-     * Temporarily adds the edge, computes span, removes it.
+     * Add bidirectional zero-weight edges for alignment: a=b.
+     * Returns false if alignment conflicts with existing strict ordering
+     * (a positive-weight path exists between a and b in either direction).
+     */
+    addAlignmentEdges(a: string, b: string, constraint?: LayoutConstraint): boolean {
+        this.ensureNode(a);
+        this.ensureNode(b);
+        if (a === b) return true;
+
+        const aToB = this.canReach(a, b);
+        const bToA = this.canReach(b, a);
+
+        if (aToB && bToA) {
+            // Both directions reachable — already in same component.
+            // This is OK only if all paths are zero-weight (already aligned).
+            // If any direction has a positive-weight path, there's already a conflict,
+            // but the system was consistent before so this shouldn't happen.
+            // Add redundant edges for provenance tracking.
+        } else if (aToB || bToA) {
+            // Asymmetric reachability — strict ordering exists between a and b.
+            // Aligning them would create x_a = x_b AND x_a < x_b (or vice versa).
+            return false;
+        }
+
+        // Add zero-weight edges (don't overwrite existing positive-weight edges)
+        if (!this.adj.get(a)!.has(b)) {
+            this.adj.get(a)!.set(b, 0);
+            this.radj.get(b)!.set(a, 0);
+            if (constraint) this.edgeProvenance.set(DifferenceConstraintGraph.provenanceKey(a, b), constraint);
+        }
+        if (!this.adj.get(b)!.has(a)) {
+            this.adj.get(b)!.set(a, 0);
+            this.radj.get(a)!.set(b, 0);
+            if (constraint) this.edgeProvenance.set(DifferenceConstraintGraph.provenanceKey(b, a), constraint);
+        }
+
+        // Increment reference count for this alignment pair
+        const pairKey = a < b ? `${a}\x00${b}` : `${b}\x00${a}`;
+        this.alignmentRefCount.set(pairKey, (this.alignmentRefCount.get(pairKey) ?? 0) + 1);
+        return true;
+    }
+
+    /**
+     * Remove alignment edges (both directions), but only if no other constraint
+     * still requires them (reference count drops to zero).
+     */
+    removeAlignmentEdges(a: string, b: string): void {
+        const pairKey = a < b ? `${a}\x00${b}` : `${b}\x00${a}`;
+        const count = (this.alignmentRefCount.get(pairKey) ?? 0) - 1;
+        if (count > 0) {
+            this.alignmentRefCount.set(pairKey, count);
+            return; // Another constraint still needs these edges
+        }
+        this.alignmentRefCount.delete(pairKey);
+
+        // Only remove if zero-weight (don't remove ordering edges)
+        if (this.adj.get(a)?.get(b) === 0) {
+            this.adj.get(a)!.delete(b);
+            this.radj.get(b)!.delete(a);
+            this.edgeProvenance.delete(DifferenceConstraintGraph.provenanceKey(a, b));
+        }
+        if (this.adj.get(b)?.get(a) === 0) {
+            this.adj.get(b)!.delete(a);
+            this.radj.get(a)!.delete(b);
+            this.edgeProvenance.delete(DifferenceConstraintGraph.provenanceKey(b, a));
+        }
+    }
+
+    /**
+     * Check if two nodes are aligned: mutually reachable (in same strongly
+     * connected component). In a consistent graph, mutual reachability through
+     * zero-weight paths means the nodes must have the same coordinate.
+     */
+    areAligned(a: string, b: string): boolean {
+        if (a === b) return true;
+        return this.canReach(a, b) && this.canReach(b, a);
+    }
+
+    /**
+     * Check if a is strictly ordered before b: there exists a path from a to b
+     * that includes at least one positive-weight edge.
+     *
+     * This distinguishes "a < b" (strict ordering) from "a = b" (alignment).
+     */
+    isStrictlyOrdered(a: string, b: string): boolean {
+        if (a === b) return false;
+        // BFS tracking whether we've traversed any positive-weight edge
+        const visited = new Map<string, boolean>(); // node → best "hasPositive" seen
+        const queue: { node: string; hasPositive: boolean }[] = [{ node: a, hasPositive: false }];
+        visited.set(a, false);
+        while (queue.length > 0) {
+            const { node, hasPositive } = queue.shift()!;
+            const succs = this.adj.get(node);
+            if (!succs) continue;
+            for (const [s, w] of succs) {
+                const newHasPositive = hasPositive || w > 0;
+                if (s === b && newHasPositive) return true;
+                const prevPositive = visited.get(s);
+                if (prevPositive === undefined || (!prevPositive && newHasPositive)) {
+                    visited.set(s, newHasPositive);
+                    queue.push({ node: s, hasPositive: newHasPositive });
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Get alignment classes: groups of nodes connected by mutual zero-weight paths.
+     * Returns a map from canonical representative to list of class members.
+     * Classes with only one member are omitted.
+     */
+    getAlignmentClasses(): Map<string, string[]> {
+        // Find SCCs using Tarjan's or simpler approach: for each node, find its
+        // SCC by checking mutual reachability. For small graphs, nested BFS is fine.
+        const classes = new Map<string, string[]>();
+        const assigned = new Set<string>();
+
+        for (const node of this.nodes) {
+            if (assigned.has(node)) continue;
+
+            // Find all nodes mutually reachable from this node (same SCC)
+            const forwardReachable = this.reachableSet(node);
+            const classMembers: string[] = [];
+
+            for (const candidate of forwardReachable) {
+                if (this.canReach(candidate, node)) {
+                    classMembers.push(candidate);
+                }
+            }
+
+            if (classMembers.length > 1) {
+                classMembers.sort(); // deterministic
+                const representative = classMembers[0];
+                classes.set(representative, classMembers);
+                for (const m of classMembers) assigned.add(m);
+            } else {
+                assigned.add(node);
+            }
+        }
+
+        return classes;
+    }
+
+    /** Get all nodes reachable from `start` via any edges. */
+    private reachableSet(start: string): Set<string> {
+        const visited = new Set<string>();
+        const queue: string[] = [start];
+        visited.add(start);
+        while (queue.length > 0) {
+            const cur = queue.shift()!;
+            const succs = this.adj.get(cur);
+            if (!succs) continue;
+            for (const s of succs.keys()) {
+                if (!visited.has(s)) {
+                    visited.add(s);
+                    queue.push(s);
+                }
+            }
+        }
+        return visited;
+    }
+
+    /**
+     * Would adding edge (a → b) with given weight cause the longest chain to
+     * exceed maxSpan? Temporarily adds the edge, computes span, removes it.
      * Returns true if the chain would overflow.
      */
-    wouldOverflow(a: string, b: string, maxSpan: number): boolean {
-        if (!this.adj.has(a) || !this.adj.has(b)) return false; // Unknown node — can't overflow
+    wouldOverflow(a: string, b: string, maxSpan: number, weight?: number): boolean {
+        // Match addEdge's weight encoding: include source node's physical size
+        const w = (weight ?? this.gap) + (this.nodeSize.get(a) ?? 0);
+        if (!this.adj.has(a) || !this.adj.has(b)) return false;
         if (this.canReach(b, a)) return true; // Cycle
 
-        this.adj.get(a)!.add(b);
-        this.radj.get(b)!.add(a);
+        // Save existing edge state before probing
+        const existingFwd = this.adj.get(a)!.get(b);
+        const existingRev = this.radj.get(b)!.get(a);
+
+        this.adj.get(a)!.set(b, w);
+        this.radj.get(b)!.set(a, w);
         const span = this.longestChainSpan();
-        this.adj.get(a)!.delete(b);
-        this.radj.get(b)!.delete(a);
+
+        // Restore original edge state
+        if (existingFwd !== undefined) {
+            this.adj.get(a)!.set(b, existingFwd);
+            this.radj.get(b)!.set(a, existingRev!);
+        } else {
+            this.adj.get(a)!.delete(b);
+            this.radj.get(b)!.delete(a);
+        }
 
         return span > maxSpan;
+    }
+
+    /**
+     * Find a path from `from` to `to` in the graph, returning edges as [src, tgt] pairs.
+     * Uses BFS with lexicographic successor ordering for determinism.
+     * Returns null if no path exists.
+     */
+    findPath(from: string, to: string): [string, string][] | null {
+        if (from === to) return [];
+        const visited = new Set<string>();
+        const queue: { node: string; path: [string, string][] }[] = [{ node: from, path: [] }];
+        visited.add(from);
+        while (queue.length > 0) {
+            const { node, path } = queue.shift()!;
+            const succs = this.adj.get(node);
+            if (!succs) continue;
+            const sortedSuccs = [...succs.keys()].sort();
+            for (const succ of sortedSuccs) {
+                if (succ === to) return [...path, [node, succ]];
+                if (!visited.has(succ)) {
+                    visited.add(succ);
+                    queue.push({ node: succ, path: [...path, [node, succ]] });
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Get the constraints (via provenance) for all edges along a path.
+     * Returns constraints in path order. Skips edges with no recorded provenance.
+     */
+    getPathConstraints(path: [string, string][]): LayoutConstraint[] {
+        const result: LayoutConstraint[] = [];
+        for (const [a, b] of path) {
+            const c = this.edgeProvenance.get(DifferenceConstraintGraph.provenanceKey(a, b));
+            if (c) result.push(c);
+        }
+        return result;
     }
 
     edgeCount(): number {
@@ -276,85 +670,15 @@ class WeightedPartialOrderGraph {
     allEdges(): [string, string][] {
         const edges: [string, string][] = [];
         for (const [src, succs] of this.adj) {
-            for (const tgt of succs) edges.push([src, tgt]);
+            for (const tgt of succs.keys()) edges.push([src, tgt]);
         }
         return edges;
     }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Union-Find with snapshot/restore (from V1)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-class UnionFind {
-    private parent: Map<string, string> = new Map();
-    private rank: Map<string, number> = new Map();
-
-    find(x: string): string {
-        if (!this.parent.has(x)) {
-            this.parent.set(x, x);
-            this.rank.set(x, 0);
-        }
-        let root = x;
-        while (this.parent.get(root) !== root) root = this.parent.get(root)!;
-        let cur = x;
-        while (cur !== root) {
-            const next = this.parent.get(cur)!;
-            this.parent.set(cur, root);
-            cur = next;
-        }
-        return root;
-    }
-
-    union(a: string, b: string): boolean {
-        const ra = this.find(a);
-        const rb = this.find(b);
-        if (ra === rb) return false;
-        const rankA = this.rank.get(ra)!;
-        const rankB = this.rank.get(rb)!;
-        if (rankA < rankB) { this.parent.set(ra, rb); }
-        else if (rankA > rankB) { this.parent.set(rb, ra); }
-        else { this.parent.set(rb, ra); this.rank.set(ra, rankA + 1); }
-        return true;
-    }
-
-    connected(a: string, b: string): boolean {
-        return this.find(a) === this.find(b);
-    }
-
-    classes(): Map<string, string[]> {
-        const cls = new Map<string, string[]>();
-        for (const [x] of this.parent) {
-            const r = this.find(x);
-            if (!cls.has(r)) cls.set(r, []);
-            cls.get(r)!.push(x);
-        }
-        // Sort members within each class for deterministic iteration
-        for (const [k, members] of cls) {
-            members.sort();
-        }
-        return cls;
-    }
-
-    snapshot(): { parent: [string, string][]; rank: [string, number][] } {
-        return {
-            parent: Array.from(this.parent.entries()),
-            rank: Array.from(this.rank.entries()),
-        };
-    }
-
-    restore(snap: { parent: [string, string][]; rank: [string, number][] }): void {
-        this.parent = new Map(snap.parent);
-        this.rank = new Map(snap.rank);
-    }
-
-    clone(): UnionFind {
-        const uf = new UnionFind();
-        uf.parent = new Map(this.parent);
-        uf.rank = new Map(this.rank);
-        return uf;
-    }
-}
+// UnionFind has been replaced by zero-weight alignment edges in DifferenceConstraintGraph.
+// Alignment equivalence classes are now computed via SCC detection (getAlignmentClasses).
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CDCL types
@@ -373,16 +697,11 @@ interface Assignment {
     alternativeIndex: number;
     decisionLevel: number;
     isDecision: boolean;
-    /** UF snapshots saved before alignment mutations, for undo on backtrack. */
-    xAlignSnapshot?: { parent: [string, string][]; rank: [string, number][] };
-    yAlignSnapshot?: { parent: [string, string][]; rank: [string, number][] };
 }
 
 interface SolverCheckpoint {
-    hGraph: WeightedPartialOrderGraph;
-    vGraph: WeightedPartialOrderGraph;
-    hAlignUF: UnionFind;
-    vAlignUF: UnionFind;
+    hGraph: DifferenceConstraintGraph;
+    vGraph: DifferenceConstraintGraph;
     assignmentTrailLength: number;
     addedConstraintsLength: number;
 }
@@ -401,10 +720,10 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     minPadding: number = 15;
 
     // ─── Qualitative state ───
-    private hGraph: WeightedPartialOrderGraph;
-    private vGraph: WeightedPartialOrderGraph;
-    private xAlignUF: UnionFind = new UnionFind();
-    private yAlignUF: UnionFind = new UnionFind();
+    private hGraph: DifferenceConstraintGraph;
+    private vGraph: DifferenceConstraintGraph;
+    // Alignment is now tracked via zero-weight edges in hGraph/vGraph.
+    // See DifferenceConstraintGraph.addAlignmentEdges / areAligned / getAlignmentClasses.
 
     // ─── Output alignment groups ───
     public horizontallyAligned: LayoutNode[][] = [];
@@ -441,8 +760,8 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         this.orientationConstraints = layout.constraints;
         this.groups = layout.groups;
 
-        this.hGraph = new WeightedPartialOrderGraph(this.minPadding);
-        this.vGraph = new WeightedPartialOrderGraph(this.minPadding);
+        this.hGraph = new DifferenceConstraintGraph(this.minPadding);
+        this.vGraph = new DifferenceConstraintGraph(this.minPadding);
 
         for (const node of this.nodes) {
             this.nodeMap.set(node.id, node);
@@ -572,8 +891,8 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     // ═══════════════════════════════════════════════════════════════════════════
 
     private checkPigeonhole(): PositionalConstraintError | null {
-        // x-aligned nodes must separate vertically
-        for (const [, members] of this.xAlignUF.classes()) {
+        // x-aligned nodes (same x-axis via hGraph) must separate vertically
+        for (const [, members] of this.hGraph.getAlignmentClasses()) {
             if (members.length < 2) continue;
             let totalHeight = 0;
             for (const id of members) {
@@ -587,8 +906,8 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             }
         }
 
-        // y-aligned nodes must separate horizontally
-        for (const [, members] of this.yAlignUF.classes()) {
+        // y-aligned nodes (same y-axis via vGraph) must separate horizontally
+        for (const [, members] of this.vGraph.getAlignmentClasses()) {
             if (members.length < 2) continue;
             let totalWidth = 0;
             for (const id of members) {
@@ -731,47 +1050,37 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
     private addConjunctiveConstraint(constraint: LayoutConstraint): PositionalConstraintError | null {
         if (isLeftConstraint(constraint)) {
-            // Check if nodes are x-aligned (same x) — can't be left/right of each other
-            if (this.xAlignUF.connected(constraint.left.id, constraint.right.id)) {
+            // addEdge checks: cycle (including alignment-ordering conflict via zero-weight paths)
+            if (!this.hGraph.addEdge(constraint.left.id, constraint.right.id, constraint.minDistance, constraint)) {
                 return this.buildConjunctiveError(constraint);
-            }
-            if (!this.hGraph.addEdge(constraint.left.id, constraint.right.id)) {
-                return this.buildConjunctiveError(constraint);
-            }
-            // Check if this new edge creates ordering between any x-aligned pair
-            if (this.hasAlignmentOrderingConflict(constraint.left.id, constraint.right.id, 'x')) {
-                // Build error while edge is still in graph (so path-finding works)
-                const error = this.buildAlignmentConflictError(constraint, 'x');
-                this.hGraph.removeEdge(constraint.left.id, constraint.right.id);
-                return error;
             }
             this.addedConstraints.push(constraint);
         } else if (isTopConstraint(constraint)) {
-            // Check if nodes are y-aligned (same y) — can't be above/below each other
-            if (this.yAlignUF.connected(constraint.top.id, constraint.bottom.id)) {
+            if (!this.vGraph.addEdge(constraint.top.id, constraint.bottom.id, constraint.minDistance, constraint)) {
                 return this.buildConjunctiveError(constraint);
-            }
-            if (!this.vGraph.addEdge(constraint.top.id, constraint.bottom.id)) {
-                return this.buildConjunctiveError(constraint);
-            }
-            // Check if this new edge creates ordering between any y-aligned pair
-            if (this.hasAlignmentOrderingConflict(constraint.top.id, constraint.bottom.id, 'y')) {
-                const error = this.buildAlignmentConflictError(constraint, 'y');
-                this.vGraph.removeEdge(constraint.top.id, constraint.bottom.id);
-                return error;
             }
             this.addedConstraints.push(constraint);
         } else if (isAlignmentConstraint(constraint)) {
             const ac = constraint as AlignmentConstraint;
+            const graph = ac.axis === 'x' ? this.hGraph : this.vGraph;
+            if (!graph.addAlignmentEdges(ac.node1.id, ac.node2.id, constraint)) {
+                return this.buildAlignmentConflictError(constraint, ac.axis);
+            }
+            // Dual-axis alignment forces two nonzero-size nodes to the same
+            // position, guaranteeing overlap. Reject the second alignment.
+            // Skip for self-alignment (same node) — that's trivially SAT.
+            if (ac.node1.id !== ac.node2.id) {
+                const otherGraph = ac.axis === 'x' ? this.vGraph : this.hGraph;
+                if (otherGraph.areAligned(ac.node1.id, ac.node2.id)) {
+                    graph.removeAlignmentEdges(ac.node1.id, ac.node2.id);
+                    return this.buildAlignmentConflictError(constraint, ac.axis);
+                }
+            }
             if (ac.axis === 'x') {
-                this.xAlignUF.union(ac.node1.id, ac.node2.id);
                 this.verticallyAligned.push([ac.node1, ac.node2]);
             } else {
-                this.yAlignUF.union(ac.node1.id, ac.node2.id);
                 this.horizontallyAligned.push([ac.node1, ac.node2]);
             }
-            const alignError = this.checkAlignmentConsistency(ac);
-            if (alignError) return alignError;
             this.addedConstraints.push(constraint);
         } else if (isBoundingBoxConstraint(constraint) || isGroupBoundaryConstraint(constraint)) {
             const error = this.addSpatialConstraint(constraint);
@@ -793,10 +1102,10 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             this.vGraph.ensureNode(groupId);
             let ok: boolean;
             switch (bc.side) {
-                case 'left':   ok = this.hGraph.addEdge(bc.node.id, groupId); break;
-                case 'right':  ok = this.hGraph.addEdge(groupId, bc.node.id); break;
-                case 'top':    ok = this.vGraph.addEdge(bc.node.id, groupId); break;
-                case 'bottom': ok = this.vGraph.addEdge(groupId, bc.node.id); break;
+                case 'left':   ok = this.hGraph.addEdge(bc.node.id, groupId, bc.minDistance, constraint); break;
+                case 'right':  ok = this.hGraph.addEdge(groupId, bc.node.id, bc.minDistance, constraint); break;
+                case 'top':    ok = this.vGraph.addEdge(bc.node.id, groupId, bc.minDistance, constraint); break;
+                case 'bottom': ok = this.vGraph.addEdge(groupId, bc.node.id, bc.minDistance, constraint); break;
                 default: ok = true;
             }
             if (!ok) return this.buildConjunctiveError(constraint);
@@ -810,10 +1119,10 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             this.vGraph.ensureNode(gBId);
             let ok: boolean;
             switch (gc.side) {
-                case 'left':   ok = this.hGraph.addEdge(gAId, gBId); break;
-                case 'right':  ok = this.hGraph.addEdge(gBId, gAId); break;
-                case 'top':    ok = this.vGraph.addEdge(gAId, gBId); break;
-                case 'bottom': ok = this.vGraph.addEdge(gBId, gAId); break;
+                case 'left':   ok = this.hGraph.addEdge(gAId, gBId, gc.minDistance, constraint); break;
+                case 'right':  ok = this.hGraph.addEdge(gBId, gAId, gc.minDistance, constraint); break;
+                case 'top':    ok = this.vGraph.addEdge(gAId, gBId, gc.minDistance, constraint); break;
+                case 'bottom': ok = this.vGraph.addEdge(gBId, gAId, gc.minDistance, constraint); break;
                 default: ok = true;
             }
             if (!ok) return this.buildConjunctiveError(constraint);
@@ -821,155 +1130,9 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         return null;
     }
 
-    private checkAlignmentConsistency(ac: AlignmentConstraint): PositionalConstraintError | null {
-        // After union, any two members of the merged equivalence class that are
-        // ordered on the same axis is a contradiction. We must check all cross-class
-        // pairs because the union may have just merged two previously separate classes.
-        const uf = ac.axis === 'x' ? this.xAlignUF : this.yAlignUF;
-        const graph = ac.axis === 'x' ? this.hGraph : this.vGraph;
-        const root = uf.find(ac.node1.id);
-
-        // Collect all members of the merged class
-        const members: string[] = [];
-        for (const [, cls] of uf.classes()) {
-            if (cls.length > 0 && uf.find(cls[0]) === root) {
-                members.push(...cls);
-                break;
-            }
-        }
-
-        // Check all pairs for ordering conflicts
-        for (let i = 0; i < members.length; i++) {
-            for (let j = i + 1; j < members.length; j++) {
-                if (graph.isOrdered(members[i], members[j]) || graph.isOrdered(members[j], members[i])) {
-                    return this.buildAlignmentConflictError(ac, ac.axis === 'x' ? 'x' : 'y');
-                }
-            }
-        }
-
-        // Cross-class alignment cycle: if two distinct alignment classes are
-        // ordered in both directions (transitively), that's unsatisfiable.
-        const cycleAxis = ac.axis === 'x' ? 'x' as const : 'y' as const;
-        if (this.hasAlignmentClassCycle(cycleAxis)) {
-            return this.buildAlignmentConflictError(ac, cycleAxis);
-        }
-
-        return null;
-    }
-
-    /**
-     * After adding an ordering edge A→B on a given axis, check if this creates
-     * a transitive ordering between any pair of nodes that are aligned on that axis.
-     * E.g., if X is x-aligned with Y, and after adding A→B there's a path X→...→Y,
-     * that's a contradiction.
-     *
-     * Important: we must check ALL multi-member alignment classes, not just those
-     * containing the edge endpoints. The new edge may complete a transitive path
-     * between aligned nodes in a class that doesn't contain either endpoint.
-     * Example: align-x(N2,N3), leftOf(N1,N2), leftOf(N3,N0), leftOf(N0,N1)
-     * — adding N0→N1 completes the path N3→N0→N1→N2, but neither N0 nor N1
-     * is in the {N2,N3} alignment class.
-     */
-    private hasAlignmentOrderingConflict(a: string, b: string, axis: 'x' | 'y'): boolean {
-        const uf = axis === 'x' ? this.xAlignUF : this.yAlignUF;
-        const graph = axis === 'x' ? this.hGraph : this.vGraph;
-
-        // Check ALL multi-member alignment classes for ordering between members
-        for (const [, members] of uf.classes()) {
-            if (members.length < 2) continue;
-            for (let i = 0; i < members.length; i++) {
-                for (let j = i + 1; j < members.length; j++) {
-                    if (graph.isOrdered(members[i], members[j]) || graph.isOrdered(members[j], members[i])) {
-                        return true;
-                    }
-                }
-            }
-        }
-
-        // Cross-class alignment cycle check
-        if (this.hasAlignmentClassCycle(axis)) return true;
-
-        return false;
-    }
-
-    /**
-     * Detect cycles in the alignment-class-contracted ordering graph.
-     *
-     * Contract the ordering graph by replacing each multi-member alignment class
-     * with a single super-node. If class A has a member that is ordered before a
-     * member of class B (transitively), that's an edge A→B in the contracted graph.
-     * A cycle in this contracted graph (e.g. A→B and B→A) means aligned nodes
-     * would need to be both before and after each other — unsatisfiable.
-     */
-    private hasAlignmentClassCycle(axis: 'x' | 'y'): boolean {
-        const uf = axis === 'x' ? this.xAlignUF : this.yAlignUF;
-        const graph = axis === 'x' ? this.hGraph : this.vGraph;
-
-        // Collect multi-member alignment classes
-        const classMembers = new Map<string, string[]>();
-        for (const [, members] of uf.classes()) {
-            if (members.length < 2) continue;
-            const root = uf.find(members[0]);
-            classMembers.set(root, members);
-        }
-
-        if (classMembers.size < 2) return false;
-
-        // Build contracted graph edges using transitive reachability
-        // Sort roots lexicographically for deterministic cycle detection
-        const roots = [...classMembers.keys()].sort();
-        const contractedAdj = new Map<string, Set<string>>();
-        for (const r of roots) contractedAdj.set(r, new Set());
-
-        for (const fromRoot of roots) {
-            const fromMembers = classMembers.get(fromRoot)!;
-            for (const toRoot of roots) {
-                if (fromRoot === toRoot) continue;
-                const toMembers = classMembers.get(toRoot)!;
-                let found = false;
-                for (const fm of fromMembers) {
-                    for (const tm of toMembers) {
-                        if (graph.isOrdered(fm, tm)) {
-                            contractedAdj.get(fromRoot)!.add(toRoot);
-                            found = true;
-                            break;
-                        }
-                    }
-                    if (found) break;
-                }
-            }
-        }
-
-        // DFS cycle detection (white/gray/black coloring)
-        const WHITE = 0, GRAY = 1, BLACK = 2;
-        const color = new Map<string, number>();
-        for (const r of roots) color.set(r, WHITE);
-
-        for (const startRoot of roots) {
-            if (color.get(startRoot) !== WHITE) continue;
-            const stack: { node: string; iter: IterableIterator<string> }[] = [];
-            color.set(startRoot, GRAY);
-            stack.push({ node: startRoot, iter: contractedAdj.get(startRoot)!.values() });
-
-            while (stack.length > 0) {
-                const top = stack[stack.length - 1];
-                const next = top.iter.next();
-                if (next.done) {
-                    color.set(top.node, BLACK);
-                    stack.pop();
-                } else {
-                    const neighbor = next.value;
-                    if (color.get(neighbor) === GRAY) return true;
-                    if (color.get(neighbor) === WHITE) {
-                        color.set(neighbor, GRAY);
-                        stack.push({ node: neighbor, iter: contractedAdj.get(neighbor)!.values() });
-                    }
-                }
-            }
-        }
-
-        return false;
-    }
+    // Alignment consistency, alignment-ordering conflicts, and alignment-class cycles
+    // are now all caught automatically by DifferenceConstraintGraph via zero-weight
+    // edges and canReach cycle detection. No separate UF-based checks needed.
 
     // ═══════════════════════════════════════════════════════════════════════════
     // Group bounding box disjunctions (from V1 — virtual group nodes)
@@ -1133,30 +1296,30 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         for (const constraint of alternative) {
             // BoundingBoxConstraint: check if node is aligned with a group member
             // on the constraint's axis. If so, the node can't be on that side.
-            // Also check containment: "node left of group" means node is left of
-            // ALL members — infeasible if any member is already left of node.
             if (isBoundingBoxConstraint(constraint)) {
                 const bc = constraint as BoundingBoxConstraint;
                 const isHorizontalSide = bc.side === 'left' || bc.side === 'right';
-                const uf = isHorizontalSide ? this.xAlignUF : this.yAlignUF;
-                const memberIds = bc.group.nodeIds;
-                for (const memberId of memberIds) {
-                    if (uf.connected(bc.node.id, memberId)) return false;
+                const graph = isHorizontalSide ? this.hGraph : this.vGraph;
+                for (const memberId of bc.group.nodeIds) {
+                    if (graph.areAligned(bc.node.id, memberId)) return false;
                 }
-                // Containment check: the bounding box must encompass all members.
-                // "node left of group" implies node left of every member.
-                // If any member is already ordered before node (same axis), contradiction.
                 if (!this.isBoundingBoxFeasible(bc)) return false;
             }
 
-            // AlignmentConstraint: aligning two nodes on the same axis is infeasible
-            // if they already have an ordering relationship on that axis.
+            // AlignmentConstraint: aligning two nodes is infeasible if there's
+            // a strict ordering between them (asymmetric reachability).
             if (isAlignmentConstraint(constraint)) {
                 const ac = constraint as AlignmentConstraint;
                 const graph = ac.axis === 'x' ? this.hGraph : this.vGraph;
-                // If either node is ordered before the other, alignment is impossible
-                if (graph.isOrdered(ac.node1.id, ac.node2.id) || graph.isOrdered(ac.node2.id, ac.node1.id)) {
-                    return false;
+                const aToB = graph.canReach(ac.node1.id, ac.node2.id);
+                const bToA = graph.canReach(ac.node2.id, ac.node1.id);
+                // Asymmetric reachability = strict ordering = can't align
+                if (aToB !== bToA) return false;
+                // Dual-axis alignment forces nodes to same position (guaranteed overlap)
+                // Skip for self-alignment (same node) — that's trivially SAT.
+                if (ac.node1.id !== ac.node2.id) {
+                    const otherGraph = ac.axis === 'x' ? this.vGraph : this.hGraph;
+                    if (otherGraph.areAligned(ac.node1.id, ac.node2.id)) return false;
                 }
                 continue;
             }
@@ -1164,22 +1327,14 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             const edge = this.constraintToEdge(constraint);
             if (!edge) continue;
             const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
-            const uf = edge.axis === 'h' ? this.xAlignUF : this.yAlignUF;
 
-            // Would cycle?
-            if (graph.isOrdered(edge.to, edge.from)) return false;
+            // Would cycle? (canReach catches both ordering cycles and
+            // alignment-ordering conflicts via zero-weight edges)
+            if (graph.canReach(edge.to, edge.from)) return false;
 
-            // Alignment conflict (direct)?
-            if (uf.connected(edge.from, edge.to)) return false;
-
-            // Alignment conflict (transitive): adding edge from→to would create
-            // ordering between aligned nodes. Check if 'to' can reach any member
-            // of 'from's alignment class (making from→...→member ordered),
-            // or if any member of 'to's class can reach 'from' (making member→...→from→to ordered).
-            if (this.wouldCreateAlignmentOrderingConflict(edge.from, edge.to, uf, graph)) return false;
-
-            // Dimension overflow? (Insight 4)
-            if (graph.wouldOverflow(edge.from, edge.to, MAX_SPAN)) {
+            // Dimension overflow? (Insight 4) — use actual constraint weight
+            const weight = this.constraintToWeight(constraint);
+            if (graph.wouldOverflow(edge.from, edge.to, MAX_SPAN, weight)) {
                 this.prunedByDimension++;
                 return false;
             }
@@ -1230,41 +1385,9 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         }
     }
 
-    /**
-     * Would adding edge from→to create a transitive ordering between two aligned nodes?
-     * Check without actually adding the edge.
-     */
-    private wouldCreateAlignmentOrderingConflict(
-        from: string, to: string, uf: UnionFind, graph: WeightedPartialOrderGraph
-    ): boolean {
-        // Collect alignment class members for 'from' and 'to'
-        const fromClass = this.getClassMembers(from, uf);
-        const toClass = this.getClassMembers(to, uf);
-
-        // Check: any member of from's class reachable from 'to'?
-        // That would mean: from → to → ... → member (from and member are aligned)
-        for (const m of fromClass) {
-            if (m !== from && graph.canReach(to, m)) return true;
-        }
-
-        // Check: any member of to's class can reach 'from'?
-        // That would mean: member → ... → from → to (to and member are aligned)
-        for (const m of toClass) {
-            if (m !== to && graph.canReach(m, from)) return true;
-        }
-
-        return false;
-    }
-
-    private getClassMembers(id: string, uf: UnionFind): string[] {
-        const root = uf.find(id);
-        for (const [, members] of uf.classes()) {
-            if (members.length > 0 && uf.find(members[0]) === root) {
-                return members;
-            }
-        }
-        return [id];
-    }
+    // wouldCreateAlignmentOrderingConflict and getClassMembers are no longer needed —
+    // alignment conflicts are caught automatically by DifferenceConstraintGraph.addEdge
+    // (which checks canReach for cycles through zero-weight alignment edges).
 
     private getDisjunctionRegionPair(disj: DisjunctiveConstraint): [string, string] | null {
         if (disj.alternatives.length === 0) return null;
@@ -1279,16 +1402,14 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     private findSatisfyingAlternative(disj: DisjunctiveConstraint, pair: [string, string]): number | null {
         // Find an alternative whose constraints are all actually implied by
         // the current ordering graphs (forward direction is ordered or alignment
-        // already holds). Previously this only checked "not contradicted" which
-        // could pick an alternative that wasn't actually satisfied, injecting
-        // wrong constraints into the output.
+        // already holds).
         for (let i = 0; i < disj.alternatives.length; i++) {
             let allImplied = true;
             for (const constraint of disj.alternatives[i]) {
                 if (isAlignmentConstraint(constraint)) {
                     const ac = constraint as AlignmentConstraint;
-                    const uf = ac.axis === 'x' ? this.xAlignUF : this.yAlignUF;
-                    if (!uf.connected(ac.node1.id, ac.node2.id)) { allImplied = false; break; }
+                    const graph = ac.axis === 'x' ? this.hGraph : this.vGraph;
+                    if (!graph.areAligned(ac.node1.id, ac.node2.id)) { allImplied = false; break; }
                     continue;
                 }
                 const edge = this.constraintToEdge(constraint);
@@ -1300,19 +1421,19 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             if (allImplied) return i;
         }
         // Fallback: if no alternative is fully implied, find one that's at least
-        // not contradicted (original behavior). This can happen when the pair is
-        // separated but through edges not captured in any single alternative.
-        // Must also check alignment conflicts — an ordering between aligned nodes
-        // is contradicted even if no reverse edge exists.
+        // not contradicted. Must also check alignment conflicts — an ordering
+        // between aligned nodes is contradicted even if no reverse edge exists.
+        // With zero-weight alignment edges, isStrictlyOrdered catches this:
+        // ordering aligned nodes would create a negative cycle through the
+        // zero-weight alignment path.
         for (let i = 0; i < disj.alternatives.length; i++) {
             let feasible = true;
             for (const constraint of disj.alternatives[i]) {
                 if (isAlignmentConstraint(constraint)) {
-                    // Alignment is contradicted if the two nodes already have
-                    // an ordering relationship on the alignment axis.
                     const ac = constraint as AlignmentConstraint;
                     const graph = ac.axis === 'x' ? this.hGraph : this.vGraph;
-                    if (graph.isOrdered(ac.node1.id, ac.node2.id) || graph.isOrdered(ac.node2.id, ac.node1.id)) {
+                    // Alignment is contradicted if the nodes are strictly ordered
+                    if (graph.isStrictlyOrdered(ac.node1.id, ac.node2.id) || graph.isStrictlyOrdered(ac.node2.id, ac.node1.id)) {
                         feasible = false; break;
                     }
                     continue;
@@ -1320,11 +1441,8 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                 const edge = this.constraintToEdge(constraint);
                 if (!edge) continue;
                 const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
-                const uf = edge.axis === 'h' ? this.xAlignUF : this.yAlignUF;
-                // Contradicted by reverse ordering?
-                if (graph.isOrdered(edge.to, edge.from)) { feasible = false; break; }
-                // Contradicted by alignment? (can't order aligned nodes)
-                if (uf.connected(edge.from, edge.to)) { feasible = false; break; }
+                // Contradicted by reverse ordering (including through alignment paths)?
+                if (graph.canReach(edge.to, edge.from)) { feasible = false; break; }
             }
             if (feasible) return i;
         }
@@ -1407,11 +1525,21 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             // for feasibility after each assignment. Skips alignment disjunctions
             // to avoid stale UF state.
             const graphPropResult = this.graphPropagate(assigned);
-            if (graphPropResult === 'conflict') {
+            if (graphPropResult !== 'ok') {
                 if (this.decisionLevel === 0) return { satisfiable: false, provedUnsat: true };
+
+                // Theory conflict: use provenance-based analysis for targeted learned clauses
+                const { learnedClause, backtrackLevel } = this.analyzeTheoryConflict(
+                    graphPropResult.disjunctionIndex, assigned
+                );
+                if (learnedClause) {
+                    this.learnedClauses.push(learnedClause);
+                    this.bumpActivity(learnedClause);
+                    this.decayActivity();
+                }
                 this.conflictCount++;
                 conflictsSinceRestart++;
-                this.backtrackTo(this.decisionLevel - 1, assigned);
+                this.backtrackTo(backtrackLevel, assigned);
                 if (conflictsSinceRestart >= this.restartThreshold) return { satisfiable: false, provedUnsat: false };
                 continue;
             }
@@ -1509,7 +1637,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
      * skipped — those need the CDCL's proper UF-undo backtracking to avoid stale
      * alignment state (see alignment backtracking regression).
      */
-    private graphPropagate(assigned: Int32Array): 'ok' | 'conflict' {
+    private graphPropagate(assigned: Int32Array): 'ok' | { conflict: true; disjunctionIndex: number } {
         // Only run when groups are present — this propagation is specifically
         // needed for GROUP + NOT GROUP contradiction detection, where BBox
         // exclusion disjunctions interact with NOT group bracketing disjunctions.
@@ -1525,10 +1653,6 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
                 const disj = this.allDisjunctions[d];
 
-                // Skip disjunctions that contain any alignment constraint —
-                // those need CDCL's proper UF-undo backtracking.
-                if (this.disjunctionHasAlignment(disj)) continue;
-
                 let feasibleCount = 0;
                 let lastFeasibleIdx = -1;
 
@@ -1540,12 +1664,12 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                 }
 
                 if (feasibleCount === 0) {
-                    return 'conflict';
+                    return { conflict: true, disjunctionIndex: d };
                 }
 
                 if (feasibleCount === 1) {
                     if (!this.tryAssign(d, lastFeasibleIdx, assigned, false)) {
-                        return 'conflict';
+                        return { conflict: true, disjunctionIndex: d };
                     }
                     changed = true;
                 }
@@ -1554,17 +1678,8 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         return 'ok';
     }
 
-    /**
-     * Returns true if any alternative in the disjunction contains an alignment constraint.
-     */
-    private disjunctionHasAlignment(disj: DisjunctiveConstraint): boolean {
-        for (const alt of disj.alternatives) {
-            for (const c of alt) {
-                if (isAlignmentConstraint(c)) return true;
-            }
-        }
-        return false;
-    }
+    // disjunctionHasAlignment is no longer needed — all disjunctions (including
+    // alignment) are handled uniformly via zero-weight graph edges.
 
     private getRemainingAlternatives(dIdx: number, assigned: Int32Array): number[] {
         const disj = this.allDisjunctions[dIdx];
@@ -1596,17 +1711,9 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     private tryAssign(dIdx: number, aIdx: number, assigned: Int32Array, isDecision: boolean): boolean {
         const alternative = this.allDisjunctions[dIdx].alternatives[aIdx];
 
-        // Snapshot UF state before alignment mutations so backtrack can undo them
-        const hasAlignment = alternative.some(c => isAlignmentConstraint(c));
-        const xSnap = hasAlignment ? this.xAlignUF.snapshot() : undefined;
-        const ySnap = hasAlignment ? this.yAlignUF.snapshot() : undefined;
-
         for (const constraint of alternative) {
             if (!this.addQualitativeEdge(constraint)) {
                 this.undoAlternativeEdges(alternative, constraint);
-                // Also restore UF if we snapshotted
-                if (xSnap) this.xAlignUF.restore(xSnap);
-                if (ySnap) this.yAlignUF.restore(ySnap);
                 return false;
             }
         }
@@ -1614,7 +1721,6 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         this.assignmentTrail.push({
             disjunctionIndex: dIdx, alternativeIndex: aIdx,
             decisionLevel: this.decisionLevel, isDecision,
-            xAlignSnapshot: xSnap, yAlignSnapshot: ySnap,
         });
         for (const constraint of alternative) this.addedConstraints.push(constraint);
         return true;
@@ -1622,30 +1728,19 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
     private addQualitativeEdge(constraint: LayoutConstraint): boolean {
         if (isLeftConstraint(constraint)) {
-            if (this.xAlignUF.connected(constraint.left.id, constraint.right.id)) return false;
-            if (!this.hGraph.addEdge(constraint.left.id, constraint.right.id)) return false;
-            if (this.hasAlignmentOrderingConflict(constraint.left.id, constraint.right.id, 'x')) {
-                this.hGraph.removeEdge(constraint.left.id, constraint.right.id);
-                return false;
-            }
-            return true;
+            // addEdge checks cycle (including alignment via zero-weight edges)
+            return this.hGraph.addEdge(constraint.left.id, constraint.right.id, constraint.minDistance, constraint);
         }
         if (isTopConstraint(constraint)) {
-            if (this.yAlignUF.connected(constraint.top.id, constraint.bottom.id)) return false;
-            if (!this.vGraph.addEdge(constraint.top.id, constraint.bottom.id)) return false;
-            if (this.hasAlignmentOrderingConflict(constraint.top.id, constraint.bottom.id, 'y')) {
-                this.vGraph.removeEdge(constraint.top.id, constraint.bottom.id);
-                return false;
-            }
-            return true;
+            return this.vGraph.addEdge(constraint.top.id, constraint.bottom.id, constraint.minDistance, constraint);
         }
         if (isBoundingBoxConstraint(constraint)) {
             const bc = constraint as BoundingBoxConstraint;
-            // Check if node is aligned with any group member on this axis
+            // Check alignment: if node is aligned with any member, can't place outside group
             const isHSide = bc.side === 'left' || bc.side === 'right';
-            const uf = isHSide ? this.xAlignUF : this.yAlignUF;
+            const graph = isHSide ? this.hGraph : this.vGraph;
             for (const memberId of bc.group.nodeIds) {
-                if (uf.connected(bc.node.id, memberId)) return false;
+                if (graph.areAligned(bc.node.id, memberId)) return false;
             }
             // Containment: node on this side must not contradict ordering with members
             if (!this.isBoundingBoxFeasible(bc)) return false;
@@ -1656,31 +1751,31 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             // members so NOT group's member-by-member constraints can see them.
             switch (bc.side) {
                 case 'left':
-                    if (!this.hGraph.addEdge(bc.node.id, groupId)) return false;
+                    if (!this.hGraph.addEdge(bc.node.id, groupId, bc.minDistance, constraint)) return false;
                     for (const mId of bc.group.nodeIds) {
                         this.hGraph.ensureNode(mId);
-                        this.hGraph.addEdge(bc.node.id, mId); // C < member
+                        this.hGraph.addEdge(bc.node.id, mId, bc.minDistance, constraint);
                     }
                     return true;
                 case 'right':
-                    if (!this.hGraph.addEdge(groupId, bc.node.id)) return false;
+                    if (!this.hGraph.addEdge(groupId, bc.node.id, bc.minDistance, constraint)) return false;
                     for (const mId of bc.group.nodeIds) {
                         this.hGraph.ensureNode(mId);
-                        this.hGraph.addEdge(mId, bc.node.id); // member < C
+                        this.hGraph.addEdge(mId, bc.node.id, bc.minDistance, constraint);
                     }
                     return true;
                 case 'top':
-                    if (!this.vGraph.addEdge(bc.node.id, groupId)) return false;
+                    if (!this.vGraph.addEdge(bc.node.id, groupId, bc.minDistance, constraint)) return false;
                     for (const mId of bc.group.nodeIds) {
                         this.vGraph.ensureNode(mId);
-                        this.vGraph.addEdge(bc.node.id, mId); // C < member
+                        this.vGraph.addEdge(bc.node.id, mId, bc.minDistance, constraint);
                     }
                     return true;
                 case 'bottom':
-                    if (!this.vGraph.addEdge(groupId, bc.node.id)) return false;
+                    if (!this.vGraph.addEdge(groupId, bc.node.id, bc.minDistance, constraint)) return false;
                     for (const mId of bc.group.nodeIds) {
                         this.vGraph.ensureNode(mId);
-                        this.vGraph.addEdge(mId, bc.node.id); // member < C
+                        this.vGraph.addEdge(mId, bc.node.id, bc.minDistance, constraint);
                     }
                     return true;
             }
@@ -1692,17 +1787,16 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             this.hGraph.ensureNode(gAId); this.hGraph.ensureNode(gBId);
             this.vGraph.ensureNode(gAId); this.vGraph.ensureNode(gBId);
             switch (gc.side) {
-                case 'left':   return this.hGraph.addEdge(gAId, gBId);
-                case 'right':  return this.hGraph.addEdge(gBId, gAId);
-                case 'top':    return this.vGraph.addEdge(gAId, gBId);
-                case 'bottom': return this.vGraph.addEdge(gBId, gAId);
+                case 'left':   return this.hGraph.addEdge(gAId, gBId, gc.minDistance, constraint);
+                case 'right':  return this.hGraph.addEdge(gBId, gAId, gc.minDistance, constraint);
+                case 'top':    return this.vGraph.addEdge(gAId, gBId, gc.minDistance, constraint);
+                case 'bottom': return this.vGraph.addEdge(gBId, gAId, gc.minDistance, constraint);
             }
         }
         if (isAlignmentConstraint(constraint)) {
             const ac = constraint as AlignmentConstraint;
-            if (ac.axis === 'x') this.xAlignUF.union(ac.node1.id, ac.node2.id);
-            else this.yAlignUF.union(ac.node1.id, ac.node2.id);
-            return this.checkAlignmentConsistency(ac) === null;
+            const graph = ac.axis === 'x' ? this.hGraph : this.vGraph;
+            return graph.addAlignmentEdges(ac.node1.id, ac.node2.id, constraint);
         }
         return true;
     }
@@ -1738,6 +1832,10 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                 case 'top':    this.vGraph.removeEdge(gAId, gBId); break;
                 case 'bottom': this.vGraph.removeEdge(gBId, gAId); break;
             }
+        } else if (isAlignmentConstraint(constraint)) {
+            const ac = constraint as AlignmentConstraint;
+            const graph = ac.axis === 'x' ? this.hGraph : this.vGraph;
+            graph.removeAlignmentEdges(ac.node1.id, ac.node2.id);
         }
     }
 
@@ -1758,7 +1856,77 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         return { learnedClause: clause, backtrackLevel: Math.max(0, secondMaxLevel) };
     }
 
+    /**
+     * Analyze a conflict from a failed tryAssign(dIdx, aIdx). Instead of
+     * negating ALL trail assignments (maximally blunt), trace which graph
+     * edges blocked the assignment and map them to specific trail entries.
+     */
     private analyzeConflictForDecision(dIdx: number, aIdx: number, assigned: Int32Array): { learnedClause: LearnedClause | null; backtrackLevel: number } {
+        const alternative = this.allDisjunctions[dIdx].alternatives[aIdx];
+        const involvedTrailIndices = new Set<number>();
+
+        // The alternative failed because one of its constraints couldn't be
+        // added. Check each constraint to find blocking edges via provenance.
+        for (const constraint of alternative) {
+            const edge = this.constraintToEdge(constraint);
+            if (!edge) continue;
+            const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
+
+            // The edge failed because of a cycle: path from edge.to → edge.from exists
+            // (using canReach, not isOrdered, because the blocking path may go
+            // through zero-weight alignment edges)
+            if (graph.canReach(edge.to, edge.from)) {
+                const cyclePath = graph.findPath(edge.to, edge.from);
+                if (cyclePath) {
+                    for (const [pa, pb] of cyclePath) {
+                        const provenance = graph.getEdgeProvenance(pa, pb);
+                        if (provenance) {
+                            const trailIdx = this.findTrailEntryForConstraint(provenance);
+                            if (trailIdx !== -1) involvedTrailIndices.add(trailIdx);
+                        }
+                    }
+                }
+            }
+
+            // Alignment conflicts are now caught by the same cycle path check above,
+            // since alignment is represented as zero-weight edges in the graph.
+            // No separate UF check needed.
+        }
+
+        // Build targeted clause if we found specific involved assignments
+        if (involvedTrailIndices.size > 0) {
+            const clause: LearnedClause = [
+                { disjunctionIndex: dIdx, alternativeIndex: aIdx, sign: false },
+            ];
+            let maxLevel = 0, secondMaxLevel = 0;
+
+            for (const idx of involvedTrailIndices) {
+                const a = this.assignmentTrail[idx];
+                clause.push({
+                    disjunctionIndex: a.disjunctionIndex,
+                    alternativeIndex: a.alternativeIndex,
+                    sign: false,
+                });
+                if (a.decisionLevel > maxLevel) {
+                    secondMaxLevel = maxLevel;
+                    maxLevel = a.decisionLevel;
+                } else if (a.decisionLevel > secondMaxLevel && a.decisionLevel < maxLevel) {
+                    secondMaxLevel = a.decisionLevel;
+                }
+            }
+
+            // Also account for the failed decision's level
+            if (this.decisionLevel > maxLevel) {
+                secondMaxLevel = maxLevel;
+                maxLevel = this.decisionLevel;
+            } else if (this.decisionLevel > secondMaxLevel && this.decisionLevel < maxLevel) {
+                secondMaxLevel = this.decisionLevel;
+            }
+
+            return { learnedClause: clause, backtrackLevel: Math.max(0, secondMaxLevel) };
+        }
+
+        // Fall back to blunt analysis: negate all trail assignments + the failed decision
         const clause: LearnedClause = [{ disjunctionIndex: dIdx, alternativeIndex: aIdx, sign: false }];
         let maxLevel = 0, secondMaxLevel = 0;
 
@@ -1770,6 +1938,97 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         return { learnedClause: clause, backtrackLevel: Math.max(0, secondMaxLevel) };
     }
 
+    /**
+     * Analyze a theory conflict from graphPropagate. Instead of negating ALL
+     * decisions (the blunt approach), we identify which trail assignments
+     * actually contributed to the conflict by checking graph provenance.
+     *
+     * When graphPropagate finds a disjunction with 0 feasible alternatives,
+     * each infeasible alternative failed because some set of committed edges
+     * (from previous assignments) blocked it. We trace those edges back to
+     * their trail assignments and build a targeted learned clause.
+     */
+    private analyzeTheoryConflict(
+        conflictDisjunctionIdx: number,
+        assigned: Int32Array
+    ): { learnedClause: LearnedClause | null; backtrackLevel: number } {
+        const conflictDisj = this.allDisjunctions[conflictDisjunctionIdx];
+
+        // Collect all trail assignments that caused infeasibility of ANY alternative.
+        // Each infeasible alternative was blocked by edges in the graph. We find
+        // those edges via provenance, then map them to trail entries.
+        const involvedAssignments = new Set<number>(); // trail indices
+
+        for (let a = 0; a < conflictDisj.alternatives.length; a++) {
+            const alt = conflictDisj.alternatives[a];
+            for (const constraint of alt) {
+                const edge = this.constraintToEdge(constraint);
+                if (!edge) continue;
+                const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
+
+                // Check what blocks this edge: a return path from edge.to → edge.from
+                // (using canReach to include zero-weight alignment edges)
+                if (graph.canReach(edge.to, edge.from)) {
+                    const cyclePath = graph.findPath(edge.to, edge.from);
+                    if (cyclePath) {
+                        for (const [pa, pb] of cyclePath) {
+                            const provenance = graph.getEdgeProvenance(pa, pb);
+                            if (provenance) {
+                                // Find which trail entry introduced this constraint
+                                const trailIdx = this.findTrailEntryForConstraint(provenance);
+                                if (trailIdx !== -1) involvedAssignments.add(trailIdx);
+                            }
+                        }
+                    }
+                }
+
+                // Alignment conflicts are now caught by the same cycle path check above,
+                // since alignment is represented as zero-weight edges in the graph.
+            }
+        }
+
+        // If we found specific involved assignments, build a targeted clause
+        if (involvedAssignments.size > 0) {
+            const clause: LearnedClause = [];
+            let maxLevel = 0, secondMaxLevel = 0;
+
+            for (const idx of involvedAssignments) {
+                const a = this.assignmentTrail[idx];
+                clause.push({
+                    disjunctionIndex: a.disjunctionIndex,
+                    alternativeIndex: a.alternativeIndex,
+                    sign: false,
+                });
+                if (a.decisionLevel > maxLevel) {
+                    secondMaxLevel = maxLevel;
+                    maxLevel = a.decisionLevel;
+                } else if (a.decisionLevel > secondMaxLevel && a.decisionLevel < maxLevel) {
+                    secondMaxLevel = a.decisionLevel;
+                }
+            }
+
+            if (clause.length > 0) {
+                return { learnedClause: clause, backtrackLevel: Math.max(0, secondMaxLevel) };
+            }
+        }
+
+        // Fall back to blunt analysis if provenance didn't yield results
+        return this.analyzeConflict(assigned);
+    }
+
+    /**
+     * Find which trail entry introduced a given constraint (by reference equality).
+     * Returns the trail index, or -1 if not found.
+     */
+    private findTrailEntryForConstraint(constraint: LayoutConstraint): number {
+        for (let i = 0; i < this.assignmentTrail.length; i++) {
+            const entry = this.assignmentTrail[i];
+            const alt = this.allDisjunctions[entry.disjunctionIndex].alternatives[entry.alternativeIndex];
+            if (alt.includes(constraint)) return i;
+        }
+        return -1;
+    }
+
     // ─── Backtracking ────────────────────────────────────────────────────────
 
     private backtrackTo(level: number, assigned: Int32Array): void {
@@ -1778,9 +2037,6 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             if (last.decisionLevel <= level) break;
             const alternative = this.allDisjunctions[last.disjunctionIndex].alternatives[last.alternativeIndex];
             for (const constraint of alternative) this.removeQualitativeEdge(constraint);
-            // Restore UF state if this assignment mutated alignment classes
-            if (last.xAlignSnapshot) this.xAlignUF.restore(last.xAlignSnapshot);
-            if (last.yAlignSnapshot) this.yAlignUF.restore(last.yAlignSnapshot);
             this.addedConstraints.length -= alternative.length;
             assigned[last.disjunctionIndex] = -1;
             this.assignmentTrail.pop();
@@ -1884,8 +2140,6 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         return {
             hGraph: this.hGraph.clone(),
             vGraph: this.vGraph.clone(),
-            hAlignUF: this.xAlignUF.clone(),
-            vAlignUF: this.yAlignUF.clone(),
             assignmentTrailLength: this.assignmentTrail.length,
             addedConstraintsLength: this.addedConstraints.length,
         };
@@ -1894,8 +2148,15 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     private restoreCheckpoint(cp: SolverCheckpoint): void {
         this.hGraph = cp.hGraph.clone();
         this.vGraph = cp.vGraph.clone();
-        this.xAlignUF = cp.hAlignUF.clone();
-        this.yAlignUF = cp.vAlignUF.clone();
+    }
+
+    /** Extract the minDistance (edge weight) from a constraint. Returns the default gap if not applicable. */
+    private constraintToWeight(constraint: LayoutConstraint): number {
+        if (isLeftConstraint(constraint)) return constraint.minDistance;
+        if (isTopConstraint(constraint)) return constraint.minDistance;
+        if (isBoundingBoxConstraint(constraint)) return (constraint as BoundingBoxConstraint).minDistance;
+        if (isGroupBoundaryConstraint(constraint)) return (constraint as GroupBoundaryConstraint).minDistance;
+        return this.minPadding;
     }
 
     private constraintToEdge(constraint: LayoutConstraint): { axis: 'h' | 'v'; from: string; to: string } | null {
@@ -1935,8 +2196,8 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         feasibleConstraints: LayoutConstraint[];
         infeasibleDisjunctions: DisjunctiveConstraint[];
     } {
-        const freshH = new WeightedPartialOrderGraph(this.minPadding);
-        const freshV = new WeightedPartialOrderGraph(this.minPadding);
+        const freshH = new DifferenceConstraintGraph(this.minPadding);
+        const freshV = new DifferenceConstraintGraph(this.minPadding);
 
         for (const node of this.nodes) {
             freshH.ensureNode(node.id, node.width);
@@ -1948,13 +2209,28 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             freshV.ensureNode(gid);
         }
 
+        const feasibleConstraints: LayoutConstraint[] = [];
         for (const constraint of this.orientationConstraints) {
-            if (isLeftConstraint(constraint)) freshH.addEdge(constraint.left.id, constraint.right.id);
-            else if (isTopConstraint(constraint)) freshV.addEdge(constraint.top.id, constraint.bottom.id);
-            else if (isAlignmentConstraint(constraint)) { /* skip for MFS graph */ }
+            let ok = true;
+            if (isLeftConstraint(constraint)) ok = freshH.addEdge(constraint.left.id, constraint.right.id, constraint.minDistance, constraint);
+            else if (isTopConstraint(constraint)) ok = freshV.addEdge(constraint.top.id, constraint.bottom.id, constraint.minDistance, constraint);
+            else if (isAlignmentConstraint(constraint)) {
+                const ac = constraint as AlignmentConstraint;
+                const graph = ac.axis === 'x' ? freshH : freshV;
+                ok = graph.addAlignmentEdges(ac.node1.id, ac.node2.id, constraint);
+                // Dual-axis alignment forces two nonzero-size nodes to the same
+                // position, guaranteeing overlap. Reject the second alignment.
+                // Skip for self-alignment (same node) — that's trivially SAT.
+                if (ok && ac.node1.id !== ac.node2.id) {
+                    const otherGraph = ac.axis === 'x' ? freshV : freshH;
+                    if (otherGraph.areAligned(ac.node1.id, ac.node2.id)) {
+                        graph.removeAlignmentEdges(ac.node1.id, ac.node2.id);
+                        ok = false;
+                    }
+                }
+            }
+            if (ok) feasibleConstraints.push(constraint);
         }
-
-        const feasibleConstraints: LayoutConstraint[] = [...this.orientationConstraints];
         const infeasibleDisjunctions: DisjunctiveConstraint[] = [];
 
         const sortedDisjunctions = [...this.allDisjunctions].sort((a, b) => {
@@ -1990,18 +2266,33 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         return { feasibleConstraints, infeasibleDisjunctions };
     }
 
-    private addEdgeToGraphs(constraint: LayoutConstraint, hGraph: WeightedPartialOrderGraph, vGraph: WeightedPartialOrderGraph): boolean {
-        if (isLeftConstraint(constraint)) return hGraph.addEdge(constraint.left.id, constraint.right.id);
-        if (isTopConstraint(constraint)) return vGraph.addEdge(constraint.top.id, constraint.bottom.id);
+    private addEdgeToGraphs(constraint: LayoutConstraint, hGraph: DifferenceConstraintGraph, vGraph: DifferenceConstraintGraph): boolean {
+        if (isLeftConstraint(constraint)) return hGraph.addEdge(constraint.left.id, constraint.right.id, constraint.minDistance, constraint);
+        if (isTopConstraint(constraint)) return vGraph.addEdge(constraint.top.id, constraint.bottom.id, constraint.minDistance, constraint);
+        if (isAlignmentConstraint(constraint)) {
+            const ac = constraint as AlignmentConstraint;
+            const graph = ac.axis === 'x' ? hGraph : vGraph;
+            if (!graph.addAlignmentEdges(ac.node1.id, ac.node2.id, constraint)) return false;
+            // Dual-axis alignment forces overlap between nonzero-size nodes
+            // Skip for self-alignment (same node) — that's trivially SAT.
+            if (ac.node1.id !== ac.node2.id) {
+                const otherGraph = ac.axis === 'x' ? vGraph : hGraph;
+                if (otherGraph.areAligned(ac.node1.id, ac.node2.id)) {
+                    graph.removeAlignmentEdges(ac.node1.id, ac.node2.id);
+                    return false;
+                }
+            }
+            return true;
+        }
         if (isBoundingBoxConstraint(constraint)) {
             const bc = constraint as BoundingBoxConstraint;
             const groupId = `_group_${bc.group.name}`;
             hGraph.ensureNode(groupId); vGraph.ensureNode(groupId);
             switch (bc.side) {
-                case 'left':   return hGraph.addEdge(bc.node.id, groupId);
-                case 'right':  return hGraph.addEdge(groupId, bc.node.id);
-                case 'top':    return vGraph.addEdge(bc.node.id, groupId);
-                case 'bottom': return vGraph.addEdge(groupId, bc.node.id);
+                case 'left':   return hGraph.addEdge(bc.node.id, groupId, bc.minDistance, constraint);
+                case 'right':  return hGraph.addEdge(groupId, bc.node.id, bc.minDistance, constraint);
+                case 'top':    return vGraph.addEdge(bc.node.id, groupId, bc.minDistance, constraint);
+                case 'bottom': return vGraph.addEdge(groupId, bc.node.id, bc.minDistance, constraint);
             }
         }
         if (isGroupBoundaryConstraint(constraint)) {
@@ -2011,10 +2302,10 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             hGraph.ensureNode(gAId); hGraph.ensureNode(gBId);
             vGraph.ensureNode(gAId); vGraph.ensureNode(gBId);
             switch (gc.side) {
-                case 'left':   return hGraph.addEdge(gAId, gBId);
-                case 'right':  return hGraph.addEdge(gBId, gAId);
-                case 'top':    return vGraph.addEdge(gAId, gBId);
-                case 'bottom': return vGraph.addEdge(gBId, gAId);
+                case 'left':   return hGraph.addEdge(gAId, gBId, gc.minDistance, constraint);
+                case 'right':  return hGraph.addEdge(gBId, gAId, gc.minDistance, constraint);
+                case 'top':    return vGraph.addEdge(gAId, gBId, gc.minDistance, constraint);
+                case 'bottom': return vGraph.addEdge(gBId, gAId, gc.minDistance, constraint);
             }
         }
         return true;
@@ -2108,37 +2399,24 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         const edge = this.constraintToEdge(failedConstraint);
         if (!edge) return [];
         const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
-        const path = this.findPath(graph, edge.to, edge.from);
+        const path = graph.findPath(edge.to, edge.from);
         if (!path) return [];
+        // Use provenance for direct lookup, fall back to linear scan
         const result: LayoutConstraint[] = [];
         for (const [a, b] of path) {
-            const c = this.addedConstraints.find(c => {
-                const e = this.constraintToEdge(c);
-                return e && e.axis === edge.axis && e.from === a && e.to === b;
-            });
-            if (c) result.push(c);
-        }
-        return result;
-    }
-
-    private findPath(graph: WeightedPartialOrderGraph, from: string, to: string): [string, string][] | null {
-        if (from === to) return [];
-        const visited = new Set<string>();
-        const queue: { node: string; path: [string, string][] }[] = [{ node: from, path: [] }];
-        visited.add(from);
-        while (queue.length > 0) {
-            const { node, path } = queue.shift()!;
-            // Sort successors lexicographically for deterministic BFS path selection
-            const sortedSuccs = [...graph.successors(node)].sort();
-            for (const succ of sortedSuccs) {
-                if (succ === to) return [...path, [node, succ]];
-                if (!visited.has(succ)) {
-                    visited.add(succ);
-                    queue.push({ node: succ, path: [...path, [node, succ]] });
-                }
+            const provenance = graph.getEdgeProvenance(a, b);
+            if (provenance) {
+                result.push(provenance);
+            } else {
+                // Fall back: edge may have been added without provenance (e.g. conjunctive phase)
+                const c = this.addedConstraints.find(c => {
+                    const e = this.constraintToEdge(c);
+                    return e && e.axis === edge.axis && e.from === a && e.to === b;
+                });
+                if (c) result.push(c);
             }
         }
-        return null;
+        return result;
     }
 
     /**
@@ -2156,8 +2434,6 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     ): PositionalConstraintError {
         // Temporarily include the trigger in addedConstraints so
         // findAlignmentConflictSet can map its graph edge back to a constraint.
-        // (The trigger's edge is already in the graph but it hasn't been pushed
-        // to addedConstraints yet since we're about to fail.)
         this.addedConstraints.push(triggerConstraint);
         const conflictSet = this.findAlignmentConflictSet(axis);
         this.addedConstraints.pop();
@@ -2165,6 +2441,29 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         // Always include the trigger
         if (!conflictSet.includes(triggerConstraint)) {
             conflictSet.push(triggerConstraint);
+        }
+
+        // When the alignment was rejected before edges were added (asymmetric
+        // reachability), findAlignmentConflictSet won't find alignment classes.
+        // Directly trace the ordering path that blocked the alignment.
+        if (isAlignmentConstraint(triggerConstraint)) {
+            const ac = triggerConstraint as AlignmentConstraint;
+            const graph = axis === 'x' ? this.hGraph : this.vGraph;
+            const a = ac.node1.id, b = ac.node2.id;
+            // Find the ordering path (asymmetric reachability)
+            for (const [from, to] of [[a, b], [b, a]]) {
+                if (graph.canReach(from, to)) {
+                    const path = graph.findPath(from, to);
+                    if (path) {
+                        for (const [pa, pb] of path) {
+                            const provenance = graph.getEdgeProvenance(pa, pb);
+                            if (provenance && !conflictSet.includes(provenance)) {
+                                conflictSet.push(provenance);
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         const srcToLayout = new Map<SourceConstraint, LayoutConstraint[]>();
@@ -2202,47 +2501,57 @@ class QualitativeConstraintValidator implements IConstraintValidator {
      * (mutual ordering between alignment classes) conflicts.
      */
     private findAlignmentConflictSet(axis: 'x' | 'y'): LayoutConstraint[] {
-        const uf = axis === 'x' ? this.xAlignUF : this.yAlignUF;
         const graph = axis === 'x' ? this.hGraph : this.vGraph;
         const axisEdge = axis === 'x' ? 'h' : 'v';
         const result: LayoutConstraint[] = [];
 
-        // Collect multi-member classes
-        const classMembers = new Map<string, string[]>();
-        for (const [, members] of uf.classes()) {
-            if (members.length < 2) continue;
-            classMembers.set(uf.find(members[0]), members);
+        // Collect multi-member alignment classes from the graph's SCCs
+        const classMembers = graph.getAlignmentClasses();
+
+        // Build a reverse index: node → representative of its alignment class
+        const nodeToRep = new Map<string, string>();
+        for (const [rep, members] of classMembers) {
+            for (const m of members) nodeToRep.set(m, rep);
         }
 
-        // --- Check 1: Within-class ordering conflict ---
-        for (const [root, members] of classMembers) {
+        // --- Check 1: Within-class strict ordering conflict ---
+        // With zero-weight alignment edges, two aligned nodes that are also
+        // strictly ordered have a positive-weight path between them, detectable
+        // via isStrictlyOrdered.
+        for (const [rep, members] of classMembers) {
             for (let i = 0; i < members.length; i++) {
                 for (let j = i + 1; j < members.length; j++) {
                     const a = members[i], b = members[j];
-                    const ordered = graph.isOrdered(a, b) || graph.isOrdered(b, a);
-                    if (!ordered) continue;
+                    const strictlyOrdered = graph.isStrictlyOrdered(a, b) || graph.isStrictlyOrdered(b, a);
+                    if (!strictlyOrdered) continue;
 
-                    const [from, to] = graph.isOrdered(a, b) ? [a, b] : [b, a];
+                    const [from, to] = graph.isStrictlyOrdered(a, b) ? [a, b] : [b, a];
 
-                    // Alignment constraints in this class
+                    // Alignment constraints in this class — use provenance from alignment edges
                     for (const c of this.addedConstraints) {
                         if (!isAlignmentConstraint(c)) continue;
                         const ac = c as AlignmentConstraint;
                         if (ac.axis !== axis) continue;
-                        if (uf.find(ac.node1.id) === root || uf.find(ac.node2.id) === root) {
-                            result.push(c);
+                        const r1 = nodeToRep.get(ac.node1.id), r2 = nodeToRep.get(ac.node2.id);
+                        if (r1 === rep || r2 === rep) {
+                            if (!result.includes(c)) result.push(c);
                         }
                     }
 
-                    // Ordering path
-                    const path = this.findPath(graph, from, to);
+                    // Ordering path — use graph's built-in findPath + provenance
+                    const path = graph.findPath(from, to);
                     if (path) {
                         for (const [pa, pb] of path) {
-                            const c = this.addedConstraints.find(c => {
-                                const e = this.constraintToEdge(c);
-                                return e && e.axis === axisEdge && e.from === pa && e.to === pb;
-                            });
-                            if (c && !result.includes(c)) result.push(c);
+                            const provenance = graph.getEdgeProvenance(pa, pb);
+                            if (provenance && !result.includes(provenance)) {
+                                result.push(provenance);
+                            } else if (!provenance) {
+                                const c = this.addedConstraints.find(c => {
+                                    const e = this.constraintToEdge(c);
+                                    return e && e.axis === axisEdge && e.from === pa && e.to === pb;
+                                });
+                                if (c && !result.includes(c)) result.push(c);
+                            }
                         }
                     }
                     return result;
@@ -2251,7 +2560,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         }
 
         // --- Check 2: Cross-class cycle ---
-        // Sort roots lexicographically for deterministic conflict selection
+        // Sort representatives lexicographically for deterministic conflict selection
         const roots = [...classMembers.keys()].sort();
         for (let i = 0; i < roots.length; i++) {
             for (let j = i + 1; j < roots.length; j++) {
@@ -2271,9 +2580,9 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                     if (!isAlignmentConstraint(c)) continue;
                     const ac = c as AlignmentConstraint;
                     if (ac.axis !== axis) continue;
-                    const r1 = uf.find(ac.node1.id), r2 = uf.find(ac.node2.id);
+                    const r1 = nodeToRep.get(ac.node1.id), r2 = nodeToRep.get(ac.node2.id);
                     if (r1 === roots[i] || r1 === roots[j] || r2 === roots[i] || r2 === roots[j]) {
-                        result.push(c);
+                        if (!result.includes(c)) result.push(c);
                     }
                 }
 
@@ -2290,20 +2599,25 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     /** Find one ordering path from any member of fromMembers to any member of toMembers and add its constraints to result. */
     private collectOrderingPath(
         fromMembers: string[], toMembers: string[],
-        graph: WeightedPartialOrderGraph, axisEdge: string,
+        graph: DifferenceConstraintGraph, axisEdge: string,
         result: LayoutConstraint[],
     ): void {
         for (const fm of fromMembers) {
             for (const tm of toMembers) {
                 if (!graph.isOrdered(fm, tm)) continue;
-                const path = this.findPath(graph, fm, tm);
+                const path = graph.findPath(fm, tm);
                 if (path) {
                     for (const [a, b] of path) {
-                        const c = this.addedConstraints.find(c => {
-                            const e = this.constraintToEdge(c);
-                            return e && e.axis === axisEdge && e.from === a && e.to === b;
-                        });
-                        if (c && !result.includes(c)) result.push(c);
+                        const provenance = graph.getEdgeProvenance(a, b);
+                        if (provenance && !result.includes(provenance)) {
+                            result.push(provenance);
+                        } else if (!provenance) {
+                            const c = this.addedConstraints.find(c => {
+                                const e = this.constraintToEdge(c);
+                                return e && e.axis === axisEdge && e.from === a && e.to === b;
+                            });
+                            if (c && !result.includes(c)) result.push(c);
+                        }
                     }
                 }
                 return;
@@ -2336,8 +2650,27 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     // ─── Alignment orders ────────────────────────────────────────────────────
 
     private computeAlignmentOrders(): LayoutConstraint[] {
-        this.horizontallyAligned = this.normalizeAlignment(this.horizontallyAligned);
-        this.verticallyAligned = this.normalizeAlignment(this.verticallyAligned);
+        // Derive alignment groups from graph SCCs (includes alignment from CDCL search,
+        // not just conjunctive constraints). Filter to real nodes only (skip virtual group nodes).
+        const realNodeIds = new Set(this.nodes.map(n => n.id));
+
+        // hGraph x-axis alignment classes → verticallyAligned (same column)
+        this.verticallyAligned = [];
+        for (const [, members] of this.hGraph.getAlignmentClasses()) {
+            const realMembers = members.filter(id => realNodeIds.has(id));
+            if (realMembers.length >= 2) {
+                this.verticallyAligned.push(realMembers.map(id => this.nodeMap.get(id)!));
+            }
+        }
+
+        // vGraph y-axis alignment classes → horizontallyAligned (same row)
+        this.horizontallyAligned = [];
+        for (const [, members] of this.vGraph.getAlignmentClasses()) {
+            const realMembers = members.filter(id => realNodeIds.has(id));
+            if (realMembers.length >= 2) {
+                this.horizontallyAligned.push(realMembers.map(id => this.nodeMap.get(id)!));
+            }
+        }
 
         const implicitConstraints: LayoutConstraint[] = [];
 
@@ -2452,8 +2785,8 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     }
 
     public dispose(): void {
-        this.hGraph = new WeightedPartialOrderGraph(this.minPadding);
-        this.vGraph = new WeightedPartialOrderGraph(this.minPadding);
+        this.hGraph = new DifferenceConstraintGraph(this.minPadding);
+        this.vGraph = new DifferenceConstraintGraph(this.minPadding);
         this.learnedClauses = [];
         this.activity.clear();
         this.assignmentTrail = [];

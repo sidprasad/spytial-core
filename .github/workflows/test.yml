@@ -19,3 +19,42 @@ jobs:
       - run: npm install
 
       - run: npm test -- --run
+
+  solver-oracle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for relevant changes
+        id: changes
+        run: |
+          BASE=${{ github.event.pull_request.base.sha || 'HEAD~1' }}
+          if git diff --name-only "$BASE"...HEAD | grep -qE \
+            'src/layout/.*constraint|tests/.*minizinc|tests/helpers/.*oracle|tests/helpers/.*constraint'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.changes.outputs.run == 'true'
+        with:
+          node-version: '20'
+
+      - name: Install MiniZinc
+        if: steps.changes.outputs.run == 'true'
+        run: |
+          curl -sL https://github.com/MiniZinc/MiniZincIDE/releases/download/2.9.5/MiniZincIDE-2.9.5-bundle-linux-x86_64.tgz | tar xz
+          echo "$PWD/MiniZincIDE-2.9.5-bundle-linux-x86_64/bin" >> $GITHUB_PATH
+
+      - run: npm install
+        if: steps.changes.outputs.run == 'true'
+
+      - run: npx vitest run tests/minizinc-equivalence.test.ts
+        if: steps.changes.outputs.run == 'true'
+
+      - name: Skip (no relevant changes)
+        if: steps.changes.outputs.run != 'true'
+        run: echo "Skipping solver-oracle — no changes to constraint validator, oracle, or MiniZinc tests."
