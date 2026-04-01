@@ -106,7 +106,9 @@ export async function isMiniZincAvailable(): Promise<boolean> {
 
 export async function initMiniZinc(): Promise<void> {
     if (!initialized) {
-        await loadMiniZinc();
+        if (!await loadMiniZinc()) {
+            throw new Error('MiniZinc module could not be loaded — is the CLI installed?');
+        }
         await mznInit();
         if (!detectedSolver) detectedSolver = await detectSolver();
         initialized = true;

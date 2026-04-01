@@ -593,7 +593,8 @@ class DifferenceConstraintGraph {
      * Returns true if the chain would overflow.
      */
     wouldOverflow(a: string, b: string, maxSpan: number, weight?: number): boolean {
-        const w = weight ?? this.gap;
+        // Match addEdge's weight encoding: include source node's physical size
+        const w = (weight ?? this.gap) + (this.nodeSize.get(a) ?? 0);
         if (!this.adj.has(a) || !this.adj.has(b)) return false;
         if (this.canReach(b, a)) return true; // Cycle
 
