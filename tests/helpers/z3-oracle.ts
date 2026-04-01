@@ -60,6 +60,16 @@ export function shutdownZ3(): void {
     Z3Context = null;
 }
 
+/** Create a fresh Z3 context, discarding accumulated WASM memory from prior solves. */
+export async function resetZ3(): Promise<void> {
+    if (!Z3Context) {
+        const { Context } = await init();
+        Z3Context = Context;
+    }
+    z3Ctx = new Z3Context('oracle');
+    z3Initialized = true;
+}
+
 // ─── ID sanitization ────────────────────────────────────────────────────
 
 function varName(id: string, suffix: string): string {
