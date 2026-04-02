@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { QualitativeConstraintValidator, PositionalConstraintError } from '../src/layout/qualitative-constraint-validator';
+import { QualitativeConstraintValidator, PositionalConstraintError, orientationConstraintToString } from '../src/layout/qualitative-constraint-validator';
 import {
     DisjunctiveConstraint,
     InstanceLayout,
@@ -1965,6 +1965,54 @@ describe('QualitativeConstraintValidator', () => {
             // conflictingConstraints on the layout should be non-empty
             expect(result.layout.conflictingConstraints).toBeDefined();
             expect(result.layout.conflictingConstraints!.length).toBeGreaterThan(0);
+        });
+
+        it('should show both positive and negated source constraints in IIS (should-have-2-iis-source)', async () => {
+            // Layout has: orientation {hold: never, selector: down, directions: [below]}
+            //         and: orientation {selector: down, directions: [directlyBelow]}
+            // These directly conflict: "must be below" AND "must NOT be below" on same pairs.
+            // The IIS should include constraints from BOTH source constraints.
+            const fs = await import('fs');
+            const path = await import('path');
+            const { parseAlloyXML } = await import('../src/data-instance/alloy/alloy-instance/src/xml');
+            const { AlloyDataInstance } = await import('../src/data-instance/alloy-data-instance');
+            const { parseLayoutSpec } = await import('../src/layout/layoutspec');
+            const { LayoutInstance } = await import('../src/layout/layoutinstance');
+            const { SGraphQueryEvaluator } = await import('../src/evaluators/sgq-evaluator');
+
+            const sampleDir = path.resolve(__dirname, '../sample/unsat-grouping');
+            const datumXml = fs.readFileSync(path.join(sampleDir, 'datum.xml'), 'utf-8');
+            const layoutCnd = fs.readFileSync(
+                path.join(sampleDir, 'should-have-2-iis-source.cnd'), 'utf-8');
+
+            const datum = parseAlloyXML(datumXml);
+            const instance = new AlloyDataInstance(datum.instances[0]);
+            const layoutSpec = parseLayoutSpec(layoutCnd);
+            const evaluator = new SGraphQueryEvaluator();
+            evaluator.initialize({ sourceData: instance });
+
+            const layoutInstance = new LayoutInstance(
+                layoutSpec, evaluator, 0, true,
+                undefined, 'qualitative'
+            );
+            const result = layoutInstance.generateLayout(instance);
+
+            expect(result.error).not.toBeNull();
+            expect(result.error!.type).toBe('positional-conflict');
+
+            const pe = result.error as PositionalConstraintError;
+
+            // IIS should have constraints from at least 2 distinct source constraints
+            // (the positive directlyBelow AND the negated below)
+            const sourceCount = pe.minimalConflictingSet.size;
+            console.log('IIS source constraint count:', sourceCount);
+            for (const [source, constraints] of pe.minimalConflictingSet) {
+                console.log(`  Source: ${source.toHTML()}`);
+                for (const c of constraints) {
+                    console.log(`    - ${orientationConstraintToString(c)}`);
+                }
+            }
+            expect(sourceCount).toBeGreaterThanOrEqual(2);
         });
     });
 });
