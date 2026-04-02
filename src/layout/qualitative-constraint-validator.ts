@@ -613,6 +613,9 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     // ─── Search state ───
     private addedConstraints: LayoutConstraint[] = [];
     private allDisjunctions: DisjunctiveConstraint[] = [];
+    /** Snapshot of allDisjunctions before presolve modifies it. Used by
+     *  computeMaximalFeasibleSubset to work with the full constraint set. */
+    private originalDisjunctions: DisjunctiveConstraint[] = [];
 
     // ─── CDCL state ───
     private assignmentTrail: Assignment[] = [];
@@ -670,6 +673,8 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
         // Phase 3: Always collect all disjunctions
         this.allDisjunctions = [...(this.layout.disjunctiveConstraints || [])];
+        // Save before presolve modifies allDisjunctions (removes resolved, prunes alternatives)
+        this.originalDisjunctions = [...this.allDisjunctions];
 
         // If Phase 1 failed, compute global MFS across all constraints and return
         if (phase1Failed) {
@@ -683,14 +688,19 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
         // Phase 4b: Handle truly empty disjunctions (no alternatives at all)
         if (this.emptyDisjunctionError) {
-            return this.enforceMaximalFeasibleSubset(this.buildGlobalMFSError());
+            return this.enforceMaximalFeasibleSubset(this.emptyDisjunctionError);
         }
 
         // Phase 5: CDCL search on remaining disjunctions
+        // Use CDCL's own error reporting (buildUnsatResult) which correctly
+        // identifies infeasible disjunctions from the search trail.
+        // buildGlobalMFSError can't detect cross-disjunction conflicts.
         if (this.allDisjunctions.length > 0) {
             const result = this.solveCDCL();
             if (!result.satisfiable) {
-                return this.enforceMaximalFeasibleSubset(this.buildGlobalMFSError());
+                const error = result.error;
+                if (error) return this.enforceMaximalFeasibleSubset(error);
+                return null;
             }
         }
 
@@ -1325,35 +1335,41 @@ class QualitativeConstraintValidator implements IConstraintValidator {
      *   - bottom: node below all members → infeasible if node→member in vGraph
      */
     private isBoundingBoxFeasible(bc: BoundingBoxConstraint): boolean {
+        return QualitativeConstraintValidator.isBboxFeasibleInGraphs(bc, this.hGraph, this.vGraph);
+    }
+
+    /**
+     * Check if a BoundingBox alternative is feasible by testing the node's
+     * ordering against ALL group members in the given graphs.
+     * The virtual group node encoding uses a single edge, but member-to-group
+     * edges aren't present — so we must check member orderings directly.
+     */
+    static isBboxFeasibleInGraphs(
+        bc: BoundingBoxConstraint,
+        hGraph: DifferenceConstraintGraph,
+        vGraph: DifferenceConstraintGraph,
+    ): boolean {
         const nodeId = bc.node.id;
         const members = bc.group.nodeIds;
         switch (bc.side) {
             case 'left':
-                // node is left of group → node must be left of every member
-                // infeasible if any member is already ordered left of node
                 for (const m of members) {
-                    if (this.hGraph.isOrdered(m, nodeId)) return false;
+                    if (hGraph.isOrdered(m, nodeId)) return false;
                 }
                 return true;
             case 'right':
-                // node is right of group → node must be right of every member
-                // infeasible if node is already ordered left of any member
                 for (const m of members) {
-                    if (this.hGraph.isOrdered(nodeId, m)) return false;
+                    if (hGraph.isOrdered(nodeId, m)) return false;
                 }
                 return true;
             case 'top':
-                // node is above group → node must be above every member
-                // infeasible if any member is already ordered above node
                 for (const m of members) {
-                    if (this.vGraph.isOrdered(m, nodeId)) return false;
+                    if (vGraph.isOrdered(m, nodeId)) return false;
                 }
                 return true;
             case 'bottom':
-                // node is below group → node must be below every member
-                // infeasible if node is already ordered above any member
                 for (const m of members) {
-                    if (this.vGraph.isOrdered(nodeId, m)) return false;
+                    if (vGraph.isOrdered(nodeId, m)) return false;
                 }
                 return true;
         }
@@ -2153,6 +2169,86 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         return null;
     }
 
+    /**
+     * Like addEdgeToGraphs but expands BoundingBox constraints to per-member
+     * edges instead of using virtual group nodes. This gives correct cycle
+     * detection for cross-group conflicts (e.g., Cell4 in both groups).
+     *
+     * - BoundingBox 'left':   node → each member (node left of each member)
+     * - BoundingBox 'right':  each member → node (node right of each member)
+     * - BoundingBox 'top':    node → each member on V axis
+     * - BoundingBox 'bottom': each member → node on V axis
+     */
+    private static addEdgeToGraphsExpanded(
+        constraint: LayoutConstraint,
+        hGraph: DifferenceConstraintGraph,
+        vGraph: DifferenceConstraintGraph,
+    ): boolean {
+        if (isBoundingBoxConstraint(constraint)) {
+            const bc = constraint as BoundingBoxConstraint;
+            const nodeId = bc.node.id;
+            for (const memberId of bc.group.nodeIds) {
+                switch (bc.side) {
+                    case 'left':
+                        if (!hGraph.addEdge(nodeId, memberId, bc.minDistance, constraint)) return false;
+                        break;
+                    case 'right':
+                        if (!hGraph.addEdge(memberId, nodeId, bc.minDistance, constraint)) return false;
+                        break;
+                    case 'top':
+                        if (!vGraph.addEdge(nodeId, memberId, bc.minDistance, constraint)) return false;
+                        break;
+                    case 'bottom':
+                        if (!vGraph.addEdge(memberId, nodeId, bc.minDistance, constraint)) return false;
+                        break;
+                }
+            }
+            return true;
+        }
+        if (isGroupBoundaryConstraint(constraint)) {
+            // Expand GroupBoundary to pairwise edges between group members
+            const gc = constraint as GroupBoundaryConstraint;
+            for (const aId of gc.groupA.nodeIds) {
+                for (const bId of gc.groupB.nodeIds) {
+                    switch (gc.side) {
+                        case 'left':
+                            if (!hGraph.addEdge(aId, bId, gc.minDistance, constraint)) return false;
+                            break;
+                        case 'right':
+                            if (!hGraph.addEdge(bId, aId, gc.minDistance, constraint)) return false;
+                            break;
+                        case 'top':
+                            if (!vGraph.addEdge(aId, bId, gc.minDistance, constraint)) return false;
+                            break;
+                        case 'bottom':
+                            if (!vGraph.addEdge(bId, aId, gc.minDistance, constraint)) return false;
+                            break;
+                    }
+                }
+            }
+            return true;
+        }
+        // Left, Top, Alignment — delegate to instance method's static logic
+        if (isLeftConstraint(constraint)) return hGraph.addEdge(constraint.left.id, constraint.right.id, constraint.minDistance, constraint);
+        if (isTopConstraint(constraint)) return vGraph.addEdge(constraint.top.id, constraint.bottom.id, constraint.minDistance, constraint);
+        if (isAlignmentConstraint(constraint)) {
+            const ac = constraint as AlignmentConstraint;
+            const graph = ac.axis === 'x' ? hGraph : vGraph;
+            if (!graph.addAlignmentEdges(ac.node1.id, ac.node2.id, constraint)) return false;
+            if (ac.node1.id !== ac.node2.id) {
+                const otherGraph = ac.axis === 'x' ? vGraph : hGraph;
+                if (QualitativeConstraintValidator.classHasDualAxisOverlap(
+                    graph, otherGraph, ac.node1.id, ac.node2.id, true,
+                )) {
+                    graph.removeAlignmentEdges(ac.node1.id, ac.node2.id);
+                    return false;
+                }
+            }
+            return true;
+        }
+        return true;
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // Maximal feasible subset
     // ═══════════════════════════════════════════════════════════════════════════
@@ -2178,16 +2274,23 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
         const feasibleConstraints: LayoutConstraint[] = [];
         for (const constraint of this.orientationConstraints) {
-            // addEdgeToGraphs handles all constraint types: Left, Top, Alignment
-            // (with dual-axis overlap check), BoundingBox, and GroupBoundary.
-            const ok = this.addEdgeToGraphs(constraint, freshH, freshV);
+            // Use expanded encoding: BoundingBox/GroupBoundary are expanded to
+            // per-member edges so cross-group conflicts are detected correctly.
+            const ok = QualitativeConstraintValidator.addEdgeToGraphsExpanded(
+                constraint, freshH, freshV);
             if (ok) feasibleConstraints.push(constraint);
         }
         const infeasibleDisjunctions: DisjunctiveConstraint[] = [];
 
-        const sortedDisjunctions = [...this.allDisjunctions].sort((a, b) => {
-            const aIdx = this.allDisjunctions.indexOf(a);
-            const bIdx = this.allDisjunctions.indexOf(b);
+        // Use originalDisjunctions (pre-presolve snapshot) so that disjunctions
+        // resolved/committed by presolve are re-evaluated from scratch. This ensures
+        // computeMaximalFeasibleSubset works with the full constraint set.
+        const disjSource = this.originalDisjunctions.length > 0
+            ? this.originalDisjunctions
+            : this.allDisjunctions;
+        const sortedDisjunctions = [...disjSource].sort((a, b) => {
+            const aIdx = disjSource.indexOf(a);
+            const bIdx = disjSource.indexOf(b);
             const aMax = Math.max(...a.alternatives.map((_, ai) => this.activity.get(`d${aIdx}a${ai}`) ?? 0));
             const bMax = Math.max(...b.alternatives.map((_, bi) => this.activity.get(`d${bIdx}a${bi}`) ?? 0));
             // Stable tiebreaker: use original index when activity scores are equal
@@ -2201,11 +2304,18 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                 const vClone = freshV.clone();
                 let ok = true;
                 for (const constraint of alternative) {
-                    if (!this.addEdgeToGraphs(constraint, hClone, vClone)) { ok = false; break; }
+                    // For BoundingBox constraints, expand to per-member edges
+                    // instead of using virtual group nodes. This captures the
+                    // actual member positions so cross-group conflicts are detected.
+                    if (!QualitativeConstraintValidator.addEdgeToGraphsExpanded(
+                        constraint, hClone, vClone)) {
+                        ok = false; break;
+                    }
                 }
                 if (ok) {
                     for (const constraint of alternative) {
-                        this.addEdgeToGraphs(constraint, freshH, freshV);
+                        QualitativeConstraintValidator.addEdgeToGraphsExpanded(
+                            constraint, freshH, freshV);
                         feasibleConstraints.push(constraint);
                     }
                     added = true;

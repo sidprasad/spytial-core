@@ -1916,4 +1916,55 @@ describe('QualitativeConstraintValidator', () => {
             expect(error!.maximalFeasibleSubset).toBeDefined();
         });
     });
+
+    describe('Group constraint conflicts (unsat-timeout regression)', () => {
+        it('should produce non-empty IIS for unsat-timeout sample via LayoutInstance', async () => {
+            // Integration test: load the actual datum.xml and layout.cnd from
+            // sample/unsat-timeout and run through the full LayoutInstance pipeline.
+            const fs = await import('fs');
+            const path = await import('path');
+            const { parseAlloyXML } = await import('../src/data-instance/alloy/alloy-instance/src/xml');
+            const { AlloyDataInstance } = await import('../src/data-instance/alloy-data-instance');
+            const { parseLayoutSpec } = await import('../src/layout/layoutspec');
+            const { LayoutInstance } = await import('../src/layout/layoutinstance');
+            const { SGraphQueryEvaluator } = await import('../src/evaluators/sgq-evaluator');
+
+            const sampleDir = path.resolve(__dirname, '../sample/unsat-timeout');
+            const datumXml = fs.readFileSync(path.join(sampleDir, 'datum.xml'), 'utf-8');
+            const layoutCnd = fs.readFileSync(path.join(sampleDir, 'layout.cnd'), 'utf-8');
+
+            const datum = parseAlloyXML(datumXml);
+            const instance = new AlloyDataInstance(datum.instances[0]);
+            const layoutSpec = parseLayoutSpec(layoutCnd);
+            const evaluator = new SGraphQueryEvaluator();
+            evaluator.initialize({ sourceData: instance });
+
+            const layoutInstance = new LayoutInstance(
+                layoutSpec, evaluator, 0, true,
+                undefined, 'qualitative'
+            );
+            const result = layoutInstance.generateLayout(instance);
+
+            // Should be unsatisfiable — group members are forced apart by ordering
+            expect(result.error).not.toBeNull();
+            expect(result.error!.type).toBe('positional-conflict');
+
+            const pe = result.error as PositionalConstraintError;
+
+            // IIS must be non-empty
+            let iisCount = 0;
+            for (const [, constraints] of pe.minimalConflictingSet) {
+                iisCount += constraints.length;
+            }
+            expect(iisCount).toBeGreaterThanOrEqual(1);
+
+            // MFS must exist
+            expect(pe.maximalFeasibleSubset).toBeDefined();
+            expect(pe.maximalFeasibleSubset!.length).toBeGreaterThan(0);
+
+            // conflictingConstraints on the layout should be non-empty
+            expect(result.layout.conflictingConstraints).toBeDefined();
+            expect(result.layout.conflictingConstraints!.length).toBeGreaterThan(0);
+        });
+    });
 });
