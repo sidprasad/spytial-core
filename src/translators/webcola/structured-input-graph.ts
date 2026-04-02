@@ -944,6 +944,9 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     try {
       if (!this.layoutInstance) {
         console.log('⚠️ Cannot enforce constraints - no layout instance available');
+        // Still re-render the current layout so local data-instance
+        // mutations (edge removal / reconnection / rename) are visible.
+        this.rerenderGraph();
         return;
       }
 
