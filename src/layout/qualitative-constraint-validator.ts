@@ -692,15 +692,13 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         }
 
         // Phase 5: CDCL search on remaining disjunctions
-        // Use CDCL's own error reporting (buildUnsatResult) which correctly
-        // identifies infeasible disjunctions from the search trail.
-        // buildGlobalMFSError can't detect cross-disjunction conflicts.
         if (this.allDisjunctions.length > 0) {
             const result = this.solveCDCL();
             if (!result.satisfiable) {
-                const error = result.error;
-                if (error) return this.enforceMaximalFeasibleSubset(error);
-                return null;
+                // buildGlobalMFSError traces conflict paths in the MFS graph,
+                // including the conjunctive constraints that block infeasible
+                // disjunctions — so both positive and negated sources appear in the IIS.
+                return this.enforceMaximalFeasibleSubset(this.buildGlobalMFSError());
             }
         }
 
