@@ -94,13 +94,9 @@ const ConstraintCard = (props: ConstraintCardProps) => {
     }, [props.onUpdate]);
 
     const handleHoldToggle = useCallback(() => {
-        const newParams = { ...props.constraintData.params };
-        if (newParams.hold === 'never') {
-            delete newParams.hold;
-        } else {
-            newParams.hold = 'never';
-        }
-        props.onUpdate({ params: newParams });
+        const isCurrentlyNegated = props.constraintData.params.hold === 'never';
+        // Use undefined to clear `hold` — the merge in updateConstraint will overwrite the old value
+        props.onUpdate({ params: { hold: isCurrentlyNegated ? undefined : 'never' } });
     }, [props.constraintData.params, props.onUpdate]);
 
     /**

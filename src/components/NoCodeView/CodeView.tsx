@@ -42,7 +42,10 @@ export function generateLayoutSpecYaml(
         if (!params || typeof params !== 'object' || Array.isArray(params)) {
             return {};
         }
-        return { ...params };
+        // Filter out undefined values so jsyaml.dump() doesn't emit "key: undefined"
+        return Object.fromEntries(
+            Object.entries(params).filter(([, value]) => value !== undefined)
+        );
     };
 
     // Helper function to determine YAML constraint type from structured data
