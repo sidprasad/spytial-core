@@ -64,22 +64,16 @@ export function removeInstanceAtom(
       newTypes[atom.type] = { ...type, atoms: filteredAtoms };
     }
     // Remove from relations — create new relation objects to avoid mutating originals
+    // Keep relations even if they end up with 0 tuples (only removeInstanceRelationTuple
+    // deletes empty relations, since atom removal is a cascade side-effect)
     for (const [key, relation] of Object.entries(instance.relations)) {
       const filtered = relation.tuples.filter((tuple) => !tuple.atoms.includes(atomId));
-      if (filtered.length === 0) {
-        delete newRelations[key];
-      } else {
-        newRelations[key] = { ...relation, tuples: filtered };
-      }
+      newRelations[key] = { ...relation, tuples: filtered };
     }
     // Remove from skolems — create new skolem objects to avoid mutating originals
     for (const [key, skolem] of Object.entries(instance.skolems)) {
       const filtered = skolem.tuples.filter((tuple) => !tuple.atoms.includes(atomId));
-      if (filtered.length === 0) {
-        delete newSkolems[key];
-      } else {
-        newSkolems[key] = { ...skolem, tuples: filtered };
-      }
+      newSkolems[key] = { ...skolem, tuples: filtered };
     }
     return {
       types: newTypes,
