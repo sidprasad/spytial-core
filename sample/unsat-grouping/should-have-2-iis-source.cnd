@@ -1,0 +1,7 @@
+constraints:
+  - orientation: {hold: never, selector: down, directions: [below]}
+  - orientation: {selector: down, directions: [directlyBelow]}
+
+directives:
+  - attribute: {field: mark}
+  - flag: hideDisconnected
