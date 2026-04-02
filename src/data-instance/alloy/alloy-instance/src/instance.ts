@@ -124,8 +124,14 @@ export function removeInstanceRelationTuple(
   const relation = getInstanceRelation(instance, relationId);
   const newRelations = { ...instance.relations };
   const newSkolems = { ...instance.skolems };
+
+  // Structural comparison — the incoming tuple is a freshly constructed object,
+  // so reference equality (===) will never match the stored tuple.
+  const tuplesEqual = (a: AlloyTuple, b: AlloyTuple): boolean =>
+    a.atoms.length === b.atoms.length && a.atoms.every((atom, i) => atom === b.atoms[i]);
+
   // Remove the tuple from the relation
-  relation.tuples = relation.tuples.filter((t) => t !== tuple);
+  relation.tuples = relation.tuples.filter((t) => !tuplesEqual(t, tuple));
   // If the relation has no tuples left, remove it from the instance
   if (relation.tuples.length === 0) {
     delete newRelations[relation.id];
@@ -134,7 +140,7 @@ export function removeInstanceRelationTuple(
   }
   // Remove the tuple from skolems
   Object.values(newSkolems).forEach((skolem) => {
-    skolem.tuples = skolem.tuples.filter((t) => t !== tuple);
+    skolem.tuples = skolem.tuples.filter((t) => !tuplesEqual(t, tuple));
     if (skolem.tuples.length === 0) {
       delete newSkolems[skolem.id];
     } else {
