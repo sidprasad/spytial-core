@@ -688,7 +688,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
         // Phase 4b: Handle truly empty disjunctions (no alternatives at all)
         if (this.emptyDisjunctionError) {
-            return this.enforceMaximalFeasibleSubset(this.buildGlobalMFSError());
+            return this.enforceMaximalFeasibleSubset(this.emptyDisjunctionError);
         }
 
         // Phase 5: CDCL search on remaining disjunctions
@@ -698,7 +698,9 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         if (this.allDisjunctions.length > 0) {
             const result = this.solveCDCL();
             if (!result.satisfiable) {
-                return this.enforceMaximalFeasibleSubset(this.buildGlobalMFSError());
+                const error = result.error;
+                if (error) return this.enforceMaximalFeasibleSubset(error);
+                return null;
             }
         }
 
