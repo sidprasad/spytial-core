@@ -21,8 +21,8 @@ describe('NoCodeView Component Tests', () => {
 
       expect(screen.getByText(/constraints/i)).toBeInTheDocument()
       expect(screen.getByText(/directives/i)).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /add a new constraint/i })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /add a new directive/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /add constraint/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /add directive/i })).toBeInTheDocument()
     })
 
     it('should display constraints in No Code view', () => {

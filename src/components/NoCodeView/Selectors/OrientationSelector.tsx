@@ -10,21 +10,23 @@ interface OrientationSelectorProps {
   onUpdate: (updates: Partial<Omit<ConstraintData, 'id'>>) => void;
 }
 
-/** Direction options with display labels and grouping */
-const DIRECTION_OPTIONS = [
-  { value: 'left', label: 'Left', group: 'relative' },
-  { value: 'right', label: 'Right', group: 'relative' },
-  { value: 'above', label: 'Above', group: 'relative' },
-  { value: 'below', label: 'Below', group: 'relative' },
-  { value: 'directlyLeft', label: 'Directly Left', group: 'direct' },
-  { value: 'directlyRight', label: 'Directly Right', group: 'direct' },
-  { value: 'directlyAbove', label: 'Directly Above', group: 'direct' },
-  { value: 'directlyBelow', label: 'Directly Below', group: 'direct' },
+/** Direction options grouped by type */
+const RELATIVE_DIRECTIONS = [
+  { value: 'left', label: 'Left' },
+  { value: 'right', label: 'Right' },
+  { value: 'above', label: 'Above' },
+  { value: 'below', label: 'Below' },
+];
+
+const DIRECT_DIRECTIONS = [
+  { value: 'directlyLeft', label: 'Directly Left' },
+  { value: 'directlyRight', label: 'Directly Right' },
+  { value: 'directlyAbove', label: 'Directly Above' },
+  { value: 'directlyBelow', label: 'Directly Below' },
 ];
 
 /**
- * Minimal React component for orientation/direction constraint configuration.
- * Uses a checkbox grid for direction selection instead of a multi-select dropdown.
+ * Orientation/direction constraint configuration using pill toggle buttons.
  */
 export const OrientationSelector: React.FC<OrientationSelectorProps> = (props: OrientationSelectorProps) => {
   const handleInputChange = (event: SelectorChangeEvent) => {
@@ -40,11 +42,11 @@ export const OrientationSelector: React.FC<OrientationSelectorProps> = (props: O
   const handleDirectionToggle = useCallback((direction: string) => {
     const currentDirections = (props.constraintData.params.directions as string[]) || [];
     const isSelected = currentDirections.includes(direction);
-    
+
     const newDirections = isSelected
       ? currentDirections.filter(d => d !== direction)
       : [...currentDirections, direction];
-    
+
     props.onUpdate({
       params: {
         ...props.constraintData.params,
@@ -57,12 +59,8 @@ export const OrientationSelector: React.FC<OrientationSelectorProps> = (props: O
 
   return (
     <>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text infolabel" title={TUPLE_SELECTOR_TEXT}>
-            Selector
-          </span>
-        </div>
+      <div className="field-group">
+        <label className="field-label" title={TUPLE_SELECTOR_TEXT}>Selector</label>
         <SelectorInput
           name="selector"
           value={props.constraintData.params.selector as string || ''}
@@ -70,24 +68,38 @@ export const OrientationSelector: React.FC<OrientationSelectorProps> = (props: O
           required
         />
       </div>
-      <div className="direction-selector">
-        <label className="direction-selector__label">Directions</label>
-        <div className="direction-selector__grid">
-          {DIRECTION_OPTIONS.map((option) => (
-            <label 
-              key={option.value} 
-              className={`direction-selector__option ${selectedDirections.includes(option.value) ? 'direction-selector__option--selected' : ''}`}
-              title={`Toggle ${option.label}`}
-            >
-              <input
-                type="checkbox"
-                checked={selectedDirections.includes(option.value)}
-                onChange={() => handleDirectionToggle(option.value)}
-                className="direction-selector__checkbox"
-              />
-              <span className="direction-selector__text">{option.label}</span>
-            </label>
-          ))}
+      <div className="direction-pills">
+        <div className="direction-pills__row">
+          <span className="direction-pills__label">Relative</span>
+          <div className="direction-pills__group">
+            {RELATIVE_DIRECTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={`direction-pill ${selectedDirections.includes(option.value) ? 'direction-pill--active' : ''}`}
+                onClick={() => handleDirectionToggle(option.value)}
+                title={`Toggle ${option.label}`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="direction-pills__row">
+          <span className="direction-pills__label">Direct</span>
+          <div className="direction-pills__group">
+            {DIRECT_DIRECTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={`direction-pill ${selectedDirections.includes(option.value) ? 'direction-pill--active' : ''}`}
+                onClick={() => handleDirectionToggle(option.value)}
+                title={`Toggle ${option.label}`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </>

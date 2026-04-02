@@ -1,47 +1,121 @@
+/* ============================================================
+   NoCodeView (Structured Builder) Styles
+   ============================================================
+   CSS custom properties scoped to the container for easy theming.
+   ============================================================ */
+
+#noCodeViewContainer {
+    --nc-bg: #ffffff;
+    --nc-bg-muted: #f8f9fa;
+    --nc-border: #e9ecef;
+    --nc-border-strong: #dee2e6;
+    --nc-text: #1f2937;
+    --nc-text-muted: #64748b;
+    --nc-text-faint: #adb5bd;
+    --nc-accent: #0d6efd;
+    --nc-accent-bg: #e7f1ff;
+    --nc-accent-hover: #d0e4ff;
+    --nc-danger: #ef4444;
+    --nc-danger-bg: #fef2f2;
+    --nc-danger-border: #fca5a5;
+    --nc-radius: 6px;
+    --nc-radius-sm: 4px;
+    --nc-transition: 0.15s ease-in-out;
+}
+
+/* ---- Card Container ---- */
+
 .cardContainer {
     display: flex;
     flex-direction: column;
     gap: 8px;
 }
 
+/* ---- Card ---- */
+
 .noCodeCard {
-    background: #ffffff;
-    border-radius: 6px;
+    background: var(--nc-bg);
+    border-radius: var(--nc-radius);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
     padding: 12px 14px;
     position: relative;
-    border: 1px solid #e9ecef;
+    border: 1px solid var(--nc-border);
+    border-left: 3px solid var(--nc-border);
+    transition: box-shadow var(--nc-transition), border-color var(--nc-transition);
 }
 
 .noCodeCard:hover {
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
-/* Card header with type selector */
-.noCodeCard > .input-group:first-of-type {
-    margin-bottom: 0;
+.noCodeCard--collapsed {
+    padding: 8px 14px;
 }
 
-.noCodeCard > .input-group:first-of-type .input-group-text {
-    background-color: #f8f9fa;
-    font-weight: 500;
-    border-right: none;
+.noCodeCard--negated {
+    border-left-color: var(--nc-danger);
+    background: var(--nc-danger-bg);
 }
 
-.noCodeCard > .input-group:first-of-type select {
-    border-left: 1px solid #dee2e6;
+/* ---- Card Header (single merged row) ---- */
+
+.cardHeader {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    user-select: none;
 }
 
-.input-group-text.stretch-height {
-    height: 100%;
+.cardHeader:focus-visible {
+    outline: 2px solid var(--nc-accent);
+    outline-offset: 2px;
+    border-radius: var(--nc-radius-sm);
 }
 
+.cardHeader__controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 0;
+}
+
+/* Collapse chevron (rotates on expand/collapse) */
+.collapse-chevron {
+    font-size: 1rem;
+    color: var(--nc-text-muted);
+    width: 16px;
+    text-align: center;
+    flex-shrink: 0;
+    transition: color var(--nc-transition);
+}
+
+.cardHeader:hover .collapse-chevron {
+    color: var(--nc-text);
+}
+
+/* Type dropdown (shared by Constraint and Directive cards) */
+.type-select {
+    font-size: 0.8125rem;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--nc-border-strong);
+    border-radius: var(--nc-radius-sm);
+    background: var(--nc-bg);
+    color: var(--nc-text);
+    cursor: pointer;
+    min-width: 0;
+}
+
+.type-select:focus {
+    outline: 2px solid var(--nc-accent);
+    outline-offset: -1px;
+}
+
+/* Close button */
 .closeButton {
-    position: absolute;
-    top: 6px;
-    right: 8px;
     background-color: transparent;
-    color: #adb5bd;
+    color: var(--nc-text-faint);
     font-size: 1.25rem;
     padding: 0;
     line-height: 1;
@@ -51,39 +125,164 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 4px;
-    transition: all 0.15s ease-in-out;
+    border-radius: var(--nc-radius-sm);
+    transition: all var(--nc-transition);
+    flex-shrink: 0;
+    margin-left: auto;
 }
 
 .closeButton:hover {
-    color: #dc3545;
-    background-color: #fee2e2;
+    color: var(--nc-danger);
+    background-color: var(--nc-danger-bg);
     cursor: pointer;
 }
 
-.code-input {
-    font-family: monospace;
+/* ---- Negation Toggle (segmented control) ---- */
+
+.negation-toggle {
+    display: inline-flex;
+    border: 1px solid var(--nc-border-strong);
+    border-radius: var(--nc-radius-sm);
+    overflow: hidden;
+    flex-shrink: 0;
 }
 
-/* Selector input styling - uses textarea for better scrolling and resizing */
+.negation-toggle__option {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 0.125rem 0.5rem;
+    border: none;
+    background: var(--nc-bg);
+    color: var(--nc-text-muted);
+    cursor: pointer;
+    transition: all var(--nc-transition);
+    line-height: 1.4;
+}
+
+.negation-toggle__option:first-child {
+    border-right: 1px solid var(--nc-border-strong);
+}
+
+.negation-toggle__option--active {
+    background: var(--nc-accent-bg);
+    color: var(--nc-accent);
+}
+
+.negation-toggle__option--never.negation-toggle__option--active {
+    background: var(--nc-danger-bg);
+    color: var(--nc-danger);
+    border-color: var(--nc-danger-border);
+}
+
+.negation-toggle__option:hover:not(.negation-toggle__option--active) {
+    background: var(--nc-bg-muted);
+}
+
+/* ---- Params Section ---- */
+
+.noCodeCard .params {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--nc-border);
+}
+
+.noCodeCard--collapsed .params {
+    display: none;
+}
+
+/* ---- Field Group (stacked label pattern) ---- */
+
+.field-group {
+    margin-bottom: 0.5rem;
+}
+
+.field-group:last-child {
+    margin-bottom: 0;
+}
+
+.field-label {
+    display: block;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--nc-text-muted);
+    margin-bottom: 0.25rem;
+}
+
+.field-label.infolabel {
+    cursor: help;
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 2px;
+}
+
+.field-label.infolabel:hover {
+    color: var(--nc-accent);
+}
+
+.field-group input[type="text"],
+.field-group input[type="number"],
+.field-group select {
+    font-size: 0.875rem;
+    padding: 0.375rem 0.5rem;
+    border: 1px solid var(--nc-border-strong);
+    border-radius: var(--nc-radius-sm);
+    background: var(--nc-bg);
+    color: var(--nc-text);
+    width: 100%;
+}
+
+.field-group input:focus,
+.field-group select:focus {
+    outline: 2px solid var(--nc-accent);
+    outline-offset: -1px;
+    background: var(--nc-bg);
+}
+
+.field-group input[type="color"] {
+    padding: 0.25rem;
+    border: 1px solid var(--nc-border-strong);
+    border-radius: var(--nc-radius-sm);
+    height: 2rem;
+    width: 4rem;
+    cursor: pointer;
+}
+
+.field-group--inline {
+    display: inline-flex;
+    flex-direction: column;
+    margin-right: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.field-group--inline input[type="number"] {
+    width: 5rem;
+}
+
+/* ---- Selector Input (monospace textarea) ---- */
+
 .selector-input {
     font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
     font-size: 0.9rem;
-    background-color: #f6f8fa;
-    border: 1px solid #d0d7de;
+    background-color: var(--nc-bg-muted);
+    border: 1px solid var(--nc-border-strong);
     padding: 0.375rem 0.5rem;
     width: 100%;
-    height: 2.25rem; /* Single line height by default */
-    min-height: 2.25rem; /* Prevent shrinking below 1 line */
-    resize: vertical; /* Allow vertical resizing only */
-    overflow-x: auto; /* Horizontal scroll for long selectors */
-    overflow-y: hidden; /* Hide vertical scroll for single line */
-    white-space: pre; /* Preserve whitespace, prevent wrapping */
+    height: 2.25rem;
+    min-height: 2.25rem;
+    resize: vertical;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: pre;
     line-height: 1.5;
-    field-sizing: content; /* Modern browsers: auto-size to content if supported */
+    field-sizing: content;
+    border-radius: var(--nc-radius-sm);
+    color: var(--nc-text);
 }
 
-/* When resized larger, show vertical scrollbar and allow full scrolling */
 .selector-input:not([rows="1"]),
 .selector-input[style*="height"] {
     overflow-y: auto;
@@ -91,61 +290,267 @@
 }
 
 .selector-input:focus {
-    outline: 2px solid #0969da;
+    outline: 2px solid var(--nc-accent);
     outline-offset: -1px;
-    background-color: #ffffff;
+    background-color: var(--nc-bg);
 }
 
-/* Resize handle indicator */
 .selector-input::-webkit-resizer {
-    background-color: #d0d7de;
+    background-color: var(--nc-border-strong);
     border-radius: 2px;
 }
 
-/* 
- * NOTE: Overlay-based syntax highlighting was removed due to scrolling and 
- * navigation issues in browsers (especially Chrome). The highlightSelector 
- * function is preserved for potential future use (tooltips, previews, etc.)
- * but the overlay CSS is no longer used.
- */
-
-/** Styles for informational labels */
-.infolabel {
-    cursor: help; /* Changes the cursor to a question mark */
-    text-decoration: underline; /* Adds an underline to indicate interactivity */
-    color: #007bff; /* Makes the text look like a link */
+.code-input {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 }
 
-.infolabel:hover {
-    color: #0056b3; /* Darkens the color on hover */
-    text-decoration: none; /* Optionally remove underline on hover */
+/* ---- Direction Pills (OrientationSelector) ---- */
+
+.direction-pills {
+    margin-top: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
 }
 
-/* Highlight effect for newly added elements */
+.direction-pills__row {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+.direction-pills__label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--nc-text-muted);
+    min-width: 3.5rem;
+    flex-shrink: 0;
+}
+
+.direction-pills__group {
+    display: flex;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+}
+
+.direction-pill {
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.1875rem 0.5rem;
+    border: 1px solid var(--nc-border-strong);
+    border-radius: 999px;
+    background: var(--nc-bg);
+    color: var(--nc-text-muted);
+    cursor: pointer;
+    transition: all var(--nc-transition);
+    white-space: nowrap;
+}
+
+.direction-pill:hover {
+    border-color: var(--nc-text-faint);
+    color: var(--nc-text);
+}
+
+.direction-pill--active {
+    background: var(--nc-accent);
+    border-color: var(--nc-accent);
+    color: #ffffff;
+}
+
+.direction-pill--active:hover {
+    background: #0b5ed7;
+    border-color: #0b5ed7;
+    color: #ffffff;
+}
+
+/* ---- Inline Checkbox / Toggle ---- */
+
+.inline-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.8125rem;
+    color: var(--nc-text-muted);
+    padding: 0.25rem 0.5rem;
+    background-color: var(--nc-bg-muted);
+    border-radius: var(--nc-radius-sm);
+    cursor: pointer;
+    user-select: none;
+    margin-top: 0.5rem;
+}
+
+.inline-checkbox:hover {
+    background-color: var(--nc-border);
+}
+
+.inline-checkbox input[type="checkbox"] {
+    margin: 0;
+    accent-color: var(--nc-accent);
+}
+
+.inline-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.8125rem;
+    color: var(--nc-text-muted);
+    padding: 0.25rem 0.5rem;
+    background-color: var(--nc-bg-muted);
+    border-radius: var(--nc-radius-sm);
+    cursor: pointer;
+    user-select: none;
+    margin-top: 0.375rem;
+}
+
+.inline-toggle:hover {
+    background-color: var(--nc-border);
+}
+
+.inline-toggle input[type="checkbox"] {
+    margin: 0;
+    accent-color: var(--nc-accent);
+}
+
+/* ---- Comment Section ---- */
+
+.commentSection {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px dashed var(--nc-border-strong);
+}
+
+.commentInput {
+    width: 100%;
+    border: 1px solid var(--nc-border-strong);
+    border-radius: var(--nc-radius-sm);
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    color: var(--nc-text-muted);
+    background-color: var(--nc-bg-muted);
+    font-style: italic;
+}
+
+.commentInput:focus {
+    outline: none;
+    border-color: var(--nc-accent);
+    background-color: var(--nc-bg);
+}
+
+.commentInput::placeholder {
+    color: var(--nc-text-faint);
+}
+
+.addCommentButton {
+    background: transparent;
+    border: none;
+    color: var(--nc-text-faint);
+    font-size: 0.75rem;
+    padding: 0;
+    cursor: pointer;
+    font-style: italic;
+}
+
+.addCommentButton:hover {
+    color: var(--nc-text-muted);
+}
+
+.collapsedComment {
+    font-size: 0.75rem;
+    color: var(--nc-text-muted);
+    font-style: italic;
+    margin-top: 0.25rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ---- Section Header ---- */
+
+.sectionHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+
+.sectionHeader h5 {
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--nc-text);
+}
+
+.sectionHeader__actions {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.icon-button {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--nc-radius-sm);
+    padding: 0.125rem 0.25rem;
+    color: var(--nc-text-faint);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--nc-transition);
+}
+
+.icon-button:hover {
+    background-color: var(--nc-bg-muted);
+    border-color: var(--nc-border-strong);
+    color: var(--nc-text-muted);
+}
+
+.add-button {
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.1875rem 0.5rem;
+    border: 1px dashed var(--nc-border-strong);
+    border-radius: var(--nc-radius-sm);
+    background: transparent;
+    color: var(--nc-text-muted);
+    cursor: pointer;
+    transition: all var(--nc-transition);
+}
+
+.add-button:hover {
+    border-color: var(--nc-accent);
+    color: var(--nc-accent);
+    background: var(--nc-accent-bg);
+}
+
+.add-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ---- Highlight (newly added card) ---- */
+
 .highlight {
-    border: 1px solid #007bff; /* Thin blue border */
-    animation: fadeConstraintBorder 1s ease-out forwards; /* Fade out the border */
+    border-color: var(--nc-accent);
+    animation: fadeConstraintBorder 1s ease-out forwards;
 }
 
-/* Keyframes for fading out the border */
 @keyframes fadeConstraintBorder {
-    0% {
-        border-color: #007bff; /* Start with blue */
-    }
-    100% {
-        border-color: transparent; /* End with no border */
-    }
+    0% { border-color: var(--nc-accent); }
+    100% { border-color: var(--nc-border); }
 }
 
-/* Code view card styles */
+/* ---- Code View ---- */
+
 .code-view-card {
-    background: #ffffff;
-    border: 1px solid #e5e9f0;
+    background: var(--nc-bg);
+    border: 1px solid var(--nc-border);
     border-radius: 8px;
     padding: 12px;
 }
 
-/* Simple code textarea */
 .code-view-textarea {
     width: 100%;
     min-height: 400px;
@@ -154,17 +559,17 @@
     font-size: 0.875rem;
     line-height: 1.6;
     padding: 12px;
-    border: 1px solid #d0d7de;
-    border-radius: 6px;
-    background-color: #f8fafc;
-    color: #1f2937;
+    border: 1px solid var(--nc-border-strong);
+    border-radius: var(--nc-radius);
+    background-color: var(--nc-bg-muted);
+    color: var(--nc-text);
 }
 
 .code-view-textarea:focus {
     outline: none;
-    border-color: #0d6efd;
+    border-color: var(--nc-accent);
     box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
-    background-color: #ffffff;
+    background-color: var(--nc-bg);
 }
 
 .code-view-textarea:disabled {
@@ -175,287 +580,4 @@
 
 .code-view-textarea::placeholder {
     color: #9ca3af;
-}
-
-/* Direction selector - checkbox grid for orientation constraints */
-.direction-selector {
-    margin-top: 0.5rem;
-}
-
-.direction-selector__label {
-    display: block;
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: #495057;
-    margin-bottom: 0.375rem;
-}
-
-.direction-selector__grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.25rem;
-}
-
-.direction-selector__option {
-    display: flex;
-    align-items: center;
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-    cursor: pointer;
-    user-select: none;
-    font-size: 0.8125rem;
-    background-color: #f8f9fa;
-    border: 1px solid #dee2e6;
-    transition: all 0.15s ease-in-out;
-}
-
-.direction-selector__option:hover {
-    background-color: #e9ecef;
-    border-color: #adb5bd;
-}
-
-.direction-selector__option--selected {
-    background-color: #e7f1ff;
-    border-color: #0d6efd;
-    color: #0d6efd;
-}
-
-.direction-selector__option--selected:hover {
-    background-color: #d0e4ff;
-}
-
-.direction-selector__checkbox {
-    margin-right: 0.375rem;
-    accent-color: #0d6efd;
-}
-
-.direction-selector__text {
-    flex: 1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-/* Compact input groups for constraint cards */
-.noCodeCard .input-group {
-    margin-bottom: 0.5rem;
-}
-
-.noCodeCard .input-group:last-child {
-    margin-bottom: 0;
-}
-
-.noCodeCard .input-group-text {
-    font-size: 0.8125rem;
-    padding: 0.25rem 0.5rem;
-    min-width: 80px;
-}
-
-.noCodeCard .form-control,
-.noCodeCard select {
-    font-size: 0.875rem;
-    padding: 0.25rem 0.5rem;
-}
-
-/* Params container styling */
-.noCodeCard .params {
-    margin-top: 0.5rem;
-    padding-top: 0.5rem;
-    border-top: 1px solid #e9ecef;
-}
-
-/* Inline checkbox style for compact boolean options */
-.inline-checkbox {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.375rem;
-    font-size: 0.8125rem;
-    color: #495057;
-    padding: 0.25rem 0.5rem;
-    background-color: #f8f9fa;
-    border-radius: 4px;
-    cursor: pointer;
-    user-select: none;
-    margin-top: 0.5rem;
-}
-
-.inline-checkbox:hover {
-    background-color: #e9ecef;
-}
-
-.inline-checkbox input[type="checkbox"] {
-    margin: 0;
-    accent-color: #0d6efd;
-}
-
-/* Negation badge for "holds never" constraints */
-.negation-badge {
-    display: inline-block;
-    font-size: 0.625rem;
-    font-weight: 700;
-    color: #dc3545;
-    background-color: #fee2e2;
-    border: 1px solid #fca5a5;
-    border-radius: 3px;
-    padding: 0.0625rem 0.375rem;
-    margin-left: 0.5rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    vertical-align: middle;
-}
-
-/* Card header with collapse button and drag handle */
-.cardHeader {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.5rem;
-}
-
-.collapseButton {
-    background: transparent;
-    border: none;
-    padding: 0;
-    width: 20px;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #6c757d;
-    cursor: pointer;
-    font-size: 0.625rem;
-    border-radius: 3px;
-    transition: all 0.15s ease-in-out;
-}
-
-.collapseButton:hover {
-    background-color: #e9ecef;
-    color: #495057;
-}
-
-/* Drag handle */
-.dragHandle {
-    color: #adb5bd;
-    cursor: grab;
-    font-size: 0.875rem;
-    letter-spacing: -2px;
-    user-select: none;
-    padding: 0 0.25rem;
-}
-
-.dragHandle:hover {
-    color: #6c757d;
-}
-
-/* Collapsed card state */
-.noCodeCard--collapsed {
-    padding: 8px 14px;
-}
-
-.noCodeCard--collapsed .params {
-    display: none;
-}
-
-.noCodeCard--collapsed .input-group {
-    margin-bottom: 0;
-}
-
-/* Dragging state */
-.noCodeCard.dragging {
-    opacity: 0.5;
-    border: 2px dashed #0d6efd;
-}
-
-.noCodeCard[draggable="true"] {
-    cursor: grab;
-}
-
-.noCodeCard[draggable="true"]:active {
-    cursor: grabbing;
-}
-
-/* Comment section styling */
-.commentSection {
-    margin-top: 0.5rem;
-    padding-top: 0.5rem;
-    border-top: 1px dashed #dee2e6;
-}
-
-.commentInput {
-    width: 100%;
-    border: 1px solid #dee2e6;
-    border-radius: 4px;
-    padding: 0.25rem 0.5rem;
-    font-size: 0.75rem;
-    color: #6c757d;
-    background-color: #f8f9fa;
-    font-style: italic;
-}
-
-.commentInput:focus {
-    outline: none;
-    border-color: #86b7fe;
-    background-color: #fff;
-}
-
-.commentInput::placeholder {
-    color: #adb5bd;
-}
-
-.addCommentButton {
-    background: transparent;
-    border: none;
-    color: #adb5bd;
-    font-size: 0.75rem;
-    padding: 0;
-    cursor: pointer;
-    font-style: italic;
-}
-
-.addCommentButton:hover {
-    color: #6c757d;
-}
-
-.collapsedComment {
-    font-size: 0.75rem;
-    color: #6c757d;
-    font-style: italic;
-    margin-top: 0.25rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-/* Section header with collapse all buttons */
-.sectionHeader {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 0.5rem;
-}
-
-.sectionHeader h5 {
-    margin: 0;
-}
-
-.collapseAllButtons {
-    display: flex;
-    gap: 0.5rem;
-}
-
-.collapseAllButton {
-    background: transparent;
-    border: 1px solid #dee2e6;
-    border-radius: 4px;
-    padding: 0.125rem 0.5rem;
-    font-size: 0.6875rem;
-    color: #6c757d;
-    cursor: pointer;
-    transition: all 0.15s ease-in-out;
-}
-
-.collapseAllButton:hover {
-    background-color: #f8f9fa;
-    border-color: #adb5bd;
-    color: #495057;
 }

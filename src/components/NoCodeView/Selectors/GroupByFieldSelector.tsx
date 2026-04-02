@@ -25,55 +25,44 @@ export const GroupByFieldSelector: React.FC<GroupByFieldSelectorProps> = (props:
 
   return (
     <>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text">Field</span>
-        </div>
+      <div className="field-group">
+        <label className="field-label">Field</label>
         <input
           type="text"
           name="field"
-          className="form-control"
           onChange={handleInputChange}
           required
         />
       </div>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text">Selector</span>
-        </div>
+      <div className="field-group">
+        <label className="field-label">Selector</label>
         <input
           type="text"
           name="selector"
-          className="form-control code-input"
+          className="code-input"
           defaultValue={props.constraintData.params.selector as string || ''}
           placeholder="Optional: target specific atoms (e.g., Person)"
           onChange={handleInputChange}
         />
       </div>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text infolabel" title="Which 0-indexed element of the field to use as the group key.">
-            Group On
-          </span>
-        </div>
+      <div className="field-group">
+        <label className="field-label infolabel" title="Which 0-indexed element of the field to use as the group key.">
+          Group On
+        </label>
         <input
           type="number"
           name="groupOn"
-          className="form-control"
           onChange={handleInputChange}
           required
         />
       </div>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text infolabel" title="Which 0-indexed element of the field are group members.">
-            Add to Group
-          </span>
-        </div>
+      <div className="field-group">
+        <label className="field-label infolabel" title="Which 0-indexed element of the field are group members.">
+          Add to Group
+        </label>
         <input
           type="number"
           name="addToGroup"
-          className="form-control"
           onChange={handleInputChange}
           required
         />

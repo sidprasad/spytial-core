@@ -27,12 +27,10 @@ export const ColorAtomSelector: React.FC<ColorAtomSelectorProps> = (props: Color
 
   return (
     <>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text infolabel" title={UNARY_SELECTOR_TEXT}>
-            Selector
-          </span>
-        </div>
+      <div className="field-group">
+        <label className="field-label infolabel" title={UNARY_SELECTOR_TEXT}>
+          Selector
+        </label>
         <SelectorInput
           name="selector"
           value={props.directiveData.params.selector as string || ''}
@@ -40,14 +38,11 @@ export const ColorAtomSelector: React.FC<ColorAtomSelectorProps> = (props: Color
           required
         />
       </div>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text">Color</span>
-        </div>
+      <div className="field-group">
+        <label className="field-label">Color</label>
         <input
           type="color"
           name="value"
-          className="form-control"
           value={props.directiveData.params.value as string || '#000000'}
           onChange={handleInputChange}
           required

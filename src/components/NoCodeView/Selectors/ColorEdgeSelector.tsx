@@ -34,25 +34,20 @@ export const ColorEdgeSelector: React.FC<ColorEdgeSelectorProps> = ({
 
   return (
     <>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text">Field</span>
-        </div>
+      <div className="field-group">
+        <label className="field-label">Field</label>
         <input
           type="text"
           name="field"
-          className="form-control"
           defaultValue={field}
           onChange={(e) => onUpdate({ params: { ...directiveData.params, field: e.target.value } })}
           required
         />
       </div>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text infolabel" title={UNARY_SELECTOR_TEXT}>
-            Selector
-          </span>
-        </div>
+      <div className="field-group">
+        <label className="field-label infolabel" title={UNARY_SELECTOR_TEXT}>
+          Selector
+        </label>
         <SelectorInput
           name="selector"
           value={selector}
@@ -60,12 +55,10 @@ export const ColorEdgeSelector: React.FC<ColorEdgeSelectorProps> = ({
           placeholder="Optional: target specific source atoms (e.g., Person)"
         />
       </div>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text infolabel" title={TUPLE_SELECTOR_TEXT}>
-            Filter
-          </span>
-        </div>
+      <div className="field-group">
+        <label className="field-label infolabel" title={TUPLE_SELECTOR_TEXT}>
+          Filter
+        </label>
         <SelectorInput
           name="filter"
           value={filter}
@@ -73,26 +66,20 @@ export const ColorEdgeSelector: React.FC<ColorEdgeSelectorProps> = ({
           placeholder="Optional: filter which tuples to style (e.g., rel & (univ -> True))"
         />
       </div>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text">Color</span>
-        </div>
+      <div className="field-group">
+        <label className="field-label">Color</label>
         <input
           type="color"
           name="value"
-          className="form-control"
           defaultValue={value}
           onChange={(e) => onUpdate({ params: { ...directiveData.params, value: e.target.value } })}
           required
         />
       </div>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text">Style</span>
-        </div>
+      <div className="field-group">
+        <label className="field-label">Style</label>
         <select
           name="style"
-          className="form-control"
           value={style}
           onChange={(e) => onUpdate({ params: { ...directiveData.params, style: e.target.value || undefined } })}
         >
@@ -102,14 +89,11 @@ export const ColorEdgeSelector: React.FC<ColorEdgeSelectorProps> = ({
           <option value="dotted">Dotted</option>
         </select>
       </div>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text">Weight</span>
-        </div>
+      <div className="field-group">
+        <label className="field-label">Weight</label>
         <input
           type="number"
           name="weight"
-          className="form-control"
           min="0"
           step="0.5"
           value={weight ?? ''}
@@ -121,36 +105,24 @@ export const ColorEdgeSelector: React.FC<ColorEdgeSelectorProps> = ({
           }}
         />
       </div>
-      <div className="input-group">
-        <div className="form-check">
-          <input
-            type="checkbox"
-            name="showLabel"
-            className="form-check-input"
-            id="showLabel-checkbox"
-            checked={showLabel !== false}
-            onChange={(e) => onUpdate({ params: { ...directiveData.params, showLabel: e.target.checked ? undefined : false } })}
-          />
-          <label className="form-check-label" htmlFor="showLabel-checkbox">
-            Show Edge Label
-          </label>
-        </div>
-      </div>
-      <div className="input-group">
-        <div className="form-check">
-          <input
-            type="checkbox"
-            name="hidden"
-            className="form-check-input"
-            id="hidden-checkbox"
-            checked={hidden === true}
-            onChange={(e) => onUpdate({ params: { ...directiveData.params, hidden: e.target.checked ? true : undefined } })}
-          />
-          <label className="form-check-label" htmlFor="hidden-checkbox">
-            Hide Edge
-          </label>
-        </div>
-      </div>
+      <label className="inline-toggle">
+        <input
+          type="checkbox"
+          name="showLabel"
+          checked={showLabel !== false}
+          onChange={(e) => onUpdate({ params: { ...directiveData.params, showLabel: e.target.checked ? undefined : false } })}
+        />
+        <span>Show Edge Label</span>
+      </label>
+      <label className="inline-toggle">
+        <input
+          type="checkbox"
+          name="hidden"
+          checked={hidden === true}
+          onChange={(e) => onUpdate({ params: { ...directiveData.params, hidden: e.target.checked ? true : undefined } })}
+        />
+        <span>Hide Edge</span>
+      </label>
     </>
   );
 };

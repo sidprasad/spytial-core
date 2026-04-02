@@ -32,12 +32,10 @@ export const HideAtomSelector: React.FC<HideAtomSelectorProps> = (props: HideAto
   };
 
   return (
-    <div className="input-group">
-      <div className="input-group-prepend">
-        <span className="input-group-text infolabel" title={UNARY_SELECTOR_TEXT}>
-          Selector
-        </span>
-      </div>
+    <div className="field-group">
+      <label className="field-label infolabel" title={UNARY_SELECTOR_TEXT}>
+        Selector
+      </label>
       <SelectorInput
         name="selector"
         value={data.params.selector as string || ''}

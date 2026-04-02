@@ -30,12 +30,10 @@ export const HelperEdgeSelector: React.FC<HelperEdgeSelectorProps> = ({
 
   return (
     <>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text infolabel" title={TUPLE_SELECTOR_TEXT}>
-            Selector
-          </span>
-        </div>
+      <div className="field-group">
+        <label className="field-label infolabel" title={TUPLE_SELECTOR_TEXT}>
+          Selector
+        </label>
         <SelectorInput
           name="selector"
           value={selector}
@@ -43,38 +41,29 @@ export const HelperEdgeSelector: React.FC<HelperEdgeSelectorProps> = ({
           required
         />
       </div>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text">Edge Name</span>
-        </div>
+      <div className="field-group">
+        <label className="field-label">Edge Name</label>
         <input
           type="text"
           name="name"
-          className="form-control"
           defaultValue={name}
           onChange={(e) => onUpdate({ params: { ...directiveData.params, name: e.target.value } })}
           required
         />
       </div>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text">Color</span>
-        </div>
+      <div className="field-group">
+        <label className="field-label">Color</label>
         <input
           type="color"
           name="color"
-          className="form-control"
           defaultValue={color}
           onChange={(e) => onUpdate({ params: { ...directiveData.params, color: e.target.value } })}
         />
       </div>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text">Style</span>
-        </div>
+      <div className="field-group">
+        <label className="field-label">Style</label>
         <select
           name="style"
-          className="form-control"
           value={style}
           onChange={(e) => onUpdate({ params: { ...directiveData.params, style: e.target.value || undefined } })}
         >
@@ -84,14 +73,11 @@ export const HelperEdgeSelector: React.FC<HelperEdgeSelectorProps> = ({
           <option value="dotted">Dotted</option>
         </select>
       </div>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text">Weight</span>
-        </div>
+      <div className="field-group">
+        <label className="field-label">Weight</label>
         <input
           type="number"
           name="weight"
-          className="form-control"
           min="0"
           step="0.5"
           value={weight ?? ''}

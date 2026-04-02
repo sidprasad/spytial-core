@@ -19,7 +19,7 @@
     }
   },
   "scripts": {
-    "build": "tsup",
+    "build": "npm run build:all",
     "build:browser": "tsup --config tsup.browser.config.ts",
     "build:components": "tsup --config tsup.components.config.ts",
     "build:all": "npm run build:browser && npm run build:components",

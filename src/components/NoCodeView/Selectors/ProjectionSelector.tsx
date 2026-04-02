@@ -36,28 +36,23 @@ export const ProjectionSelector: React.FC<ProjectionSelectorProps> = (props: Pro
 
   return (
     <>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text">Sig</span>
-        </div>
+      <div className="field-group">
+        <label className="field-label">Sig</label>
         <input
           type="text"
-          className="form-control"
           name="sig"
           defaultValue={props.directiveData.params.sig as string || ''}
           onChange={handleInputChange}
           required
         />
       </div>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span 
-            className="input-group-text infolabel" 
-            title="Selector to determine atom ordering in projection controls. Should return (atom, sortKey) pairs."
-          >
-            Order By
-          </span>
-        </div>
+      <div className="field-group">
+        <label
+          className="field-label infolabel"
+          title="Selector to determine atom ordering in projection controls. Should return (atom, sortKey) pairs."
+        >
+          Order By
+        </label>
         <SelectorInput
           name="orderBy"
           value={props.directiveData.params.orderBy as string || ''}

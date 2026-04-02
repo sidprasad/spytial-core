@@ -29,14 +29,6 @@ interface DirectiveCardProps {
   onRemove: () => void;
   /** Additional CSS class name for styling */
   className?: string;
-  /** Drag handle props for drag and drop */
-  dragHandleProps?: {
-    draggable: boolean;
-    onDragStart: (e: React.DragEvent) => void;
-    onDragEnd: (e: React.DragEvent) => void;
-    onDragOver: (e: React.DragEvent) => void;
-    onDrop: (e: React.DragEvent) => void;
-  };
 }
 
 /**
@@ -119,49 +111,31 @@ const DirectiveCard: React.FC<DirectiveCardProps> = (props: DirectiveCardProps) 
     ].filter(Boolean).join(' ');
 
   return (
-    <div 
-        className={classes}
-        {...props.dragHandleProps}
-    >
-        <div className="cardHeader">
-            <button 
-                className="collapseButton" 
-                title={isCollapsed ? "Expand" : "Collapse"} 
-                aria-label={isCollapsed ? "Expand directive" : "Collapse directive"} 
-                aria-expanded={!isCollapsed}
-                type="button" 
-                onClick={toggleCollapse}
-            >
-                <span aria-hidden="true">{isCollapsed ? '▶' : '▼'}</span>
-            </button>
-            {props.dragHandleProps && (
-                <span className="dragHandle" title="Drag to reorder" aria-label="Drag handle">⋮⋮</span>
-            )}
-            <button className="closeButton" title="Remove directive" aria-label="Remove directive" type="button" onClick={props.onRemove}>
+    <div className={classes}>
+        <div className="cardHeader" onClick={toggleCollapse} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleCollapse(); }}>
+            <span className="collapse-chevron" aria-hidden="true">{isCollapsed ? '›' : '‹'}</span>
+            {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+            <div className="cardHeader__controls" onClick={(e) => e.stopPropagation()}>
+                <select className="type-select" onChange={updateFields} value={selectValue}>
+                    <option value="flag">Visibility Flag</option>
+                    <option value="attribute">Attribute</option>
+                    <option value="tag">Tag</option>
+                    <option value="hideField">Hide Field</option>
+                    <option value="icon">Icon</option>
+                    <option value="atomColor">Color (Atom)</option>
+                    <option value="edgeColor">Edge Style</option>
+                    <option value="inferredEdge">Inferred Edge</option>
+                </select>
+            </div>
+            <button className="closeButton" title="Remove directive" aria-label="Remove directive" type="button" onClick={(e) => { e.stopPropagation(); props.onRemove(); }}>
                 <span aria-hidden="true">&times;</span>
             </button>
-        </div>
-        <div className="input-group">
-            <div className="input-group-prepend">
-                <span className="input-group-text">Directive</span>
-            </div>
-            <select onChange={ updateFields } value={selectValue}>
-                <option value="flag">Visibility Flag</option>
-                <option value="attribute">Attribute</option>
-                <option value="tag">Tag</option>
-                <option value="hideField">Hide Field</option>
-                <option value="icon">Icon</option>
-                <option value="atomColor">Color (Atom)</option>
-                <option value="edgeColor">Edge Style</option>
-                <option value="inferredEdge">Inferred Edge</option>
-            </select>
         </div>
         {!isCollapsed && (
             <>
                 <div className="params">
-                    { renderSelectorComponent(props.directiveData.type, props.directiveData, props.onUpdate) }
+                    {renderSelectorComponent(props.directiveData.type, props.directiveData, props.onUpdate)}
                 </div>
-                {/* Comment section */}
                 <div className="commentSection">
                     {isEditingComment || props.directiveData.comment ? (
                         <input
@@ -174,8 +148,8 @@ const DirectiveCard: React.FC<DirectiveCardProps> = (props: DirectiveCardProps) 
                             onBlur={() => setIsEditingComment(false)}
                         />
                     ) : (
-                        <button 
-                            type="button" 
+                        <button
+                            type="button"
                             className="addCommentButton"
                             onClick={() => setIsEditingComment(true)}
                         >
@@ -187,8 +161,8 @@ const DirectiveCard: React.FC<DirectiveCardProps> = (props: DirectiveCardProps) 
         )}
         {isCollapsed && props.directiveData.comment && (
             <div className="collapsedComment" title={props.directiveData.comment}>
-                💬 {props.directiveData.comment.length > 30 
-                    ? props.directiveData.comment.slice(0, 30) + '...' 
+                {props.directiveData.comment.length > 30
+                    ? props.directiveData.comment.slice(0, 30) + '...'
                     : props.directiveData.comment}
             </div>
         )}
