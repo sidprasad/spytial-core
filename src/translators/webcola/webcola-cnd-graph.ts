@@ -1334,9 +1334,16 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
-   * Re-render the graph with current layout data
+   * Re-render the graph with current layout data.
+   *
+   * Applies current node positions immediately without restarting the
+   * solver.  When a StructuredInputGraph event handler is active, its
+   * enforceConstraintsAndRegenerate() will do a full layout solve
+   * afterward via renderLayout().  Restarting the old solver here would
+   * leave rAF tick callbacks that race with the new solver and corrupt
+   * positions / cause visual flicker.
    */
-  private rerenderGraph(): void {
+  protected rerenderGraph(): void {
     if (!this.currentLayout || !this.colaLayout) return;
 
     // Update links in the layout
@@ -1346,8 +1353,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     this.container.selectAll('.link-group').remove();
     this.renderLinks(this.currentLayout.links, this.colaLayout);
 
-    // Restart the layout
-    this.colaLayout.start();
+    // Position elements at their current coordinates so the user gets
+    // immediate visual feedback.  Do NOT call this.colaLayout.start() —
+    // that schedules rAF tick callbacks on the OLD solver which race
+    // with the new solver that renderLayout() creates moments later.
+    this.updatePositions();
   }
 
   /**
