@@ -2178,25 +2178,9 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
         const feasibleConstraints: LayoutConstraint[] = [];
         for (const constraint of this.orientationConstraints) {
-            let ok = true;
-            if (isLeftConstraint(constraint)) ok = freshH.addEdge(constraint.left.id, constraint.right.id, constraint.minDistance, constraint);
-            else if (isTopConstraint(constraint)) ok = freshV.addEdge(constraint.top.id, constraint.bottom.id, constraint.minDistance, constraint);
-            else if (isAlignmentConstraint(constraint)) {
-                const ac = constraint as AlignmentConstraint;
-                const graph = ac.axis === 'x' ? freshH : freshV;
-                ok = graph.addAlignmentEdges(ac.node1.id, ac.node2.id, constraint);
-                // Dual-axis alignment forces two nonzero-size nodes to the same
-                // position, guaranteeing overlap. Reject the alignment.
-                if (ok && ac.node1.id !== ac.node2.id) {
-                    const otherGraph = ac.axis === 'x' ? freshV : freshH;
-                    if (QualitativeConstraintValidator.classHasDualAxisOverlap(
-                        graph, otherGraph, ac.node1.id, ac.node2.id, true,
-                    )) {
-                        graph.removeAlignmentEdges(ac.node1.id, ac.node2.id);
-                        ok = false;
-                    }
-                }
-            }
+            // addEdgeToGraphs handles all constraint types: Left, Top, Alignment
+            // (with dual-axis overlap check), BoundingBox, and GroupBoundary.
+            const ok = this.addEdgeToGraphs(constraint, freshH, freshV);
             if (ok) feasibleConstraints.push(constraint);
         }
         const infeasibleDisjunctions: DisjunctiveConstraint[] = [];
