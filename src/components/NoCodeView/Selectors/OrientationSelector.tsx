@@ -19,10 +19,10 @@ const RELATIVE_DIRECTIONS = [
 ];
 
 const DIRECT_DIRECTIONS = [
-  { value: 'directlyLeft', label: 'D. Left' },
-  { value: 'directlyRight', label: 'D. Right' },
-  { value: 'directlyAbove', label: 'D. Above' },
-  { value: 'directlyBelow', label: 'D. Below' },
+  { value: 'directlyLeft', label: 'Directly Left' },
+  { value: 'directlyRight', label: 'Directly Right' },
+  { value: 'directlyAbove', label: 'Directly Above' },
+  { value: 'directlyBelow', label: 'Directly Below' },
 ];
 
 /**
