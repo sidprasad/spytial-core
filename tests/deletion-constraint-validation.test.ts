@@ -82,49 +82,45 @@ describe('Deletion Triggers Constraint Validation', () => {
   });
 
   describe('Direct data instance deletions', () => {
-    it('should trigger constraint validation when removing an atom via data instance', async () => {
+    it('should NOT auto-rerender when atom is removed directly via data instance', async () => {
       const spec = `
         relations:
           - name: edge
             arity: 2
       `;
       await graph.setCnDSpec(spec);
-      
-      // Clear spy from spec loading
+
       constraintValidationSpy.mockClear();
 
-      // Remove an atom directly via the data instance
-      // This should trigger the 'atomRemoved' event, which should call enforceConstraintsAndRegenerate
+      // Direct data instance mutation does NOT trigger enforceConstraintsAndRegenerate
+      // (the graph uses a linear mutate→rerender flow, not event-driven)
       dataInstance.removeAtom('node4');
 
-      // Wait for async event handling
       await new Promise(resolve => setTimeout(resolve, 200));
 
-      // Constraint validation should have been triggered
-      expect(constraintValidationSpy).toHaveBeenCalled();
+      // No auto-rerender — callers should use graph methods (deleteAtom, etc.)
+      expect(constraintValidationSpy).not.toHaveBeenCalled();
     });
 
-    it('should trigger constraint validation when removing a relation tuple via data instance', async () => {
+    it('should NOT auto-rerender when data instance is mutated directly (use graph methods instead)', async () => {
       const spec = `
         relations:
           - name: edge
             arity: 2
       `;
       await graph.setCnDSpec(spec);
-      
-      // Clear spy from spec loading
+
       constraintValidationSpy.mockClear();
 
-      // Remove a tuple directly via the data instance
-      // This should trigger the 'relationTupleRemoved' event, which should call enforceConstraintsAndRegenerate
+      // Direct data instance mutation does NOT trigger enforceConstraintsAndRegenerate
+      // (the graph uses a linear mutate→rerender flow, not event-driven)
       const tupleToRemove = { atoms: ['node2', 'node3'], types: ['Entity', 'Entity'] };
       dataInstance.removeRelationTuple('edge', tupleToRemove);
 
-      // Wait for async event handling
       await new Promise(resolve => setTimeout(resolve, 200));
 
-      // Constraint validation should have been triggered
-      expect(constraintValidationSpy).toHaveBeenCalled();
+      // No auto-rerender — callers should use graph methods (deleteRelationTuple, etc.)
+      expect(constraintValidationSpy).not.toHaveBeenCalled();
     });
   });
 
@@ -156,19 +152,18 @@ describe('Deletion Triggers Constraint Validation', () => {
       expect(remainingAtoms.some(a => a.id === 'node3')).toBe(false);
     });
 
-    it('should trigger constraint validation when deleting relation tuple via UI (deleteRelation method)', async () => {
+    it('should trigger constraint validation when deleting relation tuple via UI (deleteRelationTuple method)', async () => {
       const spec = `
         relations:
           - name: edge
             arity: 2
       `;
       await graph.setCnDSpec(spec);
-      
+
       constraintValidationSpy.mockClear();
 
-      // Simulate calling deleteRelation with tuple index 1 (node2->node3)
-      // This would normally be called via the UI dropdown and delete button
-      await (graph as any).deleteRelation('1');
+      // Simulate calling deleteRelationTuple with relation ID and tuple index 1 (node2->node3)
+      await (graph as any).deleteRelationTuple('edge', 1);
 
       // Wait for async event handling
       await new Promise(resolve => setTimeout(resolve, 200));

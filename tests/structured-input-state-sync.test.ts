@@ -273,8 +273,8 @@ describe('StructuredInputGraph State Synchronization', () => {
   // ── Basic Mutations: Delete Relation Tuple ───────────────────────────────
 
   describe('Basic Mutations: Delete Relation Tuple', () => {
-    it('should remove tuple by global index and verify full state', async () => {
-      await (graph as any).deleteRelation('0');
+    it('should remove tuple by relation ID and tuple index and verify full state', async () => {
+      await (graph as any).deleteRelationTuple('knows', 0);
       await tick();
 
       assertFullState(dataInstance, DEFAULT_ATOMS, [
@@ -289,7 +289,7 @@ describe('StructuredInputGraph State Synchronization', () => {
       });
 
       // Delete the first tuple (atom1->atom2)
-      await (graph as any).deleteRelation('0');
+      await (graph as any).deleteRelationTuple('knows', 0);
       await tick();
 
       assertFullState(dataInstance, DEFAULT_ATOMS, [
@@ -601,7 +601,7 @@ describe('StructuredInputGraph State Synchronization', () => {
       expect(di.getRelations()).toHaveLength(0);
     });
 
-    it('should detach event listeners from old instance', async () => {
+    it('should not rerender when old instance is mutated directly', async () => {
       const oldInstance = dataInstance;
       const newInstance = new JSONDataInstance({
         atoms: [{ id: 'x1', type: 'A', label: 'X' }],
@@ -613,7 +613,8 @@ describe('StructuredInputGraph State Synchronization', () => {
       (graph as any).setDataInstance(newInstance);
       spy.mockClear();
 
-      // Mutate old instance — should NOT trigger enforceConstraintsAndRegenerate
+      // Mutating the old instance directly should NOT trigger rerender
+      // (the graph no longer subscribes to data instance events)
       oldInstance.addAtom({ id: 'orphan', type: 'B', label: 'Orphan' });
       await tick();
 
@@ -621,7 +622,7 @@ describe('StructuredInputGraph State Synchronization', () => {
       spy.mockRestore();
     });
 
-    it('should attach event listeners to new instance', async () => {
+    it('should use new instance for graph operations after setDataInstance', async () => {
       const newInstance = new JSONDataInstance({
         atoms: [
           { id: 'x1', type: 'A', label: 'X' },
@@ -632,17 +633,10 @@ describe('StructuredInputGraph State Synchronization', () => {
 
       (graph as any).setDataInstance(newInstance);
 
-      const spy = vi.spyOn(graph as any, 'enforceConstraintsAndRegenerate');
-
-      // Mutate new instance — should trigger enforceConstraintsAndRegenerate
-      newInstance.addRelationTuple('rel', {
-        atoms: ['x1', 'x2'],
-        types: ['A', 'A']
-      });
-      await tick();
-
-      expect(spy).toHaveBeenCalled();
-      spy.mockRestore();
+      // Graph operations go through the linear mutate→rerender flow
+      const di = (graph as any).dataInstance as JSONDataInstance;
+      expect(di).toBe(newInstance);
+      expect(di.getAtoms()).toHaveLength(2);
     });
   });
 
@@ -689,9 +683,9 @@ describe('StructuredInputGraph State Synchronization', () => {
     });
   });
 
-  // ── Suppression Flag ─────────────────────────────────────────────────────
+  // ── Single Rerender Per Operation ─────────────────────────────────────────
 
-  describe('Suppression Flag (_suppressDataChangeRerender)', () => {
+  describe('Single Rerender Per Operation', () => {
     it('should call enforceConstraintsAndRegenerate exactly once for edge creation', async () => {
       const spy = vi.spyOn(graph as any, 'enforceConstraintsAndRegenerate');
 
@@ -703,7 +697,6 @@ describe('StructuredInputGraph State Synchronization', () => {
       });
       await tick();
 
-      // One explicit call from handleEdgeCreationRequest, NOT a second from the event handler
       expect(spy).toHaveBeenCalledTimes(1);
       spy.mockRestore();
     });
@@ -720,7 +713,6 @@ describe('StructuredInputGraph State Synchronization', () => {
       });
       await tick();
 
-      // One explicit call, not one per remove + add
       expect(spy).toHaveBeenCalledTimes(1);
       spy.mockRestore();
     });
@@ -743,7 +735,7 @@ describe('StructuredInputGraph State Synchronization', () => {
       spy.mockRestore();
     });
 
-    it('should still fire data instance events even when suppressed', async () => {
+    it('should still fire data instance events for external listeners', async () => {
       const events: string[] = [];
       dataInstance.addEventListener('relationTupleRemoved', () => events.push('removed'));
       dataInstance.addEventListener('relationTupleAdded', () => events.push('added'));
