@@ -613,6 +613,9 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     // ─── Search state ───
     private addedConstraints: LayoutConstraint[] = [];
     private allDisjunctions: DisjunctiveConstraint[] = [];
+    /** Snapshot of allDisjunctions before presolve modifies it. Used by
+     *  computeMaximalFeasibleSubset to work with the full constraint set. */
+    private originalDisjunctions: DisjunctiveConstraint[] = [];
 
     // ─── CDCL state ───
     private assignmentTrail: Assignment[] = [];
@@ -657,20 +660,28 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     }
 
     public validatePositionalConstraints(): PositionalConstraintError | null {
-        // Phase 1: Add all conjunctive constraints
+        // Phase 1: Add conjunctive constraints — stop on first error but don't return yet
+        let phase1Failed = false;
         for (const constraint of this.orientationConstraints) {
             const error = this.addConjunctiveConstraint(constraint);
-            if (error) return this.enforceMaximalFeasibleSubset(error);
+            if (error) { phase1Failed = true; break; }
+        }
+
+        // Phase 2: Always collect group bounding box disjunctions
+        // (safe — only creates DisjunctiveConstraints + ensureNode, no addEdge)
+        this.addGroupBoundingBoxDisjunctions();
+
+        // Phase 3: Always collect all disjunctions
+        this.allDisjunctions = [...(this.layout.disjunctiveConstraints || [])];
+        // Save before presolve modifies allDisjunctions (removes resolved, prunes alternatives)
+        this.originalDisjunctions = [...this.allDisjunctions];
+
+        // If Phase 1 failed, compute global MFS across all constraints and return
+        if (phase1Failed) {
+            return this.enforceMaximalFeasibleSubset(this.buildGlobalMFSError());
         }
 
         const constraintsBeforeDisjunctions = this.addedConstraints.length;
-
-        // Phase 2: Group bounding box disjunctions (virtual group nodes, from V1)
-        const groupError = this.addGroupBoundingBoxDisjunctions();
-        if (groupError) return this.enforceMaximalFeasibleSubset(groupError);
-
-        // Phase 3: Collect all disjunctions
-        this.allDisjunctions = [...(this.layout.disjunctiveConstraints || [])];
 
         // Phase 4: Interval decomposition — resolve what we can before CDCL
         this.presolveDisjunctions();
@@ -681,6 +692,9 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         }
 
         // Phase 5: CDCL search on remaining disjunctions
+        // Use CDCL's own error reporting (buildUnsatResult) which correctly
+        // identifies infeasible disjunctions from the search trail.
+        // buildGlobalMFSError can't detect cross-disjunction conflicts.
         if (this.allDisjunctions.length > 0) {
             const result = this.solveCDCL();
             if (!result.satisfiable) {
@@ -722,6 +736,139 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             this.layout.constraints = error.maximalFeasibleSubset;
         }
         return error;
+    }
+
+    /**
+     * Build an error by computing a global greedy MFS across ALL constraints
+     * (conjunctive + disjunctive), then tracing conflict paths in the MFS
+     * graph to produce a proper IIS for each excluded constraint.
+     *
+     * The IIS always contains >= 2 constraints: the excluded constraint(s)
+     * plus the MFS constraints they conflict with.
+     *
+     * Uses `computeMaximalFeasibleSubset()` which builds fresh graphs from
+     * scratch, so it is independent of the main validation state.
+     */
+    private buildGlobalMFSError(): PositionalConstraintError {
+        const { feasibleConstraints, infeasibleDisjunctions, hGraph: mfsH, vGraph: mfsV } = this.computeMaximalFeasibleSubset();
+
+        // Excluded conjunctive = all orientation constraints not in the MFS
+        const feasibleSet = new Set<LayoutConstraint>(feasibleConstraints);
+        const excludedConjunctive = this.orientationConstraints.filter(c => !feasibleSet.has(c));
+
+        // Build IIS: for each excluded constraint, trace the conflict path
+        // in the MFS graph (the path that creates a cycle with the constraint).
+        // IIS = excluded constraints + their conflict paths from the MFS.
+        const iisSet = new Set<LayoutConstraint>();
+        const seen = new Set<LayoutConstraint>();
+
+        // Helper: trace a conflict path in an MFS graph and add provenances to IIS
+        const traceConflictPath = (graph: DifferenceConstraintGraph, from: string, to: string) => {
+            const path = graph.findPath(from, to);
+            if (path) {
+                for (const [a, b] of path) {
+                    const provenance = graph.getEdgeProvenance(a, b);
+                    if (provenance && !seen.has(provenance)) {
+                        seen.add(provenance);
+                        iisSet.add(provenance);
+                    }
+                }
+            }
+        };
+
+        for (const c of excludedConjunctive) {
+            if (seen.has(c)) continue;
+            seen.add(c);
+            iisSet.add(c);
+
+            if (isAlignmentConstraint(c)) {
+                // Alignment constraint align(A,B) was excluded because A and B are
+                // strictly ordered in the MFS graph. Trace the ordering path(s).
+                const ac = c as AlignmentConstraint;
+                const graph = ac.axis === 'x' ? mfsH : mfsV;
+                const a = ac.node1.id, b = ac.node2.id;
+                // Check both directions — the ordering path that blocks alignment
+                if (graph.canReach(a, b)) traceConflictPath(graph, a, b);
+                if (graph.canReach(b, a)) traceConflictPath(graph, b, a);
+            } else {
+                const edge = this.constraintToEdge(c);
+                if (!edge) continue;
+                const graph = edge.axis === 'h' ? mfsH : mfsV;
+                traceConflictPath(graph, edge.to, edge.from);
+            }
+        }
+
+        // Also include infeasible disjunctions (with representative constraints)
+        for (const disj of infeasibleDisjunctions) {
+            if (disj.alternatives.length > 0 && disj.alternatives[0].length > 0) {
+                const rep = disj.alternatives[0][0];
+                if (!seen.has(rep)) {
+                    seen.add(rep);
+                    iisSet.add(rep);
+                }
+                // Trace conflict path for the representative
+                const edge = this.constraintToEdge(rep);
+                if (edge) {
+                    const graph = edge.axis === 'h' ? mfsH : mfsV;
+                    const path = graph.findPath(edge.to, edge.from);
+                    if (path) {
+                        for (const [a, b] of path) {
+                            const provenance = graph.getEdgeProvenance(a, b);
+                            if (provenance && !seen.has(provenance)) {
+                                seen.add(provenance);
+                                iisSet.add(provenance);
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Empty disjunction — add source to maps below
+            }
+        }
+
+        // Group IIS by source constraint
+        const srcToLayout = new Map<SourceConstraint, LayoutConstraint[]>();
+        const htmlMap = new Map<string, string[]>();
+        for (const c of iisSet) {
+            const src = c.sourceConstraint;
+            if (!srcToLayout.has(src)) srcToLayout.set(src, []);
+            if (!htmlMap.has(src.toHTML())) htmlMap.set(src.toHTML(), []);
+            srcToLayout.get(src)!.push(c);
+            htmlMap.get(src.toHTML())!.push(orientationConstraintToString(c));
+        }
+
+        // Empty disjunctions with no alternatives
+        for (const disj of infeasibleDisjunctions) {
+            if (disj.alternatives.length === 0) {
+                const src = disj.sourceConstraint;
+                if (!srcToLayout.has(src)) srcToLayout.set(src, []);
+                if (!htmlMap.has(src.toHTML())) htmlMap.set(src.toHTML(), []);
+                htmlMap.get(src.toHTML())!.push(`unsatisfiable: ${src.toHTML()}`);
+            }
+        }
+
+        // Pick a representative for backward-compat singular fields
+        const iisArray = [...iisSet];
+        const representative = iisArray[0] ?? this.orientationConstraints[0];
+
+        const repString = representative ? orientationConstraintToString(representative) : '';
+        const repSource = representative?.sourceConstraint
+            ?? infeasibleDisjunctions[0]?.sourceConstraint
+            ?? this.orientationConstraints[0]?.sourceConstraint;
+
+        return {
+            name: 'PositionalConstraintError', type: 'positional-conflict',
+            message: `Constraint "${repString}" conflicts with existing constraints`,
+            conflictingConstraint: representative ?? (undefined as any),
+            conflictingSourceConstraint: repSource ?? (undefined as any),
+            minimalConflictingSet: srcToLayout,
+            maximalFeasibleSubset: feasibleConstraints,
+            errorMessages: {
+                conflictingConstraint: repString,
+                conflictingSourceConstraint: repSource?.toHTML() ?? '',
+                minimalConflictingConstraints: htmlMap,
+            },
+        };
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -1188,35 +1335,41 @@ class QualitativeConstraintValidator implements IConstraintValidator {
      *   - bottom: node below all members → infeasible if node→member in vGraph
      */
     private isBoundingBoxFeasible(bc: BoundingBoxConstraint): boolean {
+        return QualitativeConstraintValidator.isBboxFeasibleInGraphs(bc, this.hGraph, this.vGraph);
+    }
+
+    /**
+     * Check if a BoundingBox alternative is feasible by testing the node's
+     * ordering against ALL group members in the given graphs.
+     * The virtual group node encoding uses a single edge, but member-to-group
+     * edges aren't present — so we must check member orderings directly.
+     */
+    static isBboxFeasibleInGraphs(
+        bc: BoundingBoxConstraint,
+        hGraph: DifferenceConstraintGraph,
+        vGraph: DifferenceConstraintGraph,
+    ): boolean {
         const nodeId = bc.node.id;
         const members = bc.group.nodeIds;
         switch (bc.side) {
             case 'left':
-                // node is left of group → node must be left of every member
-                // infeasible if any member is already ordered left of node
                 for (const m of members) {
-                    if (this.hGraph.isOrdered(m, nodeId)) return false;
+                    if (hGraph.isOrdered(m, nodeId)) return false;
                 }
                 return true;
             case 'right':
-                // node is right of group → node must be right of every member
-                // infeasible if node is already ordered left of any member
                 for (const m of members) {
-                    if (this.hGraph.isOrdered(nodeId, m)) return false;
+                    if (hGraph.isOrdered(nodeId, m)) return false;
                 }
                 return true;
             case 'top':
-                // node is above group → node must be above every member
-                // infeasible if any member is already ordered above node
                 for (const m of members) {
-                    if (this.vGraph.isOrdered(m, nodeId)) return false;
+                    if (vGraph.isOrdered(m, nodeId)) return false;
                 }
                 return true;
             case 'bottom':
-                // node is below group → node must be below every member
-                // infeasible if node is already ordered above any member
                 for (const m of members) {
-                    if (this.vGraph.isOrdered(nodeId, m)) return false;
+                    if (vGraph.isOrdered(nodeId, m)) return false;
                 }
                 return true;
         }
@@ -2016,6 +2169,86 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         return null;
     }
 
+    /**
+     * Like addEdgeToGraphs but expands BoundingBox constraints to per-member
+     * edges instead of using virtual group nodes. This gives correct cycle
+     * detection for cross-group conflicts (e.g., Cell4 in both groups).
+     *
+     * - BoundingBox 'left':   node → each member (node left of each member)
+     * - BoundingBox 'right':  each member → node (node right of each member)
+     * - BoundingBox 'top':    node → each member on V axis
+     * - BoundingBox 'bottom': each member → node on V axis
+     */
+    private static addEdgeToGraphsExpanded(
+        constraint: LayoutConstraint,
+        hGraph: DifferenceConstraintGraph,
+        vGraph: DifferenceConstraintGraph,
+    ): boolean {
+        if (isBoundingBoxConstraint(constraint)) {
+            const bc = constraint as BoundingBoxConstraint;
+            const nodeId = bc.node.id;
+            for (const memberId of bc.group.nodeIds) {
+                switch (bc.side) {
+                    case 'left':
+                        if (!hGraph.addEdge(nodeId, memberId, bc.minDistance, constraint)) return false;
+                        break;
+                    case 'right':
+                        if (!hGraph.addEdge(memberId, nodeId, bc.minDistance, constraint)) return false;
+                        break;
+                    case 'top':
+                        if (!vGraph.addEdge(nodeId, memberId, bc.minDistance, constraint)) return false;
+                        break;
+                    case 'bottom':
+                        if (!vGraph.addEdge(memberId, nodeId, bc.minDistance, constraint)) return false;
+                        break;
+                }
+            }
+            return true;
+        }
+        if (isGroupBoundaryConstraint(constraint)) {
+            // Expand GroupBoundary to pairwise edges between group members
+            const gc = constraint as GroupBoundaryConstraint;
+            for (const aId of gc.groupA.nodeIds) {
+                for (const bId of gc.groupB.nodeIds) {
+                    switch (gc.side) {
+                        case 'left':
+                            if (!hGraph.addEdge(aId, bId, gc.minDistance, constraint)) return false;
+                            break;
+                        case 'right':
+                            if (!hGraph.addEdge(bId, aId, gc.minDistance, constraint)) return false;
+                            break;
+                        case 'top':
+                            if (!vGraph.addEdge(aId, bId, gc.minDistance, constraint)) return false;
+                            break;
+                        case 'bottom':
+                            if (!vGraph.addEdge(bId, aId, gc.minDistance, constraint)) return false;
+                            break;
+                    }
+                }
+            }
+            return true;
+        }
+        // Left, Top, Alignment — delegate to instance method's static logic
+        if (isLeftConstraint(constraint)) return hGraph.addEdge(constraint.left.id, constraint.right.id, constraint.minDistance, constraint);
+        if (isTopConstraint(constraint)) return vGraph.addEdge(constraint.top.id, constraint.bottom.id, constraint.minDistance, constraint);
+        if (isAlignmentConstraint(constraint)) {
+            const ac = constraint as AlignmentConstraint;
+            const graph = ac.axis === 'x' ? hGraph : vGraph;
+            if (!graph.addAlignmentEdges(ac.node1.id, ac.node2.id, constraint)) return false;
+            if (ac.node1.id !== ac.node2.id) {
+                const otherGraph = ac.axis === 'x' ? vGraph : hGraph;
+                if (QualitativeConstraintValidator.classHasDualAxisOverlap(
+                    graph, otherGraph, ac.node1.id, ac.node2.id, true,
+                )) {
+                    graph.removeAlignmentEdges(ac.node1.id, ac.node2.id);
+                    return false;
+                }
+            }
+            return true;
+        }
+        return true;
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // Maximal feasible subset
     // ═══════════════════════════════════════════════════════════════════════════
@@ -2023,6 +2256,8 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     private computeMaximalFeasibleSubset(): {
         feasibleConstraints: LayoutConstraint[];
         infeasibleDisjunctions: DisjunctiveConstraint[];
+        hGraph: DifferenceConstraintGraph;
+        vGraph: DifferenceConstraintGraph;
     } {
         const freshH = new DifferenceConstraintGraph(this.minPadding);
         const freshV = new DifferenceConstraintGraph(this.minPadding);
@@ -2039,32 +2274,23 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
         const feasibleConstraints: LayoutConstraint[] = [];
         for (const constraint of this.orientationConstraints) {
-            let ok = true;
-            if (isLeftConstraint(constraint)) ok = freshH.addEdge(constraint.left.id, constraint.right.id, constraint.minDistance, constraint);
-            else if (isTopConstraint(constraint)) ok = freshV.addEdge(constraint.top.id, constraint.bottom.id, constraint.minDistance, constraint);
-            else if (isAlignmentConstraint(constraint)) {
-                const ac = constraint as AlignmentConstraint;
-                const graph = ac.axis === 'x' ? freshH : freshV;
-                ok = graph.addAlignmentEdges(ac.node1.id, ac.node2.id, constraint);
-                // Dual-axis alignment forces two nonzero-size nodes to the same
-                // position, guaranteeing overlap. Reject the alignment.
-                if (ok && ac.node1.id !== ac.node2.id) {
-                    const otherGraph = ac.axis === 'x' ? freshV : freshH;
-                    if (QualitativeConstraintValidator.classHasDualAxisOverlap(
-                        graph, otherGraph, ac.node1.id, ac.node2.id, true,
-                    )) {
-                        graph.removeAlignmentEdges(ac.node1.id, ac.node2.id);
-                        ok = false;
-                    }
-                }
-            }
+            // Use expanded encoding: BoundingBox/GroupBoundary are expanded to
+            // per-member edges so cross-group conflicts are detected correctly.
+            const ok = QualitativeConstraintValidator.addEdgeToGraphsExpanded(
+                constraint, freshH, freshV);
             if (ok) feasibleConstraints.push(constraint);
         }
         const infeasibleDisjunctions: DisjunctiveConstraint[] = [];
 
-        const sortedDisjunctions = [...this.allDisjunctions].sort((a, b) => {
-            const aIdx = this.allDisjunctions.indexOf(a);
-            const bIdx = this.allDisjunctions.indexOf(b);
+        // Use originalDisjunctions (pre-presolve snapshot) so that disjunctions
+        // resolved/committed by presolve are re-evaluated from scratch. This ensures
+        // computeMaximalFeasibleSubset works with the full constraint set.
+        const disjSource = this.originalDisjunctions.length > 0
+            ? this.originalDisjunctions
+            : this.allDisjunctions;
+        const sortedDisjunctions = [...disjSource].sort((a, b) => {
+            const aIdx = disjSource.indexOf(a);
+            const bIdx = disjSource.indexOf(b);
             const aMax = Math.max(...a.alternatives.map((_, ai) => this.activity.get(`d${aIdx}a${ai}`) ?? 0));
             const bMax = Math.max(...b.alternatives.map((_, bi) => this.activity.get(`d${bIdx}a${bi}`) ?? 0));
             // Stable tiebreaker: use original index when activity scores are equal
@@ -2078,11 +2304,18 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                 const vClone = freshV.clone();
                 let ok = true;
                 for (const constraint of alternative) {
-                    if (!this.addEdgeToGraphs(constraint, hClone, vClone)) { ok = false; break; }
+                    // For BoundingBox constraints, expand to per-member edges
+                    // instead of using virtual group nodes. This captures the
+                    // actual member positions so cross-group conflicts are detected.
+                    if (!QualitativeConstraintValidator.addEdgeToGraphsExpanded(
+                        constraint, hClone, vClone)) {
+                        ok = false; break;
+                    }
                 }
                 if (ok) {
                     for (const constraint of alternative) {
-                        this.addEdgeToGraphs(constraint, freshH, freshV);
+                        QualitativeConstraintValidator.addEdgeToGraphsExpanded(
+                            constraint, freshH, freshV);
                         feasibleConstraints.push(constraint);
                     }
                     added = true;
@@ -2092,7 +2325,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             if (!added) infeasibleDisjunctions.push(disj);
         }
 
-        return { feasibleConstraints, infeasibleDisjunctions };
+        return { feasibleConstraints, infeasibleDisjunctions, hGraph: freshH, vGraph: freshV };
     }
 
     private addEdgeToGraphs(constraint: LayoutConstraint, hGraph: DifferenceConstraintGraph, vGraph: DifferenceConstraintGraph): boolean {
@@ -2146,7 +2379,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     // ═══════════════════════════════════════════════════════════════════════════
 
     private buildUnsatResult(assigned: Int32Array): { satisfiable: boolean; error: PositionalConstraintError } {
-        const { feasibleConstraints, infeasibleDisjunctions } = this.computeMaximalFeasibleSubset();
+        const { feasibleConstraints, infeasibleDisjunctions, hGraph: _h, vGraph: _v } = this.computeMaximalFeasibleSubset();
 
         const minimalConflictingSet = new Map<SourceConstraint, LayoutConstraint[]>();
         for (const disj of infeasibleDisjunctions) {

@@ -144,8 +144,10 @@ export class GroupBySelector extends ConstraintOperation{
     }
 
     override toHTML(): string {
-        const prefix = this.negated ? 'NOT ' : '';
-        return `${prefix}GroupBySelector with selector <code>${this.selector}</code>
+        if (this.negated) {
+            return `Members selected by <code>${this.selector}</code> cannot form a group`;
+        }
+        return `GroupBySelector with selector <code>${this.selector}</code>
         and name <code>${this.name}</code>.`;
     }
 }
@@ -180,9 +182,12 @@ export class GroupByField  {
     }
 
     toHTML(): string {
-        const prefix = this.negated ? 'NOT ' : '';
+        if (this.negated) {
+            const selectorText = this.selector ? ` (selector: <code>${this.selector}</code>)` : '';
+            return `Members grouped by field <code>${this.field}</code> cannot form a group${selectorText}`;
+        }
         const selectorText = this.selector ? ` with selector <pre>${this.selector}</pre>` : '';
-        return `${prefix}GroupByField on field <pre>${this.field}</pre> grouping field index <pre>${this.groupOn}</pre>
+        return `GroupByField on field <pre>${this.field}</pre> grouping field index <pre>${this.groupOn}</pre>
         adding to group index <pre>${this.addToGroup}</pre>${selectorText}.`;
     }
 }

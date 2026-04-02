@@ -993,6 +993,10 @@ export class WebColaLayout {
 
   get conflictingNodes(): LayoutNode[] {
     const conflictingNodes: LayoutNode[] = [];
+    const nodeById = new Map<string, LayoutNode>();
+    if (this.instanceLayout) {
+      for (const node of this.instanceLayout.nodes) nodeById.set(node.id, node);
+    }
     this.conflictingConstraints.forEach(constraint => {
       if (isLeftConstraint(constraint)) {
         conflictingNodes.push(constraint.left);
@@ -1003,6 +1007,23 @@ export class WebColaLayout {
       } else if (isAlignmentConstraint(constraint)) {
         conflictingNodes.push(constraint.node1);
         conflictingNodes.push(constraint.node2);
+      } else if (isBoundingBoxConstraint(constraint)) {
+        // The excluded node and the group members it conflicts with
+        conflictingNodes.push(constraint.node);
+        for (const id of constraint.group.nodeIds) {
+          const member = nodeById.get(id);
+          if (member) conflictingNodes.push(member);
+        }
+      } else if (isGroupBoundaryConstraint(constraint)) {
+        // Members of both groups involved in the boundary conflict
+        for (const id of constraint.groupA.nodeIds) {
+          const member = nodeById.get(id);
+          if (member) conflictingNodes.push(member);
+        }
+        for (const id of constraint.groupB.nodeIds) {
+          const member = nodeById.get(id);
+          if (member) conflictingNodes.push(member);
+        }
       }
     });
     return conflictingNodes;

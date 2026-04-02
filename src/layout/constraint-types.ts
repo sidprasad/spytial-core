@@ -145,14 +145,19 @@ export function formatNodeLabel(node: LayoutNode): string {
 // TODO:
 export function orientationConstraintToString(constraint: LayoutConstraint) {
     const nodeLabel = formatNodeLabel;
+    // Negated source constraints use "can" instead of "must" —
+    // they represent possibilities (alternatives) that couldn't be realized.
+    const negated = constraint.sourceConstraint && 'negated' in constraint.sourceConstraint
+        && constraint.sourceConstraint.negated;
+    const verb = negated ? 'can' : 'must';
 
     if (isTopConstraint(constraint)) {
         let tc = constraint as TopConstraint;
-        return `${nodeLabel(tc.top)} must be above ${nodeLabel(tc.bottom)}`;
+        return `${nodeLabel(tc.top)} ${verb} be above ${nodeLabel(tc.bottom)}`;
     }
     else if (isLeftConstraint(constraint)) {
         let lc = constraint as LeftConstraint;
-        return `${nodeLabel(lc.left)} must be to the left of  ${nodeLabel(lc.right)}`;
+        return `${nodeLabel(lc.left)} ${verb} be to the left of ${nodeLabel(lc.right)}`;
     }
     else if (isAlignmentConstraint(constraint)) {
         let ac = constraint as AlignmentConstraint;
@@ -161,17 +166,17 @@ export function orientationConstraintToString(constraint: LayoutConstraint) {
         let node2 = ac.node2;
 
         if (axis === 'x') {
-            return `${nodeLabel(node1)} must be vertically aligned with ${nodeLabel(node2)}`;
+            return `${nodeLabel(node1)} ${verb} be vertically aligned with ${nodeLabel(node2)}`;
         }
         else if (axis === 'y') {
-            return `${nodeLabel(node1)} must be horizontally aligned with ${nodeLabel(node2)}`;
+            return `${nodeLabel(node1)} ${verb} be horizontally aligned with ${nodeLabel(node2)}`;
         }
 
-        return `${nodeLabel(node1)} must be aligned with ${nodeLabel(node2)} along the ${axis} axis`;
+        return `${nodeLabel(node1)} ${verb} be aligned with ${nodeLabel(node2)} along the ${axis} axis`;
     }
     else if (isBoundingBoxConstraint(constraint)) {
         let bc = constraint as BoundingBoxConstraint;
-        return `${nodeLabel(bc.node)} cannot be in group "${bc.group.name}".`;
+        return `${nodeLabel(bc.node)} cannot be in group "${bc.group.name}", and groups must be contiguous rectangles`;
     }
     else if (isGroupBoundaryConstraint(constraint)) {
         let gc = constraint as GroupBoundaryConstraint;
@@ -181,7 +186,7 @@ export function orientationConstraintToString(constraint: LayoutConstraint) {
             'top': 'above',
             'bottom': 'below'
         };
-        return `Group "${gc.groupA.name}" must be ${sideDescriptions[gc.side]} group "${gc.groupB.name}"`;
+        return `Group "${gc.groupA.name}" ${verb} be ${sideDescriptions[gc.side]} group "${gc.groupB.name}"`;
     }
     return `Unknown constraint type: ${constraint}`;
 }
