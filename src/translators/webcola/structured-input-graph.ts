@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const d3: any = (window as any).d3v4 || (window as any).d3;
 import { WebColaCnDGraph } from './webcola-cnd-graph';
-import { IInputDataInstance, IAtom, ITuple, IRelation, DataInstanceEventListener } from '../../data-instance/interfaces';
+import { IInputDataInstance, IAtom, ITuple, IRelation } from '../../data-instance/interfaces';
 import { JSONDataInstance } from '../../data-instance/json-data-instance';
 import { SGraphQueryEvaluator } from '../../evaluators/sgq-evaluator';
 import { LayoutInstance } from '../../layout/layoutinstance';
@@ -51,18 +51,6 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   private currentConstraintError: ConstraintError | null = null; // Track current constraint validation error
   private selectedNodeId: string | null = null;
 
-  // When true, data-instance event handlers skip their enforceConstraintsAndRegenerate
-  // call so that multi-step operations (remove + add) only trigger a single re-render.
-  private _suppressDataChangeRerender = false;
-
-  // Track event listeners to prevent duplicates
-  private dataInstanceEventHandlers = {
-    atomAdded: null as DataInstanceEventListener | null,
-    atomRemoved: null as DataInstanceEventListener | null,
-    relationTupleAdded: null as DataInstanceEventListener | null,
-    relationTupleRemoved: null as DataInstanceEventListener | null,
-  };
-
   constructor(dataInstance?: IInputDataInstance) {
     super(true);
     
@@ -72,9 +60,6 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       relations: []
     });
     
-    console.log('StructuredInputGraph initialized with data instance:', instance);
-    
-    // Use setDataInstance to properly set up event listeners
     this.setDataInstance(instance);
     
     // Add structured input specific initialization
@@ -107,7 +92,6 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         this.updateDataInstance(newValue);
         break;
       case 'show-export':
-        this.updateExportVisibility(newValue === 'true');
         break;
     }
   }
@@ -399,7 +383,6 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       const label = labelIn.value.trim();
       if (!type || !label) return;
       this.customTypes.add(type);
-      this.updateTypeDatalist();
       const atom = await this.addAtomFromForm(type, label);
       if (atom) {
         successMsg.style.display = 'block';
@@ -409,8 +392,6 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       typeIn.value = '';
       labelIn.value = '';
       updateState();
-      this.updateDeletionSelects();
-      this.updateAtomPositions();
     };
 
     addBtn.addEventListener('click', doAdd);
@@ -505,8 +486,6 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       aritySpan.textContent = '2';
       posList.innerHTML = buildPositionSelectors();
       updateCreateState();
-      this.updateDeletionSelects();
-      this.updateAtomPositions();
       successMsg.style.display = 'block';
       setTimeout(() => { successMsg.style.display = 'none'; }, 1500);
     });
@@ -524,8 +503,6 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       this.selectedNodeId = null;
       this.clearNodeHighlights();
       this.deleteAtom(id);
-      this.updateDeletionSelects();
-      this.updateAtomPositions();
       return;
     }
 
@@ -570,12 +547,10 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       if (atomSel.value) {
         await this.deleteAtom(atomSel.value);
       } else if (relSel.value) {
-        const [relId] = relSel.value.split('::');
-        await this.deleteRelation(relId);
+        const [relationId, tupleIndexStr] = relSel.value.split('::');
+        await this.deleteRelationTuple(relationId, parseInt(tupleIndexStr, 10));
       }
       this.dismissOverlays();
-      this.updateDeletionSelects();
-      this.updateAtomPositions();
     });
 
     this.setupPopoverDismiss(popover);
@@ -691,8 +666,6 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         this.selectedNodeId = null;
         this.clearNodeHighlights();
         this.deleteAtom(atomId);
-        this.updateDeletionSelects();
-        this.updateAtomPositions();
       }
     });
   }
@@ -720,8 +693,6 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       if (target.dataset.action === 'delete') {
         this.dismissOverlays();
         await this.deleteAtom(nodeData.id);
-        this.updateDeletionSelects();
-        this.updateAtomPositions();
       }
     });
 
@@ -752,22 +723,13 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * Handle edge creation requests from input mode
    */
   private async handleEdgeCreationRequest(event: CustomEvent): Promise<void> {
-    console.log('🔗 Handling edge creation request:', event.detail);
-    
-    const { relationId, sourceNodeId, targetNodeId, tuple } = event.detail;
-    
+    const { relationId, tuple } = event.detail;
+
     try {
-      // Suppress the data-instance event handler so we get a single re-render below.
-      this._suppressDataChangeRerender = true;
-      try {
-        this.dataInstance.addRelationTuple(relationId, tuple);
-        console.log(`✅ Added relation to data instance: ${relationId}(${sourceNodeId}, ${targetNodeId})`);
-      } finally {
-        this._suppressDataChangeRerender = false;
-      }
+      this.dataInstance.addRelationTuple(relationId, tuple);
       await this.enforceConstraintsAndRegenerate();
     } catch (error) {
-      console.error('❌ Failed to handle edge creation request:', error);
+      console.error('Failed to handle edge creation request:', error);
     }
   }
 
@@ -776,56 +738,42 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * This updates the data instance when an edge label is edited
    */
   private async handleEdgeModificationRequest(event: CustomEvent): Promise<void> {
-    console.log('🔗 Handling edge modification request:', event.detail);
-
-    const { oldRelationId, newRelationId, sourceNodeId, targetNodeId, tuple, tuples } = event.detail;
+    const { oldRelationId, newRelationId, tuple, tuples } = event.detail;
 
     // Support both single `tuple` and array `tuples` (group edges send multiple).
     const allTuples: ITuple[] = tuples ?? (tuple ? [tuple] : []);
 
     try {
-      // Suppress data-instance events for all mutations; single re-render at the end.
-      this._suppressDataChangeRerender = true;
-      try {
-        // If the new relation name is empty, delete the edge
-        if (!newRelationId || newRelationId.trim() === '') {
-          console.log(`🗑️ Deleting edge (${allTuples.length} tuple(s))`);
-          if (oldRelationId && oldRelationId.trim()) {
-            for (const t of allTuples) {
-              this.dataInstance.removeRelationTuple(oldRelationId, t);
-            }
-            console.log(`✅ Removed ${allTuples.length} relation tuple(s) from ${oldRelationId}`);
-          }
-        }
-        // If the names are the same, no change needed
-        else if (oldRelationId.trim() === newRelationId.trim()) {
-          console.log('⏭️ Same relation name, no data changes needed');
-          return;
-        }
-        // Otherwise, move the tuple(s) from old relation to new relation
-        else {
-          if (oldRelationId && oldRelationId.trim()) {
-            for (const t of allTuples) {
-              try {
-                this.dataInstance.removeRelationTuple(oldRelationId, t);
-                console.log(`🗑️ Removed from ${oldRelationId}`);
-              } catch (error) {
-                const errorMsg = error instanceof Error ? error.message : String(error);
-                console.log(`⚠️ Could not remove from ${oldRelationId}: ${errorMsg}`);
-              }
-            }
-          }
+      // If the new relation name is empty, delete the edge
+      if (!newRelationId || newRelationId.trim() === '') {
+        if (oldRelationId && oldRelationId.trim()) {
           for (const t of allTuples) {
-            this.dataInstance.addRelationTuple(newRelationId, t);
+            this.dataInstance.removeRelationTuple(oldRelationId, t);
           }
-          console.log(`➕ Added ${allTuples.length} tuple(s) to ${newRelationId}`);
         }
-      } finally {
-        this._suppressDataChangeRerender = false;
+      }
+      // If the names are the same, no change needed
+      else if (oldRelationId.trim() === newRelationId.trim()) {
+        return;
+      }
+      // Otherwise, move the tuple(s) from old relation to new relation
+      else {
+        if (oldRelationId && oldRelationId.trim()) {
+          for (const t of allTuples) {
+            try {
+              this.dataInstance.removeRelationTuple(oldRelationId, t);
+            } catch {
+              // Tuple may already have been removed
+            }
+          }
+        }
+        for (const t of allTuples) {
+          this.dataInstance.addRelationTuple(newRelationId, t);
+        }
       }
       await this.enforceConstraintsAndRegenerate();
     } catch (error) {
-      console.error('❌ Failed to handle edge modification request:', error);
+      console.error('Failed to handle edge modification request:', error);
     }
   }
 
@@ -834,31 +782,20 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * This updates the data instance when an edge endpoint is dragged to a new node
    */
   private async handleEdgeReconnectionRequest(event: CustomEvent): Promise<void> {
-    console.log('🔄 Handling edge reconnection request:', event.detail);
-    
-    const { relationId, oldTuple, newTuple, oldSourceNodeId, oldTargetNodeId, newSourceNodeId, newTargetNodeId } = event.detail;
-    
+    const { relationId, oldTuple, newTuple } = event.detail;
+
     try {
-      // Suppress data-instance events for both mutations; single re-render at the end.
-      this._suppressDataChangeRerender = true;
-      try {
-        if (relationId && relationId.trim()) {
-          try {
-            this.dataInstance.removeRelationTuple(relationId, oldTuple);
-            console.log(`🗑️ Removed old tuple from ${relationId}: ${oldSourceNodeId} -> ${oldTargetNodeId}`);
-          } catch (error) {
-            const errorMsg = error instanceof Error ? error.message : String(error);
-            console.log(`⚠️ Could not remove old tuple from ${relationId}: ${errorMsg}`);
-          }
+      if (relationId && relationId.trim()) {
+        try {
+          this.dataInstance.removeRelationTuple(relationId, oldTuple);
+        } catch {
+          // Old tuple may already have been removed
         }
-        this.dataInstance.addRelationTuple(relationId, newTuple);
-        console.log(`➕ Added new tuple to ${relationId}: ${newSourceNodeId} -> ${newTargetNodeId}`);
-      } finally {
-        this._suppressDataChangeRerender = false;
       }
+      this.dataInstance.addRelationTuple(relationId, newTuple);
       await this.enforceConstraintsAndRegenerate();
     } catch (error) {
-      console.error('❌ Failed to handle edge reconnection request:', error);
+      console.error('Failed to handle edge reconnection request:', error);
     }
   }
 
@@ -867,27 +804,18 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    */
   private async parseCnDSpec(specString: string): Promise<void> {
     try {
-      console.log('🔄 Parsing CnD spec and initializing pipeline...');
       this.cndSpecString = specString;
       
       // Initialize the full CnD pipeline
       await this.initializeCnDPipeline(specString);
-      
-      this.updateTypeDatalist();
-      this.updateSpecInfo();
-      
-      // Trigger constraint enforcement and layout regeneration
+
       await this.enforceConstraintsAndRegenerate();
-      
-      // Dispatch event
+
       this.dispatchEvent(new CustomEvent('spec-loaded', {
         detail: { spec: this.cndSpecString }
       }));
-      
-      console.log('✅ CnD spec parsed and pipeline initialized');
     } catch (error) {
-      console.error('❌ Failed to parse CnD spec:', error);
-      this.updateSpecInfo('error', error instanceof Error ? error.message : 'Parse error');
+      console.error('Failed to parse CnD spec:', error);
     }
   }
 
@@ -896,38 +824,27 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    */
   private async initializeCnDPipeline(specString: string): Promise<void> {
     if (!specString.trim()) {
-      console.log('📝 Empty spec - clearing pipeline');
       this.evaluator = null;
       this.layoutInstance = null;
       return;
     }
 
     try {
-      console.log('🔧 Initializing CnD pipeline with spec...');
-      
-      // Parse the CnD spec to create a layout spec
       const layoutSpec = parseLayoutSpec(specString);
-      console.log('📋 Layout spec parsed successfully');
-      
-      // Create and initialize SGraphQueryEvaluator with current data instance
+
       this.evaluator = new SGraphQueryEvaluator();
       this.evaluator.initialize({
         sourceData: this.dataInstance
       });
-      console.log('🔍 SGraphQueryEvaluator initialized with data instance');
 
-      // Create LayoutInstance with the evaluator
       this.layoutInstance = new LayoutInstance(
-        layoutSpec, 
-        this.evaluator, 
+        layoutSpec,
+        this.evaluator,
         0, // instance number
         true // enable alignment edges
       );
-      console.log('📐 LayoutInstance created');
-
-      console.log('✅ CnD pipeline initialized successfully (evaluator + layout instance)');
     } catch (error) {
-      console.error('❌ Failed to initialize CnD pipeline:', error);
+      console.error('Failed to initialize CnD pipeline:', error);
       this.evaluator = null;
       this.layoutInstance = null;
       throw error;
@@ -939,85 +856,42 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * This method validates constraints on every data update and reports UNSAT cores
    */
   private async enforceConstraintsAndRegenerate(): Promise<void> {
-    console.log('🔄 enforceConstraintsAndRegenerate() called');
-    
     try {
       if (!this.layoutInstance) {
-        console.log('⚠️ Cannot enforce constraints - no layout instance available');
-        // Still re-render the current layout so local data-instance
-        // mutations (edge removal / reconnection / rename) are visible.
+        // Still re-render so local data-instance mutations are visible
         this.rerenderGraph();
         return;
       }
 
-      console.log('📊 Current data instance state:', {
-        atoms: this.dataInstance.getAtoms().length,
-        relations: this.dataInstance.getRelations().length
-      });
-
       // Re-initialize evaluator with current data to ensure consistency
       if (this.evaluator) {
-        console.log('🔄 Re-initializing evaluator with updated data instance...');
         this.evaluator.initialize({
           sourceData: this.dataInstance
         });
-        console.log('✅ Evaluator re-initialized');
       }
 
-      console.log('🔧 Generating layout with constraint enforcement...');
-
-      // Generate layout with constraint enforcement
       const layoutResult = this.layoutInstance.generateLayout(this.dataInstance);
-      
-      // Check for constraint validation errors
+
       if (layoutResult.error) {
-        console.warn('⚠️ Constraint validation error detected:', layoutResult.error);
-        
-        // Store the error for potential future use
         this.currentConstraintError = layoutResult.error;
-        
-        // Dispatch event to notify external components about the constraint violation
         this.dispatchEvent(new CustomEvent('constraint-error', {
-          detail: { 
-            error: layoutResult.error,
-            layout: layoutResult.layout 
-          },
+          detail: { error: layoutResult.error, layout: layoutResult.layout },
           bubbles: true
         }));
-        
-        console.log('📤 Dispatched constraint-error event with UNSAT core information');
-      } else {
-        console.log('✅ Layout generated successfully - all constraints satisfied');
-        
-        // Clear any previous constraint error since constraints are now satisfied
-        if (this.currentConstraintError !== null) {
-          console.log('🧹 Clearing previous constraint error - constraints now satisfied');
-          this.currentConstraintError = null;
-          
-          // Dispatch event to notify that constraints are now satisfied
-          this.dispatchEvent(new CustomEvent('constraints-satisfied', {
-            detail: { layout: layoutResult.layout },
-            bubbles: true
-          }));
-          
-          console.log('📤 Dispatched constraints-satisfied event');
-        }
+      } else if (this.currentConstraintError !== null) {
+        this.currentConstraintError = null;
+        this.dispatchEvent(new CustomEvent('constraints-satisfied', {
+          detail: { layout: layoutResult.layout },
+          bubbles: true
+        }));
       }
-      
-      // Render the layout (which will include visual indicators for error nodes if present).
-      // Capture the current node positions BEFORE re-rendering so the solver can
-      // warm-start from them.  This prevents nodes from jumping back to random
-      // positions on every data change and makes convergence visibly faster.
-      console.log('🎨 Rendering layout...');
+
+      // Warm-start from prior positions to prevent nodes jumping on every change
       const priorState = this.getLayoutState();
       const hasExistingLayout = priorState.positions.length > 0;
       await this.renderLayout(layoutResult.layout, hasExistingLayout ? { priorPositions: priorState } : undefined);
-      
-      console.log('✅ Constraints enforced and layout regenerated successfully');
     } catch (error) {
-      console.error('❌ Failed to enforce constraints and regenerate layout:', error);
-      
-      // Dispatch error event for unexpected errors
+      console.error('Failed to enforce constraints and regenerate layout:', error);
       this.dispatchEvent(new CustomEvent('layout-generation-error', {
         detail: { error },
         bubbles: true
@@ -1025,13 +899,6 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     }
   }
 
-  /**
-   * No-op: Previously refreshed the type datalist from the data instance.
-   * Now that updateTypeDatalist() is a no-op, this is too.
-   */
-  private refreshTypesFromDataInstance(): void {
-    // Intentionally empty — call sites retained for clarity.
-  }
 
   /**
    * Get available atom types from the current data instance
@@ -1071,29 +938,6 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     }
   }
 
-  /**
-   * No-op: Previously toggled .export-section visibility in the old side
-   * panel. That element no longer exists.
-   */
-  private updateExportVisibility(_show: boolean): void {
-    // Intentionally empty — call sites retained for clarity.
-  }
-
-  /**
-   * No-op: Previously updated #atom-type-suggestions datalist in the old
-   * side panel. The add-atom popover now builds its own datalist on demand.
-   */
-  private updateTypeDatalist(): void {
-    // Intentionally empty — call sites retained for clarity.
-  }
-
-  /**
-   * No-op: Previously updated .spec-status and .type-list elements in the
-   * old side panel. Those elements no longer exist.
-   */
-  private updateSpecInfo(_status?: 'loaded' | 'error', _message?: string): void {
-    // Intentionally empty — call sites retained for clarity.
-  }
 
   /**
    * Generate a unique atom ID
@@ -1122,8 +966,6 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     if (!type || !label) return null;
 
     try {
-      console.log(`🔵 Adding atom: ${label} (${type})`);
-
       const atomId = this.generateAtomId(type);
       const atom: IAtom = {
         id: atomId,
@@ -1132,56 +974,30 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       };
 
       this.dataInstance.addAtom(atom);
-      console.log(`✅ Atom added to data instance: ${atom.label} (${atom.id}:${atom.type})`);
-
-      // Refresh types from updated data instance
-      this.refreshTypesFromDataInstance();
-
-      // Trigger constraint enforcement and layout regeneration
       await this.enforceConstraintsAndRegenerate();
 
-      // Dispatch event
       this.dispatchEvent(new CustomEvent('atom-added', {
         detail: { atom }
       }));
 
-      console.log(`🎉 Atom addition completed: ${atom.label} (${atom.id}:${atom.type})`);
       return atom;
     } catch (error) {
-      console.error('❌ Failed to add atom:', error);
+      console.error('Failed to add atom:', error);
       return null;
     }
   }
 
-  /**
-   * No-op: Previously updated .atom-positions, .arity-display, and
-   * .remove-position-btn elements in the old side panel. Those elements no
-   * longer exist; the relation popover builds position selectors on demand.
-   */
-  private updateAtomPositions(): void {
-    // Intentionally empty — call sites retained for clarity.
-  }
-
-  /**
-   * No-op: Previously updated .relation-type-input and .add-relation-btn in
-   * the old side panel. The relation popover manages its own button state.
-   */
-  private updateRelationButtonState(): void {
-    // Intentionally empty — call sites retained for clarity.
-  }
 
   /**
    * Add a relation from the form inputs
    */
   private async addRelationFromForm(relationName?: string): Promise<void> {
     try {
-      // Accept name directly or try to read from popover input
       const relationType = relationName?.trim() ||
         (this.shadowRoot?.querySelector('.si-rel-name') as HTMLInputElement)?.value?.trim() || '';
 
       if (!relationType) return;
 
-      // Get selected atom IDs from position selectors in order
       const selectedAtomIds = this.relationAtomPositions.filter(id => id.trim() !== '');
 
       if (selectedAtomIds.length < 2) {
@@ -1189,9 +1005,6 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         return;
       }
 
-      console.log(`🔗 Adding relation: ${relationType}(${selectedAtomIds.join(', ')})`);
-
-      // Get atom types for the tuple
       const atoms = this.dataInstance.getAtoms();
       const atomTypes = selectedAtomIds.map(id => {
         const atom = atoms.find(a => a.id === id);
@@ -1204,19 +1017,13 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       };
 
       this.dataInstance.addRelationTuple(relationType, tuple);
-      console.log(`✅ Relation added to data instance: ${relationType}(${selectedAtomIds.join(', ')})`);
-
-      // Trigger constraint enforcement and layout regeneration
       await this.enforceConstraintsAndRegenerate();
 
-      // Dispatch event
       this.dispatchEvent(new CustomEvent('relation-added', {
         detail: { relationType, tuple }
       }));
-
-      console.log(`🎉 Relation addition completed: ${relationType}(${selectedAtomIds.join(', ')})`);
     } catch (error) {
-      console.error('❌ Failed to add relation:', error);
+      console.error('Failed to add relation:', error);
     }
   }
 
@@ -1225,18 +1032,11 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    */
   private exportDataAsJSON(): void {
     try {
-      console.log('📤 Exporting data instance using reify()...');
-      
-      // Use the data instance's reify method to get the proper format
       const reified = this.dataInstance.reify();
-      
-      // Convert to string - if it's already a string (like Pyret or Alloy), use as-is
-      // If it's an object (like JSON), stringify it
       const exportString = typeof reified === 'string'
         ? reified
         : JSON.stringify(reified, null, 2);
 
-      // Dispatch event with the reified data
       this.dispatchEvent(new CustomEvent('data-exported', {
         detail: {
           data: exportString,
@@ -1244,117 +1044,19 @@ export class StructuredInputGraph extends WebColaCnDGraph {
           reified: reified
         }
       }));
-
-      console.log('✅ Data exported using reify()');
     } catch (error) {
-      console.error('❌ Failed to export data:', error);
+      console.error('Failed to export data:', error);
     }
   }
 
-  /**
-   * No-op: Previously refreshed types, deletion selects, and atom positions.
-   * All three delegate methods are now no-ops since the old side panel was
-   * removed; the popover UI builds its option lists on demand.
-   */
-  private handleDataChangeUIUpdate(_includeAtomPositions: boolean = false): void {
-    // Intentionally empty — call sites retained for clarity.
-  }
-
-  /**
-   * Handler for data deletions that triggers constraint validation.
-   * The old side-panel UI updates (handleDataChangeUIUpdate) are now no-ops,
-   * so only constraint enforcement remains.
-   */
-  private async handleDataDeletionWithValidation(_includeAtomPositions: boolean = false): Promise<void> {
-    await this.enforceConstraintsAndRegenerate();
-  }
 
   /**
    * Set the data instance for this graph
    */
   setDataInstance(instance: IInputDataInstance): void {
-    console.log('🔄 Setting new data instance');
-    
-    // Remove old event listeners if they exist
-    if (this.dataInstance) {
-      if (this.dataInstanceEventHandlers.atomAdded) {
-        this.dataInstance.removeEventListener('atomAdded', this.dataInstanceEventHandlers.atomAdded);
-      }
-      if (this.dataInstanceEventHandlers.atomRemoved) {
-        this.dataInstance.removeEventListener('atomRemoved', this.dataInstanceEventHandlers.atomRemoved);
-      }
-      if (this.dataInstanceEventHandlers.relationTupleAdded) {
-        this.dataInstance.removeEventListener('relationTupleAdded', this.dataInstanceEventHandlers.relationTupleAdded);
-      }
-      if (this.dataInstanceEventHandlers.relationTupleRemoved) {
-        this.dataInstance.removeEventListener('relationTupleRemoved', this.dataInstanceEventHandlers.relationTupleRemoved);
-      }
-    }
-    
-    // Set the new data instance
     this.dataInstance = instance;
-    
-    // Refresh types from the new data instance
-    this.refreshTypesFromDataInstance();
-    
-    // Create and store event handlers
-    // ALL event handlers now trigger constraint validation to ensure constraints are
-    // checked on every data change (additions, deletions, modifications).
-    // They respect _suppressDataChangeRerender so multi-step operations can batch
-    // multiple mutations and only pay for one re-render.
-    this.dataInstanceEventHandlers.atomAdded = async () => {
-      console.log('📍 Atom added to instance - updating UI and re-validating constraints');
-      this.handleDataChangeUIUpdate(true); // Include atom positions for atom additions
-      if (!this._suppressDataChangeRerender) {
-        await this.enforceConstraintsAndRegenerate();
-      }
-    };
-
-    this.dataInstanceEventHandlers.relationTupleAdded = async () => {
-      console.log('🔗 Relation added to instance - updating UI and re-validating constraints');
-      this.handleDataChangeUIUpdate(false); // No atom positions needed for relation additions
-      if (!this._suppressDataChangeRerender) {
-        await this.enforceConstraintsAndRegenerate();
-      }
-    };
-
-    this.dataInstanceEventHandlers.atomRemoved = async () => {
-      console.log('🗑️ Atom removed from instance - updating UI and re-validating constraints');
-      this.handleDataChangeUIUpdate(true);
-      if (!this._suppressDataChangeRerender) {
-        await this.handleDataDeletionWithValidation(true);
-      }
-    };
-
-    this.dataInstanceEventHandlers.relationTupleRemoved = async () => {
-      console.log('🗑️ Relation tuple removed from instance - updating UI and re-validating constraints');
-      this.handleDataChangeUIUpdate(false);
-      if (!this._suppressDataChangeRerender) {
-        await this.handleDataDeletionWithValidation(false);
-      }
-    };
-    
-    // Add event listeners to the new instance
-    instance.addEventListener('atomAdded', this.dataInstanceEventHandlers.atomAdded);
-    instance.addEventListener('relationTupleAdded', this.dataInstanceEventHandlers.relationTupleAdded);
-    instance.addEventListener('atomRemoved', this.dataInstanceEventHandlers.atomRemoved);
-    instance.addEventListener('relationTupleRemoved', this.dataInstanceEventHandlers.relationTupleRemoved);
-
-    // Initial update of deletion selects and atom positions
-    this.updateDeletionSelects();
-    this.updateAtomPositions();
-    
-    console.log('✅ Data instance set successfully');
   }
 
-  /**
-   * No-op: Previously updated .atom-delete-select and .relation-delete-select
-   * elements in the old side panel. Those elements no longer exist; deletion
-   * is now handled via popovers that build their option lists on demand.
-   */
-  private updateDeletionSelects(): void {
-    // Intentionally empty — call sites retained for clarity.
-  }
 
   /**
    * Delete an atom by ID
@@ -1363,91 +1065,40 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     if (!atomId) return;
 
     try {
-      console.log(`🗑️ Deleting atom: ${atomId}`);
-      
-      // Find the atom before removing it
       const atoms = this.dataInstance.getAtoms();
       const atomToDelete = atoms.find(atom => atom.id === atomId);
-      
-      if (!atomToDelete) {
-        console.warn(`⚠️ Atom ${atomId} not found`);
-        return;
-      }
 
-      // Use the data instance's removeAtom method, which will:
-      // 1. Remove the atom from the atoms array
-      // 2. Remove it from its type
-      // 3. Remove all relation tuples containing this atom
-      // 4. Fire the 'atomRemoved' event (which triggers constraint validation)
+      if (!atomToDelete) return;
+
       this.dataInstance.removeAtom(atomId);
-      
-      console.log(`✅ Atom removed from data instance: ${atomToDelete.label} (${atomToDelete.id})`);
-      console.log(`🎉 Atom deletion completed: ${atomToDelete.label} (${atomToDelete.id})`);
-      
-      // Note: No need to manually call enforceConstraintsAndRegenerate() here because
-      // the 'atomRemoved' event listener in setDataInstance() will handle it
-      
-      // Dispatch custom event for external listeners
+      await this.enforceConstraintsAndRegenerate();
+
       this.dispatchEvent(new CustomEvent('atom-deleted', {
         detail: { atom: atomToDelete }
       }));
     } catch (error) {
-      console.error('❌ Failed to delete atom:', error);
+      console.error('Failed to delete atom:', error);
     }
   }
 
   /**
-   * Delete a specific relation tuple by its global index
+   * Delete a specific relation tuple by relation ID and tuple index within that relation
    */
-  private async deleteRelation(tupleIndexStr: string): Promise<void> {
-    if (!tupleIndexStr) return;
-
+  private async deleteRelationTuple(relationId: string, tupleIndex: number): Promise<void> {
     try {
-      const tupleIndex = parseInt(tupleIndexStr, 10);
-      console.log(`🗑️ Deleting relation tuple at index: ${tupleIndex}`);
-      
       const relations = this.dataInstance.getRelations();
-      
-      // Find the relation and tuple at the given global tuple index
-      let currentIndex = 0;
-      let targetRelation: IRelation | null = null;
-      let targetTuple: ITuple | null = null;
-      
-      for (const relation of relations) {
-        for (const tuple of relation.tuples) {
-          if (currentIndex === tupleIndex) {
-            targetRelation = relation;
-            targetTuple = tuple;
-            break;
-          }
-          currentIndex++;
-        }
-        if (targetRelation) break;
-      }
-      
-      if (!targetRelation || !targetTuple) {
-        console.warn(`⚠️ Relation tuple at index ${tupleIndex} not found`);
-        return;
-      }
+      const relation = relations.find(r => r.id === relationId);
+      if (!relation || tupleIndex < 0 || tupleIndex >= relation.tuples.length) return;
 
-      const relationId = targetRelation.id || targetRelation.name;
-      console.log(`🗑️ Found tuple in relation "${relationId}": ${targetTuple.atoms.join(' → ')}`);
-      
-      // Use the removeRelationTuple method to remove just this tuple
-      // This will fire the 'relationTupleRemoved' event (which triggers constraint validation)
+      const targetTuple = relation.tuples[tupleIndex];
       this.dataInstance.removeRelationTuple(relationId, targetTuple);
-      console.log(`✅ Relation tuple removed from data instance: ${relationId}: ${targetTuple.atoms.join(' → ')}`);
-      console.log(`🎉 Relation tuple deletion completed: ${relationId}: ${targetTuple.atoms.join(' → ')}`);
-      
-      // Note: No need to manually call enforceConstraintsAndRegenerate() or updateDeletionSelects() here because
-      // the 'relationTupleRemoved' event listener in setDataInstance() will handle both
-      
-      // Dispatch custom event for external listeners
+      await this.enforceConstraintsAndRegenerate();
+
       this.dispatchEvent(new CustomEvent('relation-tuple-deleted', {
         detail: { relationId, tuple: targetTuple }
       }));
     } catch (error) {
-      console.error('❌ Failed to delete relation tuple:', error);
+      console.error('Failed to delete relation tuple:', error);
     }
   }
 
@@ -1456,29 +1107,19 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    */
   private async clearAllItems(): Promise<void> {
     try {
-      console.log('🧹 Clearing all atoms and relations...');
-      
-      const newInstance = new JSONDataInstance({
+      this.setDataInstance(new JSONDataInstance({
         atoms: [],
         relations: [],
         types: []
-      });
+      }));
 
-      this.setDataInstance(newInstance);
-      
-      console.log('✅ All items cleared from data instance');
-      
-      // Trigger constraint enforcement and layout regeneration
       await this.enforceConstraintsAndRegenerate();
 
-      console.log('🎉 Clear all completed');
-      
-      // Dispatch event
       this.dispatchEvent(new CustomEvent('all-items-cleared', {
         detail: {}
       }));
     } catch (error) {
-      console.error('❌ Failed to clear all items:', error);
+      console.error('Failed to clear all items:', error);
     }
   }
 

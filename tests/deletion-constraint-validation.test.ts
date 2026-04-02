@@ -82,49 +82,45 @@ describe('Deletion Triggers Constraint Validation', () => {
   });
 
   describe('Direct data instance deletions', () => {
-    it('should trigger constraint validation when removing an atom via data instance', async () => {
+    it('should NOT auto-rerender when atom is removed directly via data instance', async () => {
       const spec = `
         relations:
           - name: edge
             arity: 2
       `;
       await graph.setCnDSpec(spec);
-      
-      // Clear spy from spec loading
+
       constraintValidationSpy.mockClear();
 
-      // Remove an atom directly via the data instance
-      // This should trigger the 'atomRemoved' event, which should call enforceConstraintsAndRegenerate
+      // Direct data instance mutation does NOT trigger enforceConstraintsAndRegenerate
+      // (the graph uses a linear mutate→rerender flow, not event-driven)
       dataInstance.removeAtom('node4');
 
-      // Wait for async event handling
       await new Promise(resolve => setTimeout(resolve, 200));
 
-      // Constraint validation should have been triggered
-      expect(constraintValidationSpy).toHaveBeenCalled();
+      // No auto-rerender — callers should use graph methods (deleteAtom, etc.)
+      expect(constraintValidationSpy).not.toHaveBeenCalled();
     });
 
-    it('should trigger constraint validation when removing a relation tuple via data instance', async () => {
+    it('should NOT auto-rerender when data instance is mutated directly (use graph methods instead)', async () => {
       const spec = `
         relations:
           - name: edge
             arity: 2
       `;
       await graph.setCnDSpec(spec);
-      
-      // Clear spy from spec loading
+
       constraintValidationSpy.mockClear();
 
-      // Remove a tuple directly via the data instance
-      // This should trigger the 'relationTupleRemoved' event, which should call enforceConstraintsAndRegenerate
+      // Direct data instance mutation does NOT trigger enforceConstraintsAndRegenerate
+      // (the graph uses a linear mutate→rerender flow, not event-driven)
       const tupleToRemove = { atoms: ['node2', 'node3'], types: ['Entity', 'Entity'] };
       dataInstance.removeRelationTuple('edge', tupleToRemove);
 
-      // Wait for async event handling
       await new Promise(resolve => setTimeout(resolve, 200));
 
-      // Constraint validation should have been triggered
-      expect(constraintValidationSpy).toHaveBeenCalled();
+      // No auto-rerender — callers should use graph methods (deleteRelationTuple, etc.)
+      expect(constraintValidationSpy).not.toHaveBeenCalled();
     });
   });
 
@@ -156,19 +152,18 @@ describe('Deletion Triggers Constraint Validation', () => {
       expect(remainingAtoms.some(a => a.id === 'node3')).toBe(false);
     });
 
-    it('should trigger constraint validation when deleting relation tuple via UI (deleteRelation method)', async () => {
+    it('should trigger constraint validation when deleting relation tuple via UI (deleteRelationTuple method)', async () => {
       const spec = `
         relations:
           - name: edge
             arity: 2
       `;
       await graph.setCnDSpec(spec);
-      
+
       constraintValidationSpy.mockClear();
 
-      // Simulate calling deleteRelation with tuple index 1 (node2->node3)
-      // This would normally be called via the UI dropdown and delete button
-      await (graph as any).deleteRelation('1');
+      // Simulate calling deleteRelationTuple with relation ID and tuple index 1 (node2->node3)
+      await (graph as any).deleteRelationTuple('edge', 1);
 
       // Wait for async event handling
       await new Promise(resolve => setTimeout(resolve, 200));
@@ -190,73 +185,72 @@ describe('Deletion Triggers Constraint Validation', () => {
   });
 
   describe('Multiple deletion operations maintain data consistency', () => {
-    it('should properly handle multiple atom deletions with constraint validation', async () => {
+    it('should properly handle multiple atom deletions via graph methods with constraint validation', async () => {
       const spec = `
         relations:
           - name: edge
             arity: 2
       `;
       await graph.setCnDSpec(spec);
-      
+
       constraintValidationSpy.mockClear();
-      
-      // Delete multiple atoms in sequence
-      dataInstance.removeAtom('node1');
-      await new Promise(resolve => setTimeout(resolve, 150));
-      
-      dataInstance.removeAtom('node4');
+
+      // Delete multiple atoms via graph methods (linear mutate→rerender flow)
+      await (graph as any).deleteAtom('node1');
       await new Promise(resolve => setTimeout(resolve, 150));
 
-      // Constraint validation should have been called twice
+      await (graph as any).deleteAtom('node4');
+      await new Promise(resolve => setTimeout(resolve, 150));
+
+      // Constraint validation should have been called twice (once per deleteAtom)
       expect(constraintValidationSpy).toHaveBeenCalledTimes(2);
-      
+
       // Verify data consistency: should have 2 atoms left
       expect(dataInstance.getAtoms().length).toBe(2);
-      
-      // Relations involving deleted atoms should be removed
+
+      // Relations involving deleted atoms should have tuples removed
       const edgeRelation = dataInstance.getRelations().find(r => r.id === 'edge');
       // Should only have 1 tuple left (node2->node3), others involved node1 or node4
       expect(edgeRelation!.tuples.length).toBe(1);
       expect(edgeRelation!.tuples[0].atoms).toEqual(['node2', 'node3']);
     });
 
-    it('should properly handle multiple relation tuple deletions with constraint validation', async () => {
+    it('should properly handle multiple relation tuple deletions via graph methods with constraint validation', async () => {
       const spec = `
         relations:
           - name: edge
             arity: 2
       `;
       await graph.setCnDSpec(spec);
-      
+
       constraintValidationSpy.mockClear();
-      
-      // Delete multiple tuples in sequence
-      dataInstance.removeRelationTuple('edge', { atoms: ['node1', 'node2'], types: ['Entity', 'Entity'] });
+
+      // Delete multiple tuples via graph methods
+      await (graph as any).deleteRelationTuple('edge', 0);
       await new Promise(resolve => setTimeout(resolve, 150));
-      
-      dataInstance.removeRelationTuple('edge', { atoms: ['node3', 'node4'], types: ['Entity', 'Entity'] });
+
+      await (graph as any).deleteRelationTuple('edge', 1);
       await new Promise(resolve => setTimeout(resolve, 150));
 
       // Constraint validation should have been called twice
       expect(constraintValidationSpy).toHaveBeenCalledTimes(2);
-      
-      // Verify data consistency: should have 1 tuple left
+
+      // Verify data consistency: should have 1 tuple left (node2->node3)
       const edgeRelation = dataInstance.getRelations().find(r => r.id === 'edge');
       expect(edgeRelation!.tuples.length).toBe(1);
       expect(edgeRelation!.tuples[0].atoms).toEqual(['node2', 'node3']);
     });
   });
 
-  describe('Event listener management', () => {
-    it('should not add duplicate event listeners when calling setDataInstance multiple times', async () => {
+  describe('setDataInstance behavior', () => {
+    it('should use the new data instance for graph operations after setDataInstance', async () => {
       const spec = `
         relations:
           - name: edge
             arity: 2
       `;
       await graph.setCnDSpec(spec);
-      
-      // Create a new data instance and set it
+
       const newInstance = new JSONDataInstance({
         atoms: [
           { id: 'a1', type: 'Node', label: 'A1' },
@@ -264,18 +258,13 @@ describe('Deletion Triggers Constraint Validation', () => {
         ],
         relations: []
       });
-      
-      // Set the new instance (this should remove old listeners and add new ones)
+
       graph.setDataInstance(newInstance);
-      
-      constraintValidationSpy.mockClear();
-      
-      // Remove an atom from the NEW instance
-      newInstance.removeAtom('a1');
-      await new Promise(resolve => setTimeout(resolve, 150));
-      
-      // Should only be called once (not multiple times due to duplicate listeners)
-      expect(constraintValidationSpy).toHaveBeenCalledTimes(1);
+
+      // Graph should now use the new instance
+      const di = (graph as any).dataInstance;
+      expect(di).toBe(newInstance);
+      expect(di.getAtoms()).toHaveLength(2);
     });
   });
 });

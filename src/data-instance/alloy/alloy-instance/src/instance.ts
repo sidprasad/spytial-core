@@ -55,31 +55,34 @@ export function removeInstanceAtom(
   const newRelations = { ...instance.relations };
   const newSkolems = { ...instance.skolems };
   // Remove the atom from its type
-  const type = newTypes[atom.type];
+  const type = instance.types[atom.type];
   if (type) {
-    type.atoms = type.atoms.filter((a) => a.id !== atomId);
-    if (type.atoms.length === 0) {
+    const filteredAtoms = type.atoms.filter((a) => a.id !== atomId);
+    if (filteredAtoms.length === 0) {
       delete newTypes[type.id];
+    } else {
+      newTypes[atom.type] = { ...type, atoms: filteredAtoms };
     }
-    // Remove from relations
-    Object.values(newRelations).forEach((relation) => {
-      relation.tuples = relation.tuples.filter((tuple) => !tuple.atoms.includes(atomId));
-    });
-    // Remove from skolems
-    Object.values(newSkolems).forEach((skolem) => {
-      skolem.tuples = skolem.tuples.filter((tuple) => !tuple.atoms.includes(atomId));
-    });
+    // Remove from relations — create new relation objects to avoid mutating originals
+    // Keep relations even if they end up with 0 tuples (only removeInstanceRelationTuple
+    // deletes empty relations, since atom removal is a cascade side-effect)
+    for (const [key, relation] of Object.entries(instance.relations)) {
+      const filtered = relation.tuples.filter((tuple) => !tuple.atoms.includes(atomId));
+      newRelations[key] = { ...relation, tuples: filtered };
+    }
+    // Remove from skolems — create new skolem objects to avoid mutating originals
+    for (const [key, skolem] of Object.entries(instance.skolems)) {
+      const filtered = skolem.tuples.filter((tuple) => !tuple.atoms.includes(atomId));
+      newSkolems[key] = { ...skolem, tuples: filtered };
+    }
     return {
       types: newTypes,
       relations: newRelations,
       skolems: newSkolems
     };
-
-
   } else {
     throw new Error(`Could not find type for atom ${atomId}`);
   }
-
 }
 
 export function addInstanceAtom(instance: AlloyInstance, atom: AlloyAtom): AlloyInstance {
@@ -108,7 +111,7 @@ export function addInstanceAtom(instance: AlloyInstance, atom: AlloyAtom): Alloy
     newTypes[newType.id] = newType;
   }
   else {
-      type.atoms.push(atom);
+      newTypes[atom.type] = { ...type, atoms: [...type.atoms, atom] };
   }
   return {
     ...instance,
@@ -130,23 +133,22 @@ export function removeInstanceRelationTuple(
   const tuplesEqual = (a: AlloyTuple, b: AlloyTuple): boolean =>
     a.atoms.length === b.atoms.length && a.atoms.every((atom, i) => atom === b.atoms[i]);
 
-  // Remove the tuple from the relation
-  relation.tuples = relation.tuples.filter((t) => !tuplesEqual(t, tuple));
-  // If the relation has no tuples left, remove it from the instance
-  if (relation.tuples.length === 0) {
+  // Remove the tuple from the relation — create new object to avoid mutating original
+  const filteredTuples = relation.tuples.filter((t) => !tuplesEqual(t, tuple));
+  if (filteredTuples.length === 0) {
     delete newRelations[relation.id];
   } else {
-    newRelations[relation.id] = relation;
+    newRelations[relation.id] = { ...relation, tuples: filteredTuples };
   }
-  // Remove the tuple from skolems
-  Object.values(newSkolems).forEach((skolem) => {
-    skolem.tuples = skolem.tuples.filter((t) => !tuplesEqual(t, tuple));
-    if (skolem.tuples.length === 0) {
-      delete newSkolems[skolem.id];
+  // Remove the tuple from skolems — create new objects to avoid mutating originals
+  for (const [key, skolem] of Object.entries(instance.skolems)) {
+    const filtered = skolem.tuples.filter((t) => !tuplesEqual(t, tuple));
+    if (filtered.length === 0) {
+      delete newSkolems[key];
     } else {
-      newSkolems[skolem.id] = skolem;
+      newSkolems[key] = { ...skolem, tuples: filtered };
     }
-  });
+  }
   return {
     ...instance,
     relations: newRelations,
@@ -165,18 +167,16 @@ export function addInstanceRelationTuple(
 
   if (!relation) {
     // Create a new relation if it doesn't exist
-    relation = {
+    newRelations[relationId] = {
       id: relationId,
       name: relationId,
       tuples: [tuple],
       types: tuple.types,
       _: 'relation',
     };
-    newRelations[relationId] = relation;
   } else {
-    // Add the tuple to the relation
-    relation.tuples.push(tuple);
-    newRelations[relation.id] = relation;
+    // Add the tuple to a new copy of the relation — avoid mutating original
+    newRelations[relation.id] = { ...relation, tuples: [...relation.tuples, tuple] };
   }
   // [SP TODO]: Don't worry about skolems for now
   return {
