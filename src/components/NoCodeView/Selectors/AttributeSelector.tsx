@@ -37,25 +37,20 @@ export const AttributeSelector: React.FC<AttributeSelectorProps> = (props: Attri
 
   return (
     <>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text">Field</span>
-        </div>
+      <div className="field-group">
+        <label className="field-label">Field</label>
         <input
           type="text"
           name="field"
-          className="form-control"
           defaultValue={props.directiveData.params.field as string || ''}
           onChange={handleInputChange}
           required
         />
       </div>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text infolabel" title={UNARY_SELECTOR_TEXT}>
-            Selector
-          </span>
-        </div>
+      <div className="field-group">
+        <label className="field-label infolabel" title={UNARY_SELECTOR_TEXT}>
+          Selector
+        </label>
         <SelectorInput
           name="selector"
           value={props.directiveData.params.selector as string || ''}
@@ -63,12 +58,10 @@ export const AttributeSelector: React.FC<AttributeSelectorProps> = (props: Attri
           placeholder="Optional: target specific source atoms (e.g., Person)"
         />
       </div>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text infolabel" title={TUPLE_SELECTOR_TEXT}>
-            Filter
-          </span>
-        </div>
+      <div className="field-group">
+        <label className="field-label infolabel" title={TUPLE_SELECTOR_TEXT}>
+          Filter
+        </label>
         <SelectorInput
           name="filter"
           value={props.directiveData.params.filter as string || ''}

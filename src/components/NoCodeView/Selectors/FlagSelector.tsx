@@ -20,10 +20,10 @@ export const FlagSelector: React.FC<FlagSelectorProps> = ({
   const flag = (directiveData.params?.flag as string) || '';
 
   return (
-    <div className="input-group">
+    <div className="field-group">
+      <label className="field-label">Flag</label>
       <select
         name="flag"
-        className="form-control"
         value={flag}
         onChange={(e) => onUpdate({ params: { ...directiveData.params, flag: e.target.value } })}
       >

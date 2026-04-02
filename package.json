@@ -19,7 +19,7 @@
     }
   },
   "scripts": {
-    "build": "tsup",
+    "build": "npm run build:all",
     "build:browser": "tsup --config tsup.browser.config.ts",
     "build:components": "tsup --config tsup.components.config.ts",
     "build:all": "npm run build:browser && npm run build:components",
@@ -86,6 +86,7 @@
     "z3-solver": "^4.16.0"
   },
   "dependencies": {
+    "@rollup/rollup-darwin-arm64": "^4.60.1",
     "@types/d3": "^4.13.12",
     "@types/graphlib-dot": "^0.6.4",
     "@types/react": "^19.1.8",

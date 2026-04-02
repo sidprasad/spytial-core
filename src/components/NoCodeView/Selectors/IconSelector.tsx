@@ -28,12 +28,10 @@ export const IconSelector: React.FC<IconSelectorProps> = ({
 
   return (
     <>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text infolabel" title={UNARY_SELECTOR_TEXT}>
-            Selector
-          </span>
-        </div>
+      <div className="field-group">
+        <label className="field-label infolabel" title={UNARY_SELECTOR_TEXT}>
+          Selector
+        </label>
         <SelectorInput
           name="selector"
           value={selector}
@@ -41,14 +39,11 @@ export const IconSelector: React.FC<IconSelectorProps> = ({
           required
         />
       </div>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text">Path</span>
-        </div>
+      <div className="field-group">
+        <label className="field-label">Path</label>
         <input
           type="text"
           name="path"
-          className="form-control"
           defaultValue={path}
           onChange={(e) => onUpdate({ params: { ...directiveData.params, path: e.target.value } })}
           placeholder="/path/to/icon.png"

@@ -27,12 +27,10 @@ export const GroupBySelectorSelector: React.FC<GroupBySelectorSelectorProps> = (
 
   return (
     <>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text infolabel" title={`${UNARY_SELECTOR_TEXT} or ${TUPLE_SELECTOR_TEXT}`}>
-            Selector
-          </span>
-        </div>
+      <div className="field-group">
+        <label className="field-label infolabel" title={`${UNARY_SELECTOR_TEXT} or ${TUPLE_SELECTOR_TEXT}`}>
+          Selector
+        </label>
         <SelectorInput
           name="selector"
           value={props.constraintData.params.selector as string || ''}
@@ -40,14 +38,11 @@ export const GroupBySelectorSelector: React.FC<GroupBySelectorSelectorProps> = (
           required
         />
       </div>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text">Group Name</span>
-        </div>
+      <div className="field-group">
+        <label className="field-label">Group Name</label>
         <input
           type="text"
           name="name"
-          className="form-control"
           value={props.constraintData.params.name as string || ''}
           onChange={handleParamsChange}
           placeholder="Enter group name"

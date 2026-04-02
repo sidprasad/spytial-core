@@ -33,14 +33,6 @@ interface ConstraintCardProps {
   onRemove: () => void;
   /** Additional CSS class name for styling */
   className?: string;
-  /** Drag handle props for drag and drop */
-  dragHandleProps?: {
-    draggable: boolean;
-    onDragStart: (e: React.DragEvent) => void;
-    onDragEnd: (e: React.DragEvent) => void;
-    onDragOver: (e: React.DragEvent) => void;
-    onDrop: (e: React.DragEvent) => void;
-  };
 }
 
 /**
@@ -131,64 +123,52 @@ const ConstraintCard = (props: ConstraintCardProps) => {
         isHighlighted ? 'highlight' : '',
         'noCodeCard',
         isCollapsed ? 'noCodeCard--collapsed' : '',
+        isNegated ? 'noCodeCard--negated' : '',
     ].filter(Boolean).join(' ');
 
     return (
-        <div 
-            className={classes}
-            {...props.dragHandleProps}
-        >
-            <div className="cardHeader">
-                <button 
-                    className="collapseButton" 
-                    title={isCollapsed ? "Expand" : "Collapse"} 
-                    aria-label={isCollapsed ? "Expand constraint" : "Collapse constraint"} 
-                    aria-expanded={!isCollapsed}
-                    type="button" 
-                    onClick={toggleCollapse}
-                >
-                    <span aria-hidden="true">{isCollapsed ? '▶' : '▼'}</span>
-                </button>
-                {props.dragHandleProps && (
-                    <span className="dragHandle" title="Drag to reorder" aria-label="Drag handle">⋮⋮</span>
-                )}
-                <button className="closeButton" title="Remove constraint" aria-label="Remove constraint" type="button" onClick={props.onRemove}>
+        <div className={classes}>
+            <div className="cardHeader" onClick={toggleCollapse} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleCollapse(); }}>
+                <span className="collapse-chevron" aria-hidden="true">{isCollapsed ? '›' : '‹'}</span>
+                {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+                <div className="cardHeader__controls" onClick={(e) => e.stopPropagation()}>
+                    <select className="type-select" onChange={updateFields} value={props.constraintData.type} title="Choose constraint type">
+                        <option value="orientation" title={ORIENTATION_DESCRIPTION}>Orientation</option>
+                        <option value="cyclic" title={CYCLIC_DESCRIPTION}>Cyclic</option>
+                        <option value="align" title={ALIGN_DESCRIPTION}>Align</option>
+                        <option value="groupfield" title={GROUPING_FIELD_DESCRIPTION}>Group by field</option>
+                        <option value="groupselector" title={GROUPING_SELECTOR_DESCRIPTION}>Group by selector</option>
+                        <option value="size" title={SIZE_DESCRIPTION}>Size</option>
+                        <option value="hideAtom" title={HIDEATOM_DESCRIPTION}>Hide Atom</option>
+                    </select>
+                    {isNegatable && (
+                        <div className="negation-toggle" title="Toggle whether this constraint is negated">
+                            <button
+                                type="button"
+                                className={`negation-toggle__option ${!isNegated ? 'negation-toggle__option--active' : ''}`}
+                                onClick={() => { if (isNegated) handleHoldToggle(); }}
+                            >
+                                Holds
+                            </button>
+                            <button
+                                type="button"
+                                className={`negation-toggle__option negation-toggle__option--never ${isNegated ? 'negation-toggle__option--active' : ''}`}
+                                onClick={() => { if (!isNegated) handleHoldToggle(); }}
+                            >
+                                Never
+                            </button>
+                        </div>
+                    )}
+                </div>
+                <button className="closeButton" title="Remove constraint" aria-label="Remove constraint" type="button" onClick={(e) => { e.stopPropagation(); props.onRemove(); }}>
                     <span aria-hidden="true">&times;</span>
                 </button>
-            </div>
-            <div className="input-group"> 
-                <div className="input-group-prepend">
-                    <span className="input-group-text" title="Choose constraint type">Constraint</span>
-                </div>
-                <select onChange={ updateFields } value={ props.constraintData.type }>
-                    <option value="orientation" title={ORIENTATION_DESCRIPTION}>Orientation</option>
-                    <option value="cyclic" title={CYCLIC_DESCRIPTION}>Cyclic</option>
-                    <option value="align" title={ALIGN_DESCRIPTION}>Align</option>
-                    <option value="groupfield" title={GROUPING_FIELD_DESCRIPTION}>Group by field</option>
-                    <option value="groupselector"  title={GROUPING_SELECTOR_DESCRIPTION}>Group by selector</option>
-                    <option value="size" title={SIZE_DESCRIPTION}>Size</option>
-                    <option value="hideAtom" title={HIDEATOM_DESCRIPTION}>Hide Atom</option>
-                </select>
-                {isNegated && (
-                    <span className="negation-badge" title="This constraint holds never (negated)">NOT</span>
-                )}
             </div>
             {!isCollapsed && (
                 <>
                     <div className="params">
-                        { renderSelectorComponent(props.constraintData.type, props.constraintData, props.onUpdate) }
+                        {renderSelectorComponent(props.constraintData.type, props.constraintData, props.onUpdate)}
                     </div>
-                    {isNegatable && (
-                        <label className="inline-checkbox" title="When checked, the layout will try to avoid satisfying this constraint.">
-                            <input
-                                type="checkbox"
-                                checked={isNegated}
-                                onChange={handleHoldToggle}
-                            />
-                            <span>Holds never</span>
-                        </label>
-                    )}
-                    {/* Comment section */}
                     <div className="commentSection">
                         {isEditingComment || props.constraintData.comment ? (
                             <input
@@ -201,8 +181,8 @@ const ConstraintCard = (props: ConstraintCardProps) => {
                                 onBlur={() => setIsEditingComment(false)}
                             />
                         ) : (
-                            <button 
-                                type="button" 
+                            <button
+                                type="button"
                                 className="addCommentButton"
                                 onClick={() => setIsEditingComment(true)}
                             >
@@ -214,8 +194,8 @@ const ConstraintCard = (props: ConstraintCardProps) => {
             )}
             {isCollapsed && props.constraintData.comment && (
                 <div className="collapsedComment" title={props.constraintData.comment}>
-                    💬 {props.constraintData.comment.length > 30 
-                        ? props.constraintData.comment.slice(0, 30) + '...' 
+                    {props.constraintData.comment.length > 30
+                        ? props.constraintData.comment.slice(0, 30) + '...'
                         : props.constraintData.comment}
                 </div>
             )}

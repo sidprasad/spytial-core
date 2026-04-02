@@ -27,24 +27,20 @@ const AlignSelector: React.FC<AlignSelectorProps> = (props: AlignSelectorProps) 
 
     return (
         <>
-            <div className="input-group">
-                <div className="input-group-prepend">
-                    <span className="input-group-text infolabel" title={TUPLE_SELECTOR_TEXT}>Selector</span>
-                </div>
-                <SelectorInput 
-                    name="selector" 
+            <div className="field-group">
+                <label className="field-label infolabel" title={TUPLE_SELECTOR_TEXT}>Selector</label>
+                <SelectorInput
+                    name="selector"
                     value={props.constraintData.params.selector as string || ''}
                     onChange={handleParamsChange}
                     required
                 />
             </div>
-            <div className="input-group">
-                <div className="input-group-prepend">
-                    <span className="input-group-text">Direction</span>
-                </div>
-                <select 
-                    name="direction" 
-                    onChange={handleParamsChange} 
+            <div className="field-group">
+                <label className="field-label">Direction</label>
+                <select
+                    name="direction"
+                    onChange={handleParamsChange}
                     value={props.constraintData.params.direction as string || 'horizontal'}
                 >
                     <option value="horizontal">Horizontal</option>

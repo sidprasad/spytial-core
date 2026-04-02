@@ -49,12 +49,10 @@ export const TagSelector: React.FC<TagSelectorProps> = (props: TagSelectorProps)
 
   return (
     <>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text infolabel" title={UNARY_SELECTOR_TEXT}>
-            To Tag
-          </span>
-        </div>
+      <div className="field-group">
+        <label className="field-label infolabel" title={UNARY_SELECTOR_TEXT}>
+          To Tag
+        </label>
         <SelectorInput
           name="toTag"
           value={props.directiveData.params.toTag as string || ''}
@@ -62,26 +60,21 @@ export const TagSelector: React.FC<TagSelectorProps> = (props: TagSelectorProps)
           placeholder="Atoms to receive this tag (e.g., Person)"
         />
       </div>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text">Name</span>
-        </div>
+      <div className="field-group">
+        <label className="field-label">Name</label>
         <input
           type="text"
           name="name"
-          className="form-control"
           defaultValue={props.directiveData.params.name as string || ''}
           onChange={handleInputChange}
           placeholder="Attribute name to display"
           required
         />
       </div>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text infolabel" title={TUPLE_SELECTOR_TEXT}>
-            Value
-          </span>
-        </div>
+      <div className="field-group">
+        <label className="field-label infolabel" title={TUPLE_SELECTOR_TEXT}>
+          Value
+        </label>
         <SelectorInput
           name="value"
           value={props.directiveData.params.value as string || ''}

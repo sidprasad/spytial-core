@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo } from "react";
 import { ConstraintCard } from "./ConstraintCard";
 import { DirectiveCard } from "./DirectiveCard";
 import { ConstraintData, DirectiveData } from "./interfaces";
@@ -297,9 +297,6 @@ const NoCodeView = ({
     setDirectives,
     disabled = false,
 }: NoCodeViewProps) => {
-    // Drag and drop state
-    const [draggedConstraintId, setDraggedConstraintId] = useState<string | null>(null);
-    const [draggedDirectiveId, setDraggedDirectiveId] = useState<string | null>(null);
     const visibleDirectives = useMemo(
         () => directives.filter((directive) => !isDualUseDirective(directive)),
         [directives]
@@ -352,52 +349,6 @@ const NoCodeView = ({
     const setAllConstraintsCollapsed = useCallback((collapsed: boolean) => {
         setConstraints((prev) => prev.map((c) => ({ ...c, collapsed })));
     }, [setConstraints]);
-
-    /**
-     * Handle constraint drag start
-     */
-    const handleConstraintDragStart = useCallback((e: React.DragEvent, id: string) => {
-        setDraggedConstraintId(id);
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', id);
-        // Add dragging class for visual feedback
-        (e.target as HTMLElement).classList.add('dragging');
-    }, []);
-
-    /**
-     * Handle constraint drag end
-     */
-    const handleConstraintDragEnd = useCallback((e: React.DragEvent) => {
-        setDraggedConstraintId(null);
-        (e.target as HTMLElement).classList.remove('dragging');
-    }, []);
-
-    /**
-     * Handle constraint drag over
-     */
-    const handleConstraintDragOver = useCallback((e: React.DragEvent) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-    }, []);
-
-    /**
-     * Handle constraint drop - reorder constraints
-     */
-    const handleConstraintDrop = useCallback((e: React.DragEvent, targetId: string) => {
-        e.preventDefault();
-        if (!draggedConstraintId || draggedConstraintId === targetId) return;
-
-        setConstraints((prev) => {
-            const draggedIndex = prev.findIndex((c) => c.id === draggedConstraintId);
-            const targetIndex = prev.findIndex((c) => c.id === targetId);
-            if (draggedIndex === -1 || targetIndex === -1) return prev;
-
-            const newConstraints = [...prev];
-            const [dragged] = newConstraints.splice(draggedIndex, 1);
-            newConstraints.splice(targetIndex, 0, dragged);
-            return newConstraints;
-        });
-    }, [draggedConstraintId, setConstraints]);
 
     const addDirective = () => {
         const newDirective: DirectiveData = {
@@ -473,50 +424,6 @@ const NoCodeView = ({
         setDirectives((prev) => prev.map((d) => ({ ...d, collapsed })));
     }, [setDirectives]);
 
-    /**
-     * Handle directive drag start
-     */
-    const handleDirectiveDragStart = useCallback((e: React.DragEvent, id: string) => {
-        setDraggedDirectiveId(id);
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', id);
-        (e.target as HTMLElement).classList.add('dragging');
-    }, []);
-
-    /**
-     * Handle directive drag end
-     */
-    const handleDirectiveDragEnd = useCallback((e: React.DragEvent) => {
-        setDraggedDirectiveId(null);
-        (e.target as HTMLElement).classList.remove('dragging');
-    }, []);
-
-    /**
-     * Handle directive drag over
-     */
-    const handleDirectiveDragOver = useCallback((e: React.DragEvent) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-    }, []);
-
-    /**
-     * Handle directive drop - reorder directives
-     */
-    const handleDirectiveDrop = useCallback((e: React.DragEvent, targetId: string) => {
-        e.preventDefault();
-        if (!draggedDirectiveId || draggedDirectiveId === targetId) return;
-
-        setDirectives((prev) => {
-            const draggedIndex = prev.findIndex((d) => d.id === draggedDirectiveId);
-            const targetIndex = prev.findIndex((d) => d.id === targetId);
-            if (draggedIndex === -1 || targetIndex === -1) return prev;
-
-            const newDirectives = [...prev];
-            const [dragged] = newDirectives.splice(draggedIndex, 1);
-            newDirectives.splice(targetIndex, 0, dragged);
-            return newDirectives;
-        });
-    }, [draggedDirectiveId, setDirectives]);
 
     /**
      * Loads constraint and directive state from YAML specification
@@ -565,96 +472,63 @@ const NoCodeView = ({
         <section id="noCodeViewContainer" aria-label="Structured Builder Container">
             <div>
                 <div className="sectionHeader">
-                    <h5>Constraints  <button type="button" onClick={ addConstraint } title="Click to add a new constraint" aria-label="Click to add a new constraint" disabled={disabled}>+</button></h5>
-                    {constraints.length > 0 && (
-                        <div className="collapseAllButtons">
-                            <button 
-                                type="button" 
-                                className="collapseAllButton"
-                                onClick={() => setAllConstraintsCollapsed(true)}
-                                title="Collapse all constraints"
-                            >
-                                Collapse All
-                            </button>
-                            <button 
-                                type="button" 
-                                className="collapseAllButton"
-                                onClick={() => setAllConstraintsCollapsed(false)}
-                                title="Expand all constraints"
-                            >
-                                Expand All
-                            </button>
-                        </div>
-                    )}
+                    <h5>Constraints</h5>
+                    <div className="sectionHeader__actions">
+                        {constraints.length > 0 && (
+                            <>
+                                <button type="button" className="icon-button" onClick={() => setAllConstraintsCollapsed(false)} title="Expand all" aria-label="Expand all constraints">
+                                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M3.2 10.4L8 5.6l4.8 4.8" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                </button>
+                                <button type="button" className="icon-button" onClick={() => setAllConstraintsCollapsed(true)} title="Collapse all" aria-label="Collapse all constraints">
+                                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M3.2 5.6L8 10.4l4.8-4.8" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                </button>
+                            </>
+                        )}
+                        <button type="button" className="add-button" onClick={addConstraint} title="Add constraint" aria-label="Add constraint" disabled={disabled}>+ Add</button>
+                    </div>
                 </div>
-                <section className='cardContainer' id="constraintContainer" aria-label="Constraints List">
-                    {/* Constraints will be added here dynamically */ }
-                    { 
-                        constraints.map((cd1) => (
-                            <ConstraintCard 
-                                key={cd1.id}
-                                constraintData={cd1}
-                                onUpdate={(updates) => updateConstraint(cd1.id, updates)}
-                                onRemove={() => {
-                                    setConstraints((prev) => prev.filter((cd2) => cd2.id !== cd1.id));
-                                }}
-                                dragHandleProps={{
-                                    draggable: true,
-                                    onDragStart: (e) => handleConstraintDragStart(e, cd1.id),
-                                    onDragEnd: handleConstraintDragEnd,
-                                    onDragOver: handleConstraintDragOver,
-                                    onDrop: (e) => handleConstraintDrop(e, cd1.id),
-                                }}
-                            />
-                        ))
-                    }
+                <section className="cardContainer" id="constraintContainer" aria-label="Constraints List">
+                    {constraints.map((cd1) => (
+                        <ConstraintCard
+                            key={cd1.id}
+                            constraintData={cd1}
+                            onUpdate={(updates) => updateConstraint(cd1.id, updates)}
+                            onRemove={() => {
+                                setConstraints((prev) => prev.filter((cd2) => cd2.id !== cd1.id));
+                            }}
+                        />
+                    ))}
                 </section>
             </div>
             <hr />
             <div>
                 <div className="sectionHeader">
-                    <h5>Directives  <button type="button" onClick={ addDirective } title="Click to add a new directive" aria-label="Click to add a new directive" disabled={disabled}>+</button></h5>
-                    {visibleDirectives.length > 0 && (
-                        <div className="collapseAllButtons">
-                            <button 
-                                type="button" 
-                                className="collapseAllButton"
-                                onClick={() => setAllDirectivesCollapsed(true)}
-                                title="Collapse all directives"
-                            >
-                                Collapse All
-                            </button>
-                            <button 
-                                type="button" 
-                                className="collapseAllButton"
-                                onClick={() => setAllDirectivesCollapsed(false)}
-                                title="Expand all directives"
-                            >
-                                Expand All
-                            </button>
-                        </div>
-                    )}
+                    <h5>Directives</h5>
+                    <div className="sectionHeader__actions">
+                        {visibleDirectives.length > 0 && (
+                            <>
+                                <button type="button" className="icon-button" onClick={() => setAllDirectivesCollapsed(false)} title="Expand all" aria-label="Expand all directives">
+                                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M3.2 10.4L8 5.6l4.8 4.8" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                </button>
+                                <button type="button" className="icon-button" onClick={() => setAllDirectivesCollapsed(true)} title="Collapse all" aria-label="Collapse all directives">
+                                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M3.2 5.6L8 10.4l4.8-4.8" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                </button>
+                            </>
+                        )}
+                        <button type="button" className="add-button" onClick={addDirective} title="Add directive" aria-label="Add directive" disabled={disabled}>+ Add</button>
+                    </div>
                 </div>
-                <section className='cardContainer' id="directiveContainer" aria-label="Directives List">
-                    { 
-                        visibleDirectives.map((dd1) => (
-                            <DirectiveCard 
-                                key={dd1.id} 
-                                directiveData={dd1}
-                                onUpdate={(updates) => updateDirective(dd1.id, updates)}
-                                onRemove={() => {
-                                    setDirectives((prev) => prev.filter((dd2) => dd2.id !== dd1.id));
-                                }}
-                                dragHandleProps={{
-                                    draggable: true,
-                                    onDragStart: (e) => handleDirectiveDragStart(e, dd1.id),
-                                    onDragEnd: handleDirectiveDragEnd,
-                                    onDragOver: handleDirectiveDragOver,
-                                    onDrop: (e) => handleDirectiveDrop(e, dd1.id),
-                                }}
-                            />
-                        ))
-                    }
+                <section className="cardContainer" id="directiveContainer" aria-label="Directives List">
+                    {visibleDirectives.map((dd1) => (
+                        <DirectiveCard
+                            key={dd1.id}
+                            directiveData={dd1}
+                            onUpdate={(updates) => updateDirective(dd1.id, updates)}
+                            onRemove={() => {
+                                setDirectives((prev) => prev.filter((dd2) => dd2.id !== dd1.id));
+                            }}
+                        />
+                    ))}
                 </section>
             </div>
         </section>

@@ -35,12 +35,10 @@ export const SizeSelector: React.FC<SizeSelectorProps> = ({
 
   return (
     <>
-      <div className="input-group">
-        <div className="input-group-prepend">
-          <span className="input-group-text infolabel" title={UNARY_SELECTOR_TEXT}>
-            Selector
-          </span>
-        </div>
+      <div className="field-group">
+        <label className="field-label infolabel" title={UNARY_SELECTOR_TEXT}>
+          Selector
+        </label>
         <SelectorInput
           name="selector"
           value={selector}
@@ -48,25 +46,21 @@ export const SizeSelector: React.FC<SizeSelectorProps> = ({
           required
         />
       </div>
-      <div className="input-group">
-        <label>
-          <span className="input-group-text">Width</span>
-        </label>
+      <div className="field-group field-group--inline">
+        <label className="field-label">Width</label>
         <input
           type="number"
           name="width"
-          className="form-control"
           defaultValue={width}
           onChange={(e) => onUpdate({ params: { ...data.params, width: Number(e.target.value) } })}
           required
         />
-        <label>
-          <span className="input-group-text">Height</span>
-        </label>
+      </div>
+      <div className="field-group field-group--inline">
+        <label className="field-label">Height</label>
         <input
           type="number"
           name="height"
-          className="form-control"
           defaultValue={height}
           onChange={(e) => onUpdate({ params: { ...data.params, height: Number(e.target.value) } })}
           required
