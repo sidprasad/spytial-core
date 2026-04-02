@@ -158,8 +158,8 @@
             <div class="mb-3">
                 <label for="validator-select">Constraint Validator:</label>
                 <select id="validator-select" class="form-select form-select-sm" aria-label="Validator selection">
-                    <option value="kiwi" selected>Kiwi (default, stable)</option>
-                    <option value="qualitative">Qualitative CDCL (beta)</option>
+                    <option value="kiwi">Kiwi</option>
+                    <option value="qualitative" selected>Qualitative CDCL (default)</option>
                 </select>
             </div>
             <div id="sql-schemas-container" style="display: none;" class="mb-3">
@@ -420,7 +420,7 @@
 
             updateStatus('Creating layout...', 'info');
             const ENABLE_ALIGNMENT_EDGES = true;
-            const validatorChoice = document.getElementById('validator-select')?.value || 'kiwi';
+            const validatorChoice = document.getElementById('validator-select')?.value || 'qualitative';
 
             const layoutInstance = new CndCore.LayoutInstance(
                 cachedLayoutSpec,
