@@ -171,7 +171,7 @@ export function orientationConstraintToString(constraint: LayoutConstraint) {
     }
     else if (isBoundingBoxConstraint(constraint)) {
         let bc = constraint as BoundingBoxConstraint;
-        return `${nodeLabel(bc.node)} cannot be in group "${bc.group.name}".`;
+        return `${nodeLabel(bc.node)} cannot be in group "${bc.group.name}", and groups must be contiguous rectangles`;
     }
     else if (isGroupBoundaryConstraint(constraint)) {
         let gc = constraint as GroupBoundaryConstraint;
