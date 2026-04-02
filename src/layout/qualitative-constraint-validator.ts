@@ -657,36 +657,40 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     }
 
     public validatePositionalConstraints(): PositionalConstraintError | null {
-        // Phase 1: Add all conjunctive constraints
+        // Phase 1: Add conjunctive constraints — stop on first error but don't return yet
+        let phase1Failed = false;
         for (const constraint of this.orientationConstraints) {
             const error = this.addConjunctiveConstraint(constraint);
-            if (error) return this.enforceMaximalFeasibleSubset(error);
+            if (error) { phase1Failed = true; break; }
+        }
+
+        // Phase 2: Always collect group bounding box disjunctions
+        // (safe — only creates DisjunctiveConstraints + ensureNode, no addEdge)
+        this.addGroupBoundingBoxDisjunctions();
+
+        // Phase 3: Always collect all disjunctions
+        this.allDisjunctions = [...(this.layout.disjunctiveConstraints || [])];
+
+        // If Phase 1 failed, compute global MFS across all constraints and return
+        if (phase1Failed) {
+            return this.enforceMaximalFeasibleSubset(this.buildGlobalMFSError());
         }
 
         const constraintsBeforeDisjunctions = this.addedConstraints.length;
-
-        // Phase 2: Group bounding box disjunctions (virtual group nodes, from V1)
-        const groupError = this.addGroupBoundingBoxDisjunctions();
-        if (groupError) return this.enforceMaximalFeasibleSubset(groupError);
-
-        // Phase 3: Collect all disjunctions
-        this.allDisjunctions = [...(this.layout.disjunctiveConstraints || [])];
 
         // Phase 4: Interval decomposition — resolve what we can before CDCL
         this.presolveDisjunctions();
 
         // Phase 4b: Handle truly empty disjunctions (no alternatives at all)
         if (this.emptyDisjunctionError) {
-            return this.enforceMaximalFeasibleSubset(this.emptyDisjunctionError);
+            return this.enforceMaximalFeasibleSubset(this.buildGlobalMFSError());
         }
 
         // Phase 5: CDCL search on remaining disjunctions
         if (this.allDisjunctions.length > 0) {
             const result = this.solveCDCL();
             if (!result.satisfiable) {
-                const error = result.error;
-                if (error) return this.enforceMaximalFeasibleSubset(error);
-                return null;
+                return this.enforceMaximalFeasibleSubset(this.buildGlobalMFSError());
             }
         }
 
@@ -722,6 +726,139 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             this.layout.constraints = error.maximalFeasibleSubset;
         }
         return error;
+    }
+
+    /**
+     * Build an error by computing a global greedy MFS across ALL constraints
+     * (conjunctive + disjunctive), then tracing conflict paths in the MFS
+     * graph to produce a proper IIS for each excluded constraint.
+     *
+     * The IIS always contains >= 2 constraints: the excluded constraint(s)
+     * plus the MFS constraints they conflict with.
+     *
+     * Uses `computeMaximalFeasibleSubset()` which builds fresh graphs from
+     * scratch, so it is independent of the main validation state.
+     */
+    private buildGlobalMFSError(): PositionalConstraintError {
+        const { feasibleConstraints, infeasibleDisjunctions, hGraph: mfsH, vGraph: mfsV } = this.computeMaximalFeasibleSubset();
+
+        // Excluded conjunctive = all orientation constraints not in the MFS
+        const feasibleSet = new Set<LayoutConstraint>(feasibleConstraints);
+        const excludedConjunctive = this.orientationConstraints.filter(c => !feasibleSet.has(c));
+
+        // Build IIS: for each excluded constraint, trace the conflict path
+        // in the MFS graph (the path that creates a cycle with the constraint).
+        // IIS = excluded constraints + their conflict paths from the MFS.
+        const iisSet = new Set<LayoutConstraint>();
+        const seen = new Set<LayoutConstraint>();
+
+        // Helper: trace a conflict path in an MFS graph and add provenances to IIS
+        const traceConflictPath = (graph: DifferenceConstraintGraph, from: string, to: string) => {
+            const path = graph.findPath(from, to);
+            if (path) {
+                for (const [a, b] of path) {
+                    const provenance = graph.getEdgeProvenance(a, b);
+                    if (provenance && !seen.has(provenance)) {
+                        seen.add(provenance);
+                        iisSet.add(provenance);
+                    }
+                }
+            }
+        };
+
+        for (const c of excludedConjunctive) {
+            if (seen.has(c)) continue;
+            seen.add(c);
+            iisSet.add(c);
+
+            if (isAlignmentConstraint(c)) {
+                // Alignment constraint align(A,B) was excluded because A and B are
+                // strictly ordered in the MFS graph. Trace the ordering path(s).
+                const ac = c as AlignmentConstraint;
+                const graph = ac.axis === 'x' ? mfsH : mfsV;
+                const a = ac.node1.id, b = ac.node2.id;
+                // Check both directions — the ordering path that blocks alignment
+                if (graph.canReach(a, b)) traceConflictPath(graph, a, b);
+                if (graph.canReach(b, a)) traceConflictPath(graph, b, a);
+            } else {
+                const edge = this.constraintToEdge(c);
+                if (!edge) continue;
+                const graph = edge.axis === 'h' ? mfsH : mfsV;
+                traceConflictPath(graph, edge.to, edge.from);
+            }
+        }
+
+        // Also include infeasible disjunctions (with representative constraints)
+        for (const disj of infeasibleDisjunctions) {
+            if (disj.alternatives.length > 0 && disj.alternatives[0].length > 0) {
+                const rep = disj.alternatives[0][0];
+                if (!seen.has(rep)) {
+                    seen.add(rep);
+                    iisSet.add(rep);
+                }
+                // Trace conflict path for the representative
+                const edge = this.constraintToEdge(rep);
+                if (edge) {
+                    const graph = edge.axis === 'h' ? mfsH : mfsV;
+                    const path = graph.findPath(edge.to, edge.from);
+                    if (path) {
+                        for (const [a, b] of path) {
+                            const provenance = graph.getEdgeProvenance(a, b);
+                            if (provenance && !seen.has(provenance)) {
+                                seen.add(provenance);
+                                iisSet.add(provenance);
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Empty disjunction — add source to maps below
+            }
+        }
+
+        // Group IIS by source constraint
+        const srcToLayout = new Map<SourceConstraint, LayoutConstraint[]>();
+        const htmlMap = new Map<string, string[]>();
+        for (const c of iisSet) {
+            const src = c.sourceConstraint;
+            if (!srcToLayout.has(src)) srcToLayout.set(src, []);
+            if (!htmlMap.has(src.toHTML())) htmlMap.set(src.toHTML(), []);
+            srcToLayout.get(src)!.push(c);
+            htmlMap.get(src.toHTML())!.push(orientationConstraintToString(c));
+        }
+
+        // Empty disjunctions with no alternatives
+        for (const disj of infeasibleDisjunctions) {
+            if (disj.alternatives.length === 0) {
+                const src = disj.sourceConstraint;
+                if (!srcToLayout.has(src)) srcToLayout.set(src, []);
+                if (!htmlMap.has(src.toHTML())) htmlMap.set(src.toHTML(), []);
+                htmlMap.get(src.toHTML())!.push(`unsatisfiable: ${src.toHTML()}`);
+            }
+        }
+
+        // Pick a representative for backward-compat singular fields
+        const iisArray = [...iisSet];
+        const representative = iisArray[0] ?? this.orientationConstraints[0];
+
+        const repString = representative ? orientationConstraintToString(representative) : '';
+        const repSource = representative?.sourceConstraint
+            ?? infeasibleDisjunctions[0]?.sourceConstraint
+            ?? this.orientationConstraints[0]?.sourceConstraint;
+
+        return {
+            name: 'PositionalConstraintError', type: 'positional-conflict',
+            message: `Constraint "${repString}" conflicts with existing constraints`,
+            conflictingConstraint: representative ?? (undefined as any),
+            conflictingSourceConstraint: repSource ?? (undefined as any),
+            minimalConflictingSet: srcToLayout,
+            maximalFeasibleSubset: feasibleConstraints,
+            errorMessages: {
+                conflictingConstraint: repString,
+                conflictingSourceConstraint: repSource?.toHTML() ?? '',
+                minimalConflictingConstraints: htmlMap,
+            },
+        };
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -2023,6 +2160,8 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     private computeMaximalFeasibleSubset(): {
         feasibleConstraints: LayoutConstraint[];
         infeasibleDisjunctions: DisjunctiveConstraint[];
+        hGraph: DifferenceConstraintGraph;
+        vGraph: DifferenceConstraintGraph;
     } {
         const freshH = new DifferenceConstraintGraph(this.minPadding);
         const freshV = new DifferenceConstraintGraph(this.minPadding);
@@ -2092,7 +2231,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             if (!added) infeasibleDisjunctions.push(disj);
         }
 
-        return { feasibleConstraints, infeasibleDisjunctions };
+        return { feasibleConstraints, infeasibleDisjunctions, hGraph: freshH, vGraph: freshV };
     }
 
     private addEdgeToGraphs(constraint: LayoutConstraint, hGraph: DifferenceConstraintGraph, vGraph: DifferenceConstraintGraph): boolean {
@@ -2146,7 +2285,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     // ═══════════════════════════════════════════════════════════════════════════
 
     private buildUnsatResult(assigned: Int32Array): { satisfiable: boolean; error: PositionalConstraintError } {
-        const { feasibleConstraints, infeasibleDisjunctions } = this.computeMaximalFeasibleSubset();
+        const { feasibleConstraints, infeasibleDisjunctions, hGraph: _h, vGraph: _v } = this.computeMaximalFeasibleSubset();
 
         const minimalConflictingSet = new Map<SourceConstraint, LayoutConstraint[]>();
         for (const disj of infeasibleDisjunctions) {
