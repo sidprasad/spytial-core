@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accessible Layout Translator Demo</title>
+
+    <!-- Bootstrap CSS for component styling -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            display: flex;
+            font-family: Arial, sans-serif;
+            max-width: 90vw;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+            gap: 20px;
+        }
+        .panel {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #input-panel {
+            flex: 1;
+            min-width: 400px;
+        }
+        #output-panel {
+            flex: 2;
+            min-width: 500px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        button {
+            background-color: #007acc;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px 0;
+        }
+        button:hover { background-color: #005a9e; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+        textarea {
+            width: 100%;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+        #json-input { height: 220px; }
+        #cnd-input { height: 140px; }
+        label {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 5px;
+        }
+        .status {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .status.info { background: #e3f2fd; color: #1976d2; }
+        .status.success { background: #e8f5e8; color: #2e7d32; }
+        .status.error { background: #ffebee; color: #c62828; }
+
+        /* Accessible output styling */
+        #accessible-html-output {
+            border: 2px solid #5a3d8a;
+            border-radius: 8px;
+            padding: 16px;
+            min-height: 200px;
+            background: #faf8ff;
+        }
+        #accessible-html-output [role="graphics-document"] {
+            font-family: system-ui, sans-serif;
+        }
+        #accessible-html-output [role="treeitem"] {
+            padding: 6px 10px;
+            margin: 2px 0;
+            border-radius: 4px;
+            cursor: pointer;
+            outline: none;
+        }
+        #accessible-html-output [role="treeitem"]:focus {
+            background: #e8e0f4;
+            box-shadow: 0 0 0 2px #5a3d8a;
+        }
+        #accessible-html-output [role="treeitem"][aria-roledescription="diagram node"]:focus {
+            background: #dce8f5;
+            box-shadow: 0 0 0 2px #007acc;
+        }
+        #accessible-html-output [role="group"] {
+            padding-left: 20px;
+            border-left: 2px solid #ddd;
+            margin-left: 8px;
+        }
+        #accessible-html-output table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+            font-size: 14px;
+        }
+        #accessible-html-output th, #accessible-html-output td {
+            border: 1px solid #ddd;
+            padding: 6px 10px;
+            text-align: left;
+        }
+        #accessible-html-output th {
+            background: #f0f0f0;
+            font-weight: 600;
+        }
+        #accessible-html-output section[aria-label="Spatial layout"] {
+            margin-top: 12px;
+            padding: 10px;
+            background: #f8f8f0;
+            border-radius: 4px;
+        }
+        #accessible-html-output dl {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 4px 12px;
+            margin: 0;
+        }
+        #accessible-html-output dt { font-weight: 600; }
+        #accessible-html-output dd { margin: 0; }
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0,0,0,0);
+            border: 0;
+        }
+
+        /* Navigation map visualization */
+        #nav-map-output {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 16px;
+            border-radius: 8px;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        .nav-node { color: #9cdcfe; }
+        .nav-direction { color: #ce9178; }
+        .nav-target { color: #4ec9b0; }
+        .nav-edge { color: #dcdcaa; }
+        .nav-group { color: #c586c0; }
+
+        /* Alt text output */
+        #alt-text-output {
+            font-family: system-ui, sans-serif;
+            font-size: 14px;
+            line-height: 1.6;
+            padding: 16px;
+            background: #fffef5;
+            border: 1px solid #e0d8a8;
+            border-radius: 8px;
+        }
+
+        /* Tab styling */
+        .output-tabs {
+            display: flex;
+            gap: 0;
+            border-bottom: 2px solid #ddd;
+        }
+        .output-tab {
+            padding: 8px 16px;
+            background: #f0f0f0;
+            border: 1px solid #ddd;
+            border-bottom: none;
+            border-radius: 4px 4px 0 0;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            color: #555;
+            margin: 0;
+        }
+        .output-tab.active {
+            background: white;
+            color: #007acc;
+            border-bottom: 2px solid white;
+            margin-bottom: -2px;
+        }
+        .output-tab:hover:not(.active) { background: #e8e8e8; }
+        .tab-content { display: none; padding-top: 16px; }
+        .tab-content.active { display: block; }
+
+        /* Description tree styling */
+        #description-tree details {
+            margin-left: 16px;
+            margin-bottom: 4px;
+        }
+        #description-tree summary {
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+        #description-tree summary:hover { background: #f0f0f0; }
+        #description-tree .desc-section { font-weight: 600; color: #333; }
+        #description-tree .desc-item { font-weight: normal; color: #555; }
+        #description-tree .desc-detail { color: #777; font-size: 13px; padding: 4px 8px; }
+
+        @media (max-width: 768px) {
+            body { flex-direction: column; }
+            #input-panel, #output-panel { min-width: unset; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Input Panel -->
+    <div class="panel border" id="input-panel">
+        <h1 class="h4">Accessible Translator Demo</h1>
+        <p class="text-muted small">
+            Spatial &ne; Visual. This demo compiles an <code>InstanceLayout</code> to an accessible representation:
+            spatial navigation, semantic HTML, and structured descriptions.
+        </p>
+
+        <div class="mb-3">
+            <label for="json-input">JSON Data Instance:</label>
+            <textarea id="json-input">{
+  "atoms": [
+    { "id": "Alice0", "type": "Person", "label": "Alice" },
+    { "id": "Bob0", "type": "Person", "label": "Bob" },
+    { "id": "Carol0", "type": "Person", "label": "Carol" },
+    { "id": "NYC0", "type": "City", "label": "NYC" },
+    { "id": "SF0", "type": "City", "label": "SF" }
+  ],
+  "relations": [
+    {
+      "id": "Person&lt;:parent",
+      "name": "parent",
+      "types": ["Person", "Person"],
+      "tuples": [
+        { "atoms": ["Bob0", "Alice0"], "types": ["Person", "Person"] },
+        { "atoms": ["Carol0", "Alice0"], "types": ["Person", "Person"] }
+      ]
+    },
+    {
+      "id": "Person&lt;:livesIn",
+      "name": "livesIn",
+      "types": ["Person", "City"],
+      "tuples": [
+        { "atoms": ["Alice0", "NYC0"], "types": ["Person", "City"] },
+        { "atoms": ["Bob0", "SF0"], "types": ["Person", "City"] }
+      ]
+    }
+  ]
+}</textarea>
+        </div>
+
+        <div class="mb-3">
+            <label for="cnd-input">Layout Specification (CND):</label>
+            <textarea id="cnd-input">constraints:
+  - orientation:
+      selector: parent
+      directions:
+        - above
+  - align:
+      selector: Person.parent
+      direction: horizontal
+
+directives:
+  - atomColor:
+      selector: Person
+      value: "#2563eb"
+  - atomColor:
+      selector: City
+      value: "#059669"
+  - attribute:
+      field: livesIn</textarea>
+        </div>
+
+        <button id="translateButton" onclick="runTranslation()">Translate to Accessible</button>
+
+        <div id="status" class="status info">Ready. Enter JSON data and a layout spec, then click Translate.</div>
+
+        <!-- Side-by-side visual comparison -->
+        <div class="mt-3">
+            <details>
+                <summary class="text-muted small">Show visual rendering (for comparison)</summary>
+                <div style="position: relative; margin-top: 8px;">
+                    <webcola-cnd-graph
+                        id="graph-container"
+                        width="400"
+                        height="300"
+                        layoutFormat="default"
+                        aria-label="Visual graph rendering for comparison">
+                    </webcola-cnd-graph>
+                </div>
+            </details>
+        </div>
+    </div>
+
+    <!-- Output Panel -->
+    <div class="panel border" id="output-panel">
+        <h2 class="h5 mb-3">Accessible Output</h2>
+
+        <!-- Tabs -->
+        <div class="output-tabs" role="tablist">
+            <button class="output-tab active" role="tab" aria-selected="true" onclick="switchTab('html')" id="tab-html">Semantic HTML</button>
+            <button class="output-tab" role="tab" aria-selected="false" onclick="switchTab('nav')" id="tab-nav">Navigation Map</button>
+            <button class="output-tab" role="tab" aria-selected="false" onclick="switchTab('desc')" id="tab-desc">Description Tree</button>
+            <button class="output-tab" role="tab" aria-selected="false" onclick="switchTab('alt')" id="tab-alt">Alt Text</button>
+        </div>
+
+        <!-- Tab: Semantic HTML (live, interactive) -->
+        <div class="tab-content active" id="content-html">
+            <p class="text-muted small mb-2">
+                Live semantic HTML output. Use <kbd>Tab</kbd> to enter, arrow keys to navigate between nodes
+                following the spatial layout. Screen readers will announce each node as a "diagram node".
+            </p>
+            <div id="accessible-html-output">
+                <p class="text-muted">Click "Translate to Accessible" to see the output here.</p>
+            </div>
+        </div>
+
+        <!-- Tab: Navigation Map -->
+        <div class="tab-content" id="content-nav">
+            <p class="text-muted small mb-2">
+                The spatial navigation map, built from constraints (not pixels). Shows what you'd
+                reach by pressing each arrow key from any node.
+            </p>
+            <div id="nav-map-output">// Click "Translate to Accessible" to see the navigation map.</div>
+        </div>
+
+        <!-- Tab: Description Tree -->
+        <div class="tab-content" id="content-desc">
+            <p class="text-muted small mb-2">
+                Structured, navigable description of the diagram. Expand sections to explore.
+            </p>
+            <div id="description-tree">
+                <p class="text-muted">Click "Translate to Accessible" to see the description tree.</p>
+            </div>
+        </div>
+
+        <!-- Tab: Alt Text -->
+        <div class="tab-content" id="content-alt">
+            <p class="text-muted small mb-2">
+                Flat alt-text suitable for an <code>alt</code> attribute or screen reader announcement.
+            </p>
+            <div id="alt-text-output">Click "Translate to Accessible" to generate alt text.</div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="../dist/browser/spytial-core-complete.global.js"></script>
+    <script>
+        // ─── State ─────────────────────────────────────────────────────────
+        let currentAccessibleLayout = null;
+
+        // ─── Tab Switching ─────────────────────────────────────────────────
+        function switchTab(tabId) {
+            document.querySelectorAll('.output-tab').forEach(t => {
+                t.classList.remove('active');
+                t.setAttribute('aria-selected', 'false');
+            });
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+            document.getElementById('tab-' + tabId).classList.add('active');
+            document.getElementById('tab-' + tabId).setAttribute('aria-selected', 'true');
+            document.getElementById('content-' + tabId).classList.add('active');
+        }
+
+        // ─── Status ────────────────────────────────────────────────────────
+        function updateStatus(message, type) {
+            const el = document.getElementById('status');
+            el.textContent = message;
+            el.className = 'status ' + type;
+        }
+
+        // ─── Main Pipeline ─────────────────────────────────────────────────
+        async function runTranslation() {
+            try {
+                updateStatus('Processing...', 'info');
+
+                // 1. Parse JSON data
+                const jsonText = document.getElementById('json-input').value;
+                if (!jsonText.trim()) throw new Error('Please enter JSON data.');
+
+                const instance = new CndCore.JSONDataInstance(jsonText);
+
+                // 2. Create evaluator
+                const evaluator = new CndCore.SGraphQueryEvaluator();
+                evaluator.initialize({ sourceData: instance });
+
+                // 3. Parse layout spec
+                const cndSpec = document.getElementById('cnd-input').value || '';
+                const layoutSpec = CndCore.parseLayoutSpec(cndSpec);
+
+                // 4. Generate InstanceLayout (same as WebCola pipeline)
+                const layoutInstance = new CndCore.LayoutInstance(layoutSpec, evaluator, 0, true);
+                const layoutResult = layoutInstance.generateLayout(instance);
+
+                if (layoutResult.selectorErrors?.length > 0) {
+                    console.warn('Selector errors:', layoutResult.selectorErrors);
+                }
+                if (layoutResult.error) {
+                    console.warn('Layout error (continuing):', layoutResult.error.message);
+                }
+
+                // 5. Accessible translation (the new path!)
+                const translator = new CndCore.AccessibleTranslator();
+                currentAccessibleLayout = translator.translate(layoutResult.layout);
+
+                // 6. Render all output tabs
+                renderHTMLTab(currentAccessibleLayout);
+                renderNavMapTab(currentAccessibleLayout);
+                renderDescriptionTab(currentAccessibleLayout);
+                renderAltTextTab(currentAccessibleLayout);
+
+                // 7. Also render visual for comparison (optional)
+                renderVisualComparison(layoutResult.layout);
+
+                updateStatus('Translation complete! Explore the tabs above.', 'success');
+
+            } catch (error) {
+                console.error('Translation failed:', error);
+                updateStatus('Error: ' + error.message, 'error');
+            }
+        }
+
+        // ─── Tab Renderers ─────────────────────────────────────────────────
+
+        function renderHTMLTab(accessible) {
+            const container = document.getElementById('accessible-html-output');
+            container.innerHTML = accessible.toHTML();
+            wireUpKeyboardNavigation(container);
+        }
+
+        function renderNavMapTab(accessible) {
+            const container = document.getElementById('nav-map-output');
+            const lines = [];
+
+            for (const [nodeId, neighbors] of accessible.navigation.entries()) {
+                lines.push(`<span class="nav-node">${esc(nodeId)}</span>`);
+
+                if (neighbors.above) lines.push(`  <span class="nav-direction">above:</span> <span class="nav-target">${esc(neighbors.above)}</span>`);
+                if (neighbors.below) lines.push(`  <span class="nav-direction">below:</span> <span class="nav-target">${esc(neighbors.below)}</span>`);
+                if (neighbors.left)  lines.push(`  <span class="nav-direction">left:</span>  <span class="nav-target">${esc(neighbors.left)}</span>`);
+                if (neighbors.right) lines.push(`  <span class="nav-direction">right:</span> <span class="nav-target">${esc(neighbors.right)}</span>`);
+
+                for (const edge of neighbors.outgoing) {
+                    lines.push(`  <span class="nav-edge">${esc(edge.relation)}</span> &rarr; <span class="nav-target">${esc(edge.nodeLabel)}</span>`);
+                }
+                for (const edge of neighbors.incoming) {
+                    lines.push(`  <span class="nav-target">${esc(edge.nodeLabel)}</span> &rarr; <span class="nav-edge">${esc(edge.relation)}</span> &rarr; this`);
+                }
+
+                if (neighbors.containingGroups.length > 0) {
+                    lines.push(`  <span class="nav-group">groups: ${neighbors.containingGroups.map(esc).join(', ')}</span>`);
+                }
+                if (neighbors.groupMembers.length > 0) {
+                    lines.push(`  <span class="nav-group">members: ${neighbors.groupMembers.map(esc).join(', ')}</span>`);
+                }
+
+                lines.push('');
+            }
+
+            lines.push(`<span class="nav-direction">Navigation order:</span> ${accessible.navigation.nodeOrder.map(esc).join(' → ')}`);
+
+            container.innerHTML = lines.join('\n');
+        }
+
+        function renderDescriptionTab(accessible) {
+            const desc = accessible.description;
+            const container = document.getElementById('description-tree');
+            const html = [];
+
+            // Overview
+            html.push(`<details open>`);
+            html.push(`  <summary class="desc-section">Overview</summary>`);
+            html.push(`  <div class="desc-detail">${esc(desc.overview.summary)}</div>`);
+            html.push(`</details>`);
+
+            // Types
+            if (desc.types.length > 0) {
+                html.push(`<details open>`);
+                html.push(`  <summary class="desc-section">Types (${desc.types.length})</summary>`);
+                for (const type of desc.types) {
+                    html.push(`  <details>`);
+                    html.push(`    <summary class="desc-item">${esc(type.typeName)} (${type.nodeCount} nodes)</summary>`);
+                    html.push(`    <div class="desc-detail">Nodes: ${type.nodeLabels.map(esc).join(', ')}</div>`);
+                    if (type.typeHierarchy.length > 1) {
+                        html.push(`    <div class="desc-detail">Hierarchy: ${type.typeHierarchy.map(esc).join(' &gt; ')}</div>`);
+                    }
+                    html.push(`  </details>`);
+                }
+                html.push(`</details>`);
+            }
+
+            // Nodes
+            if (desc.nodes.length > 0) {
+                html.push(`<details>`);
+                html.push(`  <summary class="desc-section">Nodes (${desc.nodes.length})</summary>`);
+                for (const node of desc.nodes) {
+                    html.push(`  <details>`);
+                    html.push(`    <summary class="desc-item">${esc(node.label)} (${esc(node.mostSpecificType)})</summary>`);
+                    html.push(`    <div class="desc-detail">${esc(node.summary)}</div>`);
+                    if (node.outgoing.length > 0) {
+                        html.push(`    <div class="desc-detail">Outgoing: ${node.outgoing.map(e => esc(e.summary)).join(', ')}</div>`);
+                    }
+                    if (node.incoming.length > 0) {
+                        html.push(`    <div class="desc-detail">Incoming: ${node.incoming.map(e => esc(e.summary)).join(', ')}</div>`);
+                    }
+                    html.push(`  </details>`);
+                }
+                html.push(`</details>`);
+            }
+
+            // Groups
+            if (desc.groups.length > 0) {
+                html.push(`<details>`);
+                html.push(`  <summary class="desc-section">Groups (${desc.groups.length})</summary>`);
+                for (const group of desc.groups) {
+                    html.push(`  <details>`);
+                    html.push(`    <summary class="desc-item">${esc(group.name)} (${group.nodeCount} nodes)</summary>`);
+                    html.push(`    <div class="desc-detail">${esc(group.summary)}</div>`);
+                    html.push(`  </details>`);
+                }
+                html.push(`</details>`);
+            }
+
+            // Relationships
+            if (desc.relationships.length > 0) {
+                html.push(`<details open>`);
+                html.push(`  <summary class="desc-section">Relationships (${desc.relationships.length})</summary>`);
+                for (const rel of desc.relationships) {
+                    html.push(`  <div class="desc-detail">${esc(rel.summary)}</div>`);
+                }
+                html.push(`</details>`);
+            }
+
+            // Spatial Relationships
+            if (desc.spatialRelationships.length > 0) {
+                html.push(`<details open>`);
+                html.push(`  <summary class="desc-section">Spatial Layout (${desc.spatialRelationships.length} constraints)</summary>`);
+                for (const sr of desc.spatialRelationships) {
+                    html.push(`  <div class="desc-detail">${esc(sr.description)}</div>`);
+                }
+                html.push(`</details>`);
+            }
+
+            container.innerHTML = html.join('\n');
+        }
+
+        function renderAltTextTab(accessible) {
+            document.getElementById('alt-text-output').textContent = accessible.toAltText();
+        }
+
+        // ─── Keyboard Navigation ───────────────────────────────────────────
+
+        function wireUpKeyboardNavigation(container) {
+            const treeItems = container.querySelectorAll('[role="treeitem"]');
+            if (treeItems.length === 0) return;
+
+            // Make first item focusable
+            treeItems[0].setAttribute('tabindex', '0');
+
+            container.addEventListener('keydown', (e) => {
+                const current = document.activeElement;
+                if (!current || !current.hasAttribute('data-nav-above')) {
+                    // Only handle nav if we're on a node with data-nav attributes
+                    if (!current || current.getAttribute('role') !== 'treeitem') return;
+                }
+
+                let targetId = null;
+                switch (e.key) {
+                    case 'ArrowUp':
+                        targetId = current.getAttribute('data-nav-above');
+                        break;
+                    case 'ArrowDown':
+                        targetId = current.getAttribute('data-nav-below');
+                        break;
+                    case 'ArrowLeft':
+                        targetId = current.getAttribute('data-nav-left');
+                        break;
+                    case 'ArrowRight':
+                        targetId = current.getAttribute('data-nav-right');
+                        break;
+                    default:
+                        return; // Don't prevent default for other keys
+                }
+
+                if (targetId) {
+                    e.preventDefault();
+                    const target = container.querySelector('#' + targetId);
+                    if (target) {
+                        // Move tabindex
+                        current.setAttribute('tabindex', '-1');
+                        target.setAttribute('tabindex', '0');
+                        target.focus();
+                    }
+                }
+            });
+        }
+
+        // ─── Visual Comparison ─────────────────────────────────────────────
+
+        async function renderVisualComparison(layout) {
+            try {
+                const graph = document.getElementById('graph-container');
+                if (graph && graph.renderLayout) {
+                    await graph.renderLayout(layout);
+                }
+            } catch (e) {
+                console.warn('Visual comparison render failed (non-critical):', e);
+            }
+        }
+
+        // ─── Utilities ─────────────────────────────────────────────────────
+
+        function esc(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        // ─── Initialization ────────────────────────────────────────────────
+
+        window.addEventListener('load', () => {
+            if (typeof CndCore !== 'undefined' && CndCore.AccessibleTranslator) {
+                updateStatus('Ready. Enter JSON data and a layout spec, then click Translate.', 'info');
+            } else {
+                updateStatus('Error: CndCore bundle not loaded or AccessibleTranslator not available.', 'error');
+                console.error('Available on CndCore:', typeof CndCore !== 'undefined' ? Object.keys(CndCore) : 'CndCore not defined');
+            }
+        });
+    </script>
+</body>
+</html>
