@@ -64,8 +64,8 @@ export function removeInstanceAtom(
       newTypes[atom.type] = { ...type, atoms: filteredAtoms };
     }
     // Remove from relations — create new relation objects to avoid mutating originals
-    // Keep relations even if they end up with 0 tuples (only removeInstanceRelationTuple
-    // deletes empty relations, since atom removal is a cascade side-effect)
+    // Keep relations even if they end up with 0 tuples so their id/name/types are
+    // preserved for future addRelationTuple calls
     for (const [key, relation] of Object.entries(instance.relations)) {
       const filtered = relation.tuples.filter((tuple) => !tuple.atoms.includes(atomId));
       newRelations[key] = { ...relation, tuples: filtered };
@@ -133,13 +133,11 @@ export function removeInstanceRelationTuple(
   const tuplesEqual = (a: AlloyTuple, b: AlloyTuple): boolean =>
     a.atoms.length === b.atoms.length && a.atoms.every((atom, i) => atom === b.atoms[i]);
 
-  // Remove the tuple from the relation — create new object to avoid mutating original
+  // Remove the tuple from the relation — create new object to avoid mutating original.
+  // Keep the relation even when empty so its id, name, and types are preserved
+  // for future addRelationTuple calls.
   const filteredTuples = relation.tuples.filter((t) => !tuplesEqual(t, tuple));
-  if (filteredTuples.length === 0) {
-    delete newRelations[relation.id];
-  } else {
-    newRelations[relation.id] = { ...relation, tuples: filteredTuples };
-  }
+  newRelations[relation.id] = { ...relation, tuples: filteredTuples };
   // Remove the tuple from skolems — create new objects to avoid mutating originals
   for (const [key, skolem] of Object.entries(instance.skolems)) {
     const filtered = skolem.tuples.filter((t) => !tuplesEqual(t, tuple));
@@ -161,7 +159,9 @@ export function addInstanceRelationTuple(
   instance: AlloyInstance,
   relationId: string,
   tuple: AlloyTuple): AlloyInstance {
-  let relation = instance.relations[relationId];
+  // Direct key lookup, then fallback to name-based search
+  let relation = instance.relations[relationId]
+    ?? Object.values(instance.relations).find(r => r.name === relationId);
   const newRelations = { ...instance.relations };
   const newSkolems = { ...instance.skolems };
 
@@ -201,9 +201,15 @@ export function getInstanceRelation(
   instance: AlloyInstance,
   relation: string
 ): AlloyRelation {
+  // Direct key lookup (by id, e.g. "Tree<:left")
   const rel = instance.relations[relation];
-  if (!rel) throw new Error(`Could not find relation ${relation}`);
-  return rel;
+  if (rel) return rel;
+
+  // Fallback: search by name (e.g. "left" when keyed as "Tree<:left")
+  const byName = Object.values(instance.relations).find(r => r.name === relation);
+  if (byName) return byName;
+
+  throw new Error(`Could not find relation ${relation}`);
 }
 
 export function getInstanceRelations(instance: AlloyInstance): AlloyRelation[] {
