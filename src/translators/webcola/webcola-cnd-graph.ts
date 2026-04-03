@@ -1366,25 +1366,27 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private async editEdgeLabel(edgeData: EdgeWithMetadata): Promise<void> {
     if (!this.isInputModeActive) return;
 
-    const currentLabel = edgeData.label || edgeData.relName || '';
-    const result = await this.showEdgeEditDialog(`Edit edge label:`, currentLabel);
-    
+    // Use relName for data-instance lookups; fall back to label for display.
+    const currentRelName = edgeData.relName || edgeData.label || '';
+    const displayLabel = edgeData.label || edgeData.relName || '';
+    const result = await this.showEdgeEditDialog(`Edit edge label:`, displayLabel);
+
     // Handle deletion request
     if (result === 'DELETE') {
       await this.deleteEdge(edgeData);
       return;
     }
-    
+
     // Handle label change
-    if (result !== null && result !== currentLabel) {
+    if (result !== null && result !== displayLabel) {
       const newLabel = result;
-      
+
       // Get source and target nodes for data instance update
       const sourceNode = this.getNodeFromEdge(edgeData, 'source');
       const targetNode = this.getNodeFromEdge(edgeData, 'target');
 
-      // Update external state if available
-      await this.updateExternalStateForEdgeModification(sourceNode, targetNode, currentLabel, newLabel);
+      // Update external state using relation name (not display label)
+      await this.updateExternalStateForEdgeModification(sourceNode, targetNode, currentRelName, newLabel);
 
       // Update edge data
       edgeData.label = newLabel;
@@ -2749,8 +2751,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       return;
     }
 
-    const relationName = edgeData.label || edgeData.relName || '';
-    
+    // Use relName (the data-instance relation key) rather than label (the display
+    // string, which may include n-ary suffixes like "[Person1]").
+    const relationName = edgeData.relName || edgeData.label || '';
+
     if (!relationName.trim()) {
       console.warn('Edge has no relation name, cannot reconnect');
       return;
@@ -2767,7 +2771,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       types: [newSourceNode.type || 'untyped', newTargetNode.type || 'untyped']
     };
 
-    console.log(`🔄 Reconnecting edge from ${oldSourceNode.id}->${oldTargetNode.id} to ${newSourceNode.id}->${newTargetNode.id}`);
+    console.log(`Reconnecting edge: ${relationName} from ${oldSourceNode.id}->${oldTargetNode.id} to ${newSourceNode.id}->${newTargetNode.id}`);
 
     // Dispatch edge reconnection event
     const edgeReconnectionEvent = new CustomEvent('edge-reconnection-requested', {
@@ -2806,7 +2810,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       return;
     }
 
-    const relationName = edgeData.label || edgeData.relName || '';
+    // Use relName (the data-instance relation key) rather than label (display string).
+    const relationName = edgeData.relName || edgeData.label || '';
 
     if (!relationName.trim()) {
       console.warn('Edge has no relation name, cannot delete from data instance');

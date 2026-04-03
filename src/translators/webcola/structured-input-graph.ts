@@ -758,17 +758,26 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       }
       // Otherwise, move the tuple(s) from old relation to new relation
       else {
+        let removedCount = 0;
         if (oldRelationId && oldRelationId.trim()) {
           for (const t of allTuples) {
             try {
               this.dataInstance.removeRelationTuple(oldRelationId, t);
-            } catch {
-              // Tuple may already have been removed
+              removedCount++;
+            } catch (removeErr) {
+              console.error(
+                `Failed to remove tuple from "${oldRelationId}": [${t.atoms.join(', ')}]`,
+                removeErr
+              );
             }
           }
         }
-        for (const t of allTuples) {
-          this.dataInstance.addRelationTuple(newRelationId, t);
+        // Only add to new relation if we successfully removed from old
+        // (or there was no old relation to remove from)
+        if (removedCount > 0 || !oldRelationId || !oldRelationId.trim()) {
+          for (const t of allTuples) {
+            this.dataInstance.addRelationTuple(newRelationId, t);
+          }
         }
       }
       await this.enforceConstraintsAndRegenerate();
@@ -788,8 +797,14 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       if (relationId && relationId.trim()) {
         try {
           this.dataInstance.removeRelationTuple(relationId, oldTuple);
-        } catch {
-          // Old tuple may already have been removed
+        } catch (removeErr) {
+          console.error(
+            `Failed to remove old tuple from "${relationId}": [${oldTuple.atoms.join(', ')}]`,
+            removeErr
+          );
+          // Bail out — don't add the new tuple if we couldn't remove the old one,
+          // as that would create a duplicate edge.
+          return;
         }
       }
       this.dataInstance.addRelationTuple(relationId, newTuple);
