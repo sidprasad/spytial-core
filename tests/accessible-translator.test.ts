@@ -352,7 +352,8 @@ describe('Accessible HTML output', () => {
     it('includes relationships table', () => {
         const { layout } = createLayout(familyData, familySpec);
         const translator = new AccessibleTranslator();
-        const html = result(translator, layout);
+        const result = translator.translate(layout);
+        const html = result.toHTML();
 
         expect(html).toContain('role="grid"');
         expect(html).toContain('Relationships');
@@ -401,8 +402,3 @@ describe('Alt text output', () => {
         expect(alt).toContain('empty');
     });
 });
-
-// Helper for tests that were using wrong pattern
-function result(translator: AccessibleTranslator, layout: InstanceLayout): string {
-    return translator.translate(layout).toHTML();
-}
