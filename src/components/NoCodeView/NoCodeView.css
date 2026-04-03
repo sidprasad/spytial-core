@@ -354,15 +354,17 @@
 }
 
 .direction-pill--active {
-    background: var(--nc-accent);
+    background: var(--nc-accent-bg);
     border-color: var(--nc-accent);
-    color: #ffffff;
+    color: var(--nc-accent);
+    font-weight: 600;
+    box-shadow: 0 0 0 1px var(--nc-accent);
 }
 
 .direction-pill--active:hover {
-    background: #0b5ed7;
-    border-color: #0b5ed7;
-    color: #ffffff;
+    background: var(--nc-accent-hover);
+    border-color: var(--nc-accent);
+    color: var(--nc-accent);
 }
 
 /* ---- Inline Checkbox / Toggle ---- */
