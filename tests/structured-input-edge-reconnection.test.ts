@@ -236,12 +236,13 @@ describe('StructuredInputGraph Edge Reconnection', () => {
 
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // The new tuple should still be added
+      // The new tuple should NOT be added because the handler bails out
+      // when remove fails (to prevent duplicate edges)
       const tuples = dataInstance.getRelations().find(r => r.id === 'knows')!.tuples;
       const hasNewTuple = tuples.some(
         t => t.atoms[0] === 'atom1' && t.atoms[1] === 'atom3'
       );
-      expect(hasNewTuple).toBe(true);
+      expect(hasNewTuple).toBe(false);
     });
   });
 
