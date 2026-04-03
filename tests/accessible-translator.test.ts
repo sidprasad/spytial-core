@@ -4,69 +4,100 @@ import { parseLayoutSpec } from '../src/layout/layoutspec';
 import { LayoutInstance } from '../src/layout/layoutinstance';
 import { SGraphQueryEvaluator } from '../src/evaluators/sgq-evaluator';
 import { AccessibleTranslator, buildSpatialNavigationMap } from '../src/translators/accessible';
-import type { InstanceLayout, LayoutNode, LayoutEdge, LayoutGroup, TopConstraint, LeftConstraint, AlignmentConstraint } from '../src/layout/interfaces';
-import { RelativeOrientationConstraint, AlignConstraint } from '../src/layout/layoutspec';
+import type { InstanceLayout, LayoutNode, TopConstraint } from '../src/layout/interfaces';
+import { RelativeOrientationConstraint } from '../src/layout/layoutspec';
 
-// ─── Test Data ─────────────────────────────────────────────────────────────
+// ─── Test Data: Binary Search Tree ─────────────────────────────────────────
+//
+//        Node(10)
+//       /        \
+//    Node(5)    Node(15)
+//    /    \     /     \
+// Node(3) Node(7) Node(12) Node(18)
 
-const familyData: IJsonDataInstance = {
+const bstData: IJsonDataInstance = {
     atoms: [
-        { id: 'Alice0', type: 'Person', label: 'Alice' },
-        { id: 'Bob0', type: 'Person', label: 'Bob' },
-        { id: 'Carol0', type: 'Person', label: 'Carol' },
-        { id: 'NYC0', type: 'City', label: 'NYC' },
-        { id: 'SF0', type: 'City', label: 'SF' },
+        { id: 'Node0', type: 'Node', label: 'Node (10)' },
+        { id: 'Node1', type: 'Node', label: 'Node (5)' },
+        { id: 'Node2', type: 'Node', label: 'Node (15)' },
+        { id: 'Node3', type: 'Node', label: 'Node (3)' },
+        { id: 'Node4', type: 'Node', label: 'Node (7)' },
+        { id: 'Node5', type: 'Node', label: 'Node (12)' },
+        { id: 'Node6', type: 'Node', label: 'Node (18)' },
+        { id: 'Int0', type: 'Int', label: '10' },
+        { id: 'Int1', type: 'Int', label: '5' },
+        { id: 'Int2', type: 'Int', label: '15' },
+        { id: 'Int3', type: 'Int', label: '3' },
+        { id: 'Int4', type: 'Int', label: '7' },
+        { id: 'Int5', type: 'Int', label: '12' },
+        { id: 'Int6', type: 'Int', label: '18' },
     ],
     relations: [
         {
-            id: 'Person<:parent',
-            name: 'parent',
-            types: ['Person', 'Person'],
+            id: 'Node<:left',
+            name: 'left',
+            types: ['Node', 'Node'],
             tuples: [
-                { atoms: ['Bob0', 'Alice0'], types: ['Person', 'Person'] },
-                { atoms: ['Carol0', 'Alice0'], types: ['Person', 'Person'] },
+                { atoms: ['Node0', 'Node1'], types: ['Node', 'Node'] }, // 10 -> 5
+                { atoms: ['Node1', 'Node3'], types: ['Node', 'Node'] }, // 5 -> 3
+                { atoms: ['Node2', 'Node5'], types: ['Node', 'Node'] }, // 15 -> 12
             ],
         },
         {
-            id: 'Person<:livesIn',
-            name: 'livesIn',
-            types: ['Person', 'City'],
+            id: 'Node<:right',
+            name: 'right',
+            types: ['Node', 'Node'],
             tuples: [
-                { atoms: ['Alice0', 'NYC0'], types: ['Person', 'City'] },
-                { atoms: ['Bob0', 'SF0'], types: ['Person', 'City'] },
+                { atoms: ['Node0', 'Node2'], types: ['Node', 'Node'] }, // 10 -> 15
+                { atoms: ['Node1', 'Node4'], types: ['Node', 'Node'] }, // 5 -> 7
+                { atoms: ['Node2', 'Node6'], types: ['Node', 'Node'] }, // 15 -> 18
+            ],
+        },
+        {
+            id: 'Node<:val',
+            name: 'val',
+            types: ['Node', 'Int'],
+            tuples: [
+                { atoms: ['Node0', 'Int0'], types: ['Node', 'Int'] },
+                { atoms: ['Node1', 'Int1'], types: ['Node', 'Int'] },
+                { atoms: ['Node2', 'Int2'], types: ['Node', 'Int'] },
+                { atoms: ['Node3', 'Int3'], types: ['Node', 'Int'] },
+                { atoms: ['Node4', 'Int4'], types: ['Node', 'Int'] },
+                { atoms: ['Node5', 'Int5'], types: ['Node', 'Int'] },
+                { atoms: ['Node6', 'Int6'], types: ['Node', 'Int'] },
             ],
         },
     ],
 };
 
-const familySpec = `
+// Mirrors the real BST CND spec from sterling-ts/demos/bst/bst.cnd
+const bstSpec = `
 constraints:
   - orientation:
-      selector: parent
+      selector: left
       directions:
-        - above
+        - left
+
+directives:
+  - attribute:
+      field: val
+  - flag: hideDisconnectedBuiltIns
 `;
 
-const familySpecWithAlign = `
+const bstSpecWithGroup = `
 constraints:
   - orientation:
-      selector: parent
+      selector: left
       directions:
-        - above
-  - align:
-      selector: Person.parent
-      direction: horizontal
-`;
-
-const familySpecWithGroup = `
-constraints:
-  - orientation:
-      selector: parent
-      directions:
-        - above
+        - left
   - group:
-      selector: Person
-      name: "People"
+      selector: Node
+      name: "BST Nodes"
+
+directives:
+  - attribute:
+      field: val
+  - flag: hideDisconnectedBuiltIns
 `;
 
 function createLayout(data: IJsonDataInstance, specStr: string) {
@@ -83,7 +114,7 @@ function createLayout(data: IJsonDataInstance, specStr: string) {
 describe('AccessibleTranslator', () => {
     describe('translate()', () => {
         it('produces an AccessibleLayout with all required fields', () => {
-            const { layout } = createLayout(familyData, familySpec);
+            const { layout } = createLayout(bstData, bstSpec);
             const translator = new AccessibleTranslator();
             const result = translator.translate(layout);
 
@@ -96,14 +127,14 @@ describe('AccessibleTranslator', () => {
 
     describe('overview', () => {
         it('counts nodes, edges, and types correctly', () => {
-            const { layout } = createLayout(familyData, familySpec);
+            const { layout } = createLayout(bstData, bstSpec);
             const translator = new AccessibleTranslator();
             const { description } = translator.translate(layout);
 
-            expect(description.overview.totalNodes).toBe(5);
-            expect(description.overview.typesPresent).toContain('Person');
-            expect(description.overview.typesPresent).toContain('City');
-            expect(description.overview.summary).toContain('5 nodes');
+            // hideDisconnectedBuiltIns hides Int nodes, so only 7 Node nodes remain
+            expect(description.overview.totalNodes).toBe(7);
+            expect(description.overview.typesPresent).toContain('Node');
+            expect(description.overview.summary).toContain('7 nodes');
         });
 
         it('produces "empty" summary for empty layout', () => {
@@ -123,100 +154,104 @@ describe('AccessibleTranslator', () => {
 
     describe('type breakdown', () => {
         it('groups nodes by type', () => {
-            const { layout } = createLayout(familyData, familySpec);
+            const { layout } = createLayout(bstData, bstSpec);
             const translator = new AccessibleTranslator();
             const { description } = translator.translate(layout);
 
-            const personType = description.types.find(t => t.typeName === 'Person');
-            const cityType = description.types.find(t => t.typeName === 'City');
-
-            expect(personType).toBeDefined();
-            expect(personType!.nodeCount).toBe(3);
-            expect(personType!.nodeLabels).toContain('Alice');
-            expect(personType!.nodeLabels).toContain('Bob');
-
-            expect(cityType).toBeDefined();
-            expect(cityType!.nodeCount).toBe(2);
+            const nodeType = description.types.find(t => t.typeName === 'Node');
+            expect(nodeType).toBeDefined();
+            expect(nodeType!.nodeCount).toBe(7);
+            expect(nodeType!.nodeLabels).toContain('Node (10)');
+            expect(nodeType!.nodeLabels).toContain('Node (3)');
         });
     });
 
     describe('node descriptions', () => {
-        it('includes outgoing and incoming edges', () => {
-            const { layout } = createLayout(familyData, familySpec);
+        it('includes outgoing and incoming edges for tree structure', () => {
+            const { layout } = createLayout(bstData, bstSpec);
             const translator = new AccessibleTranslator();
             const { description } = translator.translate(layout);
 
-            const bob = description.nodes.find(n => n.label === 'Bob');
-            expect(bob).toBeDefined();
+            // Root node (10) should have left -> Node(5) and right -> Node(15) outgoing
+            const root = description.nodes.find(n => n.label === 'Node (10)');
+            expect(root).toBeDefined();
 
-            // Bob has parent -> Alice (outgoing) and livesIn -> SF (outgoing)
-            const parentEdge = bob!.outgoing.find(e => e.relation === 'parent');
-            expect(parentEdge).toBeDefined();
-            expect(parentEdge!.connectedNodeLabel).toBe('Alice');
+            const leftEdge = root!.outgoing.find(e => e.relation === 'left');
+            expect(leftEdge).toBeDefined();
+            expect(leftEdge!.connectedNodeLabel).toBe('Node (5)');
 
-            // Alice should have incoming parent edges from Bob and Carol
-            const alice = description.nodes.find(n => n.label === 'Alice');
-            expect(alice).toBeDefined();
-            const incomingParent = alice!.incoming.filter(e => e.relation === 'parent');
-            expect(incomingParent.length).toBe(2);
+            const rightEdge = root!.outgoing.find(e => e.relation === 'right');
+            expect(rightEdge).toBeDefined();
+            expect(rightEdge!.connectedNodeLabel).toBe('Node (15)');
+
+            // Node(5) should have incoming left edge from Node(10)
+            const node5 = description.nodes.find(n => n.label === 'Node (5)');
+            expect(node5).toBeDefined();
+            const incomingLeft = node5!.incoming.find(e => e.relation === 'left');
+            expect(incomingLeft).toBeDefined();
+            expect(incomingLeft!.connectedNodeLabel).toBe('Node (10)');
         });
 
         it('generates readable summary', () => {
-            const { layout } = createLayout(familyData, familySpec);
+            const { layout } = createLayout(bstData, bstSpec);
             const translator = new AccessibleTranslator();
             const { description } = translator.translate(layout);
 
-            const alice = description.nodes.find(n => n.label === 'Alice');
-            expect(alice!.summary).toContain('Alice');
-            expect(alice!.summary).toContain('Person');
+            const root = description.nodes.find(n => n.label === 'Node (10)');
+            expect(root!.summary).toContain('Node (10)');
+            expect(root!.summary).toContain('Node');
         });
     });
 
     describe('relationship summary', () => {
         it('aggregates edges by relation name', () => {
-            const { layout } = createLayout(familyData, familySpec);
+            const { layout } = createLayout(bstData, bstSpec);
             const translator = new AccessibleTranslator();
             const { description } = translator.translate(layout);
 
-            const parentRel = description.relationships.find(r => r.relationName === 'parent');
-            expect(parentRel).toBeDefined();
-            expect(parentRel!.edgeCount).toBe(2);
-            expect(parentRel!.sourceTypes).toContain('Person');
-            expect(parentRel!.targetTypes).toContain('Person');
+            const leftRel = description.relationships.find(r => r.relationName === 'left');
+            expect(leftRel).toBeDefined();
+            expect(leftRel!.edgeCount).toBe(3);
+            expect(leftRel!.sourceTypes).toContain('Node');
+            expect(leftRel!.targetTypes).toContain('Node');
+
+            const rightRel = description.relationships.find(r => r.relationName === 'right');
+            expect(rightRel).toBeDefined();
+            expect(rightRel!.edgeCount).toBe(3);
         });
     });
 
     describe('spatial relationships', () => {
-        it('extracts above/below from TopConstraints', () => {
-            const { layout } = createLayout(familyData, familySpec);
+        it('extracts left-of from LeftConstraints', () => {
+            const { layout } = createLayout(bstData, bstSpec);
             const translator = new AccessibleTranslator();
             const { description } = translator.translate(layout);
 
-            // The spec says parent is "above", so Alice should be above Bob and Carol
-            const aboveRelationships = description.spatialRelationships.filter(
-                sr => sr.kind === 'above'
+            // The spec says left children are positioned to the left
+            const leftOfRelationships = description.spatialRelationships.filter(
+                sr => sr.kind === 'left-of'
             );
-            expect(aboveRelationships.length).toBeGreaterThan(0);
+            expect(leftOfRelationships.length).toBeGreaterThan(0);
 
-            // At least one should mention the parent selector as reason
-            const withParentReason = aboveRelationships.filter(sr => sr.reason === 'parent');
-            expect(withParentReason.length).toBeGreaterThan(0);
+            // At least one should mention the left selector as reason
+            const withLeftReason = leftOfRelationships.filter(sr => sr.reason === 'left');
+            expect(withLeftReason.length).toBeGreaterThan(0);
         });
 
         it('includes the constraint reason (selector)', () => {
-            const { layout } = createLayout(familyData, familySpec);
+            const { layout } = createLayout(bstData, bstSpec);
             const translator = new AccessibleTranslator();
             const { description } = translator.translate(layout);
 
             const spatial = description.spatialRelationships[0];
             expect(spatial.reason).toBeTruthy();
-            expect(spatial.description).toContain('is above');
+            expect(spatial.description).toContain('is to the left of');
         });
     });
 
     describe('group descriptions', () => {
         it('describes groups with member labels', () => {
-            const { layout } = createLayout(familyData, familySpecWithGroup);
+            const { layout } = createLayout(bstData, bstSpecWithGroup);
             const translator = new AccessibleTranslator();
             const { description } = translator.translate(layout);
 
@@ -231,42 +266,36 @@ describe('AccessibleTranslator', () => {
 
 describe('SpatialNavigationMap', () => {
     describe('from constraints', () => {
-        it('maps TopConstraint to above/below neighbors', () => {
-            const { layout } = createLayout(familyData, familySpec);
+        it('maps LeftConstraint to left/right neighbors in BST', () => {
+            const { layout } = createLayout(bstData, bstSpec);
             const navMap = buildSpatialNavigationMap(layout);
 
-            // Alice should be above Bob (parent constraint)
-            // So Alice should have Bob (or Carol) below
-            const aliceNeighbors = navMap.getNeighbors('Alice0');
-            expect(aliceNeighbors).toBeDefined();
+            // Node(5) is the left child of Node(10), so Node(5) should be to the left
+            const rootNeighbors = navMap.getNeighbors('Node0');
+            expect(rootNeighbors).toBeDefined();
 
-            // At least one of Bob or Carol should be below Alice
-            const belowAlice = aliceNeighbors!.below;
-            if (belowAlice) {
-                expect(['Bob0', 'Carol0']).toContain(belowAlice);
+            // Root should have Node(5) to its left (from the left constraint)
+            if (rootNeighbors!.left) {
+                expect(rootNeighbors!.left).toBe('Node1'); // Node(5)
             }
-
-            // Bob should have Alice above
-            const bobNeighbors = navMap.getNeighbors('Bob0');
-            expect(bobNeighbors).toBeDefined();
-            expect(bobNeighbors!.above).toBe('Alice0');
         });
 
         it('includes edge connectivity in neighbors', () => {
-            const { layout } = createLayout(familyData, familySpec);
+            const { layout } = createLayout(bstData, bstSpec);
             const navMap = buildSpatialNavigationMap(layout);
 
-            const bobNeighbors = navMap.getNeighbors('Bob0');
-            expect(bobNeighbors).toBeDefined();
+            const rootNeighbors = navMap.getNeighbors('Node0');
+            expect(rootNeighbors).toBeDefined();
 
-            // Bob should have outgoing edges (parent -> Alice, livesIn -> SF)
-            expect(bobNeighbors!.outgoing.length).toBeGreaterThan(0);
-            const parentEdge = bobNeighbors!.outgoing.find(e => e.relation === 'parent');
-            expect(parentEdge).toBeDefined();
+            // Root should have outgoing left and right edges
+            expect(rootNeighbors!.outgoing.length).toBeGreaterThan(0);
+            const leftEdge = rootNeighbors!.outgoing.find(e => e.relation === 'left');
+            expect(leftEdge).toBeDefined();
+            expect(leftEdge!.nodeLabel).toBe('Node (5)');
         });
 
         it('returns undefined for non-existent nodes', () => {
-            const { layout } = createLayout(familyData, familySpec);
+            const { layout } = createLayout(bstData, bstSpec);
             const navMap = buildSpatialNavigationMap(layout);
             expect(navMap.getNeighbors('NonExistent')).toBeUndefined();
         });
@@ -274,10 +303,10 @@ describe('SpatialNavigationMap', () => {
 
     describe('navigation order', () => {
         it('produces an order containing all nodes', () => {
-            const { layout } = createLayout(familyData, familySpec);
+            const { layout } = createLayout(bstData, bstSpec);
             const navMap = buildSpatialNavigationMap(layout);
 
-            expect(navMap.nodeOrder).toHaveLength(5);
+            expect(navMap.nodeOrder).toHaveLength(layout.nodes.length);
             for (const node of layout.nodes) {
                 expect(navMap.nodeOrder).toContain(node.id);
             }
@@ -286,7 +315,7 @@ describe('SpatialNavigationMap', () => {
 
     describe('transitive reduction', () => {
         it('picks nearest neighbor, not transitive', () => {
-            // Manually build a layout with A above B above C
+            // Manually build: A left-of B left-of C
             const nodeA: LayoutNode = { id: 'A', label: 'A', color: 'black', width: 50, height: 50, mostSpecificType: 'T', types: ['T'], showLabels: true };
             const nodeB: LayoutNode = { id: 'B', label: 'B', color: 'black', width: 50, height: 50, mostSpecificType: 'T', types: ['T'], showLabels: true };
             const nodeC: LayoutNode = { id: 'C', label: 'C', color: 'black', width: 50, height: 50, mostSpecificType: 'T', types: ['T'], showLabels: true };
@@ -323,10 +352,9 @@ describe('SpatialNavigationMap', () => {
 
 describe('Accessible HTML output', () => {
     it('produces valid ARIA structure', () => {
-        const { layout } = createLayout(familyData, familySpec);
+        const { layout } = createLayout(bstData, bstSpec);
         const translator = new AccessibleTranslator();
-        const result = translator.translate(layout);
-        const html = result.toHTML();
+        const html = translator.translate(layout).toHTML();
 
         expect(html).toContain('role="graphics-document"');
         expect(html).toContain('aria-roledescription="diagram"');
@@ -336,12 +364,11 @@ describe('Accessible HTML output', () => {
     });
 
     it('includes data-nav attributes for spatial navigation', () => {
-        const { layout } = createLayout(familyData, familySpec);
+        const { layout } = createLayout(bstData, bstSpec);
         const translator = new AccessibleTranslator();
-        const result = translator.translate(layout);
-        const html = result.toHTML();
+        const html = translator.translate(layout).toHTML();
 
-        // Should have at least one data-nav attribute (from orientation constraints)
+        // Should have left/right nav attrs from the left orientation constraint
         const hasNavAttr = html.includes('data-nav-above') ||
             html.includes('data-nav-below') ||
             html.includes('data-nav-left') ||
@@ -349,15 +376,15 @@ describe('Accessible HTML output', () => {
         expect(hasNavAttr).toBe(true);
     });
 
-    it('includes relationships table', () => {
-        const { layout } = createLayout(familyData, familySpec);
+    it('includes relationships table with left and right edges', () => {
+        const { layout } = createLayout(bstData, bstSpec);
         const translator = new AccessibleTranslator();
-        const result = translator.translate(layout);
-        const html = result.toHTML();
+        const html = translator.translate(layout).toHTML();
 
         expect(html).toContain('role="grid"');
         expect(html).toContain('Relationships');
-        expect(html).toContain('parent');
+        expect(html).toContain('left');
+        expect(html).toContain('right');
     });
 
     it('escapes HTML in node labels', () => {
@@ -378,15 +405,14 @@ describe('Accessible HTML output', () => {
 
 describe('Alt text output', () => {
     it('produces readable text with spatial relationships', () => {
-        const { layout } = createLayout(familyData, familySpec);
+        const { layout } = createLayout(bstData, bstSpec);
         const translator = new AccessibleTranslator();
-        const result = translator.translate(layout);
-        const alt = result.toAltText();
+        const alt = translator.translate(layout).toAltText();
 
         expect(alt).toContain('Diagram with');
-        expect(alt).toContain('5 nodes');
-        expect(alt).toContain('Person');
-        expect(alt).toContain('is above');
+        expect(alt).toContain('7 nodes');
+        expect(alt).toContain('Node');
+        expect(alt).toContain('is to the left of');
     });
 
     it('handles empty layout gracefully', () => {

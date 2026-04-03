@@ -235,29 +235,54 @@
             <label for="json-input">JSON Data Instance:</label>
             <textarea id="json-input">{
   "atoms": [
-    { "id": "Alice0", "type": "Person", "label": "Alice" },
-    { "id": "Bob0", "type": "Person", "label": "Bob" },
-    { "id": "Carol0", "type": "Person", "label": "Carol" },
-    { "id": "NYC0", "type": "City", "label": "NYC" },
-    { "id": "SF0", "type": "City", "label": "SF" }
+    { "id": "Node0", "type": "Node", "label": "Node (10)" },
+    { "id": "Node1", "type": "Node", "label": "Node (5)" },
+    { "id": "Node2", "type": "Node", "label": "Node (15)" },
+    { "id": "Node3", "type": "Node", "label": "Node (3)" },
+    { "id": "Node4", "type": "Node", "label": "Node (7)" },
+    { "id": "Node5", "type": "Node", "label": "Node (12)" },
+    { "id": "Node6", "type": "Node", "label": "Node (18)" },
+    { "id": "Int0", "type": "Int", "label": "10" },
+    { "id": "Int1", "type": "Int", "label": "5" },
+    { "id": "Int2", "type": "Int", "label": "15" },
+    { "id": "Int3", "type": "Int", "label": "3" },
+    { "id": "Int4", "type": "Int", "label": "7" },
+    { "id": "Int5", "type": "Int", "label": "12" },
+    { "id": "Int6", "type": "Int", "label": "18" }
   ],
   "relations": [
     {
-      "id": "Person&lt;:parent",
-      "name": "parent",
-      "types": ["Person", "Person"],
+      "id": "Node&lt;:left",
+      "name": "left",
+      "types": ["Node", "Node"],
       "tuples": [
-        { "atoms": ["Bob0", "Alice0"], "types": ["Person", "Person"] },
-        { "atoms": ["Carol0", "Alice0"], "types": ["Person", "Person"] }
+        { "atoms": ["Node0", "Node1"], "types": ["Node", "Node"] },
+        { "atoms": ["Node1", "Node3"], "types": ["Node", "Node"] },
+        { "atoms": ["Node2", "Node5"], "types": ["Node", "Node"] }
       ]
     },
     {
-      "id": "Person&lt;:livesIn",
-      "name": "livesIn",
-      "types": ["Person", "City"],
+      "id": "Node&lt;:right",
+      "name": "right",
+      "types": ["Node", "Node"],
       "tuples": [
-        { "atoms": ["Alice0", "NYC0"], "types": ["Person", "City"] },
-        { "atoms": ["Bob0", "SF0"], "types": ["Person", "City"] }
+        { "atoms": ["Node0", "Node2"], "types": ["Node", "Node"] },
+        { "atoms": ["Node1", "Node4"], "types": ["Node", "Node"] },
+        { "atoms": ["Node2", "Node6"], "types": ["Node", "Node"] }
+      ]
+    },
+    {
+      "id": "Node&lt;:val",
+      "name": "val",
+      "types": ["Node", "Int"],
+      "tuples": [
+        { "atoms": ["Node0", "Int0"], "types": ["Node", "Int"] },
+        { "atoms": ["Node1", "Int1"], "types": ["Node", "Int"] },
+        { "atoms": ["Node2", "Int2"], "types": ["Node", "Int"] },
+        { "atoms": ["Node3", "Int3"], "types": ["Node", "Int"] },
+        { "atoms": ["Node4", "Int4"], "types": ["Node", "Int"] },
+        { "atoms": ["Node5", "Int5"], "types": ["Node", "Int"] },
+        { "atoms": ["Node6", "Int6"], "types": ["Node", "Int"] }
       ]
     }
   ]
@@ -268,22 +293,14 @@
             <label for="cnd-input">Layout Specification (CND):</label>
             <textarea id="cnd-input">constraints:
   - orientation:
-      selector: parent
+      selector: left
       directions:
-        - above
-  - align:
-      selector: Person.parent
-      direction: horizontal
+        - left
 
 directives:
-  - atomColor:
-      selector: Person
-      value: "#2563eb"
-  - atomColor:
-      selector: City
-      value: "#059669"
   - attribute:
-      field: livesIn</textarea>
+      field: val
+  - flag: hideDisconnectedBuiltIns</textarea>
         </div>
 
         <button id="translateButton" onclick="runTranslation()">Translate to Accessible</button>
