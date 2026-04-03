@@ -381,10 +381,42 @@ describe('Accessible HTML output', () => {
         const translator = new AccessibleTranslator();
         const html = translator.translate(layout).toHTML();
 
-        expect(html).toContain('role="grid"');
+        // Uses native table semantics (not role="grid") for read-only data
+        expect(html).not.toContain('role="grid"');
+        expect(html).toContain('<table');
         expect(html).toContain('Relationships');
         expect(html).toContain('left');
         expect(html).toContain('right');
+    });
+
+    it('makes the first node keyboard-focusable with tabindex="0"', () => {
+        const { layout } = createLayout(bstData, bstSpec);
+        const translator = new AccessibleTranslator();
+        const html = translator.translate(layout).toHTML();
+
+        // Exactly one treeitem should have tabindex="0" (roving tabindex pattern)
+        const focusableCount = (html.match(/tabindex="0"/g) || []).length;
+        expect(focusableCount).toBe(1);
+
+        // All others should have tabindex="-1"
+        const nonFocusableCount = (html.match(/tabindex="-1"/g) || []).length;
+        expect(nonFocusableCount).toBeGreaterThan(0);
+    });
+
+    it('sanitizes node IDs in HTML attributes', () => {
+        const weirdIdData: IJsonDataInstance = {
+            atoms: [
+                { id: 'node"with>quotes', type: 'T', label: 'Safe Label' },
+            ],
+            relations: [],
+        };
+        const { layout } = createLayout(weirdIdData, 'constraints: []');
+        const translator = new AccessibleTranslator();
+        const html = translator.translate(layout).toHTML();
+
+        // ID should be sanitized — no raw quotes in attributes
+        expect(html).not.toContain('id="node-node"with>quotes"');
+        expect(html).toContain('node-node_with_quotes');
     });
 
     it('escapes HTML in node labels', () => {

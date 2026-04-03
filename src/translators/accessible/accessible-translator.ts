@@ -147,6 +147,7 @@ export interface EdgeDescription {
 export interface GroupDescription {
     name: string;
     nodeCount: number;
+    nodeIds: string[];
     nodeLabels: string[];
     keyNodeId: string;
     keyNodeLabel: string;
@@ -545,6 +546,7 @@ function buildGroupDescriptions(layout: InstanceLayout): GroupDescription[] {
         return {
             name: group.name,
             nodeCount: group.nodeIds.length,
+            nodeIds: [...group.nodeIds],
             nodeLabels,
             keyNodeId: group.keyNodeId,
             keyNodeLabel: keyLabel,
@@ -668,25 +670,27 @@ function renderAccessibleHTML(
     // Main navigable tree: groups as expandable parents, nodes as leaves
     lines.push(`  <div role="tree" aria-label="Diagram nodes">`);
 
-    // Render groups first
+    // Render groups first, keyed by node ID (not label, which may be duplicated)
     const groupedNodeIds = new Set<string>();
+    const nodeDescById = new Map(description.nodes.map(n => [n.id, n]));
+
+    let isFirstNode = true;
     for (const group of description.groups) {
         if (group.negated) continue;
-        for (const label of group.nodeLabels) {
-            // Find node by label to get ID
-            const node = description.nodes.find(n => n.label === label);
-            if (node) groupedNodeIds.add(node.id);
+        for (const nid of group.nodeIds) {
+            groupedNodeIds.add(nid);
         }
 
         lines.push(`    <div role="treeitem" aria-expanded="true" aria-label="Group: ${esc(group.name)}" tabindex="-1">`);
         lines.push(`      <span>${esc(group.name)} (${group.nodeCount} nodes)</span>`);
         lines.push(`      <div role="group">`);
 
-        // Render nodes within this group
-        for (const nodeLabel of group.nodeLabels) {
-            const nodeDesc = description.nodes.find(n => n.label === nodeLabel);
+        // Render nodes within this group by ID
+        for (const nid of group.nodeIds) {
+            const nodeDesc = nodeDescById.get(nid);
             if (nodeDesc) {
-                lines.push(renderNodeTreeItem(nodeDesc, navigation, 8));
+                lines.push(renderNodeTreeItem(nodeDesc, navigation, 8, isFirstNode));
+                isFirstNode = false;
             }
         }
 
@@ -697,14 +701,15 @@ function renderAccessibleHTML(
     // Render ungrouped nodes
     for (const nodeDesc of description.nodes) {
         if (groupedNodeIds.has(nodeDesc.id)) continue;
-        lines.push(renderNodeTreeItem(nodeDesc, navigation, 4));
+        lines.push(renderNodeTreeItem(nodeDesc, navigation, 4, isFirstNode));
+        isFirstNode = false;
     }
 
     lines.push(`  </div>`);
 
-    // Relationships as a table
+    // Relationships as a read-only data table (native table semantics, not role="grid")
     if (description.relationships.length > 0) {
-        lines.push(`  <table role="grid" aria-label="Relationships">`);
+        lines.push(`  <table aria-label="Relationships">`);
         lines.push(`    <thead><tr><th scope="col">From</th><th scope="col">Relation</th><th scope="col">To</th></tr></thead>`);
         lines.push(`    <tbody>`);
 
@@ -733,27 +738,41 @@ function renderAccessibleHTML(
     return lines.join('\n');
 }
 
+/**
+ * Sanitize an ID for use in HTML id/aria-describedby attributes.
+ * Replaces anything that isn't alphanumeric, hyphen, or underscore.
+ */
+function sanitizeId(raw: string): string {
+    return raw.replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
 function renderNodeTreeItem(
     nodeDesc: NodeDescription,
     navigation: SpatialNavigationMap,
     indent: number,
+    isFirstFocusable: boolean = false,
 ): string {
     const pad = ' '.repeat(indent);
     const esc = escapeHtml;
+    const safeId = sanitizeId(nodeDesc.id);
     const nb = navigation.getNeighbors(nodeDesc.id);
 
-    // Build data-nav attributes
+    // Build data-nav attributes (IDs sanitized for attribute safety)
     const navAttrs: string[] = [];
-    if (nb?.above) navAttrs.push(`data-nav-above="node-${esc(nb.above)}"`);
-    if (nb?.below) navAttrs.push(`data-nav-below="node-${esc(nb.below)}"`);
-    if (nb?.left) navAttrs.push(`data-nav-left="node-${esc(nb.left)}"`);
-    if (nb?.right) navAttrs.push(`data-nav-right="node-${esc(nb.right)}"`);
+    if (nb?.above) navAttrs.push(`data-nav-above="node-${sanitizeId(nb.above)}"`);
+    if (nb?.below) navAttrs.push(`data-nav-below="node-${sanitizeId(nb.below)}"`);
+    if (nb?.left) navAttrs.push(`data-nav-left="node-${sanitizeId(nb.left)}"`);
+    if (nb?.right) navAttrs.push(`data-nav-right="node-${sanitizeId(nb.right)}"`);
 
-    const descId = `desc-${nodeDesc.id}`;
+    const descId = `desc-${safeId}`;
     const navStr = navAttrs.length > 0 ? ' ' + navAttrs.join(' ') : '';
 
+    // First node in the tree gets tabindex="0" so the tree is keyboard-focusable;
+    // all others get tabindex="-1" (roving tabindex pattern per WAI-ARIA APG).
+    const tabIndex = isFirstFocusable ? '0' : '-1';
+
     const lines: string[] = [];
-    lines.push(`${pad}<div role="treeitem" id="node-${esc(nodeDesc.id)}" aria-roledescription="diagram node" aria-label="${esc(nodeDesc.label)} (${esc(nodeDesc.mostSpecificType)})" aria-describedby="${descId}" tabindex="-1"${navStr}>`);
+    lines.push(`${pad}<div role="treeitem" id="node-${safeId}" aria-roledescription="diagram node" aria-label="${esc(nodeDesc.label)} (${esc(nodeDesc.mostSpecificType)})" aria-describedby="${descId}" tabindex="${tabIndex}"${navStr}>`);
     lines.push(`${pad}  <span id="${descId}" class="sr-only">${esc(nodeDesc.summary)}</span>`);
     lines.push(`${pad}  <span>${esc(nodeDesc.label)}</span>`);
     lines.push(`${pad}</div>`);
@@ -884,10 +903,10 @@ function computeNavigationOrder(
     // Find root nodes (nothing is above them and nothing is to their left)
     const hasAbove = new Set<string>();
     const hasLeft = new Set<string>();
-    for (const [from, to] of belowOf.entries()) {
+    for (const [, to] of belowOf.entries()) {
         if (to && nodeIds.has(to)) hasAbove.add(to);
     }
-    for (const [from, to] of rightOf.entries()) {
+    for (const [, to] of rightOf.entries()) {
         if (to && nodeIds.has(to)) hasLeft.add(to);
     }
 
