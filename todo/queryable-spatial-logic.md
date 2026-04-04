@@ -1,140 +1,179 @@
 # Queryable Spatial Logic: Research Direction
 
-The AccessibleTranslator compiles `InstanceLayout` constraints to navigation and description. But the constraints encode more than layout — they are **logical assertions about spatial relationships**. This document outlines a research direction: exposing the constraint system as a queryable logic, enabling must/can/cannot reasoning over diagram structure.
+## The Architectural Parallel
 
-## The Core Idea
+Spytial has two layers of structured information:
 
-Spytial's constraints are facts in a spatial logic:
+| | **Data layer** | **Layout layer** |
+|---|---|---|
+| **Structure** | `IDataInstance` — atoms, relations, tuples | `InstanceLayout` — nodes, constraints, groups |
+| **Evaluator** | `IEvaluator` / `SGraphQueryEvaluator` | **missing** |
+| **Query** | `"left.val"` → what is Node0's left child's value? | `"must.leftOf(Node0)"` → what must be left of Node0? |
+| **Logic** | Relational (Forge/Alloy-style joins, closures) | Spatial constraint logic (conjunctions, disjunctions, negation) |
+
+The `SGraphQueryEvaluator` queries the datum: atoms, relations, tuples. It answers "what *is*" questions about the data. What's missing is the parallel evaluator over the layout: one that answers "what *must be*, what *can be*, what *cannot be*" questions about the spatial arrangement.
+
+The layout already has the logical machinery for this. `InstanceLayout` stores:
+- **Conjunctive constraints** (`constraints: LayoutConstraint[]`) — all must hold
+- **Disjunctive constraints** (`disjunctiveConstraints: DisjunctiveConstraint[]`) — at least one alternative per disjunction
+- **Negation** (`negateAtomicConstraint`, `negateConjunction`, `negateDisjunction`) with De Morgan's law
+- **Type guards** for each constraint kind (TopConstraint, LeftConstraint, AlignmentConstraint, BoundingBoxConstraint, GroupBoundaryConstraint)
+
+This is already a formula in a spatial constraint logic. It just doesn't have an evaluator.
+
+## `ILayoutEvaluator`: The Missing Piece
+
+```typescript
+interface ILayoutEvaluator {
+  initialize(layout: InstanceLayout): void;
+  isReady(): boolean;
+
+  // Modal spatial queries
+  must(query: SpatialQuery): IEvaluatorResult;   // entailed by all satisfying assignments
+  can(query: SpatialQuery): IEvaluatorResult;    // consistent with at least one assignment
+  cannot(query: SpatialQuery): IEvaluatorResult; // contradicted by all assignments
+
+  // Compose with data evaluator
+  evaluateHeterogeneous(
+    dataQuery: string,              // Forge expression over IDataInstance
+    spatialQuery: SpatialQuery,     // spatial query over InstanceLayout
+    dataEvaluator: IEvaluator       // the datum evaluator
+  ): IEvaluatorResult;
+}
+
+interface SpatialQuery {
+  relation: 'leftOf' | 'rightOf' | 'above' | 'below' | 'aligned' | 'grouped' | 'contains';
+  nodeId: string;
+  transitive?: boolean;  // follow transitive closure
+}
+```
+
+**`must`** = the query holds in every satisfying assignment of the constraint system. Computed by: the constraint (or its transitive closure) is in the conjunctive set, or it is entailed by all alternatives of every relevant disjunction.
+
+**`can`** = the query holds in at least one satisfying assignment. Computed by: there exists some consistent selection of disjunctive alternatives where the query holds.
+
+**`cannot`** = the query holds in no satisfying assignment. Computed by: `can` returns empty, or the negation of the query is in `must`.
+
+The three modalities mirror Alloy's analysis: `must` is like checking a universal assertion, `can` is like finding a satisfying instance, `cannot` is like proving unsatisfiability.
+
+## Why This Is the Real Affordance
+
+The AccessibleTranslator's navigation and description are useful, but they only afford **observation** — the same kind of information you get from looking at a rendered diagram. A sighted user looking at a BST doesn't just observe positions; they **reason**: "3 must be to the left of 10 because it's in the left subtree, and left children go left." That reasoning is a query over the constraint system.
+
+The free ride property (Shimojima 1996) says diagrams give you inferences for free because structural constraints match domain constraints. But a text description or even a navigable ARIA tree doesn't preserve those free rides — you can observe individual nodes but you can't query the constraint structure. An `ILayoutEvaluator` restores the free rides by making the constraint logic directly queryable.
+
+Barter & Coppin (Diagrams 2022) argue exactly this: WCAG text descriptions destroy the inferential advantages of diagrams. The fix isn't better descriptions. It's preserving the constraint structure in a form that supports the same reasoning.
+
+## Heterogeneous Queries: Where It Gets Interesting
+
+The most powerful queries cross the data/layout boundary. These are heterogeneous in Fisler's sense (1996): they combine sentential (data) reasoning with diagrammatic (spatial) reasoning in a single inference.
 
 ```
-left(Node0, Node1)       // LeftConstraint
-left(Node1, Node3)       // LeftConstraint
-group(BSTNodes, Node0)   // BoundingBoxConstraint
+// "What must be to the left of all nodes with val > 10?"
+// Data query: which nodes have val > 10?
+// Layout query: what must be left of those nodes?
+evaluator.evaluateHeterogeneous("val > Int[10]", { relation: 'leftOf' }, dataEvaluator)
+
+// "Is this a valid BST?"
+// For every node N with left child L: must L be spatially left of N?
+// AND for every node N with left child L: must L.val < N.val?
+// This requires BOTH evaluators.
+
+// "Can Node(7) and Node(12) be at the same level?"
+// Layout query: can they be aligned on y?
+layoutEvaluator.can({ relation: 'aligned', nodeId: 'Node4', targetId: 'Node5', axis: 'y' })
+
+// "What nodes cannot be in the same group as the root?"
+layoutEvaluator.cannot({ relation: 'grouped', nodeId: 'Node0' })
 ```
 
-From these facts, composition and inference give us:
+The BST validity example is the clearest case of Fisler's heterogeneous reasoning: it requires checking that the data semantics (value ordering) are consistent with the spatial semantics (left/right positioning). Neither evaluator alone can answer it.
 
-- **Must**: `left(A,B) ^ left(B,C) -> left(A,C)` — "Node(10) must be right of Node(3)"
-- **Can**: No constraint orders Node(7) and Node(12) — they can be in either arrangement
-- **Cannot**: `left(A,B) -> ~left(B,A)` — "Node(5) cannot be to the right of Node(10)"
-- **Grouped**: `group(G,A) ^ group(G,B)` — must be co-grouped. No shared group -> cannot be grouped.
+## Relation to Existing Work
 
-This is not description. It is **reasoning over the diagram's logical content** — the same kind of reasoning a sighted user performs by inspection ("I can see that 3 must be further left than 10 because of the tree structure") but made explicit and queryable.
-
-## Related Work
-
-### Diagrams as First-Class Logical Objects
+### Fisler: Diagrams as Formal Objects
 
 **Fisler, "A Unified Approach to Hardware Verification Through a Heterogeneous Logic of Design Diagrams" (PhD, Indiana, 1996); Fisler & Johnson, TPCD 1994.**
-Defines a heterogeneous logic where hardware diagrams participate in formal proofs alongside sentential formulas. Diagrams are not informal aids — they are objects with inference rules. The key principle: a diagram's structural constraints carry logical content that should be formally exploitable, not flattened into a different representation.
+Diagrams participate in formal proofs alongside sentential formulas. A diagram's structural constraints carry logical content that should be formally exploitable. The `ILayoutEvaluator` does exactly this: it treats the InstanceLayout's constraints as a formal system and evaluates queries against it.
 
 **Fisler, "Diagrams and Computational Efficacy" (2002).**
-Argues that diagrams change what is *computationally tractable*, not just what is cognitively natural. Her timing diagram logic (Fisler, JLLI 1999; CAV 1997) can express context-free and context-sensitive properties that linear temporal logics like LTL cannot — strictly because of the 2D diagrammatic structure. The implication for Spytial: the spatial constraint structure may support queries that a flat relational encoding does not naturally afford.
+Diagrams change what is *computationally tractable*. Her timing diagram logic (JLLI 1999; CAV 1997) expresses context-free properties that LTL cannot — because of 2D structure. Implication: the spatial constraint structure may support queries that a flat relational encoding does not naturally afford. This argues for the layout evaluator as a *separate* reasoning engine, not just a view on the data evaluator.
 
-**Shin, "The Logical Status of Diagrams" (Cambridge, 1994).**
-Formalizes Venn diagrams as a logic (Venn-I, Venn-II) with syntax, semantics, and inference rules. Venn-II is sound, complete, and expressively equivalent to monadic first-order logic. Establishes the precedent that diagrammatic representations can be rigorous formal systems.
+**Fisler, "Two-Dimensional Regular Expressions" (FMCAD 2007).**
+Extends regular expressions to 2D for concurrent-channel protocol specifications. The 2D structure is essential to the formalism, not incidental. Parallel: Spytial's constraint system is inherently 2D (left/right + above/below), and collapsing it to 1D (a flat list of facts) may lose expressiveness.
 
-**Stapleton et al., Spider Diagrams (2004-2005); Concept Diagrams (2013-2018).**
-Extend Euler diagrams with existential witnesses ("spiders") and binary-relation arrows. Concept diagrams support reasoning about OWL ontology axioms — detecting inconsistencies and entailments diagrammatically. Sound inference rules operate on diagram structure. Speedith (Urbas & Jamnik, 2015) implements an interactive theorem prover for spider diagrams.
+### Fisler + Krishnamurthi: Query-Based Exploration
 
-**Barwise & Etchemendy, "Hyperproof" (1994).**
-A heterogeneous logic mixing first-order sentential reasoning with diagrammatic reasoning about blocks-world configurations. Proofs can transfer information between modalities. Demonstrates that formal reasoning can operate across representational formats.
+**Margrave (ICSE 2005).**
+Users pose structural queries over XACML policies; Margrave enumerates answers and supports change-impact analysis. The `ILayoutEvaluator` follows this model: pose must/can/cannot queries over the constraint system, get enumerated node sets. Change-impact analysis applies directly: given two `InstanceLayout`s (e.g., before and after adding a constraint), what spatial relationships changed?
 
-### Query-Based Analysis of Formal Structures
+**Aluminum (ICSE 2013).**
+Presents minimal satisfying Alloy instances. When `can` queries have large answer sets, Aluminum's minimality principle applies: show the simplest arrangement consistent with the constraints. This informs how we present `can` results — not all possibilities, but the minimal ones.
 
-**Fisler, Krishnamurthi, Meyerovich, Tschantz, "Verification and Change-Impact Analysis of Access-Control Policies" (ICSE 2005) — the Margrave tool.**
-Translates XACML policies into MTBDDs and supports *query-based analysis*: users pose structural questions ("who can access what under which conditions?") and Margrave enumerates answers. Also supports *change-impact analysis* — given two policy versions, what differs? This is the interaction model for queryable diagram logic: pose a question about the constraint system, get enumerated answers.
+**Alchemy (FSE 2008).**
+Compiles Alloy specs to executable implementations. The `ILayoutEvaluator` does something analogous: compiles layout constraints to an executable query engine.
 
-**Nelson, Saghafi, Dougherty, Fisler, Krishnamurthi, "Aluminum: Principled Scenario Exploration through Minimality" (ICSE 2013).**
-Modifies Alloy's constraint solver to present *minimal* satisfying instances — no unnecessary structure. Addresses the usability problem of overwhelming counterexamples. Directly relevant to presenting query results: when asking "what can be left of X?", show the simplest arrangement that satisfies the constraint.
+### QSR: The Reasoning Machinery
 
-**Jackson, "Software Abstractions: Logic, Language, and Analysis" (MIT Press, 2006/2012).**
-Alloy's relational logic — first-order logic with transitive closure and relational join. Models are found by SAT-solving bounded instances. Spytial already uses relational queries over data instances (SGraphQueryEvaluator). The gap is applying the same relational query machinery to the *constraint/layout* layer.
-
-### Qualitative Spatial Reasoning (QSR)
-
-**Randell, Cui, Cohn, "A Spatial Logic Based on Regions and Connection" (KR 1992) — RCC-8.**
-Eight jointly exhaustive, pairwise disjoint topological relations (disconnected, externally connected, partial overlap, equal, proper part, etc.) with a composition table. Given the relation between A-B and B-C, infer possible relations between A-C. This is the reasoning engine for must/can/cannot queries over spatial constraints.
-
-**Allen, "Maintaining Knowledge about Temporal Intervals" (CACM 1983).**
-Thirteen interval relations with a composition table. The template for all qualitative calculi. Spytial's left/right/above/below constraints are interval-like: they define qualitative ordering without exact positions.
+**RCC-8 (Randell, Cui, Cohn, KR 1992); Allen's Interval Algebra (CACM 1983).**
+Composition tables: given the relation between A-B and B-C, infer possible relations between A-C. This is the engine for must/can/cannot. Spytial's left/right/above/below constraints map to interval-algebra-style relations. Path consistency (algebraic closure) over the composition table determines what *must*, *can*, and *cannot* hold.
 
 **Ligozat, "Qualitative Spatial and Temporal Reasoning" (Wiley, 2013).**
-Unifies Allen, RCC-8, cardinal directions under a single algebraic framework (relation algebras, constraint networks, algebraic closure). Identifies tractable fragments — important for knowing which queries can be answered efficiently.
+Identifies tractable fragments. The three maximal tractable subclasses of RCC-8 are decidable by algebraic closure. Important for knowing which `ILayoutEvaluator` queries can be answered in polynomial time.
 
-**Stocker & Sirin, "PelletSpatial" (OWLED 2009); GeoSPARQL (OGC 2022).**
-Make QSR queryable: PelletSpatial wraps RCC-8 in SPARQL; GeoSPARQL standardizes spatial queries on RDF data. These target geographic data, but the query patterns (SPARQL + spatial composition) transfer to abstract diagram constraints.
-
-### Diagram Accessibility and the "Free Ride" Problem
+### Accessibility as Motivation
 
 **Barter & Coppin, "A Diagram Must Never Be Ten Thousand Words" (Diagrams 2022).**
-Argues formally that WCAG text descriptions destroy Shimojima's "free ride" property — the automatic consequential information that diagrams provide because their structural constraints match domain constraints. Accessible representations must preserve constraint structure. This is the theoretical justification for queryable spatial logic as an accessibility mechanism: if text descriptions lose the free rides, and free rides come from constraint structure, then exposing the constraints as queryable logic *restores* the free rides non-visually.
+Text descriptions destroy free rides. The fix is preserving constraint structure. The `ILayoutEvaluator` is that fix: it makes the constraint logic queryable in any modality, not just visual.
 
-**Shimojima, "Semantic Properties of Diagrams and Their Cognitive Relevance" (1996).**
-Defines "free rides" formally: when a representation's structural constraints match the target domain's constraints, consequences become readable without explicit inference. Spytial's constraints *are* the structural constraints — they directly encode spatial free rides. A query interface makes those free rides accessible without vision.
+**Shimojima, "Free Rides" (1996).**
+Diagrams give inferences for free when structural constraints match domain constraints. The constraints in `InstanceLayout` *are* the structural constraints. The `ILayoutEvaluator` makes those free rides accessible without vision by turning implicit spatial inference into explicit queryable logic.
 
-**Goncalves et al., "TADA: Making Node-Link Diagrams Accessible" (CHI 2024).**
-Touch-and-audio exploration of node-link diagrams for blind users. Supports search, navigation, filtering, overview queries. Preserves some structural properties through sonification. But no formal logic underneath — queries are ad-hoc, not grounded in the diagram's constraint system.
+**TADA (Goncalves et al., CHI 2024).**
+Query-like touch interaction for blind users over node-link diagrams. Supports search, navigation, filtering. But no formal logic — queries are ad-hoc. The `ILayoutEvaluator` provides the formal grounding that TADA lacks.
 
-### Cardelli's Spatial Logic for Graphs
+### Graph Query Languages
 
 **Cardelli, Gardner, Ghelli, "A Spatial Logic for Querying Graphs" (ICALP 2002).**
-Defines a logic with spatial connectives (composition, restriction) for querying labeled directed graphs. You can express "find all subgraphs matching pattern P adjacent to pattern Q." Not about physical space, but about structural/spatial organization. Provides a theoretical model for what a query language over Spytial layouts could look like — graph queries with spatial composition operators.
+Spatial connectives (composition, restriction) for querying labeled directed graphs. "Find subgraphs matching pattern P adjacent to pattern Q." Theoretical model for what layout queries could look like as a logic.
 
-## Where Spytial Sits
+**Shin, "The Logical Status of Diagrams" (1994); Stapleton et al., Concept Diagrams (2013-2018); Speedith (2015).**
+Formal diagrammatic logics with sound inference rules and implemented provers. Establish that diagram-level reasoning can be mechanized.
+
+## The Gap
 
 No published system combines:
-1. A formal logic over spatial diagram constraints (not geographic, not set-theoretic)
-2. A query language for must/can/cannot reasoning over that logic
-3. Accessibility as a first-class output modality
+1. A formal evaluator over spatial diagram constraints (not geographic data, not set-theoretic diagrams)
+2. Modal queries (must/can/cannot) over that evaluator
+3. Heterogeneous composition with a data-level evaluator
+4. Accessibility as a first-class output
 
-The pieces exist separately:
-- Fisler's heterogeneous logic: diagrams as formal objects with inference rules
-- Margrave/Aluminum: query-based exploration of formal structures
-- QSR composition tables: reasoning machinery for spatial must/can/cannot
-- Barter & Coppin: theoretical argument that accessibility requires preserving constraint structure
+Spytial already has (3) halfway — `SGraphQueryEvaluator` for data, `InstanceLayout` with full logical machinery for constraints. The `ILayoutEvaluator` closes the loop.
 
-Spytial is uniquely positioned because the `InstanceLayout` already is a constraint structure — not pixel positions, not visual rendering, but abstract spatial assertions. The `SGraphQueryEvaluator` already supports relational queries over data instances. Extending this to spatial constraints would close the loop: data queries ("what is Node(10)'s left child?") + constraint queries ("what must be to the left of Node(10)?") + accessibility output.
+## Implementation Path
 
-## Possible Query Interface
+### Phase 1: Conjunctive must/cannot (transitive closure)
 
-Building on Margrave's interaction model:
+Build the spatial navigation map from `buildSpatialNavigationMap()` (already exists in AccessibleTranslator) into an evaluator. `must.leftOf(X)` = transitive closure of LeftConstraints from X. `cannot.leftOf(X)` = nodes where X is transitively left of them (antisymmetry). This is pure graph reachability — no SAT solving needed.
 
-```
-// Must queries (entailed by constraints)
-must.leftOf("Node0")        // -> ["Node1"] — LeftConstraint(Node0, Node1)
-must.leftOf("Node0", transitive=true)  // -> ["Node1", "Node3"] — transitive closure
+### Phase 2: Disjunctive can (constraint satisfaction)
 
-// Can queries (consistent with constraints)
-can.leftOf("Node5")         // -> ["Node6", ...] — no constraint prevents it
+For `can` queries over disjunctive constraints: enumerate which alternatives are consistent with the query. This requires checking satisfiability of constraint subsets. For small diagrams, direct enumeration suffices. For larger ones, connect to the existing Kiwi constraint solver.
 
-// Cannot queries (contradicted by constraints)
-cannot.leftOf("Node1")      // -> ["Node0"] — would contradict left(Node0, Node1)
+### Phase 3: Heterogeneous queries
 
-// Grouped queries
-must.coGrouped("Node0", "Node1")    // -> true if both in same group
-can.beGrouped("Node3", "Node6")     // -> true if no constraint prevents it
+Compose `ILayoutEvaluator` with `SGraphQueryEvaluator`. A heterogeneous query first evaluates the data subquery (Forge expression), then pipes the result node set into a spatial query. This is where the real power is — "is this a valid BST?" as a single query.
 
-// Change-impact (a la Margrave)
-// Given two InstanceLayouts, what spatial relationships changed?
-diff.newConstraints(layout1, layout2)
-diff.removedConstraints(layout1, layout2)
-```
+### Phase 4: Change-impact analysis (a la Margrave)
 
-These queries compose with the existing SGraphQueryEvaluator:
-
-```
-// "What must be to the left of all nodes whose val > 10?"
-const highValueNodes = evaluator.query("Node.val > 10");  // data query
-highValueNodes.flatMap(n => must.leftOf(n.id));            // constraint query
-```
+Given two `InstanceLayout`s, compute the spatial diff: which must/can/cannot relationships changed? This connects to the existing PICK-like spec diff design (two layouts + diff).
 
 ## Open Questions
 
-1. **Tractability**: Which fragments of the spatial constraint logic admit efficient query answering? QSR composition tables give polynomial path consistency for the basic relations, but transitive closure + grouping may be harder.
+1. **Query syntax**: Should the layout evaluator accept Forge-like string expressions (consistent with `SGraphQueryEvaluator`) or a structured query API? String expressions are more composable but require a grammar extension.
 
-2. **Completeness**: The constraint system is often *under-specified* — many arrangements are consistent. "Can" queries may have large answer sets. How to present these usefully? Aluminum's minimality principle applies here.
+2. **Tractability boundaries**: Conjunctive must/cannot is polynomial (graph reachability). Disjunctive can is NP in general (constraint satisfaction). Where does the practical boundary lie for typical Spytial diagrams?
 
-3. **Interaction model**: Margrave uses a command-line query interface. For accessibility, should queries be posed via natural language ("what must be left of the root?"), structured commands, or navigational actions (arrow key + modifier = "show me everything that must be in this direction")?
+3. **Interaction modality**: For accessibility, should queries be posed via natural language, structured commands, or navigational gestures (arrow key + modifier = "show me everything that must be in this direction")?
 
-4. **Connecting data and constraint queries**: The most interesting questions cross the boundary — "is this a valid BST?" requires checking that data ordering (val) is consistent with spatial ordering (left/right constraints). This is heterogeneous reasoning in Fisler's sense.
+4. **Result presentation**: Aluminum's minimality principle for `can` queries. For `must` queries, should we show the proof (which constraints entail this) or just the answer?
