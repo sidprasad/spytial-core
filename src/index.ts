@@ -35,6 +35,7 @@ export { type default as IEvaluator, SelectorArityError } from './evaluators/int
 export { ForgeEvaluator, WrappedForgeEvaluator } from './evaluators/forge-evaluator';
 export { SQLEvaluator } from './evaluators/sql-evaluator';
 export { WebColaTranslator } from './translators';
+export { AccessibleTranslator, buildSpatialNavigationMap } from './translators';
 export { StructuredInputGraph } from './translators';
 export {
   ignoreHistory,
@@ -54,6 +55,12 @@ export type {
   SequencePolicyContext,
   SequencePolicyResult,
   SequenceViewportBounds,
+  AccessibleLayout,
+  AccessibleTranslatorOptions,
+  SpatialNavigationMap,
+  SpatialNeighbors,
+  LayoutDescription,
+  SpatialRelationshipDescription,
 } from './translators';
 export { SGraphQueryEvaluator } from "./evaluators/sgq-evaluator";
 

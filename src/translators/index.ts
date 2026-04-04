@@ -1,8 +1,26 @@
 /**
- * Translators module - converts layout data to different visualization libraries
+ * Translators module - converts layout data to different output representations
  */
 
 export { WebColaTranslator } from './webcola/webcolatranslator';
+
+// Accessible translator — parallel compilation target for a11y
+export { AccessibleTranslator, buildSpatialNavigationMap } from './accessible';
+export type {
+  AccessibleLayout,
+  AccessibleTranslatorOptions,
+  SpatialNavigationMap,
+  SpatialNeighbors,
+  EdgeReference,
+  LayoutDescription,
+  OverviewSection,
+  TypeSection,
+  NodeDescription,
+  EdgeDescription,
+  GroupDescription,
+  RelationshipSummary,
+  SpatialRelationshipDescription,
+} from './accessible';
 
 
 // WebColaCnDGraph web component for browser usage
