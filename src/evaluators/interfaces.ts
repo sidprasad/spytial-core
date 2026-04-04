@@ -144,3 +144,79 @@ interface IEvaluator {
 }
 
 export default IEvaluator;
+
+// ==================== Spatial Layout Evaluator ====================
+//
+// A parallel evaluator over the layout constraint system.
+// Where IEvaluator queries the datum (atoms, relations, tuples),
+// ILayoutEvaluator queries the spatial arrangement (constraints, groups).
+//
+// The three modalities mirror Alloy's analysis:
+//   must  = entailed by all satisfying assignments (universal assertion)
+//   can   = consistent with at least one assignment (instance finding)
+//   cannot = holds in no satisfying assignment (unsat proving)
+
+import type { InstanceLayout } from "../layout/interfaces";
+
+/**
+ * Spatial relations corresponding to constraint types in InstanceLayout.
+ * These are the atomic predicates of the diagram logic.
+ */
+export type SpatialRelation = 'leftOf' | 'rightOf' | 'above' | 'below' | 'xAligned' | 'yAligned' | 'grouped' | 'contains';
+
+/**
+ * A structured query over the spatial constraint system.
+ *
+ * Queries ask: which nodes stand in a given spatial relation to a specified anchor node?
+ *
+ * Examples (in the string syntax that maps to this structure):
+ *   must { x | leftOf(x, Node0) }          → all nodes that must be left of Node0
+ *   must { x | ^leftOf(x, Node0) }         → transitive closure
+ *   can  { x | above(x, Node0) }           → nodes that can be above Node0
+ *   cannot xAligned(Node1, Node0)           → boolean: can Node1 not be x-aligned with Node0?
+ */
+export interface SpatialQuery {
+    /** The spatial relation to query */
+    relation: SpatialRelation;
+    /** The anchor node ID */
+    nodeId: string;
+    /** If true, follow transitive closure of the relation (^relation) */
+    transitive?: boolean;
+}
+
+/**
+ * Evaluator over the spatial constraint system of an InstanceLayout.
+ *
+ * Treats the layout's conjunctive and disjunctive constraints as a formula
+ * in a spatial constraint logic, and answers modal queries over that formula.
+ *
+ * Design follows Margrave (Fisler & Krishnamurthi, ICSE 2005): pose queries
+ * over a constraint system, get enumerated node sets as results.
+ */
+export interface ILayoutEvaluator {
+    /** Initialize with a layout's constraint system */
+    initialize(layout: InstanceLayout): void;
+
+    /** Whether the evaluator has been initialized */
+    isReady(): boolean;
+
+    /**
+     * What MUST satisfy the query? (entailed by all satisfying assignments)
+     * For directional relations: transitive closure over conjunctive constraints.
+     * For alignment: equivalence class on the specified axis.
+     * For grouped: all co-members of shared groups.
+     */
+    must(query: SpatialQuery): IEvaluatorResult;
+
+    /**
+     * What CANNOT satisfy the query? (contradicted by all assignments)
+     * Derived from antisymmetry: if A must be right of X, A cannot be left of X.
+     */
+    cannot(query: SpatialQuery): IEvaluatorResult;
+
+    /**
+     * What CAN satisfy the query? (consistent with at least one assignment)
+     * Phase 2: requires reasoning over disjunctive constraints.
+     */
+    can(query: SpatialQuery): IEvaluatorResult;
+}

@@ -157,6 +157,7 @@
                 </select>
             </div>
             <div id="evaluator-repl-mount"></div>
+            <div id="diagram-repl-mount"></div>
             <div id="sql-schemas-container" style="display: none;" class="mb-3">
                 <details>
                     <summary class="text-muted small">📊 Available SQL Tables</summary>
@@ -248,6 +249,7 @@
     <script>
         // Variables to store data
         let currentInstanceLayout = null;
+        let cachedDiagramEvaluator = null; // ILayoutEvaluator for spatial queries
         
         // Sequence state for multiple instances
         let alloyInstances = [];           // Array of all parsed Alloy instances
@@ -633,6 +635,17 @@
             }
 
             console.log('Generated Instance Layout:', currentInstanceLayout);
+
+            // Mount Diagram REPL (spatial constraint queries) for this layout
+            if (window.mountDiagramRepl && CndCore.LayoutEvaluator && currentInstanceLayout) {
+                try {
+                    cachedDiagramEvaluator = new CndCore.LayoutEvaluator();
+                    cachedDiagramEvaluator.initialize(currentInstanceLayout);
+                    window.mountDiagramRepl('diagram-repl-mount', cachedDiagramEvaluator);
+                } catch (err) {
+                    console.warn('Failed to mount Diagram REPL:', err);
+                }
+            }
         }
 
         /**

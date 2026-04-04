@@ -1,0 +1,68 @@
+.diagram-repl-container {
+  font-family: monospace;
+  font-size: 13px;
+}
+
+.diagram-repl-input {
+  font-family: monospace;
+  font-size: 13px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  margin: 8px 0;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background: #1e1e2e;
+  color: #cdd6f4;
+}
+
+.diagram-repl-input::placeholder {
+  color: #6c7086;
+}
+
+.diagram-repl-input:focus {
+  outline: none;
+  border-color: #89b4fa;
+}
+
+.diagram-repl-output {
+  font-family: monospace;
+  white-space: pre-wrap;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.diagram-repl-line {
+  margin: 0;
+  padding: 1px 0;
+  line-height: 1.4;
+}
+
+.diagram-repl-line-input {
+  color: #89b4fa;
+}
+
+.diagram-repl-line-output {
+  color: #a6e3a1;
+}
+
+.diagram-repl-line-error {
+  color: #f38ba8;
+}
+
+.diagram-repl-help {
+  color: #6c7086;
+  font-size: 11px;
+  margin: 4px 0 0 0;
+  padding: 0;
+}
+
+.diagram-repl-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6c7086;
+  margin: 0 0 4px 0;
+}
