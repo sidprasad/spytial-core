@@ -664,8 +664,8 @@ function renderAccessibleHTML(
 
     lines.push(`<div role="graphics-document" aria-roledescription="diagram" aria-label="${esc(description.overview.summary)}">`);
 
-    // Overview as a visually hidden description
-    lines.push(`  <p class="sr-only">${esc(description.overview.summary)}</p>`);
+    // Overview — visible to everyone, not just screen readers
+    lines.push(`  <p class="diagram-overview">${esc(description.overview.summary)}</p>`);
 
     // Main navigable tree: groups as expandable parents, nodes as leaves
     lines.push(`  <div role="tree" aria-label="Diagram nodes">`);
@@ -682,7 +682,7 @@ function renderAccessibleHTML(
         }
 
         lines.push(`    <div role="treeitem" aria-expanded="true" aria-label="Group: ${esc(group.name)}" tabindex="-1">`);
-        lines.push(`      <span>${esc(group.name)} (${group.nodeCount} nodes)</span>`);
+        lines.push(`      <span class="group-label">${esc(group.name)} <span class="node-count">(${group.nodeCount} nodes)</span></span>`);
         lines.push(`      <div role="group">`);
 
         // Render nodes within this group by ID
@@ -709,33 +709,50 @@ function renderAccessibleHTML(
 
     // Relationships as a read-only data table (native table semantics, not role="grid")
     if (description.relationships.length > 0) {
-        lines.push(`  <table aria-label="Relationships">`);
-        lines.push(`    <thead><tr><th scope="col">From</th><th scope="col">Relation</th><th scope="col">To</th></tr></thead>`);
-        lines.push(`    <tbody>`);
+        lines.push(`  <section class="diagram-relationships">`);
+        lines.push(`    <h3>Relationships</h3>`);
+        lines.push(`    <table aria-label="Relationships">`);
+        lines.push(`      <thead><tr><th scope="col">From</th><th scope="col">Relation</th><th scope="col">To</th></tr></thead>`);
+        lines.push(`      <tbody>`);
 
         for (const edge of layout.edges) {
             if (edge.hidden || edge.groupId) continue;
-            lines.push(`      <tr><td>${esc(edge.source.label)}</td><td>${esc(edge.relationName)}</td><td>${esc(edge.target.label)}</td></tr>`);
+            lines.push(`        <tr><td>${esc(edge.source.label)}</td><td>${esc(edge.relationName)}</td><td>${esc(edge.target.label)}</td></tr>`);
         }
 
-        lines.push(`    </tbody>`);
-        lines.push(`  </table>`);
+        lines.push(`      </tbody>`);
+        lines.push(`    </table>`);
+        lines.push(`  </section>`);
     }
 
-    // Spatial relationships as a description list
+    // Spatial relationships — visible as prose, not just dt/dd
     if (description.spatialRelationships.length > 0) {
-        lines.push(`  <section aria-label="Spatial layout">`);
-        lines.push(`    <dl>`);
+        lines.push(`  <section class="diagram-spatial" aria-label="Spatial layout">`);
+        lines.push(`    <h3>Spatial Layout</h3>`);
+        lines.push(`    <ul>`);
         for (const sr of description.spatialRelationships) {
-            lines.push(`      <dt>${esc(sr.sourceNodeLabel)}</dt>`);
-            lines.push(`      <dd>${esc(sr.description)}</dd>`);
+            // Human-readable: "Node (5) is to the left of Node (10), because of the left relation"
+            const because = sr.reason ? `, because of the <em>${esc(sr.reason)}</em> relation` : '';
+            lines.push(`      <li><strong>${esc(sr.sourceNodeLabel)}</strong> is ${kindToPhrase(sr.kind)} <strong>${esc(sr.targetNodeLabel)}</strong>${because}</li>`);
         }
-        lines.push(`    </dl>`);
+        lines.push(`    </ul>`);
         lines.push(`  </section>`);
     }
 
     lines.push(`</div>`);
     return lines.join('\n');
+}
+
+function kindToPhrase(kind: string): string {
+    switch (kind) {
+        case 'above': return 'above';
+        case 'below': return 'below';
+        case 'left-of': return 'to the left of';
+        case 'right-of': return 'to the right of';
+        case 'aligned': return 'aligned with';
+        case 'grouped': return 'grouped with';
+        default: return 'related to';
+    }
 }
 
 /**
@@ -771,10 +788,42 @@ function renderNodeTreeItem(
     // all others get tabindex="-1" (roving tabindex pattern per WAI-ARIA APG).
     const tabIndex = isFirstFocusable ? '0' : '-1';
 
+    // Build visible attribute chips
+    const attrParts: string[] = [];
+    if (nodeDesc.attributes) {
+        for (const [key, values] of Object.entries(nodeDesc.attributes)) {
+            if (values.length > 0) {
+                attrParts.push(`<span class="node-attr"><span class="attr-key">${esc(key)}</span>: ${esc(values.join(', '))}</span>`);
+            }
+        }
+    }
+
+    // Build visible connection summary
+    const connParts: string[] = [];
+    for (const edge of nodeDesc.outgoing) {
+        connParts.push(`<span class="node-edge node-edge-out">${esc(edge.relation)} &rarr; ${esc(edge.connectedNodeLabel)}</span>`);
+    }
+    for (const edge of nodeDesc.incoming) {
+        connParts.push(`<span class="node-edge node-edge-in">${esc(edge.connectedNodeLabel)} &rarr; ${esc(edge.relation)}</span>`);
+    }
+
     const lines: string[] = [];
     lines.push(`${pad}<div role="treeitem" id="node-${safeId}" aria-roledescription="diagram node" aria-label="${esc(nodeDesc.label)} (${esc(nodeDesc.mostSpecificType)})" aria-describedby="${descId}" tabindex="${tabIndex}"${navStr}>`);
+
+    // Expanded screen reader description
     lines.push(`${pad}  <span id="${descId}" class="sr-only">${esc(nodeDesc.summary)}</span>`);
-    lines.push(`${pad}  <span>${esc(nodeDesc.label)}</span>`);
+
+    // Visible content: label, type badge, attributes, connections
+    lines.push(`${pad}  <span class="node-label">${esc(nodeDesc.label)}</span>`);
+    lines.push(`${pad}  <span class="node-type">${esc(nodeDesc.mostSpecificType)}</span>`);
+
+    if (attrParts.length > 0) {
+        lines.push(`${pad}  <span class="node-attrs">${attrParts.join(' ')}</span>`);
+    }
+    if (connParts.length > 0) {
+        lines.push(`${pad}  <span class="node-connections">${connParts.join(' ')}</span>`);
+    }
+
     lines.push(`${pad}</div>`);
 
     return lines.join('\n');
@@ -786,32 +835,32 @@ function renderNodeTreeItem(
 function renderAltText(description: LayoutDescription): string {
     const sections: string[] = [];
 
-    // Overview
+    // Overview — concise
     sections.push(description.overview.summary);
 
-    // Types
-    if (description.types.length > 0) {
-        sections.push('Types: ' + description.types.map(t => t.summary).join('. ') + '.');
+    // Key relationships — expressed naturally
+    if (description.relationships.length > 0) {
+        const relParts = description.relationships.map(r =>
+            `${r.relationName} (${r.edgeCount})`
+        );
+        sections.push('Edges: ' + relParts.join(', ') + '.');
     }
 
     // Groups
     if (description.groups.length > 0) {
-        sections.push('Groups: ' + description.groups.map(g => g.summary).join(' '));
+        sections.push(description.groups.map(g => g.summary).join(' '));
     }
 
-    // Key relationships
-    if (description.relationships.length > 0) {
-        sections.push('Relationships: ' + description.relationships.map(r => r.summary).join('. ') + '.');
-    }
-
-    // Spatial layout
+    // Spatial layout — expressed as natural prose, no redundant "(left)" suffix
     if (description.spatialRelationships.length > 0) {
-        const spatialDescriptions = description.spatialRelationships.map(s => s.description);
-        // Limit to avoid extremely long alt text
-        const limited = spatialDescriptions.slice(0, 10);
-        let spatialText = 'Layout: ' + limited.join('. ') + '.';
-        if (spatialDescriptions.length > 10) {
-            spatialText += ` (and ${spatialDescriptions.length - 10} more spatial relationships)`;
+        const spatialParts = description.spatialRelationships.slice(0, 8).map(s => {
+            const phrase = kindToPhrase(s.kind);
+            const because = s.reason ? ` (${s.reason})` : '';
+            return `${s.sourceNodeLabel} ${phrase} ${s.targetNodeLabel}${because}`;
+        });
+        let spatialText = 'Layout: ' + spatialParts.join('; ') + '.';
+        if (description.spatialRelationships.length > 8) {
+            spatialText += ` And ${description.spatialRelationships.length - 8} more.`;
         }
         sections.push(spatialText);
     }

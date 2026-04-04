@@ -83,55 +83,136 @@
         #accessible-html-output [role="graphics-document"] {
             font-family: system-ui, sans-serif;
         }
+        #accessible-html-output .diagram-overview {
+            font-size: 14px;
+            color: #555;
+            margin: 0 0 12px 0;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #eee;
+        }
         #accessible-html-output [role="treeitem"] {
-            padding: 6px 10px;
-            margin: 2px 0;
-            border-radius: 4px;
+            padding: 8px 12px;
+            margin: 4px 0;
+            border-radius: 6px;
+            border: 1px solid #e8e8e8;
             cursor: pointer;
             outline: none;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            gap: 6px;
+        }
+        #accessible-html-output [role="treeitem"]:hover {
+            background: #f5f5f5;
         }
         #accessible-html-output [role="treeitem"]:focus {
-            background: #e8e0f4;
-            box-shadow: 0 0 0 2px #5a3d8a;
-        }
-        #accessible-html-output [role="treeitem"][aria-roledescription="diagram node"]:focus {
-            background: #dce8f5;
+            background: #e8f0fe;
             box-shadow: 0 0 0 2px #007acc;
+            border-color: #007acc;
+        }
+        #accessible-html-output .node-label {
+            font-weight: 600;
+            font-size: 15px;
+        }
+        #accessible-html-output .node-type {
+            font-size: 11px;
+            background: #e8e8e8;
+            color: #555;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-weight: 500;
+        }
+        #accessible-html-output .node-attrs {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+        #accessible-html-output .node-attr {
+            font-size: 12px;
+            background: #eef6ff;
+            color: #1a5276;
+            padding: 1px 6px;
+            border-radius: 3px;
+        }
+        #accessible-html-output .attr-key {
+            font-weight: 600;
+        }
+        #accessible-html-output .node-connections {
+            width: 100%;
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+            margin-top: 2px;
+        }
+        #accessible-html-output .node-edge {
+            font-size: 11px;
+            padding: 1px 6px;
+            border-radius: 3px;
+        }
+        #accessible-html-output .node-edge-out {
+            background: #f0faf0;
+            color: #1e6e1e;
+        }
+        #accessible-html-output .node-edge-in {
+            background: #fef5e7;
+            color: #7d5a00;
+        }
+        #accessible-html-output .group-label {
+            font-weight: 600;
+        }
+        #accessible-html-output .node-count {
+            font-weight: 400;
+            color: #888;
         }
         #accessible-html-output [role="group"] {
-            padding-left: 20px;
+            padding-left: 16px;
             border-left: 2px solid #ddd;
             margin-left: 8px;
+            margin-top: 4px;
+        }
+        #accessible-html-output .diagram-relationships,
+        #accessible-html-output .diagram-spatial {
+            margin-top: 16px;
+        }
+        #accessible-html-output h3 {
+            font-size: 14px;
+            font-weight: 600;
+            margin: 0 0 8px 0;
+            color: #333;
         }
         #accessible-html-output table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 12px;
-            font-size: 14px;
+            font-size: 13px;
         }
         #accessible-html-output th, #accessible-html-output td {
-            border: 1px solid #ddd;
-            padding: 6px 10px;
+            border: 1px solid #e0e0e0;
+            padding: 5px 10px;
             text-align: left;
         }
         #accessible-html-output th {
-            background: #f0f0f0;
+            background: #f5f5f5;
             font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #666;
         }
-        #accessible-html-output section[aria-label="Spatial layout"] {
-            margin-top: 12px;
-            padding: 10px;
-            background: #f8f8f0;
-            border-radius: 4px;
-        }
-        #accessible-html-output dl {
-            display: grid;
-            grid-template-columns: auto 1fr;
-            gap: 4px 12px;
+        #accessible-html-output .diagram-spatial ul {
+            list-style: none;
+            padding: 0;
             margin: 0;
         }
-        #accessible-html-output dt { font-weight: 600; }
-        #accessible-html-output dd { margin: 0; }
+        #accessible-html-output .diagram-spatial li {
+            padding: 4px 0;
+            font-size: 13px;
+            color: #444;
+        }
+        #accessible-html-output .diagram-spatial em {
+            color: #5a3d8a;
+            font-style: normal;
+            font-weight: 500;
+        }
         .sr-only {
             position: absolute;
             width: 1px;
@@ -376,8 +457,14 @@ directives:
     </div>
 
     <!-- Scripts -->
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="../vendor/cola.js"></script>
     <script src="../dist/browser/spytial-core-complete.global.js"></script>
     <script>
+        // The browser bundle exposes `spytialcore` as the global.
+        // Other demos reference `CndCore`; alias for consistency.
+        const CndCore = spytialcore;
+
         // ─── State ─────────────────────────────────────────────────────────
         let currentAccessibleLayout = null;
 
@@ -464,13 +551,20 @@ directives:
             const container = document.getElementById('nav-map-output');
             const lines = [];
 
-            for (const [nodeId, neighbors] of accessible.navigation.entries()) {
-                lines.push(`<span class="nav-node">${esc(nodeId)}</span>`);
+            // Build a nodeId -> label lookup from the description
+            const labelOf = {};
+            for (const n of accessible.description.nodes) {
+                labelOf[n.id] = n.label;
+            }
+            const label = (id) => labelOf[id] || id;
 
-                if (neighbors.above) lines.push(`  <span class="nav-direction">above:</span> <span class="nav-target">${esc(neighbors.above)}</span>`);
-                if (neighbors.below) lines.push(`  <span class="nav-direction">below:</span> <span class="nav-target">${esc(neighbors.below)}</span>`);
-                if (neighbors.left)  lines.push(`  <span class="nav-direction">left:</span>  <span class="nav-target">${esc(neighbors.left)}</span>`);
-                if (neighbors.right) lines.push(`  <span class="nav-direction">right:</span> <span class="nav-target">${esc(neighbors.right)}</span>`);
+            for (const [nodeId, neighbors] of accessible.navigation.entries()) {
+                lines.push(`<span class="nav-node">${esc(label(nodeId))}</span>  <span style="color:#666">(${esc(nodeId)})</span>`);
+
+                if (neighbors.above) lines.push(`  <span class="nav-direction">↑ above:</span> <span class="nav-target">${esc(label(neighbors.above))}</span>`);
+                if (neighbors.below) lines.push(`  <span class="nav-direction">↓ below:</span> <span class="nav-target">${esc(label(neighbors.below))}</span>`);
+                if (neighbors.left)  lines.push(`  <span class="nav-direction">← left:</span>  <span class="nav-target">${esc(label(neighbors.left))}</span>`);
+                if (neighbors.right) lines.push(`  <span class="nav-direction">→ right:</span> <span class="nav-target">${esc(label(neighbors.right))}</span>`);
 
                 for (const edge of neighbors.outgoing) {
                     lines.push(`  <span class="nav-edge">${esc(edge.relation)}</span> &rarr; <span class="nav-target">${esc(edge.nodeLabel)}</span>`);
@@ -489,7 +583,7 @@ directives:
                 lines.push('');
             }
 
-            lines.push(`<span class="nav-direction">Navigation order:</span> ${accessible.navigation.nodeOrder.map(esc).join(' → ')}`);
+            lines.push(`<span class="nav-direction">Tab order:</span> ${accessible.navigation.nodeOrder.map(id => esc(label(id))).join(' → ')}`);
 
             container.innerHTML = lines.join('\n');
         }

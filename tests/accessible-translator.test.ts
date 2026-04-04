@@ -444,7 +444,7 @@ describe('Alt text output', () => {
         expect(alt).toContain('Diagram with');
         expect(alt).toContain('7 nodes');
         expect(alt).toContain('Node');
-        expect(alt).toContain('is to the left of');
+        expect(alt).toContain('to the left of');
     });
 
     it('handles empty layout gracefully', () => {
