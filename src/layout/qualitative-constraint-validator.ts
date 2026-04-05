@@ -1139,7 +1139,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         //   merged inclusion disjunction. O(M + K) alternatives total but 5 extra
         //   disjunctions → deeper search tree, worthwhile only when M⁴ is large.
         const BBOX_THRESHOLD = 5; // use bbox encoding when M > 5
-        const negatedBySource = new Map<ConstraintSource, LayoutGroup[]>();
+        const negatedBySource = new Map<SourceConstraint, LayoutGroup[]>();
         for (const group of this.groups) {
             if (!group.negated || !group.sourceConstraint) continue;
             const key = group.sourceConstraint;
@@ -3001,6 +3001,134 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             prunedByTransitivity: this.prunedByTransitivity,
             prunedByDecomposition: this.prunedByDecomposition,
         };
+    }
+
+    // ─── Spatial Query API (ILayoutEvaluator) ───────────────────────────────
+    //
+    // The solver's DifferenceConstraintGraphs (hGraph, vGraph) are the authoritative
+    // source for spatial reachability. These methods expose modal spatial queries
+    // directly from the solver state — no separate evaluator needed.
+    //
+    // After validateConstraints() succeeds, the graphs contain:
+    //   - All conjunctive constraints
+    //   - Resolved disjunctive alternatives (chosen by CDCL)
+    //   - Implicit alignment-order constraints
+    //
+    // This means:
+    //   - canReach captures the full resolved model (not just conjunctive base)
+    //   - isStrictlyOrdered distinguishes ordering from alignment
+    //   - areAligned captures alignment equivalence classes
+    //
+    // Semantics note: after CDCL resolution, the graph represents ONE satisfying
+    // model. For `must` we query reachability on this resolved model; for a true
+    // "must across all models" analysis, the conjunctive-only subgraph would be
+    // needed. The resolved model is what the layout will actually render, making
+    // it the pragmatically correct answer for diagram queries.
+
+    /**
+     * Check if nodeA is strictly ordered before nodeB on the horizontal axis.
+     * "Strictly ordered" means there's a positive-weight path (not just alignment).
+     */
+    public isLeftOf(a: string, b: string): boolean {
+        return this.hGraph.isStrictlyOrdered(a, b);
+    }
+
+    /**
+     * Check if nodeA is strictly ordered before nodeB on the vertical axis.
+     */
+    public isAbove(a: string, b: string): boolean {
+        return this.vGraph.isStrictlyOrdered(a, b);
+    }
+
+    /**
+     * Check if two nodes are x-aligned (same column) in the resolved model.
+     */
+    public isXAligned(a: string, b: string): boolean {
+        return this.hGraph.areAligned(a, b);
+    }
+
+    /**
+     * Check if two nodes are y-aligned (same row) in the resolved model.
+     */
+    public isYAligned(a: string, b: string): boolean {
+        return this.vGraph.areAligned(a, b);
+    }
+
+    /**
+     * Get all nodes reachable from `nodeId` in the given direction.
+     * Uses the solver's resolved graph (post-CDCL).
+     */
+    public getReachable(nodeId: string, relation: 'leftOf' | 'rightOf' | 'above' | 'below'): Set<string> {
+        const realNodeIds = new Set(this.nodes.map(n => n.id));
+        const result = new Set<string>();
+
+        switch (relation) {
+            case 'rightOf': {
+                // rightOf(X) = nodes strictly to the right of X in hGraph
+                for (const n of realNodeIds) {
+                    if (n !== nodeId && this.hGraph.isStrictlyOrdered(nodeId, n)) result.add(n);
+                }
+                break;
+            }
+            case 'leftOf': {
+                // leftOf(X) = nodes strictly to the left of X in hGraph
+                for (const n of realNodeIds) {
+                    if (n !== nodeId && this.hGraph.isStrictlyOrdered(n, nodeId)) result.add(n);
+                }
+                break;
+            }
+            case 'below': {
+                // below(X) = nodes strictly below X in vGraph
+                for (const n of realNodeIds) {
+                    if (n !== nodeId && this.vGraph.isStrictlyOrdered(nodeId, n)) result.add(n);
+                }
+                break;
+            }
+            case 'above': {
+                // above(X) = nodes strictly above X in vGraph
+                for (const n of realNodeIds) {
+                    if (n !== nodeId && this.vGraph.isStrictlyOrdered(n, nodeId)) result.add(n);
+                }
+                break;
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Get the alignment class for the given node on the given axis.
+     * Returns node IDs (excluding the query node itself and virtual group nodes).
+     */
+    public getAlignedWith(nodeId: string, axis: 'x' | 'y'): Set<string> {
+        const graph = axis === 'x' ? this.hGraph : this.vGraph;
+        const realNodeIds = new Set(this.nodes.map(n => n.id));
+        const classMembers = graph.getAlignmentClassOf(nodeId);
+        const result = new Set<string>();
+        for (const m of classMembers) {
+            if (m !== nodeId && realNodeIds.has(m)) result.add(m);
+        }
+        return result;
+    }
+
+    /**
+     * Get the horizontal topological ordering of real nodes.
+     * Returns node IDs in left-to-right order.
+     */
+    public getHorizontalOrdering(): string[] {
+        const realNodeIds = new Set(this.nodes.map(n => n.id));
+        const order = this.hGraph.topologicalSort() || [];
+        return order.filter(id => realNodeIds.has(id));
+    }
+
+    /**
+     * Get the vertical topological ordering of real nodes.
+     * Returns node IDs in top-to-bottom order.
+     */
+    public getVerticalOrdering(): string[] {
+        const realNodeIds = new Set(this.nodes.map(n => n.id));
+        const order = this.vGraph.topologicalSort() || [];
+        return order.filter(id => realNodeIds.has(id));
     }
 }
 

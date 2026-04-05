@@ -1099,7 +1099,7 @@ export function mountEvaluatorRepl(containerId: string, evaluator: IEvaluator, i
  * @param containerId - DOM element ID to mount into
  * @param evaluator - An initialized ILayoutEvaluator
  */
-export function mountDiagramRepl(containerId: string, evaluator: ILayoutEvaluator): boolean {
+export function mountDiagramRepl(containerId: string, evaluator: ILayoutEvaluator, allNodeIds?: Set<string>): boolean {
   const container = document.getElementById(containerId);
 
   if (!container) {
@@ -1114,7 +1114,7 @@ export function mountDiagramRepl(containerId: string, evaluator: ILayoutEvaluato
 
   try {
     const root = createRoot(container);
-    root.render(<DiagramRepl evaluator={evaluator} />);
+    root.render(<DiagramRepl evaluator={evaluator} allNodeIds={allNodeIds} />);
     console.log(`Diagram REPL mounted to #${containerId}`);
     return true;
   } catch (error) {

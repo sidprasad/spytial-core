@@ -43,6 +43,8 @@ type CounterfactualLayoutResult = {
     layout: InstanceLayout;
     error: ConstraintError | null;
     selectorErrors: SelectorErrorDetail[];
+    /** The constraint validator used, if available. Needed by ILayoutEvaluator. */
+    validator?: IConstraintValidator;
 };
 
 class MissingNodeConstraintError extends Error implements ConstraintError {
@@ -1271,7 +1273,7 @@ export class LayoutInstance {
 
         // Return layout with selectorErrors (if any) - these don't block the layout
         // but callers should check and display them to the user
-        return { layout, error: null, selectorErrors: this.selectorErrors };
+        return { layout, error: null, selectorErrors: this.selectorErrors, validator };
     }
 
     /**

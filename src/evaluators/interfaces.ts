@@ -157,6 +157,7 @@ export default IEvaluator;
 //   cannot = holds in no satisfying assignment (unsat proving)
 
 import type { InstanceLayout } from "../layout/interfaces";
+import type { QualitativeConstraintValidator } from "../layout/qualitative-constraint-validator";
 
 /**
  * Spatial relations corresponding to constraint types in InstanceLayout.
@@ -187,36 +188,40 @@ export interface SpatialQuery {
 /**
  * Evaluator over the spatial constraint system of an InstanceLayout.
  *
- * Treats the layout's conjunctive and disjunctive constraints as a formula
- * in a spatial constraint logic, and answers modal queries over that formula.
+ * Backed by a QualitativeConstraintValidator — delegates directional and
+ * alignment queries to the solver's DifferenceConstraintGraphs (hGraph, vGraph).
+ * Group membership is tracked separately.
  *
  * Design follows Margrave (Fisler & Krishnamurthi, ICSE 2005): pose queries
  * over a constraint system, get enumerated node sets as results.
  */
 export interface ILayoutEvaluator {
-    /** Initialize with a layout's constraint system */
-    initialize(layout: InstanceLayout): void;
+    /**
+     * Initialize with a layout and the solver that validated it.
+     * The solver must have already run validateConstraints().
+     */
+    initialize(layout: InstanceLayout, solver: QualitativeConstraintValidator): void;
 
     /** Whether the evaluator has been initialized */
     isReady(): boolean;
 
     /**
-     * What MUST satisfy the query? (entailed by all satisfying assignments)
-     * For directional relations: transitive closure over conjunctive constraints.
-     * For alignment: equivalence class on the specified axis.
+     * What MUST satisfy the query? (entailed by the resolved model)
+     * For directional relations: isStrictlyOrdered in the solver's DCGs.
+     * For alignment: SCC-based equivalence classes.
      * For grouped: all co-members of shared groups.
      */
     must(query: SpatialQuery): IEvaluatorResult;
 
     /**
-     * What CANNOT satisfy the query? (contradicted by all assignments)
+     * What CANNOT satisfy the query? (contradicted by the resolved model)
      * Derived from antisymmetry: if A must be right of X, A cannot be left of X.
      */
     cannot(query: SpatialQuery): IEvaluatorResult;
 
     /**
-     * What CAN satisfy the query? (consistent with at least one assignment)
-     * Phase 2: requires reasoning over disjunctive constraints.
+     * What CAN satisfy the query? (consistent with the resolved model)
+     * With solver backing, can = must (the resolved model is the assignment).
      */
     can(query: SpatialQuery): IEvaluatorResult;
 }

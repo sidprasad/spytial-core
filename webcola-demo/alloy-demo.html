@@ -637,11 +637,12 @@
             console.log('Generated Instance Layout:', currentInstanceLayout);
 
             // Mount Diagram REPL (spatial constraint queries) for this layout
-            if (window.mountDiagramRepl && CndCore.LayoutEvaluator && currentInstanceLayout) {
+            if (window.mountDiagramRepl && CndCore.LayoutEvaluator && currentInstanceLayout && layoutResult.validator) {
                 try {
                     cachedDiagramEvaluator = new CndCore.LayoutEvaluator();
-                    cachedDiagramEvaluator.initialize(currentInstanceLayout);
-                    window.mountDiagramRepl('diagram-repl-mount', cachedDiagramEvaluator);
+                    cachedDiagramEvaluator.initialize(currentInstanceLayout, layoutResult.validator);
+                    const allNodeIds = new Set(currentInstanceLayout.nodes.map(n => n.id));
+                    window.mountDiagramRepl('diagram-repl-mount', cachedDiagramEvaluator, allNodeIds);
                 } catch (err) {
                     console.warn('Failed to mount Diagram REPL:', err);
                 }

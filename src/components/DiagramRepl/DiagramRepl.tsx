@@ -17,12 +17,14 @@
 
 import React from 'react';
 import type { ILayoutEvaluator } from '../../evaluators/interfaces';
-import { parseSpatialQuery, formatParsedQuery } from './spatial-query-parser';
+import { parseSpatialQuery, formatParsedQuery, evaluateCompoundQuery } from './spatial-query-parser';
 import './DiagramRepl.css';
 
 interface DiagramReplProps {
     /** The layout evaluator (must be initialized with an InstanceLayout) */
     evaluator: ILayoutEvaluator;
+    /** All node IDs in the layout (needed for 'not' complement) */
+    allNodeIds?: Set<string>;
 }
 
 type ReplLine = {
@@ -32,7 +34,7 @@ type ReplLine = {
 
 type ReplExecution = ReplLine[];
 
-export const DiagramRepl: React.FC<DiagramReplProps> = ({ evaluator }) => {
+export const DiagramRepl: React.FC<DiagramReplProps> = ({ evaluator, allNodeIds }) => {
     const [textInput, setTextInput] = React.useState('');
     const [history, setHistory] = React.useState<ReplExecution[]>([]);
 
@@ -57,13 +59,24 @@ export const DiagramRepl: React.FC<DiagramReplProps> = ({ evaluator }) => {
                     execution.push({ type: 'error', text: `  Hint: ${parsed.error.hint}` });
                 }
             } else {
-                // Evaluate the query
-                const { modality, query } = parsed.value;
+                // Evaluate the query (supports compound expressions)
+                const { modality, expression } = parsed.value;
                 try {
-                    const result =
-                        modality === 'must' ? evaluator.must(query) :
-                        modality === 'can' ? evaluator.can(query) :
-                        evaluator.cannot(query);
+                    const isCompound = expression.type !== 'atomic';
+                    let result;
+
+                    if (isCompound) {
+                        // Compound expression — use set-based evaluation
+                        const nodeIds = allNodeIds ?? new Set<string>();
+                        result = evaluateCompoundQuery(evaluator, modality, expression, nodeIds);
+                    } else {
+                        // Simple atomic query — direct evaluator call
+                        const query = expression.query;
+                        result =
+                            modality === 'must' ? evaluator.must(query) :
+                            modality === 'can' ? evaluator.can(query) :
+                            evaluator.cannot(query);
+                    }
 
                     if (result.isError()) {
                         execution.push({ type: 'error', text: result.prettyPrint() });
@@ -95,7 +108,7 @@ export const DiagramRepl: React.FC<DiagramReplProps> = ({ evaluator }) => {
                 aria-label="Spatial query input"
             />
             <p className="diagram-repl-help">
-                Modalities: must | can | cannot &nbsp;&middot;&nbsp; Relations: leftOf, rightOf, above, below, xAligned, yAligned, grouped, contains &nbsp;&middot;&nbsp; ^ = transitive
+                Modalities: must | can | cannot &nbsp;&middot;&nbsp; Relations: leftOf, rightOf, above, below, xAligned, yAligned, grouped, contains &nbsp;&middot;&nbsp; ^ = transitive &nbsp;&middot;&nbsp; Combinators: and | or | not
             </p>
             <div className="diagram-repl-output" role="log" aria-live="polite">
                 {history.map((execution, execIdx) => (
