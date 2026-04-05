@@ -20,7 +20,9 @@ import { ReplWithVisualization, ReplWithVisualizationProps } from '../src/compon
 import { PyretDataInstance } from '../src/data-instance/pyret/pyret-data-instance';
 import { PyretEvaluator } from '../src/components/ReplInterface/parsers/PyretExpressionParser';
 import { EvaluatorRepl } from '../src/components/EvaluatorRepl/EvaluatorRepl';
+import { DiagramRepl } from '../src/components/DiagramRepl/DiagramRepl';
 import { IEvaluator } from '../src/evaluators';
+import type { ILayoutEvaluator } from '../src/evaluators/interfaces';
 import { RelationHighlighter } from '../src/components/RelationHighlighter/RelationHighlighter';
 import { ProjectionControls, ProjectionChoice } from '../src/components/ProjectionControls';
 import { ProjectionOrchestrator, ProjectionOrchestratorResult } from '../src/components/ProjectionControls';
@@ -1091,6 +1093,37 @@ export function mountEvaluatorRepl(containerId: string, evaluator: IEvaluator, i
 }
 
 /**
+ * Mount the DiagramRepl component into specified container.
+ * Provides a REPL for spatial constraint queries (must/can/cannot)
+ * over the layout's constraint system — parallel to the datum EvaluatorRepl.
+ * @param containerId - DOM element ID to mount into
+ * @param evaluator - An initialized ILayoutEvaluator
+ */
+export function mountDiagramRepl(containerId: string, evaluator: ILayoutEvaluator, allNodeIds?: Set<string>): boolean {
+  const container = document.getElementById(containerId);
+
+  if (!container) {
+    console.error(`Diagram REPL: Container '${containerId}' not found`);
+    return false;
+  }
+
+  if (!evaluator) {
+    console.error('Diagram REPL: No evaluator provided');
+    return false;
+  }
+
+  try {
+    const root = createRoot(container);
+    root.render(<DiagramRepl evaluator={evaluator} allNodeIds={allNodeIds} />);
+    console.log(`Diagram REPL mounted to #${containerId}`);
+    return true;
+  } catch (error) {
+    console.error('Failed to mount Diagram REPL:', error);
+    return false;
+  }
+}
+
+/**
  * Mount the RelationHighlighter component into specified container.
  * @param containerId - DOM element ID to mount into
  * @returns Boolean indicating success
@@ -1807,6 +1840,7 @@ export const CnDCore = {
   mountErrorMessageModal,
   mountAllComponents,
   mountEvaluatorRepl,
+  mountDiagramRepl,
   mountRelationHighlighter,
   mountProjectionControls,
   mountProjectionOrchestrator,
@@ -1862,6 +1896,7 @@ if (typeof window !== 'undefined') {
   globalWindow.mountErrorMessageModal = mountErrorMessageModal;
   globalWindow.mountIntegratedComponents = mountAllComponents;
   globalWindow.mountEvaluatorRepl = mountEvaluatorRepl;
+  globalWindow.mountDiagramRepl = mountDiagramRepl;
   globalWindow.mountRelationHighlighter = mountRelationHighlighter;
   globalWindow.mountProjectionControls = mountProjectionControls;
   globalWindow.updateProjectionData = updateProjectionData;

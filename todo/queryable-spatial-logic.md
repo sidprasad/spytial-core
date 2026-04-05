@@ -152,13 +152,39 @@ Spytial already has (3) halfway — `SGraphQueryEvaluator` for data, `InstanceLa
 
 ## Implementation Path
 
-### Phase 1: Conjunctive must/cannot (transitive closure)
+### Phase 1: Conjunctive must/cannot (transitive closure) ✅ IMPLEMENTED
 
-Build the spatial navigation map from `buildSpatialNavigationMap()` (already exists in AccessibleTranslator) into an evaluator. `must.leftOf(X)` = transitive closure of LeftConstraints from X. `cannot.leftOf(X)` = nodes where X is transitively left of them (antisymmetry). This is pure graph reachability — no SAT solving needed.
+**Files:**
+- `src/evaluators/interfaces.ts` — `ILayoutEvaluator`, `SpatialQuery`, `SpatialRelation` types
+- `src/evaluators/layout-evaluator.ts` — `LayoutEvaluator` class, `LayoutEvaluatorResult`
+- `tests/layout-evaluator.test.ts` — 60 tests covering all relations, error cases, and disjunctive `can`
 
-### Phase 2: Disjunctive can (constraint satisfaction)
+**What's implemented:**
+- `must(query)` via BFS transitive closure over conjunctive constraints. Builds a `SpatialGraph` (directional adjacency maps + alignment + group membership) from `InstanceLayout.constraints` during `initialize()`.
+- `cannot(query)` via antisymmetry: `cannot.leftOf(X)` = `must.rightOf(X) ∪ {X}`. For alignment: strict ordering precludes co-alignment (`cannot.yAligned(X)` = `must.above(X) ∪ must.below(X) ∪ {X}`).
+- `can(query)` via per-alternative augmentation (Phase 2 — see below).
+- Returns `IEvaluatorResult` for downstream compatibility.
+- 8 spatial relations: `leftOf`, `rightOf`, `above`, `below`, `xAligned`, `yAligned`, `grouped`, `contains`.
 
-For `can` queries over disjunctive constraints: enumerate which alternatives are consistent with the query. This requires checking satisfiability of constraint subsets. For small diagrams, direct enumeration suffices. For larger ones, connect to the existing Kiwi constraint solver.
+**Query language design** (Margrave-inspired, Forge-convention-reusing):
+```
+must { x | ^leftOf(x, Node0) }        — transitive closure (default)
+must { x | leftOf(x, Node0) }         — immediate only with transitive=false
+cannot xAligned(Node1, Node0)          — boolean check
+```
+Predicates correspond 1:1 to constraint types. `^` denotes transitive closure (Forge convention). Modalities (`must`/`can`/`cannot`) wrap spatial formulas. Currently structured API; string parser is a future addition.
+
+### Phase 2: Disjunctive can (constraint satisfaction) ✅ IMPLEMENTED
+
+**Approach:** Per-alternative augmentation with cycle pruning.
+For each disjunction, for each alternative: clone the conjunctive spatial graph, add the alternative's constraints, check for ordering cycles (infeasible → skip), then evaluate `must(query)` on the augmented graph. Union all results with the conjunctive `must` set.
+
+**Properties:**
+- Sound under-approximation: every node returned by `can` truly can satisfy the relation in at least one feasible assignment.
+- Cross-disjunction interactions are not captured (two alternatives from different disjunctions that must both be selected). This is acceptable for typical Spytial diagrams (few disjunctions, small branching factor).
+- O(D × A × N) where D = disjunctions, A = max alternatives, N = nodes.
+
+**Tested with:** 2-way order disjunctions, 3-way cyclic rotations, infeasible alternative pruning (cycle detection), disjunctive alignment, must ⊆ can invariant.
 
 ### Phase 3: Heterogeneous queries
 
@@ -170,9 +196,9 @@ Given two `InstanceLayout`s, compute the spatial diff: which must/can/cannot rel
 
 ## Open Questions
 
-1. **Query syntax**: Should the layout evaluator accept Forge-like string expressions (consistent with `SGraphQueryEvaluator`) or a structured query API? String expressions are more composable but require a grammar extension.
+1. **Query syntax**: ~~Should the layout evaluator accept Forge-like string expressions (consistent with `SGraphQueryEvaluator`) or a structured query API?~~ **RESOLVED**: Structured API for Phase 1 (`SpatialQuery` objects). String parser reusing Forge conventions (`^` for closure, `{ x | ... }` for comprehension, `must`/`can`/`cannot` modalities) is planned as a future addition. This is a diagram logic (not RCC-8 or Allen IA) — predicates match constraint types, not topological/interval relations.
 
-2. **Tractability boundaries**: Conjunctive must/cannot is polynomial (graph reachability). Disjunctive can is NP in general (constraint satisfaction). Where does the practical boundary lie for typical Spytial diagrams?
+2. **Tractability boundaries**: Conjunctive must/cannot is polynomial (graph reachability). Disjunctive can is NP in general (constraint satisfaction). Where does the practical boundary lie for typical Spytial diagrams? Allen IA's ORD-Horn fragment and RCC-8's three maximal tractable subclasses (H8, C8, Q8) are all decidable by path consistency in O(n³). Spytial's constraints (partial orders + alignment) fall within these tractable fragments.
 
 3. **Interaction modality**: For accessibility, should queries be posed via natural language, structured commands, or navigational gestures (arrow key + modifier = "show me everything that must be in this direction")?
 

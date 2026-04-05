@@ -144,3 +144,99 @@ interface IEvaluator {
 }
 
 export default IEvaluator;
+
+// ==================== Spatial Layout Evaluator ====================
+//
+// A parallel evaluator over the layout constraint system.
+// Where IEvaluator queries the datum (atoms, relations, tuples),
+// ILayoutEvaluator queries the spatial arrangement (constraints, groups).
+//
+// The three modalities mirror Alloy's analysis:
+//   must  = entailed by all satisfying assignments (universal assertion)
+//   can   = consistent with at least one assignment (instance finding)
+//   cannot = holds in no satisfying assignment (unsat proving)
+
+import type { InstanceLayout } from "../layout/interfaces";
+
+/**
+ * Spatial relations corresponding to constraint types in InstanceLayout.
+ * These are the atomic predicates of the diagram logic.
+ */
+export type SpatialRelation = 'leftOf' | 'rightOf' | 'above' | 'below' | 'xAligned' | 'yAligned' | 'grouped' | 'contains';
+
+/**
+ * A structured query over the spatial constraint system.
+ *
+ * Queries ask: which nodes stand in a given spatial relation to a specified anchor node?
+ *
+ * Examples (in the string syntax that maps to this structure):
+ *   must { x | leftOf(x, Node0) }          → all nodes that must be left of Node0
+ *   must { x | ^leftOf(x, Node0) }         → transitive closure
+ *   can  { x | above(x, Node0) }           → nodes that can be above Node0
+ *   cannot xAligned(Node1, Node0)           → boolean: can Node1 not be x-aligned with Node0?
+ */
+export interface SpatialQuery {
+    /** The spatial relation to query */
+    relation: SpatialRelation;
+    /** The anchor node ID */
+    nodeId: string;
+    /** If true, follow transitive closure of the relation (^relation) */
+    transitive?: boolean;
+}
+
+/**
+ * Queryable spatial index over a resolved constraint system.
+ *
+ * This is the contract between the layout evaluator and whatever solver
+ * produced the resolved model. Any constraint validator that resolves
+ * directional orderings and alignment classes can implement this interface.
+ *
+ * The evaluator depends on this abstraction, never on a concrete solver.
+ */
+export interface ISpatialIndex {
+    /** Get all nodes reachable from `nodeId` in the given direction. */
+    getReachable(nodeId: string, relation: 'leftOf' | 'rightOf' | 'above' | 'below'): Set<string>;
+    /** Get nodes in the same alignment equivalence class as `nodeId` on the given axis. */
+    getAlignedWith(nodeId: string, axis: 'x' | 'y'): Set<string>;
+}
+
+/**
+ * Evaluator over the spatial constraint system of an InstanceLayout.
+ *
+ * Backed by an ISpatialIndex — delegates directional and alignment queries
+ * to the index. Group membership is tracked separately from layout data.
+ *
+ * Design follows Margrave (Fisler & Krishnamurthi, ICSE 2005): pose queries
+ * over a constraint system, get enumerated node sets as results.
+ */
+export interface ILayoutEvaluator {
+    /**
+     * Initialize with a layout (for group data) and a spatial index
+     * (for directional/alignment queries). The index must reflect a
+     * fully resolved model (post-validation).
+     */
+    initialize(layout: InstanceLayout, spatialIndex: ISpatialIndex): void;
+
+    /** Whether the evaluator has been initialized */
+    isReady(): boolean;
+
+    /**
+     * What MUST satisfy the query? (entailed by the resolved model)
+     * For directional relations: transitive reachability in the spatial index.
+     * For alignment: equivalence classes from the spatial index.
+     * For grouped: all co-members of shared groups.
+     */
+    must(query: SpatialQuery): IEvaluatorResult;
+
+    /**
+     * What CANNOT satisfy the query? (contradicted by the resolved model)
+     * Derived from antisymmetry: if A must be right of X, A cannot be left of X.
+     */
+    cannot(query: SpatialQuery): IEvaluatorResult;
+
+    /**
+     * What CAN satisfy the query? (consistent with the resolved model)
+     * With a resolved model, can = must (the model is one satisfying assignment).
+     */
+    can(query: SpatialQuery): IEvaluatorResult;
+}
