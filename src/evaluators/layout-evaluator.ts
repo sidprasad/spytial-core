@@ -1,33 +1,22 @@
 /**
  * Layout Evaluator — queries the spatial constraint system of an InstanceLayout.
  *
- * Delegates spatial reachability to the QualitativeConstraintValidator's
- * DifferenceConstraintGraphs (hGraph, vGraph). The solver is the single
- * source of truth for ordering and alignment — no duplicate graph is built.
+ * Delegates directional and alignment queries to an ISpatialIndex (the
+ * resolved model from a constraint validator). Group membership is tracked
+ * separately from layout data since solvers model groups via virtual nodes.
  *
  * Design follows Margrave (Fisler & Krishnamurthi, ICSE 2005): pose boolean
  * queries over a constraint system, get enumerated node sets.
  *
- * The solver's resolved model (post-CDCL) gives:
- *   - isStrictlyOrdered for directional queries (distinguishes ordering from alignment)
- *   - areAligned / getAlignmentClassOf for alignment equivalence classes
- *   - Topological ordering for rank-based comparisons
- *
- * Group membership (grouped/contains) is tracked separately since the solver
- * models groups via virtual proxy nodes rather than queryable membership.
- *
  * Spatial predicates:
- *   leftOf(a, b)   rightOf(a, b)     — from LeftConstraint → hGraph
- *   above(a, b)    below(a, b)       — from TopConstraint → vGraph
- *   xAligned(a, b) yAligned(a, b)    — from AlignmentConstraint → hGraph/vGraph SCCs
- *   grouped(a, b)                    — from LayoutGroup membership
- *   contains(g, a)                   — from LayoutGroup key node → members
+ *   leftOf, rightOf, above, below    — directional via ISpatialIndex.getReachable
+ *   xAligned, yAligned               — equivalence classes via ISpatialIndex.getAlignedWith
+ *   grouped, contains                — from LayoutGroup membership (layout data)
  */
 
-import type { IEvaluatorResult, EvaluatorResult, SpatialQuery, SpatialRelation, ILayoutEvaluator } from './interfaces';
+import type { IEvaluatorResult, EvaluatorResult, SpatialQuery, SpatialRelation, ILayoutEvaluator, ISpatialIndex } from './interfaces';
 import type { SingleValue } from './interfaces';
 import type { InstanceLayout, LayoutGroup } from '../layout/interfaces';
-import type { QualitativeConstraintValidator } from '../layout/qualitative-constraint-validator';
 
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -38,7 +27,7 @@ function addToSetMap(map: Map<string, Set<string>>, key: string, value: string):
 }
 
 
-// ─── Group membership (not modeled in the solver's DCGs) ─────────────────────
+// ─── Group membership (tracked from layout data, not from ISpatialIndex) ─────
 
 interface GroupData {
     /** group key → member node IDs */
@@ -174,66 +163,66 @@ export class LayoutEvaluatorResult implements IEvaluatorResult {
 /**
  * Evaluator over the spatial constraint system of an InstanceLayout.
  *
- * Requires a QualitativeConstraintValidator (post-validation) for all
+ * Requires a ISpatialIndex (post-validation) for all
  * directional and alignment queries. Group membership is tracked locally.
  *
  * Modalities:
  *   must  — entailed by the resolved model (post-CDCL)
  *   cannot — contradicted by antisymmetry in the resolved model
- *   can   — consistent with the resolved model (= must, since the solver
- *           picked one satisfying assignment and disjunctions are resolved)
+ *   can   — consistent with the resolved model (= must, since the index
+ *           reflects one satisfying assignment with disjunctions resolved)
  */
 export class LayoutEvaluator implements ILayoutEvaluator {
     private groups: GroupData | null = null;
-    private solver: QualitativeConstraintValidator | null = null;
+    private spatialIndex: ISpatialIndex | null = null;
 
     /**
-     * Initialize with an InstanceLayout and the solver that validated it.
-     * The solver must have already run validateConstraints() successfully.
+     * Initialize with a layout (for group membership) and a spatial index
+     * (for directional/alignment queries from a resolved constraint model).
      */
-    initialize(layout: InstanceLayout, solver: QualitativeConstraintValidator): void {
+    initialize(layout: InstanceLayout, spatialIndex: ISpatialIndex): void {
         this.groups = buildGroupData(layout);
-        this.solver = solver;
+        this.spatialIndex = spatialIndex;
     }
 
     isReady(): boolean {
-        return this.groups !== null && this.solver !== null;
+        return this.groups !== null && this.spatialIndex !== null;
     }
 
     // ── must ──────────────────────────────────────────────────────────────
 
     must(query: SpatialQuery): IEvaluatorResult {
-        const { groups, solver } = this.ensureReady();
+        const { groups, index } = this.ensureReady();
         const expr = formatQuery('must', query);
 
         if (!groups.nodeIds.has(query.nodeId)) {
             return LayoutEvaluatorResult.error(expr, `Unknown node: ${query.nodeId}`);
         }
 
-        const result = this.evaluateMust(query, groups, solver);
+        const result = this.evaluateMust(query, groups, index);
         return LayoutEvaluatorResult.of(result, expr);
     }
 
     private evaluateMust(
         query: SpatialQuery,
         groups: GroupData,
-        solver: QualitativeConstraintValidator,
+        index: ISpatialIndex,
     ): Set<string> {
         const { relation, nodeId } = query;
 
         switch (relation) {
             case 'leftOf':
-                return solver.getReachable(nodeId, 'leftOf');
+                return index.getReachable(nodeId, 'leftOf');
             case 'rightOf':
-                return solver.getReachable(nodeId, 'rightOf');
+                return index.getReachable(nodeId, 'rightOf');
             case 'above':
-                return solver.getReachable(nodeId, 'above');
+                return index.getReachable(nodeId, 'above');
             case 'below':
-                return solver.getReachable(nodeId, 'below');
+                return index.getReachable(nodeId, 'below');
             case 'xAligned':
-                return solver.getAlignedWith(nodeId, 'x');
+                return index.getAlignedWith(nodeId, 'x');
             case 'yAligned':
-                return solver.getAlignedWith(nodeId, 'y');
+                return index.getAlignedWith(nodeId, 'y');
 
             case 'grouped': {
                 const result = new Set<string>();
@@ -269,50 +258,50 @@ export class LayoutEvaluator implements ILayoutEvaluator {
     // ── cannot ────────────────────────────────────────────────────────────
 
     cannot(query: SpatialQuery): IEvaluatorResult {
-        const { groups, solver } = this.ensureReady();
+        const { groups, index } = this.ensureReady();
         const expr = formatQuery('cannot', query);
 
         if (!groups.nodeIds.has(query.nodeId)) {
             return LayoutEvaluatorResult.error(expr, `Unknown node: ${query.nodeId}`);
         }
 
-        const result = this.evaluateCannot(query.relation, query.nodeId, solver);
+        const result = this.evaluateCannot(query.relation, query.nodeId, index);
         return LayoutEvaluatorResult.of(result, expr);
     }
 
     private evaluateCannot(
         relation: SpatialRelation,
         nodeId: string,
-        solver: QualitativeConstraintValidator,
+        index: ISpatialIndex,
     ): Set<string> {
         switch (relation) {
             case 'leftOf': {
-                const result = solver.getReachable(nodeId, 'rightOf');
+                const result = index.getReachable(nodeId, 'rightOf');
                 result.add(nodeId);
                 return result;
             }
 
             case 'rightOf': {
-                const result = solver.getReachable(nodeId, 'leftOf');
+                const result = index.getReachable(nodeId, 'leftOf');
                 result.add(nodeId);
                 return result;
             }
 
             case 'above': {
-                const result = solver.getReachable(nodeId, 'below');
+                const result = index.getReachable(nodeId, 'below');
                 result.add(nodeId);
                 return result;
             }
 
             case 'below': {
-                const result = solver.getReachable(nodeId, 'above');
+                const result = index.getReachable(nodeId, 'above');
                 result.add(nodeId);
                 return result;
             }
 
             case 'xAligned': {
-                const leftOf = solver.getReachable(nodeId, 'leftOf');
-                const rightOf = solver.getReachable(nodeId, 'rightOf');
+                const leftOf = index.getReachable(nodeId, 'leftOf');
+                const rightOf = index.getReachable(nodeId, 'rightOf');
                 const result = new Set<string>();
                 for (const n of leftOf) result.add(n);
                 for (const n of rightOf) result.add(n);
@@ -321,8 +310,8 @@ export class LayoutEvaluator implements ILayoutEvaluator {
             }
 
             case 'yAligned': {
-                const above = solver.getReachable(nodeId, 'above');
-                const below = solver.getReachable(nodeId, 'below');
+                const above = index.getReachable(nodeId, 'above');
+                const below = index.getReachable(nodeId, 'below');
                 const result = new Set<string>();
                 for (const n of above) result.add(n);
                 for (const n of below) result.add(n);
@@ -338,29 +327,29 @@ export class LayoutEvaluator implements ILayoutEvaluator {
 
     // ── can ───────────────────────────────────────────────────────────────
     //
-    // With the solver backing, `can` = `must`: the resolved model is one
-    // satisfying assignment (disjunctions already resolved by CDCL), so
+    // With a resolved model, `can` = `must`: the index reflects one
+    // satisfying assignment (disjunctions already resolved), so
     // everything that holds in it "can" hold.
 
     can(query: SpatialQuery): IEvaluatorResult {
-        const { groups, solver } = this.ensureReady();
+        const { groups, index } = this.ensureReady();
         const expr = formatQuery('can', query);
 
         if (!groups.nodeIds.has(query.nodeId)) {
             return LayoutEvaluatorResult.error(expr, `Unknown node: ${query.nodeId}`);
         }
 
-        const result = this.evaluateMust(query, groups, solver);
+        const result = this.evaluateMust(query, groups, index);
         return LayoutEvaluatorResult.of(result, expr);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────
 
-    private ensureReady(): { groups: GroupData; solver: QualitativeConstraintValidator } {
-        if (!this.groups || !this.solver) {
-            throw new Error('LayoutEvaluator not initialized. Call initialize(layout, solver) first.');
+    private ensureReady(): { groups: GroupData; index: ISpatialIndex } {
+        if (!this.groups || !this.spatialIndex) {
+            throw new Error('LayoutEvaluator not initialized. Call initialize(layout, spatialIndex) first.');
         }
-        return { groups: this.groups, solver: this.solver };
+        return { groups: this.groups, index: this.spatialIndex };
     }
 }
 

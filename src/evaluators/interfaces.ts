@@ -157,7 +157,6 @@ export default IEvaluator;
 //   cannot = holds in no satisfying assignment (unsat proving)
 
 import type { InstanceLayout } from "../layout/interfaces";
-import type { QualitativeConstraintValidator } from "../layout/qualitative-constraint-validator";
 
 /**
  * Spatial relations corresponding to constraint types in InstanceLayout.
@@ -186,29 +185,45 @@ export interface SpatialQuery {
 }
 
 /**
+ * Queryable spatial index over a resolved constraint system.
+ *
+ * This is the contract between the layout evaluator and whatever solver
+ * produced the resolved model. Any constraint validator that resolves
+ * directional orderings and alignment classes can implement this interface.
+ *
+ * The evaluator depends on this abstraction, never on a concrete solver.
+ */
+export interface ISpatialIndex {
+    /** Get all nodes reachable from `nodeId` in the given direction. */
+    getReachable(nodeId: string, relation: 'leftOf' | 'rightOf' | 'above' | 'below'): Set<string>;
+    /** Get nodes in the same alignment equivalence class as `nodeId` on the given axis. */
+    getAlignedWith(nodeId: string, axis: 'x' | 'y'): Set<string>;
+}
+
+/**
  * Evaluator over the spatial constraint system of an InstanceLayout.
  *
- * Backed by a QualitativeConstraintValidator — delegates directional and
- * alignment queries to the solver's DifferenceConstraintGraphs (hGraph, vGraph).
- * Group membership is tracked separately.
+ * Backed by an ISpatialIndex — delegates directional and alignment queries
+ * to the index. Group membership is tracked separately from layout data.
  *
  * Design follows Margrave (Fisler & Krishnamurthi, ICSE 2005): pose queries
  * over a constraint system, get enumerated node sets as results.
  */
 export interface ILayoutEvaluator {
     /**
-     * Initialize with a layout and the solver that validated it.
-     * The solver must have already run validateConstraints().
+     * Initialize with a layout (for group data) and a spatial index
+     * (for directional/alignment queries). The index must reflect a
+     * fully resolved model (post-validation).
      */
-    initialize(layout: InstanceLayout, solver: QualitativeConstraintValidator): void;
+    initialize(layout: InstanceLayout, spatialIndex: ISpatialIndex): void;
 
     /** Whether the evaluator has been initialized */
     isReady(): boolean;
 
     /**
      * What MUST satisfy the query? (entailed by the resolved model)
-     * For directional relations: isStrictlyOrdered in the solver's DCGs.
-     * For alignment: SCC-based equivalence classes.
+     * For directional relations: transitive reachability in the spatial index.
+     * For alignment: equivalence classes from the spatial index.
      * For grouped: all co-members of shared groups.
      */
     must(query: SpatialQuery): IEvaluatorResult;
@@ -221,7 +236,7 @@ export interface ILayoutEvaluator {
 
     /**
      * What CAN satisfy the query? (consistent with the resolved model)
-     * With solver backing, can = must (the resolved model is the assignment).
+     * With a resolved model, can = must (the model is one satisfying assignment).
      */
     can(query: SpatialQuery): IEvaluatorResult;
 }

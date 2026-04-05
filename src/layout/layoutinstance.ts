@@ -1,6 +1,7 @@
 import { Graph, Edge } from 'graphlib';
 import { IAtom, IDataInstance } from '../data-instance/interfaces';
 import { type PositionalConstraintError, type GroupOverlapError, type HiddenNodeConflictError, type IConstraintValidator, isPositionalConstraintError, isGroupOverlapError, isHiddenNodeConflictError } from './constraint-types';
+import type { ISpatialIndex } from '../evaluators/interfaces';
 import { EdgeStyle, normalizeEdgeStyle } from './edge-style';
 import { resolveIconPath } from './icon-registry';
 import type { SelectorErrorDetail } from '../components/ErrorMessageModal/ErrorStateManager';
@@ -43,8 +44,8 @@ type CounterfactualLayoutResult = {
     layout: InstanceLayout;
     error: ConstraintError | null;
     selectorErrors: SelectorErrorDetail[];
-    /** The constraint validator used, if available. Needed by ILayoutEvaluator. */
-    validator?: IConstraintValidator;
+    /** Spatial index for the resolved model. Used by ILayoutEvaluator. */
+    spatialIndex?: ISpatialIndex;
 };
 
 class MissingNodeConstraintError extends Error implements ConstraintError {
@@ -1273,7 +1274,10 @@ export class LayoutInstance {
 
         // Return layout with selectorErrors (if any) - these don't block the layout
         // but callers should check and display them to the user
-        return { layout, error: null, selectorErrors: this.selectorErrors, validator };
+        // Only the qualitative validator implements ISpatialIndex for diagram queries
+        const spatialIndex: ISpatialIndex | undefined =
+            'getReachable' in validator ? (validator as ISpatialIndex) : undefined;
+        return { layout, error: null, selectorErrors: this.selectorErrors, spatialIndex };
     }
 
     /**

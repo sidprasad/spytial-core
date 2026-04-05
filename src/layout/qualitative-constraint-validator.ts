@@ -63,6 +63,8 @@ import {
     orientationConstraintToString,
 } from './constraint-types';
 
+import type { ISpatialIndex } from '../evaluators/interfaces';
+
 export {
     type ConstraintError,
     type ErrorMessages,
@@ -591,7 +593,7 @@ interface SolverCheckpoint {
 // QualitativeConstraintValidator
 // ═══════════════════════════════════════════════════════════════════════════════
 
-class QualitativeConstraintValidator implements IConstraintValidator {
+class QualitativeConstraintValidator implements IConstraintValidator, ISpatialIndex {
     // ─── Input ───
     layout: InstanceLayout;
     nodes: LayoutNode[];
