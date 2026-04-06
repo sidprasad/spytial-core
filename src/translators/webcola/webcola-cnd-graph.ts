@@ -124,6 +124,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private static readonly VIEWBOX_PADDING = 10;
 
   /**
+   * Configuration constants for edge crossing optimization
+   */
+  private static readonly MAX_CROSSING_OPTIMIZATION_PASSES = 3;
+  private static readonly CROSSING_NUDGE_DISTANCE = 12;
+  private static readonly PORT_MARGIN_FRACTION = 0.15;
+
+  /**
    * Configuration constants for WebCola layout iterations
    * Reduced from previous values (10, 100, 1000, 5) to improve performance
    * and prevent browser timeouts on large graphs
@@ -155,10 +162,18 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private edgeRoutingCache: {
     edgesBetweenNodes: Map<string, EdgeWithMetadata[]>;
     alignmentEdges: Set<string>;
+    nodeEdgesBySide: Map<string, { top: any[]; bottom: any[]; left: any[]; right: any[] }>;
   } = {
     edgesBetweenNodes: new Map(),
-    alignmentEdges: new Set()
+    alignmentEdges: new Set(),
+    nodeEdgesBySide: new Map()
   };
+
+  /**
+   * Stores computed route arrays between route computation and SVG rendering,
+   * enabling post-routing optimization (e.g. crossing reduction).
+   */
+  private computedRoutes: Map<string, Array<{ x: number; y: number }>> = new Map();
 
   /**
    * Guard flag to prevent re-entrance during grid routing operations.
@@ -3765,7 +3780,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         // Use stable anchor-based edge routing to prevent jitter during dragging
         // This approach selects consistent edge anchor points based on dominant direction
         // rather than computing dynamic ray intersections that can jump erratically
-        const route = this.getStableEdgePath(source, target);
+        const route = this.getStableEdgePath(source, target, d);
         return this.lineFunction(route);
       })
       .attr('marker-end', (d: EdgeWithMetadata) => {
@@ -4065,8 +4080,17 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       // Build caches for optimization before routing edges
       this.buildEdgeRoutingCaches();
 
-      // Route all link paths with advanced logic
-      this.routeLinkPaths(); 
+      // Sort edge ports by angle to minimize crossings at shared nodes
+      this.sortEdgePortsByAngle();
+
+      // Compute routes for all edges (stored in computedRoutes map)
+      this.computeAllRoutes();
+
+      // Post-routing crossing optimization
+      this.optimizeCrossings();
+
+      // Apply computed routes to SVG
+      this.applyRoutesToSVG();
 
       // Update link labels with proper positioning
       this.updateLinkLabelsAfterRouting();
@@ -4128,6 +4152,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // Clear existing caches
     this.edgeRoutingCache.edgesBetweenNodes.clear();
     this.edgeRoutingCache.alignmentEdges.clear();
+    this.edgeRoutingCache.nodeEdgesBySide.clear();
 
     if (!this.currentLayout?.links) return;
 
@@ -4138,22 +4163,108 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       }
     });
 
-    // Build edges-between-nodes cache
-    // Group edges by node pairs (both directions)
+    // Build edges-between-nodes cache and node-edges-by-side cache
     this.currentLayout.links.forEach((edge: EdgeWithMetadata) => {
       if (this.isAlignmentEdge(edge)) return; // Skip alignment edges
 
       const sourceId = edge.source.id;
       const targetId = edge.target.id;
-      
+
       // Create sorted key to handle bidirectional lookups
       const key = this.getNodePairKey(sourceId, targetId);
-      
+
       if (!this.edgeRoutingCache.edgesBetweenNodes.has(key)) {
         this.edgeRoutingCache.edgesBetweenNodes.set(key, []);
       }
       this.edgeRoutingCache.edgesBetweenNodes.get(key)!.push(edge);
+
+      // Skip self-loops and group edges for port ordering
+      if (sourceId === targetId || edge.id?.startsWith('_g_')) return;
+
+      // Determine which side of source/target this edge exits/enters
+      const sourceCx = edge.source.x || 0;
+      const sourceCy = edge.source.y || 0;
+      const targetCx = edge.target.x || 0;
+      const targetCy = edge.target.y || 0;
+      const dx = targetCx - sourceCx;
+      const dy = targetCy - sourceCy;
+      const angle = Math.atan2(dy, dx);
+      const sourceDirRaw = this.getDominantDirection(angle);
+      const targetDirRaw = this.getDominantDirection(angle + Math.PI); // Reverse direction for target
+      // Map getDominantDirection's 'up'/'down' to our 'top'/'bottom' side names
+      const dirToSide = (d: string | null): 'top' | 'bottom' | 'left' | 'right' | null => {
+        if (d === 'up') return 'top';
+        if (d === 'down') return 'bottom';
+        if (d === 'left' || d === 'right') return d;
+        return null;
+      };
+      const sourceSide = dirToSide(sourceDirRaw);
+      const targetSide = dirToSide(targetDirRaw);
+
+      if (sourceSide) {
+        if (!this.edgeRoutingCache.nodeEdgesBySide.has(sourceId)) {
+          this.edgeRoutingCache.nodeEdgesBySide.set(sourceId, { top: [], bottom: [], left: [], right: [] });
+        }
+        this.edgeRoutingCache.nodeEdgesBySide.get(sourceId)![sourceSide].push(
+          { edge, role: 'source', remoteX: targetCx, remoteY: targetCy }
+        );
+      }
+      if (targetSide) {
+        if (!this.edgeRoutingCache.nodeEdgesBySide.has(targetId)) {
+          this.edgeRoutingCache.nodeEdgesBySide.set(targetId, { top: [], bottom: [], left: [], right: [] });
+        }
+        this.edgeRoutingCache.nodeEdgesBySide.get(targetId)![targetSide].push(
+          { edge, role: 'target', remoteX: sourceCx, remoteY: sourceCy }
+        );
+      }
     });
+  }
+
+  /**
+   * Sorts edges at each node side by the angular position of their remote endpoint.
+   * This ensures edges don't cross each other unnecessarily where they leave/enter a node.
+   *
+   * For top/bottom sides: sorts left-to-right by remote node's x-coordinate.
+   * For left/right sides: sorts top-to-bottom by remote node's y-coordinate.
+   *
+   * Stamps _sourcePortIndex, _sourcePortCount, _targetPortIndex, _targetPortCount
+   * on each edge data object for use during offset calculation.
+   */
+  private sortEdgePortsByAngle(): void {
+    for (const [, sides] of this.edgeRoutingCache.nodeEdgesBySide) {
+      // Top/bottom: sort by remote x (left to right)
+      for (const side of ['top', 'bottom'] as const) {
+        const entries = sides[side];
+        if (entries.length <= 1) continue;
+        entries.sort((a: any, b: any) => a.remoteX - b.remoteX);
+        for (let i = 0; i < entries.length; i++) {
+          const entry = entries[i];
+          if (entry.role === 'source') {
+            entry.edge._sourcePortIndex = i;
+            entry.edge._sourcePortCount = entries.length;
+          } else {
+            entry.edge._targetPortIndex = i;
+            entry.edge._targetPortCount = entries.length;
+          }
+        }
+      }
+      // Left/right: sort by remote y (top to bottom)
+      for (const side of ['left', 'right'] as const) {
+        const entries = sides[side];
+        if (entries.length <= 1) continue;
+        entries.sort((a: any, b: any) => a.remoteY - b.remoteY);
+        for (let i = 0; i < entries.length; i++) {
+          const entry = entries[i];
+          if (entry.role === 'source') {
+            entry.edge._sourcePortIndex = i;
+            entry.edge._sourcePortCount = entries.length;
+          } else {
+            entry.edge._targetPortIndex = i;
+            entry.edge._targetPortCount = entries.length;
+          }
+        }
+      }
+    }
   }
 
   /**
@@ -5216,43 +5327,56 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
-   * Routes all link paths with advanced curvature and collision handling.
+   * Stage 1: Compute route arrays for all edges and store in computedRoutes map.
+   * This enables post-routing optimization before SVG rendering.
    */
-  private routeLinkPaths(): void {
+  private computeAllRoutes(): void {
+    this.computedRoutes.clear();
 
-    // TODO: Should this use linkGroups?
+    this.container.selectAll('.link-group path').each((d: any) => {
+      try {
+        const route = this.computeSingleRoute(d);
+        if (route) {
+          this.computedRoutes.set(d.id, route);
+        }
+      } catch (error) {
+        console.error(`Error routing edge ${d.id} from ${d.source.id} to ${d.target.id}:`, error);
+        this.showRuntimeAlert(d.source.id, d.target.id);
+        // Fallback to simple line
+        this.computedRoutes.set(d.id, [
+          { x: d.source.x || 0, y: d.source.y || 0 },
+          { x: d.target.x || 0, y: d.target.y || 0 }
+        ]);
+      }
+    });
+  }
 
-
+  /**
+   * Stage 2: Apply computed routes to SVG path elements.
+   */
+  private applyRoutesToSVG(): void {
     this.container.selectAll('.link-group path')
       .attr('d', (d: any) => {
-        try {
-          return this.routeSingleEdge(d);
-        } catch (error) {
-          console.error(`Error routing edge ${d.id} from ${d.source.id} to ${d.target.id}:`, error);
-          this.showRuntimeAlert(d.source.id, d.target.id);
-          
-          // Fallback to simple line
-          return this.lineFunction([
-            { x: d.source.x || 0, y: d.source.y || 0 },
-            { x: d.target.x || 0, y: d.target.y || 0 }
-          ]);
-        }
+        const route = this.computedRoutes.get(d.id);
+        if (!route) return null;
+        return this.lineFunction(route);
       });
   }
 
   /**
-   * Routes a single edge with advanced logic for different edge types.
-   * 
+   * Computes route points for a single edge.
+   * Returns an array of {x, y} points (not an SVG path string).
+   *
    * @param edgeData - The edge data object
-   * @returns SVG path string for the edge
+   * @returns Array of route points, or null if edge should not be rendered
    */
-  private routeSingleEdge(edgeData: any): string | null {
+  private computeSingleRoute(edgeData: any): Array<{ x: number; y: number }> | null {
     // Early return for alignment edges - they don't need complex routing
     if (this.isAlignmentEdge(edgeData)) {
-      return this.lineFunction([
+      return [
         { x: edgeData.source.x || 0, y: edgeData.source.y || 0 },
         { x: edgeData.target.x || 0, y: edgeData.target.y || 0 }
-      ]);
+      ];
     }
 
     const defaultRoute = [
@@ -5267,16 +5391,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         route = (this.colaLayout as any).routeEdge(edgeData);
 
         // Error check the route
-        // NOTE: Conditional written by Copilot, may not cover all cases
-        if (!route || !Array.isArray(route) || route.length < 2 || 
+        if (!route || !Array.isArray(route) || route.length < 2 ||
             !route[0] || !route[1] || route[0].x === undefined || route[0].y === undefined) {
                 throw new Error(`WebCola failed to route edge ${edgeData.id} from ${edgeData.source.id} to ${edgeData.target.id}`);
         }
       } catch (e) {
-        // TODO: Display error on frontend WebCola routing failure
         console.log("Error routing edge", edgeData.id, `from ${edgeData.source.id} to ${edgeData.target.id}`);
         console.error(e);
-        return this.lineFunction(defaultRoute);
+        return defaultRoute;
       }
     } else {
       // Fallback route
@@ -5291,26 +5413,334 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // After this, skip getNearTouchPerpendicularRoute — it uses raw node positions
     // and would override the group boundary snap with a member-node-center route.
     else if (edgeData.id?.startsWith('_g_')) {
-      route = this.routeGroupEdge(edgeData, route);
-      return this.lineFunction(route);
+      return this.routeGroupEdge(edgeData, route);
     }
     // Handle multiple edges between same nodes (only if not already handled above)
     else {
       route = this.handleMultipleEdgeRouting(edgeData, route);
     }
 
+    // Apply port-based endpoint distribution for ALL edges (not just multi-edges
+    // between the same pair). This spreads edges that share the same node side
+    // across the side length to reduce crossings and overlapping anchors.
+    route = this.applyPortBasedEndpoints(edgeData, route);
+
     // Check for near-touching nodes and reroute via perpendicular sides if needed
     const nearTouchRoute = this.getNearTouchPerpendicularRoute(edgeData);
     if (nearTouchRoute) {
-      return this.lineFunction(nearTouchRoute);
+      return nearTouchRoute;
     }
 
-    return this.lineFunction(route);
+    return route;
+  }
+
+  // ── Edge Crossing Optimization ──────────────────────────────────────
+
+  /**
+   * Orchestrates post-routing crossing detection and resolution.
+   * Runs up to MAX_CROSSING_OPTIMIZATION_PASSES iterations, each pass
+   * detecting crossings and attempting local fixes.
+   */
+  private optimizeCrossings(): void {
+    // Need at least 2 non-alignment edges to have a crossing
+    if (this.computedRoutes.size < 2) return;
+
+    for (let pass = 0; pass < WebColaCnDGraph.MAX_CROSSING_OPTIMIZATION_PASSES; pass++) {
+      const crossings = this.detectEdgeCrossings();
+      if (crossings.length === 0) break;
+      const improved = this.resolveEdgeCrossings(crossings);
+      if (!improved) break;
+    }
+  }
+
+  /**
+   * Detects edge-edge crossings in the computed routes using segment-segment
+   * intersection tests (cross-product method).
+   *
+   * Skips alignment edges, self-loops, and pairs sharing a node (those touch
+   * at the shared node which is an inevitable visual overlap, not a crossing).
+   *
+   * @returns Array of [edgeId1, edgeId2] crossing pairs, sorted by severity
+   *          (longer total edge length = more severe crossing)
+   */
+  private detectEdgeCrossings(): Array<[string, string]> {
+    const edgeIds: string[] = [];
+    const edgeRoutes: Array<Array<{ x: number; y: number }>> = [];
+    const edgeEndpoints: Array<{ sourceId: string; targetId: string }> = [];
+
+    // Collect non-excluded edges
+    if (this.currentLayout?.links) {
+      for (const edge of this.currentLayout.links as EdgeWithMetadata[]) {
+        if (this.isAlignmentEdge(edge)) continue;
+        if (edge.source.id === edge.target.id) continue; // self-loop
+        const route = this.computedRoutes.get(edge.id);
+        if (!route || route.length < 2) continue;
+        edgeIds.push(edge.id);
+        edgeRoutes.push(route);
+        edgeEndpoints.push({ sourceId: edge.source.id, targetId: edge.target.id });
+      }
+    }
+
+    const crossings: Array<[string, string, number]> = []; // [id1, id2, severity]
+
+    for (let i = 0; i < edgeIds.length; i++) {
+      for (let j = i + 1; j < edgeIds.length; j++) {
+        // Skip pairs that share a node
+        if (edgeEndpoints[i].sourceId === edgeEndpoints[j].sourceId ||
+            edgeEndpoints[i].sourceId === edgeEndpoints[j].targetId ||
+            edgeEndpoints[i].targetId === edgeEndpoints[j].sourceId ||
+            edgeEndpoints[i].targetId === edgeEndpoints[j].targetId) {
+          continue;
+        }
+
+        if (this.routesCross(edgeRoutes[i], edgeRoutes[j])) {
+          const severity = this.getRouteLength(edgeRoutes[i]) + this.getRouteLength(edgeRoutes[j]);
+          crossings.push([edgeIds[i], edgeIds[j], severity]);
+        }
+      }
+    }
+
+    // Sort by severity descending (worst crossings first)
+    crossings.sort((a, b) => b[2] - a[2]);
+    return crossings.map(([id1, id2]) => [id1, id2]);
+  }
+
+  /**
+   * Tests whether two polyline routes cross each other using
+   * segment-segment intersection (cross-product method).
+   */
+  private routesCross(
+    routeA: Array<{ x: number; y: number }>,
+    routeB: Array<{ x: number; y: number }>
+  ): boolean {
+    for (let i = 0; i < routeA.length - 1; i++) {
+      for (let j = 0; j < routeB.length - 1; j++) {
+        if (this.segmentsIntersect(routeA[i], routeA[i + 1], routeB[j], routeB[j + 1])) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Tests whether two line segments (p1-p2) and (p3-p4) properly intersect
+   * (cross each other, not just touch at endpoints).
+   */
+  private segmentsIntersect(
+    p1: { x: number; y: number },
+    p2: { x: number; y: number },
+    p3: { x: number; y: number },
+    p4: { x: number; y: number }
+  ): boolean {
+    const d1 = this.cross(p3, p4, p1);
+    const d2 = this.cross(p3, p4, p2);
+    const d3 = this.cross(p1, p2, p3);
+    const d4 = this.cross(p1, p2, p4);
+
+    if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+        ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) {
+      return true;
+    }
+    return false;
+  }
+
+  /** Cross product of vectors (b-a) and (c-a). */
+  private cross(
+    a: { x: number; y: number },
+    b: { x: number; y: number },
+    c: { x: number; y: number }
+  ): number {
+    return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+  }
+
+  /**
+   * Attempts to resolve detected edge crossings using local strategies.
+   *
+   * Strategy 1: Control point nudge — add/adjust an intermediate waypoint
+   * perpendicular to the crossing, pushing one edge away from the other.
+   *
+   * @returns true if any route was modified
+   */
+  private resolveEdgeCrossings(crossings: Array<[string, string]>): boolean {
+    let modified = false;
+
+    for (const [id1, id2] of crossings) {
+      const route1 = this.computedRoutes.get(id1);
+      const route2 = this.computedRoutes.get(id2);
+      if (!route1 || !route2) continue;
+
+      // Find the exact crossing point and which segments cross
+      const crossingInfo = this.findCrossingSegments(route1, route2);
+      if (!crossingInfo) continue;
+
+      // Nudge the shorter route to avoid the crossing.
+      const len1 = this.getRouteLength(route1);
+      const len2 = this.getRouteLength(route2);
+      const [targetRoute, targetId] = len1 <= len2 ? [route1, id1] : [route2, id2];
+      const otherRoute = targetRoute === route1 ? route2 : route1;
+      const segIdx = targetRoute === route1 ? crossingInfo.segIdxA : crossingInfo.segIdxB;
+
+      // Strategy 1: Small perpendicular nudge (works for near-miss crossings)
+      const seg = { dx: targetRoute[segIdx + 1].x - targetRoute[segIdx].x, dy: targetRoute[segIdx + 1].y - targetRoute[segIdx].y };
+      const segLen = Math.sqrt(seg.dx * seg.dx + seg.dy * seg.dy);
+      if (segLen < 1) continue;
+
+      const perpX = -seg.dy / segLen;
+      const perpY = seg.dx / segLen;
+
+      let resolved = false;
+      const nudgeDist = WebColaCnDGraph.CROSSING_NUDGE_DISTANCE;
+      for (const sign of [1, -1]) {
+        const midX = (targetRoute[segIdx].x + targetRoute[segIdx + 1].x) / 2 + perpX * nudgeDist * sign;
+        const midY = (targetRoute[segIdx].y + targetRoute[segIdx + 1].y) / 2 + perpY * nudgeDist * sign;
+
+        const candidate = [...targetRoute];
+        candidate.splice(segIdx + 1, 0, { x: midX, y: midY });
+
+        if (!this.routesCross(candidate, otherRoute)) {
+          this.computedRoutes.set(targetId, candidate);
+          modified = true;
+          resolved = true;
+          break;
+        }
+      }
+
+      // Strategy 2: Route around the blocking edge by going to one side of its bounding box
+      if (!resolved) {
+        const rerouteResult = this.rerouteAroundEdge(targetRoute, otherRoute);
+        if (rerouteResult && !this.routesCross(rerouteResult, otherRoute)) {
+          this.computedRoutes.set(targetId, rerouteResult);
+          modified = true;
+        }
+      }
+    }
+
+    return modified;
+  }
+
+  /**
+   * Reroutes an edge to go around a blocking edge's bounding box.
+   *
+   * Determines which side of the blocking route the start and end points are on,
+   * and routes via waypoints that stay clear of the blocking path.
+   */
+  private rerouteAroundEdge(
+    route: Array<{ x: number; y: number }>,
+    blockingRoute: Array<{ x: number; y: number }>
+  ): Array<{ x: number; y: number }> | null {
+    // Compute bounding box of the blocking route
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const p of blockingRoute) {
+      minX = Math.min(minX, p.x);
+      maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y);
+      maxY = Math.max(maxY, p.y);
+    }
+
+    const MARGIN = WebColaCnDGraph.CROSSING_NUDGE_DISTANCE;
+    const start = route[0];
+    const end = route[route.length - 1];
+    const blockW = maxX - minX;
+    const blockH = maxY - minY;
+
+    const candidates: Array<Array<{ x: number; y: number }>> = [];
+
+    if (blockH >= blockW) {
+      // Blocking route is tall/vertical — route left or right of it
+      const leftX = minX - MARGIN;
+      const rightX = maxX + MARGIN;
+
+      // For each side, build a path: start → waypoint1 → waypoint2 → end
+      // that stays entirely on that side of the blocking route.
+      for (const sideX of [leftX, rightX]) {
+        const candidate = [
+          start,
+          { x: sideX, y: start.y },
+          { x: sideX, y: end.y },
+          end
+        ];
+        if (!this.routesCross(candidate, blockingRoute)) {
+          candidates.push(candidate);
+        }
+      }
+
+      // If simple L-routes don't work (start/end are on opposite sides),
+      // try a Z-route that crosses the blocking route above or below its extent
+      if (candidates.length === 0) {
+        for (const crossY of [minY - MARGIN, maxY + MARGIN]) {
+          const candidate = [
+            start,
+            { x: start.x, y: crossY },
+            { x: end.x, y: crossY },
+            end
+          ];
+          if (!this.routesCross(candidate, blockingRoute)) {
+            candidates.push(candidate);
+          }
+        }
+      }
+    } else {
+      // Blocking route is wide/horizontal — route above or below
+      const topY = minY - MARGIN;
+      const bottomY = maxY + MARGIN;
+
+      for (const sideY of [topY, bottomY]) {
+        const candidate = [
+          start,
+          { x: start.x, y: sideY },
+          { x: end.x, y: sideY },
+          end
+        ];
+        if (!this.routesCross(candidate, blockingRoute)) {
+          candidates.push(candidate);
+        }
+      }
+
+      // Z-route fallback: cross to the left or right of the blocking extent
+      if (candidates.length === 0) {
+        for (const crossX of [minX - MARGIN, maxX + MARGIN]) {
+          const candidate = [
+            start,
+            { x: crossX, y: start.y },
+            { x: crossX, y: end.y },
+            end
+          ];
+          if (!this.routesCross(candidate, blockingRoute)) {
+            candidates.push(candidate);
+          }
+        }
+      }
+    }
+
+    if (candidates.length === 0) return null;
+
+    // Pick the shortest candidate
+    candidates.sort((a, b) => this.getRouteLength(a) - this.getRouteLength(b));
+    return candidates[0];
+  }
+
+  /**
+   * Finds the specific segment indices where two routes cross.
+   * Returns the first crossing found, or null if none.
+   */
+  private findCrossingSegments(
+    routeA: Array<{ x: number; y: number }>,
+    routeB: Array<{ x: number; y: number }>
+  ): { segIdxA: number; segIdxB: number } | null {
+    for (let i = 0; i < routeA.length - 1; i++) {
+      for (let j = 0; j < routeB.length - 1; j++) {
+        if (this.segmentsIntersect(routeA[i], routeA[i + 1], routeB[j], routeB[j + 1])) {
+          return { segIdxA: i, segIdxB: j };
+        }
+      }
+    }
+    return null;
   }
 
   /**
    * Creates a self-loop route for edges that connect a node to itself.
-   * 
+   *
    * @param edgeData - The edge data object
    * @returns Array of route points for the self-loop
    */
@@ -5329,27 +5759,85 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
     const width = bounds.X - bounds.x;
     const height = bounds.Y - bounds.y;
+    const cx = bounds.x + width / 2;
+    const cy = bounds.y + height / 2;
 
-    const startPoint = {
-      x: bounds.x + width / 2, // Center of top edge
-      y: bounds.y
-    };
+    // Compute self-loop index: which self-loop is this among all self-loops on this node?
+    const selfLoopIndex = this.getSelfLoopIndex(edgeData);
 
-    const endPoint = {
-      x: bounds.X, // Center of right edge
-      y: bounds.y + height / 2
-    };
+    // Distribute self-loops around 4 corners of the node:
+    //   0: top-right    (start: top center,    end: right center,   control: top-right)
+    //   1: bottom-right (start: right center,  end: bottom center,  control: bottom-right)
+    //   2: bottom-left  (start: bottom center, end: left center,    control: bottom-left)
+    //   3: top-left     (start: left center,   end: top center,     control: top-left)
+    // For 5+ self-loops, wrap around with increasing curvature.
+    const corner = selfLoopIndex % 4;
+    const ring = Math.floor(selfLoopIndex / 4);
+    const curvatureScale = 1 + ring * WebColaCnDGraph.SELF_LOOP_CURVATURE_SCALE;
 
-    // Dynamic control point based on self-loop index
-    const selfLoopIndex = edgeData.selfLoopIndex || 0;
-    const curvatureScale = 1 + selfLoopIndex * WebColaCnDGraph.SELF_LOOP_CURVATURE_SCALE;
-    
-    const controlPoint = {
-      x: bounds.X + (width / 2) * curvatureScale,
-      y: bounds.y - (height / 2) * curvatureScale
-    };
+    // Midpoints of each side
+    const topMid    = { x: cx,       y: bounds.y };
+    const rightMid  = { x: bounds.X, y: cy };
+    const bottomMid = { x: cx,       y: bounds.Y };
+    const leftMid   = { x: bounds.x, y: cy };
+
+    let startPoint: { x: number; y: number };
+    let endPoint: { x: number; y: number };
+    let controlPoint: { x: number; y: number };
+
+    switch (corner) {
+      case 0: // top-right
+        startPoint = topMid;
+        endPoint = rightMid;
+        controlPoint = { x: bounds.X + (width / 2) * curvatureScale, y: bounds.y - (height / 2) * curvatureScale };
+        break;
+      case 1: // bottom-right
+        startPoint = rightMid;
+        endPoint = bottomMid;
+        controlPoint = { x: bounds.X + (width / 2) * curvatureScale, y: bounds.Y + (height / 2) * curvatureScale };
+        break;
+      case 2: // bottom-left
+        startPoint = bottomMid;
+        endPoint = leftMid;
+        controlPoint = { x: bounds.x - (width / 2) * curvatureScale, y: bounds.Y + (height / 2) * curvatureScale };
+        break;
+      case 3: // top-left
+        startPoint = leftMid;
+        endPoint = topMid;
+        controlPoint = { x: bounds.x - (width / 2) * curvatureScale, y: bounds.y - (height / 2) * curvatureScale };
+        break;
+      default:
+        startPoint = topMid;
+        endPoint = rightMid;
+        controlPoint = { x: bounds.X + (width / 2) * curvatureScale, y: bounds.y - (height / 2) * curvatureScale };
+    }
 
     return [startPoint, controlPoint, endPoint];
+  }
+
+  /**
+   * Returns the 0-based index of this self-loop among all self-loops on its node.
+   * Uses the edgesBetweenNodes cache when available.
+   */
+  private getSelfLoopIndex(edgeData: any): number {
+    const nodeId = edgeData.source.id;
+    const key = this.getNodePairKey(nodeId, nodeId);
+    const selfLoops = this.edgeRoutingCache.edgesBetweenNodes.get(key);
+    if (selfLoops) {
+      const idx = selfLoops.findIndex((e: any) => e.id === edgeData.id);
+      return idx >= 0 ? idx : 0;
+    }
+    // Fallback: scan all links
+    if (this.currentLayout?.links) {
+      let idx = 0;
+      for (const edge of this.currentLayout.links as any[]) {
+        if (edge.source.id === nodeId && edge.target.id === nodeId) {
+          if (edge.id === edgeData.id) return idx;
+          idx++;
+        }
+      }
+    }
+    return 0;
   }
 
   /**
@@ -5556,19 +6044,33 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * @returns Modified route with offset applied
    */
   private applyEdgeOffsetWithIndex(edgeData: any, route: Array<{ x: number; y: number }>, allEdges: any[], angle: number, edgeIndex: number, distance: number): Array<{ x: number; y: number }> {
-    const offset = (edgeIndex % 2 === 0 ? 1 : -1) * 
-                    (Math.floor(edgeIndex / 2) + 1) * 
-                    WebColaCnDGraph.MIN_EDGE_DISTANCE;
-    const cappedOffset = this.clampOffset(offset, distance);
-
     const direction = this.getDominantDirection(angle);
-    
-    if (direction === 'right' || direction === 'left') {
-      route[0].y += cappedOffset;
-      route[route.length - 1].y += cappedOffset;
-    } else if (direction === 'up' || direction === 'down') {
-      route[0].x += cappedOffset;
-      route[route.length - 1].x += cappedOffset;
+
+    // Use port-based positioning when available (from sortEdgePortsByAngle)
+    const sourcePortIndex = edgeData._sourcePortIndex;
+    const sourcePortCount = edgeData._sourcePortCount;
+    const targetPortIndex = edgeData._targetPortIndex;
+    const targetPortCount = edgeData._targetPortCount;
+    const hasPortInfo = sourcePortIndex !== undefined && sourcePortCount !== undefined && sourcePortCount > 1;
+    const hasTargetPortInfo = targetPortIndex !== undefined && targetPortCount !== undefined && targetPortCount > 1;
+
+    if (hasPortInfo || hasTargetPortInfo) {
+      // Distribute edge endpoints evenly across the node side
+      this.applyPortBasedOffset(route, edgeData, direction, hasPortInfo, hasTargetPortInfo);
+    } else {
+      // Fallback to legacy alternating offset for multi-edges between same pair
+      const offset = (edgeIndex % 2 === 0 ? 1 : -1) *
+                      (Math.floor(edgeIndex / 2) + 1) *
+                      WebColaCnDGraph.MIN_EDGE_DISTANCE;
+      const cappedOffset = this.clampOffset(offset, distance);
+
+      if (direction === 'right' || direction === 'left') {
+        route[0].y += cappedOffset;
+        route[route.length - 1].y += cappedOffset;
+      } else if (direction === 'up' || direction === 'down') {
+        route[0].x += cappedOffset;
+        route[route.length - 1].x += cappedOffset;
+      }
     }
 
     // Ensure points stay on rectangle perimeter
@@ -5580,6 +6082,139 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     }
 
     return route;
+  }
+
+  /**
+   * Adjusts route start/end points based on port assignments so that edges sharing
+   * the same node side are spread across it rather than all exiting from the center.
+   * This applies to ALL edges (not just multi-edges between the same pair), so that
+   * e.g. d→b and a→b arriving at b's top side are spread apart.
+   *
+   * Only adjusts endpoints when port info has been stamped by sortEdgePortsByAngle().
+   * Self-loops and group edges are excluded (handled by their own routing).
+   */
+  private applyPortBasedEndpoints(
+    edgeData: any,
+    route: Array<{ x: number; y: number }>
+  ): Array<{ x: number; y: number }> {
+    if (!route || route.length < 2) return route;
+    // Skip self-loops (already handled)
+    if (edgeData.source.id === edgeData.target.id) return route;
+
+    const hasSourcePort = edgeData._sourcePortIndex !== undefined &&
+                          edgeData._sourcePortCount !== undefined &&
+                          edgeData._sourcePortCount > 1;
+    const hasTargetPort = edgeData._targetPortIndex !== undefined &&
+                          edgeData._targetPortCount !== undefined &&
+                          edgeData._targetPortCount > 1;
+
+    if (!hasSourcePort && !hasTargetPort) return route;
+
+    // Determine edge direction for figuring out which axis to distribute along
+    const dx = (edgeData.target.x || 0) - (edgeData.source.x || 0);
+    const dy = (edgeData.target.y || 0) - (edgeData.source.y || 0);
+    const angle = Math.atan2(dy, dx);
+    const direction = this.getDominantDirection(angle);
+
+    if (hasSourcePort) {
+      const bounds = this.normalizeNodeBounds(edgeData.source);
+      const portIndex = edgeData._sourcePortIndex;
+      const portCount = edgeData._sourcePortCount;
+
+      if (direction === 'right' || direction === 'left') {
+        // Edge goes horizontal: distribute source Y along the exit side
+        const sideLength = bounds.height();
+        const margin = sideLength * WebColaCnDGraph.PORT_MARGIN_FRACTION;
+        const usable = sideLength - 2 * margin;
+        route[0] = { ...route[0], y: bounds.y + margin + (portIndex + 0.5) * usable / portCount };
+      } else if (direction === 'up' || direction === 'down') {
+        // Edge goes vertical: distribute source X along the exit side
+        const sideLength = bounds.width();
+        const margin = sideLength * WebColaCnDGraph.PORT_MARGIN_FRACTION;
+        const usable = sideLength - 2 * margin;
+        route[0] = { ...route[0], x: bounds.x + margin + (portIndex + 0.5) * usable / portCount };
+      }
+    }
+
+    if (hasTargetPort) {
+      const bounds = this.normalizeNodeBounds(edgeData.target);
+      const portIndex = edgeData._targetPortIndex;
+      const portCount = edgeData._targetPortCount;
+      // Target side is opposite to edge direction
+      const targetDir = direction === 'right' ? 'left' : direction === 'left' ? 'right' : direction === 'up' ? 'down' : 'up';
+
+      if (targetDir === 'right' || targetDir === 'left') {
+        const sideLength = bounds.height();
+        const margin = sideLength * WebColaCnDGraph.PORT_MARGIN_FRACTION;
+        const usable = sideLength - 2 * margin;
+        const last = route.length - 1;
+        route[last] = { ...route[last], y: bounds.y + margin + (portIndex + 0.5) * usable / portCount };
+      } else if (targetDir === 'up' || targetDir === 'down') {
+        const sideLength = bounds.width();
+        const margin = sideLength * WebColaCnDGraph.PORT_MARGIN_FRACTION;
+        const usable = sideLength - 2 * margin;
+        const last = route.length - 1;
+        route[last] = { ...route[last], x: bounds.x + margin + (portIndex + 0.5) * usable / portCount };
+      }
+    }
+
+    return route;
+  }
+
+  /**
+   * Distributes edge endpoints evenly across a node side using port assignments.
+   * For a side of length L with N ports, port i is placed at sideStart + margin + (i + 0.5) * usableLength / N.
+   */
+  private applyPortBasedOffset(
+    route: Array<{ x: number; y: number }>,
+    edgeData: any,
+    direction: 'right' | 'up' | 'left' | 'down' | null,
+    hasSourcePort: boolean,
+    hasTargetPort: boolean
+  ): void {
+    if (hasSourcePort) {
+      const bounds = this.normalizeNodeBounds(edgeData.source);
+      const portIndex = edgeData._sourcePortIndex;
+      const portCount = edgeData._sourcePortCount;
+
+      if (direction === 'right' || direction === 'left') {
+        // Edge goes horizontal: distribute along Y axis of the source side
+        const sideLength = bounds.height();
+        const margin = sideLength * WebColaCnDGraph.PORT_MARGIN_FRACTION;
+        const usable = sideLength - 2 * margin;
+        const portY = bounds.y + margin + (portIndex + 0.5) * usable / portCount;
+        route[0].y = portY;
+      } else if (direction === 'up' || direction === 'down') {
+        // Edge goes vertical: distribute along X axis of the source side
+        const sideLength = bounds.width();
+        const margin = sideLength * WebColaCnDGraph.PORT_MARGIN_FRACTION;
+        const usable = sideLength - 2 * margin;
+        const portX = bounds.x + margin + (portIndex + 0.5) * usable / portCount;
+        route[0].x = portX;
+      }
+    }
+
+    if (hasTargetPort) {
+      const bounds = this.normalizeNodeBounds(edgeData.target);
+      const portIndex = edgeData._targetPortIndex;
+      const portCount = edgeData._targetPortCount;
+      // For target, direction is reversed from edge direction
+      const targetDirection = direction === 'right' ? 'left' : direction === 'left' ? 'right' : direction === 'up' ? 'down' : 'up';
+
+      if (targetDirection === 'right' || targetDirection === 'left') {
+        const sideLength = bounds.height();
+        const margin = sideLength * WebColaCnDGraph.PORT_MARGIN_FRACTION;
+        const usable = sideLength - 2 * margin;
+        const portY = bounds.y + margin + (portIndex + 0.5) * usable / portCount;
+        route[route.length - 1].y = portY;
+      } else if (targetDirection === 'up' || targetDirection === 'down') {
+        const sideLength = bounds.width();
+        const margin = sideLength * WebColaCnDGraph.PORT_MARGIN_FRACTION;
+        const usable = sideLength - 2 * margin;
+        const portX = bounds.x + margin + (portIndex + 0.5) * usable / portCount;
+        route[route.length - 1].x = portX;
+      }
+    }
   }
 
   /**
@@ -5754,7 +6389,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private getStableEdgePath(
     source: any,
-    target: any
+    target: any,
+    edgeData?: any
   ): Array<{ x: number; y: number }> {
     // Always use node.x/y as the center — these are the authoritative positions
     // from the WebCola solver and are always in sync, whereas bounds.cx()/cy()
@@ -5791,15 +6427,73 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     const targetBounds = makeVisualBounds(target) ?? target.bounds ?? target.innerBounds;
 
     // Calculate stable anchor points on the perimeter
-    const sourceAnchor = sourceBounds
+    let sourceAnchor = sourceBounds
       ? this.getStableEdgeAnchor(sourceBounds, targetCenter)
       : sourceCenter;
 
-    const targetAnchor = targetBounds
+    let targetAnchor = targetBounds
       ? this.getStableEdgeAnchor(targetBounds, sourceCenter)
       : targetCenter;
 
+    // Apply port-based distribution if port info is available on the edge.
+    // This spreads multiple edges sharing the same node side during drag/tick,
+    // preventing them from overlapping at the side center.
+    if (edgeData && sourceBounds) {
+      sourceAnchor = this.applyPortOffsetToAnchor(
+        sourceAnchor, sourceBounds, edgeData._sourcePortIndex, edgeData._sourcePortCount,
+        sourceCenter, targetCenter
+      );
+    }
+    if (edgeData && targetBounds) {
+      targetAnchor = this.applyPortOffsetToAnchor(
+        targetAnchor, targetBounds, edgeData._targetPortIndex, edgeData._targetPortCount,
+        targetCenter, sourceCenter
+      );
+    }
+
     return [sourceAnchor, targetAnchor];
+  }
+
+  /**
+   * Adjusts an anchor point along a node side to reflect port assignment.
+   * If no port info is available or there's only one port, returns the original anchor.
+   */
+  private applyPortOffsetToAnchor(
+    anchor: { x: number; y: number },
+    bounds: any,
+    portIndex: number | undefined,
+    portCount: number | undefined,
+    nodeCenter: { x: number; y: number },
+    remoteCenter: { x: number; y: number }
+  ): { x: number; y: number } {
+    if (portIndex === undefined || portCount === undefined || portCount <= 1) {
+      return anchor;
+    }
+
+    // Determine which side the anchor is on by comparing to bounds
+    const bx = typeof bounds.x === 'number' ? bounds.x : 0;
+    const bX = bounds.X !== undefined ? bounds.X : bx + (typeof bounds.width === 'function' ? bounds.width() : 0);
+    const by = typeof bounds.y === 'number' ? bounds.y : 0;
+    const bY = bounds.Y !== undefined ? bounds.Y : by + (typeof bounds.height === 'function' ? bounds.height() : 0);
+    const w = bX - bx;
+    const h = bY - by;
+
+    const eps = 1;
+    const margin = WebColaCnDGraph.PORT_MARGIN_FRACTION;
+
+    if (Math.abs(anchor.x - bx) < eps || Math.abs(anchor.x - bX) < eps) {
+      // Anchor is on left or right side → distribute along Y
+      const usable = h * (1 - 2 * margin);
+      const portY = by + h * margin + (portIndex + 0.5) * usable / portCount;
+      return { x: anchor.x, y: portY };
+    } else if (Math.abs(anchor.y - by) < eps || Math.abs(anchor.y - bY) < eps) {
+      // Anchor is on top or bottom side → distribute along X
+      const usable = w * (1 - 2 * margin);
+      const portX = bx + w * margin + (portIndex + 0.5) * usable / portCount;
+      return { x: portX, y: anchor.y };
+    }
+
+    return anchor;
   }
 
   /**
