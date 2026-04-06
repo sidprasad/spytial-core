@@ -20,6 +20,7 @@ describe('Loading indicator behavior', () => {
 
     const fakeThis: any = {
       shadowRoot: root,
+      get root() { return this.shadowRoot; },
       loadingShowTimer: null,
     };
     fakeThis.hideLoading = proto.hideLoading;

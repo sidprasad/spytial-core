@@ -264,9 +264,16 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private textMeasurementCanvas: HTMLCanvasElement | null = null;
 
+  private get root(): ShadowRoot {
+    if (!this.shadowRoot) {
+      throw new Error('ShadowRoot not initialized');
+    }
+    return this.shadowRoot;
+  }
+
   constructor(isInputAllowed: boolean = false) {
     super();
-    
+
     this.attachShadow({ mode: 'open' });
     this.initializeDOM();
     this.initializeD3();
@@ -794,7 +801,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Initialize the Shadow DOM structure
    */
   private initializeDOM(): void {
-    this.shadowRoot!.innerHTML = `
+    this.root.innerHTML = `
       <style>
       ${this.getCSS()}
       </style>
@@ -846,7 +853,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       d3 = window.d3;
     }
 
-    this.svg = d3.select(this.shadowRoot!.querySelector('#svg'));
+    this.svg = d3.select(this.root.querySelector('#svg'));
     this.container = this.svg.select('.zoomable');
 
     if(d3.zoom) {
@@ -883,9 +890,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Initialize zoom control event listeners
    */
   private initializeZoomControls(): void {
-    const zoomInButton = this.shadowRoot!.querySelector('#zoom-in') as HTMLButtonElement;
-    const zoomOutButton = this.shadowRoot!.querySelector('#zoom-out') as HTMLButtonElement;
-    const zoomFitButton = this.shadowRoot!.querySelector('#zoom-fit') as HTMLButtonElement;
+    const zoomInButton = this.root.querySelector('#zoom-in') as HTMLButtonElement;
+    const zoomOutButton = this.root.querySelector('#zoom-out') as HTMLButtonElement;
+    const zoomFitButton = this.root.querySelector('#zoom-fit') as HTMLButtonElement;
 
     if (zoomInButton) {
       zoomInButton.addEventListener('click', () => {
@@ -908,7 +915,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     }
 
     // Set up routing mode dropdown
-    const routingModeSelect = this.shadowRoot!.querySelector('#routing-mode') as HTMLSelectElement;
+    const routingModeSelect = this.root.querySelector('#routing-mode') as HTMLSelectElement;
     if (routingModeSelect) {
       // Set initial value from attribute
       const currentFormat = this.layoutFormat || 'default';
@@ -920,7 +927,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     }
 
     // Set up screenshot button
-    const screenshotButton = this.shadowRoot!.querySelector('#screenshot-btn') as HTMLButtonElement;
+    const screenshotButton = this.root.querySelector('#screenshot-btn') as HTMLButtonElement;
     if (screenshotButton) {
       screenshotButton.addEventListener('click', () => {
         this.takeScreenshot();
@@ -1124,8 +1131,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     const currentScale = currentTransform.k;
     const [minScale, maxScale] = this.zoomBehavior.scaleExtent();
 
-    const zoomInButton = this.shadowRoot!.querySelector('#zoom-in') as HTMLButtonElement;
-    const zoomOutButton = this.shadowRoot!.querySelector('#zoom-out') as HTMLButtonElement;
+    const zoomInButton = this.root.querySelector('#zoom-in') as HTMLButtonElement;
+    const zoomOutButton = this.root.querySelector('#zoom-out') as HTMLButtonElement;
 
     if (zoomInButton) {
       zoomInButton.disabled = currentScale >= maxScale;
@@ -1637,7 +1644,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       }
 
       // Get actual container dimensions for responsive layout
-      const svgContainer = this.shadowRoot!.querySelector('#svg-container') as HTMLElement;
+      const svgContainer = this.root.querySelector('#svg-container') as HTMLElement;
       const containerRect = svgContainer.getBoundingClientRect();
       const containerWidth = containerRect.width || 800; // fallback to default
       const containerHeight = containerRect.height || 600; // fallback to default
@@ -7624,8 +7631,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Show loading indicator
    */
   private showLoading(): void {
-    const loading = this.shadowRoot!.querySelector('#loading') as HTMLElement;
-    const error = this.shadowRoot!.querySelector('#error') as HTMLElement;
+    const loading = this.root.querySelector('#loading') as HTMLElement;
+    const error = this.root.querySelector('#error') as HTMLElement;
     if (this.loadingShowTimer !== null) {
       window.clearTimeout(this.loadingShowTimer);
       this.loadingShowTimer = null;
@@ -7643,8 +7650,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Update loading progress message
    */
   private updateLoadingProgress(message: string): void {
-    const loading = this.shadowRoot!.querySelector('#loading') as HTMLElement;
-    const progressEl = this.shadowRoot!.querySelector('#loading-progress') as HTMLElement;
+    const loading = this.root.querySelector('#loading') as HTMLElement;
+    const progressEl = this.root.querySelector('#loading-progress') as HTMLElement;
     if (progressEl) {
       progressEl.textContent = message;
       loading.setAttribute('aria-label', message);
@@ -7655,7 +7662,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Hide loading indicator
    */
   private hideLoading(): void {
-    const loading = this.shadowRoot!.querySelector('#loading') as HTMLElement;
+    const loading = this.root.querySelector('#loading') as HTMLElement;
     if (this.loadingShowTimer !== null) {
       window.clearTimeout(this.loadingShowTimer);
       this.loadingShowTimer = null;
@@ -7667,7 +7674,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Show error message
    */
   private showError(message: string): void {
-    const error = this.shadowRoot!.querySelector('#error') as HTMLElement;
+    const error = this.root.querySelector('#error') as HTMLElement;
     this.hideLoading();
     error.style.display = 'block';
     error.textContent = message;
@@ -7677,7 +7684,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Show error icon
    */
   private showErrorIcon(): void {
-    const errorIcon = this.shadowRoot!.querySelector('#error-icon') as HTMLElement;
+    const errorIcon = this.root.querySelector('#error-icon') as HTMLElement;
     errorIcon.classList.add('visible');
   }
 
@@ -7685,7 +7692,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Hide error icon
    */
   private hideErrorIcon(): void {
-    const errorIcon = this.shadowRoot!.querySelector('#error-icon') as HTMLElement;
+    const errorIcon = this.root.querySelector('#error-icon') as HTMLElement;
     errorIcon.classList.remove('visible');
   }
 
@@ -7721,13 +7728,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         const target = e.target as HTMLElement;
         if (target.classList.contains('modal-overlay')) {
           // Clicked outside dialog
-          this.shadowRoot!.removeChild(overlay);
+          this.root.removeChild(overlay);
           resolve(false);
         } else if (target.dataset.action === 'cancel') {
-          this.shadowRoot!.removeChild(overlay);
+          this.root.removeChild(overlay);
           resolve(false);
         } else if (target.dataset.action === 'confirm') {
-          this.shadowRoot!.removeChild(overlay);
+          this.root.removeChild(overlay);
           resolve(true);
         }
       });
@@ -7735,14 +7742,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       // Handle escape key
       const handleKeydown = (e: KeyboardEvent) => {
         if (e.key === 'Escape') {
-          this.shadowRoot!.removeChild(overlay);
+          this.root.removeChild(overlay);
           document.removeEventListener('keydown', handleKeydown);
           resolve(false);
         }
       };
       document.addEventListener('keydown', handleKeydown);
 
-      this.shadowRoot!.appendChild(overlay);
+      this.root.appendChild(overlay);
       
       // Focus the confirm button
       const confirmBtn = overlay.querySelector('[data-action="confirm"]') as HTMLButtonElement;
@@ -7781,14 +7788,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         const target = e.target as HTMLElement;
         if (target.classList.contains('modal-overlay')) {
           // Clicked outside dialog
-          this.shadowRoot!.removeChild(overlay);
+          this.root.removeChild(overlay);
           resolve(null);
         } else if (target.dataset.action === 'cancel') {
-          this.shadowRoot!.removeChild(overlay);
+          this.root.removeChild(overlay);
           resolve(null);
         } else if (target.dataset.action === 'ok') {
           const value = input.value;
-          this.shadowRoot!.removeChild(overlay);
+          this.root.removeChild(overlay);
           resolve(value);
         }
       });
@@ -7797,18 +7804,18 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       const handleKeydown = (e: KeyboardEvent) => {
         if (e.key === 'Enter') {
           const value = input.value;
-          this.shadowRoot!.removeChild(overlay);
+          this.root.removeChild(overlay);
           document.removeEventListener('keydown', handleKeydown);
           resolve(value);
         } else if (e.key === 'Escape') {
-          this.shadowRoot!.removeChild(overlay);
+          this.root.removeChild(overlay);
           document.removeEventListener('keydown', handleKeydown);
           resolve(null);
         }
       };
       document.addEventListener('keydown', handleKeydown);
 
-      this.shadowRoot!.appendChild(overlay);
+      this.root.appendChild(overlay);
       
       // Focus and select the input
       input.focus();
@@ -7851,17 +7858,17 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         const target = e.target as HTMLElement;
         if (target.classList.contains('modal-overlay')) {
           // Clicked outside dialog
-          this.shadowRoot!.removeChild(overlay);
+          this.root.removeChild(overlay);
           resolve(null);
         } else if (target.dataset.action === 'cancel') {
-          this.shadowRoot!.removeChild(overlay);
+          this.root.removeChild(overlay);
           resolve(null);
         } else if (target.dataset.action === 'delete') {
-          this.shadowRoot!.removeChild(overlay);
+          this.root.removeChild(overlay);
           resolve('DELETE'); // Special signal for deletion
         } else if (target.dataset.action === 'ok') {
           const value = input.value;
-          this.shadowRoot!.removeChild(overlay);
+          this.root.removeChild(overlay);
           resolve(value);
         }
       });
@@ -7870,18 +7877,18 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       const handleKeydown = (e: KeyboardEvent) => {
         if (e.key === 'Enter') {
           const value = input.value;
-          this.shadowRoot!.removeChild(overlay);
+          this.root.removeChild(overlay);
           document.removeEventListener('keydown', handleKeydown);
           resolve(value);
         } else if (e.key === 'Escape') {
-          this.shadowRoot!.removeChild(overlay);
+          this.root.removeChild(overlay);
           document.removeEventListener('keydown', handleKeydown);
           resolve(null);
         }
       };
       document.addEventListener('keydown', handleKeydown);
 
-      this.shadowRoot!.appendChild(overlay);
+      this.root.appendChild(overlay);
       
       // Focus and select the input
       input.focus();
