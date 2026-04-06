@@ -5647,27 +5647,85 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
     const width = bounds.X - bounds.x;
     const height = bounds.Y - bounds.y;
+    const cx = bounds.x + width / 2;
+    const cy = bounds.y + height / 2;
 
-    const startPoint = {
-      x: bounds.x + width / 2, // Center of top edge
-      y: bounds.y
-    };
+    // Compute self-loop index: which self-loop is this among all self-loops on this node?
+    const selfLoopIndex = this.getSelfLoopIndex(edgeData);
 
-    const endPoint = {
-      x: bounds.X, // Center of right edge
-      y: bounds.y + height / 2
-    };
+    // Distribute self-loops around 4 corners of the node:
+    //   0: top-right    (start: top center,    end: right center,   control: top-right)
+    //   1: bottom-right (start: right center,  end: bottom center,  control: bottom-right)
+    //   2: bottom-left  (start: bottom center, end: left center,    control: bottom-left)
+    //   3: top-left     (start: left center,   end: top center,     control: top-left)
+    // For 5+ self-loops, wrap around with increasing curvature.
+    const corner = selfLoopIndex % 4;
+    const ring = Math.floor(selfLoopIndex / 4);
+    const curvatureScale = 1 + ring * WebColaCnDGraph.SELF_LOOP_CURVATURE_SCALE;
 
-    // Dynamic control point based on self-loop index
-    const selfLoopIndex = edgeData.selfLoopIndex || 0;
-    const curvatureScale = 1 + selfLoopIndex * WebColaCnDGraph.SELF_LOOP_CURVATURE_SCALE;
-    
-    const controlPoint = {
-      x: bounds.X + (width / 2) * curvatureScale,
-      y: bounds.y - (height / 2) * curvatureScale
-    };
+    // Midpoints of each side
+    const topMid    = { x: cx,       y: bounds.y };
+    const rightMid  = { x: bounds.X, y: cy };
+    const bottomMid = { x: cx,       y: bounds.Y };
+    const leftMid   = { x: bounds.x, y: cy };
+
+    let startPoint: { x: number; y: number };
+    let endPoint: { x: number; y: number };
+    let controlPoint: { x: number; y: number };
+
+    switch (corner) {
+      case 0: // top-right
+        startPoint = topMid;
+        endPoint = rightMid;
+        controlPoint = { x: bounds.X + (width / 2) * curvatureScale, y: bounds.y - (height / 2) * curvatureScale };
+        break;
+      case 1: // bottom-right
+        startPoint = rightMid;
+        endPoint = bottomMid;
+        controlPoint = { x: bounds.X + (width / 2) * curvatureScale, y: bounds.Y + (height / 2) * curvatureScale };
+        break;
+      case 2: // bottom-left
+        startPoint = bottomMid;
+        endPoint = leftMid;
+        controlPoint = { x: bounds.x - (width / 2) * curvatureScale, y: bounds.Y + (height / 2) * curvatureScale };
+        break;
+      case 3: // top-left
+        startPoint = leftMid;
+        endPoint = topMid;
+        controlPoint = { x: bounds.x - (width / 2) * curvatureScale, y: bounds.y - (height / 2) * curvatureScale };
+        break;
+      default:
+        startPoint = topMid;
+        endPoint = rightMid;
+        controlPoint = { x: bounds.X + (width / 2) * curvatureScale, y: bounds.y - (height / 2) * curvatureScale };
+    }
 
     return [startPoint, controlPoint, endPoint];
+  }
+
+  /**
+   * Returns the 0-based index of this self-loop among all self-loops on its node.
+   * Uses the edgesBetweenNodes cache when available.
+   */
+  private getSelfLoopIndex(edgeData: any): number {
+    const nodeId = edgeData.source.id;
+    const key = this.getNodePairKey(nodeId, nodeId);
+    const selfLoops = this.edgeRoutingCache.edgesBetweenNodes.get(key);
+    if (selfLoops) {
+      const idx = selfLoops.findIndex((e: any) => e.id === edgeData.id);
+      return idx >= 0 ? idx : 0;
+    }
+    // Fallback: scan all links
+    if (this.currentLayout?.links) {
+      let idx = 0;
+      for (const edge of this.currentLayout.links as any[]) {
+        if (edge.source.id === nodeId && edge.target.id === nodeId) {
+          if (edge.id === edgeData.id) return idx;
+          idx++;
+        }
+      }
+    }
+    return 0;
   }
 
   /**
