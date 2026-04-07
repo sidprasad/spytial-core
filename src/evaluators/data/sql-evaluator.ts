@@ -6,8 +6,8 @@ import IEvaluator, {
   EvaluatorResult,
   SingleValue,
   Tuple
-} from './interfaces';
-import { IDataInstance, IAtom, IRelation } from '../data-instance/interfaces';
+} from '../interfaces';
+import { IDataInstance, IAtom, IRelation } from '../../data-instance/interfaces';
 
 /**
  * Type guard to check if a value is an IDataInstance

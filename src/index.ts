@@ -33,8 +33,8 @@ export { QualitativeConstraintValidator } from './layout/qualitative-constraint-
 export { parseLayoutSpec } from './layout/layoutspec';
 export { setupLayout } from './layout';
 export { type default as IEvaluator, SelectorArityError } from './evaluators/interfaces';
-export { ForgeEvaluator, WrappedForgeEvaluator } from './evaluators/forge-evaluator';
-export { SQLEvaluator } from './evaluators/sql-evaluator';
+export { ForgeEvaluator, WrappedForgeEvaluator } from './evaluators/data/forge-evaluator';
+export { SQLEvaluator } from './evaluators/data/sql-evaluator';
 export { WebColaTranslator } from './translators';
 export { AccessibleTranslator, buildSpatialNavigationMap } from './translators';
 export { StructuredInputGraph } from './translators';
@@ -63,9 +63,9 @@ export type {
   LayoutDescription,
   SpatialRelationshipDescription,
 } from './translators';
-export { SGraphQueryEvaluator } from "./evaluators/sgq-evaluator";
-export { LayoutEvaluator, LayoutEvaluatorResult } from "./evaluators/layout-evaluator";
-export type { SpatialQuery, DirectionalRelation, AlignmentAxis, Modality } from "./evaluators/layout-evaluator";
+export { SGraphQueryEvaluator } from "./evaluators/data/sgq-evaluator";
+export { LayoutEvaluator, LayoutEvaluatorResult, LayoutEvaluatorRecordResult, LayoutEvaluatorEdgeResult } from "./evaluators/layout/layout-evaluator";
+export type { SpatialQuery, DirectionalRelation, AlignmentAxis, Modality, EdgeInfo } from "./evaluators/layout/layout-evaluator";
 
 // Selector synthesis API (requires SGraphQueryEvaluator)
 export { 

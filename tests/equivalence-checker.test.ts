@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { JSONDataInstance, IJsonDataInstance } from '../src/data-instance/json-data-instance';
 import { parseLayoutSpec } from '../src/layout/layoutspec';
 import { LayoutInstance } from '../src/layout/layoutinstance';
-import { SGraphQueryEvaluator } from '../src/evaluators/sgq-evaluator';
+import { SGraphQueryEvaluator } from '../src/evaluators/data/sgq-evaluator';
 import {
     checkEquivalence,
     checkLayoutEquivalence,

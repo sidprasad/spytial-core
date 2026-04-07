@@ -8,7 +8,7 @@ import {
     GroupBySelector,
     GroupByField,
 } from '../src/layout/layoutspec';
-import { SGraphQueryEvaluator } from '../src/evaluators/sgq-evaluator';
+import { SGraphQueryEvaluator } from '../src/evaluators/data/sgq-evaluator';
 import {
     flattenConstraints,
     flipConstraint,

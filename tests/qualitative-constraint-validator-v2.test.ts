@@ -1927,7 +1927,7 @@ describe('QualitativeConstraintValidator', () => {
             const { AlloyDataInstance } = await import('../src/data-instance/alloy-data-instance');
             const { parseLayoutSpec } = await import('../src/layout/layoutspec');
             const { LayoutInstance } = await import('../src/layout/layoutinstance');
-            const { SGraphQueryEvaluator } = await import('../src/evaluators/sgq-evaluator');
+            const { SGraphQueryEvaluator } = await import('../src/evaluators/data/sgq-evaluator');
 
             const sampleDir = path.resolve(__dirname, '../sample/unsat-timeout');
             const datumXml = fs.readFileSync(path.join(sampleDir, 'datum.xml'), 'utf-8');
@@ -1978,7 +1978,7 @@ describe('QualitativeConstraintValidator', () => {
             const { AlloyDataInstance } = await import('../src/data-instance/alloy-data-instance');
             const { parseLayoutSpec } = await import('../src/layout/layoutspec');
             const { LayoutInstance } = await import('../src/layout/layoutinstance');
-            const { SGraphQueryEvaluator } = await import('../src/evaluators/sgq-evaluator');
+            const { SGraphQueryEvaluator } = await import('../src/evaluators/data/sgq-evaluator');
 
             const sampleDir = path.resolve(__dirname, '../sample/unsat-grouping');
             const datumXml = fs.readFileSync(path.join(sampleDir, 'datum.xml'), 'utf-8');

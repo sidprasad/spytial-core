@@ -8,8 +8,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { WebColaLayout } from '../src/translators/webcola/webcolatranslator';
 import { ConstraintValidator } from '../src/layout/constraint-validator';
-import { SGraphQueryEvaluator } from '../src/evaluators/sgq-evaluator';
-import { ForgeEvaluator } from '../src/evaluators/forge-evaluator';
+import { SGraphQueryEvaluator } from '../src/evaluators/data/sgq-evaluator';
+import { ForgeEvaluator } from '../src/evaluators/data/forge-evaluator';
 import type { InstanceLayout, LayoutNode } from '../src/layout/interfaces';
 
 /**
