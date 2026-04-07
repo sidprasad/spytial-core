@@ -11,7 +11,7 @@ import {
     AlignmentConstraint,
 } from '../src/layout/interfaces';
 import { RelativeOrientationConstraint, CyclicOrientationConstraint } from '../src/layout/layoutspec';
-import { LayoutEvaluator, LayoutEvaluatorResult, LayoutEvaluatorRecordResult, LayoutEvaluatorEdgeResult } from '../src/evaluators/layout-evaluator';
+import { LayoutEvaluator, LayoutEvaluatorResult, LayoutEvaluatorRecordResult, LayoutEvaluatorEdgeResult } from '../src/evaluators/layout/layout-evaluator';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

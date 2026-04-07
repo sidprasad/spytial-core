@@ -8,11 +8,11 @@
  * All query results are returned as IEvaluatorResult for REPL compatibility.
  */
 
-import { QualitativeConstraintValidator } from '../layout/qualitative-constraint-validator';
-import { InstanceLayout, LayoutEdge, LayoutGroup, LayoutNode } from '../layout/interfaces';
+import { QualitativeConstraintValidator } from '../../layout/qualitative-constraint-validator';
+import { InstanceLayout, LayoutEdge, LayoutGroup, LayoutNode } from '../../layout/interfaces';
 import {
     IEvaluatorResult, EvaluatorResult, SingleValue, Tuple
-} from './interfaces';
+} from '../interfaces';
 import { parse as parseQueryExpr } from './layout-query-parser';
 
 // ─── Types ───────────────────────────────────────────────────────────

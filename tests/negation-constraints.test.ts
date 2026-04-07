@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { JSONDataInstance, IJsonDataInstance } from '../src/data-instance/json-data-instance';
 import { parseLayoutSpec, RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint } from '../src/layout/layoutspec';
 import { LayoutInstance, ConstraintValidatorStrategy } from '../src/layout/layoutinstance';
-import { SGraphQueryEvaluator } from '../src/evaluators/sgq-evaluator';
+import { SGraphQueryEvaluator } from '../src/evaluators/data/sgq-evaluator';
 import { ConstraintValidator } from '../src/layout/constraint-validator';
 import {
     isTopConstraint, isLeftConstraint, isAlignmentConstraint,

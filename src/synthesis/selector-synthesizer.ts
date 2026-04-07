@@ -27,7 +27,7 @@ import {
 } from 'simple-graph-query';
 import type { IAtom, IDataInstance } from '../data-instance/interfaces';
 import type IEvaluator from '../evaluators/interfaces';
-import { SGraphQueryEvaluator } from '../evaluators/sgq-evaluator';
+import { SGraphQueryEvaluator } from '../evaluators/data/sgq-evaluator';
 
 /**
  * Check if synthesis is supported for a given evaluator instance.

@@ -20,7 +20,7 @@
   },
   "scripts": {
     "build": "npm run build:all",
-    "build:parser": "peggy --plugin ts-pegjs -o src/evaluators/layout-query-parser.ts src/evaluators/layout-query.pegjs",
+    "build:parser": "peggy --plugin ts-pegjs -o src/evaluators/layout/layout-query-parser.ts src/evaluators/layout/layout-query.pegjs",
     "build:browser": "tsup --config tsup.browser.config.ts",
     "build:components": "tsup --config tsup.components.config.ts",
     "build:all": "npm run build:parser && npm run build:browser && npm run build:components",

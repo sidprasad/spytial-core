@@ -1,9 +1,9 @@
-import IEvaluator, {EvaluatorResult} from "./interfaces";
+import IEvaluator, {EvaluatorResult} from "../interfaces";
 import {SimpleGraphQueryEvaluator, EvaluationResult, ErrorResult} from "simple-graph-query";
 
-import {EvaluationContext, EvaluatorConfig, IEvaluatorResult } from "./interfaces";
-import { IDataInstance } from "../data-instance/interfaces";
-import {SingleValue, Tuple} from "./interfaces";
+import {EvaluationContext, EvaluatorConfig, IEvaluatorResult } from "../interfaces";
+import { IDataInstance } from "../../data-instance/interfaces";
+import {SingleValue, Tuple} from "../interfaces";
 
 
 function isDataInstance(value: unknown): value is IDataInstance {

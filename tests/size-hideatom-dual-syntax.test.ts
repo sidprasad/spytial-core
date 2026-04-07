@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { parseLayoutSpec, LayoutInstance } from '../src/layout';
 import { JSONDataInstance } from '../src/data-instance/json-data-instance';
-import { SGraphQueryEvaluator } from '../src/evaluators/sgq-evaluator';
+import { SGraphQueryEvaluator } from '../src/evaluators/data/sgq-evaluator';
 
 describe('Size and HideAtom Dual Syntax', () => {
   const testData = {

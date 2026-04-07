@@ -3,7 +3,7 @@ const d3: any = (window as any).d3v4 || (window as any).d3;
 import { WebColaCnDGraph } from './webcola-cnd-graph';
 import { IInputDataInstance, IAtom, ITuple, IRelation } from '../../data-instance/interfaces';
 import { JSONDataInstance } from '../../data-instance/json-data-instance';
-import { SGraphQueryEvaluator } from '../../evaluators/sgq-evaluator';
+import { SGraphQueryEvaluator } from '../../evaluators/data/sgq-evaluator';
 import { LayoutInstance } from '../../layout/layoutinstance';
 import { parseLayoutSpec } from '../../layout/layoutspec';
 import { ConstraintError } from '../../layout/constraint-validator';
