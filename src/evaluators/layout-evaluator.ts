@@ -9,7 +9,7 @@
  */
 
 import { QualitativeConstraintValidator } from '../layout/qualitative-constraint-validator';
-import { InstanceLayout, LayoutGroup } from '../layout/interfaces';
+import { InstanceLayout, LayoutGroup, LayoutNode } from '../layout/interfaces';
 import {
     IEvaluatorResult, EvaluatorResult, SingleValue, Tuple
 } from './interfaces';
@@ -115,11 +115,11 @@ export class LayoutEvaluator {
         this.validator = validator;
         this.layout = layout;
 
-        // Collect all real node IDs
+        // Collect all real node IDs — must match validator's node.id, NOT node.name/label
         this.allNodeIds = new Set(
             (layout.nodes ?? [])
                 .filter((n: any) => !n._isAuxiliary && !n._isBoundingBox)
-                .map((n: any) => n.name ?? n.id?.toString() ?? '')
+                .map((n: LayoutNode) => n.id)
                 .filter((id: string) => id !== '')
         );
 
