@@ -3095,6 +3095,8 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
         let hIntersection: Set<string> | null = null;
         let vIntersection: Set<string> | null = null;
+        let hAlignIntersection: Set<string> | null = null;
+        let vAlignIntersection: Set<string> | null = null;
 
         for (const alt of disj.alternatives) {
             // Clone conjunctive graphs and add this alternative's edges
@@ -3105,13 +3107,19 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                 this.addEdgeToGraph(constraint, tempH, tempV);
             }
 
-            // Collect pairs from this alternative
+            // Collect strict ordering pairs from this alternative
             const altHPairs = this.collectStrictPairs(tempH, realNodeIds);
             const altVPairs = this.collectStrictPairs(tempV, realNodeIds);
+
+            // Collect alignment pairs from this alternative (encoded as "a\x00b" with a < b)
+            const altHAligns = this.collectAlignmentPairs(tempH, realNodeIds);
+            const altVAligns = this.collectAlignmentPairs(tempV, realNodeIds);
 
             if (hIntersection === null) {
                 hIntersection = altHPairs;
                 vIntersection = altVPairs;
+                hAlignIntersection = altHAligns;
+                vAlignIntersection = altVAligns;
             } else {
                 // Intersect: keep only pairs present in ALL alternatives
                 for (const p of hIntersection) {
@@ -3120,16 +3128,58 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                 for (const p of vIntersection!) {
                     if (!altVPairs.has(p)) vIntersection!.delete(p);
                 }
+                for (const p of hAlignIntersection!) {
+                    if (!altHAligns.has(p)) hAlignIntersection!.delete(p);
+                }
+                for (const p of vAlignIntersection!) {
+                    if (!altVAligns.has(p)) vAlignIntersection!.delete(p);
+                }
             }
         }
 
-        // Add universally forced pairs to must sets
+        // Add universally forced strict ordering pairs to must sets AND must graphs
         if (hIntersection) {
-            for (const p of hIntersection) this.mustHPairs.add(p);
+            for (const p of hIntersection) {
+                this.mustHPairs.add(p);
+                // Also add edge to must graph so getCannot (canReach) sees it
+                const [a, b] = p.split('\x00');
+                this.mustHGraph.addEdge(a, b, 1); // minimal positive weight
+            }
         }
         if (vIntersection) {
-            for (const p of vIntersection) this.mustVPairs.add(p);
+            for (const p of vIntersection) {
+                this.mustVPairs.add(p);
+                const [a, b] = p.split('\x00');
+                this.mustVGraph.addEdge(a, b, 1);
+            }
         }
+
+        // Add universally forced alignments to must graphs
+        if (hAlignIntersection) {
+            for (const p of hAlignIntersection) {
+                const [a, b] = p.split('\x00');
+                this.mustHGraph.addAlignmentEdges(a, b);
+            }
+        }
+        if (vAlignIntersection) {
+            for (const p of vAlignIntersection) {
+                const [a, b] = p.split('\x00');
+                this.mustVGraph.addAlignmentEdges(a, b);
+            }
+        }
+    }
+
+    /** Collect alignment pairs from a graph (canonical "a\x00b" with a < b). */
+    private collectAlignmentPairs(graph: DifferenceConstraintGraph, nodeIds: string[]): Set<string> {
+        const pairs = new Set<string>();
+        for (let i = 0; i < nodeIds.length; i++) {
+            for (let j = i + 1; j < nodeIds.length; j++) {
+                if (graph.areAligned(nodeIds[i], nodeIds[j])) {
+                    pairs.add(`${nodeIds[i]}\x00${nodeIds[j]}`);
+                }
+            }
+        }
+        return pairs;
     }
 
     /**

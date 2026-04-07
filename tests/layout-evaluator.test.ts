@@ -250,6 +250,48 @@ describe('Modal spatial queries (must/can/cannot)', () => {
         });
     });
 
+    describe('Disjunction-strengthened cannot (P1 fix)', () => {
+        it('unanimous disjunction ordering is reflected in cannot, not just must', () => {
+            const [a, b, c] = ['A', 'B', 'C'].map(createNode);
+            // Disjunction: (A left B AND A left C) OR (A left B AND C left A)
+            // Both alternatives force A left B, so must.rightOf(A) includes B.
+            // Because must graphs are strengthened, cannot.leftOf(B) should include A
+            // (B cannot be to the left of A, since A must be left of B).
+            const src = cyclic(['left'], 'A->B');
+            const disj = disjunction(src, [
+                [leftOf(a, b), leftOf(a, c)],
+                [leftOf(a, b), leftOf(c, a)],
+            ]);
+
+            const v = validate(layout([a, b, c], [], [disj]));
+            expect(v.getMust('A', 'rightOf').has('B')).toBe(true);
+            // P1: getCannot must agree — B cannot be left of A
+            expect(v.getCannot('A', 'leftOf').has('B')).toBe(true);
+            // And the converse: A can be left of B (it's already must)
+            expect(v.getCan('A', 'leftOf').has('B')).toBe(false); // cannot, not can
+            // must ⊆ can still holds
+            expect(v.getCan('A', 'rightOf').has('B')).toBe(true);
+        });
+    });
+
+    describe('Disjunction-strengthened alignment (P2 fix)', () => {
+        it('unanimous disjunction alignment appears in mustAligned', () => {
+            const [a, b, c] = ['A', 'B', 'C'].map(createNode);
+            // Disjunction: (A aligned-x B AND A left C) OR (A aligned-x B AND C left A)
+            // Both alternatives force A aligned-x with B.
+            const src = cyclic(['left'], 'A->C');
+            const disj = disjunction(src, [
+                [aligned(a, b, 'x'), leftOf(a, c)],
+                [aligned(a, b, 'x'), leftOf(c, a)],
+            ]);
+
+            const v = validate(layout([a, b, c], [], [disj]));
+            // P2: mustAligned should include the unanimous alignment
+            expect(v.getMustAligned('A', 'x').has('B')).toBe(true);
+            expect(v.getMustAligned('B', 'x').has('A')).toBe(true);
+        });
+    });
+
     describe('Feasibility-based cannot', () => {
         it('cannot detects infeasibility via zero-weight alignment chains', () => {
             const [a, b, c] = ['A', 'B', 'C'].map(createNode);
