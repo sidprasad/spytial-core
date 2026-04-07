@@ -233,7 +233,7 @@ export class LayoutEvaluatorEdgeResult implements IEvaluatorResult {
         ]);
     }
 
-    maxArity(): number { return this.edgeInfos.length > 0 ? 2 : 0; }
+    maxArity(): number { return this.edgeInfos.length > 0 ? 7 : 0; }
     isError(): boolean { return this.err !== null; }
     isSingleton(): boolean { return this.edgeInfos.length === 1; }
     getExpression(): string { return this.expr; }
