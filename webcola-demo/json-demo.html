@@ -187,6 +187,16 @@
                     aria-label="Interactive graph visualization">
                 </webcola-cnd-graph>
             </div>
+            <details id="spatial-query-panel" style="margin-top: 8px;">
+                <summary class="text-muted small">Spatial Queries (must / can / cannot)</summary>
+                <div style="display: flex; gap: 6px; margin-top: 8px;">
+                    <input type="text" id="spatial-query-input" placeholder="must.rightOf(NodeId)"
+                           style="flex: 1; font-family: monospace; font-size: 13px; padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px;"
+                           onkeydown="if(event.key==='Enter') runSpatialQuery()" disabled>
+                    <button onclick="runSpatialQuery()" id="spatial-query-btn" disabled style="font-size: 13px; padding: 4px 10px;">Query</button>
+                </div>
+                <div id="spatial-query-output" style="font-family: monospace; font-size: 12px; background: #1e1e1e; color: #d4d4d4; padding: 10px; border-radius: 4px; margin-top: 6px; max-height: 200px; overflow-y: auto; white-space: pre-wrap; display: none;"></div>
+            </details>
         </div>
     </div>
     <div id="cnd-panel" class="container d-flex flex-column col-md-4 border p-3">
@@ -233,6 +243,8 @@
         let cachedLayoutSpec = null;
         let cachedInstance = null;
         let cachedEvaluatorType = 'sgq';
+        let currentLayoutEvaluator = null;
+        let spatialQueryHistory = [];
         // Projection state
         let activeProjections = [];
         let projectionSelections = {};
@@ -511,6 +523,9 @@
             if (window.clearAllErrors) {
                 window.clearAllErrors();
             }
+
+            // Create LayoutEvaluator for spatial queries if validator available
+            initSpatialQueryPanel(layoutResult);
         }
 
         async function renderGraph() {
@@ -752,6 +767,55 @@
             }
         });
 
+        // ─── Spatial Query REPL ────────────────────────────────────────────
+        function initSpatialQueryPanel(layoutResult) {
+            currentLayoutEvaluator = null;
+            spatialQueryHistory = [];
+            const input = document.getElementById('spatial-query-input');
+            const btn = document.getElementById('spatial-query-btn');
+            const output = document.getElementById('spatial-query-output');
+            if (!input || !btn) return;
+
+            if (layoutResult.validator && CndCore.LayoutEvaluator) {
+                currentLayoutEvaluator = new CndCore.LayoutEvaluator(
+                    layoutResult.validator, layoutResult.layout
+                );
+                input.disabled = false;
+                btn.disabled = false;
+                output.style.display = 'none';
+                const firstNode = layoutResult.layout.nodes?.find(n => !n._isAuxiliary && !n._isBoundingBox);
+                if (firstNode) input.placeholder = 'must.rightOf(' + firstNode.id + ')';
+            } else {
+                input.disabled = true;
+                btn.disabled = true;
+            }
+        }
+
+        function runSpatialQuery() {
+            const input = document.getElementById('spatial-query-input');
+            const output = document.getElementById('spatial-query-output');
+            const expr = input.value.trim();
+            if (!expr || !currentLayoutEvaluator) return;
+
+            output.style.display = 'block';
+            const result = currentLayoutEvaluator.evaluate(expr);
+            let line = '> ' + expr + '\n';
+            if (result.isError()) {
+                line += '  Error: ' + result.prettyPrint();
+            } else if (result.noResult()) {
+                line += '  (empty set)';
+            } else {
+                const atoms = result.selectedAtoms();
+                line += '  { ' + atoms.join(', ') + ' }  (' + atoms.length + ')';
+            }
+            spatialQueryHistory.push(line);
+            output.textContent = spatialQueryHistory.join('\n\n');
+            output.scrollTop = output.scrollHeight;
+            input.value = '';
+            input.focus();
+        }
+
+        window.runSpatialQuery = runSpatialQuery;
         window.loadGraph = loadGraph;
         window.loadJsonData = loadJsonData;
         window.renderGraph = renderGraph;
