@@ -64,8 +64,8 @@ export type {
   SpatialRelationshipDescription,
 } from './translators';
 export { SGraphQueryEvaluator } from "./evaluators/sgq-evaluator";
-export { LayoutEvaluator, LayoutEvaluatorResult } from "./evaluators/layout-evaluator";
-export type { SpatialQuery, DirectionalRelation, AlignmentAxis, Modality } from "./evaluators/layout-evaluator";
+export { LayoutEvaluator, LayoutEvaluatorResult, LayoutEvaluatorRecordResult, LayoutEvaluatorEdgeResult } from "./evaluators/layout-evaluator";
+export type { SpatialQuery, DirectionalRelation, AlignmentAxis, Modality, EdgeInfo } from "./evaluators/layout-evaluator";
 
 // Selector synthesis API (requires SGraphQueryEvaluator)
 export { 

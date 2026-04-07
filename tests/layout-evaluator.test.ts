@@ -4,13 +4,14 @@ import {
     DisjunctiveConstraint,
     InstanceLayout,
     LayoutNode,
+    LayoutEdge,
     LayoutGroup,
     LeftConstraint,
     TopConstraint,
     AlignmentConstraint,
 } from '../src/layout/interfaces';
 import { RelativeOrientationConstraint, CyclicOrientationConstraint } from '../src/layout/layoutspec';
-import { LayoutEvaluator, LayoutEvaluatorResult } from '../src/evaluators/layout-evaluator';
+import { LayoutEvaluator, LayoutEvaluatorResult, LayoutEvaluatorRecordResult, LayoutEvaluatorEdgeResult } from '../src/evaluators/layout-evaluator';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -589,4 +590,428 @@ describe('Modal query PBT properties', () => {
             }
         });
     }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('Affordance queries', () => {
+
+    function createRichNode(id: string, overrides?: Partial<LayoutNode>): LayoutNode {
+        return {
+            id, label: id, color: 'black', groups: [],
+            attributes: {}, width: 100, height: 60,
+            mostSpecificType: 'Node', types: ['Node'], showLabels: true,
+            ...overrides,
+        };
+    }
+
+    function createEdge(
+        source: LayoutNode, target: LayoutNode,
+        label: string, relationName: string,
+        overrides?: Partial<LayoutEdge>
+    ): LayoutEdge {
+        const src = new RelativeOrientationConstraint(['left'], `${source.id}->${target.id}`);
+        return {
+            source, target, label, relationName,
+            id: `${source.id}_${target.id}_${label}`,
+            color: 'gray',
+            ...overrides,
+        };
+    }
+
+    function layoutWithEdges(
+        nodes: LayoutNode[],
+        edges: LayoutEdge[],
+        constraints: any[] = [],
+        groups: LayoutGroup[] = []
+    ): InstanceLayout {
+        return { nodes, edges, constraints, groups };
+    }
+
+    describe('nodes()', () => {
+        it('returns all non-auxiliary node IDs', () => {
+            const [a, b, c] = ['A', 'B', 'C'].map(createNode);
+            const v = validate(layout([a, b, c], []));
+            const ev = new LayoutEvaluator(v, layout([a, b, c], []));
+            const result = ev.evaluate('nodes()');
+            expect(result.isError()).toBe(false);
+            expect(result.selectedAtoms().sort()).toEqual(['A', 'B', 'C']);
+        });
+    });
+
+    describe('groups()', () => {
+        it('returns all group names', () => {
+            const [a, b, c] = ['A', 'B', 'C'].map(createNode);
+            const grp1: LayoutGroup = { name: 'G1', nodeIds: ['A', 'B'], keyNodeId: 'A', showLabel: true };
+            const grp2: LayoutGroup = { name: 'G2', nodeIds: ['B', 'C'], keyNodeId: 'B', showLabel: true };
+            const l = layout([a, b, c], [], undefined, [grp1, grp2]);
+            const v = validate(l);
+            const ev = new LayoutEvaluator(v, l);
+            const result = ev.evaluate('groups()');
+            expect(result.isError()).toBe(false);
+            expect(result.selectedAtoms().sort()).toEqual(['G1', 'G2']);
+        });
+
+        it('returns empty when no groups', () => {
+            const [a] = ['A'].map(createNode);
+            const l = layout([a], []);
+            const v = validate(l);
+            const ev = new LayoutEvaluator(v, l);
+            const result = ev.evaluate('groups()');
+            expect(result.noResult()).toBe(true);
+        });
+    });
+
+    describe('node(A)', () => {
+        it('returns node properties', () => {
+            const a = createRichNode('A', {
+                color: 'red', width: 120, height: 80,
+                mostSpecificType: 'Person', types: ['Person', 'Object'],
+                attributes: { age: ['25'] },
+            });
+            const l = layout([a], []);
+            const v = validate(l);
+            const ev = new LayoutEvaluator(v, l);
+            const result = ev.evaluate('node(A)');
+            expect(result.isError()).toBe(false);
+            const pp = result.prettyPrint();
+            expect(pp).toContain('color: red');
+            expect(pp).toContain('size: 120x80');
+            expect(pp).toContain('type: Person');
+            expect(pp).toContain('types: Person, Object');
+            expect(pp).toContain('attr:age: 25');
+        });
+
+        it('includes labels when present', () => {
+            const a = createRichNode('A', {
+                labels: { skolem: ['$sk1'] },
+            });
+            const l = layout([a], []);
+            const v = validate(l);
+            const ev = new LayoutEvaluator(v, l);
+            const result = ev.evaluate('node(A)');
+            expect(result.prettyPrint()).toContain('label:skolem: $sk1');
+        });
+
+        it('includes groups when present', () => {
+            const a = createRichNode('A', { groups: ['G1', 'G2'] });
+            const l = layout([a], []);
+            const v = validate(l);
+            const ev = new LayoutEvaluator(v, l);
+            const result = ev.evaluate('node(A)');
+            expect(result.prettyPrint()).toContain('groups: G1, G2');
+        });
+
+        it('returns selectedTwoples as key-value pairs', () => {
+            const a = createRichNode('A', { color: 'blue' });
+            const l = layout([a], []);
+            const v = validate(l);
+            const ev = new LayoutEvaluator(v, l);
+            const result = ev.evaluate('node(A)');
+            const twoples = result.selectedTwoples();
+            const colorEntry = twoples.find(([k]) => k === 'color');
+            expect(colorEntry).toEqual(['color', 'blue']);
+        });
+
+        it('errors for unknown node', () => {
+            const a = createNode('A');
+            const l = layout([a], []);
+            const v = validate(l);
+            const ev = new LayoutEvaluator(v, l);
+            const result = ev.evaluate('node(Z)');
+            expect(result.isError()).toBe(true);
+            expect(result.prettyPrint()).toContain('Unknown node');
+        });
+    });
+
+    describe('edges(A) and edges(A, B)', () => {
+        it('edges(A) returns edges connected to A', () => {
+            const [a, b, c] = ['A', 'B', 'C'].map(createNode);
+            const e1 = createEdge(a, b, 'friends', 'friends');
+            const e2 = createEdge(a, c, 'knows', 'knows');
+            const l = layoutWithEdges([a, b, c], [e1, e2]);
+            const v = validate(l);
+            const ev = new LayoutEvaluator(v, l);
+            const result = ev.evaluate('edges(A)');
+            expect(result.isError()).toBe(false);
+            const twoples = result.selectedTwoples();
+            expect(twoples).toHaveLength(2);
+            expect(twoples).toContainEqual(['A', 'B']);
+            expect(twoples).toContainEqual(['A', 'C']);
+        });
+
+        it('edges(A, B) returns edges between A and B', () => {
+            const [a, b, c] = ['A', 'B', 'C'].map(createNode);
+            const e1 = createEdge(a, b, 'friends', 'friends', { color: 'blue' });
+            const e2 = createEdge(a, b, 'coworkers', 'coworkers', { color: 'green' });
+            const e3 = createEdge(a, c, 'knows', 'knows');
+            const l = layoutWithEdges([a, b, c], [e1, e2, e3]);
+            const v = validate(l);
+            const ev = new LayoutEvaluator(v, l);
+            const result = ev.evaluate('edges(A, B)');
+            expect(result.isError()).toBe(false);
+            const twoples = result.selectedTwoples();
+            expect(twoples).toHaveLength(2);
+            expect(twoples).toContainEqual(['A', 'B']);
+        });
+
+        it('edges(A, B) returns empty when no edges', () => {
+            const [a, b] = ['A', 'B'].map(createNode);
+            const l = layoutWithEdges([a, b], []);
+            const v = validate(l);
+            const ev = new LayoutEvaluator(v, l);
+            const result = ev.evaluate('edges(A, B)');
+            expect(result.noResult()).toBe(true);
+        });
+
+        it('excludes hidden edges', () => {
+            const [a, b] = ['A', 'B'].map(createNode);
+            const e1 = createEdge(a, b, 'visible', 'visible');
+            const e2 = createEdge(a, b, 'secret', 'secret', { hidden: true });
+            const l = layoutWithEdges([a, b], [e1, e2]);
+            const v = validate(l);
+            const ev = new LayoutEvaluator(v, l);
+            const result = ev.evaluate('edges(A)');
+            const twoples = result.selectedTwoples();
+            expect(twoples).toHaveLength(1);
+            expect(twoples[0]).toEqual(['A', 'B']);
+        });
+
+        it('edges(A) errors for unknown node', () => {
+            const a = createNode('A');
+            const l = layoutWithEdges([a], []);
+            const v = validate(l);
+            const ev = new LayoutEvaluator(v, l);
+            const result = ev.evaluate('edges(Z)');
+            expect(result.isError()).toBe(true);
+        });
+
+        it('edge result prettyPrint formats correctly', () => {
+            const [a, b] = ['A', 'B'].map(createNode);
+            const e1 = createEdge(a, b, 'friends', 'friends', { color: 'blue', style: 'dashed' });
+            const l = layoutWithEdges([a, b], [e1]);
+            const v = validate(l);
+            const ev = new LayoutEvaluator(v, l);
+            const result = ev.evaluate('edges(A, B)');
+            const pp = result.prettyPrint();
+            expect(pp).toContain('A --[friends]--> B');
+            expect(pp).toContain('blue');
+            expect(pp).toContain('dashed');
+        });
+
+        it('selectedTuplesAll includes full edge metadata', () => {
+            const [a, b] = ['A', 'B'].map(createNode);
+            const e1 = createEdge(a, b, 'friends', 'friends', { color: 'blue', style: 'dashed', weight: 2 });
+            const l = layoutWithEdges([a, b], [e1]);
+            const v = validate(l);
+            const ev = new LayoutEvaluator(v, l);
+            const result = ev.evaluate('edges(A, B)');
+            const tuples = result.selectedTuplesAll();
+            expect(tuples).toHaveLength(1);
+            expect(tuples[0]).toEqual(['A', 'B', 'friends', 'friends', 'blue', 'dashed', '2']);
+        });
+    });
+
+    describe('Expression parser for affordance queries', () => {
+        it('parses nodes()', () => {
+            const ev = new LayoutEvaluator(
+                validate(layout([createNode('A')], [])),
+                layout([createNode('A')], [])
+            );
+            const parsed = ev.parseExpression('nodes()');
+            expect(parsed).toEqual({ kind: 'allNodes' });
+        });
+
+        it('parses groups()', () => {
+            const ev = new LayoutEvaluator(
+                validate(layout([createNode('A')], [])),
+                layout([createNode('A')], [])
+            );
+            expect(ev.parseExpression('groups()')).toEqual({ kind: 'allGroups' });
+        });
+
+        it('parses node(A)', () => {
+            const ev = new LayoutEvaluator(
+                validate(layout([createNode('A')], [])),
+                layout([createNode('A')], [])
+            );
+            expect(ev.parseExpression('node(A)')).toEqual({ kind: 'nodeInfo', nodeId: 'A' });
+        });
+
+        it('parses edges(A)', () => {
+            const ev = new LayoutEvaluator(
+                validate(layout([createNode('A')], [])),
+                layout([createNode('A')], [])
+            );
+            expect(ev.parseExpression('edges(A)')).toEqual({ kind: 'edgesOf', nodeId: 'A' });
+        });
+
+        it('parses edges(A, B)', () => {
+            const ev = new LayoutEvaluator(
+                validate(layout([createNode('A')], [])),
+                layout([createNode('A')], [])
+            );
+            expect(ev.parseExpression('edges(A, B)')).toEqual({ kind: 'edgesBetween', nodeIdA: 'A', nodeIdB: 'B' });
+        });
+
+        it('parses union(expr, expr)', () => {
+            const ev = new LayoutEvaluator(
+                validate(layout([createNode('A')], [])),
+                layout([createNode('A')], [])
+            );
+            const parsed = ev.parseExpression('union(must.leftOf(A), must.above(A))');
+            expect(parsed).toEqual({
+                kind: 'union',
+                operands: [
+                    { kind: 'directional', modality: 'must', relation: 'leftOf', nodeId: 'A' },
+                    { kind: 'directional', modality: 'must', relation: 'above', nodeId: 'A' },
+                ]
+            });
+        });
+
+        it('parses inter(expr, expr)', () => {
+            const ev = new LayoutEvaluator(
+                validate(layout([createNode('A')], [])),
+                layout([createNode('A')], [])
+            );
+            const parsed = ev.parseExpression('inter(can.leftOf(A), can.above(A))');
+            expect(parsed).toEqual({
+                kind: 'intersection',
+                operands: [
+                    { kind: 'directional', modality: 'can', relation: 'leftOf', nodeId: 'A' },
+                    { kind: 'directional', modality: 'can', relation: 'above', nodeId: 'A' },
+                ]
+            });
+        });
+
+        it('parses not(expr)', () => {
+            const ev = new LayoutEvaluator(
+                validate(layout([createNode('A')], [])),
+                layout([createNode('A')], [])
+            );
+            const parsed = ev.parseExpression('not(must.leftOf(A))');
+            expect(parsed).toEqual({
+                kind: 'negation',
+                operand: { kind: 'directional', modality: 'must', relation: 'leftOf', nodeId: 'A' },
+            });
+        });
+
+        it('parses nested: inter(expr, not(expr))', () => {
+            const ev = new LayoutEvaluator(
+                validate(layout([createNode('A')], [])),
+                layout([createNode('A')], [])
+            );
+            const parsed = ev.parseExpression('inter(must.leftOf(A), not(must.above(B)))');
+            expect(parsed).toEqual({
+                kind: 'intersection',
+                operands: [
+                    { kind: 'directional', modality: 'must', relation: 'leftOf', nodeId: 'A' },
+                    { kind: 'negation', operand: { kind: 'directional', modality: 'must', relation: 'above', nodeId: 'B' } },
+                ]
+            });
+        });
+    });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('Set operations (union/inter/not)', () => {
+
+    it('union of two spatial queries', () => {
+        const [a, b, c] = ['A', 'B', 'C'].map(createNode);
+        const l = layout([a, b, c], [leftOf(a, b), above(a, c)]);
+        const v = validate(l);
+        const ev = new LayoutEvaluator(v, l);
+        // must.rightOf(A) = {B}, must.below(A) = {C} → union = {B, C}
+        const result = ev.evaluate('union(must.rightOf(A), must.below(A))');
+        expect(result.isError()).toBe(false);
+        expect(result.selectedAtoms().sort()).toEqual(['B', 'C']);
+    });
+
+    it('intersection of two spatial queries', () => {
+        const [a, b, c] = ['A', 'B', 'C'].map(createNode);
+        // A left B, A left C, A above B → B is both rightOf(A) and below(A)
+        const l = layout([a, b, c], [leftOf(a, b), leftOf(a, c), above(a, b)]);
+        const v = validate(l);
+        const ev = new LayoutEvaluator(v, l);
+        const result = ev.evaluate('inter(must.rightOf(A), must.below(A))');
+        expect(result.isError()).toBe(false);
+        expect(result.selectedAtoms()).toEqual(['B']);
+    });
+
+    it('negation: not(must.rightOf(A)) complements relative to all nodes', () => {
+        const [a, b, c] = ['A', 'B', 'C'].map(createNode);
+        const l = layout([a, b, c], [leftOf(a, b)]);
+        const v = validate(l);
+        const ev = new LayoutEvaluator(v, l);
+        // must.rightOf(A) = {B} → not = allNodes \ {B} = {A, C}
+        const result = ev.evaluate('not(must.rightOf(A))');
+        expect(result.isError()).toBe(false);
+        expect(result.selectedAtoms().sort()).toEqual(['A', 'C']);
+    });
+
+    it('nested: inter(must.rightOf(A), not(must.below(A)))', () => {
+        const [a, b, c] = ['A', 'B', 'C'].map(createNode);
+        // A left B, A left C, A above B → rightOf(A)={B,C}, below(A)={B}
+        const l = layout([a, b, c], [leftOf(a, b), leftOf(a, c), above(a, b)]);
+        const v = validate(l);
+        const ev = new LayoutEvaluator(v, l);
+        // inter({B,C}, not({B})) = inter({B,C}, {A,C}) = {C}
+        const result = ev.evaluate('inter(must.rightOf(A), not(must.below(A)))');
+        expect(result.isError()).toBe(false);
+        expect(result.selectedAtoms()).toEqual(['C']);
+    });
+
+    it('union of group contents', () => {
+        const [a, b, c] = ['A', 'B', 'C'].map(createNode);
+        const grp1: LayoutGroup = { name: 'G1', nodeIds: ['A'], keyNodeId: 'A', showLabel: true };
+        const grp2: LayoutGroup = { name: 'G2', nodeIds: ['B', 'C'], keyNodeId: 'B', showLabel: true };
+        const l = layout([a, b, c], [], undefined, [grp1, grp2]);
+        const v = validate(l);
+        const ev = new LayoutEvaluator(v, l);
+        const result = ev.evaluate('union(contains(G1), contains(G2))');
+        expect(result.isError()).toBe(false);
+        expect(result.selectedAtoms().sort()).toEqual(['A', 'B', 'C']);
+    });
+
+    it('not(node(A)) errors — cannot negate record-returning query', () => {
+        const a = createNode('A');
+        const l = layout([a], []);
+        const v = validate(l);
+        const ev = new LayoutEvaluator(v, l);
+        const result = ev.evaluate('not(node(A))');
+        expect(result.isError()).toBe(true);
+        expect(result.prettyPrint()).toContain('record-returning');
+    });
+
+    it('not(not(X)) = X identity', () => {
+        const [a, b, c] = ['A', 'B', 'C'].map(createNode);
+        const l = layout([a, b, c], [leftOf(a, b)]);
+        const v = validate(l);
+        const ev = new LayoutEvaluator(v, l);
+        const inner = ev.evaluate('must.rightOf(A)');
+        const doubleNeg = ev.evaluate('not(not(must.rightOf(A)))');
+        expect(doubleNeg.selectedAtoms()).toEqual(inner.selectedAtoms());
+    });
+
+    it('union(X, not(X)) = nodes() identity', () => {
+        const [a, b, c] = ['A', 'B', 'C'].map(createNode);
+        const l = layout([a, b, c], [leftOf(a, b)]);
+        const v = validate(l);
+        const ev = new LayoutEvaluator(v, l);
+        const result = ev.evaluate('union(must.rightOf(A), not(must.rightOf(A)))');
+        const allNodes = ev.evaluate('nodes()');
+        expect(result.selectedAtoms().sort()).toEqual(allNodes.selectedAtoms().sort());
+    });
+
+    it('variadic union with 3 operands', () => {
+        const [a, b, c, d] = ['A', 'B', 'C', 'D'].map(createNode);
+        const l = layout([a, b, c, d], [leftOf(a, b), above(a, c)]);
+        const v = validate(l);
+        const ev = new LayoutEvaluator(v, l);
+        // union of three queries
+        const result = ev.evaluate('union(must.rightOf(A), must.below(A), nodes())');
+        expect(result.isError()).toBe(false);
+        expect(result.selectedAtoms().sort()).toEqual(['A', 'B', 'C', 'D']);
+    });
 });
