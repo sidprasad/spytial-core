@@ -29,6 +29,7 @@ export type { SchemaDescriptorOptions } from './data-instance/schema-descriptor'
 
 // Direct exports of key classes for convenience
 export { LayoutInstance, ConstraintValidatorStrategy, AlignmentEdgeStrategy } from './layout/layoutinstance';
+export { QualitativeConstraintValidator } from './layout/qualitative-constraint-validator';
 export { parseLayoutSpec } from './layout/layoutspec';
 export { setupLayout } from './layout';
 export { type default as IEvaluator, SelectorArityError } from './evaluators/interfaces';
@@ -63,6 +64,8 @@ export type {
   SpatialRelationshipDescription,
 } from './translators';
 export { SGraphQueryEvaluator } from "./evaluators/sgq-evaluator";
+export { LayoutEvaluator, LayoutEvaluatorResult } from "./evaluators/layout-evaluator";
+export type { SpatialQuery, DirectionalRelation, AlignmentAxis, Modality } from "./evaluators/layout-evaluator";
 
 // Selector synthesis API (requires SGraphQueryEvaluator)
 export { 

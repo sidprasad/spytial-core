@@ -635,6 +635,17 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     private prunedByTransitivity: number = 0;
     private prunedByDecomposition: number = 0;
 
+    // ─── Modal query state (populated after successful validation) ───
+    /** Conjunctive-only graph snapshots (before CDCL disjunction resolution). */
+    private mustHGraph: DifferenceConstraintGraph | null = null;
+    private mustVGraph: DifferenceConstraintGraph | null = null;
+    /** Precomputed must-ordering pairs: "A\x00B" means A is strictly before B. */
+    private mustHPairs: Set<string> | null = null;
+    private mustVPairs: Set<string> | null = null;
+    /** Precomputed must-alignment classes (conjunctive + disjunction intersection). */
+    private mustHAlignmentClasses: Map<string, Set<string>> | null = null;
+    private mustVAlignmentClasses: Map<string, Set<string>> | null = null;
+
     constructor(layout: InstanceLayout) {
         this.layout = layout;
         this.nodes = layout.nodes;
@@ -691,6 +702,12 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             return this.enforceMaximalFeasibleSubset(this.emptyDisjunctionError);
         }
 
+        // Snapshot graphs after conjunctive + presolve (before CDCL commits disjunctive choices).
+        // This is the "conjunctive base" for modal queries. Presolve already committed
+        // unit disjunctions (single feasible alternative), so these are included.
+        this.mustHGraph = this.hGraph.clone();
+        this.mustVGraph = this.vGraph.clone();
+
         // Phase 5: CDCL search on remaining disjunctions
         if (this.allDisjunctions.length > 0) {
             const result = this.solveCDCL();
@@ -709,6 +726,9 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         if (chosenConstraints.length > 0) {
             this.layout.constraints = this.layout.constraints.concat(chosenConstraints);
         }
+
+        // Phase 5b: Build modal query state (must/can/cannot)
+        this.buildModalQueryState();
 
         // Phase 6: Alignment orders
         const implicitConstraints = this.computeAlignmentOrders();
@@ -1139,7 +1159,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         //   merged inclusion disjunction. O(M + K) alternatives total but 5 extra
         //   disjunctions → deeper search tree, worthwhile only when M⁴ is large.
         const BBOX_THRESHOLD = 5; // use bbox encoding when M > 5
-        const negatedBySource = new Map<ConstraintSource, LayoutGroup[]>();
+        const negatedBySource = new Map<NonNullable<LayoutGroup['sourceConstraint']>, LayoutGroup[]>();
         for (const group of this.groups) {
             if (!group.negated || !group.sourceConstraint) continue;
             const key = group.sourceConstraint;
@@ -3001,6 +3021,386 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             prunedByTransitivity: this.prunedByTransitivity,
             prunedByDecomposition: this.prunedByDecomposition,
         };
+    }
+    // ─── Modal query computation ────────────────────────────────────────────
+
+    /**
+     * Build the precomputed must-ordering pairs by:
+     * 1. Starting with the conjunctive base (post-presolve snapshot)
+     * 2. Strengthening via disjunction intersection: for each remaining disjunction,
+     *    compute which orderings ALL alternatives agree on
+     *
+     * Called once after successful validation (feasible layout).
+     */
+    private buildModalQueryState(): void {
+        if (!this.mustHGraph || !this.mustVGraph) return;
+
+        const realNodeIds = this.nodes.map(n => n.id);
+
+        // Step 1: Collect pairs already forced by conjunctive base
+        this.mustHPairs = this.collectStrictPairs(this.mustHGraph, realNodeIds);
+        this.mustVPairs = this.collectStrictPairs(this.mustVGraph, realNodeIds);
+
+        // Step 2: Strengthen via disjunction intersection
+        // For each remaining disjunction (those with ≥2 alternatives after presolve),
+        // check if ALL alternatives unanimously force additional orderings.
+        for (const disj of this.allDisjunctions) {
+            if (disj.alternatives.length < 2) continue;
+            this.strengthenWithDisjunction(disj, realNodeIds);
+        }
+
+        // Step 3: Precompute alignment classes from the must graphs
+        this.mustHAlignmentClasses = this.collectAlignmentClasses(this.mustHGraph, realNodeIds);
+        this.mustVAlignmentClasses = this.collectAlignmentClasses(this.mustVGraph, realNodeIds);
+    }
+
+    /** Collect all strict ordering pairs from a graph. */
+    private collectStrictPairs(graph: DifferenceConstraintGraph, nodeIds: string[]): Set<string> {
+        const pairs = new Set<string>();
+        for (const a of nodeIds) {
+            for (const b of nodeIds) {
+                if (a !== b && graph.isStrictlyOrdered(a, b)) {
+                    pairs.add(`${a}\x00${b}`);
+                }
+            }
+        }
+        return pairs;
+    }
+
+    /** Collect alignment equivalence classes from a graph. */
+    private collectAlignmentClasses(graph: DifferenceConstraintGraph, nodeIds: string[]): Map<string, Set<string>> {
+        const classes = new Map<string, Set<string>>();
+        const realSet = new Set(nodeIds);
+        for (const id of nodeIds) {
+            const members = graph.getAlignmentClassOf(id);
+            const filtered = new Set<string>();
+            for (const m of members) {
+                if (m !== id && realSet.has(m)) filtered.add(m);
+            }
+            classes.set(id, filtered);
+        }
+        return classes;
+    }
+
+    /**
+     * For a disjunction with multiple alternatives, compute orderings that
+     * ALL alternatives unanimously force and add them to the must sets.
+     *
+     * Algorithm: for each alternative, clone the conjunctive graph, add the
+     * alternative's edges, collect strict pairs. Intersect across all alternatives.
+     * Any pair in the intersection that isn't already in mustPairs is a new must fact.
+     */
+    private strengthenWithDisjunction(disj: DisjunctiveConstraint, realNodeIds: string[]): void {
+        if (!this.mustHGraph || !this.mustVGraph || !this.mustHPairs || !this.mustVPairs) return;
+
+        let hIntersection: Set<string> | null = null;
+        let vIntersection: Set<string> | null = null;
+
+        for (const alt of disj.alternatives) {
+            // Clone conjunctive graphs and add this alternative's edges
+            const tempH = this.mustHGraph.clone();
+            const tempV = this.mustVGraph.clone();
+
+            for (const constraint of alt) {
+                this.addEdgeToGraph(constraint, tempH, tempV);
+            }
+
+            // Collect pairs from this alternative
+            const altHPairs = this.collectStrictPairs(tempH, realNodeIds);
+            const altVPairs = this.collectStrictPairs(tempV, realNodeIds);
+
+            if (hIntersection === null) {
+                hIntersection = altHPairs;
+                vIntersection = altVPairs;
+            } else {
+                // Intersect: keep only pairs present in ALL alternatives
+                for (const p of hIntersection) {
+                    if (!altHPairs.has(p)) hIntersection.delete(p);
+                }
+                for (const p of vIntersection!) {
+                    if (!altVPairs.has(p)) vIntersection!.delete(p);
+                }
+            }
+        }
+
+        // Add universally forced pairs to must sets
+        if (hIntersection) {
+            for (const p of hIntersection) this.mustHPairs.add(p);
+        }
+        if (vIntersection) {
+            for (const p of vIntersection) this.mustVPairs.add(p);
+        }
+    }
+
+    /**
+     * Add a constraint's edges to temporary graphs (for disjunction analysis).
+     * Simplified version of addQualitativeEdge — doesn't check cycles (we just
+     * want to see what orderings the constraint creates, not enforce feasibility).
+     */
+    private addEdgeToGraph(constraint: LayoutConstraint, hGraph: DifferenceConstraintGraph, vGraph: DifferenceConstraintGraph): void {
+        if (isLeftConstraint(constraint)) {
+            hGraph.addEdge(constraint.left.id, constraint.right.id, constraint.minDistance, constraint);
+        } else if (isTopConstraint(constraint)) {
+            vGraph.addEdge(constraint.top.id, constraint.bottom.id, constraint.minDistance, constraint);
+        } else if (isAlignmentConstraint(constraint)) {
+            const ac = constraint as AlignmentConstraint;
+            const graph = ac.axis === 'x' ? hGraph : vGraph;
+            graph.addAlignmentEdges(ac.node1.id, ac.node2.id, constraint);
+        } else if (isBoundingBoxConstraint(constraint)) {
+            const bc = constraint as BoundingBoxConstraint;
+            const gId = `_group_${bc.group.name}`;
+            hGraph.ensureNode(gId); vGraph.ensureNode(gId);
+            switch (bc.side) {
+                case 'left':
+                    hGraph.addEdge(bc.node.id, gId, bc.minDistance, constraint);
+                    for (const mId of bc.group.nodeIds) { hGraph.ensureNode(mId); hGraph.addEdge(bc.node.id, mId, bc.minDistance, constraint); }
+                    break;
+                case 'right':
+                    hGraph.addEdge(gId, bc.node.id, bc.minDistance, constraint);
+                    for (const mId of bc.group.nodeIds) { hGraph.ensureNode(mId); hGraph.addEdge(mId, bc.node.id, bc.minDistance, constraint); }
+                    break;
+                case 'top':
+                    vGraph.addEdge(bc.node.id, gId, bc.minDistance, constraint);
+                    for (const mId of bc.group.nodeIds) { vGraph.ensureNode(mId); vGraph.addEdge(bc.node.id, mId, bc.minDistance, constraint); }
+                    break;
+                case 'bottom':
+                    vGraph.addEdge(gId, bc.node.id, bc.minDistance, constraint);
+                    for (const mId of bc.group.nodeIds) { vGraph.ensureNode(mId); vGraph.addEdge(mId, bc.node.id, bc.minDistance, constraint); }
+                    break;
+            }
+        }
+    }
+
+    // ─── Public modal query API ──────────────────────────────────────────────
+
+    private static pairKey(a: string, b: string): string { return `${a}\x00${b}`; }
+
+    /**
+     * Nodes that MUST be in `relation` to `nodeId` — true in ALL valid layouts.
+     * Derived from conjunctive entailment + disjunction intersection.
+     */
+    public getMust(nodeId: string, relation: 'leftOf' | 'rightOf' | 'above' | 'below'): Set<string> {
+        const realNodeIds = new Set(this.nodes.map(n => n.id));
+        const result = new Set<string>();
+        if (!this.mustHPairs || !this.mustVPairs) return result;
+
+        for (const n of realNodeIds) {
+            if (n === nodeId) continue;
+            let key: string;
+            switch (relation) {
+                case 'rightOf': key = QualitativeConstraintValidator.pairKey(nodeId, n); if (this.mustHPairs.has(key)) result.add(n); break;
+                case 'leftOf':  key = QualitativeConstraintValidator.pairKey(n, nodeId); if (this.mustHPairs.has(key)) result.add(n); break;
+                case 'below':   key = QualitativeConstraintValidator.pairKey(nodeId, n); if (this.mustVPairs.has(key)) result.add(n); break;
+                case 'above':   key = QualitativeConstraintValidator.pairKey(n, nodeId); if (this.mustVPairs.has(key)) result.add(n); break;
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Nodes that CANNOT be in `relation` to `nodeId` — true in NO valid layout.
+     *
+     * Feasibility check: cannot(leftOf, X, Y) iff adding leftOf(X, Y) to the
+     * must-graph would create a cycle. In graph terms, this means Y can already
+     * reach X (via any path, including zero-weight alignment edges), so adding
+     * X→Y would close a cycle.
+     *
+     * This is strictly more precise than the old antisymmetry-based derivation,
+     * because it also catches infeasibility via zero-weight path chains.
+     */
+    public getCannot(nodeId: string, relation: 'leftOf' | 'rightOf' | 'above' | 'below'): Set<string> {
+        const result = new Set<string>();
+        result.add(nodeId); // reflexive exclusion
+
+        // Pick the must-graph for the relevant axis
+        const graph = (relation === 'leftOf' || relation === 'rightOf')
+            ? this.mustHGraph
+            : this.mustVGraph;
+        if (!graph) return result;
+
+        for (const n of this.nodes) {
+            if (n.id === nodeId) continue;
+            // getCannot(X, rel) returns Y where rel(X,Y) is infeasible.
+            // getMust(X, 'leftOf') = {Y : isStrictlyOrdered(Y, X)}  →  Y is left of X
+            // getMust(X, 'rightOf') = {Y : isStrictlyOrdered(X, Y)} →  Y is right of X
+            //
+            // getCannot(X, 'leftOf') = {Y : Y cannot be left of X}
+            //   = {Y : adding edge Y→X would cycle} = {Y : canReach(X, Y)}
+            // getCannot(X, 'rightOf') = {Y : Y cannot be right of X}
+            //   = {Y : adding edge X→Y would cycle} = {Y : canReach(Y, X)}
+            // getCannot(X, 'above') = {Y : Y cannot be above X}
+            //   = {Y : adding edge Y→X would cycle} = {Y : canReach(X, Y)}
+            // getCannot(X, 'below') = {Y : Y cannot be below X}
+            //   = {Y : adding edge X→Y would cycle} = {Y : canReach(Y, X)}
+            const infeasible = (relation === 'leftOf' || relation === 'above')
+                ? graph.canReach(nodeId, n.id)   // adding n→nodeId, cycle if nodeId→...→n exists
+                : graph.canReach(n.id, nodeId);  // adding nodeId→n, cycle if n→...→nodeId exists
+            if (infeasible) result.add(n.id);
+        }
+        return result;
+    }
+
+    /**
+     * Nodes that CAN be in `relation` to `nodeId` — true in SOME valid layout.
+     * can = ¬cannot = allNodes \ getCannot(...)
+     */
+    public getCan(nodeId: string, relation: 'leftOf' | 'rightOf' | 'above' | 'below'): Set<string> {
+        const cannotSet = this.getCannot(nodeId, relation);
+        const result = new Set<string>();
+        for (const n of this.nodes) {
+            if (!cannotSet.has(n.id)) result.add(n.id);
+        }
+        return result;
+    }
+
+    /** Alignment equivalence class — nodes that MUST be aligned with nodeId. */
+    public getMustAligned(nodeId: string, axis: 'x' | 'y'): Set<string> {
+        const classes = axis === 'x' ? this.mustHAlignmentClasses : this.mustVAlignmentClasses;
+        return classes?.get(nodeId) ?? new Set();
+    }
+
+    /**
+     * Nodes that CANNOT be aligned with nodeId on the given axis.
+     *
+     * Feasibility check: adding alignment(X, Y) means zero-weight edges in both
+     * directions. This is infeasible if there's a strict ordering between them
+     * (isStrictlyOrdered in either direction), because the zero-weight cycle
+     * would contradict the positive-weight edge.
+     */
+    public getCannotAligned(nodeId: string, axis: 'x' | 'y'): Set<string> {
+        const result = new Set<string>();
+        result.add(nodeId); // X is not "aligned with itself" in the query sense
+        const graph = axis === 'x' ? this.mustHGraph : this.mustVGraph;
+        if (!graph) return result;
+
+        for (const n of this.nodes) {
+            if (n.id === nodeId) continue;
+            if (graph.isStrictlyOrdered(nodeId, n.id) || graph.isStrictlyOrdered(n.id, nodeId)) {
+                result.add(n.id);
+            }
+        }
+        return result;
+    }
+
+    /** Nodes that CAN be aligned — ¬cannotAligned. */
+    public getCanAligned(nodeId: string, axis: 'x' | 'y'): Set<string> {
+        const cannotSet = this.getCannotAligned(nodeId, axis);
+        const result = new Set<string>();
+        for (const n of this.nodes) {
+            if (!cannotSet.has(n.id)) result.add(n.id);
+        }
+        return result;
+    }
+
+    // ─── Provenance / "why" queries ─────────────────────────────────────
+
+    /**
+     * Explain WHY `relation(nodeId, targetId)` is a must-fact.
+     * Returns the set of source-level constraints whose edges form the
+     * path in the must-graph that entails this ordering.
+     * Returns null if the relation is not must-entailed.
+     */
+    public whyMust(
+        nodeId: string, relation: 'leftOf' | 'rightOf' | 'above' | 'below', targetId: string
+    ): LayoutConstraint['sourceConstraint'][] | null {
+        if (!this.getMust(nodeId, relation).has(targetId)) return null;
+        const graph = (relation === 'leftOf' || relation === 'rightOf')
+            ? this.mustHGraph : this.mustVGraph;
+        if (!graph) return null;
+
+        // For leftOf/above: target is ordered before nodeId → path target→nodeId
+        // For rightOf/below: nodeId is ordered before target → path nodeId→target
+        const [from, to] = (relation === 'leftOf' || relation === 'above')
+            ? [targetId, nodeId] : [nodeId, targetId];
+        return this.collectPathProvenance(graph, from, to);
+    }
+
+    /**
+     * Explain WHY `relation(nodeId, targetId)` is a cannot-fact.
+     * Returns the set of source-level constraints forming the path that
+     * would create a cycle if the relation were added.
+     * Returns null if the relation is not cannot-entailed.
+     */
+    public whyCannot(
+        nodeId: string, relation: 'leftOf' | 'rightOf' | 'above' | 'below', targetId: string
+    ): LayoutConstraint['sourceConstraint'][] | null {
+        if (!this.getCannot(nodeId, relation).has(targetId)) return null;
+        if (nodeId === targetId) return []; // reflexive — no path needed
+        const graph = (relation === 'leftOf' || relation === 'rightOf')
+            ? this.mustHGraph : this.mustVGraph;
+        if (!graph) return null;
+
+        // cannot(leftOf, X, Y) ↔ canReach(X, Y): the path X→...→Y would become a cycle if Y→X added
+        // cannot(rightOf, X, Y) ↔ canReach(Y, X): the path Y→...→X would become a cycle if X→Y added
+        const [from, to] = (relation === 'leftOf' || relation === 'above')
+            ? [nodeId, targetId] : [targetId, nodeId];
+        return this.collectPathProvenance(graph, from, to);
+    }
+
+    /** Collect source constraints from a graph path's edge provenance. */
+    private collectPathProvenance(
+        graph: DifferenceConstraintGraph, from: string, to: string
+    ): LayoutConstraint['sourceConstraint'][] {
+        const path = graph.findPath(from, to);
+        if (!path) return [];
+        const seen = new Set<LayoutConstraint['sourceConstraint']>();
+        const result: LayoutConstraint['sourceConstraint'][] = [];
+        for (const [a, b] of path) {
+            const provenance = graph.getEdgeProvenance(a, b);
+            if (provenance && !seen.has(provenance.sourceConstraint)) {
+                seen.add(provenance.sourceConstraint);
+                result.push(provenance.sourceConstraint);
+            }
+        }
+        return result;
+    }
+
+    // ─── Post-CDCL resolved model queries (what's true in THIS layout) ───
+
+    /** Get all nodes reachable from `nodeId` in the given direction (resolved model). */
+    public getReachable(nodeId: string, relation: 'leftOf' | 'rightOf' | 'above' | 'below'): Set<string> {
+        const realNodeIds = new Set(this.nodes.map(n => n.id));
+        const result = new Set<string>();
+
+        switch (relation) {
+            case 'rightOf': {
+                for (const n of realNodeIds) {
+                    if (n !== nodeId && this.hGraph.isStrictlyOrdered(nodeId, n)) result.add(n);
+                }
+                break;
+            }
+            case 'leftOf': {
+                for (const n of realNodeIds) {
+                    if (n !== nodeId && this.hGraph.isStrictlyOrdered(n, nodeId)) result.add(n);
+                }
+                break;
+            }
+            case 'below': {
+                for (const n of realNodeIds) {
+                    if (n !== nodeId && this.vGraph.isStrictlyOrdered(nodeId, n)) result.add(n);
+                }
+                break;
+            }
+            case 'above': {
+                for (const n of realNodeIds) {
+                    if (n !== nodeId && this.vGraph.isStrictlyOrdered(n, nodeId)) result.add(n);
+                }
+                break;
+            }
+        }
+        return result;
+    }
+
+    /** Get alignment class from the resolved model (post-CDCL). */
+    public getAlignedWith(nodeId: string, axis: 'x' | 'y'): Set<string> {
+        const graph = axis === 'x' ? this.hGraph : this.vGraph;
+        const realNodeIds = new Set(this.nodes.map(n => n.id));
+        const classMembers = graph.getAlignmentClassOf(nodeId);
+        const result = new Set<string>();
+        for (const m of classMembers) {
+            if (m !== nodeId && realNodeIds.has(m)) result.add(m);
+        }
+        return result;
     }
 }
 

@@ -415,6 +415,7 @@ directives:
             <button class="output-tab" role="tab" aria-selected="false" onclick="switchTab('nav')" id="tab-nav">Navigation Map</button>
             <button class="output-tab" role="tab" aria-selected="false" onclick="switchTab('desc')" id="tab-desc">Description Tree</button>
             <button class="output-tab" role="tab" aria-selected="false" onclick="switchTab('alt')" id="tab-alt">Alt Text</button>
+            <button class="output-tab" role="tab" aria-selected="false" onclick="switchTab('query')" id="tab-query">Spatial Queries</button>
         </div>
 
         <!-- Tab: Semantic HTML (live, interactive) -->
@@ -454,6 +455,41 @@ directives:
             </p>
             <div id="alt-text-output">Click "Translate to Accessible" to generate alt text.</div>
         </div>
+
+        <!-- Tab: Spatial Queries -->
+        <div class="tab-content" id="content-query">
+            <p class="text-muted small mb-2">
+                Query the modal spatial logic of the diagram. Try expressions like
+                <code>must.rightOf(Node0)</code>, <code>can.leftOf(Node1)</code>,
+                <code>cannot.above(Node2)</code>, <code>must.aligned.x(Node0)</code>,
+                <code>grouped(Node0)</code>, <code>grouped(Node0, Node1)</code>,
+                or <code>contains(G1)</code>.
+            </p>
+            <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                <input type="text" id="query-input" placeholder="must.rightOf(Node0)"
+                       style="flex: 1; font-family: 'Courier New', monospace; font-size: 14px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px;"
+                       onkeydown="if(event.key==='Enter') runQuery()">
+                <button onclick="runQuery()" id="query-button" disabled>Query</button>
+            </div>
+            <div id="query-output" style="font-family: 'Courier New', monospace; font-size: 13px; background: #1e1e1e; color: #d4d4d4; padding: 16px; border-radius: 8px; max-height: 400px; overflow-y: auto; white-space: pre-wrap;">
+// Run "Translate to Accessible" first, then enter a spatial query above.
+//
+// <span style="color:#9cdcfe">Modalities:</span>
+//   <span style="color:#ce9178">must</span>  — true in ALL valid layouts (universally entailed)
+//   <span style="color:#ce9178">can</span>   — true in SOME valid layout (feasible)
+//   <span style="color:#ce9178">cannot</span> — true in NO valid layout (infeasible)
+//
+// <span style="color:#9cdcfe">Examples:</span>
+//   <span style="color:#4ec9b0">must.rightOf(Node0)</span>    — nodes that MUST be right of Node0
+//   <span style="color:#4ec9b0">can.leftOf(Node1)</span>     — nodes that CAN be left of Node1
+//   <span style="color:#4ec9b0">cannot.above(Node2)</span>   — nodes that CANNOT be above Node2
+//   <span style="color:#4ec9b0">must.aligned.x(Node0)</span> — nodes that MUST be x-aligned with Node0
+//   <span style="color:#4ec9b0">grouped(Node0)</span>        — groups containing Node0
+//   <span style="color:#4ec9b0">grouped(Node0, Node1)</span> — groups containing both nodes
+//   <span style="color:#4ec9b0">contains(G1)</span>          — members of group G1
+            </div>
+            <div id="query-history" style="margin-top: 8px; font-size: 12px; color: #888;"></div>
+        </div>
     </div>
 
     <!-- Scripts -->
@@ -467,6 +503,8 @@ directives:
 
         // ─── State ─────────────────────────────────────────────────────────
         let currentAccessibleLayout = null;
+        let currentLayoutEvaluator = null;
+        let queryHistory = [];
 
         // ─── Tab Switching ─────────────────────────────────────────────────
         function switchTab(tabId) {
@@ -522,6 +560,19 @@ directives:
                 const translator = new CndCore.AccessibleTranslator();
                 currentAccessibleLayout = translator.translate(layoutResult.layout);
 
+                // 5b. Create LayoutEvaluator if validator is available
+                currentLayoutEvaluator = null;
+                if (layoutResult.validator) {
+                    currentLayoutEvaluator = new CndCore.LayoutEvaluator(
+                        layoutResult.validator, layoutResult.layout
+                    );
+                    document.getElementById('query-button').disabled = false;
+                    document.getElementById('query-input').placeholder = 'must.rightOf(' +
+                        (layoutResult.layout.nodes?.[0]?.name || layoutResult.layout.nodes?.[0]?.id || 'Node0') + ')';
+                } else {
+                    document.getElementById('query-button').disabled = true;
+                }
+
                 // 6. Render all output tabs
                 renderHTMLTab(currentAccessibleLayout);
                 renderNavMapTab(currentAccessibleLayout);
@@ -531,7 +582,10 @@ directives:
                 // 7. Also render visual for comparison (optional)
                 renderVisualComparison(layoutResult.layout);
 
-                updateStatus('Translation complete! Explore the tabs above.', 'success');
+                const queryStatus = currentLayoutEvaluator
+                    ? ' Spatial queries enabled.'
+                    : ' Spatial queries unavailable (needs qualitative validator).';
+                updateStatus('Translation complete! Explore the tabs above.' + queryStatus, 'success');
 
             } catch (error) {
                 console.error('Translation failed:', error);
@@ -732,6 +786,53 @@ directives:
             } catch (e) {
                 console.warn('Visual comparison render failed (non-critical):', e);
             }
+        }
+
+        // ─── Spatial Query REPL ────────────────────────────────────────────
+
+        function runQuery() {
+            const input = document.getElementById('query-input');
+            const output = document.getElementById('query-output');
+            const expr = input.value.trim();
+            if (!expr) return;
+
+            if (!currentLayoutEvaluator) {
+                output.innerHTML = '<span style="color:#f44336">Error: No layout evaluator. Run "Translate to Accessible" first.</span>';
+                return;
+            }
+
+            const result = currentLayoutEvaluator.evaluate(expr);
+            const lines = [];
+
+            // Query echo
+            lines.push(`<span style="color:#888">&gt;</span> <span style="color:#4ec9b0">${esc(expr)}</span>`);
+
+            if (result.isError()) {
+                lines.push(`<span style="color:#f44336">${esc(result.prettyPrint())}</span>`);
+            } else if (result.noResult()) {
+                lines.push(`<span style="color:#888">(empty set)</span>`);
+            } else {
+                const atoms = result.selectedAtoms();
+                lines.push(`<span style="color:#9cdcfe">{</span> ${atoms.map(a => '<span style="color:#ce9178">' + esc(a) + '</span>').join(', ')} <span style="color:#9cdcfe">}</span>  <span style="color:#666">(${atoms.length} result${atoms.length !== 1 ? 's' : ''})</span>`);
+            }
+
+            lines.push('');
+
+            // Add to history
+            queryHistory.push({ expr, result: result.prettyPrint() });
+
+            // Show all history (most recent at bottom)
+            const historyLines = queryHistory.map(h =>
+                `<span style="color:#888">&gt;</span> <span style="color:#4ec9b0">${esc(h.expr)}</span>\n  ${esc(h.result)}`
+            );
+            output.innerHTML = historyLines.join('\n\n');
+
+            // Scroll to bottom
+            output.scrollTop = output.scrollHeight;
+
+            // Clear input and refocus
+            input.value = '';
+            input.focus();
         }
 
         // ─── Utilities ─────────────────────────────────────────────────────
