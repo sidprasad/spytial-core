@@ -43,6 +43,8 @@ type CounterfactualLayoutResult = {
     layout: InstanceLayout;
     error: ConstraintError | null;
     selectorErrors: SelectorErrorDetail[];
+    /** The qualitative constraint validator, if used. Exposes modal spatial queries (must/can/cannot). */
+    validator?: QualitativeConstraintValidator;
 };
 
 class MissingNodeConstraintError extends Error implements ConstraintError {
@@ -1271,7 +1273,8 @@ export class LayoutInstance {
 
         // Return layout with selectorErrors (if any) - these don't block the layout
         // but callers should check and display them to the user
-        return { layout, error: null, selectorErrors: this.selectorErrors };
+        const qualitativeValidator = validator instanceof QualitativeConstraintValidator ? validator : undefined;
+        return { layout, error: null, selectorErrors: this.selectorErrors, validator: qualitativeValidator };
     }
 
     /**
