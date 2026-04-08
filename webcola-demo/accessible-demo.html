@@ -591,6 +591,11 @@ directives:
             } catch (error) {
                 console.error('Translation failed:', error);
                 updateStatus('Error: ' + error.message, 'error');
+                // Reset evaluators and disable query buttons on failure
+                currentDataEvaluator = null;
+                currentLayoutEvaluator = null;
+                document.getElementById('datum-button').disabled = true;
+                document.getElementById('query-button').disabled = true;
             }
         }
 
