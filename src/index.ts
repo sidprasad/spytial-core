@@ -157,6 +157,12 @@ export const createCndCore = (config?: CoreConfig): CndCore => {
 
 export const version = '1.0.0';
 
+// Export error message components
+export { ErrorMessageContainer } from './components/ErrorMessageModal/ErrorMessageContainer';
+export type { ErrorMessageContainerProps } from './components/ErrorMessageModal/ErrorMessageContainer';
+export { ErrorStateManager } from './components/ErrorMessageModal/ErrorStateManager';
+export type { SystemError, SelectorErrorDetail } from './components/ErrorMessageModal/ErrorStateManager';
+
 // Export React components
 export { InstanceBuilder } from './components/InstanceBuilder/InstanceBuilder';
 export type { InstanceBuilderProps } from './components/InstanceBuilder/InstanceBuilder';
