@@ -667,6 +667,24 @@ function renderAccessibleHTML(
     // Overview — visible to everyone, not just screen readers
     lines.push(`  <p class="diagram-overview">${esc(description.overview.summary)}</p>`);
 
+    // Relationships table first — structured tabular data before spatial tree
+    if (description.relationships.length > 0) {
+        lines.push(`  <section class="diagram-relationships">`);
+        lines.push(`    <h3>Relationships</h3>`);
+        lines.push(`    <table aria-label="Relationships">`);
+        lines.push(`      <thead><tr><th scope="col">From</th><th scope="col">Relation</th><th scope="col">To</th></tr></thead>`);
+        lines.push(`      <tbody>`);
+
+        for (const edge of layout.edges) {
+            if (edge.hidden || edge.groupId) continue;
+            lines.push(`        <tr><td>${esc(edge.source.label)}</td><td>${esc(edge.relationName)}</td><td>${esc(edge.target.label)}</td></tr>`);
+        }
+
+        lines.push(`      </tbody>`);
+        lines.push(`    </table>`);
+        lines.push(`  </section>`);
+    }
+
     // Main navigable tree: groups as expandable parents, nodes as leaves
     lines.push(`  <div role="tree" aria-label="Diagram nodes">`);
 
@@ -706,24 +724,6 @@ function renderAccessibleHTML(
     }
 
     lines.push(`  </div>`);
-
-    // Relationships as a read-only data table (native table semantics, not role="grid")
-    if (description.relationships.length > 0) {
-        lines.push(`  <section class="diagram-relationships">`);
-        lines.push(`    <h3>Relationships</h3>`);
-        lines.push(`    <table aria-label="Relationships">`);
-        lines.push(`      <thead><tr><th scope="col">From</th><th scope="col">Relation</th><th scope="col">To</th></tr></thead>`);
-        lines.push(`      <tbody>`);
-
-        for (const edge of layout.edges) {
-            if (edge.hidden || edge.groupId) continue;
-            lines.push(`        <tr><td>${esc(edge.source.label)}</td><td>${esc(edge.relationName)}</td><td>${esc(edge.target.label)}</td></tr>`);
-        }
-
-        lines.push(`      </tbody>`);
-        lines.push(`    </table>`);
-        lines.push(`  </section>`);
-    }
 
     // Spatial relationships — visible as prose, not just dt/dd
     if (description.spatialRelationships.length > 0) {
