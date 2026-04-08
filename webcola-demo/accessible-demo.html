@@ -224,24 +224,6 @@
             border: 0;
         }
 
-        /* Navigation map visualization */
-        #nav-map-output {
-            font-family: 'Courier New', monospace;
-            font-size: 13px;
-            background: #1e1e1e;
-            color: #d4d4d4;
-            padding: 16px;
-            border-radius: 8px;
-            max-height: 400px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-        }
-        .nav-node { color: #9cdcfe; }
-        .nav-direction { color: #ce9178; }
-        .nav-target { color: #4ec9b0; }
-        .nav-edge { color: #dcdcaa; }
-        .nav-group { color: #c586c0; }
-
         /* Alt text output */
         #alt-text-output {
             font-family: system-ui, sans-serif;
@@ -388,20 +370,18 @@ directives:
 
         <div id="status" class="status info">Ready. Enter JSON data and a layout spec, then click Translate.</div>
 
-        <!-- Side-by-side visual comparison -->
+        <!-- Visual rendering -->
         <div class="mt-3">
-            <details>
-                <summary class="text-muted small">Show visual rendering (for comparison)</summary>
-                <div style="position: relative; margin-top: 8px;">
-                    <webcola-cnd-graph
-                        id="graph-container"
-                        width="400"
-                        height="300"
-                        layoutFormat="default"
-                        aria-label="Visual graph rendering for comparison">
-                    </webcola-cnd-graph>
-                </div>
-            </details>
+            <label>Visual Rendering</label>
+            <div style="position: relative; margin-top: 8px;">
+                <webcola-cnd-graph
+                    id="graph-container"
+                    width="600"
+                    height="450"
+                    layoutFormat="default"
+                    aria-label="Visual graph rendering">
+                </webcola-cnd-graph>
+            </div>
         </div>
     </div>
 
@@ -412,10 +392,10 @@ directives:
         <!-- Tabs -->
         <div class="output-tabs" role="tablist">
             <button class="output-tab active" role="tab" aria-selected="true" onclick="switchTab('html')" id="tab-html">Semantic HTML</button>
-            <button class="output-tab" role="tab" aria-selected="false" onclick="switchTab('nav')" id="tab-nav">Navigation Map</button>
+            <button class="output-tab" role="tab" aria-selected="false" onclick="switchTab('query')" id="tab-query">Spatial Queries</button>
+            <button class="output-tab" role="tab" aria-selected="false" onclick="switchTab('datum')" id="tab-datum">Data Queries</button>
             <button class="output-tab" role="tab" aria-selected="false" onclick="switchTab('desc')" id="tab-desc">Description Tree</button>
             <button class="output-tab" role="tab" aria-selected="false" onclick="switchTab('alt')" id="tab-alt">Alt Text</button>
-            <button class="output-tab" role="tab" aria-selected="false" onclick="switchTab('query')" id="tab-query">Spatial Queries</button>
         </div>
 
         <!-- Tab: Semantic HTML (live, interactive) -->
@@ -429,34 +409,7 @@ directives:
             </div>
         </div>
 
-        <!-- Tab: Navigation Map -->
-        <div class="tab-content" id="content-nav">
-            <p class="text-muted small mb-2">
-                The spatial navigation map, built from constraints (not pixels). Shows what you'd
-                reach by pressing each arrow key from any node.
-            </p>
-            <div id="nav-map-output">// Click "Translate to Accessible" to see the navigation map.</div>
-        </div>
-
-        <!-- Tab: Description Tree -->
-        <div class="tab-content" id="content-desc">
-            <p class="text-muted small mb-2">
-                Structured, navigable description of the diagram. Expand sections to explore.
-            </p>
-            <div id="description-tree">
-                <p class="text-muted">Click "Translate to Accessible" to see the description tree.</p>
-            </div>
-        </div>
-
-        <!-- Tab: Alt Text -->
-        <div class="tab-content" id="content-alt">
-            <p class="text-muted small mb-2">
-                Flat alt-text suitable for an <code>alt</code> attribute or screen reader announcement.
-            </p>
-            <div id="alt-text-output">Click "Translate to Accessible" to generate alt text.</div>
-        </div>
-
-        <!-- Tab: Spatial Queries -->
+        <!-- Tab: Spatial Queries (diagram-level REPL) -->
         <div class="tab-content" id="content-query">
             <p class="text-muted small mb-2">
                 Query the modal spatial logic of the diagram. Try expressions like
@@ -490,6 +443,49 @@ directives:
             </div>
             <div id="query-history" style="margin-top: 8px; font-size: 12px; color: #888;"></div>
         </div>
+
+        <!-- Tab: Data Queries (datum-level REPL) -->
+        <div class="tab-content" id="content-datum">
+            <p class="text-muted small mb-2">
+                Query the data instance directly. Navigate relations with dot notation:
+                <code>Node</code>, <code>left</code>, <code>Node.left</code>,
+                <code>Node.val</code>, <code>Node.left.val</code>.
+            </p>
+            <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                <input type="text" id="datum-input" placeholder="Node.left.val"
+                       style="flex: 1; font-family: 'Courier New', monospace; font-size: 14px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px;"
+                       onkeydown="if(event.key==='Enter') runDatumQuery()">
+                <button onclick="runDatumQuery()" id="datum-button" disabled>Query</button>
+            </div>
+            <div id="datum-output" style="font-family: 'Courier New', monospace; font-size: 13px; background: #1e1e1e; color: #d4d4d4; padding: 16px; border-radius: 8px; max-height: 400px; overflow-y: auto; white-space: pre-wrap;">
+// Run "Translate to Accessible" first, then enter a data query above.
+//
+// <span style="color:#9cdcfe">Expressions:</span>
+//   <span style="color:#4ec9b0">Node</span>              — all atoms of type Node
+//   <span style="color:#4ec9b0">left</span>              — all tuples in the "left" relation
+//   <span style="color:#4ec9b0">Node.left</span>         — navigate "left" from Node atoms
+//   <span style="color:#4ec9b0">Node.val</span>          — navigate "val" from Node atoms
+//   <span style="color:#4ec9b0">Node.left.val</span>     — chained navigation: left child's value
+            </div>
+        </div>
+
+        <!-- Tab: Description Tree -->
+        <div class="tab-content" id="content-desc">
+            <p class="text-muted small mb-2">
+                Structured, navigable description of the diagram. Expand sections to explore.
+            </p>
+            <div id="description-tree">
+                <p class="text-muted">Click "Translate to Accessible" to see the description tree.</p>
+            </div>
+        </div>
+
+        <!-- Tab: Alt Text -->
+        <div class="tab-content" id="content-alt">
+            <p class="text-muted small mb-2">
+                Flat alt-text suitable for an <code>alt</code> attribute or screen reader announcement.
+            </p>
+            <div id="alt-text-output">Click "Translate to Accessible" to generate alt text.</div>
+        </div>
     </div>
 
     <!-- Scripts -->
@@ -504,7 +500,9 @@ directives:
         // ─── State ─────────────────────────────────────────────────────────
         let currentAccessibleLayout = null;
         let currentLayoutEvaluator = null;
+        let currentDataEvaluator = null;
         let queryHistory = [];
+        let datumQueryHistory = [];
 
         // ─── Tab Switching ─────────────────────────────────────────────────
         function switchTab(tabId) {
@@ -540,6 +538,7 @@ directives:
                 // 2. Create evaluator
                 const evaluator = new CndCore.SGraphQueryEvaluator();
                 evaluator.initialize({ sourceData: instance });
+                currentDataEvaluator = evaluator;
 
                 // 3. Parse layout spec
                 const cndSpec = document.getElementById('cnd-input').value || '';
@@ -573,9 +572,11 @@ directives:
                     document.getElementById('query-button').disabled = true;
                 }
 
+                // 5c. Enable datum-level REPL (always available after translation)
+                document.getElementById('datum-button').disabled = false;
+
                 // 6. Render all output tabs
                 renderHTMLTab(currentAccessibleLayout);
-                renderNavMapTab(currentAccessibleLayout);
                 renderDescriptionTab(currentAccessibleLayout);
                 renderAltTextTab(currentAccessibleLayout);
 
@@ -590,6 +591,11 @@ directives:
             } catch (error) {
                 console.error('Translation failed:', error);
                 updateStatus('Error: ' + error.message, 'error');
+                // Reset evaluators and disable query buttons on failure
+                currentDataEvaluator = null;
+                currentLayoutEvaluator = null;
+                document.getElementById('datum-button').disabled = true;
+                document.getElementById('query-button').disabled = true;
             }
         }
 
@@ -599,47 +605,6 @@ directives:
             const container = document.getElementById('accessible-html-output');
             container.innerHTML = accessible.toHTML();
             wireUpKeyboardNavigation(container);
-        }
-
-        function renderNavMapTab(accessible) {
-            const container = document.getElementById('nav-map-output');
-            const lines = [];
-
-            // Build a nodeId -> label lookup from the description
-            const labelOf = {};
-            for (const n of accessible.description.nodes) {
-                labelOf[n.id] = n.label;
-            }
-            const label = (id) => labelOf[id] || id;
-
-            for (const [nodeId, neighbors] of accessible.navigation.entries()) {
-                lines.push(`<span class="nav-node">${esc(label(nodeId))}</span>  <span style="color:#666">(${esc(nodeId)})</span>`);
-
-                if (neighbors.above) lines.push(`  <span class="nav-direction">↑ above:</span> <span class="nav-target">${esc(label(neighbors.above))}</span>`);
-                if (neighbors.below) lines.push(`  <span class="nav-direction">↓ below:</span> <span class="nav-target">${esc(label(neighbors.below))}</span>`);
-                if (neighbors.left)  lines.push(`  <span class="nav-direction">← left:</span>  <span class="nav-target">${esc(label(neighbors.left))}</span>`);
-                if (neighbors.right) lines.push(`  <span class="nav-direction">→ right:</span> <span class="nav-target">${esc(label(neighbors.right))}</span>`);
-
-                for (const edge of neighbors.outgoing) {
-                    lines.push(`  <span class="nav-edge">${esc(edge.relation)}</span> &rarr; <span class="nav-target">${esc(edge.nodeLabel)}</span>`);
-                }
-                for (const edge of neighbors.incoming) {
-                    lines.push(`  <span class="nav-target">${esc(edge.nodeLabel)}</span> &rarr; <span class="nav-edge">${esc(edge.relation)}</span> &rarr; this`);
-                }
-
-                if (neighbors.containingGroups.length > 0) {
-                    lines.push(`  <span class="nav-group">groups: ${neighbors.containingGroups.map(esc).join(', ')}</span>`);
-                }
-                if (neighbors.groupMembers.length > 0) {
-                    lines.push(`  <span class="nav-group">members: ${neighbors.groupMembers.map(esc).join(', ')}</span>`);
-                }
-
-                lines.push('');
-            }
-
-            lines.push(`<span class="nav-direction">Tab order:</span> ${accessible.navigation.nodeOrder.map(id => esc(label(id))).join(' → ')}`);
-
-            container.innerHTML = lines.join('\n');
         }
 
         function renderDescriptionTab(accessible) {
@@ -823,6 +788,53 @@ directives:
 
             // Show all history (most recent at bottom)
             const historyLines = queryHistory.map(h =>
+                `<span style="color:#888">&gt;</span> <span style="color:#4ec9b0">${esc(h.expr)}</span>\n  ${esc(h.result)}`
+            );
+            output.innerHTML = historyLines.join('\n\n');
+
+            // Scroll to bottom
+            output.scrollTop = output.scrollHeight;
+
+            // Clear input and refocus
+            input.value = '';
+            input.focus();
+        }
+
+        // ─── Data Query REPL ───────────────────────────────────────────────
+
+        function runDatumQuery() {
+            const input = document.getElementById('datum-input');
+            const output = document.getElementById('datum-output');
+            const expr = input.value.trim();
+            if (!expr) return;
+
+            if (!currentDataEvaluator) {
+                output.innerHTML = '<span style="color:#f44336">Error: No data evaluator. Run "Translate to Accessible" first.</span>';
+                return;
+            }
+
+            const result = currentDataEvaluator.evaluate(expr);
+            const lines = [];
+
+            // Query echo
+            lines.push(`<span style="color:#888">&gt;</span> <span style="color:#4ec9b0">${esc(expr)}</span>`);
+
+            if (result.isError()) {
+                lines.push(`<span style="color:#f44336">${esc(result.prettyPrint())}</span>`);
+            } else if (result.noResult()) {
+                lines.push(`<span style="color:#888">(empty set)</span>`);
+            } else {
+                // Use prettyPrint for display — handles multi-arity tuples
+                lines.push(`<span style="color:#ce9178">${esc(result.prettyPrint())}</span>`);
+            }
+
+            lines.push('');
+
+            // Add to history
+            datumQueryHistory.push({ expr, result: result.prettyPrint() });
+
+            // Show all history (most recent at bottom)
+            const historyLines = datumQueryHistory.map(h =>
                 `<span style="color:#888">&gt;</span> <span style="color:#4ec9b0">${esc(h.expr)}</span>\n  ${esc(h.result)}`
             );
             output.innerHTML = historyLines.join('\n\n');
