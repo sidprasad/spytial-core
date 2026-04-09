@@ -5366,8 +5366,54 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr('d', (d: any) => {
         const route = this.computedRoutes.get(d.id);
         if (!route) return null;
-        return this.lineFunction(route);
+        return this.lineFunction(this.addTangentGuides(route));
       });
+  }
+
+  /**
+   * Inserts "tangent guide" points near each endpoint of a multi-point route
+   * to force the d3.curveBasis B-spline tangent to align with the actual
+   * final/first segment direction. Without these, interior control points
+   * can pull the endpoint tangent off-axis, causing arrowhead markers
+   * (orient="auto") to render at odd angles.
+   *
+   * For 2-point routes (straight lines), the tangent is already correct
+   * so no guides are added.
+   */
+  private addTangentGuides(
+    route: Array<{ x: number; y: number }>
+  ): Array<{ x: number; y: number }> {
+    if (route.length <= 2) return route;
+
+    const GUIDE_DIST = 3; // px — small enough to be invisible, large enough to steer tangent
+    const result = [...route];
+
+    // End guide: reinforce direction from second-to-last → last point
+    const last = result.length - 1;
+    const dx = result[last].x - result[last - 1].x;
+    const dy = result[last].y - result[last - 1].y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len > GUIDE_DIST * 2) {
+      const guide = {
+        x: result[last].x - (dx / len) * GUIDE_DIST,
+        y: result[last].y - (dy / len) * GUIDE_DIST
+      };
+      result.splice(last, 0, guide);
+    }
+
+    // Start guide: reinforce direction from first → second point
+    const dx0 = result[1].x - result[0].x;
+    const dy0 = result[1].y - result[0].y;
+    const len0 = Math.sqrt(dx0 * dx0 + dy0 * dy0);
+    if (len0 > GUIDE_DIST * 2) {
+      const guide = {
+        x: result[0].x + (dx0 / len0) * GUIDE_DIST,
+        y: result[0].y + (dy0 / len0) * GUIDE_DIST
+      };
+      result.splice(1, 0, guide);
+    }
+
+    return result;
   }
 
   /**
