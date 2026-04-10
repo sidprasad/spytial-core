@@ -761,13 +761,9 @@ export class SpytialExplorer extends WebColaCnDGraph {
                 e.stopPropagation();
 
                 const targetId = this.relationEdgeMap.get(this.dnCurrentFocusId)?.get(mapping.relationName);
-                if (!targetId) {
-                    this.announce(`No ${mapping.relationName} from ${this.getNodeLabel(this.dnCurrentFocusId)}.`);
-                    return;
-                }
+                if (!targetId) return;
 
                 this.focusDNNode(targetId);
-                this.announce(`Following ${mapping.relationName} to ${this.getNodeLabel(targetId)}.`);
                 return;
             }
 
@@ -779,32 +775,23 @@ export class SpytialExplorer extends WebColaCnDGraph {
             e.stopPropagation();
 
             const nextNode = this.dnInputHandler.move(this.dnCurrentFocusId, direction);
-            if (!nextNode) {
-                this.announce(`No ${direction} neighbor from ${this.getNodeLabel(this.dnCurrentFocusId)}.`);
-                return;
-            }
+            if (!nextNode) return;
 
-            // Must mode: block if relationship isn't must
+            // Must mode: silently block if relationship isn't must
             if (this.currentNavMode === 'must') {
                 const modality = this.getModality(
                     this.dnCurrentFocusId,
                     direction as SpatialDir,
                     nextNode.id,
                 );
-                if (modality !== 'must') {
-                    this.announce(`No must-${direction} neighbor. This is a ${modality} relationship.`);
-                    return;
-                }
+                if (modality !== 'must') return;
             }
 
             // Group boundary check
             if (this.groupStack.length > 0) {
                 const currentGroup = this.groupStack[this.groupStack.length - 1];
                 const members = this.groupMemberMap.get(currentGroup);
-                if (members && !members.includes(nextNode.id)) {
-                    this.announce(`Edge of group ${currentGroup}. Press Escape to leave group.`);
-                    return;
-                }
+                if (members && !members.includes(nextNode.id)) return;
             }
 
             this.focusDNNode(nextNode.id);
@@ -829,19 +816,10 @@ export class SpytialExplorer extends WebColaCnDGraph {
      */
     private switchNavigationMode(mode: NavigationMode): void {
         if (mode === this.currentNavMode) return;
-
-        if (mode === 'relations' && this.relationKeyMap.length === 0) {
-            this.announce('No data relations available for relation navigation.');
-            return;
-        }
+        if (mode === 'relations' && this.relationKeyMap.length === 0) return;
 
         this.currentNavMode = mode;
         this.updateModeUI();
-
-        const modeDesc = mode === 'spatial' ? 'Spatial — arrow keys move to nearest neighbor'
-            : mode === 'must' ? 'Must-only — arrow keys follow only guaranteed relationships'
-            : `Relations — ${this.relationKeyMap.map(m => `${m.key} ${m.relationName}`).join(', ')}`;
-        this.announce(`Navigation mode: ${modeDesc}.`);
     }
 
     /**
