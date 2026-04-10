@@ -74,7 +74,7 @@
         </div>
     </div>
 
-    <spytial-explorer id="explorer" width="900" height="500"></spytial-explorer>
+    <spytial-explorer id="explorer" style="width: 100%; max-width: 1200px; height: 650px; margin: 0 auto;"></spytial-explorer>
 
     <!-- ─── Usage Guide ─────────────────────────────────────────────── -->
     <div class="usage-guide">
@@ -85,8 +85,14 @@
                 <h3>Keyboard Navigation (Data Navigator)</h3>
                 <ul>
                     <li>Click <strong>"Enter diagram navigation"</strong> (or <kbd>Tab</kbd> to it) to start</li>
-                    <li><kbd>&larr;</kbd> <kbd>&rarr;</kbd> <kbd>&uarr;</kbd> <kbd>&darr;</kbd> &mdash; move between nodes spatially (current layout)</li>
-                    <li><kbd>Shift</kbd>+<kbd>&larr;</kbd> etc. &mdash; move only along <strong>must</strong> relationships (guaranteed in ALL valid layouts)</li>
+                    <li><kbd>&larr;</kbd> <kbd>&rarr;</kbd> <kbd>&uarr;</kbd> <kbd>&darr;</kbd> &mdash; move between nodes (behavior depends on navigation mode)</li>
+                    <li><strong>Navigation modes</strong> (press <kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> to switch):
+                        <ul>
+                            <li><kbd>1</kbd> <strong>Spatial</strong> &mdash; nearest neighbor in current layout</li>
+                            <li><kbd>2</kbd> <strong>Must-only</strong> &mdash; only constraint-guaranteed relationships (true in ALL valid layouts)</li>
+                            <li><kbd>3</kbd> <strong>Relations</strong> &mdash; follow named data relations (left, right, val)</li>
+                        </ul>
+                    </li>
                     <li><kbd>Enter</kbd> &mdash; drill into a group (navigate among group members)</li>
                     <li><kbd>Esc</kbd> &mdash; leave group, or exit diagram navigation</li>
                     <li>The <strong>Spatial Context</strong> panel updates live with modality badges (<span style="background:#c8e6c9;padding:0 4px;border-radius:2px;font-size:11px;font-weight:700">MUST</span> / <span style="background:#fff3e0;padding:0 4px;border-radius:2px;font-size:11px;font-weight:700">CAN</span>)</li>

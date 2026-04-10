@@ -550,5 +550,46 @@ export function getExplorerCSS(): string {
     .highlight-flash {
         outline: 3px solid #4ec9b0 !important;
     }
+
+    /* ─── Navigation mode toolbar ────────────────────────────────── */
+
+    .nav-mode-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 6px;
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 4px;
+        margin: 4px;
+        font-size: 12px;
+    }
+
+    .nav-mode-toolbar [role="radio"] {
+        background: #f0f0f0;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+        padding: 3px 8px;
+        font-size: 11px;
+        cursor: pointer;
+        font-weight: 500;
+        color: #555;
+    }
+
+    .nav-mode-toolbar [role="radio"]:hover {
+        background: #e8e0f5;
+    }
+
+    .nav-mode-toolbar [role="radio"][aria-checked="true"] {
+        background: var(--accent);
+        color: white;
+        border-color: var(--accent);
+    }
+
+    .relation-key-hint {
+        font-family: 'Courier New', monospace;
+        font-size: 11px;
+        color: #888;
+        margin-left: 6px;
+    }
     `;
 }

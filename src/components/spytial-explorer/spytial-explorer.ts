@@ -25,7 +25,7 @@ import { AccessibleTranslator } from '../../translators/accessible/accessible-tr
 import { LayoutEvaluator } from '../../evaluators/layout/layout-evaluator';
 import { getExplorerCSS } from './explorer-styles';
 import type { AccessibleLayout, SpatialNeighbors } from '../../translators/accessible/accessible-translator';
-import type { InstanceLayout, LayoutGroup } from '../../layout/interfaces';
+import type { InstanceLayout, LayoutGroup, LayoutEdge } from '../../layout/interfaces';
 import type { QualitativeConstraintValidator } from '../../layout/qualitative-constraint-validator';
 import type { SGraphQueryEvaluator } from '../../evaluators/data/sgq-evaluator';
 // Data Navigator — structure and input modules (rendering done manually for Shadow DOM compat)
@@ -41,6 +41,9 @@ type ValidatorDirection = 'leftOf' | 'rightOf' | 'above' | 'below';
 /** Spatial direction as used internally (arrow keys / nav map) */
 type SpatialDir = 'left' | 'right' | 'up' | 'down';
 
+/** Navigation modes — how arrow keys are interpreted */
+type NavigationMode = 'spatial' | 'must' | 'relations';
+
 interface AnnotatedNeighbor {
     nodeId: string;
     direction: SpatialDir;
@@ -52,6 +55,9 @@ interface QueryHistoryEntry {
     html: string;
     srText: string;
 }
+
+/** Maps arrow keys to DN navigation rule labels */
+type NavigationRuleSet = Record<string, { key: string; direction: 'target' | 'source' }>;
 
 // ─── Component ─────────────────────────────────────────────────────────────
 
@@ -72,6 +78,14 @@ export class SpytialExplorer extends WebColaCnDGraph {
     private groupStack: string[] = [];          // stack of group names we've entered
     private groupMemberMap: Map<string, string[]> = new Map(); // groupName → nodeIds
     private nodeGroupMap: Map<string, string[]> = new Map();   // nodeId → groupNames
+
+    // Navigation mode state
+    private currentNavMode: NavigationMode = 'spatial';
+    private spatialRules: NavigationRuleSet = {};
+    private mustRules: NavigationRuleSet = {};
+    private relationRules: NavigationRuleSet = {};
+    private relationKeyMap: Array<{ key: string; label: string; relationName: string }> = [];
+    private zoomObserver: MutationObserver | null = null;
 
     // Query histories
     private spatialHistory: QueryHistoryEntry[] = [];
@@ -129,9 +143,8 @@ export class SpytialExplorer extends WebColaCnDGraph {
         // If layout already completed (e.g., enableAccessibility called late),
         // set up immediately
         if (this.getNodePositions().length > 0) {
-            const g = this.shadowRoot!.querySelector('svg > g');
-            const transform = g?.getAttribute('transform') ?? '';
-            if (transform.includes('scale') && !transform.includes('scale(1)')) {
+            const t = this.getCurrentTransform();
+            if (t.k !== 1 || t.x !== 0 || t.y !== 0) {
                 // Transform already applied — set up now
                 requestAnimationFrame(() => this.setupDataNavigator());
             }
@@ -251,7 +264,7 @@ export class SpytialExplorer extends WebColaCnDGraph {
         this.dnOverlayContainer = document.createElement('div');
         this.dnOverlayContainer.id = 'dn-overlay-root';
         this.dnOverlayContainer.setAttribute('role', 'application');
-        this.dnOverlayContainer.setAttribute('aria-label', 'Diagram navigation. Arrow keys move between nodes. Shift plus arrow restricts to must relationships. Enter to go into a group. Escape to leave.');
+        this.dnOverlayContainer.setAttribute('aria-label', 'Diagram navigation. Arrow keys move between nodes. Press 1 for spatial mode, 2 for must-only mode, 3 for relation mode. Enter to go into a group. Escape to leave.');
         this.dnOverlayContainer.style.cssText = 'position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;';
 
         // Insert into the svg-container (which has position: relative)
@@ -367,68 +380,45 @@ export class SpytialExplorer extends WebColaCnDGraph {
     /**
      * Build a Data Navigator structure from the spatial navigation map
      * and overlay focusable elements on the SVG.
+     *
+     * Positioning uses getBoundingClientRect() on actual SVG elements,
+     * which automatically handles zoom/pan transforms.
      */
-    /**
-     * Extract the current SVG pan/zoom transform so overlay elements
-     * can be positioned in container-pixel coordinates.
-     */
-    private getSVGTransform(): { tx: number; ty: number; scale: number } {
-        const shadow = this.shadowRoot!;
-        const g = shadow.querySelector('svg > g');
-        if (!g) return { tx: 0, ty: 0, scale: 1 };
-
-        const transformAttr = g.getAttribute('transform') ?? '';
-        const translateMatch = transformAttr.match(/translate\(\s*([-\d.]+)[,\s]+([-\d.]+)\s*\)/);
-        const scaleMatch = transformAttr.match(/scale\(\s*([-\d.]+)\s*\)/);
-
-        return {
-            tx: translateMatch ? parseFloat(translateMatch[1]) : 0,
-            ty: translateMatch ? parseFloat(translateMatch[2]) : 0,
-            scale: scaleMatch ? parseFloat(scaleMatch[1]) : 1,
-        };
-    }
-
     private setupDataNavigator(): void {
         if (!this.accessibleLayout || !this.currentInstanceLayout) return;
 
+        const shadow = this.shadowRoot!;
         const nav = this.accessibleLayout.navigation;
         const nodeDescs = this.accessibleLayout.description.nodes;
-        const positions = this.getNodePositions();
-        const layoutNodes = this.currentInstanceLayout.nodes;
+        const layout = this.currentInstanceLayout;
 
-        if (positions.length === 0) return;
+        // Build a map from node ID → SVG <g> element via D3's __data__ binding
+        const svgNodeMap = this.buildSVGNodeMap();
+        if (svgNodeMap.size === 0) return;
 
-        // Get SVG transform for coordinate conversion
-        const svgTransform = this.getSVGTransform();
+        const svgContainer = shadow.querySelector('#svg-container') as HTMLElement;
+        if (!svgContainer) return;
 
-        // Build position + size lookup
-        const posMap = new Map(positions.map(p => [p.id, p]));
-        const sizeMap = new Map(layoutNodes.map(n => [
-            n.id,
-            { width: (n as any).visualWidth ?? n.width ?? 50, height: (n as any).visualHeight ?? n.height ?? 30 },
-        ]));
         const descMap = new Map(nodeDescs.map(d => [d.id, d]));
 
-        // ─── Build DN structure manually ───────────────────────────────
-        // We build the Structure object directly rather than using DN's
-        // structure() function, because our navigation graph comes from
-        // the constraint solver, not from raw data dimensions.
-
+        // ─── Build DN structure with multi-label edges ────────────────
         const dnNodes: Record<string, any> = {};
         const dnEdges: Record<string, any> = {};
         const dnElementData: Record<string, any> = {};
         let edgeCounter = 0;
 
+        // Track which node IDs have DN nodes (for relation edge filtering)
+        const dnNodeIds = new Set<string>();
+
         for (const [nodeId, neighbors] of nav.entries()) {
-            const pos = posMap.get(nodeId);
-            const size = sizeMap.get(nodeId);
-            const desc = descMap.get(nodeId);
-            if (!pos || !size) continue;
+            if (!svgNodeMap.has(nodeId)) continue;
+            dnNodeIds.add(nodeId);
 
             const renderId = `dn-node-${this.sanitizeId(nodeId)}`;
+            const desc = descMap.get(nodeId);
             const nodeEdges: string[] = [];
 
-            // Create edges for each spatial direction
+            // Create multi-label edges for each spatial direction
             const directions: Array<[SpatialDir, string | null]> = [
                 ['left', neighbors.left],
                 ['right', neighbors.right],
@@ -438,11 +428,16 @@ export class SpytialExplorer extends WebColaCnDGraph {
 
             for (const [dir, targetId] of directions) {
                 if (!targetId) continue;
+                // Multi-label: spatial_* always, must_* when constraint-guaranteed
+                const labels = [`spatial_${dir}`];
+                if (this.getModality(nodeId, dir, targetId) === 'must') {
+                    labels.push(`must_${dir}`);
+                }
                 const edgeId = `e${edgeCounter++}`;
                 dnEdges[edgeId] = {
                     source: nodeId,
                     target: targetId,
-                    navigationRules: [dir],
+                    navigationRules: labels,
                 };
                 nodeEdges.push(edgeId);
             }
@@ -455,23 +450,8 @@ export class SpytialExplorer extends WebColaCnDGraph {
                 type: desc?.mostSpecificType ?? '',
             };
 
-            // Element data for rendering — convert SVG coords to container pixels
-            // Enforce a minimum clickable size so nodes remain interactive at low zoom
-            const MIN_NODE_SIZE = 24;
-            const pixelX = pos.x * svgTransform.scale + svgTransform.tx;
-            const pixelY = pos.y * svgTransform.scale + svgTransform.ty;
-            const rawW = size.width * svgTransform.scale;
-            const rawH = size.height * svgTransform.scale;
-            const pixelW = Math.max(rawW, MIN_NODE_SIZE);
-            const pixelH = Math.max(rawH, MIN_NODE_SIZE);
-
+            // Element data — positions computed from getBoundingClientRect
             dnElementData[renderId] = {
-                spatialProperties: {
-                    x: pixelX - pixelW / 2,
-                    y: pixelY - pixelH / 2,
-                    width: pixelW,
-                    height: pixelH,
-                },
                 semantics: {
                     label: () => this.buildNodeAnnouncement(nodeId),
                     role: 'button',
@@ -480,15 +460,32 @@ export class SpytialExplorer extends WebColaCnDGraph {
             };
         }
 
+        // ─── Add relation edges from the layout ──────────────────────
+        // These let users follow named data relations (left, right, val, etc.)
+        const relationNames = this.addRelationEdges(layout.edges, dnNodes, dnEdges, dnNodeIds, edgeCounter);
+
+        // ─── Build navigation rule sets ──────────────────────────────
+
+        this.spatialRules = {
+            spatial_left:  { key: 'ArrowLeft',  direction: 'target' },
+            spatial_right: { key: 'ArrowRight', direction: 'target' },
+            spatial_up:    { key: 'ArrowUp',    direction: 'target' },
+            spatial_down:  { key: 'ArrowDown',  direction: 'target' },
+        };
+
+        this.mustRules = {
+            must_left:  { key: 'ArrowLeft',  direction: 'target' },
+            must_right: { key: 'ArrowRight', direction: 'target' },
+            must_up:    { key: 'ArrowUp',    direction: 'target' },
+            must_down:  { key: 'ArrowDown',  direction: 'target' },
+        };
+
+        this.buildRelationRules(relationNames);
+
         const dnStructure = {
             nodes: dnNodes,
             edges: dnEdges,
-            navigationRules: {
-                left: { key: 'ArrowLeft', direction: 'target' as const },
-                right: { key: 'ArrowRight', direction: 'target' as const },
-                up: { key: 'ArrowUp', direction: 'target' as const },
-                down: { key: 'ArrowDown', direction: 'target' as const },
-            },
+            navigationRules: this.spatialRules,
             elementData: dnElementData,
         };
 
@@ -496,28 +493,159 @@ export class SpytialExplorer extends WebColaCnDGraph {
 
         this.dnInputHandler = dataNavigator.input({
             structure: dnStructure,
-            navigationRules: dnStructure.navigationRules,
+            navigationRules: this.spatialRules,
             entryPoint: nav.nodeOrder[0],
         });
 
         // ─── Render DN overlay nodes ───────────────────────────────────
-        // We render manually instead of using DN's rendering module because
-        // we're inside a Shadow DOM and DN's renderer uses document.getElementById.
 
-        this.renderDNOverlay(dnStructure, dnElementData);
+        this.renderDNOverlay(dnStructure, svgNodeMap, svgContainer);
 
-        // ─── Wire keyboard navigation on the overlay ───────────────────
+        // ─── Wire keyboard + zoom tracking ─────────────────────────────
 
-        this.wireDNKeyboard(dnStructure);
+        this.wireDNKeyboard();
+        this.setupZoomTracking(svgContainer, svgNodeMap);
+    }
+
+    /**
+     * Build a map from node ID → SVG <g> DOM element by reading
+     * D3's __data__ binding on each rendered node group.
+     */
+    private buildSVGNodeMap(): Map<string, SVGGElement> {
+        const shadow = this.shadowRoot!;
+        const result = new Map<string, SVGGElement>();
+        const nodeGroups = shadow.querySelectorAll('g.node, g.error-node');
+        for (const g of nodeGroups) {
+            const d = (g as any).__data__;
+            if (d && d.id) {
+                result.set(d.id, g as SVGGElement);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Add DN edges for data relations (left, right, val, etc.) from the layout.
+     * Returns the set of unique relation names found.
+     */
+    private addRelationEdges(
+        edges: LayoutEdge[],
+        dnNodes: Record<string, any>,
+        dnEdges: Record<string, any>,
+        dnNodeIds: Set<string>,
+        edgeCounter: number,
+    ): string[] {
+        const seenRelations = new Set<string>();
+
+        for (const edge of edges) {
+            const relName = edge.relationName || edge.label;
+            if (!relName) continue;
+            // Skip group edges
+            if (edge.groupId) continue;
+
+            const sourceId = edge.source.id;
+            const targetId = edge.target.id;
+
+            // Only add edges between nodes that exist in our DN graph
+            if (!dnNodeIds.has(sourceId) || !dnNodeIds.has(targetId)) continue;
+
+            seenRelations.add(relName);
+
+            const edgeId = `rel_e${edgeCounter++}`;
+            dnEdges[edgeId] = {
+                source: sourceId,
+                target: targetId,
+                navigationRules: [`rel_${relName}`],
+            };
+
+            // Ensure both nodes list this edge
+            if (dnNodes[sourceId]) dnNodes[sourceId].edges.push(edgeId);
+        }
+
+        return [...seenRelations];
+    }
+
+    /**
+     * Build the relation navigation rule set — maps the first 4 relations
+     * to arrow keys in declaration order.
+     */
+    private buildRelationRules(relationNames: string[]): void {
+        const keys = ['ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown'];
+        const labels = ['←', '↑', '→', '↓'];
+
+        this.relationRules = {};
+        this.relationKeyMap = [];
+
+        for (let i = 0; i < Math.min(relationNames.length, keys.length); i++) {
+            const ruleLabel = `rel_${relationNames[i]}`;
+            this.relationRules[ruleLabel] = { key: keys[i], direction: 'target' };
+            this.relationKeyMap.push({
+                key: labels[i],
+                label: relationNames[i],
+                relationName: relationNames[i],
+            });
+        }
+    }
+
+    /**
+     * Set up a MutationObserver on the zoomable SVG group to reposition
+     * overlay nodes when the user zooms or pans.
+     */
+    private setupZoomTracking(svgContainer: HTMLElement, svgNodeMap: Map<string, SVGGElement>): void {
+        // Clean up previous observer
+        if (this.zoomObserver) {
+            this.zoomObserver.disconnect();
+            this.zoomObserver = null;
+        }
+
+        const zoomableG = this.shadowRoot!.querySelector('g.zoomable');
+        if (!zoomableG) return;
+
+        this.zoomObserver = new MutationObserver(() => {
+            this.repositionOverlayNodes(svgContainer, svgNodeMap);
+        });
+        this.zoomObserver.observe(zoomableG, { attributes: true, attributeFilter: ['transform'] });
+    }
+
+    /**
+     * Reposition all overlay nodes to match current SVG node positions.
+     * Called after zoom/pan changes.
+     */
+    private repositionOverlayNodes(svgContainer: HTMLElement, svgNodeMap: Map<string, SVGGElement>): void {
+        if (!this.dnOverlayContainer) return;
+
+        const containerRect = svgContainer.getBoundingClientRect();
+        const MIN_NODE_SIZE = 24;
+
+        for (const el of this.dnOverlayContainer.querySelectorAll('.dn-spatial-node')) {
+            const nodeId = (el as HTMLElement).dataset.nodeId;
+            if (!nodeId) continue;
+
+            const svgG = svgNodeMap.get(nodeId);
+            if (!svgG) continue;
+
+            const rect = svgG.getBoundingClientRect();
+            const w = Math.max(rect.width, MIN_NODE_SIZE);
+            const h = Math.max(rect.height, MIN_NODE_SIZE);
+            const x = rect.left - containerRect.left + (rect.width - w) / 2;
+            const y = rect.top - containerRect.top + (rect.height - h) / 2;
+
+            (el as HTMLElement).style.left = `${x}px`;
+            (el as HTMLElement).style.top = `${y}px`;
+            (el as HTMLElement).style.width = `${w}px`;
+            (el as HTMLElement).style.height = `${h}px`;
+        }
     }
 
     /**
      * Render focusable overlay elements on top of the SVG nodes.
-     * These are what Data Navigator users interact with.
+     * Positions are derived from getBoundingClientRect() on the actual SVG
+     * elements, which automatically handles zoom/pan transforms.
      */
     private renderDNOverlay(
         structure: any,
-        elementData: Record<string, any>,
+        svgNodeMap: Map<string, SVGGElement>,
+        svgContainer: HTMLElement,
     ): void {
         if (!this.dnOverlayContainer) return;
 
@@ -535,21 +663,31 @@ export class SpytialExplorer extends WebColaCnDGraph {
         });
         this.dnOverlayContainer.appendChild(entryBtn);
 
+        // Mode toolbar
+        this.renderModeToolbar();
+
+        const containerRect = svgContainer.getBoundingClientRect();
+        const MIN_NODE_SIZE = 24;
+
         // Create a focusable element for each node
         for (const [nodeId, node] of Object.entries(structure.nodes) as any[]) {
             const renderId = node.renderId;
-            const data = elementData[renderId];
-            if (!data) continue;
+            const svgG = svgNodeMap.get(nodeId);
+            if (!svgG) continue;
 
-            const sp = data.spatialProperties;
+            // Position from actual SVG element bounding rect
+            const rect = svgG.getBoundingClientRect();
+            const w = Math.max(rect.width, MIN_NODE_SIZE);
+            const h = Math.max(rect.height, MIN_NODE_SIZE);
+            const x = rect.left - containerRect.left + (rect.width - w) / 2;
+            const y = rect.top - containerRect.top + (rect.height - h) / 2;
+
             const el = document.createElement('div');
             el.id = renderId;
-            el.className = `dn-spatial-node ${data.cssClass || ''}`;
+            el.className = 'dn-spatial-node';
             el.setAttribute('role', 'button');
             el.setAttribute('tabindex', '-1');
-            el.setAttribute('aria-label', typeof data.semantics?.label === 'function'
-                ? data.semantics.label()
-                : (data.semantics?.label || nodeId));
+            el.setAttribute('aria-label', this.buildNodeAnnouncement(nodeId));
             el.dataset.nodeId = nodeId;
 
             // Tag with groups for group navigation
@@ -560,10 +698,10 @@ export class SpytialExplorer extends WebColaCnDGraph {
 
             el.style.cssText = `
                 position: absolute;
-                left: ${sp.x}px;
-                top: ${sp.y}px;
-                width: ${sp.width}px;
-                height: ${sp.height}px;
+                left: ${x}px;
+                top: ${y}px;
+                width: ${w}px;
+                height: ${h}px;
                 pointer-events: auto;
                 cursor: pointer;
                 border-radius: 4px;
@@ -581,18 +719,62 @@ export class SpytialExplorer extends WebColaCnDGraph {
     }
 
     /**
+     * Render the navigation mode toolbar inside the overlay container.
+     */
+    private renderModeToolbar(): void {
+        if (!this.dnOverlayContainer) return;
+
+        const toolbar = document.createElement('div');
+        toolbar.className = 'nav-mode-toolbar';
+        toolbar.setAttribute('role', 'radiogroup');
+        toolbar.setAttribute('aria-label', 'Navigation mode');
+        toolbar.style.cssText = 'pointer-events: auto;';
+
+        const modes: Array<{ mode: NavigationMode; label: string; key: string }> = [
+            { mode: 'spatial', label: 'Spatial', key: '1' },
+            { mode: 'must', label: 'Must-only', key: '2' },
+            { mode: 'relations', label: 'Relations', key: '3' },
+        ];
+
+        for (const { mode, label, key } of modes) {
+            const btn = document.createElement('button');
+            btn.setAttribute('role', 'radio');
+            btn.setAttribute('aria-checked', mode === this.currentNavMode ? 'true' : 'false');
+            btn.dataset.mode = mode;
+            btn.textContent = `${label} (${key})`;
+            btn.addEventListener('click', () => this.switchNavigationMode(mode));
+            toolbar.appendChild(btn);
+        }
+
+        // Relation key mapping hint (shown when in relation mode)
+        const keyHint = document.createElement('span');
+        keyHint.className = 'relation-key-hint';
+        keyHint.id = 'se-relation-key-hint';
+        keyHint.style.display = this.currentNavMode === 'relations' ? 'inline' : 'none';
+        keyHint.textContent = this.relationKeyMap.map(m => `${m.key} ${m.label}`).join('  ');
+        toolbar.appendChild(keyHint);
+
+        this.dnOverlayContainer.appendChild(toolbar);
+    }
+
+    /**
      * Wire keyboard navigation on the DN overlay.
      *
-     * - Arrow keys: navigate to nearest neighbor in that direction (current layout)
-     * - Shift+Arrow: navigate only along MUST relationships (guaranteed in all valid layouts)
+     * - Arrow keys: navigate based on current mode (spatial/must/relations)
+     * - 1/2/3: switch navigation mode
      * - Enter: drill into a group
      * - Esc: leave a group (or exit navigation)
      */
-    private wireDNKeyboard(_structure: any): void {
+    private wireDNKeyboard(): void {
         if (!this.dnOverlayContainer || !this.dnInputHandler) return;
 
         this.dnOverlayContainer.addEventListener('keydown', (e) => {
             if (!this.dnCurrentFocusId || !this.dnInputHandler) return;
+
+            // ─── Mode switching ──────────────────────────────────
+            if (e.key === '1') { this.switchNavigationMode('spatial'); e.preventDefault(); return; }
+            if (e.key === '2') { this.switchNavigationMode('must'); e.preventDefault(); return; }
+            if (e.key === '3') { this.switchNavigationMode('relations'); e.preventDefault(); return; }
 
             // ─── Group navigation ─────────────────────────────────
             if (e.key === 'Enter') {
@@ -615,29 +797,19 @@ export class SpytialExplorer extends WebColaCnDGraph {
                 return;
             }
 
-            // ─── Spatial navigation ───────────────────────────────
+            // ─── Navigation ──────────────────────────────────────
             const direction = this.dnInputHandler.keydownValidator(e);
             if (!direction) return;
 
             e.preventDefault();
             e.stopPropagation();
 
-            const mustOnly = e.shiftKey;
             const nextNode = this.dnInputHandler.move(this.dnCurrentFocusId, direction);
 
-            if (!nextNode) return;
-
-            // If Shift is held, only allow must relationships
-            if (mustOnly) {
-                const modality = this.getModality(
-                    this.dnCurrentFocusId,
-                    direction as SpatialDir,
-                    nextNode.id,
-                );
-                if (modality !== 'must') {
-                    this.announce(`No must-${direction} neighbor. This is a can relationship.`);
-                    return;
-                }
+            if (!nextNode) {
+                // Announce no neighbor in current mode
+                this.announceNoNeighbor(direction);
+                return;
             }
 
             // If we're inside a group, only navigate to group members
@@ -655,9 +827,83 @@ export class SpytialExplorer extends WebColaCnDGraph {
             const el = this.shadowRoot!.getElementById(renderId);
             if (el) {
                 el.focus();
-                this.highlightNodes([nextNode.id]);
+                // Call directly — don't rely solely on focus event
+                this.onDNNodeFocused(nextNode.id);
+            }
+
+            // Mode-specific announcement
+            if (this.currentNavMode === 'relations') {
+                const relName = this.getRelationNameFromDirection(direction);
+                if (relName) {
+                    this.announce(`Following ${relName} to ${this.getNodeLabel(nextNode.id)}.`);
+                }
             }
         });
+    }
+
+    /**
+     * Switch navigation mode and update DN's active key bindings.
+     */
+    private switchNavigationMode(mode: NavigationMode): void {
+        if (mode === this.currentNavMode) return;
+
+        const ruleSet = mode === 'spatial' ? this.spatialRules
+            : mode === 'must' ? this.mustRules
+            : this.relationRules;
+
+        // Ensure the rule set has entries (relations may be empty)
+        if (Object.keys(ruleSet).length === 0 && mode === 'relations') {
+            this.announce('No data relations available for relation navigation.');
+            return;
+        }
+
+        this.dnInputHandler?.setNavigationKeyBindings?.(ruleSet);
+        this.currentNavMode = mode;
+        this.updateModeUI();
+        this.announce(`Navigation mode: ${mode}.`);
+    }
+
+    /**
+     * Update the toolbar UI to reflect the current navigation mode.
+     */
+    private updateModeUI(): void {
+        if (!this.dnOverlayContainer) return;
+
+        const toolbar = this.dnOverlayContainer.querySelector('.nav-mode-toolbar');
+        if (!toolbar) return;
+
+        for (const btn of toolbar.querySelectorAll('[role="radio"]')) {
+            const isActive = (btn as HTMLElement).dataset.mode === this.currentNavMode;
+            btn.setAttribute('aria-checked', isActive ? 'true' : 'false');
+        }
+
+        const keyHint = toolbar.querySelector('#se-relation-key-hint') as HTMLElement;
+        if (keyHint) {
+            keyHint.style.display = this.currentNavMode === 'relations' ? 'inline' : 'none';
+        }
+    }
+
+    /**
+     * Announce that no neighbor was found in the given direction for the current mode.
+     */
+    private announceNoNeighbor(direction: string): void {
+        const nodeLabel = this.dnCurrentFocusId ? this.getNodeLabel(this.dnCurrentFocusId) : 'current node';
+        if (this.currentNavMode === 'must') {
+            this.announce(`No must-${direction.replace('must_', '')} neighbor from ${nodeLabel}.`);
+        } else if (this.currentNavMode === 'relations') {
+            const relName = this.getRelationNameFromDirection(direction) ?? direction;
+            this.announce(`No ${relName} relation from ${nodeLabel}.`);
+        } else {
+            this.announce(`No ${direction.replace('spatial_', '')} neighbor from ${nodeLabel}.`);
+        }
+    }
+
+    /**
+     * Extract the relation name from a DN direction label like "rel_left" → "left".
+     */
+    private getRelationNameFromDirection(direction: string): string | null {
+        if (direction.startsWith('rel_')) return direction.slice(4);
+        return null;
     }
 
     // ─── Group Navigation ─────────────────────────────────────────────
@@ -990,7 +1236,9 @@ export class SpytialExplorer extends WebColaCnDGraph {
 
         if (el) {
             el.focus();
-            this.highlightNodes([nodeId]);
+            // Call directly — don't rely solely on focus event firing
+            this.dnCurrentFocusId = nodeId;
+            this.onDNNodeFocused(nodeId);
         }
     }
 
