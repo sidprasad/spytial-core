@@ -402,36 +402,39 @@ export class SpytialExplorer extends WebColaCnDGraph {
 
         const descMap = new Map(nodeDescs.map(d => [d.id, d]));
 
+        // ─── Compute position-based spatial neighbors ─────────────────
+        // Use actual layout positions to find nearest neighbor in each
+        // cardinal direction. This works regardless of what constraints
+        // exist — navigation follows the visual layout.
+        const positions = this.getNodePositions();
+        const posMap = new Map(positions.map(p => [p.id, p]));
+        const spatialNeighbors = this.computePositionBasedNeighbors(positions);
+
         // ─── Build DN structure ───────────────────────────────────────
         const dnNodes: Record<string, any> = {};
         const dnEdges: Record<string, any> = {};
         const dnElementData: Record<string, any> = {};
         let edgeCounter = 0;
 
-        for (const [nodeId, neighbors] of nav.entries()) {
-            if (!svgNodeMap.has(nodeId)) continue;
+        const nodeIds = positions.map(p => p.id).filter(id => svgNodeMap.has(id));
 
+        for (const nodeId of nodeIds) {
             const renderId = `dn-node-${this.sanitizeId(nodeId)}`;
             const desc = descMap.get(nodeId);
             const nodeEdges: string[] = [];
+            const neighbors = spatialNeighbors.get(nodeId);
 
-            // Simple direction-labeled edges for spatial navigation
-            const directions: Array<[SpatialDir, string | null]> = [
-                ['left', neighbors.left],
-                ['right', neighbors.right],
-                ['up', neighbors.above],
-                ['down', neighbors.below],
-            ];
-
-            for (const [dir, targetId] of directions) {
-                if (!targetId) continue;
-                const edgeId = `e${edgeCounter++}`;
-                dnEdges[edgeId] = {
-                    source: nodeId,
-                    target: targetId,
-                    navigationRules: [dir],
-                };
-                nodeEdges.push(edgeId);
+            if (neighbors) {
+                for (const [dir, targetId] of Object.entries(neighbors)) {
+                    if (!targetId) continue;
+                    const edgeId = `e${edgeCounter++}`;
+                    dnEdges[edgeId] = {
+                        source: nodeId,
+                        target: targetId,
+                        navigationRules: [dir],
+                    };
+                    nodeEdges.push(edgeId);
+                }
             }
 
             dnNodes[nodeId] = {
@@ -484,6 +487,60 @@ export class SpytialExplorer extends WebColaCnDGraph {
 
         this.wireDNKeyboard();
         this.setupZoomTracking(svgContainer, svgNodeMap);
+    }
+
+    /**
+     * Compute nearest neighbor in each cardinal direction from node positions.
+     *
+     * For "left": among all nodes with x < this node's x, pick the closest
+     * by Euclidean distance (weighted to prefer nodes roughly on the same axis).
+     * Same logic for right/up/down.
+     */
+    private computePositionBasedNeighbors(
+        positions: Array<{ id: string; x: number; y: number }>,
+    ): Map<string, Record<SpatialDir, string | null>> {
+        const result = new Map<string, Record<SpatialDir, string | null>>();
+
+        for (const node of positions) {
+            const neighbors: Record<SpatialDir, string | null> = {
+                left: null, right: null, up: null, down: null,
+            };
+
+            let bestLeft = Infinity, bestRight = Infinity, bestUp = Infinity, bestDown = Infinity;
+
+            for (const other of positions) {
+                if (other.id === node.id) continue;
+
+                const dx = other.x - node.x;
+                const dy = other.y - node.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                // Left: other.x < node.x (must be meaningfully to the left)
+                if (dx < -1 && dist < bestLeft) {
+                    bestLeft = dist;
+                    neighbors.left = other.id;
+                }
+                // Right: other.x > node.x
+                if (dx > 1 && dist < bestRight) {
+                    bestRight = dist;
+                    neighbors.right = other.id;
+                }
+                // Up: other.y < node.y (SVG y-axis: smaller = higher)
+                if (dy < -1 && dist < bestUp) {
+                    bestUp = dist;
+                    neighbors.up = other.id;
+                }
+                // Down: other.y > node.y
+                if (dy > 1 && dist < bestDown) {
+                    bestDown = dist;
+                    neighbors.down = other.id;
+                }
+            }
+
+            result.set(node.id, neighbors);
+        }
+
+        return result;
     }
 
     /**

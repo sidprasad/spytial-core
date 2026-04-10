@@ -5,7 +5,8 @@
 export function getExplorerCSS(): string {
     return /* css */ `
     :host {
-        display: block;
+        display: flex;
+        flex-direction: column;
         font-family: system-ui, -apple-system, sans-serif;
         color: #333;
         --accent: #5a3d8a;
@@ -16,6 +17,18 @@ export function getExplorerCSS(): string {
         --repl-fg: #d4d4d4;
         --success: #2e7d32;
         --error: #c62828;
+    }
+
+    /* Override parent's svg-container to share height with explorer panel */
+    #svg-container {
+        flex: 1;
+        min-height: 200px;
+        height: auto !important;
+    }
+
+    #se-explorer-panel {
+        flex-shrink: 0;
+        padding: 8px 0;
     }
 
     /* ─── Layout ─────────────────────────────────────────────── */
