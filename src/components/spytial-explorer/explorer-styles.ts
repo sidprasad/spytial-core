@@ -481,16 +481,16 @@ export function getExplorerCSS(): string {
 
     .repl-output {
         font-family: 'Courier New', monospace;
-        font-size: 12px;
+        font-size: 11px;
         background: var(--repl-bg);
         color: var(--repl-fg);
-        padding: 12px;
-        border-radius: 6px;
-        flex: 1;
-        min-height: 80px;
-        max-height: 300px;
+        padding: 8px 10px;
+        border-radius: 4px;
+        min-height: 32px;
+        max-height: 150px;
         overflow-y: auto;
         white-space: pre-wrap;
+        line-height: 1.4;
     }
 
     /* ─── Query result atoms ─────────────────────────────────── */
