@@ -74,9 +74,34 @@
         </div>
     </div>
 
-    <div style="max-width: 1400px; margin: 0 auto; border: 1px solid #ccc; border-radius: 8px; resize: both; overflow: hidden; height: 85vh; min-height: 400px; min-width: 400px;">
+    <div id="explorer-wrapper" style="max-width: 1400px; margin: 0 auto; border: 1px solid #ccc; border-radius: 8px; overflow: hidden; height: 85vh; min-height: 400px; min-width: 400px; position: relative;">
         <spytial-explorer id="explorer" style="width: 100%; height: 100%;"></spytial-explorer>
+        <div id="resize-handle" style="position: absolute; bottom: 0; right: 0; width: 20px; height: 20px; cursor: nwse-resize; background: linear-gradient(135deg, transparent 50%, #999 50%, transparent 52%, #999 65%, transparent 67%, #999 80%, transparent 82%); border-radius: 0 0 8px 0; z-index: 10;" title="Drag to resize"></div>
     </div>
+    <script>
+    // Custom drag-resize for the explorer wrapper
+    (function() {
+        const handle = document.getElementById('resize-handle');
+        const wrapper = document.getElementById('explorer-wrapper');
+        if (!handle || !wrapper) return;
+        let startX, startY, startW, startH;
+        handle.addEventListener('mousedown', function(e) {
+            e.preventDefault();
+            startX = e.clientX; startY = e.clientY;
+            startW = wrapper.offsetWidth; startH = wrapper.offsetHeight;
+            function onMove(e) {
+                wrapper.style.width = Math.max(400, startW + e.clientX - startX) + 'px';
+                wrapper.style.height = Math.max(300, startH + e.clientY - startY) + 'px';
+            }
+            function onUp() {
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+            }
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        });
+    })();
+    </script>
 
     <!-- ─── Usage Guide ─────────────────────────────────────────────── -->
     <div class="usage-guide">
