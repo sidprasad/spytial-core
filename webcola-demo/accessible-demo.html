@@ -74,7 +74,7 @@
         </div>
     </div>
 
-    <spytial-explorer id="explorer" style="width: 100%; max-width: 1200px; height: 650px; margin: 0 auto;"></spytial-explorer>
+    <spytial-explorer id="explorer" style="width: 100%; max-width: 1400px; height: 85vh; min-height: 600px; margin: 0 auto; resize: vertical; overflow: auto;"></spytial-explorer>
 
     <!-- ─── Usage Guide ─────────────────────────────────────────────── -->
     <div class="usage-guide">
@@ -128,7 +128,8 @@
             </div>
         </div>
 
-        <h3>Using <code>&lt;spytial-explorer&gt;</code> in Your Own Page</h3>
+        <details>
+            <summary><h3 style="display:inline;cursor:pointer">Using <code>&lt;spytial-explorer&gt;</code> in Your Own Page</h3></summary>
 <pre><span class="comment">&lt;!-- 1. Include dependencies --&gt;</span>
 &lt;script src=<span class="string">"d3.v4.min.js"</span>&gt;&lt;/script&gt;
 &lt;script src=<span class="string">"cola.js"</span>&gt;&lt;/script&gt;
@@ -153,6 +154,7 @@
   <span class="comment">//    Data Navigator overlay, spatial context, spatial + datum REPLs</span>
   explorer.<span class="fn">enableAccessibility</span>(result.layout, result.validator, evaluator);
 &lt;/script&gt;</pre>
+        </details>
     </div>
 
     <!-- Load the library bundle (registers <spytial-explorer> automatically) -->
