@@ -99,6 +99,7 @@
     "chroma-js": "^3.1.2",
     "d3": "^7.9.0",
     "dagre": "^0.8.5",
+    "data-navigator": "^2.4.1",
     "forge-expr-evaluator": "^1.1.0",
     "graphlib": "^2.1.8",
     "graphlib-dot": "^0.6.4",

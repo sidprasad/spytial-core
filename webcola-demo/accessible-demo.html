@@ -3,285 +3,212 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Spatial Queries as Accessible Affordances</title>
-
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>Spatial Explorer — Accessible Diagram Navigation</title>
     <style>
-        * { box-sizing: border-box; }
         body {
-            font-family: Arial, sans-serif;
-            max-width: 95vw;
-            margin: 0 auto;
-            padding: 16px;
-            background-color: #f5f5f5;
-        }
-        .panel {
-            background: white;
-            padding: 16px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        button {
-            background-color: #007acc;
-            color: white;
-            border: none;
-            padding: 8px 14px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        button:hover { background-color: #005a9e; }
-        button:disabled { background-color: #ccc; cursor: not-allowed; }
-        textarea {
-            width: 100%;
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            resize: vertical;
-            box-sizing: border-box;
-        }
-        #json-input { height: 180px; }
-        #cnd-input { height: 120px; }
-        .status {
-            margin: 8px 0;
-            padding: 8px;
-            border-radius: 4px;
-            font-size: 13px;
-        }
-        .status.info { background: #e3f2fd; color: #1976d2; }
-        .status.success { background: #e8f5e8; color: #2e7d32; }
-        .status.error { background: #ffebee; color: #c62828; }
-
-        /* ─── Main layout: graph+navigator left, REPLs right ─── */
-        #main-area {
-            display: flex;
-            gap: 16px;
-            margin-top: 16px;
-        }
-        #graph-panel {
-            flex: 3;
-            min-width: 500px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-        #repl-panel {
-            flex: 2;
-            min-width: 350px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        /* ─── Navigator layer (ARIA tree) ─── */
-        #accessible-html-output {
-            border: 2px solid #5a3d8a;
-            border-radius: 8px;
-            padding: 16px;
-            min-height: 120px;
-            background: #faf8ff;
-        }
-        #accessible-html-output [role="graphics-document"] {
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
             font-family: system-ui, sans-serif;
         }
-        #accessible-html-output .diagram-overview {
-            font-size: 14px;
-            color: #555;
-            margin: 0 0 12px 0;
-            padding-bottom: 8px;
-            border-bottom: 1px solid #eee;
+        .demo-header {
+            max-width: 1400px;
+            margin: 0 auto 16px;
         }
-        #accessible-html-output [role="treeitem"] {
-            padding: 8px 12px;
-            margin: 4px 0;
-            border-radius: 6px;
-            border: 1px solid #e8e8e8;
-            cursor: pointer;
-            outline: none;
-            display: flex;
-            flex-wrap: wrap;
-            align-items: baseline;
-            gap: 6px;
+        .demo-header h1 { font-size: 22px; margin: 0 0 8px; }
+        .demo-header p { font-size: 14px; color: #555; margin: 0 0 8px; line-height: 1.6; }
+        .demo-header code {
+            background: #f0eef8; padding: 1px 5px; border-radius: 3px;
+            font-size: 13px; color: #5a3d8a;
         }
-        #accessible-html-output [role="treeitem"]:hover { background: #f5f5f5; }
-        #accessible-html-output [role="treeitem"]:focus {
-            background: #e8f0fe;
-            box-shadow: 0 0 0 2px #007acc;
-            border-color: #007acc;
+        .usage-guide {
+            max-width: 1400px;
+            margin: 24px auto 0;
+            background: white;
+            border-radius: 8px;
+            padding: 20px 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
         }
-        #accessible-html-output .node-label { font-weight: 600; font-size: 15px; }
-        #accessible-html-output .node-type {
-            font-size: 11px; background: #e8e8e8; color: #555;
-            padding: 1px 6px; border-radius: 3px; font-weight: 500;
+        .usage-guide h2 { font-size: 16px; margin: 0 0 12px; }
+        .usage-guide h3 { font-size: 14px; margin: 16px 0 6px; color: #333; }
+        .usage-guide p, .usage-guide li { font-size: 13px; color: #555; line-height: 1.6; }
+        .usage-guide ul { padding-left: 20px; margin: 4px 0; }
+        .usage-guide kbd {
+            background: #eee; border: 1px solid #ccc; border-radius: 3px;
+            padding: 1px 5px; font-size: 12px; font-family: monospace;
         }
-        #accessible-html-output .node-attrs { display: flex; gap: 4px; flex-wrap: wrap; }
-        #accessible-html-output .node-attr {
-            font-size: 12px; background: #eef6ff; color: #1a5276;
-            padding: 1px 6px; border-radius: 3px;
+        .usage-guide pre {
+            background: #1e1e2e; color: #cdd6f4; padding: 14px 16px;
+            border-radius: 6px; font-size: 12.5px; line-height: 1.5;
+            overflow-x: auto; margin: 8px 0;
         }
-        #accessible-html-output .attr-key { font-weight: 600; }
-        #accessible-html-output .node-connections {
-            width: 100%; display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px;
+        .usage-guide .comment { color: #6c7086; }
+        .usage-guide .keyword { color: #cba6f7; }
+        .usage-guide .string { color: #a6e3a1; }
+        .usage-guide .fn { color: #89b4fa; }
+        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 800px) { .two-col { grid-template-columns: 1fr; } }
+        .thesis-box {
+            background: #f8f6ff; border-left: 3px solid #5a3d8a; padding: 10px 14px;
+            border-radius: 0 6px 6px 0; margin: 8px 0;
         }
-        #accessible-html-output .node-edge {
-            font-size: 11px; padding: 1px 6px; border-radius: 3px;
-        }
-        #accessible-html-output .node-edge-out { background: #f0faf0; color: #1e6e1e; }
-        #accessible-html-output .node-edge-in { background: #fef5e7; color: #7d5a00; }
-        #accessible-html-output .group-label { font-weight: 600; }
-        #accessible-html-output .node-count { font-weight: 400; color: #888; }
-        #accessible-html-output [role="group"] {
-            padding-left: 16px; border-left: 2px solid #ddd;
-            margin-left: 8px; margin-top: 4px;
-        }
-        #accessible-html-output .diagram-relationships,
-        #accessible-html-output .diagram-spatial { margin-top: 16px; }
-        #accessible-html-output h3 {
-            font-size: 14px; font-weight: 600; margin: 0 0 8px 0; color: #333;
-        }
-        #accessible-html-output table {
-            width: 100%; border-collapse: collapse; font-size: 13px;
-        }
-        #accessible-html-output th, #accessible-html-output td {
-            border: 1px solid #e0e0e0; padding: 5px 10px; text-align: left;
-        }
-        #accessible-html-output th {
-            background: #f5f5f5; font-weight: 600; font-size: 12px;
-            text-transform: uppercase; letter-spacing: 0.5px; color: #666;
-        }
-        #accessible-html-output .diagram-spatial ul { list-style: none; padding: 0; margin: 0; }
-        #accessible-html-output .diagram-spatial li { padding: 4px 0; font-size: 13px; color: #444; }
-        #accessible-html-output .diagram-spatial em { color: #5a3d8a; font-style: normal; font-weight: 500; }
-
-        .sr-only {
-            position: absolute; width: 1px; height: 1px; padding: 0;
-            margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0;
-        }
-
-        /* ─── Spatial context panel ─── */
-        #spatial-context-panel {
-            background: #f0eef8; border: 1px solid #c4b8e0; border-radius: 6px;
-            padding: 12px 16px; font-size: 13px; line-height: 1.5; color: #333;
-        }
-        #spatial-context-panel .context-label { font-weight: 600; color: #5a3d8a; margin-bottom: 4px; }
-        #spatial-context-panel .context-direction {
-            display: inline-block; background: #e8e0f5; padding: 1px 8px;
-            border-radius: 3px; margin: 2px 4px 2px 0; font-size: 12px;
-        }
-        #spatial-context-panel .context-group {
-            display: inline-block; background: #e0f0e0; padding: 1px 8px;
-            border-radius: 3px; margin: 2px 4px 2px 0; font-size: 12px;
-        }
-
-        /* ─── REPL styling ─── */
-        .repl-section { margin-bottom: 0; }
-        .repl-section h3 { font-size: 14px; font-weight: 600; margin: 0 0 6px 0; color: #333; }
-        .repl-output {
-            font-family: 'Courier New', monospace; font-size: 13px;
-            background: #1e1e1e; color: #d4d4d4; padding: 12px;
-            border-radius: 6px; max-height: 250px; overflow-y: auto; white-space: pre-wrap;
-        }
-        .query-result-atom {
-            cursor: pointer; text-decoration: underline; text-decoration-style: dotted;
-        }
-        .query-result-atom:hover { text-decoration-style: solid; color: #4ec9b0; }
-
-        /* ─── Input details ─── */
-        #input-details summary {
-            cursor: pointer; font-weight: 600; padding: 8px 0; color: #555;
-        }
-        #input-details[open] summary { margin-bottom: 8px; }
-
-        @media (max-width: 900px) {
-            #main-area { flex-direction: column; }
-            #graph-panel, #repl-panel { min-width: unset; }
-        }
+        .thesis-box p { color: #3a2a5a; margin: 0; }
     </style>
 </head>
 <body>
-
-    <!-- ─── Header ─── -->
-    <div class="panel border" style="margin-bottom: 0;">
-        <h1 class="h4" style="margin-bottom: 8px;">Spatial Queries as Accessible Affordances</h1>
-        <p class="text-muted small" style="margin-bottom: 4px;">
-            In visual tools, <strong>dragging</strong> reveals what spatial arrangements are possible.
-            The spatial REPL provides the same exploration non-visually:
-            <code>must.leftOf(Node0)</code> answers "what <em>must</em> always be to the left?"
-            &mdash; information locked behind drag interaction in existing tools.
+    <div class="demo-header">
+        <h1>Spatial Explorer</h1>
+        <p>
+            <code>&lt;spytial-explorer&gt;</code> is a drop-in replacement for
+            <code>&lt;webcola-cnd-graph&gt;</code> that integrates
+            <a href="https://github.com/cmudig/data-navigator">Data Navigator</a>
+            with Spytial's constraint-derived spatial model. The result: keyboard navigation
+            and spatial queries that <em>no</em> existing tool can derive from pixels alone.
         </p>
-        <p class="text-muted small" style="margin-bottom: 0;">
-            <strong>Graph</strong> (what sighted users see) &rarr;
-            <strong>Navigator</strong> (non-visual traversal via constraints) &rarr;
-            <strong>REPLs</strong> (non-visual exploration &mdash; replaces drag).
-        </p>
+        <div class="thesis-box">
+            <p><strong>Key insight:</strong> The REPL replaces <em>drag-to-explore</em> as an
+            interaction primitive. Instead of visually scanning a diagram to answer
+            "what is to the right of this node?", a screen reader user can type
+            <code>must.rightOf(Node0)</code> and get a provably correct answer
+            &mdash; grounded in the constraint graph, not pixel coordinates.</p>
+        </div>
     </div>
 
-    <!-- ─── Collapsible input ─── -->
-    <details id="input-details" class="panel border" style="margin-top: 8px;">
-        <summary>Data &amp; Layout Specification (click to edit)</summary>
-        <div style="display: flex; gap: 16px; flex-wrap: wrap;">
-            <div style="flex: 1; min-width: 300px;">
-                <label for="json-input" style="font-weight: bold; display: block; margin-bottom: 4px;">JSON Data Instance:</label>
-                <textarea id="json-input">{
-  "atoms": [
-    { "id": "Node0", "type": "Node", "label": "Node (10)" },
-    { "id": "Node1", "type": "Node", "label": "Node (5)" },
-    { "id": "Node2", "type": "Node", "label": "Node (15)" },
-    { "id": "Node3", "type": "Node", "label": "Node (3)" },
-    { "id": "Node4", "type": "Node", "label": "Node (7)" },
-    { "id": "Node5", "type": "Node", "label": "Node (12)" },
-    { "id": "Node6", "type": "Node", "label": "Node (18)" },
-    { "id": "Int0", "type": "Int", "label": "10" },
-    { "id": "Int1", "type": "Int", "label": "5" },
-    { "id": "Int2", "type": "Int", "label": "15" },
-    { "id": "Int3", "type": "Int", "label": "3" },
-    { "id": "Int4", "type": "Int", "label": "7" },
-    { "id": "Int5", "type": "Int", "label": "12" },
-    { "id": "Int6", "type": "Int", "label": "18" }
-  ],
-  "relations": [
-    {
-      "id": "Node&lt;:left",
-      "name": "left",
-      "types": ["Node", "Node"],
-      "tuples": [
-        { "atoms": ["Node0", "Node1"], "types": ["Node", "Node"] },
-        { "atoms": ["Node1", "Node3"], "types": ["Node", "Node"] },
-        { "atoms": ["Node2", "Node5"], "types": ["Node", "Node"] }
-      ]
-    },
-    {
-      "id": "Node&lt;:right",
-      "name": "right",
-      "types": ["Node", "Node"],
-      "tuples": [
-        { "atoms": ["Node0", "Node2"], "types": ["Node", "Node"] },
-        { "atoms": ["Node1", "Node4"], "types": ["Node", "Node"] },
-        { "atoms": ["Node2", "Node6"], "types": ["Node", "Node"] }
-      ]
-    },
-    {
-      "id": "Node&lt;:val",
-      "name": "val",
-      "types": ["Node", "Int"],
-      "tuples": [
-        { "atoms": ["Node0", "Int0"], "types": ["Node", "Int"] },
-        { "atoms": ["Node1", "Int1"], "types": ["Node", "Int"] },
-        { "atoms": ["Node2", "Int2"], "types": ["Node", "Int"] },
-        { "atoms": ["Node3", "Int3"], "types": ["Node", "Int"] },
-        { "atoms": ["Node4", "Int4"], "types": ["Node", "Int"] },
-        { "atoms": ["Node5", "Int5"], "types": ["Node", "Int"] },
-        { "atoms": ["Node6", "Int6"], "types": ["Node", "Int"] }
-      ]
-    }
-  ]
-}</textarea>
+    <spytial-explorer id="explorer" width="900" height="500"></spytial-explorer>
+
+    <!-- ─── Usage Guide ─────────────────────────────────────────────── -->
+    <div class="usage-guide">
+        <h2>How to Use This Demo</h2>
+
+        <div class="two-col">
+            <div>
+                <h3>Keyboard Navigation (Data Navigator)</h3>
+                <ul>
+                    <li>Click <strong>"Enter diagram navigation"</strong> (or <kbd>Tab</kbd> to it) to start</li>
+                    <li><kbd>&larr;</kbd> <kbd>&rarr;</kbd> <kbd>&uarr;</kbd> <kbd>&darr;</kbd> &mdash; move between nodes spatially (current layout)</li>
+                    <li><kbd>Shift</kbd>+<kbd>&larr;</kbd> etc. &mdash; move only along <strong>must</strong> relationships (guaranteed in ALL valid layouts)</li>
+                    <li><kbd>Enter</kbd> &mdash; drill into a group (navigate among group members)</li>
+                    <li><kbd>Esc</kbd> &mdash; leave group, or exit diagram navigation</li>
+                    <li>The <strong>Spatial Context</strong> panel updates live with modality badges (<span style="background:#c8e6c9;padding:0 4px;border-radius:2px;font-size:11px;font-weight:700">MUST</span> / <span style="background:#fff3e0;padding:0 4px;border-radius:2px;font-size:11px;font-weight:700">CAN</span>)</li>
+                </ul>
+
+                <h3>Spatial Queries (REPL)</h3>
+                <ul>
+                    <li><code>must.rightOf(Node0)</code> &mdash; nodes that <em>must</em> be right of Node0 in <strong>all</strong> valid layouts</li>
+                    <li><code>can.leftOf(Node1)</code> &mdash; nodes that <em>can</em> be left of Node1 in <strong>some</strong> valid layout</li>
+                    <li><code>cannot.above(Node2)</code> &mdash; nodes that <em>cannot</em> be above Node2 in <strong>any</strong> valid layout</li>
+                    <li>Results are clickable &mdash; click a result atom to navigate to that node</li>
+                </ul>
             </div>
-            <div style="flex: 0 0 280px;">
-                <label for="cnd-input" style="font-weight: bold; display: block; margin-bottom: 4px;">Layout Specification (CND):</label>
-                <textarea id="cnd-input">constraints:
+            <div>
+                <h3>Data Queries (REPL)</h3>
+                <ul>
+                    <li><code>Node</code> &mdash; all atoms of type Node</li>
+                    <li><code>Node.left</code> &mdash; follow the <em>left</em> relation from all Nodes</li>
+                    <li><code>Node.left.val</code> &mdash; chain relations: left children's values</li>
+                </ul>
+
+                <h3>Why This Matters</h3>
+                <p>
+                    Traditional diagram accessibility tools (alt text, ARIA trees) describe
+                    <em>what</em> is in a diagram. Spytial answers <em>why</em>: the spatial
+                    layout is derived from constraints, not arbitrary positioning. This means:
+                </p>
+                <ul>
+                    <li><strong>must</strong> queries give guarantees &mdash; true regardless of layout variation</li>
+                    <li><strong>can/cannot</strong> queries reveal structural degrees of freedom</li>
+                    <li>Data Navigator gets <em>spatial semantics it can't derive on its own</em> from the constraint graph</li>
+                </ul>
+            </div>
+        </div>
+
+        <h3>Using <code>&lt;spytial-explorer&gt;</code> in Your Own Page</h3>
+<pre><span class="comment">&lt;!-- 1. Include dependencies --&gt;</span>
+&lt;script src=<span class="string">"d3.v4.min.js"</span>&gt;&lt;/script&gt;
+&lt;script src=<span class="string">"cola.js"</span>&gt;&lt;/script&gt;
+&lt;script src=<span class="string">"spytial-core-complete.global.js"</span>&gt;&lt;/script&gt;
+
+<span class="comment">&lt;!-- 2. Drop in the element (same attributes as webcola-cnd-graph) --&gt;</span>
+&lt;spytial-explorer id=<span class="string">"explorer"</span> width=<span class="string">"800"</span> height=<span class="string">"500"</span>&gt;&lt;/spytial-explorer&gt;
+
+&lt;script&gt;
+  <span class="comment">// 3. Run the standard layout pipeline</span>
+  <span class="keyword">const</span> instance  = <span class="keyword">new</span> spytialcore.<span class="fn">JSONDataInstance</span>(jsonText);
+  <span class="keyword">const</span> evaluator = <span class="keyword">new</span> spytialcore.<span class="fn">SGraphQueryEvaluator</span>();
+  evaluator.<span class="fn">initialize</span>({ sourceData: instance });
+  <span class="keyword">const</span> layoutSpec = spytialcore.<span class="fn">parseLayoutSpec</span>(cndYaml);
+  <span class="keyword">const</span> li = <span class="keyword">new</span> spytialcore.<span class="fn">LayoutInstance</span>(layoutSpec, evaluator, 0, <span class="keyword">true</span>);
+  <span class="keyword">const</span> result = li.<span class="fn">generateLayout</span>(instance);
+
+  <span class="comment">// 4. Render (inherited from WebColaCnDGraph)</span>
+  <span class="keyword">await</span> explorer.<span class="fn">renderLayout</span>(result.layout);
+
+  <span class="comment">// 5. One call enables all a11y features:</span>
+  <span class="comment">//    Data Navigator overlay, spatial context, spatial + datum REPLs</span>
+  explorer.<span class="fn">enableAccessibility</span>(result.layout, result.validator, evaluator);
+&lt;/script&gt;</pre>
+    </div>
+
+    <!-- Load the library bundle (registers <spytial-explorer> automatically) -->
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="../vendor/cola.js"></script>
+    <script src="../dist/browser/spytial-core-complete.global.js"></script>
+
+    <script>
+        // BST example data
+        const BST_JSON = {
+            atoms: [
+                { id: "Node0", type: "Node", label: "Node (10)" },
+                { id: "Node1", type: "Node", label: "Node (5)" },
+                { id: "Node2", type: "Node", label: "Node (15)" },
+                { id: "Node3", type: "Node", label: "Node (3)" },
+                { id: "Node4", type: "Node", label: "Node (7)" },
+                { id: "Node5", type: "Node", label: "Node (12)" },
+                { id: "Node6", type: "Node", label: "Node (18)" },
+                { id: "Int0", type: "Int", label: "10" },
+                { id: "Int1", type: "Int", label: "5" },
+                { id: "Int2", type: "Int", label: "15" },
+                { id: "Int3", type: "Int", label: "3" },
+                { id: "Int4", type: "Int", label: "7" },
+                { id: "Int5", type: "Int", label: "12" },
+                { id: "Int6", type: "Int", label: "18" }
+            ],
+            relations: [
+                {
+                    id: "Node<:left", name: "left",
+                    types: ["Node", "Node"],
+                    tuples: [
+                        { atoms: ["Node0", "Node1"], types: ["Node", "Node"] },
+                        { atoms: ["Node1", "Node3"], types: ["Node", "Node"] },
+                        { atoms: ["Node2", "Node5"], types: ["Node", "Node"] }
+                    ]
+                },
+                {
+                    id: "Node<:right", name: "right",
+                    types: ["Node", "Node"],
+                    tuples: [
+                        { atoms: ["Node0", "Node2"], types: ["Node", "Node"] },
+                        { atoms: ["Node1", "Node4"], types: ["Node", "Node"] },
+                        { atoms: ["Node2", "Node6"], types: ["Node", "Node"] }
+                    ]
+                },
+                {
+                    id: "Node<:val", name: "val",
+                    types: ["Node", "Int"],
+                    tuples: [
+                        { atoms: ["Node0", "Int0"], types: ["Node", "Int"] },
+                        { atoms: ["Node1", "Int1"], types: ["Node", "Int"] },
+                        { atoms: ["Node2", "Int2"], types: ["Node", "Int"] },
+                        { atoms: ["Node3", "Int3"], types: ["Node", "Int"] },
+                        { atoms: ["Node4", "Int4"], types: ["Node", "Int"] },
+                        { atoms: ["Node5", "Int5"], types: ["Node", "Int"] },
+                        { atoms: ["Node6", "Int6"], types: ["Node", "Int"] }
+                    ]
+                }
+            ]
+        };
+
+        const BST_CND = `constraints:
   - orientation:
       selector: left
       directions:
@@ -290,495 +217,57 @@
 directives:
   - attribute:
       field: val
-  - flag: hideDisconnectedBuiltIns</textarea>
-                <button id="translateButton" onclick="runTranslation()" style="margin-top: 8px;">Re-translate</button>
-                <div id="status" class="status info">Loading...</div>
-            </div>
-        </div>
-    </details>
+  - flag: hideDisconnectedBuiltIns`;
 
-    <!-- ─── Main area: graph+navigator | REPLs ─── -->
-    <div id="main-area">
+        // ─── Pipeline ─────────────────────────────────────────────────
+        async function init() {
+            // Wait for custom elements to be defined
+            await customElements.whenDefined('spytial-explorer');
 
-        <!-- Left: Graph + Navigator layer -->
-        <div id="graph-panel" class="panel border">
-            <!-- Visual graph -->
-            <div>
-                <h2 class="h6" style="margin: 0 0 8px 0;">Visual Graph</h2>
-                <webcola-cnd-graph
-                    id="graph-container"
-                    width="600"
-                    height="400"
-                    layoutFormat="default"
-                    aria-label="Visual graph rendering">
-                </webcola-cnd-graph>
-            </div>
+            const explorer = document.getElementById('explorer');
 
-            <!-- Data Navigator layer -->
-            <div>
-                <h2 class="h6" style="margin: 0 0 4px 0;">Navigator</h2>
-                <p class="text-muted small" style="margin-bottom: 8px;">
-                    Use <kbd>Tab</kbd> to enter. <kbd>Alt</kbd>+Arrow keys navigate
-                    spatially (constraint-derived). Plain arrows use tree navigation.
-                </p>
-                <div id="accessible-html-output">
-                    <p class="text-muted">Loading...</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Right: Context + REPLs -->
-        <div id="repl-panel">
-
-            <!-- Spatial context — live updates on node focus -->
-            <div class="panel border">
-                <div id="spatial-context-panel" role="region" aria-label="Spatial context for focused node">
-                    <div class="context-label">Spatial Context</div>
-                    <div id="spatial-context-content">Navigate to a node to see its spatial context.</div>
-                </div>
-                <!-- Screen-reader-only live region -->
-                <div id="spatial-live-region" aria-live="polite" aria-atomic="true" class="sr-only"></div>
-            </div>
-
-            <!-- Spatial REPL -->
-            <div class="panel border repl-section">
-                <h3>Spatial Queries <span class="text-muted" style="font-weight:normal; font-size:12px;">(diagram)</span></h3>
-                <p class="text-muted small" style="margin-bottom: 6px;">
-                    Query what <em>must</em>, <em>can</em>, or <em>cannot</em> hold spatially.
-                    These answer questions locked behind drag interaction in visual tools.
-                </p>
-                <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-                    <label for="query-input" class="sr-only">Spatial query expression</label>
-                    <input type="text" id="query-input" placeholder="must.rightOf(Node0)"
-                           aria-describedby="query-input-hint"
-                           style="flex: 1; font-family: 'Courier New', monospace; font-size: 14px; padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px;"
-                           onkeydown="if(event.key==='Enter') runQuery()">
-                    <span id="query-input-hint" class="sr-only">Enter a spatial query like must.rightOf(Node0) and press Enter. Click results to navigate to them.</span>
-                    <button onclick="runQuery()" id="query-button" disabled>Query</button>
-                </div>
-                <div id="query-output" role="log" aria-label="Spatial query results" aria-live="polite" class="repl-output">
-<span style="color:#9cdcfe">Modalities:</span>
-  <span style="color:#ce9178">must</span>  &mdash; true in ALL valid layouts
-  <span style="color:#ce9178">can</span>   &mdash; true in SOME valid layout
-  <span style="color:#ce9178">cannot</span> &mdash; true in NO valid layout
-
-<span style="color:#9cdcfe">Try:</span>
-  <span style="color:#4ec9b0">must.rightOf(Node0)</span>   <span style="color:#4ec9b0">can.leftOf(Node1)</span>
-  <span style="color:#4ec9b0">cannot.above(Node2)</span>   <span style="color:#4ec9b0">must.aligned.x(Node0)</span>
-  <span style="color:#4ec9b0">grouped(Node0)</span>        <span style="color:#4ec9b0">contains(G1)</span></div>
-            </div>
-
-            <!-- Datum REPL -->
-            <div class="panel border repl-section">
-                <h3>Data Queries <span class="text-muted" style="font-weight:normal; font-size:12px;">(datum)</span></h3>
-                <p class="text-muted small" style="margin-bottom: 6px;">
-                    Query the underlying data instance. Navigate relations with dot notation.
-                </p>
-                <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-                    <label for="datum-input" class="sr-only">Data query expression</label>
-                    <input type="text" id="datum-input" placeholder="Node.left.val"
-                           aria-describedby="datum-input-hint"
-                           style="flex: 1; font-family: 'Courier New', monospace; font-size: 14px; padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px;"
-                           onkeydown="if(event.key==='Enter') runDatumQuery()">
-                    <span id="datum-input-hint" class="sr-only">Enter a data query like Node.left.val and press Enter</span>
-                    <button onclick="runDatumQuery()" id="datum-button" disabled>Query</button>
-                </div>
-                <div id="datum-output" role="log" aria-label="Data query results" aria-live="polite" class="repl-output">
-<span style="color:#9cdcfe">Try:</span>
-  <span style="color:#4ec9b0">Node</span>              <span style="color:#4ec9b0">left</span>
-  <span style="color:#4ec9b0">Node.left</span>         <span style="color:#4ec9b0">Node.val</span>
-  <span style="color:#4ec9b0">Node.left.val</span>     <span style="color:#4ec9b0">Node.right.val</span></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Scripts -->
-    <script src="https://d3js.org/d3.v4.min.js"></script>
-    <script src="../vendor/cola.js"></script>
-    <script src="../dist/browser/spytial-core-complete.global.js"></script>
-    <script>
-        const CndCore = spytialcore;
-
-        // ─── State ─────────────────────────────────────────────────────────
-        let currentAccessibleLayout = null;
-        let currentLayoutEvaluator = null;
-        let currentDataEvaluator = null;
-        let queryHistory = [];
-        let datumQueryHistory = [];
-
-        // ─── Status ────────────────────────────────────────────────────────
-        function updateStatus(message, type) {
-            const el = document.getElementById('status');
-            el.textContent = message;
-            el.className = 'status ' + type;
-        }
-
-        // ─── Main Pipeline ─────────────────────────────────────────────────
-        async function runTranslation() {
             try {
-                updateStatus('Processing...', 'info');
+                // 1. Parse JSON data
+                const instance = new spytialcore.JSONDataInstance(JSON.stringify(BST_JSON));
 
-                const jsonText = document.getElementById('json-input').value;
-                if (!jsonText.trim()) throw new Error('Please enter JSON data.');
-
-                const instance = new CndCore.JSONDataInstance(jsonText);
-
-                const evaluator = new CndCore.SGraphQueryEvaluator();
+                // 2. Create data evaluator
+                const evaluator = new spytialcore.SGraphQueryEvaluator();
                 evaluator.initialize({ sourceData: instance });
-                currentDataEvaluator = evaluator;
 
-                const cndSpec = document.getElementById('cnd-input').value || '';
-                const layoutSpec = CndCore.parseLayoutSpec(cndSpec);
+                // 3. Parse layout spec
+                const layoutSpec = spytialcore.parseLayoutSpec(BST_CND);
 
-                const layoutInstance = new CndCore.LayoutInstance(layoutSpec, evaluator, 0, true);
+                // 4. Generate InstanceLayout
+                const layoutInstance = new spytialcore.LayoutInstance(layoutSpec, evaluator, 0, true);
                 const layoutResult = layoutInstance.generateLayout(instance);
 
-                if (layoutResult.selectorErrors?.length > 0) {
-                    console.warn('Selector errors:', layoutResult.selectorErrors);
-                }
                 if (layoutResult.error) {
                     console.warn('Layout error (continuing):', layoutResult.error.message);
                 }
 
-                // Accessible translation
-                const translator = new CndCore.AccessibleTranslator();
-                currentAccessibleLayout = translator.translate(layoutResult.layout);
+                // 5. Render the graph (inherited from WebColaCnDGraph)
+                await explorer.renderLayout(layoutResult.layout);
 
-                // Layout evaluator for spatial REPL
-                currentLayoutEvaluator = null;
-                if (layoutResult.validator) {
-                    currentLayoutEvaluator = new CndCore.LayoutEvaluator(
-                        layoutResult.validator, layoutResult.layout
-                    );
-                    document.getElementById('query-button').disabled = false;
-                    document.getElementById('query-input').placeholder = 'must.rightOf(' +
-                        (layoutResult.layout.nodes?.[0]?.name || layoutResult.layout.nodes?.[0]?.id || 'Node0') + ')';
-                } else {
-                    document.getElementById('query-button').disabled = true;
-                }
+                // 6. Enable accessibility: Data Navigator overlay + context + REPLs
+                explorer.enableAccessibility(
+                    layoutResult.layout,
+                    layoutResult.validator || null,
+                    evaluator
+                );
 
-                document.getElementById('datum-button').disabled = false;
-
-                // Render navigator layer
-                renderNavigator(currentAccessibleLayout);
-
-                // Render visual graph
-                renderVisualGraph(layoutResult.layout);
-
-                updateStatus('Ready. Navigate the tree or query the REPLs.', 'success');
+                console.log('Spatial Explorer initialized with BST example');
 
             } catch (error) {
-                console.error('Translation failed:', error);
-                updateStatus('Error: ' + error.message, 'error');
-                currentDataEvaluator = null;
-                currentLayoutEvaluator = null;
-                document.getElementById('datum-button').disabled = true;
-                document.getElementById('query-button').disabled = true;
+                console.error('Pipeline failed:', error);
             }
         }
 
-        // ─── Navigator Renderer ────────────────────────────────────────────
-
-        function renderNavigator(accessible) {
-            const container = document.getElementById('accessible-html-output');
-            container.innerHTML = accessible.toHTML();
-            wireUpKeyboardNavigation(container);
+        // Run after DOM + scripts are loaded
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
         }
-
-        // ─── Keyboard Navigation ───────────────────────────────────────────
-
-        function wireUpKeyboardNavigation(container) {
-            const treeItems = container.querySelectorAll('[role="treeitem"]');
-            if (treeItems.length === 0) return;
-
-            treeItems[0].setAttribute('tabindex', '0');
-
-            // Use event delegation on the persistent container for focusin
-            container.addEventListener('focusin', (e) => {
-                const node = e.target.closest('[role="treeitem"]');
-                if (node) updateSpatialContext(node);
-            });
-
-            container.addEventListener('keydown', (e) => {
-                const current = document.activeElement;
-                if (!current || current.getAttribute('role') !== 'treeitem') return;
-
-                // Alt+Arrow = spatial navigation (constraint-based)
-                if (e.altKey) {
-                    let targetId = null;
-                    switch (e.key) {
-                        case 'ArrowUp': targetId = current.getAttribute('data-nav-above'); break;
-                        case 'ArrowDown': targetId = current.getAttribute('data-nav-below'); break;
-                        case 'ArrowLeft': targetId = current.getAttribute('data-nav-left'); break;
-                        case 'ArrowRight': targetId = current.getAttribute('data-nav-right'); break;
-                        default: return;
-                    }
-                    if (targetId) {
-                        e.preventDefault();
-                        focusNodeById(container, current, targetId);
-                    }
-                    return;
-                }
-
-                // Standard WAI-ARIA tree navigation
-                const allItems = Array.from(container.querySelectorAll('[role="treeitem"]'));
-                const idx = allItems.indexOf(current);
-
-                switch (e.key) {
-                    case 'ArrowUp':
-                        if (idx > 0) { e.preventDefault(); focusNode(current, allItems[idx - 1]); }
-                        break;
-                    case 'ArrowDown':
-                        if (idx < allItems.length - 1) { e.preventDefault(); focusNode(current, allItems[idx + 1]); }
-                        break;
-                    case 'ArrowLeft':
-                        if (current.getAttribute('aria-expanded') === 'true') {
-                            e.preventDefault();
-                            current.setAttribute('aria-expanded', 'false');
-                            const group = current.querySelector('[role="group"]');
-                            if (group) group.hidden = true;
-                        } else {
-                            const parentGroup = current.closest('[role="group"]');
-                            if (parentGroup) {
-                                const parentItem = parentGroup.closest('[role="treeitem"]');
-                                if (parentItem) { e.preventDefault(); focusNode(current, parentItem); }
-                            }
-                        }
-                        break;
-                    case 'ArrowRight':
-                        if (current.getAttribute('aria-expanded') === 'false') {
-                            e.preventDefault();
-                            current.setAttribute('aria-expanded', 'true');
-                            const group = current.querySelector('[role="group"]');
-                            if (group) group.hidden = false;
-                        } else if (current.getAttribute('aria-expanded') === 'true') {
-                            const firstChild = current.querySelector('[role="group"] > [role="treeitem"]');
-                            if (firstChild) { e.preventDefault(); focusNode(current, firstChild); }
-                        }
-                        break;
-                }
-            });
-        }
-
-        function focusNode(from, to) {
-            from.setAttribute('tabindex', '-1');
-            to.setAttribute('tabindex', '0');
-            to.focus();
-        }
-
-        function focusNodeById(container, from, targetId) {
-            const target = container.querySelector('#' + targetId);
-            if (target) focusNode(from, target);
-        }
-
-        // ─── Spatial Context ───────────────────────────────────────────────
-
-        function updateSpatialContext(nodeElement) {
-            if (!currentAccessibleLayout) return;
-
-            const elementId = nodeElement.id;
-            if (!elementId || !elementId.startsWith('node-')) return;
-
-            const nodeId = elementId.replace('node-', '');
-            const nb = currentAccessibleLayout.navigation.getNeighbors(nodeId);
-            if (!nb) return;
-
-            const nodeDesc = currentAccessibleLayout.description.nodes.find(n =>
-                sanitizeIdJS(n.id) === nodeId
-            );
-
-            const contextEl = document.getElementById('spatial-context-content');
-            const liveEl = document.getElementById('spatial-live-region');
-            if (!contextEl || !liveEl) return;
-
-            const label = nodeDesc ? nodeDesc.label : nodeId;
-            const type = nodeDesc ? nodeDesc.mostSpecificType : '';
-
-            const directions = [];
-            if (nb.above) directions.push({ dir: 'Above', label: getNodeLabel(nb.above) });
-            if (nb.below) directions.push({ dir: 'Below', label: getNodeLabel(nb.below) });
-            if (nb.left) directions.push({ dir: 'Left', label: getNodeLabel(nb.left) });
-            if (nb.right) directions.push({ dir: 'Right', label: getNodeLabel(nb.right) });
-
-            // Visual panel
-            let html = `<strong>${esc(label)}</strong>`;
-            if (type) html += ` <span class="context-direction">${esc(type)}</span>`;
-            html += '<br>';
-
-            if (directions.length > 0) {
-                html += directions.map(d =>
-                    `<span class="context-direction">${d.dir}: <strong>${esc(d.label)}</strong></span>`
-                ).join(' ');
-            } else {
-                html += '<span style="color:#888">No spatial neighbors (unconstrained)</span>';
-            }
-
-            if (nb.containingGroups.length > 0) {
-                html += '<br>' + nb.containingGroups.map(g =>
-                    `<span class="context-group">In: ${esc(g)}</span>`
-                ).join(' ');
-            }
-
-            contextEl.innerHTML = html;
-
-            // Screen-reader announcement
-            const srParts = [];
-            if (nb.above) srParts.push(`above ${getNodeLabel(nb.above)}`);
-            if (nb.below) srParts.push(`below ${getNodeLabel(nb.below)}`);
-            if (nb.left) srParts.push(`left of ${getNodeLabel(nb.left)}`);
-            if (nb.right) srParts.push(`right of ${getNodeLabel(nb.right)}`);
-
-            let srText = label;
-            if (srParts.length > 0) srText += '. ' + srParts.join(', ') + '.';
-            if (nb.containingGroups.length > 0) {
-                srText += ' In group ' + nb.containingGroups.join(', ') + '.';
-            }
-            liveEl.textContent = srText;
-        }
-
-        function getNodeLabel(nodeId) {
-            if (!currentAccessibleLayout) return nodeId;
-            const desc = currentAccessibleLayout.description.nodes.find(n =>
-                sanitizeIdJS(n.id) === nodeId || n.id === nodeId
-            );
-            return desc ? desc.label : nodeId;
-        }
-
-        function sanitizeIdJS(raw) {
-            return raw.replace(/[^a-zA-Z0-9_-]/g, '_');
-        }
-
-        // ─── Visual Graph ──────────────────────────────────────────────────
-
-        async function renderVisualGraph(layout) {
-            try {
-                const graph = document.getElementById('graph-container');
-                if (graph && graph.renderLayout) await graph.renderLayout(layout);
-            } catch (e) {
-                console.warn('Visual render failed:', e);
-            }
-        }
-
-        // ─── Spatial Query REPL ────────────────────────────────────────────
-
-        function runQuery() {
-            const input = document.getElementById('query-input');
-            const output = document.getElementById('query-output');
-            const expr = input.value.trim();
-            if (!expr) return;
-
-            if (!currentLayoutEvaluator) {
-                output.innerHTML = '<span style="color:#f44336" role="alert">Error: No layout evaluator available.</span>';
-                return;
-            }
-
-            const result = currentLayoutEvaluator.evaluate(expr);
-
-            if (result.isError()) {
-                queryHistory.push({
-                    expr,
-                    html: `<span style="color:#f44336">Error: ${esc(result.prettyPrint())}</span>`,
-                });
-            } else if (result.noResult()) {
-                queryHistory.push({
-                    expr,
-                    html: `<span style="color:#888">(empty set &mdash; no results)</span>`,
-                });
-            } else {
-                const atoms = result.selectedAtoms();
-                const atomHtml = atoms.map(a =>
-                    `<span class="query-result-atom" role="link" tabindex="0" data-node-id="${esc(sanitizeIdJS(a))}" onclick="focusNodeFromQuery(this)" onkeydown="if(event.key==='Enter')focusNodeFromQuery(this)" style="color:#ce9178">${esc(a)}</span>`
-                ).join(', ');
-                queryHistory.push({
-                    expr,
-                    html: `<span style="color:#9cdcfe">{</span> ${atomHtml} <span style="color:#9cdcfe">}</span>  <span style="color:#666">(${atoms.length} result${atoms.length !== 1 ? 's' : ''})</span>`,
-                });
-            }
-
-            const historyLines = queryHistory.map(h =>
-                `<span style="color:#888">&gt;</span> <span style="color:#4ec9b0">${esc(h.expr)}</span>\n  ${h.html}`
-            );
-            output.innerHTML = historyLines.join('\n\n');
-            output.scrollTop = output.scrollHeight;
-            input.value = '';
-            input.focus();
-        }
-
-        function focusNodeFromQuery(element) {
-            const nodeId = element.getAttribute('data-node-id');
-            if (!nodeId) return;
-
-            const container = document.getElementById('accessible-html-output');
-            const target = container.querySelector('#node-' + nodeId);
-            if (target) {
-                container.querySelectorAll('[role="treeitem"][tabindex="0"]').forEach(el => {
-                    el.setAttribute('tabindex', '-1');
-                });
-                target.setAttribute('tabindex', '0');
-                target.focus();
-                target.style.outline = '3px solid #4ec9b0';
-                setTimeout(() => { target.style.outline = ''; }, 1500);
-            }
-        }
-
-        // ─── Data Query REPL ───────────────────────────────────────────────
-
-        function runDatumQuery() {
-            const input = document.getElementById('datum-input');
-            const output = document.getElementById('datum-output');
-            const expr = input.value.trim();
-            if (!expr) return;
-
-            if (!currentDataEvaluator) {
-                output.innerHTML = '<span style="color:#f44336" role="alert">Error: No data evaluator available.</span>';
-                return;
-            }
-
-            const result = currentDataEvaluator.evaluate(expr);
-
-            if (result.isError()) {
-                datumQueryHistory.push({
-                    expr,
-                    html: `<span style="color:#f44336">Error: ${esc(result.prettyPrint())}</span>`,
-                });
-            } else if (result.noResult()) {
-                datumQueryHistory.push({
-                    expr,
-                    html: `<span style="color:#888">(empty set &mdash; no results)</span>`,
-                });
-            } else {
-                datumQueryHistory.push({
-                    expr,
-                    html: `<span style="color:#ce9178">${esc(result.prettyPrint())}</span>`,
-                });
-            }
-
-            const historyLines = datumQueryHistory.map(h =>
-                `<span style="color:#888">&gt;</span> <span style="color:#4ec9b0">${esc(h.expr)}</span>\n  ${h.html}`
-            );
-            output.innerHTML = historyLines.join('\n\n');
-            output.scrollTop = output.scrollHeight;
-            input.value = '';
-            input.focus();
-        }
-
-        // ─── Utilities ─────────────────────────────────────────────────────
-
-        function esc(str) {
-            const div = document.createElement('div');
-            div.textContent = str;
-            return div.innerHTML;
-        }
-
-        // ─── Init: auto-translate on load ──────────────────────────────────
-
-        window.addEventListener('load', () => {
-            if (typeof CndCore !== 'undefined' && CndCore.AccessibleTranslator) {
-                runTranslation();
-            } else {
-                updateStatus('Error: CndCore bundle not loaded.', 'error');
-            }
-        });
     </script>
 </body>
 </html>

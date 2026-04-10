@@ -37,6 +37,7 @@ export { ForgeEvaluator, WrappedForgeEvaluator } from './evaluators/data/forge-e
 export { SQLEvaluator } from './evaluators/data/sql-evaluator';
 export { WebColaTranslator } from './translators';
 export { AccessibleTranslator, buildSpatialNavigationMap } from './translators';
+export { SpytialExplorer } from './components/spytial-explorer';
 export { StructuredInputGraph } from './translators';
 export {
   ignoreHistory,
@@ -104,6 +105,13 @@ if (typeof window !== 'undefined') {
         if (typeof customElements !== 'undefined' && !customElements.get('structured-input-graph')) {
           customElements.define('structured-input-graph', StructuredInputGraph as any);
           //console.log('✅ Structured Input Graph custom element registered');
+        }
+      }).catch(console.error);
+
+      // Register spytial-explorer
+      import('./components/spytial-explorer/spytial-explorer').then(({ SpytialExplorer }) => {
+        if (typeof customElements !== 'undefined' && !customElements.get('spytial-explorer')) {
+          customElements.define('spytial-explorer', SpytialExplorer as any);
         }
       }).catch(console.error);
     }).catch(console.error);
