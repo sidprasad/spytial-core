@@ -56,9 +56,6 @@ interface QueryHistoryEntry {
     srText: string;
 }
 
-/** Maps arrow keys to DN navigation rule labels */
-type NavigationRuleSet = Record<string, { key: string; direction: 'target' | 'source' }>;
-
 // ─── Component ─────────────────────────────────────────────────────────────
 
 export class SpytialExplorer extends WebColaCnDGraph {
@@ -81,10 +78,9 @@ export class SpytialExplorer extends WebColaCnDGraph {
 
     // Navigation mode state
     private currentNavMode: NavigationMode = 'spatial';
-    private spatialRules: NavigationRuleSet = {};
-    private mustRules: NavigationRuleSet = {};
-    private relationRules: NavigationRuleSet = {};
-    private relationKeyMap: Array<{ key: string; label: string; relationName: string }> = [];
+    private relationKeyMap: Array<{ key: string; arrowKey: string; relationName: string }> = [];
+    // (nodeId, relationName) → targetNodeId — for relation mode navigation
+    private relationEdgeMap: Map<string, Map<string, string>> = new Map();
     private zoomObserver: MutationObserver | null = null;
 
     // Query histories
@@ -383,6 +379,11 @@ export class SpytialExplorer extends WebColaCnDGraph {
      *
      * Positioning uses getBoundingClientRect() on actual SVG elements,
      * which automatically handles zoom/pan transforms.
+     *
+     * DN edges use simple direction labels (left/right/up/down).
+     * Mode filtering (must-only, relations) is handled in the keyboard
+     * handler rather than via DN's setNavigationKeyBindings, which is
+     * more reliable and gives us full control over announcements.
      */
     private setupDataNavigator(): void {
         if (!this.accessibleLayout || !this.currentInstanceLayout) return;
@@ -401,24 +402,20 @@ export class SpytialExplorer extends WebColaCnDGraph {
 
         const descMap = new Map(nodeDescs.map(d => [d.id, d]));
 
-        // ─── Build DN structure with multi-label edges ────────────────
+        // ─── Build DN structure ───────────────────────────────────────
         const dnNodes: Record<string, any> = {};
         const dnEdges: Record<string, any> = {};
         const dnElementData: Record<string, any> = {};
         let edgeCounter = 0;
 
-        // Track which node IDs have DN nodes (for relation edge filtering)
-        const dnNodeIds = new Set<string>();
-
         for (const [nodeId, neighbors] of nav.entries()) {
             if (!svgNodeMap.has(nodeId)) continue;
-            dnNodeIds.add(nodeId);
 
             const renderId = `dn-node-${this.sanitizeId(nodeId)}`;
             const desc = descMap.get(nodeId);
             const nodeEdges: string[] = [];
 
-            // Create multi-label edges for each spatial direction
+            // Simple direction-labeled edges for spatial navigation
             const directions: Array<[SpatialDir, string | null]> = [
                 ['left', neighbors.left],
                 ['right', neighbors.right],
@@ -428,16 +425,11 @@ export class SpytialExplorer extends WebColaCnDGraph {
 
             for (const [dir, targetId] of directions) {
                 if (!targetId) continue;
-                // Multi-label: spatial_* always, must_* when constraint-guaranteed
-                const labels = [`spatial_${dir}`];
-                if (this.getModality(nodeId, dir, targetId) === 'must') {
-                    labels.push(`must_${dir}`);
-                }
                 const edgeId = `e${edgeCounter++}`;
                 dnEdges[edgeId] = {
                     source: nodeId,
                     target: targetId,
-                    navigationRules: labels,
+                    navigationRules: [dir],
                 };
                 nodeEdges.push(edgeId);
             }
@@ -450,7 +442,6 @@ export class SpytialExplorer extends WebColaCnDGraph {
                 type: desc?.mostSpecificType ?? '',
             };
 
-            // Element data — positions computed from getBoundingClientRect
             dnElementData[renderId] = {
                 semantics: {
                     label: () => this.buildNodeAnnouncement(nodeId),
@@ -460,32 +451,20 @@ export class SpytialExplorer extends WebColaCnDGraph {
             };
         }
 
-        // ─── Add relation edges from the layout ──────────────────────
-        // These let users follow named data relations (left, right, val, etc.)
-        const relationNames = this.addRelationEdges(layout.edges, dnNodes, dnEdges, dnNodeIds, edgeCounter);
+        // ─── Build relation map for relation-mode navigation ─────────
+        this.buildRelationMap(layout.edges);
 
-        // ─── Build navigation rule sets ──────────────────────────────
-
-        this.spatialRules = {
-            spatial_left:  { key: 'ArrowLeft',  direction: 'target' },
-            spatial_right: { key: 'ArrowRight', direction: 'target' },
-            spatial_up:    { key: 'ArrowUp',    direction: 'target' },
-            spatial_down:  { key: 'ArrowDown',  direction: 'target' },
+        const navigationRules = {
+            left:  { key: 'ArrowLeft',  direction: 'target' as const },
+            right: { key: 'ArrowRight', direction: 'target' as const },
+            up:    { key: 'ArrowUp',    direction: 'target' as const },
+            down:  { key: 'ArrowDown',  direction: 'target' as const },
         };
-
-        this.mustRules = {
-            must_left:  { key: 'ArrowLeft',  direction: 'target' },
-            must_right: { key: 'ArrowRight', direction: 'target' },
-            must_up:    { key: 'ArrowUp',    direction: 'target' },
-            must_down:  { key: 'ArrowDown',  direction: 'target' },
-        };
-
-        this.buildRelationRules(relationNames);
 
         const dnStructure = {
             nodes: dnNodes,
             edges: dnEdges,
-            navigationRules: this.spatialRules,
+            navigationRules,
             elementData: dnElementData,
         };
 
@@ -493,7 +472,7 @@ export class SpytialExplorer extends WebColaCnDGraph {
 
         this.dnInputHandler = dataNavigator.input({
             structure: dnStructure,
-            navigationRules: this.spatialRules,
+            navigationRules,
             entryPoint: nav.nodeOrder[0],
         });
 
@@ -525,63 +504,39 @@ export class SpytialExplorer extends WebColaCnDGraph {
     }
 
     /**
-     * Add DN edges for data relations (left, right, val, etc.) from the layout.
-     * Returns the set of unique relation names found.
+     * Build the relation map from layout edges.
+     * Maps (sourceNodeId, relationName) → targetNodeId for relation-mode nav.
+     * Also builds the key mapping (first 4 relations → arrow keys).
      */
-    private addRelationEdges(
-        edges: LayoutEdge[],
-        dnNodes: Record<string, any>,
-        dnEdges: Record<string, any>,
-        dnNodeIds: Set<string>,
-        edgeCounter: number,
-    ): string[] {
+    private buildRelationMap(edges: LayoutEdge[]): void {
+        this.relationEdgeMap.clear();
+        this.relationKeyMap = [];
+
         const seenRelations = new Set<string>();
 
         for (const edge of edges) {
             const relName = edge.relationName || edge.label;
-            if (!relName) continue;
-            // Skip group edges
-            if (edge.groupId) continue;
+            if (!relName || edge.groupId) continue;
 
             const sourceId = edge.source.id;
             const targetId = edge.target.id;
 
-            // Only add edges between nodes that exist in our DN graph
-            if (!dnNodeIds.has(sourceId) || !dnNodeIds.has(targetId)) continue;
-
+            if (!this.relationEdgeMap.has(sourceId)) {
+                this.relationEdgeMap.set(sourceId, new Map());
+            }
+            this.relationEdgeMap.get(sourceId)!.set(relName, targetId);
             seenRelations.add(relName);
-
-            const edgeId = `rel_e${edgeCounter++}`;
-            dnEdges[edgeId] = {
-                source: sourceId,
-                target: targetId,
-                navigationRules: [`rel_${relName}`],
-            };
-
-            // Ensure both nodes list this edge
-            if (dnNodes[sourceId]) dnNodes[sourceId].edges.push(edgeId);
         }
 
-        return [...seenRelations];
-    }
+        // Map first 4 unique relations to arrow keys
+        const arrowKeys = ['ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown'];
+        const labels = ['\u2190', '\u2191', '\u2192', '\u2193'];
+        const relationNames = [...seenRelations];
 
-    /**
-     * Build the relation navigation rule set — maps the first 4 relations
-     * to arrow keys in declaration order.
-     */
-    private buildRelationRules(relationNames: string[]): void {
-        const keys = ['ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown'];
-        const labels = ['←', '↑', '→', '↓'];
-
-        this.relationRules = {};
-        this.relationKeyMap = [];
-
-        for (let i = 0; i < Math.min(relationNames.length, keys.length); i++) {
-            const ruleLabel = `rel_${relationNames[i]}`;
-            this.relationRules[ruleLabel] = { key: keys[i], direction: 'target' };
+        for (let i = 0; i < Math.min(relationNames.length, arrowKeys.length); i++) {
             this.relationKeyMap.push({
                 key: labels[i],
-                label: relationNames[i],
+                arrowKey: arrowKeys[i],
                 relationName: relationNames[i],
             });
         }
@@ -751,7 +706,7 @@ export class SpytialExplorer extends WebColaCnDGraph {
         keyHint.className = 'relation-key-hint';
         keyHint.id = 'se-relation-key-hint';
         keyHint.style.display = this.currentNavMode === 'relations' ? 'inline' : 'none';
-        keyHint.textContent = this.relationKeyMap.map(m => `${m.key} ${m.label}`).join('  ');
+        keyHint.textContent = this.relationKeyMap.map(m => `${m.key} ${m.relationName}`).join('  ');
         toolbar.appendChild(keyHint);
 
         this.dnOverlayContainer.appendChild(toolbar);
@@ -760,10 +715,11 @@ export class SpytialExplorer extends WebColaCnDGraph {
     /**
      * Wire keyboard navigation on the DN overlay.
      *
-     * - Arrow keys: navigate based on current mode (spatial/must/relations)
-     * - 1/2/3: switch navigation mode
-     * - Enter: drill into a group
-     * - Esc: leave a group (or exit navigation)
+     * DN always uses simple direction labels (left/right/up/down).
+     * Mode filtering is handled here:
+     *   - Spatial: move() directly (all neighbors)
+     *   - Must-only: move() then block if modality !== 'must'
+     *   - Relations: bypass DN, use relationEdgeMap directly
      */
     private wireDNKeyboard(): void {
         if (!this.dnOverlayContainer || !this.dnInputHandler) return;
@@ -788,7 +744,6 @@ export class SpytialExplorer extends WebColaCnDGraph {
                 if (this.groupStack.length > 0) {
                     this.handleGroupEscape();
                 } else {
-                    // Exit navigation entirely
                     (this.shadowRoot!.activeElement as HTMLElement)?.blur();
                     this.dnCurrentFocusId = null;
                 }
@@ -797,7 +752,26 @@ export class SpytialExplorer extends WebColaCnDGraph {
                 return;
             }
 
-            // ─── Navigation ──────────────────────────────────────
+            // ─── Relation mode: bypass DN, use relation map ──────
+            if (this.currentNavMode === 'relations') {
+                const mapping = this.relationKeyMap.find(m => m.arrowKey === e.code);
+                if (!mapping) return;
+
+                e.preventDefault();
+                e.stopPropagation();
+
+                const targetId = this.relationEdgeMap.get(this.dnCurrentFocusId)?.get(mapping.relationName);
+                if (!targetId) {
+                    this.announce(`No ${mapping.relationName} from ${this.getNodeLabel(this.dnCurrentFocusId)}.`);
+                    return;
+                }
+
+                this.focusDNNode(targetId);
+                this.announce(`Following ${mapping.relationName} to ${this.getNodeLabel(targetId)}.`);
+                return;
+            }
+
+            // ─── Spatial / Must modes: use DN move() ─────────────
             const direction = this.dnInputHandler.keydownValidator(e);
             if (!direction) return;
 
@@ -805,14 +779,25 @@ export class SpytialExplorer extends WebColaCnDGraph {
             e.stopPropagation();
 
             const nextNode = this.dnInputHandler.move(this.dnCurrentFocusId, direction);
-
             if (!nextNode) {
-                // Announce no neighbor in current mode
-                this.announceNoNeighbor(direction);
+                this.announce(`No ${direction} neighbor from ${this.getNodeLabel(this.dnCurrentFocusId)}.`);
                 return;
             }
 
-            // If we're inside a group, only navigate to group members
+            // Must mode: block if relationship isn't must
+            if (this.currentNavMode === 'must') {
+                const modality = this.getModality(
+                    this.dnCurrentFocusId,
+                    direction as SpatialDir,
+                    nextNode.id,
+                );
+                if (modality !== 'must') {
+                    this.announce(`No must-${direction} neighbor. This is a ${modality} relationship.`);
+                    return;
+                }
+            }
+
+            // Group boundary check
             if (this.groupStack.length > 0) {
                 const currentGroup = this.groupStack[this.groupStack.length - 1];
                 const members = this.groupMemberMap.get(currentGroup);
@@ -822,45 +807,41 @@ export class SpytialExplorer extends WebColaCnDGraph {
                 }
             }
 
-            this.dnCurrentFocusId = nextNode.id;
-            const renderId = nextNode.renderId;
-            const el = this.shadowRoot!.getElementById(renderId);
-            if (el) {
-                el.focus();
-                // Call directly — don't rely solely on focus event
-                this.onDNNodeFocused(nextNode.id);
-            }
-
-            // Mode-specific announcement
-            if (this.currentNavMode === 'relations') {
-                const relName = this.getRelationNameFromDirection(direction);
-                if (relName) {
-                    this.announce(`Following ${relName} to ${this.getNodeLabel(nextNode.id)}.`);
-                }
-            }
+            this.focusDNNode(nextNode.id);
         });
     }
 
     /**
-     * Switch navigation mode and update DN's active key bindings.
+     * Focus a DN overlay node by ID — updates tracking, context panel, highlights.
+     */
+    private focusDNNode(nodeId: string): void {
+        this.dnCurrentFocusId = nodeId;
+        const renderId = `dn-node-${this.sanitizeId(nodeId)}`;
+        const el = this.shadowRoot!.getElementById(renderId);
+        if (el) {
+            el.focus();
+            this.onDNNodeFocused(nodeId);
+        }
+    }
+
+    /**
+     * Switch navigation mode. Purely local state — DN structure is unchanged.
      */
     private switchNavigationMode(mode: NavigationMode): void {
         if (mode === this.currentNavMode) return;
 
-        const ruleSet = mode === 'spatial' ? this.spatialRules
-            : mode === 'must' ? this.mustRules
-            : this.relationRules;
-
-        // Ensure the rule set has entries (relations may be empty)
-        if (Object.keys(ruleSet).length === 0 && mode === 'relations') {
+        if (mode === 'relations' && this.relationKeyMap.length === 0) {
             this.announce('No data relations available for relation navigation.');
             return;
         }
 
-        this.dnInputHandler?.setNavigationKeyBindings?.(ruleSet);
         this.currentNavMode = mode;
         this.updateModeUI();
-        this.announce(`Navigation mode: ${mode}.`);
+
+        const modeDesc = mode === 'spatial' ? 'Spatial — arrow keys move to nearest neighbor'
+            : mode === 'must' ? 'Must-only — arrow keys follow only guaranteed relationships'
+            : `Relations — ${this.relationKeyMap.map(m => `${m.key} ${m.relationName}`).join(', ')}`;
+        this.announce(`Navigation mode: ${modeDesc}.`);
     }
 
     /**
@@ -881,29 +862,6 @@ export class SpytialExplorer extends WebColaCnDGraph {
         if (keyHint) {
             keyHint.style.display = this.currentNavMode === 'relations' ? 'inline' : 'none';
         }
-    }
-
-    /**
-     * Announce that no neighbor was found in the given direction for the current mode.
-     */
-    private announceNoNeighbor(direction: string): void {
-        const nodeLabel = this.dnCurrentFocusId ? this.getNodeLabel(this.dnCurrentFocusId) : 'current node';
-        if (this.currentNavMode === 'must') {
-            this.announce(`No must-${direction.replace('must_', '')} neighbor from ${nodeLabel}.`);
-        } else if (this.currentNavMode === 'relations') {
-            const relName = this.getRelationNameFromDirection(direction) ?? direction;
-            this.announce(`No ${relName} relation from ${nodeLabel}.`);
-        } else {
-            this.announce(`No ${direction.replace('spatial_', '')} neighbor from ${nodeLabel}.`);
-        }
-    }
-
-    /**
-     * Extract the relation name from a DN direction label like "rel_left" → "left".
-     */
-    private getRelationNameFromDirection(direction: string): string | null {
-        if (direction.startsWith('rel_')) return direction.slice(4);
-        return null;
     }
 
     // ─── Group Navigation ─────────────────────────────────────────────
@@ -983,6 +941,7 @@ export class SpytialExplorer extends WebColaCnDGraph {
         const annotated = this.getAnnotatedNeighbors(nodeId);
 
         this.updateContextPanel(label, type, nb, annotated);
+        this.clearNodeHighlights();
         this.highlightNodes([nodeId]);
 
         // Dispatch event for external consumers
