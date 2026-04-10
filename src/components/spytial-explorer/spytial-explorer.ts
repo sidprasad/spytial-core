@@ -824,7 +824,20 @@ export class SpytialExplorer extends WebColaCnDGraph {
                 return;
             }
 
-            // ─── Spatial / Must modes: use DN move() ─────────────
+            // ─── Must mode: find closest must-neighbor in direction ─
+            if (this.currentNavMode === 'must') {
+                const dir = this.arrowKeyToDir(e.code);
+                if (!dir) return;
+
+                e.preventDefault();
+                e.stopPropagation();
+
+                const target = this.findClosestMustNeighbor(this.dnCurrentFocusId, dir);
+                if (target) this.focusDNNode(target);
+                return;
+            }
+
+            // ─── Spatial mode: use DN move() ─────────────────────
             const direction = this.dnInputHandler.keydownValidator(e);
             if (!direction) return;
 
@@ -833,16 +846,6 @@ export class SpytialExplorer extends WebColaCnDGraph {
 
             const nextNode = this.dnInputHandler.move(this.dnCurrentFocusId, direction);
             if (!nextNode) return;
-
-            // Must mode: silently block if relationship isn't must
-            if (this.currentNavMode === 'must') {
-                const modality = this.getModality(
-                    this.dnCurrentFocusId,
-                    direction as SpatialDir,
-                    nextNode.id,
-                );
-                if (modality !== 'must') return;
-            }
 
             // Group boundary check
             if (this.groupStack.length > 0) {
@@ -853,6 +856,55 @@ export class SpytialExplorer extends WebColaCnDGraph {
 
             this.focusDNNode(nextNode.id);
         });
+    }
+
+    /**
+     * Find the closest node that MUST be in the given direction from the current node.
+     * Queries the constraint validator for the must-set, then picks the nearest by position.
+     */
+    private findClosestMustNeighbor(fromNodeId: string, dir: SpatialDir): string | null {
+        if (!this.constraintValidator) return null;
+
+        const validatorDir = this.spatialDirToValidatorDir(dir);
+        let mustSet: Set<string>;
+        try {
+            mustSet = this.constraintValidator.getMust(fromNodeId, validatorDir);
+        } catch {
+            return null;
+        }
+        if (mustSet.size === 0) return null;
+
+        // Find the closest must-node by position
+        const positions = this.getNodePositions();
+        const posMap = new Map(positions.map(p => [p.id, p]));
+        const fromPos = posMap.get(fromNodeId);
+        if (!fromPos) return null;
+
+        let closest: string | null = null;
+        let bestDist = Infinity;
+
+        for (const targetId of mustSet) {
+            const tp = posMap.get(targetId);
+            if (!tp) continue;
+            const dist = Math.sqrt((tp.x - fromPos.x) ** 2 + (tp.y - fromPos.y) ** 2);
+            if (dist < bestDist) {
+                bestDist = dist;
+                closest = targetId;
+            }
+        }
+
+        return closest;
+    }
+
+    /** Map e.code to our SpatialDir, or null if not an arrow key. */
+    private arrowKeyToDir(code: string): SpatialDir | null {
+        switch (code) {
+            case 'ArrowLeft':  return 'left';
+            case 'ArrowRight': return 'right';
+            case 'ArrowUp':    return 'up';
+            case 'ArrowDown':  return 'down';
+            default: return null;
+        }
     }
 
     /**
