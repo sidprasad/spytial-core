@@ -127,6 +127,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Configuration constants for edge crossing optimization
    */
   private static readonly MAX_CROSSING_OPTIMIZATION_PASSES = 3;
+  private static readonly CROSSING_OPTIMIZATION_EDGE_THRESHOLD = 15;
   private static readonly CROSSING_NUDGE_DISTANCE = 12;
   private static readonly PORT_MARGIN_FRACTION = 0.15;
 
@@ -5497,6 +5498,19 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private optimizeCrossings(): void {
     // Need at least 2 non-alignment edges to have a crossing
     if (this.computedRoutes.size < 2) return;
+
+    // Skip O(E²) crossing optimization on dense graphs — the base routing
+    // (port angle sorting + blocking-node avoidance) is good enough.
+    let candidateEdges = 0;
+    if (this.currentLayout?.links) {
+      for (const edge of this.currentLayout.links as EdgeWithMetadata[]) {
+        if (this.isAlignmentEdge(edge)) continue;
+        if (edge.source.id === edge.target.id) continue;
+        if (!this.computedRoutes.get(edge.id)) continue;
+        candidateEdges++;
+      }
+    }
+    if (candidateEdges > WebColaCnDGraph.CROSSING_OPTIMIZATION_EDGE_THRESHOLD) return;
 
     for (let pass = 0; pass < WebColaCnDGraph.MAX_CROSSING_OPTIMIZATION_PASSES; pass++) {
       const crossings = this.detectEdgeCrossings();
