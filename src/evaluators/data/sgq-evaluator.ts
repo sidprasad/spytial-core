@@ -1,6 +1,12 @@
 import IEvaluator, {EvaluatorResult} from "../interfaces";
 import {SimpleGraphQueryEvaluator, EvaluationResult, ErrorResult} from "simple-graph-query";
 
+// Matched structurally rather than by `instanceof NameNotFoundError` so this
+// file is version-agnostic across simple-graph-query releases — prior versions
+// swallowed NameNotFoundError internally (the branch never fires); newer
+// versions surface it in ErrorResult.error (the branch handles it).
+const NAME_NOT_FOUND_ERROR_NAME = "NameNotFoundError";
+
 import {EvaluationContext, EvaluatorConfig, IEvaluatorResult } from "../interfaces";
 import { IDataInstance } from "../../data-instance/interfaces";
 import {SingleValue, Tuple} from "../interfaces";
@@ -270,11 +276,27 @@ export class SGraphQueryEvaluator implements IEvaluator {
       return cachedResult;
     }
 
-    const result = this.eval.evaluateExpression(expression);
+    const rawResult = this.eval.evaluateExpression(expression);
 
+    // Policy boundary: simple-graph-query surfaces NameNotFoundError when an
+    // expression references a name the data instance doesn't contain.
+    // spytial-core decides what that means for all downstream consumers —
+    // which is "treat missing names as empty results" (e.g. a tree node
+    // without `right` children should produce no constraints, not an error).
+    // Parse errors and other real failures still propagate through as
+    // ErrorResult.
+    let policyResult: EvaluationResult = rawResult;
+    if (isErrorResult(rawResult) && rawResult.error.name === NAME_NOT_FOUND_ERROR_NAME) {
+      if (config?.warnOnMissingName) {
+        console.warn(
+          `[SGraphQueryEvaluator] missing name in "${expression}": ${rawResult.error.message}`
+        );
+      }
+      policyResult = [];
+    }
 
     // Now we need to wrap the result in our IEvaluatorResult interface
-    const wrappedResult = new SGQEvaluatorResult(result, expression);
+    const wrappedResult = new SGQEvaluatorResult(policyResult, expression);
     
     // Implement LRU eviction: if cache is at max size, remove oldest entry
     if (this.evaluatorCache.size >= this.MAX_CACHE_SIZE) {
