@@ -90,17 +90,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private static readonly NODE_STROKE_WIDTH = 1.5;
 
   /**
-   * Mixes an `rgb(r, g, b)` color with white. `ratio` is the white share
-   * (0 = pure source, 1 = pure white). Returns "white" for anything not in
-   * `rgb(...)` form so non-palette colors fall back to the prior behavior.
+   * Warm-white canvas color (tufte-css `#fffff8`). Used for the graph container
+   * background, edge-label halos so they "punch through" cleanly, and as the
+   * background of exported PNG screenshots so on-screen and export match.
    */
-  private static tintWithWhite(color: string | undefined, ratio: number): string {
-    if (!color) return "white";
-    const m = color.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/);
-    if (!m) return "white";
-    const mix = (channel: number) => Math.round(255 * ratio + channel * (1 - ratio));
-    return `rgb(${mix(+m[1])}, ${mix(+m[2])}, ${mix(+m[3])})`;
-  }
+  private static readonly CANVAS_BG = '#fffff8';
 
   /**
    * Configuration constants for text sizing and layout
@@ -844,11 +838,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       </div>
       <svg id="svg">
         <defs>
-        <marker id="end-arrow" markerWidth="10" markerHeight="7" refX="8" refY="3.5" orient="auto" markerUnits="userSpaceOnUse">
-          <polygon points="0 0, 10 3.5, 0 7, 2.5 3.5" fill="context-stroke" />
+        <marker id="end-arrow" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+          <polygon points="0 0, 12 4, 0 8, 3 4" fill="context-stroke" />
         </marker>
-        <marker id="start-arrow" markerWidth="10" markerHeight="7" refX="2" refY="3.5" orient="auto" markerUnits="userSpaceOnUse">
-          <polygon points="10 0, 0 3.5, 10 7, 7.5 3.5" fill="context-stroke" />
+        <marker id="start-arrow" markerWidth="12" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+          <polygon points="12 0, 0 4, 12 8, 9 4" fill="context-stroke" />
         </marker>
         </defs>
         <g class="zoomable"></g>
@@ -3276,12 +3270,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         const hasIcon = !! d.icon;
         const showLabels = d.showLabels;
 
-        if (isHidden || (hasIcon && !showLabels)) return "transparent";
-
-        // Tint the fill toward the stroke color so the node feels anchored to its
-        // palette entry instead of floating as a white box. 92% white / 8% stroke
-        // is enough hue to read but not so much that small text loses contrast.
-        return WebColaCnDGraph.tintWithWhite(d.color, 0.92);
+        // Only make transparent if hidden OR (has icon AND not showing labels).
+        // Otherwise nodes render white so they pop against the warm-white canvas.
+        return isHidden || (hasIcon && !showLabels) ? "transparent" : "white";
       });
   }
 
@@ -7254,6 +7245,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         height: 100%;
         border: 1px solid rgba(0, 0, 0, 0.08);
         border-radius: 8px;
+        background-color: ${WebColaCnDGraph.CANVAS_BG}; /* tufte-css warm white — softens the canvas without yellowing */
         overflow: hidden;
       }
 
@@ -7439,7 +7431,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         fill: #1a1a1a;
         pointer-events: none;
         font-family: system-ui, -apple-system, sans-serif;
-        stroke: white;
+        stroke: ${WebColaCnDGraph.CANVAS_BG};
         stroke-width: 3px;
         stroke-linejoin: round;
         paint-order: stroke fill;
@@ -7448,8 +7440,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .mostSpecificTypeLabel {
         font-size: 9px;
         font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
         pointer-events: none;
       }
       
@@ -8094,11 +8084,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       // Convert <image> hrefs to base64 data URIs so icons render in the PNG
       await this.convertImagesToBase64(svgClone);
 
-      // Add a white background rect as the first child
+      // Match the on-screen canvas background so PNG exports look like the live view
       const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       bgRect.setAttribute('width', '100%');
       bgRect.setAttribute('height', '100%');
-      bgRect.setAttribute('fill', 'white');
+      bgRect.setAttribute('fill', WebColaCnDGraph.CANVAS_BG);
       svgClone.insertBefore(bgRect, svgClone.firstChild);
 
       // Serialize the clone to a string
@@ -8232,7 +8222,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         if (!ctx) { URL.revokeObjectURL(url); resolve(null); return; }
 
         ctx.scale(scale, scale);
-        ctx.fillStyle = 'white';
+        ctx.fillStyle = WebColaCnDGraph.CANVAS_BG;
         ctx.fillRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
 
