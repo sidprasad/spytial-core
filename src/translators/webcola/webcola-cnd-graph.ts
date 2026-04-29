@@ -3,6 +3,7 @@ import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator, N
 import { InstanceLayout, isAlignmentConstraint, isInstanceLayout, isLeftConstraint, isTopConstraint, LayoutNode } from '../../layout/interfaces';
 import type { GridRouter, Group, Layout, Node, Link } from 'webcola';
 import { IInputDataInstance, ITuple, IAtom } from '../../data-instance/interfaces';
+import { MAIN_LABEL_FONT_SIZE, SECONDARY_FONT_SIZE, LABEL_LINE_HEIGHT_RATIO } from '../../layout/text-extent';
 
 let d3 = window.d3v4 || window.d3; // Use d3 v4 if available, otherwise fallback to the default window.d3
 let cola = window.cola;
@@ -132,13 +133,16 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
-   * Configuration constants for text sizing and layout
+   * Text-sizing constants. Node-label sizes (main + secondary) live in
+   * `src/layout/text-extent.ts` so the layout estimator and the renderer
+   * agree by construction. The constants below are for non-node text:
+   * group labels (DEFAULT/MIN/MAX_FONT_SIZE) and the renderer's inset for
+   * text inside node rects (TEXT_PADDING).
    */
   private static readonly DEFAULT_FONT_SIZE = 10;
   private static readonly MIN_FONT_SIZE = 6;
   private static readonly MAX_FONT_SIZE = 16;
-  private static readonly TEXT_PADDING = 8; // Padding inside node for text
-  private static readonly LINE_HEIGHT_RATIO = 1.2;
+  private static readonly TEXT_PADDING = 8;
 
   /**
    * Configuration constants for screenshot export
@@ -3135,28 +3139,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     return Array.from(nodeIndices);
   }
 
-  private getNodeMainLabelFontSize(node: any): number {
-    const cachedSize = node?._mainLabelFontSize;
-    if (typeof cachedSize === 'number' && Number.isFinite(cachedSize)) {
-      return cachedSize;
-    }
-
-    const nodeWidth = node?.visualWidth ?? node?.width ?? 100;
-    const nodeHeight = node?.visualHeight ?? node?.height ?? 60;
-    const maxTextWidth = Math.max(1, nodeWidth - WebColaCnDGraph.TEXT_PADDING * 2);
-    const maxTextHeight = Math.max(1, nodeHeight - WebColaCnDGraph.TEXT_PADDING * 2);
-
-    const displayLabel = node?.label || node?.name || node?.id || "Node";
-    const hasLabels = Object.keys(node?.labels || {}).length > 0;
-    const hasAttributes = Object.keys(node?.attributes || {}).length > 0;
-    const hasExtraContent = hasLabels || hasAttributes;
-    const mainLabelMaxHeight = hasExtraContent ? maxTextHeight * 0.5 : maxTextHeight;
-
-    return this.calculateOptimalFontSize(
-      displayLabel,
-      maxTextWidth,
-      Math.max(1, mainLabelMaxHeight)
-    );
+  private getNodeMainLabelFontSize(_node: any): number {
+    return MAIN_LABEL_FONT_SIZE;
   }
 
   private calculateGroupLabelFontSize(group: any, allGroups: any[]): number {
@@ -3421,85 +3405,19 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     return context.measureText(text).width;
   }
 
-  /**
-   * Calculates the optimal font size to fit text within given dimensions
-   */
-  private calculateOptimalFontSize(
-    text: string,
-    maxWidth: number,
-    maxHeight: number,
-    fontFamily?: string
-  ): number {
-    fontFamily = fontFamily ?? this.getFontFamily();
-    let fontSize = WebColaCnDGraph.DEFAULT_FONT_SIZE;
-    
-    // Start with default size and scale down if needed
-    while (fontSize > WebColaCnDGraph.MIN_FONT_SIZE) {
-      const textWidth = this.measureTextWidth(text, fontSize, fontFamily);
-      const lineHeight = fontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO;
-      
-      if (textWidth <= maxWidth && lineHeight <= maxHeight) {
-        break;
-      }
-      
-      fontSize -= 0.5;
-    }
-    
-    // Scale up if there's room
-    while (fontSize < WebColaCnDGraph.MAX_FONT_SIZE) {
-      const testSize = fontSize + 0.5;
-      const textWidth = this.measureTextWidth(text, testSize, fontFamily);
-      const lineHeight = testSize * WebColaCnDGraph.LINE_HEIGHT_RATIO;
-      
-      if (textWidth > maxWidth || lineHeight > maxHeight) {
-        break;
-      }
-      
-      fontSize = testSize;
-    }
-    
-    return Math.max(WebColaCnDGraph.MIN_FONT_SIZE, Math.min(fontSize, WebColaCnDGraph.MAX_FONT_SIZE));
-  }
-
-  /**
-   * Wraps text to fit within given width, returning array of lines
-   */
-  private wrapText(text: string, maxWidth: number, fontSize: number, fontFamily?: string): string[] {
-    fontFamily = fontFamily ?? this.getFontFamily();
-    const words = text.split(/\s+/);
-    const lines: string[] = [];
-    let currentLine = '';
-    
-    for (const word of words) {
-      const testLine = currentLine ? `${currentLine} ${word}` : word;
-      const lineWidth = this.measureTextWidth(testLine, fontSize, fontFamily);
-      
-      if (lineWidth <= maxWidth) {
-        currentLine = testLine;
-      } else {
-        if (currentLine) {
-          lines.push(currentLine);
-          currentLine = word;
-        } else {
-          // Word is too long for the line, we'll have to break it
-          lines.push(word);
-        }
-      }
-    }
-    
-    if (currentLine) {
-      lines.push(currentLine);
-    }
-    
-    return lines;
-  }
-
 
 
   /**
-   * Creates main node labels with attributes using dynamic sizing and expansion
+   * Creates main node labels with attributes using fixed font sizes.
+   *
+   * Box dimensions are decided upstream by `LayoutInstance.getNodeSizeMap`
+   * via `estimateLabelBox`, which sizes each box to fit the same fixed font
+   * sizes used here. No per-node font negotiation; if a user pins a too-small
+   * `size` directive their text overflows (their explicit choice).
    */
-  private setupNodeLabelsWithDynamicSizing(nodeSelection: d3.Selection<SVGGElement, any, any, unknown>): void {
+  private setupNodeLabels(nodeSelection: d3.Selection<SVGGElement, any, any, unknown>): void {
+    const secondaryLineHeight = SECONDARY_FONT_SIZE * LABEL_LINE_HEIGHT_RATIO;
+
     nodeSelection
       .append("text")
       .attr("class", "label")
@@ -3512,136 +3430,62 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           return;
         }
 
-        const shouldShowLabels = d.showLabels;
-        if (!shouldShowLabels) {
+        if (!d.showLabels) {
           return;
         }
 
         const textElement = d3.select(nodes[i]);
-        const nodeWidth = d.width || 100;
-        const nodeHeight = d.height || 60;
-        const maxTextWidth = nodeWidth - WebColaCnDGraph.TEXT_PADDING * 2;
-        const maxTextHeight = nodeHeight - WebColaCnDGraph.TEXT_PADDING * 2;
-        
+
         const displayLabel = d.label || d.name || d.id || "Node";
-        const attributes = d.attributes || {};
-        const attributeEntries = Object.entries(attributes).sort(([a], [b]) => a.localeCompare(b));
-        
-        // Get labels (e.g., Skolems) which are displayed in node color
-        const nodeLabels = d.labels || {};
-        const labelEntries = Object.entries(nodeLabels);
-        const hasLabels = labelEntries.length > 0;
-        
-        // Allocate space: prioritize main label, then labels (Skolems), then attributes
-        const hasAttributes = attributeEntries.length > 0;
-        const hasExtraContent = hasLabels || hasAttributes;
-        const mainLabelMaxHeight = hasExtraContent ? maxTextHeight * 0.5 : maxTextHeight;
-        
-        // Calculate font size based on available space
-        // Use the actual display label to ensure text fits within node bounds
-        const mainLabelFontSize = this.calculateOptimalFontSize(
-          displayLabel,
-          maxTextWidth,
-          mainLabelMaxHeight
-        );
-        d._mainLabelFontSize = mainLabelFontSize;
-        
-        textElement.attr("font-size", `${mainLabelFontSize}px`);
-        
-        // Add main name label on a single line
-        // When there's extra content, shift the label up to make room
-        const lineHeight = mainLabelFontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO;
+        const attributeEntries = Object.entries(d.attributes || {})
+          .sort(([a], [b]) => a.localeCompare(b));
+        const labelEntries = Object.entries(d.labels || {});
         const totalSecondaryEntries = labelEntries.length + attributeEntries.length;
-        const verticalOffset = hasExtraContent ? -totalSecondaryEntries * lineHeight * 0.5 : 0;
-        
-        // Store the vertical offset on the data for use in updatePositions
+
+        // Center the entire label block on the node: shift the main label up
+        // by half the secondary block's height so the visual centroid sits at d.y.
+        const verticalOffset = totalSecondaryEntries > 0
+          ? -totalSecondaryEntries * secondaryLineHeight * 0.5
+          : 0;
+
+        // Cached for updatePositions, which re-applies dy to each tspan after layout.
         d._labelVerticalOffset = verticalOffset;
-        d._labelLineHeight = lineHeight;
-        
+        d._labelLineHeight = secondaryLineHeight;
+
+        textElement.attr("font-size", `${MAIN_LABEL_FONT_SIZE}px`);
+
         textElement
           .append("tspan")
           .attr("x", 0)
           .attr("dy", `${verticalOffset}px`)
           .attr("class", "main-label-tspan")
           .style("font-weight", "bold")
-          .style("font-size", `${mainLabelFontSize}px`)
+          .style("font-size", `${MAIN_LABEL_FONT_SIZE}px`)
           .text(displayLabel);
 
-        // Calculate font size for secondary content (labels and attributes)
-        // Find the longest secondary text to ensure all content fits
-        let longestSecondaryText = "";
-        for (const [key, values] of labelEntries) {
+        // Skolem-style labels: italic, comma-separated values per key.
+        for (const [, values] of labelEntries) {
           const labelText = Array.isArray(values) ? values.join(', ') : String(values);
-          if (labelText.length > longestSecondaryText.length) {
-            longestSecondaryText = labelText;
-          }
+          textElement
+            .append("tspan")
+            .attr("x", 0)
+            .attr("dy", `${secondaryLineHeight}px`)
+            .style("font-size", `${SECONDARY_FONT_SIZE}px`)
+            .style("fill", 'black')
+            .style("font-style", "italic")
+            .text(labelText);
         }
+
+        // Attribute lines: "key: value, value, ..."
         for (const [key, value] of attributeEntries) {
-          const attributeText = `${key}: ${value}`;
-          if (attributeText.length > longestSecondaryText.length) {
-            longestSecondaryText = attributeText;
-          }
-        }
-        
-        // Use a minimum ratio of the main label size to ensure readability
-        const minSecondaryFontSize = mainLabelFontSize * 0.65; // At least 65% of main label
-        const remainingHeight = maxTextHeight - lineHeight;
-        const calculatedSecondaryFontSize = totalSecondaryEntries > 0
-          ? this.calculateOptimalFontSize(
-              longestSecondaryText || "SampleText",
-              maxTextWidth,
-              remainingHeight / totalSecondaryEntries
-            )
-          : mainLabelFontSize * 0.8;
-        // Ensure secondary font size is at least the minimum for readability
-        const secondaryFontSize = Math.max(calculatedSecondaryFontSize, minSecondaryFontSize);
-
-        // Handle labels first (e.g., Skolems) - styled in node's color
-        if (hasLabels) {
-          // const nodeColor = d.color || 'black';
-          const nodeColor = 'black';
-          
-          for (const [key, values] of labelEntries) {
-            // For labels like Skolems, display as comma-separated list
-            const labelText = Array.isArray(values) ? values.join(', ') : String(values);
-            
-            textElement
-              .append("tspan")
-              .attr("x", 0)
-              .attr("dy", `${secondaryFontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO}px`)
-              .style("font-size", `${secondaryFontSize}px`)
-              .style("fill", nodeColor)  // Style in node's color
-              .style("font-style", "italic")  // Italicize to distinguish from attributes
-              .text(labelText);
-          }
-        }
-
-        // Handle attributes (show all that fit)
-        if (hasAttributes) {
-          for (let i = 0; i < attributeEntries.length; i++) {
-            const [key, value] = attributeEntries[i];
-            const attributeText = `${key}: ${value}`;
-            
-            textElement
-              .append("tspan")
-              .attr("x", 0)
-              .attr("dy", `${secondaryFontSize * WebColaCnDGraph.LINE_HEIGHT_RATIO}px`)
-              .style("font-size", `${secondaryFontSize}px`)
-              .text(attributeText);
-          }
+          textElement
+            .append("tspan")
+            .attr("x", 0)
+            .attr("dy", `${secondaryLineHeight}px`)
+            .style("font-size", `${SECONDARY_FONT_SIZE}px`)
+            .text(`${key}: ${value}`);
         }
       });
-  }
-
-  /**
-   * Creates main node labels with attributes using tspan elements.
-   * Handles conditional label display and multi-line attribute rendering.
-   * 
-   * @param nodeSelection - D3 selection of node groups
-   */
-  private setupNodeLabels(nodeSelection: d3.Selection<SVGGElement, any, any, unknown>): void {
-    // Use the new dynamic sizing implementation
-    this.setupNodeLabelsWithDynamicSizing(nodeSelection);
   }
 
   /**
