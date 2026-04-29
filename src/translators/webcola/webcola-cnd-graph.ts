@@ -86,8 +86,21 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Configuration constants for node visualization
    */
   private static readonly SMALL_IMG_SCALE_FACTOR = 0.3;
-  private static readonly NODE_BORDER_RADIUS = 3;
+  private static readonly NODE_BORDER_RADIUS = 6;
   private static readonly NODE_STROKE_WIDTH = 1.5;
+
+  /**
+   * Mixes an `rgb(r, g, b)` color with white. `ratio` is the white share
+   * (0 = pure source, 1 = pure white). Returns "white" for anything not in
+   * `rgb(...)` form so non-palette colors fall back to the prior behavior.
+   */
+  private static tintWithWhite(color: string | undefined, ratio: number): string {
+    if (!color) return "white";
+    const m = color.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/);
+    if (!m) return "white";
+    const mix = (channel: number) => Math.round(255 * ratio + channel * (1 - ratio));
+    return `rgb(${mix(+m[1])}, ${mix(+m[2])}, ${mix(+m[3])})`;
+  }
 
   /**
    * Configuration constants for text sizing and layout
@@ -831,11 +844,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       </div>
       <svg id="svg">
         <defs>
-        <marker id="end-arrow" markerWidth="15" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse">
-          <polygon points="0 0, 15 5, 0 10" fill="context-stroke" />
+        <marker id="end-arrow" markerWidth="10" markerHeight="7" refX="8" refY="3.5" orient="auto" markerUnits="userSpaceOnUse">
+          <polygon points="0 0, 10 3.5, 0 7, 2.5 3.5" fill="context-stroke" />
         </marker>
-        <marker id="start-arrow" markerWidth="15" markerHeight="10" refX="3" refY="5" orient="auto" markerUnits="userSpaceOnUse">
-          <polygon points="15 0, 0 5, 15 10" fill="context-stroke" />
+        <marker id="start-arrow" markerWidth="10" markerHeight="7" refX="2" refY="3.5" orient="auto" markerUnits="userSpaceOnUse">
+          <polygon points="10 0, 0 3.5, 10 7, 7.5 3.5" fill="context-stroke" />
         </marker>
         </defs>
         <g class="zoomable"></g>
@@ -3262,12 +3275,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         const isHidden = this.isHiddenNode(d);
         const hasIcon = !! d.icon;
         const showLabels = d.showLabels;
-        
-        // Only make transparent if hidden OR (has icon AND not showing labels)
-        // When showLabels is true, keep white background even with icons
-        const fill = isHidden || (hasIcon && !showLabels) ? "transparent" : "white";
 
-        return fill;
+        if (isHidden || (hasIcon && !showLabels)) return "transparent";
+
+        // Tint the fill toward the stroke color so the node feels anchored to its
+        // palette entry instead of floating as a white box. 92% white / 8% stroke
+        // is enough hue to read but not so much that small text loses contrast.
+        return WebColaCnDGraph.tintWithWhite(d.color, 0.92);
       });
   }
 
@@ -7238,7 +7252,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         position: relative; /* Make this the positioning context for zoom controls */
         width: 100%;
         height: 100%;
-        border: 1px solid #ccc;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        border-radius: 8px;
         overflow: hidden;
       }
 
@@ -7306,6 +7321,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       
       .node rect {
         cursor: move;
+        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.06));
+        transition: stroke-width 120ms ease, filter 120ms ease;
+      }
+
+      .node:hover rect {
+        stroke-width: 2px;
+        filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.1));
       }
 
       .error-node rect, .error-group {
@@ -7339,15 +7361,25 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       }
       
       .link {
-        stroke-width: 1px;
+        stroke-width: 1.25px;
         fill: none;
         marker-end: url(#end-arrow);
+        transition: stroke-width 120ms ease;
       }
-      
+
+      .link:hover {
+        stroke-width: 2px;
+      }
+
       .inferredLink {
         stroke-width: 1.5px;
         fill: none;
         marker-end: url(#end-arrow);
+        transition: stroke-width 120ms ease;
+      }
+
+      .inferredLink:hover {
+        stroke-width: 2.25px;
       }
 
 
@@ -7430,8 +7462,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       }
       
       .mostSpecificTypeLabel {
-        font-size: 8px;
-        font-weight: bold;
+        font-size: 9px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
         pointer-events: none;
       }
       
