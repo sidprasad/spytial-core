@@ -86,8 +86,50 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Configuration constants for node visualization
    */
   private static readonly SMALL_IMG_SCALE_FACTOR = 0.3;
-  private static readonly NODE_BORDER_RADIUS = 3;
+  private static readonly NODE_BORDER_RADIUS = 6;
   private static readonly NODE_STROKE_WIDTH = 1.5;
+
+  /**
+   * Default canvas color (tufte-css `#fffff8` warm white). Used when the host
+   * element has no `background` attribute. The canvas color drives the
+   * container background, node fills, edge-label halos, and PNG export
+   * background so they all stay in sync.
+   */
+  private static readonly DEFAULT_CANVAS_BG = '#fffff8';
+
+  /**
+   * Returns the active canvas color: the host's `background` attribute if
+   * set, otherwise the default warm white.
+   */
+  private getCanvasBackground(): string {
+    return this.getAttribute('background') ?? WebColaCnDGraph.DEFAULT_CANVAS_BG;
+  }
+
+  /**
+   * Default font stack. Atkinson Hyperlegible (Braille Institute, OFL) is
+   * designed for low-vision and dyslexic readers — distinguishable letterforms
+   * (a/g/q/d, 0/O, 1/l/I) without looking childlike. Falls back to system-ui
+   * if the host hasn't loaded the web font.
+   */
+  private static readonly DEFAULT_FONT_FAMILY = "'Atkinson Hyperlegible', system-ui, -apple-system, sans-serif";
+
+  /**
+   * Returns the active font stack: the host's `font-family` attribute if
+   * set, otherwise the Atkinson Hyperlegible default.
+   */
+  private getFontFamily(): string {
+    return this.getAttribute('font-family') ?? WebColaCnDGraph.DEFAULT_FONT_FAMILY;
+  }
+
+  /**
+   * Returns the @import statement(s) needed to load the default font from
+   * Google Fonts. Skipped when the host has set a custom `font-family`, since
+   * users with their own font shouldn't pay for an unused download.
+   */
+  private getFontImports(): string {
+    if (this.hasAttribute('font-family')) return '';
+    return "@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&display=swap');";
+  }
 
   /**
    * Configuration constants for text sizing and layout
@@ -557,7 +599,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       const fontSize = 12; // Default edge label font size
       links.forEach(link => {
         if (link && link.label) {
-          const labelWidth = this.measureTextWidth(link.label, fontSize, 'system-ui');
+          const labelWidth = this.measureTextWidth(link.label, fontSize);
           maxLabelWidth = Math.max(maxLabelWidth, labelWidth);
         }
       });
@@ -831,11 +873,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       </div>
       <svg id="svg">
         <defs>
-        <marker id="end-arrow" markerWidth="15" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse">
-          <polygon points="0 0, 15 5, 0 10" fill="context-stroke" />
+        <marker id="end-arrow" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+          <polygon points="0 0, 12 4, 0 8, 3 4" fill="context-stroke" />
         </marker>
-        <marker id="start-arrow" markerWidth="15" markerHeight="10" refX="3" refY="5" orient="auto" markerUnits="userSpaceOnUse">
-          <polygon points="15 0, 0 5, 15 10" fill="context-stroke" />
+        <marker id="start-arrow" markerWidth="12" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+          <polygon points="12 0, 0 4, 12 8, 9 4" fill="context-stroke" />
         </marker>
         </defs>
         <g class="zoomable"></g>
@@ -2605,7 +2647,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr("class", "linklabel")
       .attr("text-anchor", "middle")
       .attr("dominant-baseline", "middle")
-      .attr("font-family", "system-ui")
+      .attr("font-family", this.getFontFamily())
       .attr("pointer-events", "none")
       .text((d: any) => d.label || d.relName || "");
   }
@@ -3084,8 +3126,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     return this.calculateOptimalFontSize(
       displayLabel,
       maxTextWidth,
-      Math.max(1, mainLabelMaxHeight),
-      'system-ui'
+      Math.max(1, mainLabelMaxHeight)
     );
   }
 
@@ -3136,7 +3177,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr("class", "groupLabel")
       .attr("text-anchor", "middle")
       .attr("dominant-baseline", "hanging")
-      .attr("font-family", "system-ui")
+      .attr("font-family", this.getFontFamily())
       .attr("font-size", (d: any) => {
         const computedFontSize = this.calculateGroupLabelFontSize(d, groups);
         d._groupLabelFontSize = computedFontSize;
@@ -3262,12 +3303,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         const isHidden = this.isHiddenNode(d);
         const hasIcon = !! d.icon;
         const showLabels = d.showLabels;
-        
-        // Only make transparent if hidden OR (has icon AND not showing labels)
-        // When showLabels is true, keep white background even with icons
-        const fill = isHidden || (hasIcon && !showLabels) ? "transparent" : "white";
 
-        return fill;
+        // Tufte: node fill matches the canvas so only the stroke + label
+        // distinguish a node — less ink, more clarity. Transparent for
+        // hidden nodes and icon-only nodes (preserve prior behavior).
+        return isHidden || (hasIcon && !showLabels) ? "transparent" : this.getCanvasBackground();
       });
   }
 
@@ -3346,9 +3386,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   /**
    * Measures the width of text at a given font size
    */
-  private measureTextWidth(text: string, fontSize: number, fontFamily: string = 'system-ui'): number {
+  private measureTextWidth(text: string, fontSize: number, fontFamily?: string): number {
     const context = this.getTextMeasurementContext();
-    context.font = `${fontSize}px ${fontFamily}`;
+    context.font = `${fontSize}px ${fontFamily ?? this.getFontFamily()}`;
     return context.measureText(text).width;
   }
 
@@ -3356,11 +3396,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Calculates the optimal font size to fit text within given dimensions
    */
   private calculateOptimalFontSize(
-    text: string, 
-    maxWidth: number, 
-    maxHeight: number, 
-    fontFamily: string = 'system-ui'
+    text: string,
+    maxWidth: number,
+    maxHeight: number,
+    fontFamily?: string
   ): number {
+    fontFamily = fontFamily ?? this.getFontFamily();
     let fontSize = WebColaCnDGraph.DEFAULT_FONT_SIZE;
     
     // Start with default size and scale down if needed
@@ -3394,7 +3435,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   /**
    * Wraps text to fit within given width, returning array of lines
    */
-  private wrapText(text: string, maxWidth: number, fontSize: number, fontFamily: string = 'system-ui'): string[] {
+  private wrapText(text: string, maxWidth: number, fontSize: number, fontFamily?: string): string[] {
+    fontFamily = fontFamily ?? this.getFontFamily();
     const words = text.split(/\s+/);
     const lines: string[] = [];
     let currentLine = '';
@@ -3434,7 +3476,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr("class", "label")
       .attr("text-anchor", "middle")
       .attr("dominant-baseline", "middle")
-      .attr("font-family", "system-ui")
+      .attr("font-family", this.getFontFamily())
       .attr("fill", "black")
       .each((d: any, i: number, nodes: SVGTextElement[]) => {
         if (this.isHiddenNode(d)) {
@@ -3471,8 +3513,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         const mainLabelFontSize = this.calculateOptimalFontSize(
           displayLabel,
           maxTextWidth,
-          mainLabelMaxHeight,
-          'system-ui'
+          mainLabelMaxHeight
         );
         d._mainLabelFontSize = mainLabelFontSize;
         
@@ -3516,12 +3557,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         // Use a minimum ratio of the main label size to ensure readability
         const minSecondaryFontSize = mainLabelFontSize * 0.65; // At least 65% of main label
         const remainingHeight = maxTextHeight - lineHeight;
-        const calculatedSecondaryFontSize = totalSecondaryEntries > 0 
+        const calculatedSecondaryFontSize = totalSecondaryEntries > 0
           ? this.calculateOptimalFontSize(
               longestSecondaryText || "SampleText",
               maxTextWidth,
-              remainingHeight / totalSecondaryEntries,
-              'system-ui'
+              remainingHeight / totalSecondaryEntries
             )
           : mainLabelFontSize * 0.8;
         // Ensure secondary font size is at least the minimum for readability
@@ -7227,18 +7267,21 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private getCSS(): string {
     return `
+      ${this.getFontImports()}
       :host {
         display: block;
         width: 100%;
         height: 100%;
-        font-family: system-ui, -apple-system, sans-serif;
+        font-family: ${this.getFontFamily()};
       }
       
       #svg-container {
         position: relative; /* Make this the positioning context for zoom controls */
         width: 100%;
         height: 100%;
-        border: 1px solid #ccc;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        border-radius: 8px;
+        background-color: ${this.getCanvasBackground()}; /* warm-white default; override via the background attribute */
         overflow: hidden;
       }
 
@@ -7339,11 +7382,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       }
       
       .link {
-        stroke-width: 1px;
+        stroke-width: 1.25px;
         fill: none;
         marker-end: url(#end-arrow);
       }
-      
+
       .inferredLink {
         stroke-width: 1.5px;
         fill: none;
@@ -7422,16 +7465,16 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         font-weight: 500;
         fill: #1a1a1a;
         pointer-events: none;
-        font-family: system-ui, -apple-system, sans-serif;
-        stroke: white;
+        font-family: ${this.getFontFamily()};
+        stroke: ${this.getCanvasBackground()};
         stroke-width: 3px;
         stroke-linejoin: round;
         paint-order: stroke fill;
       }
       
       .mostSpecificTypeLabel {
-        font-size: 8px;
-        font-weight: bold;
+        font-size: 9px;
+        font-weight: 600;
         pointer-events: none;
       }
       
@@ -7660,7 +7703,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         align-items: center;
         justify-content: center;
         z-index: 10000;
-        font-family: system-ui, -apple-system, sans-serif;
+        font-family: ${this.getFontFamily()};
       }
 
       .modal-dialog {
@@ -8076,11 +8119,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       // Convert <image> hrefs to base64 data URIs so icons render in the PNG
       await this.convertImagesToBase64(svgClone);
 
-      // Add a white background rect as the first child
+      // Match the on-screen canvas background so PNG exports look like the live view
       const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       bgRect.setAttribute('width', '100%');
       bgRect.setAttribute('height', '100%');
-      bgRect.setAttribute('fill', 'white');
+      bgRect.setAttribute('fill', this.getCanvasBackground());
       svgClone.insertBefore(bgRect, svgClone.firstChild);
 
       // Serialize the clone to a string
@@ -8214,7 +8257,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         if (!ctx) { URL.revokeObjectURL(url); resolve(null); return; }
 
         ctx.scale(scale, scale);
-        ctx.fillStyle = 'white';
+        ctx.fillStyle = this.getCanvasBackground();
         ctx.fillRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
 

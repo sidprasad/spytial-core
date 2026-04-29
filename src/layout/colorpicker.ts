@@ -41,22 +41,16 @@ export class ColorPicker {
         const x = radius * Math.cos(angle);
         const y = radius * Math.sin(angle);
 
-        // Convert the position to a color in the CIELAB color space
-        const l = 50; // Lightness
+        // Lightness raised from 50 → 62 so colors read clearly against white backgrounds
+        // without being muddy. Chroma stays at full radius for distinguishability.
+        const l = 62;
         const a = x; // Position on the a* axis
         const b = y; // Position on the b* axis
 
         // Convert CIELAB to RGB using chroma.js
         const color = chroma.lab(l, a, b).rgb();
 
-
-        // Apply a factor to darken the colors
-        const darkFactor = 1; // Adjust this factor to make the colors darker
-        const darkR = Math.round(color[0] * darkFactor);
-        const darkG = Math.round(color[1] * darkFactor);
-        const darkB = Math.round(color[2] * darkFactor);
-
-        return `rgb(${darkR}, ${darkG}, ${darkB})`;
+        return `rgb(${Math.round(color[0])}, ${Math.round(color[1])}, ${Math.round(color[2])})`;
     }
 }
 
