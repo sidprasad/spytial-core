@@ -4508,10 +4508,18 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       );
 
       const routesByEdgeId = new Map<string, any>();
+      // Tier 1.4: only run bend flattening on graphs below the same threshold as
+      // crossing optimization — keeps cost zero on dense graphs (matching policy
+      // at CROSSING_OPTIMIZATION_EDGE_THRESHOLD).
+      const shouldFlattenBends = routableEdges.length <= WebColaCnDGraph.CROSSING_OPTIMIZATION_EDGE_THRESHOLD;
       routableEdges.forEach((edge: any, index: number) => {
         const route = routes[index];
         if (edge?.id && route) {
-          routesByEdgeId.set(edge.id, this.adjustGridRouteForEdge(edge, route));
+          let processed = this.adjustGridRouteForEdge(edge, route);
+          if (shouldFlattenBends) {
+            processed = this.flattenGridRouteBends(processed, nodes, edge);
+          }
+          routesByEdgeId.set(edge.id, processed);
         }
       });
 
@@ -5305,6 +5313,187 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       segments.push([points[i], points[i + 1]]);
     }
     return segments;
+  }
+
+  /**
+   * Removes redundant bends from an orthogonal grid route (Tier 1.4).
+   *
+   * Two passes:
+   *   1. Collinear merge — drop interior points that are collinear with their
+   *      immediate neighbors. Always safe (no geometry change), no collision
+   *      check needed.
+   *   2. Z-shape flattening — for each 4-point Z (A→B→C→D where AB and CD are
+   *      parallel and offset), try replacing B and C with a single corner M at
+   *      either (A.x, D.y) or (D.x, A.y). Accept whichever produces an
+   *      orthogonal L that doesn't pass through any non-endpoint node bounds.
+   *      Each successful replacement removes one bend.
+   *
+   * Performance guardrails:
+   *   - Caller already gates on edge count ≤ CROSSING_OPTIMIZATION_EDGE_THRESHOLD.
+   *   - Z-shape pass is capped at MAX_FLATTEN_ATTEMPTS successful flattens per
+   *     edge — diminishing returns past 2.
+   *   - Returns the original route unchanged on any error (defensive).
+   *
+   * @param route - Cola GridRouter output (array of [start, end] segments)
+   * @param nodes - All current layout nodes (for collision checks)
+   * @param edge - The edge being flattened (its endpoints are excluded from collision checks)
+   */
+  private flattenGridRouteBends(route: any[], nodes: any[], edge: any): any[] {
+    try {
+      if (!route || route.length < 2) return route;
+
+      const points = this.gridRouteToPoints(route);
+      if (points.length < 3) return route;
+
+      // Pass 1: collinear merge.
+      const merged = this.dropCollinearGridPoints(points);
+
+      // Pass 2: Z-shape flattening.
+      const flattened = this.flattenGridRouteZShapes(merged, nodes, edge);
+
+      // No changes? Return original route to avoid pointless allocation churn.
+      if (flattened.length === points.length) return route;
+
+      return this.pointsToGridRoute(flattened);
+    } catch (e) {
+      console.warn('[flattenGridRouteBends] Failed; returning original route:', e);
+      return route;
+    }
+  }
+
+  /**
+   * Drops interior points that are collinear with their immediate neighbors.
+   * For an orthogonal route, "collinear" means three consecutive points share
+   * the same X (vertical line) or the same Y (horizontal line). Always safe.
+   */
+  private dropCollinearGridPoints(
+    points: Array<{ x: number; y: number }>
+  ): Array<{ x: number; y: number }> {
+    if (points.length < 3) return points;
+    const result: Array<{ x: number; y: number }> = [points[0]];
+    for (let i = 1; i < points.length - 1; i++) {
+      const prev = result[result.length - 1];
+      const cur = points[i];
+      const next = points[i + 1];
+      const collinearX = prev.x === cur.x && cur.x === next.x;
+      const collinearY = prev.y === cur.y && cur.y === next.y;
+      if (collinearX || collinearY) continue; // cur is redundant
+      result.push(cur);
+    }
+    result.push(points[points.length - 1]);
+    return result;
+  }
+
+  /**
+   * Replaces 4-point Z-shapes with 2-point L-shapes when the alternate corner
+   * is collision-free. See flattenGridRouteBends for the surrounding context.
+   * Capped at MAX_FLATTEN_ATTEMPTS successful flattens per edge.
+   */
+  private flattenGridRouteZShapes(
+    points: Array<{ x: number; y: number }>,
+    nodes: any[],
+    edge: any
+  ): Array<{ x: number; y: number }> {
+    const MAX_FLATTEN_ATTEMPTS = 2;
+    const NODE_COLLISION_MARGIN = 2; // px
+
+    // Endpoints belong to the edge's source/target; excluded from collision checks.
+    const excludeIds = new Set<string>();
+    if (edge?.source?.id) excludeIds.add(edge.source.id);
+    if (edge?.target?.id) excludeIds.add(edge.target.id);
+
+    const result = points.slice();
+    let flattens = 0;
+    let i = 0;
+    while (i + 3 < result.length && flattens < MAX_FLATTEN_ATTEMPTS) {
+      const a = result[i];
+      const b = result[i + 1];
+      const c = result[i + 2];
+      const d = result[i + 3];
+
+      // Z-shape requires AB and CD to be parallel-and-offset (segments alternate
+      // orthogonal axes). After collinear merge, axes alternate by construction,
+      // so the structural test is "AB parallel to CD" → A.y === B.y matches C.y === D.y.
+      const abHorizontal = a.y === b.y;
+      const cdHorizontal = c.y === d.y;
+      const isZ = abHorizontal === cdHorizontal && (
+        abHorizontal ? a.y !== d.y : a.x !== d.x
+      );
+      if (!isZ) {
+        i++;
+        continue;
+      }
+
+      // Try both alternate corners for the replacement L.
+      const candidates: Array<{ x: number; y: number }> = [
+        { x: a.x, y: d.y },
+        { x: d.x, y: a.y },
+      ];
+      let replaced = false;
+      for (const m of candidates) {
+        if (
+          this.isOrthogonalSegmentClearOfNodes(a, m, nodes, excludeIds, NODE_COLLISION_MARGIN) &&
+          this.isOrthogonalSegmentClearOfNodes(m, d, nodes, excludeIds, NODE_COLLISION_MARGIN)
+        ) {
+          result.splice(i + 1, 2, m); // Replace b, c with m → removes one bend.
+          flattens++;
+          replaced = true;
+          break;
+        }
+      }
+      if (!replaced) i++;
+      // If replaced, don't advance i — re-check from the same position in case
+      // the new L can be flattened further with the next neighbor.
+    }
+    return result;
+  }
+
+  /**
+   * Returns true if an axis-aligned segment from `a` to `b` doesn't pass through
+   * any node's bounds (with a small margin), excluding nodes whose ids are in
+   * `excludeIds` (typically the segment's edge endpoints).
+   *
+   * Returns false on non-axis-aligned input — flattenGridRouteZShapes only ever
+   * produces axis-aligned segments, so this is a defensive guard.
+   */
+  private isOrthogonalSegmentClearOfNodes(
+    a: { x: number; y: number },
+    b: { x: number; y: number },
+    nodes: any[],
+    excludeIds: Set<string>,
+    margin: number
+  ): boolean {
+    const isHorizontal = a.y === b.y;
+    const isVertical = a.x === b.x;
+    if (!isHorizontal && !isVertical) return false;
+
+    for (const node of nodes) {
+      if (excludeIds.has(node.id)) continue;
+      const bounds = node.bounds || node.innerBounds;
+      if (!bounds) continue;
+
+      const widthFn = typeof bounds.width === 'function' ? bounds.width() : 0;
+      const heightFn = typeof bounds.height === 'function' ? bounds.height() : 0;
+      const nx = (typeof bounds.x === 'number' ? bounds.x : 0) - margin;
+      const nX = (bounds.X !== undefined ? bounds.X : (bounds.x || 0) + widthFn) + margin;
+      const ny = (typeof bounds.y === 'number' ? bounds.y : 0) - margin;
+      const nY = (bounds.Y !== undefined ? bounds.Y : (bounds.y || 0) + heightFn) + margin;
+
+      if (isHorizontal) {
+        if (a.y < ny || a.y > nY) continue; // Outside node's y-range
+        const xMin = Math.min(a.x, b.x);
+        const xMax = Math.max(a.x, b.x);
+        if (xMax < nx || xMin > nX) continue; // No x-overlap
+        return false; // Segment passes through this node
+      } else {
+        if (a.x < nx || a.x > nX) continue;
+        const yMin = Math.min(a.y, b.y);
+        const yMax = Math.max(a.y, b.y);
+        if (yMax < ny || yMin > nY) continue;
+        return false;
+      }
+    }
+    return true;
   }
 
   private createFallbackBounds(node: any) {
