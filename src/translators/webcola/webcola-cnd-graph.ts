@@ -106,6 +106,32 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
+   * Default font stack. Atkinson Hyperlegible (Braille Institute, OFL) is
+   * designed for low-vision and dyslexic readers — distinguishable letterforms
+   * (a/g/q/d, 0/O, 1/l/I) without looking childlike. Falls back to system-ui
+   * if the host hasn't loaded the web font.
+   */
+  private static readonly DEFAULT_FONT_FAMILY = "'Atkinson Hyperlegible', system-ui, -apple-system, sans-serif";
+
+  /**
+   * Returns the active font stack: the host's `font-family` attribute if
+   * set, otherwise the Atkinson Hyperlegible default.
+   */
+  private getFontFamily(): string {
+    return this.getAttribute('font-family') ?? WebColaCnDGraph.DEFAULT_FONT_FAMILY;
+  }
+
+  /**
+   * Returns the @import statement(s) needed to load the default font from
+   * Google Fonts. Skipped when the host has set a custom `font-family`, since
+   * users with their own font shouldn't pay for an unused download.
+   */
+  private getFontImports(): string {
+    if (this.hasAttribute('font-family')) return '';
+    return "@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&display=swap');";
+  }
+
+  /**
    * Configuration constants for text sizing and layout
    */
   private static readonly DEFAULT_FONT_SIZE = 10;
@@ -573,7 +599,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       const fontSize = 12; // Default edge label font size
       links.forEach(link => {
         if (link && link.label) {
-          const labelWidth = this.measureTextWidth(link.label, fontSize, 'system-ui');
+          const labelWidth = this.measureTextWidth(link.label, fontSize);
           maxLabelWidth = Math.max(maxLabelWidth, labelWidth);
         }
       });
@@ -2621,7 +2647,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr("class", "linklabel")
       .attr("text-anchor", "middle")
       .attr("dominant-baseline", "middle")
-      .attr("font-family", "system-ui")
+      .attr("font-family", this.getFontFamily())
       .attr("pointer-events", "none")
       .text((d: any) => d.label || d.relName || "");
   }
@@ -3100,8 +3126,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     return this.calculateOptimalFontSize(
       displayLabel,
       maxTextWidth,
-      Math.max(1, mainLabelMaxHeight),
-      'system-ui'
+      Math.max(1, mainLabelMaxHeight)
     );
   }
 
@@ -3152,7 +3177,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr("class", "groupLabel")
       .attr("text-anchor", "middle")
       .attr("dominant-baseline", "hanging")
-      .attr("font-family", "system-ui")
+      .attr("font-family", this.getFontFamily())
       .attr("font-size", (d: any) => {
         const computedFontSize = this.calculateGroupLabelFontSize(d, groups);
         d._groupLabelFontSize = computedFontSize;
@@ -3361,9 +3386,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   /**
    * Measures the width of text at a given font size
    */
-  private measureTextWidth(text: string, fontSize: number, fontFamily: string = 'system-ui'): number {
+  private measureTextWidth(text: string, fontSize: number, fontFamily?: string): number {
     const context = this.getTextMeasurementContext();
-    context.font = `${fontSize}px ${fontFamily}`;
+    context.font = `${fontSize}px ${fontFamily ?? this.getFontFamily()}`;
     return context.measureText(text).width;
   }
 
@@ -3371,11 +3396,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Calculates the optimal font size to fit text within given dimensions
    */
   private calculateOptimalFontSize(
-    text: string, 
-    maxWidth: number, 
-    maxHeight: number, 
-    fontFamily: string = 'system-ui'
+    text: string,
+    maxWidth: number,
+    maxHeight: number,
+    fontFamily?: string
   ): number {
+    fontFamily = fontFamily ?? this.getFontFamily();
     let fontSize = WebColaCnDGraph.DEFAULT_FONT_SIZE;
     
     // Start with default size and scale down if needed
@@ -3409,7 +3435,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   /**
    * Wraps text to fit within given width, returning array of lines
    */
-  private wrapText(text: string, maxWidth: number, fontSize: number, fontFamily: string = 'system-ui'): string[] {
+  private wrapText(text: string, maxWidth: number, fontSize: number, fontFamily?: string): string[] {
+    fontFamily = fontFamily ?? this.getFontFamily();
     const words = text.split(/\s+/);
     const lines: string[] = [];
     let currentLine = '';
@@ -3449,7 +3476,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr("class", "label")
       .attr("text-anchor", "middle")
       .attr("dominant-baseline", "middle")
-      .attr("font-family", "system-ui")
+      .attr("font-family", this.getFontFamily())
       .attr("fill", "black")
       .each((d: any, i: number, nodes: SVGTextElement[]) => {
         if (this.isHiddenNode(d)) {
@@ -3486,8 +3513,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         const mainLabelFontSize = this.calculateOptimalFontSize(
           displayLabel,
           maxTextWidth,
-          mainLabelMaxHeight,
-          'system-ui'
+          mainLabelMaxHeight
         );
         d._mainLabelFontSize = mainLabelFontSize;
         
@@ -3531,12 +3557,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         // Use a minimum ratio of the main label size to ensure readability
         const minSecondaryFontSize = mainLabelFontSize * 0.65; // At least 65% of main label
         const remainingHeight = maxTextHeight - lineHeight;
-        const calculatedSecondaryFontSize = totalSecondaryEntries > 0 
+        const calculatedSecondaryFontSize = totalSecondaryEntries > 0
           ? this.calculateOptimalFontSize(
               longestSecondaryText || "SampleText",
               maxTextWidth,
-              remainingHeight / totalSecondaryEntries,
-              'system-ui'
+              remainingHeight / totalSecondaryEntries
             )
           : mainLabelFontSize * 0.8;
         // Ensure secondary font size is at least the minimum for readability
@@ -7242,11 +7267,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private getCSS(): string {
     return `
+      ${this.getFontImports()}
       :host {
         display: block;
         width: 100%;
         height: 100%;
-        font-family: system-ui, -apple-system, sans-serif;
+        font-family: ${this.getFontFamily()};
       }
       
       #svg-container {
@@ -7439,7 +7465,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         font-weight: 500;
         fill: #1a1a1a;
         pointer-events: none;
-        font-family: system-ui, -apple-system, sans-serif;
+        font-family: ${this.getFontFamily()};
         stroke: ${this.getCanvasBackground()};
         stroke-width: 3px;
         stroke-linejoin: round;
@@ -7677,7 +7703,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         align-items: center;
         justify-content: center;
         z-index: 10000;
-        font-family: system-ui, -apple-system, sans-serif;
+        font-family: ${this.getFontFamily()};
       }
 
       .modal-dialog {
