@@ -935,7 +935,9 @@ export class WebColaLayout {
       // To resolve this, ensure that 'leaves' always contains node indices before passing to WebCola. Refactor the code to handle cases where node objects are present, or update the mapping logic to guarantee indices.
       let leaves = value.map((nodeId) => this.getNodeIndex(nodeId));
       let name = key;
-      const defaultPadding = 10;
+      // 12px keeps contained nodes visibly separated from the group boundary;
+      // labelled groups still get bumped to GROUP_LABEL_PADDING in the renderer.
+      const defaultPadding = 12;
 
       return { leaves, padding: defaultPadding, name };
     });
