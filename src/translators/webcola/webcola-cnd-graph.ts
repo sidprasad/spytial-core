@@ -6747,13 +6747,21 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
   /**
    * Updates link label positions after edge routing is complete.
+   *
+   * Pipeline:
+   *   1. Position each label at the midpoint of its routed path.
+   *   2. Run a batch overlap-resolution pass that pushes overlapping labels
+   *      apart along the smaller-overlap axis (Tier 1.1 of the visual-polish
+   *      plan — see resolveLinkLabelOverlaps).
+   *   3. Raise labels above edges so the white halo from `paint-order: stroke
+   *      fill` reads correctly.
    */
   private updateLinkLabelsAfterRouting(): void {
     this.container.selectAll('.link-group .linklabel')
       .attr('x', (d: any) => {
         const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${d.id}"]`) as SVGPathElement;
         if (!pathElement) return 0;
-        
+
         const pathLength = pathElement.getTotalLength();
         const midpoint = pathElement.getPointAtLength(pathLength / 2);
         return midpoint.x;
@@ -6761,49 +6769,127 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr('y', (d: any) => {
         const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${d.id}"]`) as SVGPathElement;
         if (!pathElement) return 0;
-        
+
         const pathLength = pathElement.getTotalLength();
         const midpoint = pathElement.getPointAtLength(pathLength / 2);
         return midpoint.y;
       })
-      .attr('text-anchor', 'middle')
-      .each((d: any, i: number, nodes: any[]) => {
-        this.handleLabelOverlap(nodes[i] as SVGTextElement);
-      })
-      .raise();
+      .attr('text-anchor', 'middle');
+
+    this.resolveLinkLabelOverlaps();
+
+    this.container.selectAll('.link-group .linklabel').raise();
   }
 
   /**
-   * Handles overlap detection and resolution for link labels.
-   * 
-   * @param currentLabel - The current label element
+   * Pushes overlapping link labels apart so they don't stack on top of each
+   * other when multiple parallel edges or dense regions place several labels
+   * at the same midpoint (Tier 1.1 of the visual-polish plan).
+   *
+   * Algorithm: minimum-translation-vector (MTV) pairwise pushaway, repeated
+   * for up to MAX_LABEL_OVERLAP_PASSES passes. For each overlapping pair, both
+   * labels move half the overlap (plus a small margin) along the *smaller*
+   * overlap axis — the axis where moving disrupts position the least.
+   *
+   * Per-label cumulative displacement is capped at MAX_LABEL_DISPLACEMENT_PX
+   * so labels never drift far from their edge midpoints. If an overlap can't
+   * be resolved within the cap, we accept the residual rather than fly the
+   * label off the canvas.
+   *
+   * Cost: O(N² × passes) where N = number of labels. Called once per layout
+   * after routing, not per-tick — fine for typical graphs (≤ a few hundred
+   * labels). For sparse graphs the inner loop short-circuits on `isOverlapping`.
    */
-  private handleLabelOverlap(currentLabel: SVGTextElement): void {
-    const overlapsWith: SVGTextElement[] = [];
+  private resolveLinkLabelOverlaps(): void {
+    const labels = Array.from(
+      this.container.selectAll<SVGTextElement, any>('.link-group .linklabel').nodes()
+    );
+    if (labels.length < 2) return;
 
+    const MAX_PASSES = 4;
+    const MAX_DISPLACEMENT_PX = 28;
+    const MARGIN_PX = 2;
 
-    this.container.selectAll('.linklabel').each(function(this: SVGTextElement) {
-      if (this !== currentLabel && isOverlapping(this, currentLabel)) {
-        overlapsWith.push(this);
+    // Track cumulative displacement per label so we can clamp to MAX_DISPLACEMENT_PX.
+    const dxMap = new Map<SVGTextElement, number>();
+    const dyMap = new Map<SVGTextElement, number>();
+
+    for (let pass = 0; pass < MAX_PASSES; pass++) {
+      let resolvedAny = false;
+
+      for (let i = 0; i < labels.length; i++) {
+        const a = labels[i];
+        for (let j = i + 1; j < labels.length; j++) {
+          const b = labels[j];
+          if (!isOverlapping(a, b)) continue;
+
+          const ba = a.getBBox();
+          const bb = b.getBBox();
+
+          const cax = ba.x + ba.width / 2;
+          const cay = ba.y + ba.height / 2;
+          const cbx = bb.x + bb.width / 2;
+          const cby = bb.y + bb.height / 2;
+
+          const overlapX = (ba.width + bb.width) / 2 - Math.abs(cax - cbx);
+          const overlapY = (ba.height + bb.height) / 2 - Math.abs(cay - cby);
+          if (overlapX <= 0 || overlapY <= 0) continue;
+
+          // Push along the axis with the smaller overlap (less movement).
+          // For identical-position labels the sign falls out of the >= compare,
+          // giving a deterministic split.
+          if (overlapY <= overlapX) {
+            const push = (overlapY + MARGIN_PX) / 2;
+            const sign = cay >= cby ? 1 : -1;
+            this.applyLabelDisplacement(a, 0, sign * push, dxMap, dyMap, MAX_DISPLACEMENT_PX);
+            this.applyLabelDisplacement(b, 0, -sign * push, dxMap, dyMap, MAX_DISPLACEMENT_PX);
+          } else {
+            const push = (overlapX + MARGIN_PX) / 2;
+            const sign = cax >= cbx ? 1 : -1;
+            this.applyLabelDisplacement(a, sign * push, 0, dxMap, dyMap, MAX_DISPLACEMENT_PX);
+            this.applyLabelDisplacement(b, -sign * push, 0, dxMap, dyMap, MAX_DISPLACEMENT_PX);
+          }
+          resolvedAny = true;
+        }
       }
-    });
 
-    if (overlapsWith.length > 0) {
-      this.minimizeOverlap(currentLabel, overlapsWith);
+      if (!resolvedAny) break;
     }
   }
 
-
   /**
-   * Minimizes overlap between labels by repositioning.
-   * 
-   * @param currentLabel - Current label to reposition
-   * @param overlappingLabels - Array of overlapping labels
+   * Applies a displacement delta to a label's x/y attributes, clamping the
+   * cumulative displacement magnitude to `cap`. If the new cumulative would
+   * exceed the cap, the displacement is scaled down so the magnitude lands
+   * exactly on the cap boundary.
    */
-  private minimizeOverlap(currentLabel: SVGTextElement, overlappingLabels: SVGTextElement[]): void {
-    // Implementation would reposition labels to minimize overlap
-    // This is a placeholder for the actual overlap resolution algorithm
+  private applyLabelDisplacement(
+    label: SVGTextElement,
+    deltaX: number,
+    deltaY: number,
+    dxMap: Map<SVGTextElement, number>,
+    dyMap: Map<SVGTextElement, number>,
+    cap: number
+  ): void {
+    const curDx = dxMap.get(label) || 0;
+    const curDy = dyMap.get(label) || 0;
+    let newDx = curDx + deltaX;
+    let newDy = curDy + deltaY;
 
+    const mag = Math.hypot(newDx, newDy);
+    if (mag > cap) {
+      const scale = cap / mag;
+      newDx *= scale;
+      newDy *= scale;
+    }
+
+    const sel = d3.select(label);
+    const x = parseFloat(sel.attr('x') || '0') + (newDx - curDx);
+    const y = parseFloat(sel.attr('y') || '0') + (newDy - curDy);
+    sel.attr('x', x).attr('y', y);
+
+    dxMap.set(label, newDx);
+    dyMap.set(label, newDy);
   }
 
   /**
