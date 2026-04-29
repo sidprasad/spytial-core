@@ -90,11 +90,20 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private static readonly NODE_STROKE_WIDTH = 1.5;
 
   /**
-   * Warm-white canvas color (tufte-css `#fffff8`). Used for the graph container
-   * background, edge-label halos so they "punch through" cleanly, and as the
-   * background of exported PNG screenshots so on-screen and export match.
+   * Default canvas color (tufte-css `#fffff8` warm white). Used when the host
+   * element has no `background` attribute. The canvas color drives the
+   * container background, node fills, edge-label halos, and PNG export
+   * background so they all stay in sync.
    */
-  private static readonly CANVAS_BG = '#fffff8';
+  private static readonly DEFAULT_CANVAS_BG = '#fffff8';
+
+  /**
+   * Returns the active canvas color: the host's `background` attribute if
+   * set, otherwise the default warm white.
+   */
+  private getCanvasBackground(): string {
+    return this.getAttribute('background') ?? WebColaCnDGraph.DEFAULT_CANVAS_BG;
+  }
 
   /**
    * Configuration constants for text sizing and layout
@@ -3270,9 +3279,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         const hasIcon = !! d.icon;
         const showLabels = d.showLabels;
 
-        // Only make transparent if hidden OR (has icon AND not showing labels).
-        // Otherwise nodes render white so they pop against the warm-white canvas.
-        return isHidden || (hasIcon && !showLabels) ? "transparent" : "white";
+        // Tufte: node fill matches the canvas so only the stroke + label
+        // distinguish a node — less ink, more clarity. Transparent for
+        // hidden nodes and icon-only nodes (preserve prior behavior).
+        return isHidden || (hasIcon && !showLabels) ? "transparent" : this.getCanvasBackground();
       });
   }
 
@@ -7245,7 +7255,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         height: 100%;
         border: 1px solid rgba(0, 0, 0, 0.08);
         border-radius: 8px;
-        background-color: ${WebColaCnDGraph.CANVAS_BG}; /* tufte-css warm white — softens the canvas without yellowing */
+        background-color: ${this.getCanvasBackground()}; /* warm-white default; override via the background attribute */
         overflow: hidden;
       }
 
@@ -7313,7 +7323,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       
       .node rect {
         cursor: move;
-        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.06));
       }
 
       .error-node rect, .error-group {
@@ -7431,7 +7440,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         fill: #1a1a1a;
         pointer-events: none;
         font-family: system-ui, -apple-system, sans-serif;
-        stroke: ${WebColaCnDGraph.CANVAS_BG};
+        stroke: ${this.getCanvasBackground()};
         stroke-width: 3px;
         stroke-linejoin: round;
         paint-order: stroke fill;
@@ -8088,7 +8097,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       bgRect.setAttribute('width', '100%');
       bgRect.setAttribute('height', '100%');
-      bgRect.setAttribute('fill', WebColaCnDGraph.CANVAS_BG);
+      bgRect.setAttribute('fill', this.getCanvasBackground());
       svgClone.insertBefore(bgRect, svgClone.firstChild);
 
       // Serialize the clone to a string
@@ -8222,7 +8231,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         if (!ctx) { URL.revokeObjectURL(url); resolve(null); return; }
 
         ctx.scale(scale, scale);
-        ctx.fillStyle = WebColaCnDGraph.CANVAS_BG;
+        ctx.fillStyle = this.getCanvasBackground();
         ctx.fillRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
 
