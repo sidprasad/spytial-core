@@ -169,7 +169,23 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Configuration constants for edge crossing optimization
    */
   private static readonly MAX_CROSSING_OPTIMIZATION_PASSES = 3;
-  private static readonly CROSSING_OPTIMIZATION_EDGE_THRESHOLD = 15;
+  /**
+   * Edge-count gate above which the O(E²) crossing optimizer (and the bend
+   * flattener that piggybacks on this threshold) is skipped. Raised from 15 to
+   * 50 because at this size the algorithm is still well under the wall-clock
+   * budget — at E=50 there are C(50,2)=1225 pairs × ~10 segment-segment tests
+   * each (still sub-millisecond on commodity hardware). The hard skip remains
+   * past this threshold so worst-case cost stays bounded.
+   * See MAX_CROSSING_OPTIMIZATION_BUDGET_MS for the wall-clock safety net.
+   */
+  private static readonly CROSSING_OPTIMIZATION_EDGE_THRESHOLD = 50;
+  /**
+   * Wall-clock budget (ms) for the entire optimizeCrossings() pipeline. If
+   * detection + resolution exceeds this, we abort and accept the current
+   * routing. Acts as a safety net for pathological graphs that fall below
+   * the edge-count gate but still take long (e.g. very long polyline routes).
+   */
+  private static readonly MAX_CROSSING_OPTIMIZATION_BUDGET_MS = 30;
   private static readonly CROSSING_NUDGE_DISTANCE = 12;
   private static readonly PORT_MARGIN_FRACTION = 0.15;
   /**
@@ -5736,6 +5752,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Orchestrates post-routing crossing detection and resolution.
    * Runs up to MAX_CROSSING_OPTIMIZATION_PASSES iterations, each pass
    * detecting crossings and attempting local fixes.
+   *
+   * Performance guardrails (Tier 1.5):
+   *   - Skip entirely if edge count exceeds CROSSING_OPTIMIZATION_EDGE_THRESHOLD
+   *     (50 — keeps the worst case bounded by graph size).
+   *   - Wall-clock budget MAX_CROSSING_OPTIMIZATION_BUDGET_MS (30ms) — if
+   *     detection+resolution overruns, abort and accept current routing. This
+   *     covers pathological graphs that fall below the edge-count gate but
+   *     have, e.g., very long polyline routes or many crossings.
    */
   private optimizeCrossings(): void {
     // Need at least 2 non-alignment edges to have a crossing
@@ -5754,9 +5778,27 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     }
     if (candidateEdges > WebColaCnDGraph.CROSSING_OPTIMIZATION_EDGE_THRESHOLD) return;
 
+    const budgetMs = WebColaCnDGraph.MAX_CROSSING_OPTIMIZATION_BUDGET_MS;
+    const startedAt = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+      ? performance.now()
+      : Date.now();
+    const elapsed = (): number => (
+      (typeof performance !== 'undefined' && typeof performance.now === 'function')
+        ? performance.now()
+        : Date.now()
+    ) - startedAt;
+
     for (let pass = 0; pass < WebColaCnDGraph.MAX_CROSSING_OPTIMIZATION_PASSES; pass++) {
+      if (elapsed() > budgetMs) {
+        console.warn(`[optimizeCrossings] Budget (${budgetMs}ms) exceeded after pass ${pass}; accepting current routing.`);
+        return;
+      }
       const crossings = this.detectEdgeCrossings();
       if (crossings.length === 0) break;
+      if (elapsed() > budgetMs) {
+        console.warn(`[optimizeCrossings] Budget exceeded after detection on pass ${pass}; accepting current routing.`);
+        return;
+      }
       const improved = this.resolveEdgeCrossings(crossings);
       if (!improved) break;
     }
