@@ -3985,8 +3985,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         .attr("d", (d: any) => {
             // Handle self-loops specially - they can't use orthogonal routing
             if (d.source?.id === d.target?.id) {
-                const route = this.createSelfLoopRoute(d);
-                return this.lineFunction(route);
+                const route = this.createGridSelfLoopRoute(d);
+                return this.gridLineFunction(route);
             }
 
             // Resolve group-edge endpoints: for _g_ edges the arrow should reach
@@ -4470,9 +4470,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         .attr("d", (edgeData: any) => {
           // Handle self-loops specially - GridRouter can't route these
           if (edgeData.source?.id === edgeData.target?.id) {
-            // Use the existing self-loop routing logic but with grid-style path
-            const route = this.createSelfLoopRoute(edgeData);
-            return this.lineFunction(route);
+            // Orthogonal "out and back" hook to match grid mode's rectilinear style
+            const route = this.createGridSelfLoopRoute(edgeData);
+            return this.gridLineFunction(route);
           }
           
           const route = routesByEdgeId.get(edgeData.id);
@@ -4550,8 +4550,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr("d", (edgeData: any) => {
         // Handle self-loops specially
         if (edgeData.source?.id === edgeData.target?.id) {
-          const route = this.createSelfLoopRoute(edgeData);
-          return this.lineFunction(route);
+          const route = this.createGridSelfLoopRoute(edgeData);
+          return this.gridLineFunction(route);
         }
         
         // Create orthogonal fallback path
@@ -5880,6 +5880,84 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     }
 
     return [startPoint, controlPoint, endPoint];
+  }
+
+  /**
+   * Grid-mode self-loop route: a 5-point orthogonal "out and back" rectangular hook
+   * that fits the rectilinear aesthetic of grid layout. Mirrors the corner / ring
+   * distribution from createSelfLoopRoute() so multiple self-loops on a node still
+   * spread around the four sides and grow outward for the 5th+ loop.
+   */
+  private createGridSelfLoopRoute(edgeData: any): Array<{ x: number; y: number }> {
+    const source = edgeData.source;
+    const bounds = source.bounds;
+
+    if (!bounds) {
+      return [
+        { x: source.x, y: source.y },
+        { x: source.x, y: source.y - 20 },
+        { x: source.x + 20, y: source.y - 20 },
+        { x: source.x + 20, y: source.y },
+        { x: source.x, y: source.y }
+      ];
+    }
+
+    const width = bounds.X - bounds.x;
+    const height = bounds.Y - bounds.y;
+    const cx = bounds.x + width / 2;
+    const cy = bounds.y + height / 2;
+
+    const selfLoopIndex = this.getSelfLoopIndex(edgeData);
+    const corner = selfLoopIndex % 4;
+    const ring = Math.floor(selfLoopIndex / 4);
+    const ringScale = 1 + ring * WebColaCnDGraph.SELF_LOOP_CURVATURE_SCALE;
+    const hOffset = (width / 2) * ringScale;
+    const vOffset = (height / 2) * ringScale;
+
+    let p0: { x: number; y: number };
+    let p1: { x: number; y: number };
+    let p2: { x: number; y: number };
+    let p3: { x: number; y: number };
+    let p4: { x: number; y: number };
+
+    switch (corner) {
+      case 0: // top-right: top mid → up → right → down → right mid
+        p0 = { x: cx,                 y: bounds.y };
+        p1 = { x: cx,                 y: bounds.y - vOffset };
+        p2 = { x: bounds.X + hOffset, y: bounds.y - vOffset };
+        p3 = { x: bounds.X + hOffset, y: cy };
+        p4 = { x: bounds.X,           y: cy };
+        break;
+      case 1: // bottom-right: right mid → right → down → left → bottom mid
+        p0 = { x: bounds.X,           y: cy };
+        p1 = { x: bounds.X + hOffset, y: cy };
+        p2 = { x: bounds.X + hOffset, y: bounds.Y + vOffset };
+        p3 = { x: cx,                 y: bounds.Y + vOffset };
+        p4 = { x: cx,                 y: bounds.Y };
+        break;
+      case 2: // bottom-left: bottom mid → down → left → up → left mid
+        p0 = { x: cx,                 y: bounds.Y };
+        p1 = { x: cx,                 y: bounds.Y + vOffset };
+        p2 = { x: bounds.x - hOffset, y: bounds.Y + vOffset };
+        p3 = { x: bounds.x - hOffset, y: cy };
+        p4 = { x: bounds.x,           y: cy };
+        break;
+      case 3: // top-left: left mid → left → up → right → top mid
+        p0 = { x: bounds.x,           y: cy };
+        p1 = { x: bounds.x - hOffset, y: cy };
+        p2 = { x: bounds.x - hOffset, y: bounds.y - vOffset };
+        p3 = { x: cx,                 y: bounds.y - vOffset };
+        p4 = { x: cx,                 y: bounds.y };
+        break;
+      default:
+        p0 = { x: cx,                 y: bounds.y };
+        p1 = { x: cx,                 y: bounds.y - vOffset };
+        p2 = { x: bounds.X + hOffset, y: bounds.y - vOffset };
+        p3 = { x: bounds.X + hOffset, y: cy };
+        p4 = { x: bounds.X,           y: cy };
+    }
+
+    return [p0, p1, p2, p3, p4];
   }
 
   /**
