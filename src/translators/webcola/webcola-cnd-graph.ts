@@ -172,6 +172,19 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private static readonly CROSSING_OPTIMIZATION_EDGE_THRESHOLD = 15;
   private static readonly CROSSING_NUDGE_DISTANCE = 12;
   private static readonly PORT_MARGIN_FRACTION = 0.15;
+  /**
+   * Minimum perimeter distance (px) between adjacent ports on the same node side.
+   * Translates to ≈18° angular separation for a node half-dimension of ~30px,
+   * which is the threshold above which fanning edges read as visually distinct.
+   * Used by computePortMargin() to shrink the side margin when port density is high.
+   */
+  private static readonly MIN_PORT_PERIMETER_SPACING = 10;
+  /**
+   * Absolute floor on port-margin (px). Below this, ports start to visually
+   * collide with the node's corner radius and arrowheads can splay weirdly.
+   * Even on overcrowded nodes, margin is never reduced below this value.
+   */
+  private static readonly MIN_ABSOLUTE_PORT_MARGIN_PX = 2;
 
   /**
    * Configuration constants for WebCola layout iterations
@@ -6270,6 +6283,40 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
+   * Computes the per-side margin used when distributing ports along a node side.
+   *
+   * Default behavior (low port density) returns `sideLength * PORT_MARGIN_FRACTION`,
+   * preserving the legacy look. When port density is high enough that adjacent ports
+   * would land closer than MIN_PORT_PERIMETER_SPACING, the margin is shrunk so the
+   * side is used more fully — improving angular separation between fanning edges at
+   * high-degree nodes (Tier 1.3 of the visual-polish plan).
+   *
+   * Margin is never shrunk below MIN_ABSOLUTE_PORT_MARGIN_PX so ports don't sit on
+   * the node corner. If the side is so small that even zero margin can't fit all
+   * ports at minimum spacing, the absolute floor is used and ports are accepted at
+   * tighter spacing — same as the legacy behavior, no worse.
+   *
+   * @param sideLength - Length of the node side (px)
+   * @param portCount - Number of ports being distributed on this side
+   * @returns Margin to use on each end of the side
+   */
+  private computePortMargin(sideLength: number, portCount: number): number {
+    const baseMargin = sideLength * WebColaCnDGraph.PORT_MARGIN_FRACTION;
+    if (portCount <= 1) return baseMargin;
+
+    const baseSpacing = (sideLength - 2 * baseMargin) / portCount;
+    if (baseSpacing >= WebColaCnDGraph.MIN_PORT_PERIMETER_SPACING) {
+      return baseMargin; // Density is comfortable — keep current behavior.
+    }
+
+    // Density is tight: solve for margin that gives exactly MIN_PORT_PERIMETER_SPACING.
+    // (sideLength - 2*margin) / portCount >= MIN  →  margin <= (sideLength - portCount*MIN) / 2
+    const desiredMargin =
+      (sideLength - portCount * WebColaCnDGraph.MIN_PORT_PERIMETER_SPACING) / 2;
+    return Math.max(WebColaCnDGraph.MIN_ABSOLUTE_PORT_MARGIN_PX, desiredMargin);
+  }
+
+  /**
    * Adjusts route start/end points based on port assignments so that edges sharing
    * the same node side are spread across it rather than all exiting from the center.
    * This applies to ALL edges (not just multi-edges between the same pair), so that
@@ -6309,13 +6356,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       if (direction === 'right' || direction === 'left') {
         // Edge goes horizontal: distribute source Y along the exit side
         const sideLength = bounds.height();
-        const margin = sideLength * WebColaCnDGraph.PORT_MARGIN_FRACTION;
+        const margin = this.computePortMargin(sideLength, portCount);
         const usable = sideLength - 2 * margin;
         route[0] = { ...route[0], y: bounds.y + margin + (portIndex + 0.5) * usable / portCount };
       } else if (direction === 'up' || direction === 'down') {
         // Edge goes vertical: distribute source X along the exit side
         const sideLength = bounds.width();
-        const margin = sideLength * WebColaCnDGraph.PORT_MARGIN_FRACTION;
+        const margin = this.computePortMargin(sideLength, portCount);
         const usable = sideLength - 2 * margin;
         route[0] = { ...route[0], x: bounds.x + margin + (portIndex + 0.5) * usable / portCount };
       }
@@ -6330,13 +6377,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
       if (targetDir === 'right' || targetDir === 'left') {
         const sideLength = bounds.height();
-        const margin = sideLength * WebColaCnDGraph.PORT_MARGIN_FRACTION;
+        const margin = this.computePortMargin(sideLength, portCount);
         const usable = sideLength - 2 * margin;
         const last = route.length - 1;
         route[last] = { ...route[last], y: bounds.y + margin + (portIndex + 0.5) * usable / portCount };
       } else if (targetDir === 'up' || targetDir === 'down') {
         const sideLength = bounds.width();
-        const margin = sideLength * WebColaCnDGraph.PORT_MARGIN_FRACTION;
+        const margin = this.computePortMargin(sideLength, portCount);
         const usable = sideLength - 2 * margin;
         const last = route.length - 1;
         route[last] = { ...route[last], x: bounds.x + margin + (portIndex + 0.5) * usable / portCount };
@@ -6365,14 +6412,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       if (direction === 'right' || direction === 'left') {
         // Edge goes horizontal: distribute along Y axis of the source side
         const sideLength = bounds.height();
-        const margin = sideLength * WebColaCnDGraph.PORT_MARGIN_FRACTION;
+        const margin = this.computePortMargin(sideLength, portCount);
         const usable = sideLength - 2 * margin;
         const portY = bounds.y + margin + (portIndex + 0.5) * usable / portCount;
         route[0].y = portY;
       } else if (direction === 'up' || direction === 'down') {
         // Edge goes vertical: distribute along X axis of the source side
         const sideLength = bounds.width();
-        const margin = sideLength * WebColaCnDGraph.PORT_MARGIN_FRACTION;
+        const margin = this.computePortMargin(sideLength, portCount);
         const usable = sideLength - 2 * margin;
         const portX = bounds.x + margin + (portIndex + 0.5) * usable / portCount;
         route[0].x = portX;
@@ -6388,13 +6435,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
       if (targetDirection === 'right' || targetDirection === 'left') {
         const sideLength = bounds.height();
-        const margin = sideLength * WebColaCnDGraph.PORT_MARGIN_FRACTION;
+        const margin = this.computePortMargin(sideLength, portCount);
         const usable = sideLength - 2 * margin;
         const portY = bounds.y + margin + (portIndex + 0.5) * usable / portCount;
         route[route.length - 1].y = portY;
       } else if (targetDirection === 'up' || targetDirection === 'down') {
         const sideLength = bounds.width();
-        const margin = sideLength * WebColaCnDGraph.PORT_MARGIN_FRACTION;
+        const margin = this.computePortMargin(sideLength, portCount);
         const usable = sideLength - 2 * margin;
         const portX = bounds.x + margin + (portIndex + 0.5) * usable / portCount;
         route[route.length - 1].x = portX;
@@ -6664,17 +6711,18 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     const h = bY - by;
 
     const eps = 1;
-    const margin = WebColaCnDGraph.PORT_MARGIN_FRACTION;
 
     if (Math.abs(anchor.x - bx) < eps || Math.abs(anchor.x - bX) < eps) {
       // Anchor is on left or right side → distribute along Y
-      const usable = h * (1 - 2 * margin);
-      const portY = by + h * margin + (portIndex + 0.5) * usable / portCount;
+      const margin = this.computePortMargin(h, portCount);
+      const usable = h - 2 * margin;
+      const portY = by + margin + (portIndex + 0.5) * usable / portCount;
       return { x: anchor.x, y: portY };
     } else if (Math.abs(anchor.y - by) < eps || Math.abs(anchor.y - bY) < eps) {
       // Anchor is on top or bottom side → distribute along X
-      const usable = w * (1 - 2 * margin);
-      const portX = bx + w * margin + (portIndex + 0.5) * usable / portCount;
+      const margin = this.computePortMargin(w, portCount);
+      const usable = w - 2 * margin;
+      const portX = bx + margin + (portIndex + 0.5) * usable / portCount;
       return { x: portX, y: anchor.y };
     }
 
