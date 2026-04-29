@@ -150,8 +150,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private static readonly DISCONNECTED_NODE_PREFIX = "_d_";
   private static readonly GROUP_BORDER_RADIUS = 8;
-  private static readonly GROUP_FILL_OPACITY = 0.25;
+  private static readonly GROUP_FILL_OPACITY = 0.10;
+  private static readonly GROUP_STROKE_OPACITY = 0.4;
+  private static readonly GROUP_STROKE_WIDTH = 1.5;
   private static readonly GROUP_LABEL_PADDING = 20;
+  private static readonly GROUP_LABEL_PILL_PADDING_X = 8;
+  private static readonly GROUP_LABEL_PILL_PADDING_Y = 3;
+  private static readonly GROUP_LABEL_PILL_OFFSET_Y = 4;
   private static readonly DEFAULT_GROUP_COMPACTNESS = 1e-5;
 
   /**
@@ -258,6 +263,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private svgLinkGroups : any;
   private svgGroups : any;
   private svgGroupLabels: any;
+  private svgGroupLabelBgs: any;
   private zoomBehavior: any;
   private storedTransform: any;
   
@@ -3061,7 +3067,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         const targetNode = nodes[d.keyNode];
         return targetNode?.color || "#999999";
       })
-      .attr("stroke-width", 1)
+      .attr("stroke-width", (d: any) => {
+        if (this.isDisconnectedGroup(d) || this.isErrorGroup(d)) return 1;
+        return WebColaCnDGraph.GROUP_STROKE_WIDTH;
+      })
+      .attr("stroke-opacity", (d: any) => {
+        if (this.isDisconnectedGroup(d) || this.isErrorGroup(d)) return 1;
+        return WebColaCnDGraph.GROUP_STROKE_OPACITY;
+      })
       .call((layout as any).drag);
 
 
@@ -3195,9 +3208,32 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * @returns D3 selection of created group labels
    */
   private setupGroupLabels(
-    groups: any[], 
+    groups: any[],
     layout: Layout
   ): d3.Selection<SVGTextElement, any, any, unknown> {
+    const allNodes = this.currentLayout?.nodes || [];
+
+    // Pill backings sit between the group rect and the text. Append before
+    // the text so document order keeps text on top.
+    this.svgGroupLabelBgs = this.container
+      .selectAll(".groupLabelBg")
+      .data(groups)
+      .enter()
+      .append("rect")
+      .attr("class", "groupLabelBg")
+      .attr("rx", 6)
+      .attr("ry", 6)
+      .attr("fill", this.getCanvasBackground())
+      .attr("fill-opacity", 0.92)
+      .attr("stroke", (d: any) => {
+        const targetNode = allNodes[d.keyNode];
+        return targetNode?.color || "#999999";
+      })
+      .attr("stroke-width", 1)
+      .attr("stroke-opacity", 0.3)
+      .attr("pointer-events", "none")
+      .style("display", "none");
+
     return this.container
       .selectAll(".groupLabel")
       .data(groups)
@@ -3217,7 +3253,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr("pointer-events", "none")
       .text((d: any) => {
         const shouldShowGroupLabel = d.showLabel || false;
-        
+
         if (shouldShowGroupLabel) {
           // Ensure adequate padding for label display
           if (d.padding) {
@@ -3225,7 +3261,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           }
           return d.name || "";
         }
-        
+
         return "";
       }).call((layout as any).drag);
   }
@@ -3904,10 +3940,30 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr('y', (d: any) => {
         if (!d.bounds) return 0;
         const labelFontSize = d._groupLabelFontSize || WebColaCnDGraph.DEFAULT_FONT_SIZE;
-        return d.bounds.y + Math.max(4, labelFontSize * 0.35);
+        return d.bounds.y + WebColaCnDGraph.GROUP_LABEL_PILL_OFFSET_Y + Math.max(4, labelFontSize * 0.35);
       })
       .attr('text-anchor', 'middle')
-      .lower();
+      .each(function (d: any) {
+        const text = this as SVGTextElement;
+        if (text.textContent && d.bounds) {
+          const bbox = text.getBBox();
+          d._labelBBox = { x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height };
+        } else {
+          d._labelBBox = null;
+        }
+      });
+
+    // Position the pill backing rect to wrap the label text.
+    if (this.svgGroupLabelBgs) {
+      this.svgGroupLabelBgs
+        .style('display', (d: any) => (d._labelBBox ? null : 'none'))
+        .attr('x', (d: any) => d._labelBBox ? d._labelBBox.x - WebColaCnDGraph.GROUP_LABEL_PILL_PADDING_X : 0)
+        .attr('y', (d: any) => d._labelBBox ? d._labelBBox.y - WebColaCnDGraph.GROUP_LABEL_PILL_PADDING_Y : 0)
+        .attr('width', (d: any) => d._labelBBox ? d._labelBBox.width + WebColaCnDGraph.GROUP_LABEL_PILL_PADDING_X * 2 : 0)
+        .attr('height', (d: any) => d._labelBBox ? d._labelBBox.height + WebColaCnDGraph.GROUP_LABEL_PILL_PADDING_Y * 2 : 0);
+      this.svgGroupLabelBgs.raise();
+    }
+    this.svgGroupLabels.raise();
 
     // Ensure proper layering - raise important elements
     this.svgLinkGroups.selectAll('marker').raise();
@@ -4042,10 +4098,28 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     groupLabel.attr("x", function (d: any) { return d.bounds.x + d.bounds.width() / 2; }) // Center horizontally
         .attr("y", function (d: any) {
           const labelFontSize = d._groupLabelFontSize || WebColaCnDGraph.DEFAULT_FONT_SIZE;
-          return d.bounds.y + Math.max(4, labelFontSize * 0.35);
+          return d.bounds.y + WebColaCnDGraph.GROUP_LABEL_PILL_OFFSET_Y + Math.max(4, labelFontSize * 0.35);
         })
-        .attr("text-anchor", "middle") // Center the text on its position
-        .raise();
+        .attr("text-anchor", "middle")
+        .each(function (d: any) {
+          const text = this as SVGTextElement;
+          if (text.textContent && d.bounds) {
+            const bbox = text.getBBox();
+            d._labelBBox = { x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height };
+          } else {
+            d._labelBBox = null;
+          }
+        });
+
+    const groupLabelBg = this.container.selectAll(".groupLabelBg");
+    groupLabelBg
+      .style("display", (d: any) => (d._labelBBox ? null : "none"))
+      .attr("x", (d: any) => d._labelBBox ? d._labelBBox.x - WebColaCnDGraph.GROUP_LABEL_PILL_PADDING_X : 0)
+      .attr("y", (d: any) => d._labelBBox ? d._labelBBox.y - WebColaCnDGraph.GROUP_LABEL_PILL_PADDING_Y : 0)
+      .attr("width", (d: any) => d._labelBBox ? d._labelBBox.width + WebColaCnDGraph.GROUP_LABEL_PILL_PADDING_X * 2 : 0)
+      .attr("height", (d: any) => d._labelBBox ? d._labelBBox.height + WebColaCnDGraph.GROUP_LABEL_PILL_PADDING_Y * 2 : 0)
+      .raise();
+    groupLabel.raise();
 
     // UPDATE EDGES - Use orthogonal routing for grid mode
     // Maintain grid-like paths during drag for better visual consistency
@@ -7811,9 +7885,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       }
       
       .group {
-        fill: rgba(200, 200, 200, 0.3);
+        fill: rgba(200, 200, 200, 0.10);
         stroke: #666;
-        stroke-width: 1px;
+        stroke-width: 1.5px;
+        stroke-opacity: 0.4;
+      }
+
+      .groupLabelBg {
+        pointer-events: none;
       }
       
       .label {
@@ -8706,6 +8785,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     this.svgLinkGroups = null as any;
     this.svgGroups = null as any;
     this.svgGroupLabels = null as any;
+    this.svgGroupLabelBgs = null as any;
     this.zoomBehavior = null as any;
     this.storedTransform = null as any;
     
