@@ -560,4 +560,59 @@ directives:
     // The label should include the middle node's label: "route[Bravo]"
     expect(inferredEdge!.label).toBe('route[Bravo]');
   });
+
+  describe('content-aware default node size (issue #431)', () => {
+    const FLOOR_W = 100;
+    const FLOOR_H = 60;
+
+    function makeData(labels: string[]): IJsonDataInstance {
+      return {
+        atoms: labels.map((label, i) => ({ id: `n${i}`, type: 'T', label })),
+        relations: [],
+      };
+    }
+
+    it('keeps short-label nodes at the floor (no shrinking)', () => {
+      const instance = new JSONDataInstance(makeData(['x']));
+      const evaluator = createEvaluator(instance);
+      const spec = parseLayoutSpec(`constraints: []\ndirectives: []`);
+      const li = new LayoutInstance(spec, evaluator, 0, true);
+      const { layout } = li.generateLayout(instance);
+
+      const node = layout.nodes.find(n => n.id === 'n0')!;
+      expect(node.width).toBe(FLOOR_W);
+      expect(node.height).toBe(FLOOR_H);
+    });
+
+    it('grows long-label nodes past the floor up to the cap', () => {
+      const instance = new JSONDataInstance(makeData(['OverviewMetricsDashboard']));
+      const evaluator = createEvaluator(instance);
+      const spec = parseLayoutSpec(`constraints: []\ndirectives: []`);
+      const li = new LayoutInstance(spec, evaluator, 0, true);
+      const { layout } = li.generateLayout(instance);
+
+      const node = layout.nodes.find(n => n.id === 'n0')!;
+      expect(node.width).toBeGreaterThan(FLOOR_W);
+      expect(node.width).toBeLessThanOrEqual(280); // ceiling
+    });
+
+    it('still honors explicit size directives exactly (sat_size preserved)', () => {
+      const instance = new JSONDataInstance(makeData(['OverviewMetricsDashboard']));
+      const evaluator = createEvaluator(instance);
+      const spec = parseLayoutSpec(`
+constraints: []
+directives:
+  - size:
+      selector: T
+      width: 80
+      height: 50
+`);
+      const li = new LayoutInstance(spec, evaluator, 0, true);
+      const { layout } = li.generateLayout(instance);
+
+      const node = layout.nodes.find(n => n.id === 'n0')!;
+      expect(node.width).toBe(80);
+      expect(node.height).toBe(50);
+    });
+  });
 });

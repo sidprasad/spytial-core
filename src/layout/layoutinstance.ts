@@ -29,6 +29,16 @@ import type { IEvaluatorResult } from '../evaluators/interfaces';
 import { ColorPicker } from './colorpicker';
 import { type ConstraintError, type ErrorMessages, ConstraintValidator, orientationConstraintToString } from './constraint-validator';
 import { QualitativeConstraintValidator } from './qualitative-constraint-validator';
+import { estimateLabelBox } from './text-extent';
+
+/** The strings the renderer will draw inside a node's box. Used to size the box. */
+type NodeDisplayContent = {
+    label: string;
+    /** One per attribute key, formatted "key: v1, v2, ..." to match the renderer. */
+    attributeLines: string[];
+    /** One per Skolem-label key, formatted as "v1, v2, ..." (key not shown by renderer). */
+    skolemLines: string[];
+};
 const UNIVERSAL_TYPE = "univ";
 
 type ConstraintSource = RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint;
@@ -1113,7 +1123,12 @@ export class LayoutInstance {
         // Recompute visual maps after graph mutations (inferred edges / node removal)
         let nodeIconMap = this.getNodeIconMap(g);
         let nodeColorMap = this.getNodeColorMap(g, ai);
-        let nodeSizeMap = this.getNodeSizeMap(g);
+
+        // Compute the display strings once — single source of truth for "what's
+        // drawn inside the box" so the box sizer (getNodeSizeMap) and the
+        // LayoutNode mapping below see the same content.
+        let contentByNode = this.getNodeDisplayContent(g, ai, attributes);
+        let nodeSizeMap = this.getNodeSizeMap(g, contentByNode);
 
         let dcN = this.getDisconnectedNodes(g);
 
@@ -1128,13 +1143,13 @@ export class LayoutInstance {
             let nodeMetadata = g.node(nodeId);
             // If the node has a label, we can use it.
             // Otherwise, we can use the nodeId as the label.
-            let label = nodeMetadata?.label || nodeId; 
+            let label = nodeMetadata?.label || nodeId;
             let color = nodeColorMap[nodeId] || "black";
             let iconDetails = nodeIconMap[nodeId];
             let iconPath = iconDetails.path;
             let showLabels = iconDetails.showLabels;
 
-            let { height, width } = nodeSizeMap[nodeId] || { height: this.DEFAULT_NODE_HEIGHT, width: this.DEFAULT_NODE_WIDTH };
+            let { height, width } = nodeSizeMap[nodeId];
 
             const mostSpecificType = this.getMostSpecificType(nodeId, a);
             const allTypes = this.getNodeTypes(nodeId, a);
@@ -2409,11 +2424,57 @@ export class LayoutInstance {
 
 
 
-    private getNodeSizeMap(g: Graph): Record<string, { width: number; height: number }> {
-        let nodeSizeMap: Record<string, { width: number; height: number }> = {};
-        const DEFAULT_SIZE = { width: this.DEFAULT_NODE_WIDTH, height: this.DEFAULT_NODE_HEIGHT };
+    /**
+     * Compute, for every node in `g`, the strings that the renderer will draw
+     * inside its box: main label, attribute lines, and Skolem-label lines.
+     * These are the inputs to `estimateLabelBox` so the auto-sized default
+     * matches what the user will actually see.
+     *
+     * Line formatting mirrors `webcola-cnd-graph.ts`:
+     *   - main label = `g.node(nodeId).label || nodeId`
+     *   - each attribute key produces one line: `"key: v1, v2, ..."`
+     *   - each Skolem-label key produces one line: `"v1, v2, ..."` (key omitted)
+     */
+    private getNodeDisplayContent(
+        g: Graph,
+        ai: IDataInstance,
+        attributes: Record<string, Record<string, string[]>>
+    ): Record<string, NodeDisplayContent> {
+        const result: Record<string, NodeDisplayContent> = {};
+        const atoms = ai.getAtoms();
 
-        // Apply size directives first
+        for (const nodeId of g.nodes()) {
+            const nodeMetadata = g.node(nodeId);
+            const label = nodeMetadata?.label || nodeId;
+
+            const nodeAttrs = attributes[nodeId] || {};
+            const attributeLines = Object.entries(nodeAttrs)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([key, values]) => `${key}: ${values.join(', ')}`);
+
+            const atom = atoms.find((x) => x.id === nodeId);
+            const skolemLines: string[] = [];
+            if (atom?.labels) {
+                for (const values of Object.values(atom.labels)) {
+                    skolemLines.push(Array.isArray(values) ? values.join(', ') : String(values));
+                }
+            }
+
+            result[nodeId] = { label, attributeLines, skolemLines };
+        }
+        return result;
+    }
+
+    private getNodeSizeMap(
+        g: Graph,
+        contentByNode: Record<string, NodeDisplayContent>
+    ): Record<string, { width: number; height: number }> {
+        let nodeSizeMap: Record<string, { width: number; height: number }> = {};
+
+        // Apply size directives first. These come from `size` constraints in
+        // the layout spec and must produce exactly the requested dimensions
+        // (matching `sat_size` in the Lean mechanization: ∀ a ∈ S, b.width = w
+        // ∧ b.height = h).
         let sizeDirectives = this._layoutSpec.directives.sizes;
         sizeDirectives.forEach((sizeDirective) => {
             let selectedNodes: string[];
@@ -2446,13 +2507,18 @@ export class LayoutInstance {
             });
         });
 
-        // Set default sizes for nodes that do not have a size set
-        let graphNodes = [...g.nodes()];
-        graphNodes.forEach((nodeId) => {
-            if (!nodeSizeMap[nodeId]) {
-                nodeSizeMap[nodeId] = DEFAULT_SIZE;
-            }
-        });
+        // Auto-size nodes that no `size` directive matched. The estimator
+        // floor is DEFAULT_NODE_WIDTH × DEFAULT_NODE_HEIGHT (100 × 60), so
+        // short-label nodes keep their historical footprint and only
+        // long-label nodes grow.
+        const floor = { w: this.DEFAULT_NODE_WIDTH, h: this.DEFAULT_NODE_HEIGHT };
+        for (const nodeId of g.nodes()) {
+            if (nodeSizeMap[nodeId]) continue;
+            const c = contentByNode[nodeId];
+            const main = c?.label ?? '';
+            const secondary = c ? [...c.attributeLines, ...c.skolemLines] : [];
+            nodeSizeMap[nodeId] = estimateLabelBox(main, secondary, { min: floor });
+        }
 
         return nodeSizeMap;
     }
