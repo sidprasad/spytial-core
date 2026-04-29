@@ -7322,12 +7322,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .node rect {
         cursor: move;
         filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.06));
-        transition: stroke-width 120ms ease, filter 120ms ease;
-      }
-
-      .node:hover rect {
-        stroke-width: 2px;
-        filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.1));
       }
 
       .error-node rect, .error-group {
@@ -7364,22 +7358,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         stroke-width: 1.25px;
         fill: none;
         marker-end: url(#end-arrow);
-        transition: stroke-width 120ms ease;
-      }
-
-      .link:hover {
-        stroke-width: 2px;
       }
 
       .inferredLink {
         stroke-width: 1.5px;
         fill: none;
         marker-end: url(#end-arrow);
-        transition: stroke-width 120ms ease;
-      }
-
-      .inferredLink:hover {
-        stroke-width: 2.25px;
       }
 
 
