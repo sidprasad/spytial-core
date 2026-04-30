@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { Layout as ColaLayout } from 'webcola';
 import { JSONDataInstance, IJsonDataInstance } from '../src/data-instance/json-data-instance';
 import { parseLayoutSpec } from '../src/layout/layoutspec';
 import { LayoutInstance } from '../src/layout/layoutinstance';
@@ -12,12 +11,12 @@ import {
 } from '../src/layout/interfaces';
 import {
   WebColaTranslator,
-  WebColaLayout,
   WebColaLayoutOptions,
   NodePositionHint,
   LayoutState,
   NodeWithMetadata,
 } from '../src/translators/webcola/webcolatranslator';
+import { runHeadlessLayout } from '../src/evaluation';
 
 /**
  * Test for sequence layout rendering consistency.
@@ -560,28 +559,12 @@ describe('Sequence Layout Consistency', () => {
       return base + adaptive;
     }
 
-    /**
-     * Run cola.Layout on a translated WebColaLayout. Mirrors the
-     * production setup in webcola-cnd-graph.ts (avoidOverlaps,
-     * handleDisconnected, reduced iterations) without needing d3 or DOM.
-     */
-    function runSolver(layout: WebColaLayout): NodeWithMetadata[] {
-      const colaLayout = new ColaLayout()
-        .linkDistance(150)
-        .convergenceThreshold(0.1)
-        .avoidOverlaps(true)
-        .handleDisconnected(true)
-        .nodes(layout.colaNodes as any)
-        .links(layout.colaEdges as any)
-        .constraints(layout.colaConstraints as any[])
-        .size([layout.FIG_WIDTH, layout.FIG_HEIGHT]);
-
-      // Match the reduced-iterations path used in production when
-      // prior positions are present (webcola-cnd-graph.ts:1764-1772).
-      colaLayout.start(0, 10, 20, 1);
-
-      return layout.colaNodes;
-    }
+    // The previously-inline `runSolver` helper has been promoted to
+    // the public evaluation API as `runHeadlessLayout`
+    // (src/evaluation/headless-layout.ts) so downstream consistency
+    // analysis (e.g., the thesis evaluation repo) can drive the same
+    // pipeline. These tests now consume that public path, which is the
+    // best on-going test of it.
 
     /**
      * Walk the original LayoutConstraints and assert each is satisfied
@@ -631,18 +614,9 @@ describe('Sequence Layout Consistency', () => {
       }
     }
 
-    const layoutInstance = (instance: JSONDataInstance) => {
-      const evaluator = createEvaluator(instance);
-      return new LayoutInstance(layoutSpec, evaluator, 0, true);
-    };
-
     it('locked endpoints stay near prior positions AND constraint stays satisfied (satisfied prior)', async () => {
       // jsonData1 has A→B; layoutSpec puts A left of B. Prior positions
       // already satisfy the LeftConstraint with comfortable slack.
-      const instance = new JSONDataInstance(jsonData1);
-      const li = layoutInstance(instance);
-      const { layout } = li.generateLayout(instance);
-
       const priorPositions: LayoutState = {
         positions: [
           { id: 'A', x: 200, y: 400 },
@@ -652,21 +626,18 @@ describe('Sequence Layout Consistency', () => {
         transform: { k: 1, x: 0, y: 0 },
       };
 
-      const translator = new WebColaTranslator();
-      const webcolaLayout = await translator.translate(layout, 800, 600, {
+      const result = await runHeadlessLayout(layoutSpec, new JSONDataInstance(jsonData1), {
         priorPositions,
         lockUnconstrainedNodes: true,
       });
 
-      runSolver(webcolaLayout);
-
       // The constraint must hold at the final positions.
-      assertAllConstraintsSatisfied(layout.constraints, webcolaLayout.colaNodes);
+      assertAllConstraintsSatisfied(result.constraints, result.nodes);
 
       // And locks should have held: the post-solver positions should
       // be near the prior ones for nodes whose constraints were satisfied.
       // Use a generous drift bound (50px) — the lock isn't a hard pin.
-      const finalById = new Map(webcolaLayout.colaNodes.map(n => [n.id, n]));
+      const finalById = new Map(result.nodes.map(n => [n.id, n]));
       for (const prior of priorPositions.positions) {
         const finalNode = finalById.get(prior.id)!;
         const drift = Math.hypot(
@@ -683,10 +654,6 @@ describe('Sequence Layout Consistency', () => {
     it('repairs violated constraint at prior positions (both endpoints unfixed)', async () => {
       // Same instance, but prior positions VIOLATE the LeftConstraint:
       // A.x > B.x. Both should be unfixed and the solver should repair.
-      const instance = new JSONDataInstance(jsonData1);
-      const li = layoutInstance(instance);
-      const { layout } = li.generateLayout(instance);
-
       const priorPositions: LayoutState = {
         positions: [
           { id: 'A', x: 600, y: 400 },
@@ -696,61 +663,43 @@ describe('Sequence Layout Consistency', () => {
         transform: { k: 1, x: 0, y: 0 },
       };
 
-      const translator = new WebColaTranslator();
-      const webcolaLayout = await translator.translate(layout, 800, 600, {
+      const result = await runHeadlessLayout(layoutSpec, new JSONDataInstance(jsonData1), {
         priorPositions,
         lockUnconstrainedNodes: true,
       });
 
-      runSolver(webcolaLayout);
-
       // The constraint must hold at the final positions.
-      assertAllConstraintsSatisfied(layout.constraints, webcolaLayout.colaNodes);
+      assertAllConstraintsSatisfied(result.constraints, result.nodes);
     });
 
     it('places a new node so all constraints are satisfied (mixed prior)', async () => {
       // Start with A,B; new state has A,B,C plus chain A→B→C.
       // Provide priors only for A and B (C is new). Solver must place C
       // such that LeftConstraint(B,C) and LeftConstraint(A,B) both hold.
-      const instance1 = new JSONDataInstance(jsonData1);
-      const evaluator1 = createEvaluator(instance1);
-      const layoutInstance1 = new LayoutInstance(layoutSpec, evaluator1, 0, true);
-      const { layout: layout1 } = layoutInstance1.generateLayout(instance1);
-      const translator = new WebColaTranslator();
-      const result1 = await translator.translate(layout1, 800, 600);
-      const aNode = result1.colaNodes.find(n => n.id === 'A')!;
-      const bNode = result1.colaNodes.find(n => n.id === 'B')!;
+      const baseline = await runHeadlessLayout(layoutSpec, new JSONDataInstance(jsonData1));
+      const aPos = baseline.positions.positions.find(p => p.id === 'A')!;
+      const bPos = baseline.positions.positions.find(p => p.id === 'B')!;
 
       const priorPositions: LayoutState = {
         positions: [
-          { id: 'A', x: aNode.x ?? 200, y: aNode.y ?? 400 },
-          { id: 'B', x: bNode.x ?? 600, y: bNode.y ?? 400 },
+          { id: 'A', x: aPos.x, y: aPos.y },
+          { id: 'B', x: bPos.x, y: bPos.y },
           // C intentionally omitted — it's the "new" node.
         ],
         transform: { k: 1, x: 0, y: 0 },
       };
 
-      const instance2 = new JSONDataInstance(jsonData2);
-      const li2 = layoutInstance(instance2);
-      const { layout: layout2 } = li2.generateLayout(instance2);
-
-      const webcolaLayout = await translator.translate(layout2, 800, 600, {
+      const result = await runHeadlessLayout(layoutSpec, new JSONDataInstance(jsonData2), {
         priorPositions,
         lockUnconstrainedNodes: true,
       });
 
-      runSolver(webcolaLayout);
-
       // Every constraint in the new layout must hold post-solve.
-      assertAllConstraintsSatisfied(layout2.constraints, webcolaLayout.colaNodes);
+      assertAllConstraintsSatisfied(result.constraints, result.nodes);
     });
 
     it('legacy mode (lockUnconstrainedNodes=false) also satisfies constraints', async () => {
       // Sanity check that the legacy path didn't regress.
-      const instance = new JSONDataInstance(jsonData1);
-      const li = layoutInstance(instance);
-      const { layout } = li.generateLayout(instance);
-
       const priorPositions: LayoutState = {
         positions: [
           { id: 'A', x: 200, y: 400 },
@@ -760,14 +709,12 @@ describe('Sequence Layout Consistency', () => {
         transform: { k: 1, x: 0, y: 0 },
       };
 
-      const translator = new WebColaTranslator();
-      const webcolaLayout = await translator.translate(layout, 800, 600, {
+      const result = await runHeadlessLayout(layoutSpec, new JSONDataInstance(jsonData1), {
         priorPositions,
         // lockUnconstrainedNodes intentionally omitted (false).
       });
 
-      runSolver(webcolaLayout);
-      assertAllConstraintsSatisfied(layout.constraints, webcolaLayout.colaNodes);
+      assertAllConstraintsSatisfied(result.constraints, result.nodes);
     });
   });
 });
