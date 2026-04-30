@@ -211,3 +211,27 @@ const stablePositional = positionalConsistency(priorState, currResult.positions,
   spytial-core's `stability` is soft (drifts under constraint
   pressure); a Penlloy-style hard variant would require runtime
   changes outside this API's scope.
+
+---
+
+## Test topology
+
+Three test files exercise the evaluation API and the policies, in
+increasing order of cost. Run via `npm run test:run -- <file>`.
+
+| File | Tier | What it asserts | Cost |
+|---|---|---|---|
+| [`tests/sequence-policy-metrics-pbt.test.ts`](../tests/sequence-policy-metrics-pbt.test.ts) | 1 — pure metric algebra (PBT) | Non-negativity, symmetry, translation invariance, restrict-to subset monotonicity for both metrics; idempotence and tolerance-ball semantics for the classifier. 200 trials per property. | ~120 ms |
+| [`tests/sequence-policy-apply-pbt.test.ts`](../tests/sequence-policy-apply-pbt.test.ts) | 2 — policy `apply()` invariants (PBT) | `ignoreHistory` always returns `{ undefined, false }`; `stability` preserves shared-atom positions exactly; `changeEmphasis` is deterministic and respects viewport + jitter range; `randomPositioning` covers every curr atom and stays in bounds. 100 trials per property. | ~80 ms |
+| [`tests/sequence-policy-consistency-metrics.test.ts`](../tests/sequence-policy-consistency-metrics.test.ts) | 3 — full-pipeline behavioural (example-based) | Per-policy promises observed at the **post-solver** positions on a small fixed benchmark of five scenarios (identity, relation change, atom add/remove, restructure). | ~300 ms |
+
+PBT (Tiers 1 and 2) catches regressions across a wide input space
+cheaply; example-based Tier 3 covers full-pipeline behaviour where
+PBT trial cost would balloon (cola.Layout runs ≈ 200-900 ms per
+trial). End-to-end PBT through the solver is deliberately deferred
+until a specific class of inputs surfaces a regression worth
+generalising; see the May 14 follow-up
+([routine](https://claude.ai/code/routines/trig_01BF8tevRZXFyuwGtZnxE5Yn)).
+
+Reusable arbitraries for sequence-policy PBT live in
+[`tests/helpers/sequence-policy-arbitraries.ts`](../tests/helpers/sequence-policy-arbitraries.ts).
