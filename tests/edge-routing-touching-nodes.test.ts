@@ -83,6 +83,7 @@ describe('Edge routing near-touching nodes', () => {
         computePerpendicularRoute: proto.computePerpendicularRoute,
         areBoundsNear: proto.areBoundsNear,
         chooseBoundaryPoint: proto.chooseBoundaryPoint,
+        getVisibleBounds: proto.getVisibleBounds,
         gridLineFunction: (pts: any[]) => `M${pts.map(p => `${p.x},${p.y}`).join(' L ')}`
       };
 
