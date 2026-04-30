@@ -197,18 +197,24 @@ export interface WebColaLayoutOptions {
   transitionMode?: WebColaRenderTransitionMode;
 
   /**
-   * When true, nodes with prior positions that are NOT involved in any
-   * constraint get fixed=1 (locked at their prior position).
+   * When true (stability mode), nodes with prior positions are locked
+   * at those positions (fixed=1) wherever it does not violate a
+   * constraint:
    *
-   * Webcola's gradient descent inflates the Hessian diagonal for locked
-   * nodes, creating a strong spring toward the prior position.
-   * `toColaConstraint()` sets fixed=0 on every node involved in a
-   * constraint so that alignment-edge spring forces and gradient descent
-   * can freely position them.
+   *   - Unconstrained nodes with prior positions stay locked.
+   *   - Constrained nodes whose prior positions already SATISFY the
+   *     constraint stay locked. WebCola treats fixed=1 as a strong
+   *     soft anchor (default weight 1000 in the VPSC projector and a
+   *     max-Hessian spring in gradient descent), so the solver will
+   *     still keep the constraint satisfied if anything else moves.
+   *   - Constrained nodes whose prior positions VIOLATE the constraint
+   *     are unfixed so the solver can move them freely.
+   *   - New nodes (no prior position) are unfixed and seeded via DAGRE
+   *     or the figure center.
    *
-   * Seeding prior positions on all nodes (including constrained ones)
-   * still helps: it gives gradient descent a good starting neighborhood,
-   * reducing drift even for unlocked nodes.
+   * When false (default / morph mode), every node involved in any
+   * constraint is unfixed — the legacy behavior that lets gradient
+   * descent and alignment-edge spring forces freely re-place them.
    */
   lockUnconstrainedNodes?: boolean;
 }
@@ -271,6 +277,13 @@ export class WebColaLayout {
    */
   private priorPositionMap: Map<string, NodePositionHint>;
 
+  /**
+   * Map of node id to its index in `colaNodes`. Built once after `colaNodes`
+   * is constructed. Backs `getNodeIndex()` so constraint translation and
+   * the post-pass run in O(c) instead of O(c × n).
+   */
+  private nodeIndexMap: Map<string, number> = new Map();
+
   /** When true, lock unconstrained nodes with prior positions via fixed=1. */
   private lockUnconstrainedNodes: boolean;
 
@@ -322,6 +335,12 @@ export class WebColaLayout {
 
 
     this.colaNodes = instanceLayout.nodes.map(node => this.toColaNode(node));
+    // Build node-id -> index map. Used by getNodeIndex() to keep
+    // constraint translation and the constraint-aware locking post-pass
+    // O(c) instead of O(c × n).
+    for (let i = 0; i < this.colaNodes.length; i++) {
+      this.nodeIndexMap.set(this.colaNodes[i].id, i);
+    }
     this.colaEdges = instanceLayout.edges.map(edge => this.toColaEdge(edge));
 
     // Collapse symmetric edges with the same label
@@ -334,6 +353,13 @@ export class WebColaLayout {
     this.conflictingConstraints = instanceLayout.conflictingConstraints || [];
     this.overlappingNodesData = instanceLayout.overlappingNodes || [];
     this.colaConstraints = instanceLayout.constraints.map(constraint => this.toColaConstraint(constraint));
+
+    // Decide which constraint endpoints stay locked (fixed=1) and which
+    // get unfixed. In stability mode (lockUnconstrainedNodes=true) we
+    // only unfix endpoints whose prior positions would violate the
+    // constraint. Outside stability mode this preserves the historical
+    // behavior of unfixing every constrained node.
+    this.applyConstraintAwareLocking(instanceLayout.constraints);
 
     // Apply transitive reduction optimization if we have many constraints
     // Threshold: optimize when we have more than 100 constraints
@@ -495,8 +521,9 @@ export class WebColaLayout {
     return nonRedundant;
   }
 
-  private getNodeIndex(nodeId: string) {
-    return this.colaNodes.findIndex(node => node.id === nodeId);
+  private getNodeIndex(nodeId: string): number {
+    const idx = this.nodeIndexMap.get(nodeId);
+    return idx === undefined ? -1 : idx;
   }
 
   /**
@@ -589,11 +616,12 @@ export class WebColaLayout {
    * 3. Default center position (DEFAULT_X, DEFAULT_Y)
    * 
    * When `lockUnconstrainedNodes` is true (stability mode), nodes with
-   * prior positions are initially locked (fixed=1).  `toColaConstraint()`
-   * later sets fixed=0 on any node involved in a constraint, so only
-   * truly unconstrained nodes stay locked.  Seeding the prior position
-   * on constrained nodes still helps by giving gradient descent a good
-   * starting neighborhood.
+   * prior positions are initially locked (fixed=1). After all
+   * constraints are translated, `applyConstraintAwareLocking()` runs
+   * a post-pass that unfixes endpoints whose prior positions violate a
+   * constraint (so the solver can repair) and unfixes new (unseeded)
+   * endpoints in mixed-prior constraints. Endpoints whose prior
+   * positions already satisfy their constraints stay locked.
    * 
    * @param node - The LayoutNode to convert
    * @returns NodeWithMetadata for WebCola
@@ -736,59 +764,33 @@ export class WebColaLayout {
 
   private toColaConstraint(constraint: LayoutConstraint): ColaConstraint {
 
-    // Switch on the type of constraint.
-    // Nodes involved in constraints get fixed=0 so that gradient descent
-    // (and alignment-edge spring forces) can freely position them.
-    // Unconstrained nodes keep fixed=1 from toColaNode() so they stay
-    // anchored at their prior positions.
+    // Pure translation: do NOT mutate node.fixed here. The post-pass in
+    // applyConstraintAwareLocking() decides whether to unfix endpoints
+    // based on whether their prior positions already satisfy the constraint.
+
     if (isLeftConstraint(constraint)) {
-
-      // Get the two nodes that are being constrained
-      let node1 = this.colaNodes[this.getNodeIndex(constraint.left.id)];
-      let node2 = this.colaNodes[this.getNodeIndex(constraint.right.id)];
-      // Free constrained nodes so alignment edges and gradient descent work
-      node1.fixed = 0;
-      node2.fixed = 0;
-
-      // Use improved horizontal separation calculation based on actual node dimensions
-      let distance = this.computeHorizontalSeparation(node1, node2, constraint.minDistance);
-
+      const node1 = this.colaNodes[this.getNodeIndex(constraint.left.id)];
+      const node2 = this.colaNodes[this.getNodeIndex(constraint.right.id)];
+      const distance = this.computeHorizontalSeparation(node1, node2, constraint.minDistance);
       return this.leftConstraint(this.getNodeIndex(constraint.left.id), this.getNodeIndex(constraint.right.id), distance);
     }
 
     if (isTopConstraint(constraint)) {
-
-      // Get the two nodes that are being constrained
-      let node1 = this.colaNodes[this.getNodeIndex(constraint.top.id)];
-      let node2 = this.colaNodes[this.getNodeIndex(constraint.bottom.id)];
-      // Free constrained nodes so alignment edges and gradient descent work
-      node1.fixed = 0;
-      node2.fixed = 0;
-
-      // Use improved vertical separation calculation based on actual node dimensions
-      let distance = this.computeVerticalSeparation(node1, node2, constraint.minDistance);
-
+      const node1 = this.colaNodes[this.getNodeIndex(constraint.top.id)];
+      const node2 = this.colaNodes[this.getNodeIndex(constraint.bottom.id)];
+      const distance = this.computeVerticalSeparation(node1, node2, constraint.minDistance);
       return this.topConstraint(this.getNodeIndex(constraint.top.id), this.getNodeIndex(constraint.bottom.id), distance);
     }
 
     if (isAlignmentConstraint(constraint)) {
-      const alignmentConstraint = {
+      return {
         type: "separation",
         axis: constraint.axis,
         left: this.getNodeIndex(constraint.node1.id),
         right: this.getNodeIndex(constraint.node2.id),
         gap: 0,
         'equality': true
-      }
-
-      // Free constrained nodes so alignment edges and gradient descent work
-      let node1 = this.colaNodes[this.getNodeIndex(constraint.node1.id)];
-      let node2 = this.colaNodes[this.getNodeIndex(constraint.node2.id)];
-      node1.fixed = 0;
-      node2.fixed = 0;
-
-      return alignmentConstraint;
-
+      };
     }
 
     if(isBoundingBoxConstraint(constraint)) {
@@ -805,6 +807,142 @@ export class WebColaLayout {
     }
 
     throw new Error("Constraint type not recognized");
+  }
+
+  /**
+   * Tolerance (px) used when checking whether two prior positions already
+   * satisfy a separation/alignment constraint. Matches the implicit slack
+   * the WebCola solver uses when deciding constraints are "satisfied".
+   */
+  private static readonly CONSTRAINT_SATISFACTION_TOLERANCE = 0.5;
+
+  /**
+   * Per-constraint lock decision, computed once in a single switch:
+   *
+   *   - `endpoints`: the node objects involved in this constraint, or
+   *     `null` for constraint types we don't translate (bounding-box,
+   *     group-boundary, noop). Callers skip null.
+   *   - `verdict`:
+   *       'satisfied' — both endpoints have prior positions and they
+   *                     satisfy the constraint (within tolerance). Both
+   *                     can stay locked at fixed=1.
+   *       'violated'  — both endpoints have prior positions but they do
+   *                     NOT satisfy the constraint. Both must be unfixed
+   *                     so the solver can repair.
+   *       'unknown'   — at least one endpoint lacks a prior position
+   *                     (newly added). Lock the seeded one, free the new
+   *                     one.
+   *
+   * Folds the previous `endpointsOf` + `evaluateConstraintAtPriorPositions`
+   * helpers into a single switch so each constraint pays one dispatch and
+   * one pair of node lookups (O(1) each via nodeIndexMap).
+   */
+  private classifyConstraintForLocking(
+    constraint: LayoutConstraint
+  ): {
+    endpoints: [NodeWithMetadata, NodeWithMetadata];
+    verdict: 'satisfied' | 'violated' | 'unknown';
+  } | null {
+    const tol = WebColaLayout.CONSTRAINT_SATISFACTION_TOLERANCE;
+    const priors = this.priorPositionMap;
+
+    let n1: NodeWithMetadata;
+    let n2: NodeWithMetadata;
+    let bothSeeded: boolean;
+
+    if (isLeftConstraint(constraint)) {
+      n1 = this.colaNodes[this.getNodeIndex(constraint.left.id)];
+      n2 = this.colaNodes[this.getNodeIndex(constraint.right.id)];
+      bothSeeded = priors.has(n1.id) && priors.has(n2.id);
+      if (!bothSeeded) return { endpoints: [n1, n2], verdict: 'unknown' };
+      const required = this.computeHorizontalSeparation(n1, n2, constraint.minDistance);
+      const actual = (n2.x ?? 0) - (n1.x ?? 0);
+      return {
+        endpoints: [n1, n2],
+        verdict: actual + tol >= required ? 'satisfied' : 'violated',
+      };
+    }
+
+    if (isTopConstraint(constraint)) {
+      n1 = this.colaNodes[this.getNodeIndex(constraint.top.id)];
+      n2 = this.colaNodes[this.getNodeIndex(constraint.bottom.id)];
+      bothSeeded = priors.has(n1.id) && priors.has(n2.id);
+      if (!bothSeeded) return { endpoints: [n1, n2], verdict: 'unknown' };
+      const required = this.computeVerticalSeparation(n1, n2, constraint.minDistance);
+      const actual = (n2.y ?? 0) - (n1.y ?? 0);
+      return {
+        endpoints: [n1, n2],
+        verdict: actual + tol >= required ? 'satisfied' : 'violated',
+      };
+    }
+
+    if (isAlignmentConstraint(constraint)) {
+      n1 = this.colaNodes[this.getNodeIndex(constraint.node1.id)];
+      n2 = this.colaNodes[this.getNodeIndex(constraint.node2.id)];
+      bothSeeded = priors.has(n1.id) && priors.has(n2.id);
+      if (!bothSeeded) return { endpoints: [n1, n2], verdict: 'unknown' };
+      const a = constraint.axis === 'x' ? (n1.x ?? 0) : (n1.y ?? 0);
+      const b = constraint.axis === 'x' ? (n2.x ?? 0) : (n2.y ?? 0);
+      return {
+        endpoints: [n1, n2],
+        verdict: Math.abs(a - b) <= tol ? 'satisfied' : 'violated',
+      };
+    }
+
+    // BoundingBox / GroupBoundary / unrecognized: not translated to
+    // WebCola, so they have no endpoints to lock.
+    return null;
+  }
+
+  /**
+   * Post-pass over all LayoutConstraints that decides which endpoints
+   * stay locked (fixed=1 from toColaNode) and which get unfixed.
+   *
+   * - lockUnconstrainedNodes=true (stability mode): per-constraint
+   *   verdict drives the decision — satisfied keeps both locked,
+   *   violated unfixes both, unknown unfixes only unseeded endpoints.
+   * - lockUnconstrainedNodes=false: legacy behavior — any node touched
+   *   by a constraint is unfixed. Short-circuited when no node was ever
+   *   locked (priorPositionMap empty), since there's nothing to unfix.
+   *
+   * Cost: O(c) — one classification per constraint, each doing two
+   * O(1) node-index lookups via nodeIndexMap.
+   */
+  private applyConstraintAwareLocking(constraints: LayoutConstraint[]): void {
+    const stability = this.lockUnconstrainedNodes;
+
+    // Legacy mode + no nodes were locked → no-op.
+    if (!stability && this.priorPositionMap.size === 0) return;
+
+    for (const constraint of constraints) {
+      const classified = this.classifyConstraintForLocking(constraint);
+      if (!classified) continue;
+      const [n1, n2] = classified.endpoints;
+
+      if (!stability) {
+        // Legacy: any constrained endpoint is freed.
+        n1.fixed = 0;
+        n2.fixed = 0;
+        continue;
+      }
+
+      switch (classified.verdict) {
+        case 'satisfied':
+          // Prior positions honor the constraint — keep both locked.
+          break;
+        case 'violated':
+          // Prior positions don't honor the constraint — free both so
+          // the solver can repair.
+          n1.fixed = 0;
+          n2.fixed = 0;
+          break;
+        case 'unknown':
+          // One side is a new node — free only the unseeded endpoint(s).
+          if (!this.priorPositionMap.has(n1.id)) n1.fixed = 0;
+          if (!this.priorPositionMap.has(n2.id)) n2.fixed = 0;
+          break;
+      }
+    }
   }
 
   /**
