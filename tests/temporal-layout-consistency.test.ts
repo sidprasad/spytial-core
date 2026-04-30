@@ -362,4 +362,143 @@ describe('Sequence Layout Consistency', () => {
       expect(nonExistent).toBeUndefined();
     });
   });
+
+  describe('Constraint-aware locking (lockUnconstrainedNodes)', () => {
+    // Layout spec with a "right" orientation constraint: A right-of edges
+    // produce a Left-constraint between source and target. Combined with
+    // jsonData1 (A -> B), this means there is a LeftConstraint(A, B).
+    const layoutInstance = (instance: JSONDataInstance) => {
+      const evaluator = createEvaluator(instance);
+      return new LayoutInstance(layoutSpec, evaluator, 0, true);
+    };
+
+    it('keeps both endpoints locked (fixed=1) when prior positions satisfy the constraint', async () => {
+      const instance = new JSONDataInstance(jsonData1);
+      const li = layoutInstance(instance);
+      const { layout } = li.generateLayout(instance);
+
+      // A at (100, 300), B at (400, 300): A is well to the left of B,
+      // so the LeftConstraint(A, B) is already satisfied by the seeds.
+      const priorPositions: LayoutState = {
+        positions: [
+          { id: 'A', x: 100, y: 300 },
+          { id: 'B', x: 400, y: 300 },
+          { id: 'C', x: 250, y: 500 }
+        ],
+        transform: { k: 1, x: 0, y: 0 }
+      };
+
+      const translator = new WebColaTranslator();
+      const result = await translator.translate(layout, 800, 600, {
+        priorPositions,
+        lockUnconstrainedNodes: true,
+      });
+
+      const nodeA = result.colaNodes.find(n => n.id === 'A')!;
+      const nodeB = result.colaNodes.find(n => n.id === 'B')!;
+      const nodeC = result.colaNodes.find(n => n.id === 'C')!;
+
+      // A and B both have prior positions and the LeftConstraint(A, B)
+      // is satisfied — both should remain locked.
+      expect(nodeA.fixed).toBe(1);
+      expect(nodeB.fixed).toBe(1);
+      // C is unconstrained and has a prior position — also locked.
+      expect(nodeC.fixed).toBe(1);
+    });
+
+    it('unfixes both endpoints when prior positions violate the constraint', async () => {
+      const instance = new JSONDataInstance(jsonData1);
+      const li = layoutInstance(instance);
+      const { layout } = li.generateLayout(instance);
+
+      // A at (400, 300), B at (100, 300): A is to the RIGHT of B,
+      // violating the LeftConstraint(A, B). Both must be unfixed so the
+      // solver can repair.
+      const priorPositions: LayoutState = {
+        positions: [
+          { id: 'A', x: 400, y: 300 },
+          { id: 'B', x: 100, y: 300 },
+          { id: 'C', x: 250, y: 500 }
+        ],
+        transform: { k: 1, x: 0, y: 0 }
+      };
+
+      const translator = new WebColaTranslator();
+      const result = await translator.translate(layout, 800, 600, {
+        priorPositions,
+        lockUnconstrainedNodes: true,
+      });
+
+      const nodeA = result.colaNodes.find(n => n.id === 'A')!;
+      const nodeB = result.colaNodes.find(n => n.id === 'B')!;
+      const nodeC = result.colaNodes.find(n => n.id === 'C')!;
+
+      // Both endpoints of the violated constraint are unfixed.
+      expect(nodeA.fixed).toBe(0);
+      expect(nodeB.fixed).toBe(0);
+      // C is unaffected — still locked at its prior position.
+      expect(nodeC.fixed).toBe(1);
+    });
+
+    it('unfixes only the new endpoint when one side lacks a prior position', async () => {
+      const instance = new JSONDataInstance(jsonData1);
+      const li = layoutInstance(instance);
+      const { layout } = li.generateLayout(instance);
+
+      // Only A has a prior position; B is brand-new in this frame.
+      const priorPositions: LayoutState = {
+        positions: [
+          { id: 'A', x: 100, y: 300 }
+        ],
+        transform: { k: 1, x: 0, y: 0 }
+      };
+
+      const translator = new WebColaTranslator();
+      const result = await translator.translate(layout, 800, 600, {
+        priorPositions,
+        lockUnconstrainedNodes: true,
+      });
+
+      const nodeA = result.colaNodes.find(n => n.id === 'A')!;
+      const nodeB = result.colaNodes.find(n => n.id === 'B')!;
+
+      // A keeps its prior position locked; B (no prior) is unfixed
+      // so the solver can position it relative to A.
+      expect(nodeA.fixed).toBe(1);
+      expect(nodeB.fixed).toBe(0);
+    });
+
+    it('preserves legacy behavior when lockUnconstrainedNodes is false', async () => {
+      const instance = new JSONDataInstance(jsonData1);
+      const li = layoutInstance(instance);
+      const { layout } = li.generateLayout(instance);
+
+      const priorPositions: LayoutState = {
+        positions: [
+          { id: 'A', x: 100, y: 300 },
+          { id: 'B', x: 400, y: 300 },
+          { id: 'C', x: 250, y: 500 }
+        ],
+        transform: { k: 1, x: 0, y: 0 }
+      };
+
+      const translator = new WebColaTranslator();
+      // No lockUnconstrainedNodes flag (defaults to false): legacy mode
+      // should unfix every constrained endpoint and never lock anyone.
+      const result = await translator.translate(layout, 800, 600, {
+        priorPositions,
+      });
+
+      const nodeA = result.colaNodes.find(n => n.id === 'A')!;
+      const nodeB = result.colaNodes.find(n => n.id === 'B')!;
+      const nodeC = result.colaNodes.find(n => n.id === 'C')!;
+
+      // toColaNode never sets fixed=1 when lockUnconstrainedNodes=false,
+      // so all nodes start at fixed=0 — and the post-pass leaves them
+      // there.
+      expect(nodeA.fixed).toBe(0);
+      expect(nodeB.fixed).toBe(0);
+      expect(nodeC.fixed).toBe(0);
+    });
+  });
 });
