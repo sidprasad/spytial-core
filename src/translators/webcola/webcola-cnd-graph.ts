@@ -919,7 +919,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       </div>
       <svg id="svg">
         <defs>
-        <marker id="end-arrow" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+        <marker id="end-arrow" markerWidth="12" markerHeight="8" refX="12" refY="4" orient="auto" markerUnits="userSpaceOnUse">
           <polygon points="0 0, 12 4, 0 8, 3 4" fill="context-stroke" />
         </marker>
         <marker id="start-arrow" markerWidth="12" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
@@ -4476,16 +4476,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         }
       });
 
-      // Distribute parallel edges across distinct ports on each node side and
-      // re-orthogonalize the entry/exit segments. Without this, GridRouter
-      // produces identical center-to-center paths for two A→B edges, which
-      // overlap and (after any downstream nudge) appear non-orthogonal.
-      for (const [edgeId, processed] of routesByEdgeId) {
-        const edgeData = (routableEdges as any[]).find((e: any) => e?.id === edgeId);
-        if (!edgeData) continue;
-        const adjusted = this.applyPortBasedEndpointsOrthogonal(edgeData, processed);
-        routesByEdgeId.set(edgeId, adjusted);
-      }
+      // Note: port distribution for parallel edges is applied at draw time
+      // inside adjustGridRouteForArrowPositioning, after rectangle clipping —
+      // doing it here would be overwritten by that pass.
 
       console.log('[gridify] Routes generated:', routesByEdgeId.size, 'out of', routableEdges.length);
 
@@ -4779,40 +4772,74 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         return this.gridLineFunction(newPoints);
       }
 
-      // Standard case: adjust endpoints to node boundaries
-      const secondPoint = points.length > 1 ? points[1] : points[0];
-      let sourceIntersection = this.getRectangleIntersection(
-        sourceBounds.x + sourceBounds.width() / 2,
-        sourceBounds.y + sourceBounds.height() / 2,
-        secondPoint.x,
-        secondPoint.y,
-        sourceBounds
-      );
-
-      if (sourceIntersection) {
-        points[0] = sourceIntersection;
-      }
-
-      // Adjust last point to target node boundary
-      const secondLastPoint = points.length > 1 ? points[points.length - 2] : points[points.length - 1];
-      let targetIntersection = this.getRectangleIntersection(
-        targetBounds.x + targetBounds.width() / 2,
-        targetBounds.y + targetBounds.height() / 2,
-        secondLastPoint.x,
-        secondLastPoint.y,
+      // Standard case: clip endpoints to the visible boundary while preserving
+      // orthogonality of the entry/exit segments. GridRouter outputs axis-aligned
+      // segments, so we just snap route[0]/route[last] along the egress axis to
+      // the visible side. Falls back to a center-line rectangle intersection if
+      // the original segment isn't orthogonal (defensive — shouldn't happen).
+      points[0] = this.clipEndpointToVisibleBoundary(points[0], points[1], sourceBounds);
+      points[points.length - 1] = this.clipEndpointToVisibleBoundary(
+        points[points.length - 1],
+        points[points.length - 2],
         targetBounds
       );
 
-      if (targetIntersection) {
-        points[points.length - 1] = targetIntersection;
-      }
+      // Distribute parallel edges across distinct ports on the visible boundary
+      // and re-orthogonalize the entry/exit segments. Must run AFTER rectangle
+      // clipping so the port shift isn't overwritten.
+      const portAdjusted = this.applyPortBasedEndpointsOrthogonal(edgeData, points);
 
       // Convert points back to SVG path using grid line function for sharp turns
-      return this.gridLineFunction(points);
+      return this.gridLineFunction(portAdjusted);
     } catch (error) {
       console.warn('Error adjusting grid route for arrow positioning:', error);
       return null;
     }
+  }
+
+  /**
+   * Snap an endpoint of an orthogonal route to the visible-boundary side it
+   * already exits, preserving axis alignment with the neighboring waypoint.
+   *
+   * For a route like [(245, 92), (245, -120), …], the first segment is
+   * vertical (same x), so route[0] is on the top or bottom of source. We pick
+   * whichever side route[0] is closer to and snap that coordinate to the
+   * visible boundary while keeping the perpendicular coordinate intact —
+   * preserving orthogonality automatically.
+   *
+   * Falls back to a center-line rectangle intersection if the original
+   * endpoint→neighbor segment isn't axis-aligned.
+   */
+  private clipEndpointToVisibleBoundary(
+    endpoint: { x: number; y: number },
+    neighbor: { x: number; y: number },
+    bounds: any
+  ): { x: number; y: number } {
+    const cx = bounds.x + bounds.width() / 2;
+    const cy = bounds.y + bounds.height() / 2;
+    const bx = bounds.x;
+    const bX = typeof bounds.X === 'number' ? bounds.X : bounds.x + bounds.width();
+    const by = bounds.y;
+    const bY = typeof bounds.Y === 'number' ? bounds.Y : bounds.y + bounds.height();
+    const eps = 0.5;
+
+    const dx = neighbor.x - endpoint.x;
+    const dy = neighbor.y - endpoint.y;
+
+    if (Math.abs(dx) < eps && Math.abs(dy) >= eps) {
+      // Vertical segment — endpoint is on top or bottom.
+      const targetY = endpoint.y > cy ? bY : by;
+      return { x: endpoint.x, y: targetY };
+    }
+    if (Math.abs(dy) < eps && Math.abs(dx) >= eps) {
+      // Horizontal segment — endpoint is on left or right.
+      const targetX = endpoint.x > cx ? bX : bx;
+      return { x: targetX, y: endpoint.y };
+    }
+
+    // Fallback: defensive rectangle intersection from center to neighbor.
+    const intersection = this.getRectangleIntersection(cx, cy, neighbor.x, neighbor.y, bounds);
+    return intersection ?? endpoint;
   }
 
   /**
