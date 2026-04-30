@@ -196,3 +196,18 @@ export type { ProjectionOrchestratorProps, ProjectionOrchestratorResult } from '
 // Projection Transform (pre-layout data instance transformation)
 export { applyProjectionTransform, topologicalSortWithCycleBreaking } from './data-instance/projection-transform';
 export type { Projection, ProjectionTransformOptions, ProjectionTransformResult } from './data-instance/projection-transform';
+
+// Evaluation API — headless layout + Penlloy consistency metrics.
+// Intended for sequence-policy analysis (e.g., the thesis evaluation
+// repo); not for production rendering.
+export {
+  runHeadlessLayout,
+  positionalConsistency,
+  relativeConsistency,
+  classifyChangeEmphasisStableSet,
+} from './evaluation';
+export type {
+  HeadlessLayoutOptions,
+  HeadlessLayoutResult,
+  EdgeKey,
+} from './evaluation';
