@@ -210,6 +210,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Even on overcrowded nodes, margin is never reduced below this value.
    */
   private static readonly MIN_ABSOLUTE_PORT_MARGIN_PX = 2;
+  /**
+   * Visible (rendered) inset for group containers, expressed as the inverse
+   * of the inflation applied at routing time (see route() — `bounds.inflate(-groupMargin)`).
+   * Edges should clip to this visible boundary so arrowheads land on the
+   * rendered group rectangle rather than on the inflated WebCola bounds.
+   */
+  private static readonly GROUP_VISUAL_MARGIN_PX = 10;
 
   /**
    * Configuration constants for WebCola layout iterations
@@ -4226,12 +4233,19 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * on each edge data object for use during offset calculation.
    */
   private sortEdgePortsByAngle(): void {
+    const tieBreak = (a: any, b: any): number => {
+      const ida = String(a.edge?.id ?? '');
+      const idb = String(b.edge?.id ?? '');
+      if (ida < idb) return -1;
+      if (ida > idb) return 1;
+      return 0;
+    };
     for (const [, sides] of this.edgeRoutingCache.nodeEdgesBySide) {
-      // Top/bottom: sort by remote x (left to right)
+      // Top/bottom: sort by remote x (left to right), edge id as tie-breaker
       for (const side of ['top', 'bottom'] as const) {
         const entries = sides[side];
         if (entries.length <= 1) continue;
-        entries.sort((a: any, b: any) => a.remoteX - b.remoteX);
+        entries.sort((a: any, b: any) => (a.remoteX - b.remoteX) || tieBreak(a, b));
         for (let i = 0; i < entries.length; i++) {
           const entry = entries[i];
           if (entry.role === 'source') {
@@ -4243,11 +4257,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           }
         }
       }
-      // Left/right: sort by remote y (top to bottom)
+      // Left/right: sort by remote y (top to bottom), edge id as tie-breaker
       for (const side of ['left', 'right'] as const) {
         const entries = sides[side];
         if (entries.length <= 1) continue;
-        entries.sort((a: any, b: any) => a.remoteY - b.remoteY);
+        entries.sort((a: any, b: any) => (a.remoteY - b.remoteY) || tieBreak(a, b));
         for (let i = 0; i < entries.length; i++) {
           const entry = entries[i];
           if (entry.role === 'source') {
@@ -4400,6 +4414,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         console.log(`  ${n.id}: x=${n.x?.toFixed(2)}, y=${n.y?.toFixed(2)}, bounds.cx=${n.bounds?.cx?.()?.toFixed(2)}, bounds.x=${n.bounds?.x?.toFixed(2)}`);
       });
 
+      // Build/refresh port assignments so parallel edges use distinct entry/exit
+      // points. Without this, multiple A→B edges share the same orthogonal route.
+      this.buildEdgeRoutingCaches();
+      this.sortEdgePortsByAngle();
+
       // Create the grid router
       const gridrouter = this.route(nodes, groups, margin, groupMargin);
 
@@ -4456,6 +4475,17 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           routesByEdgeId.set(edge.id, processed);
         }
       });
+
+      // Distribute parallel edges across distinct ports on each node side and
+      // re-orthogonalize the entry/exit segments. Without this, GridRouter
+      // produces identical center-to-center paths for two A→B edges, which
+      // overlap and (after any downstream nudge) appear non-orthogonal.
+      for (const [edgeId, processed] of routesByEdgeId) {
+        const edgeData = (routableEdges as any[]).find((e: any) => e?.id === edgeId);
+        if (!edgeData) continue;
+        const adjusted = this.applyPortBasedEndpointsOrthogonal(edgeData, processed);
+        routesByEdgeId.set(edgeId, adjusted);
+      }
 
       console.log('[gridify] Routes generated:', routesByEdgeId.size, 'out of', routableEdges.length);
 
@@ -4718,14 +4748,16 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       const source = edgeData.source;
       const target = edgeData.target;
 
-      // Get node bounds (fallback to simple bounds if not provided)
-      const sourceBounds = source.bounds || { 
-        x: source.x - (source.width || 0) / 2, 
+      // Use the *visible* rectangle (visualWidth/visualHeight for plain nodes,
+      // inset bounds for groups) so the arrowhead lands on the rendered border
+      // rather than on WebCola's inflated collision rectangle.
+      const sourceBounds = this.getVisibleBounds(source) ?? source.bounds ?? {
+        x: source.x - (source.width || 0) / 2,
         y: source.y - (source.height || 0) / 2,
         width: () => source.width || 0,
         height: () => source.height || 0
       };
-      const targetBounds = target.bounds || {
+      const targetBounds = this.getVisibleBounds(target) ?? target.bounds ?? {
         x: target.x - (target.width || 0) / 2,
         y: target.y - (target.height || 0) / 2,
         width: () => target.width || 0,
@@ -5726,8 +5758,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Detects edge-edge crossings in the computed routes using segment-segment
    * intersection tests (cross-product method).
    *
-   * Skips alignment edges, self-loops, and pairs sharing a node (those touch
-   * at the shared node which is an inevitable visual overlap, not a crossing).
+   * Skips alignment edges and self-loops. For pairs that share an endpoint
+   * node, drops the segments incident to the shared node before testing for
+   * intersection — touching at a shared node is unavoidable, but a *real*
+   * crossing past the shared node is fixable (typically by a port swap).
    *
    * @returns Array of [edgeId1, edgeId2] crossing pairs, sorted by severity
    *          (longer total edge length = more severe crossing)
@@ -5754,14 +5788,17 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
     for (let i = 0; i < edgeIds.length; i++) {
       for (let j = i + 1; j < edgeIds.length; j++) {
-        // Skip pairs that share a node
-        if (edgeEndpoints[i].sourceId === edgeEndpoints[j].sourceId ||
-            edgeEndpoints[i].sourceId === edgeEndpoints[j].targetId ||
-            edgeEndpoints[i].targetId === edgeEndpoints[j].sourceId ||
-            edgeEndpoints[i].targetId === edgeEndpoints[j].targetId) {
-          continue;
-        }
+        const ei = edgeEndpoints[i];
+        const ej = edgeEndpoints[j];
+        const sharedAtSourceI = ei.sourceId === ej.sourceId || ei.sourceId === ej.targetId;
+        const sharedAtTargetI = ei.targetId === ej.sourceId || ei.targetId === ej.targetId;
+        // Parallel edges (both endpoints shared) only ever touch at endpoints —
+        // skip them (port distribution handles their separation).
+        if (sharedAtSourceI && sharedAtTargetI) continue;
 
+        // For all other pairs (including those sharing one node) the strict
+        // proper-intersection test in segmentsIntersect rules out touches at
+        // the shared endpoint, so the full routes can be tested directly.
         if (this.routesCross(edgeRoutes[i], edgeRoutes[j])) {
           const severity = this.getRouteLength(edgeRoutes[i]) + this.getRouteLength(edgeRoutes[j]);
           crossings.push([edgeIds[i], edgeIds[j], severity]);
@@ -5839,6 +5876,20 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       const route2 = this.computedRoutes.get(id2);
       if (!route1 || !route2) continue;
 
+      // Strategy 0: if the two crossing edges share an endpoint node, try
+      // swapping their port indices at that node. This is the canonical fix
+      // for "two edges left the same side in the wrong angular order" and is
+      // cheaper than nudging or rerouting.
+      const edge1 = this.findEdgeById(id1);
+      const edge2 = this.findEdgeById(id2);
+      const sharedNodeId = edge1 && edge2 ? this.findSharedNodeId(edge1, edge2) : null;
+      if (edge1 && edge2 && sharedNodeId) {
+        if (this.tryResolveByPortSwap(edge1, edge2, sharedNodeId)) {
+          modified = true;
+          continue;
+        }
+      }
+
       // Find the exact crossing point and which segments cross
       const crossingInfo = this.findCrossingSegments(route1, route2);
       if (!crossingInfo) continue;
@@ -5886,6 +5937,86 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     }
 
     return modified;
+  }
+
+  /** Look up an edge in the current layout by its id. */
+  private findEdgeById(edgeId: string): EdgeWithMetadata | null {
+    if (!this.currentLayout?.links) return null;
+    for (const e of this.currentLayout.links as EdgeWithMetadata[]) {
+      if (e.id === edgeId) return e;
+    }
+    return null;
+  }
+
+  /**
+   * Returns the id of the node both edges have in common, or null if they
+   * don't share an endpoint. Two parallel edges (sharing both endpoints) are
+   * treated as no shared-node fixable case — port distribution handles those.
+   */
+  private findSharedNodeId(a: EdgeWithMetadata, b: EdgeWithMetadata): string | null {
+    const aSrc = a.source.id;
+    const aTgt = a.target.id;
+    const bSrc = b.source.id;
+    const bTgt = b.target.id;
+    const sharedAtA1 = aSrc === bSrc || aSrc === bTgt;
+    const sharedAtA2 = aTgt === bSrc || aTgt === bTgt;
+    if (sharedAtA1 && sharedAtA2) return null; // parallel
+    if (sharedAtA1) return aSrc;
+    if (sharedAtA2) return aTgt;
+    return null;
+  }
+
+  /**
+   * Swap the port indices of two edges at their shared node, recompute the
+   * relevant endpoints, and accept the swap only if it reduces or removes the
+   * crossing between them. Reverts otherwise.
+   */
+  private tryResolveByPortSwap(
+    edge1: EdgeWithMetadata,
+    edge2: EdgeWithMetadata,
+    sharedNodeId: string
+  ): boolean {
+    const e1: any = edge1;
+    const e2: any = edge2;
+    const route1Before = this.computedRoutes.get(edge1.id);
+    const route2Before = this.computedRoutes.get(edge2.id);
+    if (!route1Before || !route2Before) return false;
+
+    const isSrc1 = edge1.source.id === sharedNodeId;
+    const isSrc2 = edge2.source.id === sharedNodeId;
+    const idxKey1 = isSrc1 ? '_sourcePortIndex' : '_targetPortIndex';
+    const cntKey1 = isSrc1 ? '_sourcePortCount' : '_targetPortCount';
+    const idxKey2 = isSrc2 ? '_sourcePortIndex' : '_targetPortIndex';
+    const cntKey2 = isSrc2 ? '_sourcePortCount' : '_targetPortCount';
+
+    const i1 = e1[idxKey1];
+    const i2 = e2[idxKey2];
+    const c1 = e1[cntKey1];
+    const c2 = e2[cntKey2];
+
+    // Need both edges to have port info on the same node and same port-count
+    // bucket (same side of the shared node).
+    if (i1 === undefined || i2 === undefined || c1 === undefined || c2 === undefined) return false;
+    if (c1 !== c2) return false;
+    if (i1 === i2) return false;
+
+    // Swap and recompute routes via the same pipeline used at routing time.
+    e1[idxKey1] = i2;
+    e2[idxKey2] = i1;
+
+    const route1After = this.applyPortBasedEndpoints(e1, route1Before.map(p => ({ ...p })));
+    const route2After = this.applyPortBasedEndpoints(e2, route2Before.map(p => ({ ...p })));
+
+    if (this.routesCross(route1After, route2After)) {
+      // Revert
+      e1[idxKey1] = i1;
+      e2[idxKey2] = i2;
+      return false;
+    }
+
+    this.computedRoutes.set(edge1.id, route1After);
+    this.computedRoutes.set(edge2.id, route2After);
+    return true;
   }
 
   /**
@@ -6543,6 +6674,132 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
+   * Grid-mode variant of applyPortBasedEndpoints: shifts the route's first and
+   * last points to port-distributed positions on the *visible* node boundary,
+   * inserting an L-bend waypoint when needed so the entry/exit segments stay
+   * orthogonal. Without this, two parallel edges between the same node pair
+   * would share endpoints and overlap.
+   */
+  private applyPortBasedEndpointsOrthogonal(
+    edgeData: any,
+    route: Array<{ x: number; y: number }>
+  ): Array<{ x: number; y: number }> {
+    if (!route || route.length < 2) return route;
+    if (edgeData?.source?.id === edgeData?.target?.id) return route;
+
+    const hasSourcePort = edgeData._sourcePortIndex !== undefined &&
+                          edgeData._sourcePortCount !== undefined &&
+                          edgeData._sourcePortCount > 1;
+    const hasTargetPort = edgeData._targetPortIndex !== undefined &&
+                          edgeData._targetPortCount !== undefined &&
+                          edgeData._targetPortCount > 1;
+
+    if (!hasSourcePort && !hasTargetPort) return route;
+
+    let result = route.slice();
+
+    if (hasSourcePort) {
+      result = this.shiftRouteEndpointToPort(
+        result, edgeData.source,
+        edgeData._sourcePortIndex, edgeData._sourcePortCount,
+        'start'
+      );
+    }
+    if (hasTargetPort) {
+      result = this.shiftRouteEndpointToPort(
+        result, edgeData.target,
+        edgeData._targetPortIndex, edgeData._targetPortCount,
+        'end'
+      );
+    }
+
+    return result;
+  }
+
+  /**
+   * Shift the first or last route point to a port location on the visible node
+   * boundary, preserving orthogonality of the entry/exit segment by inserting
+   * an L-bend waypoint when necessary.
+   */
+  private shiftRouteEndpointToPort(
+    route: Array<{ x: number; y: number }>,
+    node: any,
+    portIndex: number,
+    portCount: number,
+    which: 'start' | 'end'
+  ): Array<{ x: number; y: number }> {
+    if (route.length < 2) return route;
+    const visible = this.getVisibleBounds(node);
+    if (!visible) return route;
+
+    const idx = which === 'start' ? 0 : route.length - 1;
+    const neighborIdx = which === 'start' ? 1 : route.length - 2;
+    const endpoint = route[idx];
+    const neighbor = route[neighborIdx];
+
+    const bx = visible.x;
+    const bX = visible.X;
+    const by = visible.y;
+    const bY = visible.Y;
+    const w = bX - bx;
+    const h = bY - by;
+    const eps = 1;
+
+    let side: 'left' | 'right' | 'top' | 'bottom';
+    const dLeft = Math.abs(endpoint.x - bx);
+    const dRight = Math.abs(endpoint.x - bX);
+    const dTop = Math.abs(endpoint.y - by);
+    const dBottom = Math.abs(endpoint.y - bY);
+    const minD = Math.min(dLeft, dRight, dTop, dBottom);
+    if (minD === dLeft) side = 'left';
+    else if (minD === dRight) side = 'right';
+    else if (minD === dTop) side = 'top';
+    else side = 'bottom';
+
+    const sideLength = (side === 'left' || side === 'right') ? h : w;
+    if (sideLength <= 0) return route;
+    const margin = this.computePortMargin(sideLength, portCount);
+    const usable = sideLength - 2 * margin;
+    const portOffset = margin + (portIndex + 0.5) * usable / portCount;
+
+    let newEndpoint: { x: number; y: number };
+    switch (side) {
+      case 'left':   newEndpoint = { x: bx, y: by + portOffset }; break;
+      case 'right':  newEndpoint = { x: bX, y: by + portOffset }; break;
+      case 'top':    newEndpoint = { x: bx + portOffset, y: by }; break;
+      case 'bottom': newEndpoint = { x: bx + portOffset, y: bY }; break;
+    }
+
+    const result = route.slice();
+    const isAxisAligned = Math.abs(newEndpoint.x - neighbor.x) < eps ||
+                          Math.abs(newEndpoint.y - neighbor.y) < eps;
+
+    if (isAxisAligned) {
+      result[idx] = newEndpoint;
+      return result;
+    }
+
+    // Need an L-bend to keep both new segments orthogonal.
+    let bend: { x: number; y: number };
+    if (side === 'left' || side === 'right') {
+      // Egress along X; the side direction is Y. Bend at (neighbor.x, port.y).
+      bend = { x: neighbor.x, y: newEndpoint.y };
+    } else {
+      // Egress along Y; the side direction is X. Bend at (port.x, neighbor.y).
+      bend = { x: newEndpoint.x, y: neighbor.y };
+    }
+
+    if (which === 'start') {
+      result[0] = newEndpoint;
+      result.splice(1, 0, bend);
+    } else {
+      result[result.length - 1] = newEndpoint;
+      result.splice(result.length - 1, 0, bend);
+    }
+    return result;
+  }
+
+  /**
    * Distributes edge endpoints evenly across a node side using port assignments.
    * For a side of length L with N ports, port i is placed at sideStart + margin + (i + 0.5) * usableLength / N.
    */
@@ -6695,6 +6952,68 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
+   * Build a bounds-like object describing the *visible* rectangle of a node or
+   * group. WebCola inflates `node.width/height` for collision avoidance, and
+   * `group.bounds` covers the inflated container rectangle — both are larger
+   * than what is actually rendered. Edges should clip to the rendered boundary
+   * so arrowheads land exactly on it instead of behind a fill that draws over
+   * them.
+   *
+   * Returns null if visible dimensions can't be derived.
+   */
+  private getVisibleBounds(node: any): {
+    cx: () => number;
+    cy: () => number;
+    width: () => number;
+    height: () => number;
+    x: number;
+    X: number;
+    y: number;
+    Y: number;
+  } | null {
+    if (!node) return null;
+    const cx = node.x ?? (node.bounds && typeof node.bounds.cx === 'function' ? node.bounds.cx() : undefined);
+    const cy = node.y ?? (node.bounds && typeof node.bounds.cy === 'function' ? node.bounds.cy() : undefined);
+    if (cx === undefined || cy === undefined) return null;
+
+    let hw: number | undefined;
+    let hh: number | undefined;
+
+    if (node.visualWidth !== undefined || node.visualHeight !== undefined) {
+      hw = (node.visualWidth ?? node.width ?? 0) / 2;
+      hh = (node.visualHeight ?? node.height ?? 0) / 2;
+    } else if (Array.isArray(node.leaves) || Array.isArray(node.groups)) {
+      // Group container — visible rectangle is bounds inset by GROUP_VISUAL_MARGIN_PX
+      // (matches the bounds.inflate(-groupMargin) used at routing time).
+      if (node.bounds && typeof node.bounds.width === 'function') {
+        hw = node.bounds.width() / 2 - WebColaCnDGraph.GROUP_VISUAL_MARGIN_PX;
+        hh = node.bounds.height() / 2 - WebColaCnDGraph.GROUP_VISUAL_MARGIN_PX;
+      } else if (node.bounds && node.bounds.X !== undefined) {
+        hw = (node.bounds.X - node.bounds.x) / 2 - WebColaCnDGraph.GROUP_VISUAL_MARGIN_PX;
+        hh = (node.bounds.Y - node.bounds.y) / 2 - WebColaCnDGraph.GROUP_VISUAL_MARGIN_PX;
+      }
+    } else if (node.width !== undefined || node.height !== undefined) {
+      hw = (node.width ?? 0) / 2;
+      hh = (node.height ?? 0) / 2;
+    }
+
+    if (hw === undefined || hh === undefined || (hw <= 0 && hh <= 0)) return null;
+    hw = Math.max(0, hw);
+    hh = Math.max(0, hh);
+
+    return {
+      cx: () => cx,
+      cy: () => cy,
+      width: () => hw! * 2,
+      height: () => hh! * 2,
+      x: cx - hw,
+      X: cx + hw,
+      y: cy - hh,
+      Y: cy + hh,
+    };
+  }
+
+  /**
    * Calculates a stable anchor point on a rectangle's perimeter for edge drawing.
    * This method produces consistent, jitter-free anchor points by using the
    * center of the rectangle edge that faces the target point.
@@ -6779,33 +7098,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     const sourceCenter: { x: number; y: number } = { x: source.x || 0, y: source.y || 0 };
     const targetCenter: { x: number; y: number } = { x: target.x || 0, y: target.y || 0 };
 
-    // Build visual bounds from the node's rendered dimensions (visualWidth/visualHeight).
-    // WebCola inflates node.width/height for collision avoidance, so d.bounds ends up
-    // larger than the rendered rectangle.  Using visualWidth/visualHeight here ensures
-    // edge anchors snap to the VISIBLE node boundary both during animation ticks and
-    // after final routing — preventing the "edges float around nodes" effect.
-    const makeVisualBounds = (node: any): any | null => {
-      const hw = ((node.visualWidth ?? node.width) || 0) / 2;
-      const hh = ((node.visualHeight ?? node.height) || 0) / 2;
-      if (hw === 0 && hh === 0) return null;
-      const cx = node.x || 0;
-      const cy = node.y || 0;
-      return {
-        cx: () => cx,
-        cy: () => cy,
-        width: () => hw * 2,
-        height: () => hh * 2,
-        x: cx - hw,
-        X: cx + hw,
-        y: cy - hh,
-        Y: cy + hh,
-      };
-    };
-
-    // Prefer visual bounds; fall back to WebCola bounds only for group nodes that
-    // don't carry visualWidth/visualHeight (groups use d.bounds for their extent).
-    const sourceBounds = makeVisualBounds(source) ?? source.bounds ?? source.innerBounds;
-    const targetBounds = makeVisualBounds(target) ?? target.bounds ?? target.innerBounds;
+    // Prefer visible bounds (visualWidth/visualHeight for plain nodes, bounds-inset
+    // for groups). Falling back to WebCola bounds would land arrowheads on the
+    // INFLATED rectangle, behind the rendered fill.
+    const sourceBounds = this.getVisibleBounds(source) ?? source.bounds ?? source.innerBounds;
+    const targetBounds = this.getVisibleBounds(target) ?? target.bounds ?? target.innerBounds;
 
     // Calculate stable anchor points on the perimeter
     let sourceAnchor = sourceBounds
