@@ -43,6 +43,7 @@ export {
   ignoreHistory,
   stability,
   changeEmphasis,
+  classifyChangeEmphasisChangedSet,
   randomPositioning,
   getSequencePolicy,
   registerSequencePolicy,
@@ -207,6 +208,7 @@ export {
   positionalConsistency,
   relativeConsistency,
   pairwiseDistanceConsistency,
+  changeEmphasisSeparation,
   constraintAdherence,
   classifyChangeEmphasisStableSet,
 } from './evaluation';
@@ -214,4 +216,5 @@ export type {
   HeadlessLayoutOptions,
   HeadlessLayoutResult,
   EdgeKey,
+  ChangeEmphasisSeparation,
 } from './evaluation';

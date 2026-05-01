@@ -47,8 +47,10 @@ export {
   positionalConsistency,
   relativeConsistency,
   pairwiseDistanceConsistency,
+  changeEmphasisSeparation,
   constraintAdherence,
   classifyChangeEmphasisStableSet,
   type EdgeKey,
+  type ChangeEmphasisSeparation,
   type ConstraintAdherenceNode,
 } from './consistency-metrics';

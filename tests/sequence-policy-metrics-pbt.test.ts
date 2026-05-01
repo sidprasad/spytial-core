@@ -5,6 +5,7 @@ import {
   positionalConsistency,
   relativeConsistency,
   pairwiseDistanceConsistency,
+  changeEmphasisSeparation,
   constraintAdherence,
   classifyChangeEmphasisStableSet,
   type EdgeKey,
@@ -304,6 +305,140 @@ describe('classifyChangeEmphasisStableSet — invariants', () => {
       ),
       { numRuns: NUM_RUNS }
     );
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────
+// changeEmphasisSeparation
+// ──────────────────────────────────────────────────────────────────
+
+describe('changeEmphasisSeparation — split-emphasis score', () => {
+  it('returns perfect AUC when every changed node moves more than every stable node', () => {
+    const prev: LayoutState = {
+      positions: [
+        { id: 'changed', x: 0, y: 0 },
+        { id: 'stable', x: 0, y: 0 },
+      ],
+      transform: { k: 1, x: 0, y: 0 },
+    };
+    const curr: LayoutState = {
+      positions: [
+        { id: 'changed', x: 10, y: 0 },
+        { id: 'stable', x: 1, y: 0 },
+      ],
+      transform: { k: 1, x: 0, y: 0 },
+    };
+
+    const score = changeEmphasisSeparation(prev, curr, new Set(['changed']));
+    expect(score.auc).toBe(1);
+    expect(score.changedMeanDrift).toBe(10);
+    expect(score.stableMeanDrift).toBe(1);
+    expect(score.changedPositional).toBe(100);
+    expect(score.stablePositional).toBe(1);
+    expect(score.changedPairwiseDistance).toBeNull();
+    expect(score.stablePairwiseDistance).toBeNull();
+    expect(score.changedCount).toBe(1);
+    expect(score.stableCount).toBe(1);
+  });
+
+  it('returns inverted AUC when stable nodes move more than changed nodes', () => {
+    const prev: LayoutState = {
+      positions: [
+        { id: 'changed', x: 0, y: 0 },
+        { id: 'stable', x: 0, y: 0 },
+      ],
+      transform: { k: 1, x: 0, y: 0 },
+    };
+    const curr: LayoutState = {
+      positions: [
+        { id: 'changed', x: 1, y: 0 },
+        { id: 'stable', x: 10, y: 0 },
+      ],
+      transform: { k: 1, x: 0, y: 0 },
+    };
+
+    expect(changeEmphasisSeparation(prev, curr, new Set(['changed'])).auc).toBe(0);
+  });
+
+  it('gives half credit for equal changed/stable drift ties', () => {
+    const prev: LayoutState = {
+      positions: [
+        { id: 'changed', x: 0, y: 0 },
+        { id: 'stable', x: 0, y: 0 },
+      ],
+      transform: { k: 1, x: 0, y: 0 },
+    };
+    const curr: LayoutState = {
+      positions: [
+        { id: 'changed', x: 5, y: 0 },
+        { id: 'stable', x: 5, y: 0 },
+      ],
+      transform: { k: 1, x: 0, y: 0 },
+    };
+
+    expect(changeEmphasisSeparation(prev, curr, new Set(['changed'])).auc).toBe(0.5);
+  });
+
+  it('returns null AUC when there is no changed/stable split', () => {
+    const prev: LayoutState = {
+      positions: [{ id: 'A', x: 0, y: 0 }],
+      transform: { k: 1, x: 0, y: 0 },
+    };
+    const curr: LayoutState = {
+      positions: [{ id: 'A', x: 1, y: 0 }],
+      transform: { k: 1, x: 0, y: 0 },
+    };
+
+    expect(changeEmphasisSeparation(prev, curr, new Set(['A'])).auc).toBeNull();
+    expect(changeEmphasisSeparation(prev, curr, new Set()).auc).toBeNull();
+  });
+
+  it('uses zoom-transformed coordinates for drift', () => {
+    const prev: LayoutState = {
+      positions: [
+        { id: 'changed', x: 0, y: 0 },
+        { id: 'stable', x: 0, y: 0 },
+      ],
+      transform: { k: 2, x: 0, y: 0 },
+    };
+    const curr: LayoutState = {
+      positions: [
+        { id: 'changed', x: 10, y: 0 },
+        { id: 'stable', x: 1, y: 0 },
+      ],
+      transform: { k: 1, x: 0, y: 0 },
+    };
+
+    const score = changeEmphasisSeparation(prev, curr, new Set(['changed']));
+    expect(score.changedMeanDrift).toBe(10);
+    expect(score.stableMeanDrift).toBe(1);
+  });
+
+  it('reports positional and pairwise metrics for changed and stable subsets', () => {
+    const prev: LayoutState = {
+      positions: [
+        { id: 'C1', x: 0, y: 0 },
+        { id: 'C2', x: 3, y: 0 },
+        { id: 'S1', x: 0, y: 10 },
+        { id: 'S2', x: 4, y: 10 },
+      ],
+      transform: { k: 1, x: 0, y: 0 },
+    };
+    const curr: LayoutState = {
+      positions: [
+        { id: 'C1', x: 10, y: 0 },
+        { id: 'C2', x: 18, y: 0 },
+        { id: 'S1', x: 1, y: 10 },
+        { id: 'S2', x: 5, y: 10 },
+      ],
+      transform: { k: 1, x: 0, y: 0 },
+    };
+
+    const score = changeEmphasisSeparation(prev, curr, new Set(['C1', 'C2']));
+    expect(score.changedPositional).toBe(325);
+    expect(score.stablePositional).toBe(2);
+    expect(score.changedPairwiseDistance).toBe(25);
+    expect(score.stablePairwiseDistance).toBe(0);
   });
 });
 

@@ -59,6 +59,7 @@ export {
   ignoreHistory,
   stability,
   changeEmphasis,
+  classifyChangeEmphasisChangedSet,
   randomPositioning,
   getSequencePolicy,
   registerSequencePolicy,

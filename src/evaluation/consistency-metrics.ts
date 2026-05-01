@@ -266,6 +266,116 @@ export function pairwiseDistanceConsistency(
   return total;
 }
 
+/**
+ * Summary for change-emphasis separation.
+ *
+ * `auc` is the primary score: the probability that a changed persisting
+ * node moved farther than a stable persisting node. Higher is better.
+ * `0.5` means no rank separation; `1.0` means every changed node moved
+ * more than every stable node. `null` means the frame pair has no
+ * changed/stable split to compare.
+ */
+export interface ChangeEmphasisSeparation {
+  auc: number | null;
+  changedMeanDrift: number | null;
+  stableMeanDrift: number | null;
+  changedPositional: number | null;
+  stablePositional: number | null;
+  changedPairwiseDistance: number | null;
+  stablePairwiseDistance: number | null;
+  changedCount: number;
+  stableCount: number;
+}
+
+function mean(values: number[]): number | null {
+  if (values.length === 0) return null;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+/**
+ * Change-emphasis separation:
+ *
+ *     AUC(drift(node), changed-vs-stable)
+ *
+ * over nodes present in both frames. `changedIds` should contain the
+ * semantic-change set for the frame pair, typically nodes whose incident
+ * tuples changed. The metric asks whether changed nodes are visually
+ * emphasized more than stable nodes.
+ *
+ * This is motivated by difference-map style dynamic graph evaluation:
+ * the visualization should distinguish added/removed/changed elements
+ * while not unnecessarily disturbing persistent unchanged context.
+ *
+ * @param prev       Previous-frame layout state.
+ * @param curr       Current-frame layout state.
+ * @param changedIds Nodes that should be visually emphasized.
+ */
+export function changeEmphasisSeparation(
+  prev: LayoutState,
+  curr: LayoutState,
+  changedIds: Set<string>
+): ChangeEmphasisSeparation {
+  const prevPos = buildPositionMap(prev);
+  const currPos = buildPositionMap(curr);
+  const changedDrifts: number[] = [];
+  const stableDrifts: number[] = [];
+
+  for (const [id, p] of currPos) {
+    const q = prevPos.get(id);
+    if (!q) continue;
+
+    const drift = Math.hypot(p.x - q.x, p.y - q.y);
+    if (changedIds.has(id)) {
+      changedDrifts.push(drift);
+    } else {
+      stableDrifts.push(drift);
+    }
+  }
+
+  let auc: number | null = null;
+  if (changedDrifts.length > 0 && stableDrifts.length > 0) {
+    let wins = 0;
+    for (const changed of changedDrifts) {
+      for (const stable of stableDrifts) {
+        if (changed > stable) {
+          wins += 1;
+        } else if (changed === stable) {
+          wins += 0.5;
+        }
+      }
+    }
+    auc = wins / (changedDrifts.length * stableDrifts.length);
+  }
+
+  const changedPersistingIds = new Set<string>();
+  const stablePersistingIds = new Set<string>();
+  for (const [id] of currPos) {
+    if (!prevPos.has(id)) continue;
+    if (changedIds.has(id)) changedPersistingIds.add(id);
+    else stablePersistingIds.add(id);
+  }
+
+  return {
+    auc,
+    changedMeanDrift: mean(changedDrifts),
+    stableMeanDrift: mean(stableDrifts),
+    changedPositional: changedPersistingIds.size > 0
+      ? positionalConsistency(prev, curr, changedPersistingIds)
+      : null,
+    stablePositional: stablePersistingIds.size > 0
+      ? positionalConsistency(prev, curr, stablePersistingIds)
+      : null,
+    changedPairwiseDistance: changedPersistingIds.size >= 2
+      ? pairwiseDistanceConsistency(prev, curr, changedPersistingIds)
+      : null,
+    stablePairwiseDistance: stablePersistingIds.size >= 2
+      ? pairwiseDistanceConsistency(prev, curr, stablePersistingIds)
+      : null,
+    changedCount: changedDrifts.length,
+    stableCount: stableDrifts.length,
+  };
+}
+
 // ──────────────────────────────────────────────────────────────────
 // Constraint adherence — a fairness check, not a consistency metric.
 // ──────────────────────────────────────────────────────────────────
