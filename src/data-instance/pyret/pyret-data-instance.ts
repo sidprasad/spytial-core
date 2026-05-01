@@ -388,7 +388,7 @@ export class PyretDataInstance implements IInputDataInstance {
    * Try to rebuild constructor arguments from relations using cached patterns
    * Only uses patterns from previously seen constructor instances - no heuristics
    */
-  private tryReconstructFromRelations(atom: IAtom, visited: Set<string>): string {
+  private tryReconstructFromRelations(atom: IAtom, memo: Map<string, string>, inProgress: Set<string>): string {
     // Get all relations where this atom is the source
     const relationMap = new Map<string, string[]>();
     this.relations.forEach(relation => {
@@ -415,7 +415,7 @@ export class PyretDataInstance implements IInputDataInstance {
       for (const fieldName of cachedPattern) {
         const targetIds = relationMap.get(fieldName) || [];
         for (const targetId of targetIds) {
-          args.push(this.reifyAtom(targetId, visited));
+          args.push(this.reifyAtom(targetId, memo, inProgress));
         }
       }
       if (args.length > 0) {
@@ -437,7 +437,7 @@ export class PyretDataInstance implements IInputDataInstance {
         for (const fieldName of orderedKeys) {
           const targetIds = relationMap.get(fieldName) || [];
           for (const targetId of targetIds) {
-            args.push(this.reifyAtom(targetId, visited));
+            args.push(this.reifyAtom(targetId, memo, inProgress));
           }
         }
         if (args.length > 0) {
@@ -456,7 +456,7 @@ export class PyretDataInstance implements IInputDataInstance {
     for (const relationName of relationNames) {
       const targetIds = relationMap.get(relationName) || [];
       for (const targetId of targetIds) {
-        args.push(this.reifyAtom(targetId, visited));
+        args.push(this.reifyAtom(targetId, memo, inProgress));
       }
     }
 
@@ -608,27 +608,36 @@ export class PyretDataInstance implements IInputDataInstance {
 
     // If multiple roots, wrap in a Pyret set
     if (rootAtoms.length > 1) {
-      const rootExpressions = rootAtoms.map(atom => this.reifyAtom(atom.id, new Set()));
+      const memo = new Map<string, string>();
+      const rootExpressions = rootAtoms.map(atom => this.reifyAtom(atom.id, memo, new Set()));
       return result + `[list-set: ${rootExpressions.join(', ')}]`;
     }
 
     // If only one root atom, reify it directly
-    return result + this.reifyAtom(rootAtoms[0].id, new Set());
+    return result + this.reifyAtom(rootAtoms[0].id, new Map(), new Set());
   }
 
   /**
-   * Recursively reifies a single atom and its relations, preserving constructor argument order
-   * 
+   * Recursively reifies a single atom and its relations, preserving constructor argument order.
+   *
+   * Uses a persistent memoization map (`memo`) to cache already-reified atoms, preventing
+   * redundant work for shared (diamond) nodes. A separate `inProgress` set tracks the
+   * current recursion path to detect true structural cycles.
+   *
    * @param atomId - The atom ID to reify
-   * @param visited - Set of visited atom IDs to prevent infinite recursion
+   * @param memo - Persistent map from atomId to its already-computed reified string
+   * @param inProgress - Set of atom IDs currently on the active recursion path (cycle detection)
    * @returns Pyret constructor notation for this atom
    */
-  private reifyAtom(atomId: string, visited: Set<string>): string {
+  private reifyAtom(atomId: string, memo: Map<string, string>, inProgress: Set<string>): string {
 
+    // Return memoized result if already computed
+    if (memo.has(atomId)) {
+      return memo.get(atomId)!;
+    }
 
-    // TODO: I think this is broken -- it doesn't cache things correctly.
-
-    if (visited.has(atomId)) {
+    // Detect true structural cycles (current path)
+    if (inProgress.has(atomId)) {
       return `/* cycle: ${atomId} */`;
     }
 
@@ -637,62 +646,58 @@ export class PyretDataInstance implements IInputDataInstance {
       return `/* missing atom: ${atomId} */`;
     }
 
-    visited.add(atomId);
+    inProgress.add(atomId);
+
+    let result: string;
 
     // Handle primitive types
     if (this.isBuiltinType(atom.type)) {
-      const result = this.reifyPrimitive(atom);
-      visited.delete(atomId);
-      return result;
-    }
+      result = this.reifyPrimitive(atom);
+    } else {
+      // Get the original object to preserve key order
+      const originalObject = this.originalObjects.get(atomId);
 
-    // Get the original object to preserve key order
-    const originalObject = this.originalObjects.get(atomId);
+      if (!originalObject || !originalObject.dict) {
+        // No original object available - try to reconstruct using cached patterns or heuristics
+        result = this.tryReconstructFromRelations(atom, memo, inProgress);
+      } else {
+        // Use the original dict key order to maintain constructor argument order
+        const orderedKeys = Object.keys(originalObject.dict);
 
-    if (!originalObject || !originalObject.dict) {
-      // No original object available - try to reconstruct using cached patterns or heuristics
-      visited.delete(atomId);
-      return this.tryReconstructFromRelations(atom, visited);
-    }
+        // Cache this constructor pattern for future use
+        this.cacheConstructorPattern(atom.type, orderedKeys);
 
-    // Use the original dict key order to maintain constructor argument order
-    const orderedKeys = Object.keys(originalObject.dict);
+        // Check if this looks like a list (all keys are numeric)
+        const isListLike = orderedKeys.every(key => /^\d+$/.test(key));
 
-    // Cache this constructor pattern for future use
-    this.cacheConstructorPattern(atom.type, orderedKeys);
+        if (isListLike && orderedKeys.length > 0) {
+          // Sort numeric keys and extract list items
+          const sortedKeys = orderedKeys.sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+          const listItems = sortedKeys.map(key => {
+            const targetAtomIds = this.getRelationTargets(atomId, key);
+            return targetAtomIds.map(targetId => this.reifyAtom(targetId, memo, inProgress));
+          }).flat();
 
-    // Check if this looks like a list (all keys are numeric)
-    const isListLike = orderedKeys.every(key => /^\d+$/.test(key));
+          result = `[list: ${listItems.join(', ')}]`;
+        } else {
+          // Regular constructor notation with preserved argument order
+          const args: string[] = [];
 
-    if (isListLike && orderedKeys.length > 0) {
-      // Sort numeric keys and extract list items
-      const sortedKeys = orderedKeys.sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
-      const listItems = sortedKeys.map(key => {
-        const targetAtomIds = this.getRelationTargets(atomId, key);
-        return targetAtomIds.map(targetId => this.reifyAtom(targetId, visited));
-      }).flat();
+          for (const relationName of orderedKeys) {
+            const targetAtomIds = this.getRelationTargets(atomId, relationName);
+            for (const targetId of targetAtomIds) {
+              args.push(this.reifyAtom(targetId, memo, inProgress));
+            }
+          }
 
-      visited.delete(atomId);
-      return `[list: ${listItems.join(', ')}]`;
-    }
-
-    // Regular constructor notation with preserved argument order
-    const args: string[] = [];
-
-    for (const relationName of orderedKeys) {
-      const targetAtomIds = this.getRelationTargets(atomId, relationName);
-      for (const targetId of targetAtomIds) {
-        args.push(this.reifyAtom(targetId, visited));
+          result = args.length === 0 ? atom.type : `${atom.type}(${args.join(', ')})`;
+        }
       }
     }
 
-    visited.delete(atomId);
-
-    if (args.length === 0) {
-      return atom.type;
-    }
-
-    return `${atom.type}(${args.join(', ')})`;
+    inProgress.delete(atomId);
+    memo.set(atomId, result);
+    return result;
   }
 
   /**

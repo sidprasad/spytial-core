@@ -233,4 +233,98 @@ describe('PyretDataInstance', () => {
         expect(labels).toContain('0.25');  // 1/4
         expect(labels).toContain('1.5');   // 3/2
     });
+
+    it('should reify diamond-shaped data (shared atom) correctly without duplication or error', () => {
+        // Diamond: Root -> Left -> Shared, Root -> Right -> Shared
+        // The same JS object reference is used for `sharedLeaf` in both branches.
+        const sharedLeaf: any = {
+            dict: { value: 42 },
+            brands: { "$brandExampleData": true, "$brandLeafNode": true },
+            $name: "LeafNode"
+        };
+        const diamond: any = {
+            dict: {
+                left: {
+                    dict: { child: sharedLeaf },
+                    brands: { "$brandExampleData": true, "$brandInner": true },
+                    $name: "Inner"
+                },
+                right: {
+                    dict: { child: sharedLeaf },
+                    brands: { "$brandExampleData": true, "$brandInner": true },
+                    $name: "Inner"
+                }
+            },
+            brands: { "$brandExampleData": true, "$brandRoot": true },
+            $name: "Root"
+        };
+
+        const instance = new PyretDataInstance(diamond);
+        const reified = instance.reify();
+
+        // The shared leaf should appear the same way in both branches
+        expect(reified).toBeDefined();
+        expect(typeof reified).toBe('string');
+        // Should not contain any cycle markers — the diamond is not a cycle
+        expect(reified).not.toContain('/* cycle:');
+        // Both branches should refer to the same leaf by the same representation
+        const normalised = reified.replace(/\s+/g, '');
+        expect(normalised).toBe('Root(Inner(LeafNode(42)),Inner(LeafNode(42)))');
+    });
+
+    it('should handle self-loop cycles without infinite recursion', () => {
+        // Build a root that points to a self-referencing node (so root is not in any cycle)
+        const selfRef: any = {
+            dict: {},
+            brands: { "$brandCycleTest": true, "$brandNode": true },
+            $name: "Node"
+        };
+        selfRef.dict.self = selfRef;
+
+        const root: any = {
+            dict: { loop: selfRef },
+            brands: { "$brandCycleTest": true, "$brandRoot": true },
+            $name: "Root"
+        };
+
+        const instance = new PyretDataInstance(root);
+        // Must terminate without throwing or hanging
+        const reified = instance.reify();
+
+        expect(reified).toBeDefined();
+        expect(typeof reified).toBe('string');
+        // The self-loop should be reported as a cycle marker
+        expect(reified).toContain('/* cycle:');
+    });
+
+    it('should handle mutual cycles (A -> B -> A) without infinite recursion', () => {
+        // nodeA.child = nodeB, nodeB.parent = nodeA (mutual cycle); root -> nodeA is the entry
+        const nodeA: any = {
+            dict: {},
+            brands: { "$brandMutual": true, "$brandNodeA": true },
+            $name: "NodeA"
+        };
+        const nodeB: any = {
+            dict: {},
+            brands: { "$brandMutual": true, "$brandNodeB": true },
+            $name: "NodeB"
+        };
+        nodeA.dict.child = nodeB;
+        nodeB.dict.parent = nodeA;
+
+        const root: any = {
+            dict: { entry: nodeA },
+            brands: { "$brandMutual": true, "$brandRoot": true },
+            $name: "Root"
+        };
+
+        const instance = new PyretDataInstance(root);
+        // Must terminate without throwing or hanging
+        const reified = instance.reify();
+
+        expect(reified).toBeDefined();
+        expect(typeof reified).toBe('string');
+        // Must detect the cycle and not hang
+        expect(reified).toContain('/* cycle:');
+    });
 });
