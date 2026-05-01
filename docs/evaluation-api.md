@@ -25,24 +25,30 @@ import {
   type HeadlessLayoutOptions,
   type HeadlessLayoutResult,
 
-  // Penlloy consistency metrics (PLATEAU 2025 §6.2)
+  // Visual-consistency metrics (Penlloy PLATEAU 2025 §6.2 + Liang TOSEM 2026 §3.4)
   positionalConsistency,
   relativeConsistency,
+  pairwiseDistanceConsistency,
+  constraintAdherence,
   classifyChangeEmphasisStableSet,
   type EdgeKey,
+  type ConstraintAdherenceNode,
 } from 'spytial-core';
 ```
 
 | Export                              | What it does                                                                              |
 |-------------------------------------|-------------------------------------------------------------------------------------------|
 | `runHeadlessLayout`                 | `LayoutSpec + IDataInstance → post-solver positions`. No DOM, no d3.                      |
-| `positionalConsistency`             | `Σ ‖D(n) − D'(n)‖²` over persisting nodes. Squared L2.                                    |
-| `relativeConsistency`               | `Σ ‖(D(n₂)−D(n₁))−(D'(n₂)−D'(n₁))‖²` over persisting edges. Squared L2.                   |
+| `positionalConsistency`             | `Σ ‖D(n) − D'(n)‖²` over persisting nodes. Squared L2. (Penlloy PLATEAU 2025 §6.2.)        |
+| `relativeConsistency`               | `Σ ‖(D(n₂)−D(n₁))−(D'(n₂)−D'(n₁))‖²` over persisting edges. Squared L2. (Penlloy §6.2.)   |
+| `pairwiseDistanceConsistency`       | `Σ (d_curr(i,j) − d_prev(i,j))²` over unordered persisting node pairs. Translation- and rotation-invariant; operationalizes Liang TOSEM 2026 §3.4 partial-consistency. |
+| `constraintAdherence`               | Fraction in `[0,1]` of `Left`/`Top`/`Alignment` constraints satisfied at the post-solver positions. Per-frame fairness check on the solver. |
 | `classifyChangeEmphasisStableSet`   | Recovers the stable subset for a `stable-node-reflow`-style policy from its output.       |
 
-The two metrics are pure functions over `LayoutState`; you don't need
-`runHeadlessLayout` to compute them if you have positions from
-elsewhere.
+The four scoring functions are pure over `LayoutState` (and, for
+`constraintAdherence`, over the solver's `LayoutConstraint[]` and
+node geometry). You don't need `runHeadlessLayout` to compute them if
+you have positions from elsewhere.
 
 ---
 
@@ -56,6 +62,8 @@ import {
   runHeadlessLayout,
   positionalConsistency,
   relativeConsistency,
+  pairwiseDistanceConsistency,
+  constraintAdherence,
 } from 'spytial-core';
 
 const spec = parseLayoutSpec(`
@@ -109,14 +117,24 @@ const relative = relativeConsistency(
   prevResult.positions, prevResult.edges,
   currResult.positions, currResult.edges,
 );
+const pairwise = pairwiseDistanceConsistency(prevResult.positions, currResult.positions);
+const adherence = constraintAdherence(currResult.constraints, currResult.nodes);
 
-console.log({ positional, relative });
+console.log({ positional, relative, pairwise, adherence });
 ```
 
-`positional` is `Σ ‖D(n) − D'(n)‖²` over nodes present in both frames.
-`relative` is the same sum over edges present in both frames, of
-edge-vector deltas. Both are 0 when the corresponding consistency
-type holds exactly.
+- `positional` is `Σ ‖D(n) − D'(n)‖²` over nodes present in both frames.
+- `relative` is the same sum over edges present in both frames, of
+  edge-vector deltas.
+- `pairwise` is `Σ (d_curr(i,j) − d_prev(i,j))²` over unordered persisting
+  node pairs — translation- and rotation-invariant, so a rigidly
+  translated/rotated layout scores 0 even when `positional` and
+  `relative` do not.
+- `adherence` is in `[0,1]`: the fraction of `Left`/`Top`/`Alignment`
+  constraints the solver actually satisfied at the returned positions.
+
+The first three are 0 when the corresponding consistency type holds
+exactly; `adherence` is 1 when every applicable constraint is met.
 
 ---
 
@@ -129,17 +147,34 @@ positional(D, D') = Σ ‖D(n) − D'(n)‖²       n ∈ nodes(D) ∩ nodes(D')
 
 relative(D, D')   = Σ ‖(D(n₂) − D(n₁)) − (D'(n₂) − D'(n₁))‖²
                     (n₁, n₂) ∈ edges(D) ∩ edges(D')
+
+pairwise(D, D')   = Σ (‖D(i) − D(j)‖ − ‖D'(i) − D'(j)‖)²
+                    {i, j} ⊆ nodes(D) ∩ nodes(D'),  i ≠ j
 ```
 
-Both lifted verbatim from §6.2 of:
+`positional` and `relative` are lifted verbatim from §6.2 of:
 
 > Liang, Palliyil, Kang, Sunshine. *Towards Better Formal Methods Visualizations.* PLATEAU 2025. doi:[10.1184/R1/29086949.v1](https://doi.org/10.1184/R1/29086949.v1)
+
+`pairwise` is a computational form of the Liang TOSEM 2026 §3.4
+partial-consistency notion: it scores how much the *shape* of the node
+set deformed between frames, independent of any rigid translation or
+rotation.
 
 Penlloy's framing distinguishes **hard** consistency (the metric is a
 constraint that must equal 0) from **soft** consistency (the metric is
 in the objective and yields under other constraint pressure).
 spytial-core's `stability` policy implements **soft** positional
 consistency: it minimizes drift but does not enforce zero.
+
+`constraintAdherence(constraints, nodes, tol = 5)` is not a
+between-frame metric — it's a per-frame fairness check on the solver,
+asking what fraction of the `LayoutConstraint[]` returned by
+`LayoutInstance.generateLayout` are actually satisfied at the
+post-solver positions. Useful when probing whether a policy's locking
+strategy starves the solver of feasibility (e.g., randomPositioning
+typically scores ~1.0 here, since constraints are still emitted; a
+policy that locks endpoints inconsistently would not).
 
 ---
 
@@ -178,12 +213,18 @@ If both are supplied, policy-driven wins.
 
 For any benchmark scenario:
 
-| Built-in policy       | Predicted `positional`               | Predicted `relative`                  |
-|-----------------------|--------------------------------------|---------------------------------------|
-| `ignoreHistory`       | high                                 | high                                  |
-| `randomPositioning`   | high                                 | high                                  |
-| `stability`           | low (≈ 0 when constraints permit)    | low (downstream of positional)        |
-| `changeEmphasis`      | low on stable subset; high on reflow | low on stable-stable edges            |
+| Built-in policy       | `positional`                         | `relative`                            | `pairwise`                            | `adherence` |
+|-----------------------|--------------------------------------|---------------------------------------|---------------------------------------|-------------|
+| `ignoreHistory`       | high                                 | high                                  | high                                  | ≈ 1         |
+| `randomPositioning`   | very high                            | very high                             | very high                             | ≈ 1         |
+| `stability`           | low (≈ 0 when constraints permit)    | low (downstream of positional)        | low                                   | ≈ 1         |
+| `changeEmphasis`      | low on stable subset; high on reflow | low on stable-stable edges            | low on stable subset                  | ≈ 1         |
+
+The headline observation from the demo: `randomPositioning` blows up
+the three consistency metrics by orders of magnitude while
+`adherence` stays near 1 — the solver still satisfies the spec on
+every frame; it just discards inter-frame continuity. The other three
+metrics are the ones that distinguish policies.
 
 Use `classifyChangeEmphasisStableSet(prior, policyOutput)` to recover
 the stable/reflow split from a `changeEmphasis` invocation:
@@ -225,7 +266,7 @@ increasing order of cost. Run via `npm run test:run -- <file>`.
 
 | File | Tier | What it asserts | Cost |
 |---|---|---|---|
-| [`tests/sequence-policy-metrics-pbt.test.ts`](../tests/sequence-policy-metrics-pbt.test.ts) | 1 — pure metric algebra (PBT) | Non-negativity, symmetry, translation invariance, restrict-to subset monotonicity for both metrics; idempotence and tolerance-ball semantics for the classifier. 200 trials per property. | ~120 ms |
+| [`tests/sequence-policy-metrics-pbt.test.ts`](../tests/sequence-policy-metrics-pbt.test.ts) | 1 — pure metric algebra (PBT) | Non-negativity, symmetry, translation invariance, restrict-to subset monotonicity for `positional` / `relative` / `pairwise`; rotation invariance for `pairwise`; range/permutation/vacuous/satisfied/violated for `constraintAdherence`; idempotence and tolerance-ball semantics for the classifier. 200 trials per property. | ~150 ms |
 | [`tests/sequence-policy-apply-pbt.test.ts`](../tests/sequence-policy-apply-pbt.test.ts) | 2 — policy `apply()` invariants (PBT) | `ignoreHistory` always returns `{ undefined, false }`; `stability` preserves shared-atom positions exactly; `changeEmphasis` is deterministic and respects viewport + jitter range; `randomPositioning` covers every curr atom and stays in bounds. 100 trials per property. | ~80 ms |
 | [`tests/sequence-policy-consistency-metrics.test.ts`](../tests/sequence-policy-consistency-metrics.test.ts) | 3 — full-pipeline behavioural (example-based) | Per-policy promises observed at the **post-solver** positions on a small fixed benchmark of five scenarios (identity, relation change, atom add/remove, restructure). | ~300 ms |
 
