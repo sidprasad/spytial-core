@@ -9,9 +9,15 @@
  *      LayoutInstance → WebColaTranslator → cola.Layout pipeline with
  *      no DOM dependency, returning post-solver positions plus the
  *      edges and constraints needed to score them.
- *   2. `positionalConsistency` / `relativeConsistency` — Penlloy's two
- *      consistency metrics (PLATEAU 2025 §6.2), as plain pure
- *      functions over `LayoutState`.
+ *   2. Three consistency metrics, each measuring a different notion of
+ *      "the layout stayed the same":
+ *        - `positionalConsistency`  — per-node coordinate preservation
+ *          (Penlloy PLATEAU 2025 §6.2; Liang TOSEM 2026 positional cell).
+ *        - `relativeConsistency`    — per-edge vector preservation
+ *          (Penlloy §6.2; Liang TOSEM 2026 §2.6.1).
+ *        - `pairwiseDistanceConsistency` — per-pair distance preservation
+ *          ("shape" of a node subset; computational form of Liang
+ *          TOSEM 2026 §3.4 partial-consistency).
  *   3. `classifyChangeEmphasisStableSet` — recovers the stable-vs-
  *      reflow node split for a partial-consistency policy from its
  *      output positions, with no SequencePolicy interface change.
@@ -40,6 +46,9 @@ export {
 export {
   positionalConsistency,
   relativeConsistency,
+  pairwiseDistanceConsistency,
+  constraintAdherence,
   classifyChangeEmphasisStableSet,
   type EdgeKey,
-} from './penlloy-metrics';
+  type ConstraintAdherenceNode,
+} from './consistency-metrics';

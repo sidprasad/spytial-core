@@ -2,7 +2,11 @@
 
 A small public surface for **headless consistency analysis** of spytial-core
 layouts — running the layout pipeline outside the browser and scoring
-sequence-policy output against Penlloy's two consistency metrics.
+sequence-policy output against three visual-consistency metrics (Penlloy
+PLATEAU 2025 §6.2 and Liang TOSEM 2026 §3.4 partial-consistency) plus a
+`constraintAdherence` fairness check on the solver. See
+[`webcola-demo/sequence-metrics-demo.html`](../webcola-demo/sequence-metrics-demo.html)
+for an interactive walkthrough.
 
 > Intended for evaluation, not production rendering. The renderer's
 > tuning lives in [`webcola-cnd-graph.ts`](../src/translators/webcola/webcola-cnd-graph.ts);

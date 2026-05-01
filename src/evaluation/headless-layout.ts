@@ -27,7 +27,7 @@ import {
   type WebColaLayoutOptions,
 } from '../translators/webcola/webcolatranslator';
 import type { SequencePolicy, SequencePolicyContext } from '../translators/webcola/sequence-policy';
-import type { EdgeKey } from './penlloy-metrics';
+import type { EdgeKey } from './consistency-metrics';
 
 /**
  * Options for `runHeadlessLayout`.
