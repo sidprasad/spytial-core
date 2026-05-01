@@ -197,6 +197,22 @@ function analyzeNodeChanges(
 }
 
 /**
+ * Return the exact node-change set used by `changeEmphasis`.
+ *
+ * A node is classified as changed when it is new, removed, or its
+ * incident tuple fingerprint differs between adjacent instances. The
+ * policy uses this same analysis to decide which prior positions get
+ * jittered; evaluation code should use this helper instead of
+ * reimplementing a parallel change predicate.
+ */
+export function classifyChangeEmphasisChangedSet(
+  prev: IDataInstance,
+  curr: IDataInstance
+): Set<string> {
+  return analyzeNodeChanges(prev, curr).changedIds;
+}
+
+/**
  * Deterministic pseudo-random number in [0, 1] from a string seed.
  * Used so change-emphasis jitter is stable for the same instance pair.
  */

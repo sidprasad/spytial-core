@@ -29,9 +29,12 @@ import {
   positionalConsistency,
   relativeConsistency,
   pairwiseDistanceConsistency,
+  changeEmphasisSeparation,
   constraintAdherence,
+  classifyChangeEmphasisChangedSet,
   classifyChangeEmphasisStableSet,
   type EdgeKey,
+  type ChangeEmphasisSeparation,
   type ConstraintAdherenceNode,
 } from 'spytial-core';
 ```
@@ -42,10 +45,12 @@ import {
 | `positionalConsistency`             | `Σ ‖D(n) − D'(n)‖²` over persisting nodes. Squared L2. (Penlloy PLATEAU 2025 §6.2.)        |
 | `relativeConsistency`               | `Σ ‖(D(n₂)−D(n₁))−(D'(n₂)−D'(n₁))‖²` over persisting edges. Squared L2. (Penlloy §6.2.)   |
 | `pairwiseDistanceConsistency`       | `Σ (d_curr(i,j) − d_prev(i,j))²` over unordered persisting node pairs. Translation- and rotation-invariant; operationalizes Liang TOSEM 2026 §3.4 partial-consistency. |
+| `changeEmphasisSeparation`          | AUC-style score asking whether semantically changed persisting nodes moved farther than stable persisting nodes. Higher is better; `1.0` is perfect separation, `0.5` is no separation. |
 | `constraintAdherence`               | Fraction in `[0,1]` of `Left`/`Top`/`Alignment` constraints satisfied at the post-solver positions. Per-frame fairness check on the solver. |
+| `classifyChangeEmphasisChangedSet`  | Returns the exact changed-node set used internally by `changeEmphasis` to decide which prior positions to jitter. |
 | `classifyChangeEmphasisStableSet`   | Recovers the stable subset for a `stable-node-reflow`-style policy from its output.       |
 
-The four scoring functions are pure over `LayoutState` (and, for
+The scoring functions are pure over `LayoutState` (and, for
 `constraintAdherence`, over the solver's `LayoutConstraint[]` and
 node geometry). You don't need `runHeadlessLayout` to compute them if
 you have positions from elsewhere.
@@ -237,6 +242,17 @@ const policyResult = changeEmphasis.apply({
 });
 const stableSet = classifyChangeEmphasisStableSet(priorState, policyResult.effectivePriorState!);
 const stablePositional = positionalConsistency(priorState, currResult.positions, stableSet);
+```
+
+For a direct change-emphasis conjecture check, use the same changed-node
+classifier that `changeEmphasis` uses internally, then pass that set to
+`changeEmphasisSeparation`:
+
+```ts
+const changedIds = classifyChangeEmphasisChangedSet(prevInstance, currInstance);
+const separation = changeEmphasisSeparation(prevResult.positions, currResult.positions, changedIds);
+// separation.auc: higher is better; 1.0 perfect, 0.5 no rank separation
+// separation also reports changed/stable positional and pairwise costs
 ```
 
 ---

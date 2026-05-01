@@ -3,6 +3,7 @@ import {
   ignoreHistory,
   stability,
   changeEmphasis,
+  classifyChangeEmphasisChangedSet,
   randomPositioning,
   getSequencePolicy,
   registerSequencePolicy,
@@ -219,6 +220,17 @@ describe('stability', () => {
 describe('changeEmphasis', () => {
   it('has name "change_emphasis"', () => {
     expect(changeEmphasis.name).toBe('change_emphasis');
+  });
+
+  it('exposes the same changed-node classification used by the policy', () => {
+    const prev = makeInstance([{ id: 'A', type: 'T' }, { id: 'B', type: 'T' }], [
+      { name: 'next', tuples: [['A', 'B']] },
+    ]);
+    const curr = makeInstance([{ id: 'A', type: 'T' }, { id: 'B', type: 'T' }, { id: 'C', type: 'T' }], [
+      { name: 'next', tuples: [['A', 'B'], ['B', 'C']] },
+    ]);
+
+    expect([...classifyChangeEmphasisChangedSet(prev, curr)].sort()).toEqual(['B', 'C']);
   });
 
   it('when instances are identical, all nodes are pinned (stability fallback)', () => {

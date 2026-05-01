@@ -29,6 +29,10 @@
         }
         .metric-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #eee; }
         .metric-row:last-child { border-bottom: none; }
+        .metric-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+        .metric-table th, .metric-table td { padding: 4px 3px; border-bottom: 1px solid #eee; text-align: right; }
+        .metric-table th:first-child, .metric-table td:first-child { text-align: left; }
+        .metric-table th { color: #666; font-weight: 600; }
         .metric-label { font-weight: 500; }
         .metric-value { font-family: 'SF Mono', Consolas, monospace; }
         .metric-value.zero { color: #2e7d32; }
@@ -36,6 +40,8 @@
         .metric-value.unknown { color: #999; font-style: italic; }
         .panel { background: #fafafa; border: 1px solid #ddd; border-radius: 6px; padding: 16px; }
         .panel h5 { margin-top: 0; font-size: 0.9rem; color: #555; text-transform: uppercase; letter-spacing: 0.05em; }
+        .conjecture-panel { background: #f8fbff; border-color: #cfe2ff; }
+        .conjecture-title { font-weight: 600; color: #174ea6; }
         #sparkline { width: 100%; height: 80px; }
         .sparkline-legend { display: flex; gap: 12px; font-size: 0.75rem; color: #666; margin-top: 4px; }
         .legend-swatch { display: inline-block; width: 10px; height: 10px; vertical-align: middle; margin-right: 4px; border-radius: 2px; }
@@ -81,6 +87,12 @@
             post-solver positions; see <a href="../docs/evaluation-api.md">docs/evaluation-api.md</a>
             for the formulas.
         </p>
+        <p class="text-muted">
+            The four policies are layout strategies you can compare; the three consistency metrics are
+            lenses used to score any selected strategy. They are not paired one-to-one. The fourth
+            displayed value, <code>constraint adherence</code>, checks whether the solver respected the
+            layout spec, so it is shown separately from consistency.
+        </p>
 
         <div class="row g-3 mb-3">
             <div class="col-lg-7">
@@ -122,6 +134,10 @@
         </div>
 
         <div id="scenario" class="scenario-text mb-2">…</div>
+        <div class="panel conjecture-panel mb-3">
+            <div class="conjecture-title" id="policyConjectureTitle">Policy conjecture</div>
+            <div id="policyConjectureBody" class="small-help mt-1"></div>
+        </div>
 
         <div class="row g-3">
             <div class="col-lg-8">
@@ -145,6 +161,49 @@
                     <div class="metric-row">
                         <span class="metric-label">pairwise distance <span class="text-muted small">(shape, lower better)</span></span>
                         <span><span id="pairwiseValue" class="metric-value unknown">—</span> <span class="text-muted small">px⁴</span></span>
+                    </div>
+                </div>
+
+                <div class="panel mb-3">
+                    <h5>change-emphasis diagnostic</h5>
+                    <div class="small-help mb-2">For costs, lower is better. For AUC, higher is better. Changed nodes are persisting nodes whose incident relation tuples changed.</div>
+                    <div class="metric-row">
+                        <span class="metric-label">change separation AUC <span class="text-muted small">(higher better)</span></span>
+                        <span><span id="changeAucValue" class="metric-value unknown">—</span></span>
+                    </div>
+                    <table class="metric-table mt-2" aria-label="Change emphasis metric split">
+                        <thead>
+                            <tr>
+                                <th>metric</th>
+                                <th>overall</th>
+                                <th>changed</th>
+                                <th>stable</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>positional cost</td>
+                                <td id="splitOverallPositional" class="metric-value unknown">—</td>
+                                <td id="splitChangedPositional" class="metric-value unknown">—</td>
+                                <td id="splitStablePositional" class="metric-value unknown">—</td>
+                            </tr>
+                            <tr>
+                                <td>pairwise cost</td>
+                                <td id="splitOverallPairwise" class="metric-value unknown">—</td>
+                                <td id="splitChangedPairwise" class="metric-value unknown">—</td>
+                                <td id="splitStablePairwise" class="metric-value unknown">—</td>
+                            </tr>
+                            <tr>
+                                <td>mean drift</td>
+                                <td id="splitOverallMeanDrift" class="metric-value unknown">—</td>
+                                <td id="splitChangedMeanDrift" class="metric-value unknown">—</td>
+                                <td id="splitStableMeanDrift" class="metric-value unknown">—</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="metric-row small-help">
+                        <span>changed / stable nodes</span>
+                        <span><span id="changedNodeCount" class="metric-value">—</span> / <span id="stableNodeCount" class="metric-value">—</span></span>
                     </div>
                 </div>
 
@@ -180,6 +239,9 @@
                 <details class="mt-3">
                     <summary>What do the metrics mean?</summary>
                     <div class="small-help mt-2">
+                        <p>The policy dropdown chooses how the next frame is seeded. The metrics score
+                        the result of that choice. Multiple policies can be compared with the same
+                        metric, and one policy can look good under one metric but worse under another.</p>
                         <p>All three consistency metrics are non-negative costs. Lower is better:
                         0 means that flavor of consistency is preserved exactly. Larger values mean
                         more drift, summed only over elements persisting across the two frames.</p>
@@ -200,6 +262,11 @@
                         positions. In healthy runs it stays at 1.0 across every policy, even
                         <code>randomPositioning</code>; that flatness is the visible proof that
                         the partial orders the user declared are honored regardless of seed strategy.</p>
+                        <p><b>change separation AUC</b> is specific to the change-emphasis conjecture.
+                        It classifies persisting nodes by whether their incident relation tuples changed,
+                        then asks whether changed nodes moved farther than stable nodes. Higher is better:
+                        1.000 means perfect separation, 0.500 means no rank separation, and values below
+                        0.500 mean stable nodes moved more than changed nodes.</p>
                     </div>
                 </details>
             </div>
@@ -313,6 +380,32 @@ constraints:
             return Cnd.getSequencePolicy(document.getElementById('sequencePolicy').value);
         }
 
+        const POLICY_CONJECTURES = {
+            ignore_history: {
+                title: 'ignoreHistory conjecture',
+                body: 'Fresh layout should act as the baseline with no temporal preservation promise. Positional, relative, and pairwise costs may be high on changing frames; that is expected. Constraint adherence should still stay near 1.000 if the solver respects the layout spec.',
+            },
+            stability: {
+                title: 'stability conjecture',
+                body: 'Persisting nodes should stay close to their previous screen positions when constraints allow it. The strongest evidence is lower positional cost than ignoreHistory on the same sequence. Relative and pairwise costs should often improve too, but may rise when preserving exact positions conflicts with new constraints. Constraint adherence should remain near 1.000.',
+            },
+            change_emphasis: {
+                title: 'changeEmphasis conjecture',
+                body: 'Unchanged nodes should remain visually stable while changed nodes move enough to be noticeable. Total positional cost may be higher than stability because some movement is intentional. The useful evidence is a visible split: stable parts stay low-drift while changed parts create targeted drift. Constraint adherence should remain near 1.000.',
+            },
+            random_positioning: {
+                title: 'randomPositioning conjecture',
+                body: 'Continuity is intentionally discarded. Positional, relative, and pairwise costs should usually be high or unstable across frames. This policy is a stress baseline: even with randomized seeds, constraint adherence should still stay near 1.000 after solving.',
+            },
+        };
+
+        function updatePolicyConjecture() {
+            const policyName = document.getElementById('sequencePolicy').value;
+            const conjecture = POLICY_CONJECTURES[policyName] || POLICY_CONJECTURES.ignore_history;
+            document.getElementById('policyConjectureTitle').textContent = conjecture.title;
+            document.getElementById('policyConjectureBody').textContent = conjecture.body;
+        }
+
         async function renderCurrentFrame() {
             const currInstance = buildFrameInstance(currentIdx);
             const evaluator = new Cnd.SGraphQueryEvaluator();
@@ -360,11 +453,21 @@ constraints:
                 const persistingEdges = currEdges.filter(
                     e => prevEdgeKeys.has(`${e.source}->${e.target}#${e.rel}`)
                 ).length;
-                metrics = { positional, relative, pairwise, adherence, persistingNodes, persistingEdges };
+                const changedIds = Cnd.classifyChangeEmphasisChangedSet(prevInstance, currInstance);
+                const changeSeparation = Cnd.changeEmphasisSeparation(prevState, newState, changedIds);
+                metrics = { positional, relative, pairwise, adherence, persistingNodes, persistingEdges, changeSeparation };
             } else {
                 // Frame 1: no prior to compare consistency against, but
                 // adherence is still meaningful on the standalone layout.
-                metrics = { positional: null, relative: null, pairwise: null, adherence, persistingNodes: 0, persistingEdges: 0 };
+                metrics = {
+                    positional: null,
+                    relative: null,
+                    pairwise: null,
+                    adherence,
+                    persistingNodes: 0,
+                    persistingEdges: 0,
+                    changeSeparation: null,
+                };
             }
 
             updateMetricPanel(metrics);
@@ -383,8 +486,21 @@ constraints:
             const adhEl = document.getElementById('adherenceValue');
             const nodesEl = document.getElementById('persistingNodes');
             const edgesEl = document.getElementById('persistingEdges');
+            const aucEl = document.getElementById('changeAucValue');
+            const changedCountEl = document.getElementById('changedNodeCount');
+            const stableCountEl = document.getElementById('stableNodeCount');
+            const splitOverallPositionalEl = document.getElementById('splitOverallPositional');
+            const splitChangedPositionalEl = document.getElementById('splitChangedPositional');
+            const splitStablePositionalEl = document.getElementById('splitStablePositional');
+            const splitOverallPairwiseEl = document.getElementById('splitOverallPairwise');
+            const splitChangedPairwiseEl = document.getElementById('splitChangedPairwise');
+            const splitStablePairwiseEl = document.getElementById('splitStablePairwise');
+            const splitOverallMeanDriftEl = document.getElementById('splitOverallMeanDrift');
+            const splitChangedMeanDriftEl = document.getElementById('splitChangedMeanDrift');
+            const splitStableMeanDriftEl = document.getElementById('splitStableMeanDrift');
 
             const fmtPx = v => (v == null ? '—' : v.toFixed(1));
+            const fmtUnit = v => (v == null ? '—' : v.toFixed(3));
             const klassPx = v => {
                 if (v == null) return 'metric-value unknown';
                 if (v < 1) return 'metric-value zero';
@@ -410,6 +526,33 @@ constraints:
 
             nodesEl.textContent = metrics?.persistingNodes != null ? String(metrics.persistingNodes) : '—';
             edgesEl.textContent = metrics?.persistingEdges != null ? String(metrics.persistingEdges) : '—';
+
+            const change = metrics?.changeSeparation ?? null;
+            const auc = change?.auc ?? null;
+            aucEl.textContent = fmtUnit(auc);
+            aucEl.className = auc == null
+                ? 'metric-value unknown'
+                : auc >= 0.75
+                    ? 'metric-value zero'
+                    : auc < 0.5
+                        ? 'metric-value high'
+                        : 'metric-value';
+            changedCountEl.textContent = change ? String(change.changedCount) : '—';
+            stableCountEl.textContent = change ? String(change.stableCount) : '—';
+
+            const overallMeanDrift = change && (change.changedCount + change.stableCount) > 0
+                ? (((change.changedMeanDrift ?? 0) * change.changedCount) + ((change.stableMeanDrift ?? 0) * change.stableCount)) /
+                    (change.changedCount + change.stableCount)
+                : null;
+            splitOverallPositionalEl.textContent = fmtPx(metrics?.positional ?? null);
+            splitChangedPositionalEl.textContent = fmtPx(change?.changedPositional ?? null);
+            splitStablePositionalEl.textContent = fmtPx(change?.stablePositional ?? null);
+            splitOverallPairwiseEl.textContent = fmtPx(metrics?.pairwise ?? null);
+            splitChangedPairwiseEl.textContent = fmtPx(change?.changedPairwiseDistance ?? null);
+            splitStablePairwiseEl.textContent = fmtPx(change?.stablePairwiseDistance ?? null);
+            splitOverallMeanDriftEl.textContent = fmtPx(overallMeanDrift);
+            splitChangedMeanDriftEl.textContent = fmtPx(change?.changedMeanDrift ?? null);
+            splitStableMeanDriftEl.textContent = fmtPx(change?.stableMeanDrift ?? null);
         }
 
         function updateSparkline() {
@@ -506,6 +649,7 @@ constraints:
             document.getElementById('prevBtn').disabled = currentIdx === 0;
             document.getElementById('nextBtn').disabled = currentIdx === getFrameCount() - 1;
             document.getElementById('scenario').textContent = describeFrame(currentIdx);
+            updatePolicyConjecture();
         }
 
         function resetSequence() {
@@ -579,7 +723,10 @@ constraints:
         document.getElementById('prevBtn').addEventListener('click', () => step(-1));
         document.getElementById('nextBtn').addEventListener('click', () => step(1));
         document.getElementById('resetBtn').addEventListener('click', resetSequence);
-        document.getElementById('sequencePolicy').addEventListener('change', resetSequence);
+        document.getElementById('sequencePolicy').addEventListener('change', () => {
+            updatePolicyConjecture();
+            resetSequence();
+        });
         document.getElementById('loadAlloyBtn').addEventListener('click', loadAlloySequence);
         document.getElementById('useBuiltInBtn').addEventListener('click', useBuiltInSequence);
 
