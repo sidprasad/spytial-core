@@ -1,61 +1,42 @@
-# What is Spytial?
+# What is spytial-core?
 
-Spytial is a **declarative, constraint-based graph visualization** system. Instead of manually placing nodes and drawing edges, you describe *what you want* — and Spytial figures out *how to draw it*.
+`spytial-core` is the **host-agnostic engine** behind Spytial. It is the piece that:
 
-You write a short **YAML specification** that says things like:
+1. Takes a relational view of your data — atoms (nodes), labeled tuples (edges), types.
+2. Takes a YAML *spec* of spatial constraints and visual directives.
+3. Produces a layout — positions, groups, edge styling, accessibility metadata — that any frontend (WebCola, SVG, screen reader, …) can render.
 
-- "Parents should appear **above** their children"
-- "Sibling nodes should be **aligned horizontally**"
-- "Color all `Error` nodes **red**"
-- "Show the `age` field as a **label on the node** instead of an edge"
-
-Spytial takes your data and your spec, and produces a clean, readable layout.
+It runs entirely in the browser. It has no knowledge of your source language. Everything language-specific — Python objects, Rust values, Pyret data, Lean terms — lives in a thin **host integration layer** that you write (or reuse).
 
 ## Who is this guide for?
 
-This guide is for people who want to **use** Spytial to visualize structured data. You might be:
+This documentation is for **language and tool integrators**. You're writing the bridge between a host (Python, Rust, Pyret, Lean, your custom debugger, your notebook kernel, …) and `spytial-core`.
 
-- Writing YAML layout specs by hand
-- Using the NoCode visual editor to build specs interactively
-- Providing JSON data to visualize
+Existing integrations you can study:
 
-You don't need to know how Spytial works internally. You just need to know what you can tell it to do.
+| Host                  | Repo                                                                                   | Bridge mechanism                                       |
+|-----------------------|----------------------------------------------------------------------------------------|--------------------------------------------------------|
+| Python (sPyTial)      | [github.com/sidprasad/spytial](https://github.com/sidprasad/spytial)                  | Runtime reflection → JSON → browser/notebook           |
+| Rust (Caraspace)      | [github.com/sidprasad/caraspace](https://github.com/sidprasad/caraspace)              | `derive` + procedural macros → JSON → local HTTP       |
+| Pyret (Spyret)        | [github.com/sidprasad/spyret-lang](https://github.com/sidprasad/spyret-lang) · [spyret-ide](https://github.com/sidprasad/spyret-ide) | Value-skeleton output method → spytial-core in browser |
+| Lean 4 (Spytial-Lean) | [github.com/sidprasad/spytial-lean](https://github.com/sidprasad/spytial-lean)        | Relationalize `Expr` → ProofWidgets4 → spytial-core    |
+| Racket                | [github.com/sidprasad/rkt-graphable](https://github.com/sidprasad/rkt-graphable)      | `#lang` integration                                    |
 
-## Core Concepts
+If you are *using* one of those bindings, read its README — not this guide.
 
-### Data
+## What `spytial-core` gives you
 
-Your data consists of **atoms** (nodes) and **relations** (edges between them). For example, a family tree has atoms like `Alice`, `Bob`, `Carol` and a relation `parent` connecting them.
+- **A canonical data model** — `IDataInstance` (atoms, tuples, types). [JSON serialization](json-data.md) is the lingua franca.
+- **A YAML spec language** — orientation, alignment, grouping, color, icons, projection. See the [YAML Reference](yaml-reference.md).
+- **A query/selector engine** — Forge-style relational expressions (`^parent`, `Node - left.Node`, …) plus optional AlaSQL.
+- **A constraint solver** — qualitative spatial constraints (above/below/left/right, alignment, cyclic) compiled to a linear system; conflicts are reported as an Irreducible Inconsistent Subset (IIS).
+- **A WebCola renderer** as a custom element (`<webcola-cnd-graph>`) plus an accessible parallel renderer.
+- **Sequence support** — pairwise [policies](sequences.md) for stepping through traces / states with continuity.
 
-Spytial accepts data in several formats including [JSON](json-data.md), Alloy XML, and others.
+## What `spytial-core` does *not* give you
 
-### Specs
+- Anything host-specific. **You write the relationalizer.**
+- A way to capture annotations from your source language. **You write the spec collector.**
+- A delivery mechanism. The library is browser-side; you must get the data + spec there yourself (HTTP server, Jupyter widget, IDE webview, language-server message, …).
 
-A **spec** is a YAML file with two optional sections:
-
-```yaml
-constraints:
-  - # ... structural layout rules
-
-directives:
-  - # ... visual styling rules
-```
-
-**Constraints** control *where* things go — which nodes are above, below, left, or right of others; which nodes are grouped or aligned.
-
-**Directives** control *how* things look — colors, icons, labels, hidden elements.
-
-### Selectors
-
-Both constraints and directives use **selectors** to pick which atoms or relations they apply to. Selectors use [Forge relational syntax](selectors.md), so if you've used Forge or Alloy, you already know the basics:
-
-```yaml
-# All Person atoms
-selector: Person
-
-# The parent relation (source -> target pairs)
-selector: parent
-
-# Transitive closure — all ancestors
-selector: "^parent"
-```
+The next page is the only mental model you need: [the integration pipeline](pipeline.md).

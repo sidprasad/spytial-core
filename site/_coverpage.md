@@ -1,12 +1,13 @@
 <!-- site/_coverpage.md -->
 
-# Spytial <small>Guide</small>
+# spytial-core <small>integration guide</small>
 
-> Declarative, constraint-based graph visualization.
+> The host-agnostic engine behind Spytial. Integrate spatial diagramming into your language.
 
-- Define **layout constraints** and **visual directives** in YAML
-- Use familiar **Forge-style selectors** to target nodes and edges
-- Customize everything — colors, icons, grouping, alignment, and more
+- A **canonical relational data model** — atoms, tuples, types
+- A **YAML constraint + directive language** for spatial layout
+- A **constraint solver, evaluator, and renderer** ready to embed
 
 [Get Started](getting-started.md)
-[YAML Reference](yaml-reference.md)
+[Four Subproblems](integration.md)
+[API Reference](api-reference.md)

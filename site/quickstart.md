@@ -1,90 +1,134 @@
 # Quick Start
 
-This page walks through writing a simple Spytial spec from scratch.
+The smallest possible integration: a self-contained HTML page that renders one diagram. Every host integration is a refinement of this.
 
-## The Scenario
+---
 
-Imagine you have a family tree with these relationships:
+## End-to-end example
 
-| Parent | Child |
-|--------|-------|
-| Alice  | Bob   |
-| Alice  | Carol |
-| Bob    | Dave  |
+Save the following as `demo.html`, then open it in a browser:
 
-You want parents to appear **above** their children, and siblings to be **aligned horizontally**.
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>spytial-core minimal integration</title>
+  <script src="https://cdn.jsdelivr.net/npm/spytial-core/dist/browser/spytial-core-complete.global.js"></script>
+</head>
+<body>
+  <webcola-cnd-graph id="g" width="800" height="500"></webcola-cnd-graph>
 
-## Step 1: Write the Spec
+  <script>
+    const { JSONDataInstance, parseLayoutSpec, SGraphQueryEvaluator, LayoutInstance } = spytialcore;
 
-Create a YAML file:
+    // 1. Relational data — produced by the host (here, hand-written)
+    const data = {
+      atoms: [
+        { id: "a", type: "Node", label: "Alice"  },
+        { id: "b", type: "Node", label: "Bob"    },
+        { id: "c", type: "Node", label: "Carol"  },
+      ],
+      relations: [
+        {
+          id: "parent", name: "parent", types: ["Node", "Node"],
+          tuples: [
+            { atoms: ["a", "b"], types: ["Node", "Node"] },
+            { atoms: ["a", "c"], types: ["Node", "Node"] },
+          ],
+        },
+      ],
+    };
 
-```yaml
-constraints:
-  - orientation:
-      selector: parent
-      directions: [above]
+    // 2. Spec — produced by the host (here, hand-written YAML)
+    const spec = `
+      constraints:
+        - orientation: { selector: parent, directions: [above] }
+      directives:
+        - atomColor: { selector: Node, value: "#4a90d9" }
+        - flag: hideDisconnectedBuiltIns
+    `;
 
-  - align:
-      selector: "Person.~parent.parent - iden"
-      direction: horizontal
+    // 3. Wire up the pipeline
+    const instance  = new JSONDataInstance(data);
+    const layoutSpec = parseLayoutSpec(spec);
+    const evaluator = new SGraphQueryEvaluator();
+    evaluator.initialize({ sourceData: instance });
+
+    const layout = new LayoutInstance(layoutSpec, evaluator).generateLayout(instance);
+
+    // 4. Render
+    document.getElementById('g').renderLayout(layout);
+  </script>
+</body>
+</html>
 ```
 
-That's it. Two constraints:
+The four numbered comments map directly to the [pipeline stages](pipeline.md). In a real integration:
 
-1. **Orientation**: For every `parent` edge, the source (parent) appears above the target (child).
-2. **Align**: Siblings (nodes sharing the same parent) are aligned horizontally.
+- Step 1 comes from your **relationalizer** (Python reflection, Rust derive macro, Pyret skeleton, …).
+- Step 2 comes from your **spec collector** (decorators, attributes, output methods, …).
+- Steps 3–4 are identical across every host.
 
-## Step 2: Add Some Style
+---
 
-Let's color the nodes and show ages as labels:
+## Convenience: `setupLayout`
 
-```yaml
-constraints:
-  - orientation:
-      selector: parent
-      directions: [above]
+The three lines that build the evaluator + layout instance are common enough to have a helper:
 
-directives:
-  - atomColor:
-      selector: Person
-      value: "#4a90d9"
+```javascript
+const { setupLayout } = spytialcore;
 
-  - attribute:
-      field: age
-      selector: Person
-
-  - flag: hideDisconnectedBuiltIns
+const layout = setupLayout(spec, instance, evaluator);
 ```
 
-Now every `Person` node is blue, ages appear as labels on the node instead of edges, and disconnected built-in type nodes (like `Int`) are hidden.
+`setupLayout` parses the spec if you pass a string and returns the same `InstanceLayout` you'd get from `LayoutInstance.generateLayout`.
 
-## Step 3: Iterate
+---
 
-The power of Spytial is that you can keep adding constraints and directives to refine your layout. Some ideas:
+## Accessibility variant
 
-```yaml
-# Group family branches
-- group:
-    selector: Person.~parent
-    name: "Family"
+Swap `<webcola-cnd-graph>` for `<spytial-explorer>` to get keyboard navigation, screen-reader announcements, and the must/can spatial REPL out of the box:
 
-# Add icons
-- icon:
-    selector: Person
-    path: "user"
-    showLabels: true
-
-# Style specific edges
-- edgeColor:
-    field: parent
-    value: "#666"
-    style: solid
-    weight: 2
+```html
+<spytial-explorer id="g" width="800" height="500"></spytial-explorer>
+<script>
+  const explorer = document.getElementById('g');
+  explorer.renderLayout(layout);
+  explorer.enableAccessibility(layout, /* validator */ null, evaluator);
+</script>
 ```
 
-## What's Next?
+`SpytialExplorer` extends `WebColaCnDGraph` — same rendering API, plus an `enableAccessibility` call that wires up the [`AccessibleTranslator`](api-reference.md#accessibletranslator).
 
-- [**Constraints**](constraints.md) — Full reference for all constraint types
-- [**Directives**](directives.md) — Full reference for all directive types
-- [**Selector Syntax**](selectors.md) — How to write selectors
+---
 
+## NPM (instead of CDN)
+
+For non-browser builds (Vite, Webpack, …):
+
+```bash
+npm install spytial-core
+```
+
+```typescript
+import {
+  JSONDataInstance,
+  parseLayoutSpec,
+  SGraphQueryEvaluator,
+  LayoutInstance,
+  setupLayout,
+} from 'spytial-core';
+```
+
+The CDN bundle is the same module, exposed as the global `spytialcore`. Either path works for an integration; pick whichever fits your delivery mechanism.
+
+---
+
+## Where to go next
+
+- [The Four Subproblems](integration.md) — the integrator's checklist.
+- [Custom Data Instances](custom-data-instance.md) — how to feed your host's data in.
+- [YAML Reference](yaml-reference.md) — every constraint and directive.
+- [Sequences of States](sequences.md) — when you need to step through traces.
+- [API Reference](api-reference.md) — the full export surface.
