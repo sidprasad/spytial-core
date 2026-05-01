@@ -197,13 +197,17 @@ export type { ProjectionOrchestratorProps, ProjectionOrchestratorResult } from '
 export { applyProjectionTransform, topologicalSortWithCycleBreaking } from './data-instance/projection-transform';
 export type { Projection, ProjectionTransformOptions, ProjectionTransformResult } from './data-instance/projection-transform';
 
-// Evaluation API — headless layout + Penlloy consistency metrics.
-// Intended for sequence-policy analysis (e.g., the thesis evaluation
-// repo); not for production rendering.
+// Evaluation API — headless layout + visual-consistency metrics from
+// multiple sources (Penlloy PLATEAU 2025; Liang TOSEM 2026), plus a
+// per-frame constraint-adherence fairness check. Intended for
+// sequence-policy analysis (e.g., the thesis evaluation repo); not
+// for production rendering.
 export {
   runHeadlessLayout,
   positionalConsistency,
   relativeConsistency,
+  pairwiseDistanceConsistency,
+  constraintAdherence,
   classifyChangeEmphasisStableSet,
 } from './evaluation';
 export type {
