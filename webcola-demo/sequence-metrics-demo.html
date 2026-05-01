@@ -76,7 +76,8 @@
             and <code>pairwise distance</code> (shape, computational form of
             <a href="https://doi.org/10.1145/3809502" target="_blank">Liang TOSEM 2026</a> partial
             consistency) — plus a <code>constraint adherence</code> fairness check that confirms the
-            solver respects the layout spec regardless of policy. All four are computed live on the
+            solver respects the layout spec regardless of policy. Lower is better for the three
+            consistency costs; higher is better for constraint adherence. All four are computed live on the
             post-solver positions; see <a href="../docs/evaluation-api.md">docs/evaluation-api.md</a>
             for the formulas.
         </p>
@@ -132,24 +133,26 @@
             <div class="col-lg-4">
                 <div class="panel mb-3">
                     <h5>consistency vs prior frame</h5>
+                    <div class="small-help mb-2">Lower is better. A value of 0 means this kind of consistency was preserved exactly.</div>
                     <div class="metric-row">
-                        <span class="metric-label">positional</span>
+                        <span class="metric-label">positional <span class="text-muted small">(lower better)</span></span>
                         <span><span id="positionalValue" class="metric-value unknown">—</span> <span class="text-muted small">px²</span></span>
                     </div>
                     <div class="metric-row">
-                        <span class="metric-label">relative <span class="text-muted small">(edges)</span></span>
+                        <span class="metric-label">relative <span class="text-muted small">(edges, lower better)</span></span>
                         <span><span id="relativeValue" class="metric-value unknown">—</span> <span class="text-muted small">px²</span></span>
                     </div>
                     <div class="metric-row">
-                        <span class="metric-label">pairwise distance <span class="text-muted small">(shape)</span></span>
+                        <span class="metric-label">pairwise distance <span class="text-muted small">(shape, lower better)</span></span>
                         <span><span id="pairwiseValue" class="metric-value unknown">—</span> <span class="text-muted small">px⁴</span></span>
                     </div>
                 </div>
 
                 <div class="panel mb-3">
                     <h5>solver fairness check</h5>
+                    <div class="small-help mb-2">Higher is better. A value of 1.000 means all scored constraints are satisfied.</div>
                     <div class="metric-row">
-                        <span class="metric-label">constraint adherence</span>
+                        <span class="metric-label">constraint adherence <span class="text-muted small">(higher better)</span></span>
                         <span><span id="adherenceValue" class="metric-value unknown">—</span></span>
                     </div>
                     <div class="metric-row small-help">
@@ -177,9 +180,9 @@
                 <details class="mt-3">
                     <summary>What do the metrics mean?</summary>
                     <div class="small-help mt-2">
-                        <p>All three consistency metrics are non-negative and 0 iff that flavor of
-                        consistency is preserved exactly, summed only over elements persisting across
-                        the two frames.</p>
+                        <p>All three consistency metrics are non-negative costs. Lower is better:
+                        0 means that flavor of consistency is preserved exactly. Larger values mean
+                        more drift, summed only over elements persisting across the two frames.</p>
                         <ul class="ps-3">
                             <li><b>positional</b> — Σ‖D(n) − D′(n)‖² over persisting <em>nodes</em>. Strict;
                             "every node held still." Penlloy PLATEAU 2025 §6.2.</li>
@@ -191,8 +194,8 @@
                             invariant under translation AND rotation. Computational form of Liang TOSEM
                             2026 §3.4 partial consistency.</li>
                         </ul>
-                        <p><b>constraint adherence</b> is different — it is a fairness check on the
-                        solver, not a consistency metric on the policy. It reports the fraction of the
+                        <p><b>constraint adherence</b> is different — it is a fairness score on the
+                        solver, not a consistency cost on the policy. Higher is better. It reports the fraction of the
                         layout spec's Left/Top/Alignment constraints satisfied at the post-solver
                         positions. In healthy runs it stays at 1.0 across every policy, even
                         <code>randomPositioning</code>; that flatness is the visible proof that
