@@ -69,10 +69,18 @@ export interface EdgeKey {
 const edgeKeyString = (e: EdgeKey): string =>
   `${e.source}->${e.target}#${e.rel}`;
 
+/**
+ * Convert captured layout coordinates into the same zoom/pan-adjusted
+ * coordinate space the renderer uses on screen.
+ */
 const buildPositionMap = (state: LayoutState): Map<string, { x: number; y: number }> => {
   const m = new Map<string, { x: number; y: number }>();
+  const k = Number.isFinite(state.transform?.k) && state.transform.k > 0 ? state.transform.k : 1;
+  const tx = Number.isFinite(state.transform?.x) ? state.transform.x : 0;
+  const ty = Number.isFinite(state.transform?.y) ? state.transform.y : 0;
+
   for (const p of state.positions) {
-    m.set(p.id, { x: p.x, y: p.y });
+    m.set(p.id, { x: p.x * k + tx, y: p.y * k + ty });
   }
   return m;
 };
@@ -420,12 +428,13 @@ export function classifyChangeEmphasisStableSet(
   tol: number = 0.5
 ): Set<string> {
   const priorPos = buildPositionMap(prior);
+  const outputPos = buildPositionMap(policyOutput);
   const stable = new Set<string>();
-  for (const p of policyOutput.positions) {
-    const q = priorPos.get(p.id);
+  for (const [id, p] of outputPos) {
+    const q = priorPos.get(id);
     if (!q) continue;
     if (Math.abs(p.x - q.x) <= tol && Math.abs(p.y - q.y) <= tol) {
-      stable.add(p.id);
+      stable.add(id);
     }
   }
   return stable;

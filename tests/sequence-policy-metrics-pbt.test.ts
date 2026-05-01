@@ -45,6 +45,32 @@ const translate = (s: LayoutState, dx: number, dy: number): LayoutState => ({
 // ──────────────────────────────────────────────────────────────────
 
 describe('positionalConsistency — algebraic invariants', () => {
+  it('compares positions after applying each frame zoom transform', () => {
+    const prev: LayoutState = {
+      positions: [{ id: 'A', x: 10, y: 20 }],
+      transform: { k: 2, x: 5, y: -10 },
+    };
+    const curr: LayoutState = {
+      positions: [{ id: 'A', x: 25, y: 30 }],
+      transform: { k: 1, x: 0, y: 0 },
+    };
+
+    expect(positionalConsistency(prev, curr)).toBe(0);
+  });
+
+  it('counts zoom-scale movement even when raw layout coordinates match', () => {
+    const prev: LayoutState = {
+      positions: [{ id: 'A', x: 10, y: 20 }],
+      transform: { k: 2, x: 0, y: 0 },
+    };
+    const curr: LayoutState = {
+      positions: [{ id: 'A', x: 10, y: 20 }],
+      transform: { k: 1, x: 0, y: 0 },
+    };
+
+    expect(positionalConsistency(prev, curr)).toBe(500);
+  });
+
   it('is non-negative for any input', () => {
     fc.assert(
       fc.property(
