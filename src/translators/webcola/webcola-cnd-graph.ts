@@ -6192,13 +6192,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // Compute self-loop index: which self-loop is this among all self-loops on this node?
     const selfLoopIndex = this.getSelfLoopIndex(edgeData);
 
-    // Distribute self-loops around 4 corners of the node:
-    //   0: top-right    (start: top center,    end: right center,   control: top-right)
-    //   1: bottom-right (start: right center,  end: bottom center,  control: bottom-right)
-    //   2: bottom-left  (start: bottom center, end: left center,    control: bottom-left)
-    //   3: top-left     (start: left center,   end: top center,     control: top-left)
+    // Distribute self-loops around 4 sides and shape each loop like a small
+    // "tulip" petal in non-grid mode.
     // For 5+ self-loops, wrap around with increasing curvature.
-    const corner = selfLoopIndex % 4;
+    const side = selfLoopIndex % 4;
     const ring = Math.floor(selfLoopIndex / 4);
     const curvatureScale = 1 + ring * WebColaCnDGraph.SELF_LOOP_CURVATURE_SCALE;
 
@@ -6208,38 +6205,55 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     const bottomMid = { x: cx,       y: bounds.Y };
     const leftMid   = { x: bounds.x, y: cy };
 
+    // Split a side into two anchors so the loop leaves and re-enters nearby.
+    const split = 0.22;
+    const topLeftAnchor = { x: cx - width * split, y: bounds.y };
+    const topRightAnchor = { x: cx + width * split, y: bounds.y };
+    const rightTopAnchor = { x: bounds.X, y: cy - height * split };
+    const rightBottomAnchor = { x: bounds.X, y: cy + height * split };
+    const bottomLeftAnchor = { x: cx - width * split, y: bounds.Y };
+    const bottomRightAnchor = { x: cx + width * split, y: bounds.Y };
+    const leftTopAnchor = { x: bounds.x, y: cy - height * split };
+    const leftBottomAnchor = { x: bounds.x, y: cy + height * split };
+
     let startPoint: { x: number; y: number };
     let endPoint: { x: number; y: number };
-    let controlPoint: { x: number; y: number };
+    let neckPoint: { x: number; y: number };
+    let tipPoint: { x: number; y: number };
 
-    switch (corner) {
-      case 0: // top-right
-        startPoint = topMid;
-        endPoint = rightMid;
-        controlPoint = { x: bounds.X + (width / 2) * curvatureScale, y: bounds.y - (height / 2) * curvatureScale };
+    switch (side) {
+      case 0: // top petal
+        startPoint = topLeftAnchor;
+        endPoint = topRightAnchor;
+        neckPoint = { x: topMid.x, y: bounds.y - (height * 0.35) * curvatureScale };
+        tipPoint = { x: topMid.x, y: bounds.y - (height * 0.9) * curvatureScale };
         break;
-      case 1: // bottom-right
-        startPoint = rightMid;
-        endPoint = bottomMid;
-        controlPoint = { x: bounds.X + (width / 2) * curvatureScale, y: bounds.Y + (height / 2) * curvatureScale };
+      case 1: // right petal
+        startPoint = rightTopAnchor;
+        endPoint = rightBottomAnchor;
+        neckPoint = { x: bounds.X + (width * 0.35) * curvatureScale, y: rightMid.y };
+        tipPoint = { x: bounds.X + (width * 0.9) * curvatureScale, y: rightMid.y };
         break;
-      case 2: // bottom-left
-        startPoint = bottomMid;
-        endPoint = leftMid;
-        controlPoint = { x: bounds.x - (width / 2) * curvatureScale, y: bounds.Y + (height / 2) * curvatureScale };
+      case 2: // bottom petal
+        startPoint = bottomRightAnchor;
+        endPoint = bottomLeftAnchor;
+        neckPoint = { x: bottomMid.x, y: bounds.Y + (height * 0.35) * curvatureScale };
+        tipPoint = { x: bottomMid.x, y: bounds.Y + (height * 0.9) * curvatureScale };
         break;
-      case 3: // top-left
-        startPoint = leftMid;
-        endPoint = topMid;
-        controlPoint = { x: bounds.x - (width / 2) * curvatureScale, y: bounds.y - (height / 2) * curvatureScale };
+      case 3: // left petal
+        startPoint = leftBottomAnchor;
+        endPoint = leftTopAnchor;
+        neckPoint = { x: bounds.x - (width * 0.35) * curvatureScale, y: leftMid.y };
+        tipPoint = { x: bounds.x - (width * 0.9) * curvatureScale, y: leftMid.y };
         break;
       default:
-        startPoint = topMid;
-        endPoint = rightMid;
-        controlPoint = { x: bounds.X + (width / 2) * curvatureScale, y: bounds.y - (height / 2) * curvatureScale };
+        startPoint = topLeftAnchor;
+        endPoint = topRightAnchor;
+        neckPoint = { x: topMid.x, y: bounds.y - (height * 0.35) * curvatureScale };
+        tipPoint = { x: topMid.x, y: bounds.y - (height * 0.9) * curvatureScale };
     }
 
-    return [startPoint, controlPoint, endPoint];
+    return [startPoint, neckPoint, tipPoint, neckPoint, endPoint];
   }
 
   /**
