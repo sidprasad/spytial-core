@@ -94,6 +94,72 @@
             layout spec, so it is shown separately from consistency.
         </p>
 
+        <details class="panel mb-3" id="metricsGuide">
+            <summary style="cursor:pointer; font-weight:600;">How to read all the metrics on this page</summary>
+            <div class="small-help mt-2">
+                <p>
+                    There are a lot of numbers in the right-hand panels. The smallest mental model that covers them
+                    is <strong>three families, three questions</strong>:
+                </p>
+                <table class="metric-table" aria-label="Metric families">
+                    <thead>
+                        <tr>
+                            <th>Family</th>
+                            <th>The question it answers</th>
+                            <th>Which metrics</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Consistency</strong></td>
+                            <td><em>Did the layout stay similar?</em> &mdash; how preserved is X across this transition?</td>
+                            <td>
+                                <code>positional</code>, <code>relative</code>, <code>pairwise distance</code>,
+                                <code>orthogonal ordering</code>, <code>k-NN Jaccard</code>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Salience</strong></td>
+                            <td><em>Did the right things move?</em> &mdash; is the changed bit emphasized and the stable bit quiet?</td>
+                            <td>
+                                <code>change separation AUC</code>, <code>directional coherence</code>,
+                                <code>stable quiet ratio</code>, <code>edge crossings &Delta;</code>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Appropriateness</strong></td>
+                            <td><em>Is the policy close to optimal?</em> &mdash; how far from the constraint-feasible mental-map ideal?</td>
+                            <td>
+                                <code>gap_positional</code>, <code>gap_pwd</code>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Moderator</td>
+                            <td><em>How forced was the change at all?</em></td>
+                            <td><code>constraint perturbation</code></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p class="mt-2">
+                    <strong>What to look at first.</strong> The headline metric is <code>gap_pwd</code> &mdash;
+                    distance from the policy's output to the constraint-feasible shape-preservation optimum,
+                    shown as <em>% of theoretical worst</em>. Smaller = more appropriate.
+                </p>
+                <p>
+                    Everything else is supporting evidence:
+                </p>
+                <ul>
+                    <li><code>gap_positional</code> is a sanity check &mdash; <code>stability</code> should land at &asymp; 0% by construction.</li>
+                    <li>The <strong>Misue battery</strong> tells you <em>which dimension</em> of the mental map a policy preserves. Useful when <code>gap_pwd</code> doesn't separate policies but, say, ordering does.</li>
+                    <li>The <strong>salience</strong> metrics answer a different question and only really matter for <code>change_emphasis</code>.</li>
+                    <li><code>constraint perturbation</code> is a regressor &mdash; when high, no policy can help much. Use it to bin transitions into easy / hard before comparing.</li>
+                </ul>
+                <p>
+                    <strong>What "% of theoretical worst" means.</strong> The denominator is the value the metric would take if every persisting element contributed its theoretical maximum (every node corner-to-corner, etc.). 0 = ideal, 1 = worst possible. Real values are usually small fractions of 1 because random positioning typically uses ~30&ndash;50% of the bounding box, not 100%; the compression is intentional and self-anchored.
+                </p>
+            </div>
+        </details>
+
         <div class="row g-3 mb-3">
             <div class="col-lg-7">
                 <label class="form-label form-label-sm" for="alloyInput">Alloy XML Sequence</label>
