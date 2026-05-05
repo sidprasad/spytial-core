@@ -1,3 +1,39 @@
+/**
+ * Sequence policies and the warm-start appropriateness factor.
+ *
+ * **Research framing.** A sequence policy controls how prior layout
+ * state is fed back into the solver between consecutive frames. The
+ * research question this module supports is:
+ *
+ *   *Choosing an appropriate warm-start position causes the solver to
+ *   converge at a layout that preserves the mental map, modulo hard
+ *   constraints.*
+ *
+ * The four built-in policies below are not unrelated strategies — they
+ * span one experimental factor at four levels:
+ *
+ *   | Level   | Policy              | Reading                                                              |
+ *   |---------|---------------------|----------------------------------------------------------------------|
+ *   | Anti    | `random_positioning`| Prior info actively discarded for noise — lower bound                |
+ *   | None    | `ignore_history`    | No prior info — pure baseline                                        |
+ *   | Partial | `change_emphasis`   | Prior for unchanged; deliberately perturbed for changed (interior contrast) |
+ *   | Full    | `stability`         | Prior for everything persisting — most appropriate                   |
+ *
+ * The claim predicts mental-map metrics (Misue 1995's three criteria,
+ * Penlloy/Liang positional & pairwise-distance) rise monotonically from
+ * anti → none → partial → full. The four policies are chosen so the
+ * gradient is empirically testable; `change_emphasis`'s perturbation is
+ * intentional, not a bug — it is the interior contrast point that makes
+ * "appropriate" non-tautological.
+ *
+ * **Aliases.** Each policy is also registered under its
+ * literature-vocabulary name (Liang TOSEM 2026 §2.6 / §3.4):
+ * `full_consistency` ↔ `stability`,
+ * `partial_consistency` ↔ `change_emphasis`,
+ * `no_consistency` ↔ `ignore_history`,
+ * `anti_consistency` ↔ `random_positioning`.
+ */
+
 import type { LayoutState } from './webcolatranslator';
 import type { IDataInstance } from '../../data-instance/interfaces';
 import type { LayoutSpec } from '../../layout/layoutspec';
@@ -317,6 +353,12 @@ function jitterChangedPosition(
 
 /**
  * Fresh layout every time — no prior state used.
+ *
+ * **Appropriateness level:** None. No warm-start at all.
+ * **Role in the experiment:** Pure baseline. Per Archambault TVCG 2011's
+ * small-multiples comparison, this is what the world looks like when the
+ * mental map is not preserved at all. Differences between any warm-start
+ * policy and `ignoreHistory` measure the contribution of warm-starting.
  */
 export const ignoreHistory: SequencePolicy = {
   name: 'ignore_history',
@@ -328,6 +370,14 @@ export const ignoreHistory: SequencePolicy = {
  *
  * This built-in includes short-lived in-memory recall for ids that
  * disappear briefly and reappear in nearby steps.
+ *
+ * **Appropriateness level:** Full. Verbatim prior positions for every
+ * persisting node, plus brief-recall for transient absences.
+ * **Role in the experiment:** The strongest warm-start the hint-only
+ * interface allows. By construction, this is the policy whose seed is
+ * closest to the *positional* oracle (the constraint-feasible projection
+ * of the prior layout). `gap_positional(stability)` is therefore a
+ * sanity check, expected near zero modulo solver epsilon.
  *
  * ### Behavioural notes
  *
@@ -428,6 +478,16 @@ export const stability: SequencePolicy = {
  *
  * The diff is computed automatically from the provided instances.
  *
+ * **Appropriateness level:** Partial. Verbatim prior for the unchanged
+ * subset, *deliberately perturbed* for the changed subset. The
+ * perturbation is intentional under the appropriateness framing — its
+ * job is to be the interior contrast point between full
+ * (`stability`) and none (`ignoreHistory`).
+ * **Role in the experiment:** Operationalizes Liang TOSEM 2026 §3.4
+ * partial-consistency with focal substructure = unchanged set. Tests
+ * whether *which* persisting nodes are warm-started matters, holding the
+ * hint mechanism constant.
+ *
  * ### Behavioural notes
  *
  * **New atoms receive no solver hint.** `emphasizedPositions` iterates only
@@ -492,6 +552,14 @@ export const changeEmphasis: SequencePolicy = {
 /**
  * Completely randomize positions of all current nodes each step.
  * Positions are sampled uniformly within viewport bounds.
+ *
+ * **Appropriateness level:** Anti. Prior info actively discarded for
+ * uniform noise.
+ * **Role in the experiment:** Lower bound on how badly any policy can
+ * do. Mental-map metric values for `randomPositioning` define the
+ * "no preservation possible" reference; the gap between the warm-start
+ * policies and this baseline upper-bounds the headroom available to
+ * any preservation strategy.
  */
 export const randomPositioning: SequencePolicy = {
   name: 'random_positioning',
@@ -520,10 +588,16 @@ export const randomPositioning: SequencePolicy = {
 // ---------------------------------------------------------------------------
 
 const policyRegistry = new Map<string, SequencePolicy>([
+  // Canonical names
   ['ignore_history', ignoreHistory],
   ['stability', stability],
   ['change_emphasis', changeEmphasis],
   ['random_positioning', randomPositioning],
+  // Literature-vocabulary aliases (Liang TOSEM 2026 §2.6 / §3.4)
+  ['no_consistency', ignoreHistory],
+  ['full_consistency', stability],
+  ['partial_consistency', changeEmphasis],
+  ['anti_consistency', randomPositioning],
 ]);
 
 /**

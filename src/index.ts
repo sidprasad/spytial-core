@@ -211,10 +211,24 @@ export {
   changeEmphasisSeparation,
   constraintAdherence,
   classifyChangeEmphasisStableSet,
+  // Misue mental-map battery (JVLC 1995)
+  orthogonalOrderingPreservation,
+  knnJaccard,
+  edgeCrossings,
+  edgeCrossingsDelta,
+  directionalCoherence,
+  stableQuietRatio,
+  // Constraint-perturbation moderator
+  constraintPerturbation,
+  // Appropriateness oracles
+  positionalOracle,
+  pairwiseDistanceOracle,
 } from './evaluation';
 export type {
   HeadlessLayoutOptions,
   HeadlessLayoutResult,
   EdgeKey,
+  CrossingEdge,
   ChangeEmphasisSeparation,
+  PairwiseDistanceOracleOptions,
 } from './evaluation';

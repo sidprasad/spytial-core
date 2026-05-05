@@ -50,7 +50,29 @@ export {
   changeEmphasisSeparation,
   constraintAdherence,
   classifyChangeEmphasisStableSet,
+  // Misue mental-map battery (JVLC 1995). Persisting-only; null when
+  // there's not enough data to compute.
+  orthogonalOrderingPreservation,
+  knnJaccard,
+  edgeCrossings,
+  edgeCrossingsDelta,
+  directionalCoherence,
+  stableQuietRatio,
+  // Constraint-perturbation moderator: distance from prior to the
+  // closest constraint-feasible projection.
+  constraintPerturbation,
   type EdgeKey,
+  type CrossingEdge,
   type ChangeEmphasisSeparation,
   type ConstraintAdherenceNode,
 } from './consistency-metrics';
+
+export {
+  // Oracle layouts for the appropriateness experiment. Tractable in
+  // v1: positional + pairwise-distance. See
+  // docs/MENTAL_MAP_ORACLE_COMPLEXITY.md for why other criteria are
+  // deferred.
+  positionalOracle,
+  pairwiseDistanceOracle,
+  type PairwiseDistanceOracleOptions,
+} from './oracle-layouts';
