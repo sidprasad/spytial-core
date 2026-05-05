@@ -1,44 +1,52 @@
 /**
  * Visual-consistency metrics for sequence-policy output. Each metric
  * compares two LayoutStates (a previous frame D′ and a current frame D)
- * and is a non-negative scalar that is 0 exactly when its specific
+ * and is a scalar that takes a specific extreme value exactly when its
  * notion of consistency holds.
  *
- * The three metrics here come from different sources and capture
- * different intuitions about what "consistency between frames" means:
+ * The module hosts two metric lineages:
+ *
+ * **Penlloy / Liang (squared-error consistency).** Source: Liang,
+ * Palliyil, Kang, Sunshine, "Towards Better Formal Methods
+ * Visualizations," PLATEAU 2025 §6.2 ("Penlloy"); equivalent to cells
+ * of Liang et al.'s TOSEM 2026 hard/soft × positional/relative
+ * taxonomy. Each metric is a non-negative scalar, 0 when its consistency
+ * notion holds:
  *
  *   • positional        — per-node coordinate preservation.
- *                         Source: Liang, Palliyil, Kang, Sunshine,
- *                           "Towards Better Formal Methods Visualizations,"
- *                           PLATEAU 2025 §6.2 ("Penlloy"); equivalent to
- *                           the positional cell of Liang et al.'s TOSEM 2026
- *                           hard/soft × positional/relative taxonomy.
- *
- *   • relative          — per-edge vector preservation.
- *                         Source: Penlloy §6.2; cited identically in
- *                           Liang TOSEM 2026 §2.6.1, where it is described
- *                           as "the changes to the relative positions
- *                           between nodes related by edges."
- *                         Note: only persisting EDGES contribute. Two nodes
- *                           that are not connected by an edge are not
- *                           compared, even if they exist in both frames.
- *
+ *   • relative          — per-edge vector preservation. Only persisting
+ *                         EDGES contribute.
  *   • pairwiseDistance  — per-pair Euclidean-distance preservation.
- *                         Source: a computational version of Liang TOSEM
- *                           2026 §3.4 partial-consistency operationalization
- *                           ("key substructures … maintain their overall
- *                           shape and relative positioning across states"),
- *                           which they apply by manual annotation of
- *                           visualizations. Pairwise-distance preservation
- *                           is the natural numeric realization: it is 0 iff
- *                           the persisting subset's shape (its
- *                           pairwise-distance matrix) is preserved, and is
- *                           invariant under translation and rotation of the
- *                           subset as a whole.
+ *                         Computational realization of Liang TOSEM
+ *                         §3.4: 0 iff the persisting subset's pairwise-
+ *                         distance matrix is preserved, invariant under
+ *                         translation and rotation of the subset.
  *
- * All three sum ONLY over elements that persist across the two frames.
- * "Persisting" means present in both D′ and D — added/removed nodes or
- * edges contribute nothing.
+ * **Misue 1995 (mental-map battery).** Source: Misue, Eades, Lai,
+ * Sugiyama, "Layout adjustment and the mental map," JVLC 1995. Three
+ * operational criteria for whether a reader's cognitive representation
+ * survives a transition:
+ *
+ *   • orthogonalOrderingPreservation — fraction of node pairs whose
+ *                         left/right + up/down ordering survived. 1 = all
+ *                         pairs preserved.
+ *   • knnJaccard        — mean Jaccard overlap of each persisting
+ *                         node's k-nearest-neighbor set across the two
+ *                         frames. 1 = every node's neighborhood
+ *                         preserved.
+ *   • edgeCrossings /
+ *     edgeCrossingsDelta — number of edge-segment crossings; 0 = none.
+ *                         Delta = absolute change between frames.
+ *   • directionalCoherence — mean resultant length of unit
+ *                         displacement vectors over a node set. 1 = all
+ *                         moving the same direction.
+ *   • stableQuietRatio  — fraction of "stable" nodes whose displacement
+ *                         is below a threshold. 1 = the still part is
+ *                         truly still.
+ *
+ * All metrics in both lineages sum/average ONLY over elements that
+ * persist across the two frames. "Persisting" means present in both D′
+ * and D — added/removed nodes or edges contribute nothing.
  *
  * These functions are evaluation infrastructure: used by in-repo
  * assertion tests that defend the realization-policy claims, by the
@@ -53,6 +61,7 @@ import {
   type LayoutConstraint,
 } from '../layout/interfaces';
 import type { LayoutState } from '../translators/webcola/webcolatranslator';
+import { positionalOracle } from './oracle-layouts';
 
 /**
  * Edge identity used to determine persistence between two frames.
@@ -548,4 +557,373 @@ export function classifyChangeEmphasisStableSet(
     }
   }
   return stable;
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Misue mental-map battery
+//
+// Misue, Eades, Lai, Sugiyama, "Layout adjustment and the mental
+// map," JVLC 1995. Three operational criteria for mental-map
+// preservation across a transition: orthogonal ordering, k-NN
+// proximity, topological structure (the last realized as
+// pairwiseDistanceConsistency above). The metrics below cover the
+// remaining mental-map dimensions plus two related diagnostics
+// (edge crossings, directional coherence, stable quiet ratio).
+//
+// All metrics consider ONLY persisting nodes/edges. A metric is
+// `null` when there is no data to compute it (e.g., < 2 persisting
+// nodes for a pair-based metric).
+// ──────────────────────────────────────────────────────────────────
+
+/**
+ * Edge shape used by the crossings metrics. Only `source` and `target`
+ * are read; any superset (such as `EdgeKey`) is accepted.
+ */
+export interface CrossingEdge {
+  source: string;
+  target: string;
+}
+
+/**
+ * Strict line-segment intersection test (no endpoint touches counted).
+ * Mirrors the CCW predicate used in derived_metrics.py:_segments_cross.
+ */
+function segmentsCross(
+  p1: { x: number; y: number },
+  p2: { x: number; y: number },
+  q1: { x: number; y: number },
+  q2: { x: number; y: number }
+): boolean {
+  // Reject incident edges (shared endpoints).
+  if ((p1.x === q1.x && p1.y === q1.y) || (p1.x === q2.x && p1.y === q2.y)) return false;
+  if ((p2.x === q1.x && p2.y === q1.y) || (p2.x === q2.x && p2.y === q2.y)) return false;
+
+  const ccw = (
+    a: { x: number; y: number },
+    b: { x: number; y: number },
+    c: { x: number; y: number }
+  ): number => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+
+  const d1 = ccw(q1, q2, p1);
+  const d2 = ccw(q1, q2, p2);
+  const d3 = ccw(p1, p2, q1);
+  const d4 = ccw(p1, p2, q2);
+  return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+         ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+}
+
+/**
+ * Orthogonal ordering preservation (Misue 1995, criterion 1):
+ *
+ *     fraction of unordered pairs (i, j) ∈ persisting × persisting
+ *     such that the L/R relation between i and j AND the U/D relation
+ *     between i and j are both the same in prev and curr.
+ *
+ * Returns a number in [0, 1], or `null` when fewer than 2 persisting
+ * nodes exist.
+ *
+ * @param prev       Previous-frame layout state.
+ * @param curr       Current-frame layout state.
+ * @param restrictTo If provided, only nodes whose id is in this set
+ *                   (still requiring presence in both frames) form
+ *                   pairs.
+ */
+export function orthogonalOrderingPreservation(
+  prev: LayoutState,
+  curr: LayoutState,
+  restrictTo?: Set<string>
+): number | null {
+  const prevPos = buildPositionMap(prev);
+  const currPos = buildPositionMap(curr);
+
+  const ids: string[] = [];
+  for (const [id] of currPos) {
+    if (!prevPos.has(id)) continue;
+    if (restrictTo && !restrictTo.has(id)) continue;
+    ids.push(id);
+  }
+  ids.sort();
+
+  if (ids.length < 2) return null;
+
+  let preserved = 0;
+  let total = 0;
+  for (let a = 0; a < ids.length; a++) {
+    const ip = prevPos.get(ids[a])!;
+    const ic = currPos.get(ids[a])!;
+    for (let b = a + 1; b < ids.length; b++) {
+      const jp = prevPos.get(ids[b])!;
+      const jc = currPos.get(ids[b])!;
+
+      const xSame =
+        (ip.x < jp.x && ic.x < jc.x) ||
+        (ip.x > jp.x && ic.x > jc.x) ||
+        (ip.x === jp.x && ic.x === jc.x);
+      const ySame =
+        (ip.y < jp.y && ic.y < jc.y) ||
+        (ip.y > jp.y && ic.y > jc.y) ||
+        (ip.y === jp.y && ic.y === jc.y);
+
+      if (xSame && ySame) preserved += 1;
+      total += 1;
+    }
+  }
+  return total === 0 ? null : preserved / total;
+}
+
+/**
+ * k-nearest-neighbor Jaccard preservation (Misue 1995, criterion 2):
+ *
+ *     mean over persisting nodes n of  |knn_prev(n) ∩ knn_curr(n)|
+ *                                      ────────────────────────────
+ *                                      |knn_prev(n) ∪ knn_curr(n)|
+ *
+ * Each node's k-NN is computed within the persisting subset only (its
+ * neighbors in `prev` are restricted to nodes that also persist).
+ * Returns a number in [0, 1], or `null` when fewer than k+1 persisting
+ * nodes exist.
+ *
+ * @param prev       Previous-frame layout state.
+ * @param curr       Current-frame layout state.
+ * @param k          Neighborhood size. Default 3.
+ * @param restrictTo If provided, only nodes whose id is in this set
+ *                   (and persist in both frames) participate.
+ */
+export function knnJaccard(
+  prev: LayoutState,
+  curr: LayoutState,
+  k: number = 3,
+  restrictTo?: Set<string>
+): number | null {
+  const prevPos = buildPositionMap(prev);
+  const currPos = buildPositionMap(curr);
+
+  const ids: string[] = [];
+  for (const [id] of currPos) {
+    if (!prevPos.has(id)) continue;
+    if (restrictTo && !restrictTo.has(id)) continue;
+    ids.push(id);
+  }
+  ids.sort();
+
+  if (ids.length < k + 1) return null;
+
+  const nearestK = (
+    posMap: Map<string, { x: number; y: number }>,
+    queryId: string
+  ): Set<string> => {
+    const q = posMap.get(queryId)!;
+    const dists: Array<{ id: string; d: number }> = [];
+    for (const other of ids) {
+      if (other === queryId) continue;
+      const o = posMap.get(other)!;
+      dists.push({ id: other, d: Math.hypot(o.x - q.x, o.y - q.y) });
+    }
+    dists.sort((a, b) => (a.d - b.d) || a.id.localeCompare(b.id));
+    return new Set(dists.slice(0, k).map(d => d.id));
+  };
+
+  let totalOverlap = 0;
+  let count = 0;
+  for (const id of ids) {
+    const a = nearestK(prevPos, id);
+    const b = nearestK(currPos, id);
+    const union = new Set([...a, ...b]);
+    if (union.size === 0) continue;
+    let inter = 0;
+    for (const x of a) if (b.has(x)) inter += 1;
+    totalOverlap += inter / union.size;
+    count += 1;
+  }
+  return count === 0 ? null : totalOverlap / count;
+}
+
+/**
+ * Number of edge-segment crossings in a single layout. Strict
+ * crossings only — segments that meet at a shared endpoint (incident
+ * edges) do not count.
+ *
+ * @param state   Layout state with positions for the relevant nodes.
+ * @param edges   Edges to test. Edges referencing absent nodes are
+ *                silently skipped.
+ */
+export function edgeCrossings(
+  state: LayoutState,
+  edges: CrossingEdge[]
+): number {
+  const pos = buildPositionMap(state);
+  const segments: Array<{
+    a: { x: number; y: number };
+    b: { x: number; y: number };
+  }> = [];
+  for (const e of edges) {
+    const a = pos.get(e.source);
+    const b = pos.get(e.target);
+    if (!a || !b) continue;
+    segments.push({ a, b });
+  }
+
+  let crossings = 0;
+  for (let i = 0; i < segments.length; i++) {
+    for (let j = i + 1; j < segments.length; j++) {
+      if (segmentsCross(segments[i].a, segments[i].b, segments[j].a, segments[j].b)) {
+        crossings += 1;
+      }
+    }
+  }
+  return crossings;
+}
+
+/**
+ * Absolute change in edge-crossing count between two frames.
+ *
+ *     |edgeCrossings(curr, currEdges) − edgeCrossings(prev, prevEdges)|
+ *
+ * 0 when the visual entanglement is unchanged. The metric does not
+ * require persisting edges — adding/removing edges contributes to the
+ * delta naturally through the per-frame counts.
+ */
+export function edgeCrossingsDelta(
+  prev: LayoutState,
+  prevEdges: CrossingEdge[],
+  curr: LayoutState,
+  currEdges: CrossingEdge[]
+): number {
+  return Math.abs(edgeCrossings(curr, currEdges) - edgeCrossings(prev, prevEdges));
+}
+
+/**
+ * Directional coherence of a node set's displacement.
+ *
+ *     | Σ_{n ∈ ids ∩ persisting, ‖d(n)‖>0}  d(n)/‖d(n)‖ |   /   N
+ *
+ * where d(n) = curr(n) − prev(n) and N is the number of nodes that
+ * actually moved (zero-drift nodes are excluded — their direction is
+ * undefined). Returns a number in [0, 1] (the resultant length of unit
+ * vectors), or `null` when no node in `ids` moved.
+ *
+ * Used downstream to test whether changed-context atoms move
+ * coherently (1.0 = same direction) versus chaotically (~0).
+ */
+export function directionalCoherence(
+  prev: LayoutState,
+  curr: LayoutState,
+  ids: Iterable<string>
+): number | null {
+  const prevPos = buildPositionMap(prev);
+  const currPos = buildPositionMap(curr);
+
+  let sx = 0;
+  let sy = 0;
+  let n = 0;
+  for (const id of ids) {
+    const p = prevPos.get(id);
+    const c = currPos.get(id);
+    if (!p || !c) continue;
+    const dx = c.x - p.x;
+    const dy = c.y - p.y;
+    const d = Math.hypot(dx, dy);
+    if (d === 0) continue;
+    sx += dx / d;
+    sy += dy / d;
+    n += 1;
+  }
+  if (n === 0) return null;
+  return Math.hypot(sx, sy) / n;
+}
+
+/**
+ * Fraction of "stable" nodes whose total displacement stayed below a
+ * pixel threshold.
+ *
+ *     |{ n ∈ stableIds ∩ persisting  :  ‖d(n)‖ ≤ threshold }|
+ *     ──────────────────────────────────────────────────────
+ *               |stableIds ∩ persisting|
+ *
+ * Returns a number in [0, 1] (1 = the part the policy claims is
+ * unchanged really did not move), or `null` when no stable id
+ * persists.
+ *
+ * @param prev       Previous-frame layout state.
+ * @param curr       Current-frame layout state.
+ * @param stableIds  Nodes the policy claims are unchanged this step.
+ * @param threshold  Per-node displacement tolerance in px. Default 5.
+ */
+export function stableQuietRatio(
+  prev: LayoutState,
+  curr: LayoutState,
+  stableIds: Iterable<string>,
+  threshold: number = 5
+): number | null {
+  const prevPos = buildPositionMap(prev);
+  const currPos = buildPositionMap(curr);
+
+  let total = 0;
+  let quiet = 0;
+  for (const id of stableIds) {
+    const p = prevPos.get(id);
+    const c = currPos.get(id);
+    if (!p || !c) continue;
+    total += 1;
+    if (Math.hypot(c.x - p.x, c.y - p.y) <= threshold) quiet += 1;
+  }
+  return total === 0 ? null : quiet / total;
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Constraint-induced perturbation — moderator for the appropriateness
+// experiment.
+//
+// When new hard constraints push the prior layout outside the new
+// feasible region, no warm-start can fully preserve. Without measuring
+// this, "warm-start failure" gets mis-attributed to bad policy when it
+// was actually constraint-forced. constraintPerturbation answers: how
+// far does the prior layout sit from the new feasible region?
+// ──────────────────────────────────────────────────────────────────
+
+/**
+ * Total L2 displacement of the closest constraint-feasible projection
+ * of the prior positions onto the new constraint set.
+ *
+ *     Σ_{n ∈ persisting}  ‖ project(prior(n), feasible_new) − prior(n) ‖
+ *
+ * Returns a non-negative number. 0 means the prior layout already
+ * satisfies the new constraints (no constraint-induced perturbation
+ * is forced).
+ *
+ * Implementation: builds a Kiwi.js solver, soft-anchors each prior
+ * node at its prior `(x, y)` (weak edit variables — Kiwi minimizes
+ * squared deviation from suggested values), hard-adds Left/Top/Alignment
+ * constraints from `newConstraints`, solves, sums per-node displacement.
+ *
+ * Constraint types handled (matching the WebCola translator's Kiwi
+ * coverage in `constraint-validator.ts`): `LeftConstraint`,
+ * `TopConstraint`, `AlignmentConstraint`. `BoundingBoxConstraint` and
+ * `GroupBoundaryConstraint` are not Kiwi-translated today — they are
+ * silently skipped. New nodes referenced by constraints but absent
+ * from `prev` are given free variables (no anchor) so the constraint
+ * is expressible.
+ *
+ * @param prev            Previous-frame layout state.
+ * @param newConstraints  Constraint set in effect for the current frame.
+ */
+export function constraintPerturbation(
+  prev: LayoutState,
+  newConstraints: LayoutConstraint[]
+): number {
+  if (prev.positions.length === 0) return 0;
+
+  // Project the prior layout onto the new feasible region, then sum
+  // per-node L2 displacement. positionalOracle owns the Kiwi machinery;
+  // this metric is its scalar summary.
+  const projected = positionalOracle(prev, newConstraints);
+  const projectedById = new Map(projected.positions.map(p => [p.id, p]));
+
+  let total = 0;
+  for (const p of prev.positions) {
+    const q = projectedById.get(p.id);
+    if (!q) continue;
+    total += Math.hypot(q.x - p.x, q.y - p.y);
+  }
+  return total;
 }

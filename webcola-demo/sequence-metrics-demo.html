@@ -94,6 +94,72 @@
             layout spec, so it is shown separately from consistency.
         </p>
 
+        <details class="panel mb-3" id="metricsGuide">
+            <summary style="cursor:pointer; font-weight:600;">How to read all the metrics on this page</summary>
+            <div class="small-help mt-2">
+                <p>
+                    There are a lot of numbers in the right-hand panels. The smallest mental model that covers them
+                    is <strong>three families, three questions</strong>:
+                </p>
+                <table class="metric-table" aria-label="Metric families">
+                    <thead>
+                        <tr>
+                            <th>Family</th>
+                            <th>The question it answers</th>
+                            <th>Which metrics</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Consistency</strong></td>
+                            <td><em>Did the layout stay similar?</em> &mdash; how preserved is X across this transition?</td>
+                            <td>
+                                <code>positional</code>, <code>relative</code>, <code>pairwise distance</code>,
+                                <code>orthogonal ordering</code>, <code>k-NN Jaccard</code>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Salience</strong></td>
+                            <td><em>Did the right things move?</em> &mdash; is the changed bit emphasized and the stable bit quiet?</td>
+                            <td>
+                                <code>change separation AUC</code>, <code>directional coherence</code>,
+                                <code>stable quiet ratio</code>, <code>edge crossings &Delta;</code>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Appropriateness</strong></td>
+                            <td><em>Is the policy close to optimal?</em> &mdash; how far from the constraint-feasible mental-map ideal?</td>
+                            <td>
+                                <code>gap_positional</code>, <code>gap_pwd</code>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Moderator</td>
+                            <td><em>How forced was the change at all?</em></td>
+                            <td><code>constraint perturbation</code></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p class="mt-2">
+                    <strong>What to look at first.</strong> The headline metric is <code>gap_pwd</code> &mdash;
+                    distance from the policy's output to the constraint-feasible shape-preservation optimum,
+                    shown as <em>% of theoretical worst</em>. Smaller = more appropriate.
+                </p>
+                <p>
+                    Everything else is supporting evidence:
+                </p>
+                <ul>
+                    <li><code>gap_positional</code> is a sanity check &mdash; <code>stability</code> should land at &asymp; 0% by construction.</li>
+                    <li>The <strong>Misue battery</strong> tells you <em>which dimension</em> of the mental map a policy preserves. Useful when <code>gap_pwd</code> doesn't separate policies but, say, ordering does.</li>
+                    <li>The <strong>salience</strong> metrics answer a different question and only really matter for <code>change_emphasis</code>.</li>
+                    <li><code>constraint perturbation</code> is a regressor &mdash; when high, no policy can help much. Use it to bin transitions into easy / hard before comparing.</li>
+                </ul>
+                <p>
+                    <strong>What "% of theoretical worst" means.</strong> The denominator is the value the metric would take if every persisting element contributed its theoretical maximum (every node corner-to-corner, etc.). 0 = ideal, 1 = worst possible. Real values are usually small fractions of 1 because random positioning typically uses ~30&ndash;50% of the bounding box, not 100%; the compression is intentional and self-anchored.
+                </p>
+            </div>
+        </details>
+
         <div class="row g-3 mb-3">
             <div class="col-lg-7">
                 <label class="form-label form-label-sm" for="alloyInput">Alloy XML Sequence</label>
@@ -204,6 +270,65 @@
                     <div class="metric-row small-help">
                         <span>changed / stable nodes</span>
                         <span><span id="changedNodeCount" class="metric-value">—</span> / <span id="stableNodeCount" class="metric-value">—</span></span>
+                    </div>
+                </div>
+
+                <div class="panel mb-3">
+                    <h5>Misue mental-map battery</h5>
+                    <div class="small-help mb-2">
+                        Misue, Eades, Lai &amp; Sugiyama (JVLC 1995). Three operational criteria for mental-map preservation: orthogonal ordering (each pair's L/R + U/D survives), k-NN proximity (each node's neighborhood is preserved), edge crossings stable. Higher = better preserved (except crossings delta — lower better).
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">orthogonal ordering <span class="text-muted small">(higher better, [0–1])</span></span>
+                        <span><span id="oopValue" class="metric-value unknown">—</span></span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">k-NN Jaccard (k=3) <span class="text-muted small">(higher better, [0–1])</span></span>
+                        <span><span id="knnValue" class="metric-value unknown">—</span></span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">edge crossings Δ <span class="text-muted small">(lower better)</span></span>
+                        <span><span id="crossingsDeltaValue" class="metric-value unknown">—</span></span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">directional coherence (changed) <span class="text-muted small">([0–1])</span></span>
+                        <span><span id="dcValue" class="metric-value unknown">—</span></span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">stable quiet ratio (≤5 px) <span class="text-muted small">([0–1])</span></span>
+                        <span><span id="sqrValue" class="metric-value unknown">—</span></span>
+                    </div>
+                </div>
+
+                <div class="panel mb-3">
+                    <h5>appropriateness gap (oracles)</h5>
+                    <div class="small-help mb-2">
+                        Distance from the policy's output to the constraint-feasible mental-map optimum.
+                        Each row shows raw cost (px²/px) plus % of theoretical worst — every persisting node drifting corner-to-corner of the prior-frame bounding box.
+                        Smaller = the policy lands closer to "the actual mental-map-preserving thing."
+                        <code>gap_positional</code> ≈ 0% for <code>stability</code> by construction (sanity check).
+                        <code>gap_pwd</code> measures Liang shape preservation under hard constraints.
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">gap_positional <span class="text-muted small">(px²)</span></span>
+                        <span>
+                            <span id="gapPosValue" class="metric-value unknown">—</span>
+                            <span class="text-muted small">(<span id="gapPosPct">—</span>)</span>
+                        </span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">gap_pwd <span class="text-muted small">(px²)</span></span>
+                        <span>
+                            <span id="gapPwdValue" class="metric-value unknown">—</span>
+                            <span class="text-muted small">(<span id="gapPwdPct">—</span>)</span>
+                        </span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">constraint perturbation <span class="text-muted small">(prior → feasible, px)</span></span>
+                        <span>
+                            <span id="cPerturbValue" class="metric-value unknown">—</span>
+                            <span class="text-muted small">(<span id="cPerturbPct">—</span>)</span>
+                        </span>
                     </div>
                 </div>
 
@@ -455,7 +580,70 @@ constraints:
                 ).length;
                 const changedIds = Cnd.classifyChangeEmphasisChangedSet(prevInstance, currInstance);
                 const changeSeparation = Cnd.changeEmphasisSeparation(prevState, newState, changedIds);
-                metrics = { positional, relative, pairwise, adherence, persistingNodes, persistingEdges, changeSeparation };
+
+                // Build the changed/stable atom-id lists for the
+                // directional-coherence and stable-quiet-ratio readouts.
+                const prevIds = new Set(prevState.positions.map(p => p.id));
+                const currIds = new Set(newState.positions.map(p => p.id));
+                const changedIdList = [];
+                const stableIdList = [];
+                for (const id of currIds) {
+                    if (!prevIds.has(id)) continue;
+                    if (changedIds.has(id)) changedIdList.push(id);
+                    else stableIdList.push(id);
+                }
+
+                // Misue battery + appropriateness gaps + perturbation.
+                // Wrapped in try so a transient solver hiccup doesn't
+                // tank the whole frame's metric panel.
+                let oop = null, knn = null, crossingsDelta = null;
+                let dc = null, sqr = null;
+                let gapPositional = null, gapPwd = null, cPerturb = null;
+                try {
+                    oop = Cnd.orthogonalOrderingPreservation(prevState, newState);
+                    knn = Cnd.knnJaccard(prevState, newState);
+                    crossingsDelta = Cnd.edgeCrossingsDelta(prevState, prevEdges, newState, currEdges);
+                    dc = Cnd.directionalCoherence(prevState, newState, changedIdList);
+                    sqr = Cnd.stableQuietRatio(prevState, newState, stableIdList);
+                    cPerturb = Cnd.constraintPerturbation(prevState, layout.constraints);
+                    const oraclePos = Cnd.positionalOracle(prevState, layout.constraints);
+                    const oraclePwd = Cnd.pairwiseDistanceOracle(prevState, layout.constraints);
+                    gapPositional = Cnd.positionalConsistency(oraclePos, newState);
+                    gapPwd = Cnd.positionalConsistency(oraclePwd, newState);
+                } catch (err) {
+                    console.warn('Misue / oracle metric path failed:', err);
+                }
+
+                // Theoretical-worst denominators for the "% from ideal"
+                // companions on the appropriateness panel. Match the
+                // aggregator's normSquared / normLinearPerCount semantics.
+                const priorPositions = prevState.positions;
+                let bboxDiag = 0;
+                if (priorPositions.length > 0) {
+                    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+                    for (const p of priorPositions) {
+                        if (p.x < minX) minX = p.x;
+                        if (p.x > maxX) maxX = p.x;
+                        if (p.y < minY) minY = p.y;
+                        if (p.y > maxY) maxY = p.y;
+                    }
+                    bboxDiag = Math.hypot(maxX - minX, maxY - minY);
+                }
+                const sumSquaredDenom = persistingNodes * bboxDiag * bboxDiag;
+                const sumLinearDenom = persistingNodes * bboxDiag;
+                const fracOf = (value, denom) =>
+                    value == null || !(denom > 0) ? null : value / denom;
+                const gapPositionalPct = fracOf(gapPositional, sumSquaredDenom);
+                const gapPwdPct = fracOf(gapPwd, sumSquaredDenom);
+                const cPerturbPct = fracOf(cPerturb, sumLinearDenom);
+
+                metrics = {
+                    positional, relative, pairwise, adherence,
+                    persistingNodes, persistingEdges, changeSeparation,
+                    oop, knn, crossingsDelta, dc, sqr,
+                    gapPositional, gapPwd, cPerturb,
+                    gapPositionalPct, gapPwdPct, cPerturbPct,
+                };
             } else {
                 // Frame 1: no prior to compare consistency against, but
                 // adherence is still meaningful on the standalone layout.
@@ -467,6 +655,9 @@ constraints:
                     persistingNodes: 0,
                     persistingEdges: 0,
                     changeSeparation: null,
+                    oop: null, knn: null, crossingsDelta: null,
+                    dc: null, sqr: null,
+                    gapPositional: null, gapPwd: null, cPerturb: null,
                 };
             }
 
@@ -498,9 +689,31 @@ constraints:
             const splitOverallMeanDriftEl = document.getElementById('splitOverallMeanDrift');
             const splitChangedMeanDriftEl = document.getElementById('splitChangedMeanDrift');
             const splitStableMeanDriftEl = document.getElementById('splitStableMeanDrift');
+            // Misue + appropriateness panel ids (added in this PR).
+            const oopEl = document.getElementById('oopValue');
+            const knnEl = document.getElementById('knnValue');
+            const crossingsDeltaEl = document.getElementById('crossingsDeltaValue');
+            const dcEl = document.getElementById('dcValue');
+            const sqrEl = document.getElementById('sqrValue');
+            const gapPosEl = document.getElementById('gapPosValue');
+            const gapPwdEl = document.getElementById('gapPwdValue');
+            const cPerturbEl = document.getElementById('cPerturbValue');
+            // % of theoretical worst companions for the appropriateness panel.
+            const gapPosPctEl = document.getElementById('gapPosPct');
+            const gapPwdPctEl = document.getElementById('gapPwdPct');
+            const cPerturbPctEl = document.getElementById('cPerturbPct');
 
             const fmtPx = v => (v == null ? '—' : v.toFixed(1));
             const fmtUnit = v => (v == null ? '—' : v.toFixed(3));
+            const fmtInt = v => (v == null ? '—' : Math.round(v).toString());
+            // Color higher-is-better metrics: green when ≥ 0.95,
+            // yellow in the middle, red below 0.5.
+            const klassUp = v => {
+                if (v == null) return 'metric-value unknown';
+                if (v >= 0.95) return 'metric-value zero';
+                if (v >= 0.5) return 'metric-value';
+                return 'metric-value high';
+            };
             const klassPx = v => {
                 if (v == null) return 'metric-value unknown';
                 if (v < 1) return 'metric-value zero';
@@ -553,6 +766,42 @@ constraints:
             splitOverallMeanDriftEl.textContent = fmtPx(overallMeanDrift);
             splitChangedMeanDriftEl.textContent = fmtPx(change?.changedMeanDrift ?? null);
             splitStableMeanDriftEl.textContent = fmtPx(change?.stableMeanDrift ?? null);
+
+            // Misue mental-map battery readouts.
+            oopEl.textContent = fmtUnit(metrics?.oop ?? null);
+            oopEl.className = klassUp(metrics?.oop ?? null);
+            knnEl.textContent = fmtUnit(metrics?.knn ?? null);
+            knnEl.className = klassUp(metrics?.knn ?? null);
+            crossingsDeltaEl.textContent = fmtInt(metrics?.crossingsDelta ?? null);
+            crossingsDeltaEl.className = metrics?.crossingsDelta == null
+                ? 'metric-value unknown'
+                : metrics.crossingsDelta === 0
+                    ? 'metric-value zero'
+                    : 'metric-value high';
+            dcEl.textContent = fmtUnit(metrics?.dc ?? null);
+            dcEl.className = metrics?.dc == null ? 'metric-value unknown' : 'metric-value';
+            sqrEl.textContent = fmtUnit(metrics?.sqr ?? null);
+            sqrEl.className = klassUp(metrics?.sqr ?? null);
+
+            // Appropriateness gaps + % of theoretical worst.
+            const fmtPct = v => v == null
+                ? '—'
+                : v < 0.0001
+                    ? `${(v * 100).toExponential(1)}% of worst`
+                    : `${(v * 100).toFixed(2)}% of worst`;
+            gapPosEl.textContent = fmtPx(metrics?.gapPositional ?? null);
+            gapPosEl.className = klassPx(metrics?.gapPositional ?? null);
+            gapPosPctEl.textContent = fmtPct(metrics?.gapPositionalPct ?? null);
+            gapPwdEl.textContent = fmtPx(metrics?.gapPwd ?? null);
+            gapPwdEl.className = klassPx(metrics?.gapPwd ?? null);
+            gapPwdPctEl.textContent = fmtPct(metrics?.gapPwdPct ?? null);
+            cPerturbEl.textContent = fmtPx(metrics?.cPerturb ?? null);
+            cPerturbEl.className = metrics?.cPerturb == null
+                ? 'metric-value unknown'
+                : metrics.cPerturb < 1
+                    ? 'metric-value zero'
+                    : 'metric-value';
+            cPerturbPctEl.textContent = fmtPct(metrics?.cPerturbPct ?? null);
         }
 
         function updateSparkline() {

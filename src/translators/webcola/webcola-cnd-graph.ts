@@ -75,6 +75,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private currentLayout!: WebColaLayout;
   private colaLayout!: Layout;
   private readonly lineFunction: d3.Line<{ x: number; y: number }>;
+  /**
+   * Snapshot of the seed positions the most-recent policy resolved
+   * before the solver ran. Captured for the seed-vs-output
+   * decomposition in the appropriateness experiment. `null` when no
+   * policy was applied this render (e.g., first frame, no prior).
+   */
+  private lastSeedState: LayoutState | null = null;
 
   /**
    * Configuration constants for SVG
@@ -1649,6 +1656,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       });
       resolvedState = result.effectivePriorState;
       useReducedIterations = result.useReducedIterations;
+      // Capture by reference only — production users who never call
+      // getLastSeedState pay nothing. The policy's effectivePriorState
+      // is a freshly constructed object, so retaining the reference is
+      // safe; the deep-clone for immutability happens lazily in
+      // getLastSeedState below.
+      this.lastSeedState = resolvedState ?? null;
     } else if (options?.priorPositions) {
       // Direct prior-positions path (no policy): warm-start the solver from the
       // caller-supplied positions and use reduced iterations so existing nodes
@@ -2540,6 +2553,30 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     return {
       positions: this.getNodePositions(),
       transform: this.getCurrentTransform()
+    };
+  }
+
+  /**
+   * Return the seed positions the most-recent policy produced before
+   * the solver ran, or `null` if no policy was applied during the last
+   * render.
+   *
+   * Used by the appropriateness-experiment harness to score the policy
+   * seed against the prior frame independently of solver output. The
+   * gap between seed-scored and output-scored metrics attributes the
+   * effect: small gap = policy is the lever; large gap = solver
+   * dominated.
+   *
+   * The stored value is captured by reference during rendering (zero
+   * production cost — callers who never invoke this method pay
+   * nothing). The deep-clone happens here so the returned snapshot is
+   * immutable from the consumer's perspective.
+   */
+  public getLastSeedState(): LayoutState | null {
+    if (!this.lastSeedState) return null;
+    return {
+      positions: this.lastSeedState.positions.map(p => ({ ...p })),
+      transform: { ...this.lastSeedState.transform },
     };
   }
 

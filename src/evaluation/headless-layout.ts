@@ -102,6 +102,15 @@ export interface HeadlessLayoutResult {
    * satisfaction.
    */
   nodes: NodeWithMetadata[];
+  /**
+   * Seed positions the applied policy returned before the solver ran,
+   * or `null` when no policy was applied (direct prior-positions path
+   * or first frame). Used for the seed-vs-output decomposition in the
+   * appropriateness experiment: the gap between metrics scored on
+   * `seed` versus `positions` attributes the effect to the policy or
+   * the solver.
+   */
+  seed: LayoutState | null;
 }
 
 const DEFAULT_FIG_WIDTH = 800;
@@ -142,6 +151,7 @@ export async function runHeadlessLayout(
   // Resolve translator options. Policy-driven path mirrors
   // webcola-cnd-graph.ts:1645-1678.
   let translatorOptions: WebColaLayoutOptions | undefined;
+  let seedState: LayoutState | null = null;
   if (options.policy && options.prevInstance && options.currInstance) {
     const priorState: LayoutState = options.priorPositions ?? {
       positions: [],
@@ -158,6 +168,13 @@ export async function runHeadlessLayout(
       translatorOptions = {
         priorPositions: policyResult.effectivePriorState,
         lockUnconstrainedNodes: policyResult.useReducedIterations,
+      };
+      // Snapshot the seed for the appropriateness-experiment
+      // decomposition. Deep-copied so downstream mutation of
+      // translator inputs doesn't bleed into the snapshot.
+      seedState = {
+        positions: policyResult.effectivePriorState.positions.map(p => ({ ...p })),
+        transform: { ...policyResult.effectivePriorState.transform },
       };
     }
   } else if (options.priorPositions) {
@@ -209,5 +226,6 @@ export async function runHeadlessLayout(
     edges,
     constraints: layout.constraints,
     nodes: webcolaLayout.colaNodes,
+    seed: seedState,
   };
 }

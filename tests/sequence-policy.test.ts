@@ -456,6 +456,23 @@ describe('getSequencePolicy', () => {
   it('defaults to ignoreHistory for unknown names', () => {
     expect(getSequencePolicy('nonexistent')).toBe(ignoreHistory);
   });
+
+  // Literature-vocabulary aliases (Liang TOSEM 2026 §2.6 / §3.4)
+  it('resolves no_consistency alias to ignoreHistory', () => {
+    expect(getSequencePolicy('no_consistency')).toBe(ignoreHistory);
+  });
+
+  it('resolves full_consistency alias to stability', () => {
+    expect(getSequencePolicy('full_consistency')).toBe(stability);
+  });
+
+  it('resolves partial_consistency alias to changeEmphasis', () => {
+    expect(getSequencePolicy('partial_consistency')).toBe(changeEmphasis);
+  });
+
+  it('resolves anti_consistency alias to randomPositioning', () => {
+    expect(getSequencePolicy('anti_consistency')).toBe(randomPositioning);
+  });
 });
 
 // ---------------------------------------------------------------------------
