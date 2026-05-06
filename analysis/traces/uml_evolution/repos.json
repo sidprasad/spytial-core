@@ -1,0 +1,44 @@
+{
+  "_comment": "Target OSS repositories for the UML-evolution trace family. Each entry's `puml_glob` is the path pattern (relative to the repo root) where PlantUML files live. Verify with `gh repo view <repo>` or `git ls-files` before running mine.py — repo layouts shift over time. The `dataset_url` field is reserved for a direct Lindholmen / Hebig mirror should one resurface; if non-null it overrides the per-repo mining.",
+
+  "dataset_url": null,
+
+  "repos": [
+    {
+      "slug": "eclipse/microprofile-config",
+      "puml_glob": "spec/src/main/asciidoc/*.puml",
+      "max_commits": 50,
+      "rationale": "Spec evolution; small diagrams; clean PlantUML usage co-located with the asciidoc source."
+    },
+    {
+      "slug": "spring-projects/spring-framework",
+      "puml_glob": "framework-docs/modules/ROOT/assets/images/**/*.puml",
+      "max_commits": 100,
+      "rationale": "Mature Java framework with rich architectural diagrams in framework-docs; long history."
+    },
+    {
+      "slug": "apache/kafka",
+      "puml_glob": "docs/**/*.puml",
+      "max_commits": 50,
+      "rationale": "Component-level architecture diagrams maintained alongside docs."
+    },
+    {
+      "slug": "nestjs/nest",
+      "puml_glob": "docs/**/*.puml",
+      "max_commits": 50,
+      "rationale": "TypeScript framework; class and dependency diagrams."
+    },
+    {
+      "slug": "puppeteer/puppeteer",
+      "puml_glob": "docs/**/*.puml",
+      "max_commits": 50,
+      "rationale": "API surface diagrams in PlantUML, frequent revision."
+    }
+  ],
+
+  "validation_notes": [
+    "Run `git clone --depth 1 https://github.com/<slug>.git cache/<slug>` and `git ls-files | grep -E '\\.(puml|plantuml)$'` to confirm each repo currently contains PlantUML files. If empty, drop or replace.",
+    "If fewer than 3 of the 5 repos have usable PlantUML history, broaden the glob to also include `*.plantuml` and `*.uml` extensions, or add fallback repos from https://github.com/topics/plantuml.",
+    "Keep total commit count across all repos under ~250 for the first sweep; the harness scales linearly per transition."
+  ]
+}

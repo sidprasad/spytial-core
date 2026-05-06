@@ -1,0 +1,3752 @@
+{
+  "algorithm": "heap-insert+extract",
+  "spec": "constraints:\n- orientation:\n    directions:\n    - right\n    - below\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = add[1, multiply[i, 2]] }).(list.idx)'\n- orientation:\n    directions:\n    - left\n    - below\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = multiply[i,2] }).(list.idx)'\n- orientation:\n    directions:\n    - right\n    - below\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = add[1, multiply[i, 2]] }).(list.idx)'\n- orientation:\n    directions:\n    - left\n    - below\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = multiply[i,2] }).(list.idx)'\n- orientation:\n    directions:\n    - right\n    - below\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = add[1, multiply[i, 2]] }).(list.idx)'\n- orientation:\n    directions:\n    - left\n    - below\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = multiply[i,2] }).(list.idx)'\n- orientation:\n    directions:\n    - right\n    - below\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = add[1, multiply[i, 2]] }).(list.idx)'\n- orientation:\n    directions:\n    - left\n    - below\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = multiply[i,2] }).(list.idx)'\n- orientation:\n    directions:\n    - right\n    - below\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = add[1, multiply[i, 2]] }).(list.idx)'\n- orientation:\n    directions:\n    - left\n    - below\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = multiply[i,2] }).(list.idx)'\n- orientation:\n    directions:\n    - right\n    - below\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = add[1, multiply[i, 2]] }).(list.idx)'\n- orientation:\n    directions:\n    - left\n    - below\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = multiply[i,2] }).(list.idx)'\n- orientation:\n    directions:\n    - right\n    - below\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = add[1, multiply[i, 2]] }).(list.idx)'\n- orientation:\n    directions:\n    - left\n    - below\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = multiply[i,2] }).(list.idx)'\n- orientation:\n    directions:\n    - right\n    - below\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = add[1, multiply[i, 2]] }).(list.idx)'\n- orientation:\n    directions:\n    - left\n    - below\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = multiply[i,2] }).(list.idx)'\n- orientation:\n    directions:\n    - right\n    - below\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = add[1, multiply[i, 2]] }).(list.idx)'\n- orientation:\n    directions:\n    - left\n    - below\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = multiply[i,2] }).(list.idx)'\n- orientation:\n    directions:\n    - right\n    - below\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = add[1, multiply[i, 2]] }).(list.idx)'\n- orientation:\n    directions:\n    - left\n    - below\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = multiply[i,2] }).(list.idx)'\n- orientation:\n    directions:\n    - right\n    - below\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = add[1, multiply[i, 2]] }).(list.idx)'\n- orientation:\n    directions:\n    - left\n    - below\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = multiply[i,2] }).(list.idx)'\n- orientation:\n    directions:\n    - right\n    - below\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = add[1, multiply[i, 2]] }).(list.idx)'\n- orientation:\n    directions:\n    - left\n    - below\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = multiply[i,2] }).(list.idx)'\n- orientation:\n    directions:\n    - right\n    - below\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = add[1, multiply[i, 2]] }).(list.idx)'\n- orientation:\n    directions:\n    - left\n    - below\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = multiply[i,2] }).(list.idx)'\ndirectives:\n- inferredEdge:\n    name: right\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = add[1, multiply[i, 2]] }).(list.idx)'\n- inferredEdge:\n    name: left\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = multiply[i,2] }).(list.idx)'\n- hideAtom:\n    selector: MaxHeap + list + (int - ((int - 0).(list.idx)))\n- inferredEdge:\n    name: right\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = add[1, multiply[i, 2]] }).(list.idx)'\n- inferredEdge:\n    name: left\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = multiply[i,2] }).(list.idx)'\n- hideAtom:\n    selector: MaxHeap + list + (int - ((int - 0).(list.idx)))\n- inferredEdge:\n    name: right\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = add[1, multiply[i, 2]] }).(list.idx)'\n- inferredEdge:\n    name: left\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = multiply[i,2] }).(list.idx)'\n- hideAtom:\n    selector: MaxHeap + list + (int - ((int - 0).(list.idx)))\n- inferredEdge:\n    name: right\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = add[1, multiply[i, 2]] }).(list.idx)'\n- inferredEdge:\n    name: left\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = multiply[i,2] }).(list.idx)'\n- hideAtom:\n    selector: MaxHeap + list + (int - ((int - 0).(list.idx)))\n- inferredEdge:\n    name: right\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = add[1, multiply[i, 2]] }).(list.idx)'\n- inferredEdge:\n    name: left\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = multiply[i,2] }).(list.idx)'\n- hideAtom:\n    selector: MaxHeap + list + (int - ((int - 0).(list.idx)))\n- inferredEdge:\n    name: right\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = add[1, multiply[i, 2]] }).(list.idx)'\n- inferredEdge:\n    name: left\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = multiply[i,2] }).(list.idx)'\n- hideAtom:\n    selector: MaxHeap + list + (int - ((int - 0).(list.idx)))\n- inferredEdge:\n    name: right\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = add[1, multiply[i, 2]] }).(list.idx)'\n- inferredEdge:\n    name: left\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = multiply[i,2] }).(list.idx)'\n- hideAtom:\n    selector: MaxHeap + list + (int - ((int - 0).(list.idx)))\n- inferredEdge:\n    name: right\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = add[1, multiply[i, 2]] }).(list.idx)'\n- inferredEdge:\n    name: left\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = multiply[i,2] }).(list.idx)'\n- hideAtom:\n    selector: MaxHeap + list + (int - ((int - 0).(list.idx)))\n- inferredEdge:\n    name: right\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = add[1, multiply[i, 2]] }).(list.idx)'\n- inferredEdge:\n    name: left\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = multiply[i,2] }).(list.idx)'\n- hideAtom:\n    selector: MaxHeap + list + (int - ((int - 0).(list.idx)))\n- inferredEdge:\n    name: right\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = add[1, multiply[i, 2]] }).(list.idx)'\n- inferredEdge:\n    name: left\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = multiply[i,2] }).(list.idx)'\n- hideAtom:\n    selector: MaxHeap + list + (int - ((int - 0).(list.idx)))\n- inferredEdge:\n    name: right\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = add[1, multiply[i, 2]] }).(list.idx)'\n- inferredEdge:\n    name: left\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = multiply[i,2] }).(list.idx)'\n- hideAtom:\n    selector: MaxHeap + list + (int - ((int - 0).(list.idx)))\n- inferredEdge:\n    name: right\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = add[1, multiply[i, 2]] }).(list.idx)'\n- inferredEdge:\n    name: left\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = multiply[i,2] }).(list.idx)'\n- hideAtom:\n    selector: MaxHeap + list + (int - ((int - 0).(list.idx)))\n- inferredEdge:\n    name: right\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = add[1, multiply[i, 2]] }).(list.idx)'\n- inferredEdge:\n    name: left\n    selector: '(~(list.idx)).({ i, j : (int-0) | j = multiply[i,2] }).(list.idx)'\n- hideAtom:\n    selector: MaxHeap + list + (int - ((int - 0).(list.idx)))\n",
+  "frames": [
+    {
+      "step": 0,
+      "label": "insert(4)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "4",
+            "type": "int",
+            "label": "4"
+          },
+          {
+            "id": "n1",
+            "type": "list",
+            "label": "list[2]"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          },
+          {
+            "id": "n0",
+            "type": "MaxHeap",
+            "label": "snap"
+          }
+        ],
+        "relations": [
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "0",
+                  "0"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "1",
+                  "4"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "a",
+            "name": "a",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "n1"
+                ],
+                "types": [
+                  "MaxHeap",
+                  "list"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n",
+            "name": "n",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "1"
+                ],
+                "types": [
+                  "MaxHeap",
+                  "int"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "4",
+                "type": "int",
+                "label": "4"
+              },
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n1",
+                "type": "list",
+                "label": "list[2]"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "MaxHeap",
+            "types": [
+              "MaxHeap",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "MaxHeap",
+                "label": "snap"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 1,
+      "label": "insert(1)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "4",
+            "type": "int",
+            "label": "4"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          },
+          {
+            "id": "n1",
+            "type": "list",
+            "label": "list[3]"
+          },
+          {
+            "id": "2",
+            "type": "int",
+            "label": "2"
+          },
+          {
+            "id": "n0",
+            "type": "MaxHeap",
+            "label": "snap"
+          }
+        ],
+        "relations": [
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "0",
+                  "0"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "1",
+                  "4"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "2",
+                  "1"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "a",
+            "name": "a",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "n1"
+                ],
+                "types": [
+                  "MaxHeap",
+                  "list"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n",
+            "name": "n",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "2"
+                ],
+                "types": [
+                  "MaxHeap",
+                  "int"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "4",
+                "type": "int",
+                "label": "4"
+              },
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              },
+              {
+                "id": "2",
+                "type": "int",
+                "label": "2"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n1",
+                "type": "list",
+                "label": "list[3]"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "MaxHeap",
+            "types": [
+              "MaxHeap",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "MaxHeap",
+                "label": "snap"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 2,
+      "label": "insert(3)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "4",
+            "type": "int",
+            "label": "4"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          },
+          {
+            "id": "3",
+            "type": "int",
+            "label": "3"
+          },
+          {
+            "id": "n1",
+            "type": "list",
+            "label": "list[4]"
+          },
+          {
+            "id": "2",
+            "type": "int",
+            "label": "2"
+          },
+          {
+            "id": "n0",
+            "type": "MaxHeap",
+            "label": "snap"
+          }
+        ],
+        "relations": [
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "0",
+                  "0"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "1",
+                  "4"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "2",
+                  "1"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "3",
+                  "3"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "a",
+            "name": "a",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "n1"
+                ],
+                "types": [
+                  "MaxHeap",
+                  "list"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n",
+            "name": "n",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "3"
+                ],
+                "types": [
+                  "MaxHeap",
+                  "int"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "4",
+                "type": "int",
+                "label": "4"
+              },
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              },
+              {
+                "id": "3",
+                "type": "int",
+                "label": "3"
+              },
+              {
+                "id": "2",
+                "type": "int",
+                "label": "2"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n1",
+                "type": "list",
+                "label": "list[4]"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "MaxHeap",
+            "types": [
+              "MaxHeap",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "MaxHeap",
+                "label": "snap"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 3,
+      "label": "insert(2)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "4",
+            "type": "int",
+            "label": "4"
+          },
+          {
+            "id": "2",
+            "type": "int",
+            "label": "2"
+          },
+          {
+            "id": "3",
+            "type": "int",
+            "label": "3"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          },
+          {
+            "id": "n1",
+            "type": "list",
+            "label": "list[5]"
+          },
+          {
+            "id": "n0",
+            "type": "MaxHeap",
+            "label": "snap"
+          }
+        ],
+        "relations": [
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "0",
+                  "0"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "1",
+                  "4"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "2",
+                  "2"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "3",
+                  "3"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "4",
+                  "1"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "a",
+            "name": "a",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "n1"
+                ],
+                "types": [
+                  "MaxHeap",
+                  "list"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n",
+            "name": "n",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "4"
+                ],
+                "types": [
+                  "MaxHeap",
+                  "int"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "4",
+                "type": "int",
+                "label": "4"
+              },
+              {
+                "id": "2",
+                "type": "int",
+                "label": "2"
+              },
+              {
+                "id": "3",
+                "type": "int",
+                "label": "3"
+              },
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n1",
+                "type": "list",
+                "label": "list[5]"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "MaxHeap",
+            "types": [
+              "MaxHeap",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "MaxHeap",
+                "label": "snap"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 4,
+      "label": "insert(16)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "16",
+            "type": "int",
+            "label": "16"
+          },
+          {
+            "id": "4",
+            "type": "int",
+            "label": "4"
+          },
+          {
+            "id": "3",
+            "type": "int",
+            "label": "3"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          },
+          {
+            "id": "2",
+            "type": "int",
+            "label": "2"
+          },
+          {
+            "id": "n1",
+            "type": "list",
+            "label": "list[6]"
+          },
+          {
+            "id": "5",
+            "type": "int",
+            "label": "5"
+          },
+          {
+            "id": "n0",
+            "type": "MaxHeap",
+            "label": "snap"
+          }
+        ],
+        "relations": [
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "0",
+                  "0"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "1",
+                  "16"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "2",
+                  "4"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "3",
+                  "3"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "4",
+                  "1"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "5",
+                  "2"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "a",
+            "name": "a",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "n1"
+                ],
+                "types": [
+                  "MaxHeap",
+                  "list"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n",
+            "name": "n",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "5"
+                ],
+                "types": [
+                  "MaxHeap",
+                  "int"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "16",
+                "type": "int",
+                "label": "16"
+              },
+              {
+                "id": "4",
+                "type": "int",
+                "label": "4"
+              },
+              {
+                "id": "3",
+                "type": "int",
+                "label": "3"
+              },
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              },
+              {
+                "id": "2",
+                "type": "int",
+                "label": "2"
+              },
+              {
+                "id": "5",
+                "type": "int",
+                "label": "5"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n1",
+                "type": "list",
+                "label": "list[6]"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "MaxHeap",
+            "types": [
+              "MaxHeap",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "MaxHeap",
+                "label": "snap"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 5,
+      "label": "insert(9)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "16",
+            "type": "int",
+            "label": "16"
+          },
+          {
+            "id": "4",
+            "type": "int",
+            "label": "4"
+          },
+          {
+            "id": "9",
+            "type": "int",
+            "label": "9"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          },
+          {
+            "id": "2",
+            "type": "int",
+            "label": "2"
+          },
+          {
+            "id": "3",
+            "type": "int",
+            "label": "3"
+          },
+          {
+            "id": "n1",
+            "type": "list",
+            "label": "list[7]"
+          },
+          {
+            "id": "5",
+            "type": "int",
+            "label": "5"
+          },
+          {
+            "id": "6",
+            "type": "int",
+            "label": "6"
+          },
+          {
+            "id": "n0",
+            "type": "MaxHeap",
+            "label": "snap"
+          }
+        ],
+        "relations": [
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "0",
+                  "0"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "1",
+                  "16"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "2",
+                  "4"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "3",
+                  "9"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "4",
+                  "1"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "5",
+                  "2"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "6",
+                  "3"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "a",
+            "name": "a",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "n1"
+                ],
+                "types": [
+                  "MaxHeap",
+                  "list"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n",
+            "name": "n",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "6"
+                ],
+                "types": [
+                  "MaxHeap",
+                  "int"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "16",
+                "type": "int",
+                "label": "16"
+              },
+              {
+                "id": "4",
+                "type": "int",
+                "label": "4"
+              },
+              {
+                "id": "9",
+                "type": "int",
+                "label": "9"
+              },
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              },
+              {
+                "id": "2",
+                "type": "int",
+                "label": "2"
+              },
+              {
+                "id": "3",
+                "type": "int",
+                "label": "3"
+              },
+              {
+                "id": "5",
+                "type": "int",
+                "label": "5"
+              },
+              {
+                "id": "6",
+                "type": "int",
+                "label": "6"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n1",
+                "type": "list",
+                "label": "list[7]"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "MaxHeap",
+            "types": [
+              "MaxHeap",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "MaxHeap",
+                "label": "snap"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 6,
+      "label": "insert(10)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "16",
+            "type": "int",
+            "label": "16"
+          },
+          {
+            "id": "4",
+            "type": "int",
+            "label": "4"
+          },
+          {
+            "id": "10",
+            "type": "int",
+            "label": "10"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          },
+          {
+            "id": "2",
+            "type": "int",
+            "label": "2"
+          },
+          {
+            "id": "3",
+            "type": "int",
+            "label": "3"
+          },
+          {
+            "id": "9",
+            "type": "int",
+            "label": "9"
+          },
+          {
+            "id": "n1",
+            "type": "list",
+            "label": "list[8]"
+          },
+          {
+            "id": "5",
+            "type": "int",
+            "label": "5"
+          },
+          {
+            "id": "6",
+            "type": "int",
+            "label": "6"
+          },
+          {
+            "id": "7",
+            "type": "int",
+            "label": "7"
+          },
+          {
+            "id": "n0",
+            "type": "MaxHeap",
+            "label": "snap"
+          }
+        ],
+        "relations": [
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "0",
+                  "0"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "1",
+                  "16"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "2",
+                  "4"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "3",
+                  "10"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "4",
+                  "1"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "5",
+                  "2"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "6",
+                  "3"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "7",
+                  "9"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "a",
+            "name": "a",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "n1"
+                ],
+                "types": [
+                  "MaxHeap",
+                  "list"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n",
+            "name": "n",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "7"
+                ],
+                "types": [
+                  "MaxHeap",
+                  "int"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "16",
+                "type": "int",
+                "label": "16"
+              },
+              {
+                "id": "4",
+                "type": "int",
+                "label": "4"
+              },
+              {
+                "id": "10",
+                "type": "int",
+                "label": "10"
+              },
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              },
+              {
+                "id": "2",
+                "type": "int",
+                "label": "2"
+              },
+              {
+                "id": "3",
+                "type": "int",
+                "label": "3"
+              },
+              {
+                "id": "9",
+                "type": "int",
+                "label": "9"
+              },
+              {
+                "id": "5",
+                "type": "int",
+                "label": "5"
+              },
+              {
+                "id": "6",
+                "type": "int",
+                "label": "6"
+              },
+              {
+                "id": "7",
+                "type": "int",
+                "label": "7"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n1",
+                "type": "list",
+                "label": "list[8]"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "MaxHeap",
+            "types": [
+              "MaxHeap",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "MaxHeap",
+                "label": "snap"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 7,
+      "label": "insert(14)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "16",
+            "type": "int",
+            "label": "16"
+          },
+          {
+            "id": "14",
+            "type": "int",
+            "label": "14"
+          },
+          {
+            "id": "10",
+            "type": "int",
+            "label": "10"
+          },
+          {
+            "id": "4",
+            "type": "int",
+            "label": "4"
+          },
+          {
+            "id": "2",
+            "type": "int",
+            "label": "2"
+          },
+          {
+            "id": "3",
+            "type": "int",
+            "label": "3"
+          },
+          {
+            "id": "9",
+            "type": "int",
+            "label": "9"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          },
+          {
+            "id": "n1",
+            "type": "list",
+            "label": "list[9]"
+          },
+          {
+            "id": "5",
+            "type": "int",
+            "label": "5"
+          },
+          {
+            "id": "6",
+            "type": "int",
+            "label": "6"
+          },
+          {
+            "id": "7",
+            "type": "int",
+            "label": "7"
+          },
+          {
+            "id": "8",
+            "type": "int",
+            "label": "8"
+          },
+          {
+            "id": "n0",
+            "type": "MaxHeap",
+            "label": "snap"
+          }
+        ],
+        "relations": [
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "0",
+                  "0"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "1",
+                  "16"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "2",
+                  "14"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "3",
+                  "10"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "4",
+                  "4"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "5",
+                  "2"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "6",
+                  "3"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "7",
+                  "9"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "8",
+                  "1"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "a",
+            "name": "a",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "n1"
+                ],
+                "types": [
+                  "MaxHeap",
+                  "list"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n",
+            "name": "n",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "8"
+                ],
+                "types": [
+                  "MaxHeap",
+                  "int"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "16",
+                "type": "int",
+                "label": "16"
+              },
+              {
+                "id": "14",
+                "type": "int",
+                "label": "14"
+              },
+              {
+                "id": "10",
+                "type": "int",
+                "label": "10"
+              },
+              {
+                "id": "4",
+                "type": "int",
+                "label": "4"
+              },
+              {
+                "id": "2",
+                "type": "int",
+                "label": "2"
+              },
+              {
+                "id": "3",
+                "type": "int",
+                "label": "3"
+              },
+              {
+                "id": "9",
+                "type": "int",
+                "label": "9"
+              },
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              },
+              {
+                "id": "5",
+                "type": "int",
+                "label": "5"
+              },
+              {
+                "id": "6",
+                "type": "int",
+                "label": "6"
+              },
+              {
+                "id": "7",
+                "type": "int",
+                "label": "7"
+              },
+              {
+                "id": "8",
+                "type": "int",
+                "label": "8"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n1",
+                "type": "list",
+                "label": "list[9]"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "MaxHeap",
+            "types": [
+              "MaxHeap",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "MaxHeap",
+                "label": "snap"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 8,
+      "label": "insert(8)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "16",
+            "type": "int",
+            "label": "16"
+          },
+          {
+            "id": "14",
+            "type": "int",
+            "label": "14"
+          },
+          {
+            "id": "10",
+            "type": "int",
+            "label": "10"
+          },
+          {
+            "id": "8",
+            "type": "int",
+            "label": "8"
+          },
+          {
+            "id": "2",
+            "type": "int",
+            "label": "2"
+          },
+          {
+            "id": "3",
+            "type": "int",
+            "label": "3"
+          },
+          {
+            "id": "9",
+            "type": "int",
+            "label": "9"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          },
+          {
+            "id": "4",
+            "type": "int",
+            "label": "4"
+          },
+          {
+            "id": "n1",
+            "type": "list",
+            "label": "list[10]"
+          },
+          {
+            "id": "5",
+            "type": "int",
+            "label": "5"
+          },
+          {
+            "id": "6",
+            "type": "int",
+            "label": "6"
+          },
+          {
+            "id": "7",
+            "type": "int",
+            "label": "7"
+          },
+          {
+            "id": "n0",
+            "type": "MaxHeap",
+            "label": "snap"
+          }
+        ],
+        "relations": [
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "0",
+                  "0"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "1",
+                  "16"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "2",
+                  "14"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "3",
+                  "10"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "4",
+                  "8"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "5",
+                  "2"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "6",
+                  "3"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "7",
+                  "9"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "8",
+                  "1"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "9",
+                  "4"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "a",
+            "name": "a",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "n1"
+                ],
+                "types": [
+                  "MaxHeap",
+                  "list"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n",
+            "name": "n",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "9"
+                ],
+                "types": [
+                  "MaxHeap",
+                  "int"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "16",
+                "type": "int",
+                "label": "16"
+              },
+              {
+                "id": "14",
+                "type": "int",
+                "label": "14"
+              },
+              {
+                "id": "10",
+                "type": "int",
+                "label": "10"
+              },
+              {
+                "id": "8",
+                "type": "int",
+                "label": "8"
+              },
+              {
+                "id": "2",
+                "type": "int",
+                "label": "2"
+              },
+              {
+                "id": "3",
+                "type": "int",
+                "label": "3"
+              },
+              {
+                "id": "9",
+                "type": "int",
+                "label": "9"
+              },
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              },
+              {
+                "id": "4",
+                "type": "int",
+                "label": "4"
+              },
+              {
+                "id": "5",
+                "type": "int",
+                "label": "5"
+              },
+              {
+                "id": "6",
+                "type": "int",
+                "label": "6"
+              },
+              {
+                "id": "7",
+                "type": "int",
+                "label": "7"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n1",
+                "type": "list",
+                "label": "list[10]"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "MaxHeap",
+            "types": [
+              "MaxHeap",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "MaxHeap",
+                "label": "snap"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 9,
+      "label": "insert(7)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "16",
+            "type": "int",
+            "label": "16"
+          },
+          {
+            "id": "14",
+            "type": "int",
+            "label": "14"
+          },
+          {
+            "id": "10",
+            "type": "int",
+            "label": "10"
+          },
+          {
+            "id": "8",
+            "type": "int",
+            "label": "8"
+          },
+          {
+            "id": "7",
+            "type": "int",
+            "label": "7"
+          },
+          {
+            "id": "3",
+            "type": "int",
+            "label": "3"
+          },
+          {
+            "id": "9",
+            "type": "int",
+            "label": "9"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          },
+          {
+            "id": "4",
+            "type": "int",
+            "label": "4"
+          },
+          {
+            "id": "2",
+            "type": "int",
+            "label": "2"
+          },
+          {
+            "id": "n1",
+            "type": "list",
+            "label": "list[11]"
+          },
+          {
+            "id": "5",
+            "type": "int",
+            "label": "5"
+          },
+          {
+            "id": "6",
+            "type": "int",
+            "label": "6"
+          },
+          {
+            "id": "n0",
+            "type": "MaxHeap",
+            "label": "snap"
+          }
+        ],
+        "relations": [
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "0",
+                  "0"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "1",
+                  "16"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "2",
+                  "14"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "3",
+                  "10"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "4",
+                  "8"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "5",
+                  "7"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "6",
+                  "3"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "7",
+                  "9"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "8",
+                  "1"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "9",
+                  "4"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "10",
+                  "2"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "a",
+            "name": "a",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "n1"
+                ],
+                "types": [
+                  "MaxHeap",
+                  "list"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n",
+            "name": "n",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "10"
+                ],
+                "types": [
+                  "MaxHeap",
+                  "int"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "16",
+                "type": "int",
+                "label": "16"
+              },
+              {
+                "id": "14",
+                "type": "int",
+                "label": "14"
+              },
+              {
+                "id": "10",
+                "type": "int",
+                "label": "10"
+              },
+              {
+                "id": "8",
+                "type": "int",
+                "label": "8"
+              },
+              {
+                "id": "7",
+                "type": "int",
+                "label": "7"
+              },
+              {
+                "id": "3",
+                "type": "int",
+                "label": "3"
+              },
+              {
+                "id": "9",
+                "type": "int",
+                "label": "9"
+              },
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              },
+              {
+                "id": "4",
+                "type": "int",
+                "label": "4"
+              },
+              {
+                "id": "2",
+                "type": "int",
+                "label": "2"
+              },
+              {
+                "id": "5",
+                "type": "int",
+                "label": "5"
+              },
+              {
+                "id": "6",
+                "type": "int",
+                "label": "6"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n1",
+                "type": "list",
+                "label": "list[11]"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "MaxHeap",
+            "types": [
+              "MaxHeap",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "MaxHeap",
+                "label": "snap"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 10,
+      "label": "extract-max -> 16",
+      "instance": {
+        "atoms": [
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "14",
+            "type": "int",
+            "label": "14"
+          },
+          {
+            "id": "8",
+            "type": "int",
+            "label": "8"
+          },
+          {
+            "id": "10",
+            "type": "int",
+            "label": "10"
+          },
+          {
+            "id": "4",
+            "type": "int",
+            "label": "4"
+          },
+          {
+            "id": "7",
+            "type": "int",
+            "label": "7"
+          },
+          {
+            "id": "3",
+            "type": "int",
+            "label": "3"
+          },
+          {
+            "id": "9",
+            "type": "int",
+            "label": "9"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          },
+          {
+            "id": "2",
+            "type": "int",
+            "label": "2"
+          },
+          {
+            "id": "n1",
+            "type": "list",
+            "label": "list[10]"
+          },
+          {
+            "id": "5",
+            "type": "int",
+            "label": "5"
+          },
+          {
+            "id": "6",
+            "type": "int",
+            "label": "6"
+          },
+          {
+            "id": "n0",
+            "type": "MaxHeap",
+            "label": "snap"
+          }
+        ],
+        "relations": [
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "0",
+                  "0"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "1",
+                  "14"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "2",
+                  "8"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "3",
+                  "10"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "4",
+                  "4"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "5",
+                  "7"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "6",
+                  "3"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "7",
+                  "9"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "8",
+                  "1"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "9",
+                  "2"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "a",
+            "name": "a",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "n1"
+                ],
+                "types": [
+                  "MaxHeap",
+                  "list"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n",
+            "name": "n",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "9"
+                ],
+                "types": [
+                  "MaxHeap",
+                  "int"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "14",
+                "type": "int",
+                "label": "14"
+              },
+              {
+                "id": "8",
+                "type": "int",
+                "label": "8"
+              },
+              {
+                "id": "10",
+                "type": "int",
+                "label": "10"
+              },
+              {
+                "id": "4",
+                "type": "int",
+                "label": "4"
+              },
+              {
+                "id": "7",
+                "type": "int",
+                "label": "7"
+              },
+              {
+                "id": "3",
+                "type": "int",
+                "label": "3"
+              },
+              {
+                "id": "9",
+                "type": "int",
+                "label": "9"
+              },
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              },
+              {
+                "id": "2",
+                "type": "int",
+                "label": "2"
+              },
+              {
+                "id": "5",
+                "type": "int",
+                "label": "5"
+              },
+              {
+                "id": "6",
+                "type": "int",
+                "label": "6"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n1",
+                "type": "list",
+                "label": "list[10]"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "MaxHeap",
+            "types": [
+              "MaxHeap",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "MaxHeap",
+                "label": "snap"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 11,
+      "label": "extract-max -> 14",
+      "instance": {
+        "atoms": [
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "10",
+            "type": "int",
+            "label": "10"
+          },
+          {
+            "id": "8",
+            "type": "int",
+            "label": "8"
+          },
+          {
+            "id": "9",
+            "type": "int",
+            "label": "9"
+          },
+          {
+            "id": "4",
+            "type": "int",
+            "label": "4"
+          },
+          {
+            "id": "7",
+            "type": "int",
+            "label": "7"
+          },
+          {
+            "id": "3",
+            "type": "int",
+            "label": "3"
+          },
+          {
+            "id": "2",
+            "type": "int",
+            "label": "2"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          },
+          {
+            "id": "n1",
+            "type": "list",
+            "label": "list[9]"
+          },
+          {
+            "id": "5",
+            "type": "int",
+            "label": "5"
+          },
+          {
+            "id": "6",
+            "type": "int",
+            "label": "6"
+          },
+          {
+            "id": "n0",
+            "type": "MaxHeap",
+            "label": "snap"
+          }
+        ],
+        "relations": [
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "0",
+                  "0"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "1",
+                  "10"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "2",
+                  "8"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "3",
+                  "9"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "4",
+                  "4"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "5",
+                  "7"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "6",
+                  "3"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "7",
+                  "2"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "8",
+                  "1"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "a",
+            "name": "a",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "n1"
+                ],
+                "types": [
+                  "MaxHeap",
+                  "list"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n",
+            "name": "n",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "8"
+                ],
+                "types": [
+                  "MaxHeap",
+                  "int"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "10",
+                "type": "int",
+                "label": "10"
+              },
+              {
+                "id": "8",
+                "type": "int",
+                "label": "8"
+              },
+              {
+                "id": "9",
+                "type": "int",
+                "label": "9"
+              },
+              {
+                "id": "4",
+                "type": "int",
+                "label": "4"
+              },
+              {
+                "id": "7",
+                "type": "int",
+                "label": "7"
+              },
+              {
+                "id": "3",
+                "type": "int",
+                "label": "3"
+              },
+              {
+                "id": "2",
+                "type": "int",
+                "label": "2"
+              },
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              },
+              {
+                "id": "5",
+                "type": "int",
+                "label": "5"
+              },
+              {
+                "id": "6",
+                "type": "int",
+                "label": "6"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n1",
+                "type": "list",
+                "label": "list[9]"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "MaxHeap",
+            "types": [
+              "MaxHeap",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "MaxHeap",
+                "label": "snap"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 12,
+      "label": "extract-max -> 10",
+      "instance": {
+        "atoms": [
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "9",
+            "type": "int",
+            "label": "9"
+          },
+          {
+            "id": "8",
+            "type": "int",
+            "label": "8"
+          },
+          {
+            "id": "3",
+            "type": "int",
+            "label": "3"
+          },
+          {
+            "id": "4",
+            "type": "int",
+            "label": "4"
+          },
+          {
+            "id": "7",
+            "type": "int",
+            "label": "7"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          },
+          {
+            "id": "2",
+            "type": "int",
+            "label": "2"
+          },
+          {
+            "id": "n1",
+            "type": "list",
+            "label": "list[8]"
+          },
+          {
+            "id": "5",
+            "type": "int",
+            "label": "5"
+          },
+          {
+            "id": "6",
+            "type": "int",
+            "label": "6"
+          },
+          {
+            "id": "n0",
+            "type": "MaxHeap",
+            "label": "snap"
+          }
+        ],
+        "relations": [
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "0",
+                  "0"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "1",
+                  "9"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "2",
+                  "8"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "3",
+                  "3"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "4",
+                  "4"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "5",
+                  "7"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "6",
+                  "1"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "7",
+                  "2"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "a",
+            "name": "a",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "n1"
+                ],
+                "types": [
+                  "MaxHeap",
+                  "list"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "n",
+            "name": "n",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "7"
+                ],
+                "types": [
+                  "MaxHeap",
+                  "int"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "9",
+                "type": "int",
+                "label": "9"
+              },
+              {
+                "id": "8",
+                "type": "int",
+                "label": "8"
+              },
+              {
+                "id": "3",
+                "type": "int",
+                "label": "3"
+              },
+              {
+                "id": "4",
+                "type": "int",
+                "label": "4"
+              },
+              {
+                "id": "7",
+                "type": "int",
+                "label": "7"
+              },
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              },
+              {
+                "id": "2",
+                "type": "int",
+                "label": "2"
+              },
+              {
+                "id": "5",
+                "type": "int",
+                "label": "5"
+              },
+              {
+                "id": "6",
+                "type": "int",
+                "label": "6"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n1",
+                "type": "list",
+                "label": "list[8]"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "MaxHeap",
+            "types": [
+              "MaxHeap",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "MaxHeap",
+                "label": "snap"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    }
+  ]
+}

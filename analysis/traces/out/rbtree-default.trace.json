@@ -1,0 +1,4823 @@
+{
+  "algorithm": "rbtree-insert+delete",
+  "spec": "constraints:\n- orientation:\n    directions:\n    - below\n    - right\n    selector: right & (RBNode -> (RBNode - NoneType.~key))\n- orientation:\n    directions:\n    - below\n    - left\n    selector: left & (RBNode -> (RBNode - NoneType.~key))\n- orientation:\n    directions:\n    - below\n    - right\n    selector: right & (RBNode -> (RBNode - NoneType.~key))\n- orientation:\n    directions:\n    - below\n    - left\n    selector: left & (RBNode -> (RBNode - NoneType.~key))\n- orientation:\n    directions:\n    - below\n    - right\n    selector: right & (RBNode -> (RBNode - NoneType.~key))\n- orientation:\n    directions:\n    - below\n    - left\n    selector: left & (RBNode -> (RBNode - NoneType.~key))\n- orientation:\n    directions:\n    - below\n    - right\n    selector: right & (RBNode -> (RBNode - NoneType.~key))\n- orientation:\n    directions:\n    - below\n    - left\n    selector: left & (RBNode -> (RBNode - NoneType.~key))\n- orientation:\n    directions:\n    - below\n    - right\n    selector: right & (RBNode -> (RBNode - NoneType.~key))\n- orientation:\n    directions:\n    - below\n    - left\n    selector: left & (RBNode -> (RBNode - NoneType.~key))\n- orientation:\n    directions:\n    - below\n    - right\n    selector: right & (RBNode -> (RBNode - NoneType.~key))\n- orientation:\n    directions:\n    - below\n    - left\n    selector: left & (RBNode -> (RBNode - NoneType.~key))\n- orientation:\n    directions:\n    - below\n    - right\n    selector: right & (RBNode -> (RBNode - NoneType.~key))\n- orientation:\n    directions:\n    - below\n    - left\n    selector: left & (RBNode -> (RBNode - NoneType.~key))\n- orientation:\n    directions:\n    - below\n    - right\n    selector: right & (RBNode -> (RBNode - NoneType.~key))\n- orientation:\n    directions:\n    - below\n    - left\n    selector: left & (RBNode -> (RBNode - NoneType.~key))\n- orientation:\n    directions:\n    - below\n    - right\n    selector: right & (RBNode -> (RBNode - NoneType.~key))\n- orientation:\n    directions:\n    - below\n    - left\n    selector: left & (RBNode -> (RBNode - NoneType.~key))\ndirectives:\n- hideField:\n    field: parent\n- hideAtom:\n    selector: '{ x : RBNode | (x.key in NoneType) } + RBTree + int + NoneType + {s\n      : str | @:s = red or @:s = black}'\n- attribute:\n    field: color\n- attribute:\n    field: key\n- atomColor:\n    selector: '{ x : RBNode | @:(x.color) = black }'\n    value: black\n- atomColor:\n    selector: '{ x : RBNode | @:(x.color) = red }'\n    value: red\n- hideField:\n    field: parent\n- hideAtom:\n    selector: '{ x : RBNode | (x.key in NoneType) } + RBTree + int + NoneType + {s\n      : str | @:s = red or @:s = black}'\n- attribute:\n    field: color\n- attribute:\n    field: key\n- atomColor:\n    selector: '{ x : RBNode | @:(x.color) = black }'\n    value: black\n- atomColor:\n    selector: '{ x : RBNode | @:(x.color) = red }'\n    value: red\n- hideField:\n    field: parent\n- hideAtom:\n    selector: '{ x : RBNode | (x.key in NoneType) } + RBTree + int + NoneType + {s\n      : str | @:s = red or @:s = black}'\n- attribute:\n    field: color\n- attribute:\n    field: key\n- atomColor:\n    selector: '{ x : RBNode | @:(x.color) = black }'\n    value: black\n- atomColor:\n    selector: '{ x : RBNode | @:(x.color) = red }'\n    value: red\n- hideField:\n    field: parent\n- hideAtom:\n    selector: '{ x : RBNode | (x.key in NoneType) } + RBTree + int + NoneType + {s\n      : str | @:s = red or @:s = black}'\n- attribute:\n    field: color\n- attribute:\n    field: key\n- atomColor:\n    selector: '{ x : RBNode | @:(x.color) = black }'\n    value: black\n- atomColor:\n    selector: '{ x : RBNode | @:(x.color) = red }'\n    value: red\n- hideField:\n    field: parent\n- hideAtom:\n    selector: '{ x : RBNode | (x.key in NoneType) } + RBTree + int + NoneType + {s\n      : str | @:s = red or @:s = black}'\n- attribute:\n    field: color\n- attribute:\n    field: key\n- atomColor:\n    selector: '{ x : RBNode | @:(x.color) = black }'\n    value: black\n- atomColor:\n    selector: '{ x : RBNode | @:(x.color) = red }'\n    value: red\n- hideField:\n    field: parent\n- hideAtom:\n    selector: '{ x : RBNode | (x.key in NoneType) } + RBTree + int + NoneType + {s\n      : str | @:s = red or @:s = black}'\n- attribute:\n    field: color\n- attribute:\n    field: key\n- atomColor:\n    selector: '{ x : RBNode | @:(x.color) = black }'\n    value: black\n- atomColor:\n    selector: '{ x : RBNode | @:(x.color) = red }'\n    value: red\n- hideField:\n    field: parent\n- hideAtom:\n    selector: '{ x : RBNode | (x.key in NoneType) } + RBTree + int + NoneType + {s\n      : str | @:s = red or @:s = black}'\n- attribute:\n    field: color\n- attribute:\n    field: key\n- atomColor:\n    selector: '{ x : RBNode | @:(x.color) = black }'\n    value: black\n- atomColor:\n    selector: '{ x : RBNode | @:(x.color) = red }'\n    value: red\n- hideField:\n    field: parent\n- hideAtom:\n    selector: '{ x : RBNode | (x.key in NoneType) } + RBTree + int + NoneType + {s\n      : str | @:s = red or @:s = black}'\n- attribute:\n    field: color\n- attribute:\n    field: key\n- atomColor:\n    selector: '{ x : RBNode | @:(x.color) = black }'\n    value: black\n- atomColor:\n    selector: '{ x : RBNode | @:(x.color) = red }'\n    value: red\n- hideField:\n    field: parent\n- hideAtom:\n    selector: '{ x : RBNode | (x.key in NoneType) } + RBTree + int + NoneType + {s\n      : str | @:s = red or @:s = black}'\n- attribute:\n    field: color\n- attribute:\n    field: key\n- atomColor:\n    selector: '{ x : RBNode | @:(x.color) = black }'\n    value: black\n- atomColor:\n    selector: '{ x : RBNode | @:(x.color) = red }'\n    value: red\n",
+  "frames": [
+    {
+      "step": 0,
+      "label": "insert(26)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "\"black\"",
+            "type": "str",
+            "label": "black"
+          },
+          {
+            "id": "26",
+            "type": "int",
+            "label": "26"
+          },
+          {
+            "id": "None",
+            "type": "NoneType",
+            "label": "None"
+          },
+          {
+            "id": "n2",
+            "type": "RBNode",
+            "label": "RBNode1"
+          },
+          {
+            "id": "n1",
+            "type": "RBNode",
+            "label": "RBNode0"
+          },
+          {
+            "id": "n0",
+            "type": "RBTree",
+            "label": "snap"
+          }
+        ],
+        "relations": [
+          {
+            "id": "color",
+            "name": "color",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "key",
+            "name": "key",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "None"
+                ],
+                "types": [
+                  "RBNode",
+                  "NoneType"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "26"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "left",
+            "name": "left",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "parent",
+            "name": "parent",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "right",
+            "name": "right",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "root",
+            "name": "root",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "n1"
+                ],
+                "types": [
+                  "RBTree",
+                  "RBNode"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "str",
+            "types": [
+              "str",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "\"black\"",
+                "type": "str",
+                "label": "black"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "26",
+                "type": "int",
+                "label": "26"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "NoneType",
+            "types": [
+              "NoneType",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "None",
+                "type": "NoneType",
+                "label": "None"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "RBNode",
+            "types": [
+              "RBNode",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n2",
+                "type": "RBNode",
+                "label": "RBNode1"
+              },
+              {
+                "id": "n1",
+                "type": "RBNode",
+                "label": "RBNode0"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "RBTree",
+            "types": [
+              "RBTree",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "RBTree",
+                "label": "snap"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 1,
+      "label": "insert(17)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "\"black\"",
+            "type": "str",
+            "label": "black"
+          },
+          {
+            "id": "26",
+            "type": "int",
+            "label": "26"
+          },
+          {
+            "id": "\"red\"",
+            "type": "str",
+            "label": "red"
+          },
+          {
+            "id": "17",
+            "type": "int",
+            "label": "17"
+          },
+          {
+            "id": "None",
+            "type": "NoneType",
+            "label": "None"
+          },
+          {
+            "id": "n2",
+            "type": "RBNode",
+            "label": "RBNode2"
+          },
+          {
+            "id": "n3",
+            "type": "RBNode",
+            "label": "RBNode1"
+          },
+          {
+            "id": "n1",
+            "type": "RBNode",
+            "label": "RBNode0"
+          },
+          {
+            "id": "n0",
+            "type": "RBTree",
+            "label": "snap"
+          }
+        ],
+        "relations": [
+          {
+            "id": "color",
+            "name": "color",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "\"red\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "key",
+            "name": "key",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "None"
+                ],
+                "types": [
+                  "RBNode",
+                  "NoneType"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "17"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "26"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "left",
+            "name": "left",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "n3"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "parent",
+            "name": "parent",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n1"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "right",
+            "name": "right",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "root",
+            "name": "root",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "n1"
+                ],
+                "types": [
+                  "RBTree",
+                  "RBNode"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "str",
+            "types": [
+              "str",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "\"black\"",
+                "type": "str",
+                "label": "black"
+              },
+              {
+                "id": "\"red\"",
+                "type": "str",
+                "label": "red"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "26",
+                "type": "int",
+                "label": "26"
+              },
+              {
+                "id": "17",
+                "type": "int",
+                "label": "17"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "NoneType",
+            "types": [
+              "NoneType",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "None",
+                "type": "NoneType",
+                "label": "None"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "RBNode",
+            "types": [
+              "RBNode",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n2",
+                "type": "RBNode",
+                "label": "RBNode2"
+              },
+              {
+                "id": "n3",
+                "type": "RBNode",
+                "label": "RBNode1"
+              },
+              {
+                "id": "n1",
+                "type": "RBNode",
+                "label": "RBNode0"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "RBTree",
+            "types": [
+              "RBTree",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "RBTree",
+                "label": "snap"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 2,
+      "label": "insert(41)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "\"black\"",
+            "type": "str",
+            "label": "black"
+          },
+          {
+            "id": "26",
+            "type": "int",
+            "label": "26"
+          },
+          {
+            "id": "\"red\"",
+            "type": "str",
+            "label": "red"
+          },
+          {
+            "id": "17",
+            "type": "int",
+            "label": "17"
+          },
+          {
+            "id": "None",
+            "type": "NoneType",
+            "label": "None"
+          },
+          {
+            "id": "n2",
+            "type": "RBNode",
+            "label": "RBNode2"
+          },
+          {
+            "id": "n3",
+            "type": "RBNode",
+            "label": "RBNode1"
+          },
+          {
+            "id": "41",
+            "type": "int",
+            "label": "41"
+          },
+          {
+            "id": "n4",
+            "type": "RBNode",
+            "label": "RBNode3"
+          },
+          {
+            "id": "n1",
+            "type": "RBNode",
+            "label": "RBNode0"
+          },
+          {
+            "id": "n0",
+            "type": "RBTree",
+            "label": "snap"
+          }
+        ],
+        "relations": [
+          {
+            "id": "color",
+            "name": "color",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "\"red\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "\"red\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "key",
+            "name": "key",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "None"
+                ],
+                "types": [
+                  "RBNode",
+                  "NoneType"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "17"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "41"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "26"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "left",
+            "name": "left",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "n3"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "parent",
+            "name": "parent",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n1"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n1"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "right",
+            "name": "right",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "n4"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "root",
+            "name": "root",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "n1"
+                ],
+                "types": [
+                  "RBTree",
+                  "RBNode"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "str",
+            "types": [
+              "str",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "\"black\"",
+                "type": "str",
+                "label": "black"
+              },
+              {
+                "id": "\"red\"",
+                "type": "str",
+                "label": "red"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "26",
+                "type": "int",
+                "label": "26"
+              },
+              {
+                "id": "17",
+                "type": "int",
+                "label": "17"
+              },
+              {
+                "id": "41",
+                "type": "int",
+                "label": "41"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "NoneType",
+            "types": [
+              "NoneType",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "None",
+                "type": "NoneType",
+                "label": "None"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "RBNode",
+            "types": [
+              "RBNode",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n2",
+                "type": "RBNode",
+                "label": "RBNode2"
+              },
+              {
+                "id": "n3",
+                "type": "RBNode",
+                "label": "RBNode1"
+              },
+              {
+                "id": "n4",
+                "type": "RBNode",
+                "label": "RBNode3"
+              },
+              {
+                "id": "n1",
+                "type": "RBNode",
+                "label": "RBNode0"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "RBTree",
+            "types": [
+              "RBTree",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "RBTree",
+                "label": "snap"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 3,
+      "label": "insert(47)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "\"black\"",
+            "type": "str",
+            "label": "black"
+          },
+          {
+            "id": "26",
+            "type": "int",
+            "label": "26"
+          },
+          {
+            "id": "17",
+            "type": "int",
+            "label": "17"
+          },
+          {
+            "id": "None",
+            "type": "NoneType",
+            "label": "None"
+          },
+          {
+            "id": "n2",
+            "type": "RBNode",
+            "label": "RBNode2"
+          },
+          {
+            "id": "n3",
+            "type": "RBNode",
+            "label": "RBNode1"
+          },
+          {
+            "id": "41",
+            "type": "int",
+            "label": "41"
+          },
+          {
+            "id": "\"red\"",
+            "type": "str",
+            "label": "red"
+          },
+          {
+            "id": "47",
+            "type": "int",
+            "label": "47"
+          },
+          {
+            "id": "n5",
+            "type": "RBNode",
+            "label": "RBNode4"
+          },
+          {
+            "id": "n4",
+            "type": "RBNode",
+            "label": "RBNode3"
+          },
+          {
+            "id": "n1",
+            "type": "RBNode",
+            "label": "RBNode0"
+          },
+          {
+            "id": "n0",
+            "type": "RBTree",
+            "label": "snap"
+          }
+        ],
+        "relations": [
+          {
+            "id": "color",
+            "name": "color",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "\"red\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "key",
+            "name": "key",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "None"
+                ],
+                "types": [
+                  "RBNode",
+                  "NoneType"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "17"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "47"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "41"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "26"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "left",
+            "name": "left",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "n3"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "parent",
+            "name": "parent",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n1"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n4"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n1"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "right",
+            "name": "right",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n5"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "n4"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "root",
+            "name": "root",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "n1"
+                ],
+                "types": [
+                  "RBTree",
+                  "RBNode"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "str",
+            "types": [
+              "str",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "\"black\"",
+                "type": "str",
+                "label": "black"
+              },
+              {
+                "id": "\"red\"",
+                "type": "str",
+                "label": "red"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "26",
+                "type": "int",
+                "label": "26"
+              },
+              {
+                "id": "17",
+                "type": "int",
+                "label": "17"
+              },
+              {
+                "id": "41",
+                "type": "int",
+                "label": "41"
+              },
+              {
+                "id": "47",
+                "type": "int",
+                "label": "47"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "NoneType",
+            "types": [
+              "NoneType",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "None",
+                "type": "NoneType",
+                "label": "None"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "RBNode",
+            "types": [
+              "RBNode",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n2",
+                "type": "RBNode",
+                "label": "RBNode2"
+              },
+              {
+                "id": "n3",
+                "type": "RBNode",
+                "label": "RBNode1"
+              },
+              {
+                "id": "n5",
+                "type": "RBNode",
+                "label": "RBNode4"
+              },
+              {
+                "id": "n4",
+                "type": "RBNode",
+                "label": "RBNode3"
+              },
+              {
+                "id": "n1",
+                "type": "RBNode",
+                "label": "RBNode0"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "RBTree",
+            "types": [
+              "RBTree",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "RBTree",
+                "label": "snap"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 4,
+      "label": "insert(30)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "\"black\"",
+            "type": "str",
+            "label": "black"
+          },
+          {
+            "id": "26",
+            "type": "int",
+            "label": "26"
+          },
+          {
+            "id": "17",
+            "type": "int",
+            "label": "17"
+          },
+          {
+            "id": "None",
+            "type": "NoneType",
+            "label": "None"
+          },
+          {
+            "id": "n2",
+            "type": "RBNode",
+            "label": "RBNode2"
+          },
+          {
+            "id": "n3",
+            "type": "RBNode",
+            "label": "RBNode1"
+          },
+          {
+            "id": "41",
+            "type": "int",
+            "label": "41"
+          },
+          {
+            "id": "\"red\"",
+            "type": "str",
+            "label": "red"
+          },
+          {
+            "id": "30",
+            "type": "int",
+            "label": "30"
+          },
+          {
+            "id": "n6",
+            "type": "RBNode",
+            "label": "RBNode4"
+          },
+          {
+            "id": "47",
+            "type": "int",
+            "label": "47"
+          },
+          {
+            "id": "n5",
+            "type": "RBNode",
+            "label": "RBNode5"
+          },
+          {
+            "id": "n4",
+            "type": "RBNode",
+            "label": "RBNode3"
+          },
+          {
+            "id": "n1",
+            "type": "RBNode",
+            "label": "RBNode0"
+          },
+          {
+            "id": "n0",
+            "type": "RBTree",
+            "label": "snap"
+          }
+        ],
+        "relations": [
+          {
+            "id": "color",
+            "name": "color",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "\"red\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "\"red\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "key",
+            "name": "key",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "None"
+                ],
+                "types": [
+                  "RBNode",
+                  "NoneType"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "17"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "30"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "47"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "41"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "26"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "left",
+            "name": "left",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n6"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "n3"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "parent",
+            "name": "parent",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n1"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "n4"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n4"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n1"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "right",
+            "name": "right",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n5"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "n4"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "root",
+            "name": "root",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "n1"
+                ],
+                "types": [
+                  "RBTree",
+                  "RBNode"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "str",
+            "types": [
+              "str",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "\"black\"",
+                "type": "str",
+                "label": "black"
+              },
+              {
+                "id": "\"red\"",
+                "type": "str",
+                "label": "red"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "26",
+                "type": "int",
+                "label": "26"
+              },
+              {
+                "id": "17",
+                "type": "int",
+                "label": "17"
+              },
+              {
+                "id": "41",
+                "type": "int",
+                "label": "41"
+              },
+              {
+                "id": "30",
+                "type": "int",
+                "label": "30"
+              },
+              {
+                "id": "47",
+                "type": "int",
+                "label": "47"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "NoneType",
+            "types": [
+              "NoneType",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "None",
+                "type": "NoneType",
+                "label": "None"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "RBNode",
+            "types": [
+              "RBNode",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n2",
+                "type": "RBNode",
+                "label": "RBNode2"
+              },
+              {
+                "id": "n3",
+                "type": "RBNode",
+                "label": "RBNode1"
+              },
+              {
+                "id": "n6",
+                "type": "RBNode",
+                "label": "RBNode4"
+              },
+              {
+                "id": "n5",
+                "type": "RBNode",
+                "label": "RBNode5"
+              },
+              {
+                "id": "n4",
+                "type": "RBNode",
+                "label": "RBNode3"
+              },
+              {
+                "id": "n1",
+                "type": "RBNode",
+                "label": "RBNode0"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "RBTree",
+            "types": [
+              "RBTree",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "RBTree",
+                "label": "snap"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 5,
+      "label": "insert(38)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "\"black\"",
+            "type": "str",
+            "label": "black"
+          },
+          {
+            "id": "26",
+            "type": "int",
+            "label": "26"
+          },
+          {
+            "id": "17",
+            "type": "int",
+            "label": "17"
+          },
+          {
+            "id": "None",
+            "type": "NoneType",
+            "label": "None"
+          },
+          {
+            "id": "n2",
+            "type": "RBNode",
+            "label": "RBNode2"
+          },
+          {
+            "id": "n3",
+            "type": "RBNode",
+            "label": "RBNode1"
+          },
+          {
+            "id": "\"red\"",
+            "type": "str",
+            "label": "red"
+          },
+          {
+            "id": "41",
+            "type": "int",
+            "label": "41"
+          },
+          {
+            "id": "30",
+            "type": "int",
+            "label": "30"
+          },
+          {
+            "id": "38",
+            "type": "int",
+            "label": "38"
+          },
+          {
+            "id": "n7",
+            "type": "RBNode",
+            "label": "RBNode5"
+          },
+          {
+            "id": "n6",
+            "type": "RBNode",
+            "label": "RBNode4"
+          },
+          {
+            "id": "47",
+            "type": "int",
+            "label": "47"
+          },
+          {
+            "id": "n5",
+            "type": "RBNode",
+            "label": "RBNode6"
+          },
+          {
+            "id": "n4",
+            "type": "RBNode",
+            "label": "RBNode3"
+          },
+          {
+            "id": "n1",
+            "type": "RBNode",
+            "label": "RBNode0"
+          },
+          {
+            "id": "n0",
+            "type": "RBTree",
+            "label": "snap"
+          }
+        ],
+        "relations": [
+          {
+            "id": "color",
+            "name": "color",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "\"red\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "\"red\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "key",
+            "name": "key",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "None"
+                ],
+                "types": [
+                  "RBNode",
+                  "NoneType"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "17"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "38"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "30"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "47"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "41"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "26"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "left",
+            "name": "left",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n6"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "n3"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "parent",
+            "name": "parent",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n1"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n6"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "n4"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n4"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n1"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "right",
+            "name": "right",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "n7"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n5"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "n4"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "root",
+            "name": "root",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "n1"
+                ],
+                "types": [
+                  "RBTree",
+                  "RBNode"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "str",
+            "types": [
+              "str",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "\"black\"",
+                "type": "str",
+                "label": "black"
+              },
+              {
+                "id": "\"red\"",
+                "type": "str",
+                "label": "red"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "26",
+                "type": "int",
+                "label": "26"
+              },
+              {
+                "id": "17",
+                "type": "int",
+                "label": "17"
+              },
+              {
+                "id": "41",
+                "type": "int",
+                "label": "41"
+              },
+              {
+                "id": "30",
+                "type": "int",
+                "label": "30"
+              },
+              {
+                "id": "38",
+                "type": "int",
+                "label": "38"
+              },
+              {
+                "id": "47",
+                "type": "int",
+                "label": "47"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "NoneType",
+            "types": [
+              "NoneType",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "None",
+                "type": "NoneType",
+                "label": "None"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "RBNode",
+            "types": [
+              "RBNode",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n2",
+                "type": "RBNode",
+                "label": "RBNode2"
+              },
+              {
+                "id": "n3",
+                "type": "RBNode",
+                "label": "RBNode1"
+              },
+              {
+                "id": "n7",
+                "type": "RBNode",
+                "label": "RBNode5"
+              },
+              {
+                "id": "n6",
+                "type": "RBNode",
+                "label": "RBNode4"
+              },
+              {
+                "id": "n5",
+                "type": "RBNode",
+                "label": "RBNode6"
+              },
+              {
+                "id": "n4",
+                "type": "RBNode",
+                "label": "RBNode3"
+              },
+              {
+                "id": "n1",
+                "type": "RBNode",
+                "label": "RBNode0"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "RBTree",
+            "types": [
+              "RBTree",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "RBTree",
+                "label": "snap"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 6,
+      "label": "insert(35)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "\"black\"",
+            "type": "str",
+            "label": "black"
+          },
+          {
+            "id": "26",
+            "type": "int",
+            "label": "26"
+          },
+          {
+            "id": "17",
+            "type": "int",
+            "label": "17"
+          },
+          {
+            "id": "None",
+            "type": "NoneType",
+            "label": "None"
+          },
+          {
+            "id": "n2",
+            "type": "RBNode",
+            "label": "RBNode2"
+          },
+          {
+            "id": "n3",
+            "type": "RBNode",
+            "label": "RBNode1"
+          },
+          {
+            "id": "\"red\"",
+            "type": "str",
+            "label": "red"
+          },
+          {
+            "id": "41",
+            "type": "int",
+            "label": "41"
+          },
+          {
+            "id": "35",
+            "type": "int",
+            "label": "35"
+          },
+          {
+            "id": "30",
+            "type": "int",
+            "label": "30"
+          },
+          {
+            "id": "n6",
+            "type": "RBNode",
+            "label": "RBNode5"
+          },
+          {
+            "id": "38",
+            "type": "int",
+            "label": "38"
+          },
+          {
+            "id": "n7",
+            "type": "RBNode",
+            "label": "RBNode6"
+          },
+          {
+            "id": "n8",
+            "type": "RBNode",
+            "label": "RBNode4"
+          },
+          {
+            "id": "47",
+            "type": "int",
+            "label": "47"
+          },
+          {
+            "id": "n5",
+            "type": "RBNode",
+            "label": "RBNode7"
+          },
+          {
+            "id": "n4",
+            "type": "RBNode",
+            "label": "RBNode3"
+          },
+          {
+            "id": "n1",
+            "type": "RBNode",
+            "label": "RBNode0"
+          },
+          {
+            "id": "n0",
+            "type": "RBTree",
+            "label": "snap"
+          }
+        ],
+        "relations": [
+          {
+            "id": "color",
+            "name": "color",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "\"red\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "\"red\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n8",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "\"red\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "key",
+            "name": "key",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "None"
+                ],
+                "types": [
+                  "RBNode",
+                  "NoneType"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "17"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "30"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "38"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n8",
+                  "35"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "47"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "41"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "26"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "left",
+            "name": "left",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n8",
+                  "n6"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n8"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "n3"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "parent",
+            "name": "parent",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n1"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "n8"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n8"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n8",
+                  "n4"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n4"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n1"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "right",
+            "name": "right",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n8",
+                  "n7"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n5"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "n4"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "root",
+            "name": "root",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "n1"
+                ],
+                "types": [
+                  "RBTree",
+                  "RBNode"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "str",
+            "types": [
+              "str",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "\"black\"",
+                "type": "str",
+                "label": "black"
+              },
+              {
+                "id": "\"red\"",
+                "type": "str",
+                "label": "red"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "26",
+                "type": "int",
+                "label": "26"
+              },
+              {
+                "id": "17",
+                "type": "int",
+                "label": "17"
+              },
+              {
+                "id": "41",
+                "type": "int",
+                "label": "41"
+              },
+              {
+                "id": "35",
+                "type": "int",
+                "label": "35"
+              },
+              {
+                "id": "30",
+                "type": "int",
+                "label": "30"
+              },
+              {
+                "id": "38",
+                "type": "int",
+                "label": "38"
+              },
+              {
+                "id": "47",
+                "type": "int",
+                "label": "47"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "NoneType",
+            "types": [
+              "NoneType",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "None",
+                "type": "NoneType",
+                "label": "None"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "RBNode",
+            "types": [
+              "RBNode",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n2",
+                "type": "RBNode",
+                "label": "RBNode2"
+              },
+              {
+                "id": "n3",
+                "type": "RBNode",
+                "label": "RBNode1"
+              },
+              {
+                "id": "n6",
+                "type": "RBNode",
+                "label": "RBNode5"
+              },
+              {
+                "id": "n7",
+                "type": "RBNode",
+                "label": "RBNode6"
+              },
+              {
+                "id": "n8",
+                "type": "RBNode",
+                "label": "RBNode4"
+              },
+              {
+                "id": "n5",
+                "type": "RBNode",
+                "label": "RBNode7"
+              },
+              {
+                "id": "n4",
+                "type": "RBNode",
+                "label": "RBNode3"
+              },
+              {
+                "id": "n1",
+                "type": "RBNode",
+                "label": "RBNode0"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "RBTree",
+            "types": [
+              "RBTree",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "RBTree",
+                "label": "snap"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 7,
+      "label": "delete(26)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "\"black\"",
+            "type": "str",
+            "label": "black"
+          },
+          {
+            "id": "30",
+            "type": "int",
+            "label": "30"
+          },
+          {
+            "id": "17",
+            "type": "int",
+            "label": "17"
+          },
+          {
+            "id": "None",
+            "type": "NoneType",
+            "label": "None"
+          },
+          {
+            "id": "35",
+            "type": "int",
+            "label": "35"
+          },
+          {
+            "id": "\"red\"",
+            "type": "str",
+            "label": "red"
+          },
+          {
+            "id": "41",
+            "type": "int",
+            "label": "41"
+          },
+          {
+            "id": "47",
+            "type": "int",
+            "label": "47"
+          },
+          {
+            "id": "n5",
+            "type": "RBNode",
+            "label": "RBNode5"
+          },
+          {
+            "id": "n4",
+            "type": "RBNode",
+            "label": "RBNode4"
+          },
+          {
+            "id": "38",
+            "type": "int",
+            "label": "38"
+          },
+          {
+            "id": "n7",
+            "type": "RBNode",
+            "label": "RBNode6"
+          },
+          {
+            "id": "n8",
+            "type": "RBNode",
+            "label": "RBNode3"
+          },
+          {
+            "id": "n2",
+            "type": "RBNode",
+            "label": "RBNode2"
+          },
+          {
+            "id": "n3",
+            "type": "RBNode",
+            "label": "RBNode1"
+          },
+          {
+            "id": "n6",
+            "type": "RBNode",
+            "label": "RBNode0"
+          },
+          {
+            "id": "n0",
+            "type": "RBTree",
+            "label": "snap"
+          }
+        ],
+        "relations": [
+          {
+            "id": "color",
+            "name": "color",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n5",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "\"red\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "\"red\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n8",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "key",
+            "name": "key",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n5",
+                  "47"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "41"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "38"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n8",
+                  "35"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "None"
+                ],
+                "types": [
+                  "RBNode",
+                  "NoneType"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "17"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "30"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "left",
+            "name": "left",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n5",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n8"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n8",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "n3"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "parent",
+            "name": "parent",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n5",
+                  "n4"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n6"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n8"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n8",
+                  "n4"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "n8"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n6"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "right",
+            "name": "right",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n5",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n5"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n8",
+                  "n7"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "n4"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "root",
+            "name": "root",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "n6"
+                ],
+                "types": [
+                  "RBTree",
+                  "RBNode"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "str",
+            "types": [
+              "str",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "\"black\"",
+                "type": "str",
+                "label": "black"
+              },
+              {
+                "id": "\"red\"",
+                "type": "str",
+                "label": "red"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "30",
+                "type": "int",
+                "label": "30"
+              },
+              {
+                "id": "17",
+                "type": "int",
+                "label": "17"
+              },
+              {
+                "id": "35",
+                "type": "int",
+                "label": "35"
+              },
+              {
+                "id": "41",
+                "type": "int",
+                "label": "41"
+              },
+              {
+                "id": "47",
+                "type": "int",
+                "label": "47"
+              },
+              {
+                "id": "38",
+                "type": "int",
+                "label": "38"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "NoneType",
+            "types": [
+              "NoneType",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "None",
+                "type": "NoneType",
+                "label": "None"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "RBNode",
+            "types": [
+              "RBNode",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n5",
+                "type": "RBNode",
+                "label": "RBNode5"
+              },
+              {
+                "id": "n4",
+                "type": "RBNode",
+                "label": "RBNode4"
+              },
+              {
+                "id": "n7",
+                "type": "RBNode",
+                "label": "RBNode6"
+              },
+              {
+                "id": "n8",
+                "type": "RBNode",
+                "label": "RBNode3"
+              },
+              {
+                "id": "n2",
+                "type": "RBNode",
+                "label": "RBNode2"
+              },
+              {
+                "id": "n3",
+                "type": "RBNode",
+                "label": "RBNode1"
+              },
+              {
+                "id": "n6",
+                "type": "RBNode",
+                "label": "RBNode0"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "RBTree",
+            "types": [
+              "RBTree",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "RBTree",
+                "label": "snap"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 8,
+      "label": "delete(41)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "\"black\"",
+            "type": "str",
+            "label": "black"
+          },
+          {
+            "id": "30",
+            "type": "int",
+            "label": "30"
+          },
+          {
+            "id": "17",
+            "type": "int",
+            "label": "17"
+          },
+          {
+            "id": "None",
+            "type": "NoneType",
+            "label": "None"
+          },
+          {
+            "id": "47",
+            "type": "int",
+            "label": "47"
+          },
+          {
+            "id": "\"red\"",
+            "type": "str",
+            "label": "red"
+          },
+          {
+            "id": "38",
+            "type": "int",
+            "label": "38"
+          },
+          {
+            "id": "35",
+            "type": "int",
+            "label": "35"
+          },
+          {
+            "id": "n8",
+            "type": "RBNode",
+            "label": "RBNode5"
+          },
+          {
+            "id": "n7",
+            "type": "RBNode",
+            "label": "RBNode4"
+          },
+          {
+            "id": "n5",
+            "type": "RBNode",
+            "label": "RBNode3"
+          },
+          {
+            "id": "n2",
+            "type": "RBNode",
+            "label": "RBNode2"
+          },
+          {
+            "id": "n3",
+            "type": "RBNode",
+            "label": "RBNode1"
+          },
+          {
+            "id": "n6",
+            "type": "RBNode",
+            "label": "RBNode0"
+          },
+          {
+            "id": "n0",
+            "type": "RBTree",
+            "label": "snap"
+          }
+        ],
+        "relations": [
+          {
+            "id": "color",
+            "name": "color",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n8",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "\"red\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "\"black\""
+                ],
+                "types": [
+                  "RBNode",
+                  "str"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "key",
+            "name": "key",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n8",
+                  "35"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "38"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "47"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "None"
+                ],
+                "types": [
+                  "RBNode",
+                  "NoneType"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "17"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "30"
+                ],
+                "types": [
+                  "RBNode",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "left",
+            "name": "left",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n8",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n8"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "n3"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "parent",
+            "name": "parent",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n8",
+                  "n7"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n6"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n7"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "n5"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n6"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "right",
+            "name": "right",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n8",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n5"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n2"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "n7"
+                ],
+                "types": [
+                  "RBNode",
+                  "RBNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "root",
+            "name": "root",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "n6"
+                ],
+                "types": [
+                  "RBTree",
+                  "RBNode"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "str",
+            "types": [
+              "str",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "\"black\"",
+                "type": "str",
+                "label": "black"
+              },
+              {
+                "id": "\"red\"",
+                "type": "str",
+                "label": "red"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "30",
+                "type": "int",
+                "label": "30"
+              },
+              {
+                "id": "17",
+                "type": "int",
+                "label": "17"
+              },
+              {
+                "id": "47",
+                "type": "int",
+                "label": "47"
+              },
+              {
+                "id": "38",
+                "type": "int",
+                "label": "38"
+              },
+              {
+                "id": "35",
+                "type": "int",
+                "label": "35"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "NoneType",
+            "types": [
+              "NoneType",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "None",
+                "type": "NoneType",
+                "label": "None"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "RBNode",
+            "types": [
+              "RBNode",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n8",
+                "type": "RBNode",
+                "label": "RBNode5"
+              },
+              {
+                "id": "n7",
+                "type": "RBNode",
+                "label": "RBNode4"
+              },
+              {
+                "id": "n5",
+                "type": "RBNode",
+                "label": "RBNode3"
+              },
+              {
+                "id": "n2",
+                "type": "RBNode",
+                "label": "RBNode2"
+              },
+              {
+                "id": "n3",
+                "type": "RBNode",
+                "label": "RBNode1"
+              },
+              {
+                "id": "n6",
+                "type": "RBNode",
+                "label": "RBNode0"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "RBTree",
+            "types": [
+              "RBTree",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "RBTree",
+                "label": "snap"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    }
+  ]
+}

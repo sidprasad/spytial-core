@@ -1,0 +1,11 @@
+[project]
+name = "spytial-sequence-analysis"
+version = "0.1.0"
+description = "Trace generator for the spytial-core sequencing-policy analysis harness."
+requires-python = ">=3.9"
+dependencies = [
+  "spytial-diagramming>=1.1.0",
+]
+
+[tool.setuptools]
+packages = ["traces", "traces.algorithms"]
