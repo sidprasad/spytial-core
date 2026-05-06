@@ -65,9 +65,6 @@ edge-input-demo.html
 # Analysis-harness runtime output (unpublished tooling under analysis/)
 analysis/results/
 analysis/.venv/
-analysis/.ipynb_checkpoints/
-# Python caches anywhere under analysis/ (traces/, scripts/, runner/, ...)
+# Python caches under analysis/ (from derived_metrics.py / bootstrap_cis.py)
 analysis/**/__pycache__/
 **/*.pyc
-# External-repo clones used as input fixtures (re-clonable from upstream)
-analysis/traces/uml_evolution/cache/
