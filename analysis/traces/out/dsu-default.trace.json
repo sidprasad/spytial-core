@@ -1,0 +1,6398 @@
+{
+  "algorithm": "dsu-makeset+union",
+  "spec": "constraints:\n- orientation:\n    directions:\n    - above\n    selector: (parent - iden) & (DSUNode->DSUNode)\n- orientation:\n    directions:\n    - above\n    selector: (parent - iden) & (DSUNode->DSUNode)\n- orientation:\n    directions:\n    - above\n    selector: (parent - iden) & (DSUNode->DSUNode)\n- orientation:\n    directions:\n    - above\n    selector: (parent - iden) & (DSUNode->DSUNode)\n- orientation:\n    directions:\n    - above\n    selector: (parent - iden) & (DSUNode->DSUNode)\n- orientation:\n    directions:\n    - above\n    selector: (parent - iden) & (DSUNode->DSUNode)\n- orientation:\n    directions:\n    - above\n    selector: (parent - iden) & (DSUNode->DSUNode)\n- orientation:\n    directions:\n    - above\n    selector: (parent - iden) & (DSUNode->DSUNode)\n- orientation:\n    directions:\n    - above\n    selector: (parent - iden) & (DSUNode->DSUNode)\n- orientation:\n    directions:\n    - above\n    selector: (parent - iden) & (DSUNode->DSUNode)\n- orientation:\n    directions:\n    - above\n    selector: (parent - iden) & (DSUNode->DSUNode)\n- orientation:\n    directions:\n    - above\n    selector: (parent - iden) & (DSUNode->DSUNode)\n- orientation:\n    directions:\n    - above\n    selector: (parent - iden) & (DSUNode->DSUNode)\ndirectives:\n- hideAtom:\n    selector: int + str\n- attribute:\n    field: rank\n- attribute:\n    field: key\n- hideAtom:\n    selector: int + str\n- attribute:\n    field: rank\n- attribute:\n    field: key\n- hideAtom:\n    selector: int + str\n- attribute:\n    field: rank\n- attribute:\n    field: key\n- hideAtom:\n    selector: int + str\n- attribute:\n    field: rank\n- attribute:\n    field: key\n- hideAtom:\n    selector: int + str\n- attribute:\n    field: rank\n- attribute:\n    field: key\n- hideAtom:\n    selector: int + str\n- attribute:\n    field: rank\n- attribute:\n    field: key\n- hideAtom:\n    selector: int + str\n- attribute:\n    field: rank\n- attribute:\n    field: key\n- hideAtom:\n    selector: int + str\n- attribute:\n    field: rank\n- attribute:\n    field: key\n- hideAtom:\n    selector: int + str\n- attribute:\n    field: rank\n- attribute:\n    field: key\n- hideAtom:\n    selector: int + str\n- attribute:\n    field: rank\n- attribute:\n    field: key\n- hideAtom:\n    selector: int + str\n- attribute:\n    field: rank\n- attribute:\n    field: key\n- hideAtom:\n    selector: int + str\n- attribute:\n    field: rank\n- attribute:\n    field: key\n- hideAtom:\n    selector: int + str\n- attribute:\n    field: rank\n- attribute:\n    field: key\n",
+  "frames": [
+    {
+      "step": 0,
+      "label": "MAKE-SET(f)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "\"f\"",
+            "type": "str",
+            "label": "f"
+          },
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "n1",
+            "type": "DSUNode",
+            "label": "DSUNode0"
+          },
+          {
+            "id": "n0",
+            "type": "list",
+            "label": "list[1]"
+          }
+        ],
+        "relations": [
+          {
+            "id": "key",
+            "name": "key",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "\"f\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "parent",
+            "name": "parent",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "n1"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "rank",
+            "name": "rank",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "0",
+                  "n1"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "str",
+            "types": [
+              "str",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "\"f\"",
+                "type": "str",
+                "label": "f"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "DSUNode",
+            "types": [
+              "DSUNode",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n1",
+                "type": "DSUNode",
+                "label": "DSUNode0"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "list",
+                "label": "list[1]"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 1,
+      "label": "MAKE-SET(d)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "\"f\"",
+            "type": "str",
+            "label": "f"
+          },
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "n1",
+            "type": "DSUNode",
+            "label": "DSUNode0"
+          },
+          {
+            "id": "\"d\"",
+            "type": "str",
+            "label": "d"
+          },
+          {
+            "id": "n2",
+            "type": "DSUNode",
+            "label": "DSUNode1"
+          },
+          {
+            "id": "n0",
+            "type": "list",
+            "label": "list[2]"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          }
+        ],
+        "relations": [
+          {
+            "id": "key",
+            "name": "key",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "\"f\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "\"d\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "parent",
+            "name": "parent",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "n1"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "rank",
+            "name": "rank",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "0",
+                  "n1"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "1",
+                  "n2"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "str",
+            "types": [
+              "str",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "\"f\"",
+                "type": "str",
+                "label": "f"
+              },
+              {
+                "id": "\"d\"",
+                "type": "str",
+                "label": "d"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "DSUNode",
+            "types": [
+              "DSUNode",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n1",
+                "type": "DSUNode",
+                "label": "DSUNode0"
+              },
+              {
+                "id": "n2",
+                "type": "DSUNode",
+                "label": "DSUNode1"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "list",
+                "label": "list[2]"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 2,
+      "label": "MAKE-SET(g)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "\"f\"",
+            "type": "str",
+            "label": "f"
+          },
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "n1",
+            "type": "DSUNode",
+            "label": "DSUNode0"
+          },
+          {
+            "id": "\"d\"",
+            "type": "str",
+            "label": "d"
+          },
+          {
+            "id": "n2",
+            "type": "DSUNode",
+            "label": "DSUNode1"
+          },
+          {
+            "id": "\"g\"",
+            "type": "str",
+            "label": "g"
+          },
+          {
+            "id": "n3",
+            "type": "DSUNode",
+            "label": "DSUNode2"
+          },
+          {
+            "id": "n0",
+            "type": "list",
+            "label": "list[3]"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          },
+          {
+            "id": "2",
+            "type": "int",
+            "label": "2"
+          }
+        ],
+        "relations": [
+          {
+            "id": "key",
+            "name": "key",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "\"f\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "\"d\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "\"g\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "parent",
+            "name": "parent",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "n1"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n3"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "rank",
+            "name": "rank",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "0",
+                  "n1"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "1",
+                  "n2"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "2",
+                  "n3"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "str",
+            "types": [
+              "str",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "\"f\"",
+                "type": "str",
+                "label": "f"
+              },
+              {
+                "id": "\"d\"",
+                "type": "str",
+                "label": "d"
+              },
+              {
+                "id": "\"g\"",
+                "type": "str",
+                "label": "g"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              },
+              {
+                "id": "2",
+                "type": "int",
+                "label": "2"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "DSUNode",
+            "types": [
+              "DSUNode",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n1",
+                "type": "DSUNode",
+                "label": "DSUNode0"
+              },
+              {
+                "id": "n2",
+                "type": "DSUNode",
+                "label": "DSUNode1"
+              },
+              {
+                "id": "n3",
+                "type": "DSUNode",
+                "label": "DSUNode2"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "list",
+                "label": "list[3]"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 3,
+      "label": "MAKE-SET(b)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "\"f\"",
+            "type": "str",
+            "label": "f"
+          },
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "n1",
+            "type": "DSUNode",
+            "label": "DSUNode0"
+          },
+          {
+            "id": "\"d\"",
+            "type": "str",
+            "label": "d"
+          },
+          {
+            "id": "n2",
+            "type": "DSUNode",
+            "label": "DSUNode1"
+          },
+          {
+            "id": "\"g\"",
+            "type": "str",
+            "label": "g"
+          },
+          {
+            "id": "n3",
+            "type": "DSUNode",
+            "label": "DSUNode2"
+          },
+          {
+            "id": "\"b\"",
+            "type": "str",
+            "label": "b"
+          },
+          {
+            "id": "n4",
+            "type": "DSUNode",
+            "label": "DSUNode3"
+          },
+          {
+            "id": "n0",
+            "type": "list",
+            "label": "list[4]"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          },
+          {
+            "id": "2",
+            "type": "int",
+            "label": "2"
+          },
+          {
+            "id": "3",
+            "type": "int",
+            "label": "3"
+          }
+        ],
+        "relations": [
+          {
+            "id": "key",
+            "name": "key",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "\"f\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "\"d\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "\"g\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "\"b\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "parent",
+            "name": "parent",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "n1"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n3"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n4"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "rank",
+            "name": "rank",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "0",
+                  "n1"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "1",
+                  "n2"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "2",
+                  "n3"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "3",
+                  "n4"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "str",
+            "types": [
+              "str",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "\"f\"",
+                "type": "str",
+                "label": "f"
+              },
+              {
+                "id": "\"d\"",
+                "type": "str",
+                "label": "d"
+              },
+              {
+                "id": "\"g\"",
+                "type": "str",
+                "label": "g"
+              },
+              {
+                "id": "\"b\"",
+                "type": "str",
+                "label": "b"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              },
+              {
+                "id": "2",
+                "type": "int",
+                "label": "2"
+              },
+              {
+                "id": "3",
+                "type": "int",
+                "label": "3"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "DSUNode",
+            "types": [
+              "DSUNode",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n1",
+                "type": "DSUNode",
+                "label": "DSUNode0"
+              },
+              {
+                "id": "n2",
+                "type": "DSUNode",
+                "label": "DSUNode1"
+              },
+              {
+                "id": "n3",
+                "type": "DSUNode",
+                "label": "DSUNode2"
+              },
+              {
+                "id": "n4",
+                "type": "DSUNode",
+                "label": "DSUNode3"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "list",
+                "label": "list[4]"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 4,
+      "label": "MAKE-SET(h)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "\"f\"",
+            "type": "str",
+            "label": "f"
+          },
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "n1",
+            "type": "DSUNode",
+            "label": "DSUNode0"
+          },
+          {
+            "id": "\"d\"",
+            "type": "str",
+            "label": "d"
+          },
+          {
+            "id": "n2",
+            "type": "DSUNode",
+            "label": "DSUNode1"
+          },
+          {
+            "id": "\"g\"",
+            "type": "str",
+            "label": "g"
+          },
+          {
+            "id": "n3",
+            "type": "DSUNode",
+            "label": "DSUNode2"
+          },
+          {
+            "id": "\"b\"",
+            "type": "str",
+            "label": "b"
+          },
+          {
+            "id": "n4",
+            "type": "DSUNode",
+            "label": "DSUNode3"
+          },
+          {
+            "id": "\"h\"",
+            "type": "str",
+            "label": "h"
+          },
+          {
+            "id": "n5",
+            "type": "DSUNode",
+            "label": "DSUNode4"
+          },
+          {
+            "id": "n0",
+            "type": "list",
+            "label": "list[5]"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          },
+          {
+            "id": "2",
+            "type": "int",
+            "label": "2"
+          },
+          {
+            "id": "3",
+            "type": "int",
+            "label": "3"
+          },
+          {
+            "id": "4",
+            "type": "int",
+            "label": "4"
+          }
+        ],
+        "relations": [
+          {
+            "id": "key",
+            "name": "key",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "\"f\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "\"d\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "\"g\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "\"b\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "\"h\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "parent",
+            "name": "parent",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "n1"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n3"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n4"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n5"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "rank",
+            "name": "rank",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "0",
+                  "n1"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "1",
+                  "n2"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "2",
+                  "n3"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "3",
+                  "n4"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "4",
+                  "n5"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "str",
+            "types": [
+              "str",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "\"f\"",
+                "type": "str",
+                "label": "f"
+              },
+              {
+                "id": "\"d\"",
+                "type": "str",
+                "label": "d"
+              },
+              {
+                "id": "\"g\"",
+                "type": "str",
+                "label": "g"
+              },
+              {
+                "id": "\"b\"",
+                "type": "str",
+                "label": "b"
+              },
+              {
+                "id": "\"h\"",
+                "type": "str",
+                "label": "h"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              },
+              {
+                "id": "2",
+                "type": "int",
+                "label": "2"
+              },
+              {
+                "id": "3",
+                "type": "int",
+                "label": "3"
+              },
+              {
+                "id": "4",
+                "type": "int",
+                "label": "4"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "DSUNode",
+            "types": [
+              "DSUNode",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n1",
+                "type": "DSUNode",
+                "label": "DSUNode0"
+              },
+              {
+                "id": "n2",
+                "type": "DSUNode",
+                "label": "DSUNode1"
+              },
+              {
+                "id": "n3",
+                "type": "DSUNode",
+                "label": "DSUNode2"
+              },
+              {
+                "id": "n4",
+                "type": "DSUNode",
+                "label": "DSUNode3"
+              },
+              {
+                "id": "n5",
+                "type": "DSUNode",
+                "label": "DSUNode4"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "list",
+                "label": "list[5]"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 5,
+      "label": "MAKE-SET(c)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "\"f\"",
+            "type": "str",
+            "label": "f"
+          },
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "n1",
+            "type": "DSUNode",
+            "label": "DSUNode0"
+          },
+          {
+            "id": "\"d\"",
+            "type": "str",
+            "label": "d"
+          },
+          {
+            "id": "n2",
+            "type": "DSUNode",
+            "label": "DSUNode1"
+          },
+          {
+            "id": "\"g\"",
+            "type": "str",
+            "label": "g"
+          },
+          {
+            "id": "n3",
+            "type": "DSUNode",
+            "label": "DSUNode2"
+          },
+          {
+            "id": "\"b\"",
+            "type": "str",
+            "label": "b"
+          },
+          {
+            "id": "n4",
+            "type": "DSUNode",
+            "label": "DSUNode3"
+          },
+          {
+            "id": "\"h\"",
+            "type": "str",
+            "label": "h"
+          },
+          {
+            "id": "n5",
+            "type": "DSUNode",
+            "label": "DSUNode4"
+          },
+          {
+            "id": "\"c\"",
+            "type": "str",
+            "label": "c"
+          },
+          {
+            "id": "n6",
+            "type": "DSUNode",
+            "label": "DSUNode5"
+          },
+          {
+            "id": "n0",
+            "type": "list",
+            "label": "list[6]"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          },
+          {
+            "id": "2",
+            "type": "int",
+            "label": "2"
+          },
+          {
+            "id": "3",
+            "type": "int",
+            "label": "3"
+          },
+          {
+            "id": "4",
+            "type": "int",
+            "label": "4"
+          },
+          {
+            "id": "5",
+            "type": "int",
+            "label": "5"
+          }
+        ],
+        "relations": [
+          {
+            "id": "key",
+            "name": "key",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "\"f\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "\"d\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "\"g\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "\"b\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "\"h\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "\"c\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "parent",
+            "name": "parent",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "n1"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n3"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n4"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n5"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "n6"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "rank",
+            "name": "rank",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "0",
+                  "n1"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "1",
+                  "n2"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "2",
+                  "n3"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "3",
+                  "n4"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "4",
+                  "n5"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "5",
+                  "n6"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "str",
+            "types": [
+              "str",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "\"f\"",
+                "type": "str",
+                "label": "f"
+              },
+              {
+                "id": "\"d\"",
+                "type": "str",
+                "label": "d"
+              },
+              {
+                "id": "\"g\"",
+                "type": "str",
+                "label": "g"
+              },
+              {
+                "id": "\"b\"",
+                "type": "str",
+                "label": "b"
+              },
+              {
+                "id": "\"h\"",
+                "type": "str",
+                "label": "h"
+              },
+              {
+                "id": "\"c\"",
+                "type": "str",
+                "label": "c"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              },
+              {
+                "id": "2",
+                "type": "int",
+                "label": "2"
+              },
+              {
+                "id": "3",
+                "type": "int",
+                "label": "3"
+              },
+              {
+                "id": "4",
+                "type": "int",
+                "label": "4"
+              },
+              {
+                "id": "5",
+                "type": "int",
+                "label": "5"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "DSUNode",
+            "types": [
+              "DSUNode",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n1",
+                "type": "DSUNode",
+                "label": "DSUNode0"
+              },
+              {
+                "id": "n2",
+                "type": "DSUNode",
+                "label": "DSUNode1"
+              },
+              {
+                "id": "n3",
+                "type": "DSUNode",
+                "label": "DSUNode2"
+              },
+              {
+                "id": "n4",
+                "type": "DSUNode",
+                "label": "DSUNode3"
+              },
+              {
+                "id": "n5",
+                "type": "DSUNode",
+                "label": "DSUNode4"
+              },
+              {
+                "id": "n6",
+                "type": "DSUNode",
+                "label": "DSUNode5"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "list",
+                "label": "list[6]"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 6,
+      "label": "MAKE-SET(e)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "\"f\"",
+            "type": "str",
+            "label": "f"
+          },
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "n1",
+            "type": "DSUNode",
+            "label": "DSUNode0"
+          },
+          {
+            "id": "\"d\"",
+            "type": "str",
+            "label": "d"
+          },
+          {
+            "id": "n2",
+            "type": "DSUNode",
+            "label": "DSUNode1"
+          },
+          {
+            "id": "\"g\"",
+            "type": "str",
+            "label": "g"
+          },
+          {
+            "id": "n3",
+            "type": "DSUNode",
+            "label": "DSUNode2"
+          },
+          {
+            "id": "\"b\"",
+            "type": "str",
+            "label": "b"
+          },
+          {
+            "id": "n4",
+            "type": "DSUNode",
+            "label": "DSUNode3"
+          },
+          {
+            "id": "\"h\"",
+            "type": "str",
+            "label": "h"
+          },
+          {
+            "id": "n5",
+            "type": "DSUNode",
+            "label": "DSUNode4"
+          },
+          {
+            "id": "\"c\"",
+            "type": "str",
+            "label": "c"
+          },
+          {
+            "id": "n6",
+            "type": "DSUNode",
+            "label": "DSUNode5"
+          },
+          {
+            "id": "\"e\"",
+            "type": "str",
+            "label": "e"
+          },
+          {
+            "id": "n7",
+            "type": "DSUNode",
+            "label": "DSUNode6"
+          },
+          {
+            "id": "n0",
+            "type": "list",
+            "label": "list[7]"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          },
+          {
+            "id": "2",
+            "type": "int",
+            "label": "2"
+          },
+          {
+            "id": "3",
+            "type": "int",
+            "label": "3"
+          },
+          {
+            "id": "4",
+            "type": "int",
+            "label": "4"
+          },
+          {
+            "id": "5",
+            "type": "int",
+            "label": "5"
+          },
+          {
+            "id": "6",
+            "type": "int",
+            "label": "6"
+          }
+        ],
+        "relations": [
+          {
+            "id": "key",
+            "name": "key",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "\"f\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "\"d\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "\"g\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "\"b\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "\"h\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "\"c\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "\"e\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "parent",
+            "name": "parent",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "n1"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n3"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n4"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n5"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "n6"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n7"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "rank",
+            "name": "rank",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "0",
+                  "n1"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "1",
+                  "n2"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "2",
+                  "n3"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "3",
+                  "n4"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "4",
+                  "n5"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "5",
+                  "n6"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "6",
+                  "n7"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "str",
+            "types": [
+              "str",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "\"f\"",
+                "type": "str",
+                "label": "f"
+              },
+              {
+                "id": "\"d\"",
+                "type": "str",
+                "label": "d"
+              },
+              {
+                "id": "\"g\"",
+                "type": "str",
+                "label": "g"
+              },
+              {
+                "id": "\"b\"",
+                "type": "str",
+                "label": "b"
+              },
+              {
+                "id": "\"h\"",
+                "type": "str",
+                "label": "h"
+              },
+              {
+                "id": "\"c\"",
+                "type": "str",
+                "label": "c"
+              },
+              {
+                "id": "\"e\"",
+                "type": "str",
+                "label": "e"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              },
+              {
+                "id": "2",
+                "type": "int",
+                "label": "2"
+              },
+              {
+                "id": "3",
+                "type": "int",
+                "label": "3"
+              },
+              {
+                "id": "4",
+                "type": "int",
+                "label": "4"
+              },
+              {
+                "id": "5",
+                "type": "int",
+                "label": "5"
+              },
+              {
+                "id": "6",
+                "type": "int",
+                "label": "6"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "DSUNode",
+            "types": [
+              "DSUNode",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n1",
+                "type": "DSUNode",
+                "label": "DSUNode0"
+              },
+              {
+                "id": "n2",
+                "type": "DSUNode",
+                "label": "DSUNode1"
+              },
+              {
+                "id": "n3",
+                "type": "DSUNode",
+                "label": "DSUNode2"
+              },
+              {
+                "id": "n4",
+                "type": "DSUNode",
+                "label": "DSUNode3"
+              },
+              {
+                "id": "n5",
+                "type": "DSUNode",
+                "label": "DSUNode4"
+              },
+              {
+                "id": "n6",
+                "type": "DSUNode",
+                "label": "DSUNode5"
+              },
+              {
+                "id": "n7",
+                "type": "DSUNode",
+                "label": "DSUNode6"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "list",
+                "label": "list[7]"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 7,
+      "label": "UNION(h,b)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "\"f\"",
+            "type": "str",
+            "label": "f"
+          },
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "n1",
+            "type": "DSUNode",
+            "label": "DSUNode0"
+          },
+          {
+            "id": "\"d\"",
+            "type": "str",
+            "label": "d"
+          },
+          {
+            "id": "n2",
+            "type": "DSUNode",
+            "label": "DSUNode1"
+          },
+          {
+            "id": "\"g\"",
+            "type": "str",
+            "label": "g"
+          },
+          {
+            "id": "n3",
+            "type": "DSUNode",
+            "label": "DSUNode2"
+          },
+          {
+            "id": "\"b\"",
+            "type": "str",
+            "label": "b"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          },
+          {
+            "id": "n4",
+            "type": "DSUNode",
+            "label": "DSUNode3"
+          },
+          {
+            "id": "\"h\"",
+            "type": "str",
+            "label": "h"
+          },
+          {
+            "id": "n5",
+            "type": "DSUNode",
+            "label": "DSUNode4"
+          },
+          {
+            "id": "\"c\"",
+            "type": "str",
+            "label": "c"
+          },
+          {
+            "id": "n6",
+            "type": "DSUNode",
+            "label": "DSUNode5"
+          },
+          {
+            "id": "\"e\"",
+            "type": "str",
+            "label": "e"
+          },
+          {
+            "id": "n7",
+            "type": "DSUNode",
+            "label": "DSUNode6"
+          },
+          {
+            "id": "n0",
+            "type": "list",
+            "label": "list[7]"
+          },
+          {
+            "id": "2",
+            "type": "int",
+            "label": "2"
+          },
+          {
+            "id": "3",
+            "type": "int",
+            "label": "3"
+          },
+          {
+            "id": "4",
+            "type": "int",
+            "label": "4"
+          },
+          {
+            "id": "5",
+            "type": "int",
+            "label": "5"
+          },
+          {
+            "id": "6",
+            "type": "int",
+            "label": "6"
+          }
+        ],
+        "relations": [
+          {
+            "id": "key",
+            "name": "key",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "\"f\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "\"d\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "\"g\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "\"b\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "\"h\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "\"c\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "\"e\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "parent",
+            "name": "parent",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "n1"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n3"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n4"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n4"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "n6"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n7"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "rank",
+            "name": "rank",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "1"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "0",
+                  "n1"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "1",
+                  "n2"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "2",
+                  "n3"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "3",
+                  "n4"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "4",
+                  "n5"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "5",
+                  "n6"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "6",
+                  "n7"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "str",
+            "types": [
+              "str",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "\"f\"",
+                "type": "str",
+                "label": "f"
+              },
+              {
+                "id": "\"d\"",
+                "type": "str",
+                "label": "d"
+              },
+              {
+                "id": "\"g\"",
+                "type": "str",
+                "label": "g"
+              },
+              {
+                "id": "\"b\"",
+                "type": "str",
+                "label": "b"
+              },
+              {
+                "id": "\"h\"",
+                "type": "str",
+                "label": "h"
+              },
+              {
+                "id": "\"c\"",
+                "type": "str",
+                "label": "c"
+              },
+              {
+                "id": "\"e\"",
+                "type": "str",
+                "label": "e"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              },
+              {
+                "id": "2",
+                "type": "int",
+                "label": "2"
+              },
+              {
+                "id": "3",
+                "type": "int",
+                "label": "3"
+              },
+              {
+                "id": "4",
+                "type": "int",
+                "label": "4"
+              },
+              {
+                "id": "5",
+                "type": "int",
+                "label": "5"
+              },
+              {
+                "id": "6",
+                "type": "int",
+                "label": "6"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "DSUNode",
+            "types": [
+              "DSUNode",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n1",
+                "type": "DSUNode",
+                "label": "DSUNode0"
+              },
+              {
+                "id": "n2",
+                "type": "DSUNode",
+                "label": "DSUNode1"
+              },
+              {
+                "id": "n3",
+                "type": "DSUNode",
+                "label": "DSUNode2"
+              },
+              {
+                "id": "n4",
+                "type": "DSUNode",
+                "label": "DSUNode3"
+              },
+              {
+                "id": "n5",
+                "type": "DSUNode",
+                "label": "DSUNode4"
+              },
+              {
+                "id": "n6",
+                "type": "DSUNode",
+                "label": "DSUNode5"
+              },
+              {
+                "id": "n7",
+                "type": "DSUNode",
+                "label": "DSUNode6"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "list",
+                "label": "list[7]"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 8,
+      "label": "UNION(c,h)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "\"f\"",
+            "type": "str",
+            "label": "f"
+          },
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "n1",
+            "type": "DSUNode",
+            "label": "DSUNode0"
+          },
+          {
+            "id": "\"d\"",
+            "type": "str",
+            "label": "d"
+          },
+          {
+            "id": "n2",
+            "type": "DSUNode",
+            "label": "DSUNode1"
+          },
+          {
+            "id": "\"g\"",
+            "type": "str",
+            "label": "g"
+          },
+          {
+            "id": "n3",
+            "type": "DSUNode",
+            "label": "DSUNode2"
+          },
+          {
+            "id": "\"b\"",
+            "type": "str",
+            "label": "b"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          },
+          {
+            "id": "n4",
+            "type": "DSUNode",
+            "label": "DSUNode3"
+          },
+          {
+            "id": "\"h\"",
+            "type": "str",
+            "label": "h"
+          },
+          {
+            "id": "n5",
+            "type": "DSUNode",
+            "label": "DSUNode4"
+          },
+          {
+            "id": "\"c\"",
+            "type": "str",
+            "label": "c"
+          },
+          {
+            "id": "n6",
+            "type": "DSUNode",
+            "label": "DSUNode5"
+          },
+          {
+            "id": "\"e\"",
+            "type": "str",
+            "label": "e"
+          },
+          {
+            "id": "n7",
+            "type": "DSUNode",
+            "label": "DSUNode6"
+          },
+          {
+            "id": "n0",
+            "type": "list",
+            "label": "list[7]"
+          },
+          {
+            "id": "2",
+            "type": "int",
+            "label": "2"
+          },
+          {
+            "id": "3",
+            "type": "int",
+            "label": "3"
+          },
+          {
+            "id": "4",
+            "type": "int",
+            "label": "4"
+          },
+          {
+            "id": "5",
+            "type": "int",
+            "label": "5"
+          },
+          {
+            "id": "6",
+            "type": "int",
+            "label": "6"
+          }
+        ],
+        "relations": [
+          {
+            "id": "key",
+            "name": "key",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "\"f\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "\"d\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "\"g\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "\"b\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "\"h\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "\"c\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "\"e\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "parent",
+            "name": "parent",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "n1"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n3"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n4"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n4"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "n4"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n7"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "rank",
+            "name": "rank",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "1"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "0",
+                  "n1"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "1",
+                  "n2"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "2",
+                  "n3"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "3",
+                  "n4"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "4",
+                  "n5"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "5",
+                  "n6"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "6",
+                  "n7"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "str",
+            "types": [
+              "str",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "\"f\"",
+                "type": "str",
+                "label": "f"
+              },
+              {
+                "id": "\"d\"",
+                "type": "str",
+                "label": "d"
+              },
+              {
+                "id": "\"g\"",
+                "type": "str",
+                "label": "g"
+              },
+              {
+                "id": "\"b\"",
+                "type": "str",
+                "label": "b"
+              },
+              {
+                "id": "\"h\"",
+                "type": "str",
+                "label": "h"
+              },
+              {
+                "id": "\"c\"",
+                "type": "str",
+                "label": "c"
+              },
+              {
+                "id": "\"e\"",
+                "type": "str",
+                "label": "e"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              },
+              {
+                "id": "2",
+                "type": "int",
+                "label": "2"
+              },
+              {
+                "id": "3",
+                "type": "int",
+                "label": "3"
+              },
+              {
+                "id": "4",
+                "type": "int",
+                "label": "4"
+              },
+              {
+                "id": "5",
+                "type": "int",
+                "label": "5"
+              },
+              {
+                "id": "6",
+                "type": "int",
+                "label": "6"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "DSUNode",
+            "types": [
+              "DSUNode",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n1",
+                "type": "DSUNode",
+                "label": "DSUNode0"
+              },
+              {
+                "id": "n2",
+                "type": "DSUNode",
+                "label": "DSUNode1"
+              },
+              {
+                "id": "n3",
+                "type": "DSUNode",
+                "label": "DSUNode2"
+              },
+              {
+                "id": "n4",
+                "type": "DSUNode",
+                "label": "DSUNode3"
+              },
+              {
+                "id": "n5",
+                "type": "DSUNode",
+                "label": "DSUNode4"
+              },
+              {
+                "id": "n6",
+                "type": "DSUNode",
+                "label": "DSUNode5"
+              },
+              {
+                "id": "n7",
+                "type": "DSUNode",
+                "label": "DSUNode6"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "list",
+                "label": "list[7]"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 9,
+      "label": "UNION(c,e)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "\"f\"",
+            "type": "str",
+            "label": "f"
+          },
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "n1",
+            "type": "DSUNode",
+            "label": "DSUNode0"
+          },
+          {
+            "id": "\"d\"",
+            "type": "str",
+            "label": "d"
+          },
+          {
+            "id": "n2",
+            "type": "DSUNode",
+            "label": "DSUNode1"
+          },
+          {
+            "id": "\"g\"",
+            "type": "str",
+            "label": "g"
+          },
+          {
+            "id": "n3",
+            "type": "DSUNode",
+            "label": "DSUNode2"
+          },
+          {
+            "id": "\"b\"",
+            "type": "str",
+            "label": "b"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          },
+          {
+            "id": "n4",
+            "type": "DSUNode",
+            "label": "DSUNode3"
+          },
+          {
+            "id": "\"h\"",
+            "type": "str",
+            "label": "h"
+          },
+          {
+            "id": "n5",
+            "type": "DSUNode",
+            "label": "DSUNode4"
+          },
+          {
+            "id": "\"c\"",
+            "type": "str",
+            "label": "c"
+          },
+          {
+            "id": "n6",
+            "type": "DSUNode",
+            "label": "DSUNode5"
+          },
+          {
+            "id": "\"e\"",
+            "type": "str",
+            "label": "e"
+          },
+          {
+            "id": "n7",
+            "type": "DSUNode",
+            "label": "DSUNode6"
+          },
+          {
+            "id": "n0",
+            "type": "list",
+            "label": "list[7]"
+          },
+          {
+            "id": "2",
+            "type": "int",
+            "label": "2"
+          },
+          {
+            "id": "3",
+            "type": "int",
+            "label": "3"
+          },
+          {
+            "id": "4",
+            "type": "int",
+            "label": "4"
+          },
+          {
+            "id": "5",
+            "type": "int",
+            "label": "5"
+          },
+          {
+            "id": "6",
+            "type": "int",
+            "label": "6"
+          }
+        ],
+        "relations": [
+          {
+            "id": "key",
+            "name": "key",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "\"f\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "\"d\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "\"g\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "\"b\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "\"h\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "\"c\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "\"e\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "parent",
+            "name": "parent",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "n1"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "n2"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n3"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n4"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n4"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "n4"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n4"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "rank",
+            "name": "rank",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "1"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "0",
+                  "n1"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "1",
+                  "n2"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "2",
+                  "n3"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "3",
+                  "n4"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "4",
+                  "n5"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "5",
+                  "n6"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "6",
+                  "n7"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "str",
+            "types": [
+              "str",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "\"f\"",
+                "type": "str",
+                "label": "f"
+              },
+              {
+                "id": "\"d\"",
+                "type": "str",
+                "label": "d"
+              },
+              {
+                "id": "\"g\"",
+                "type": "str",
+                "label": "g"
+              },
+              {
+                "id": "\"b\"",
+                "type": "str",
+                "label": "b"
+              },
+              {
+                "id": "\"h\"",
+                "type": "str",
+                "label": "h"
+              },
+              {
+                "id": "\"c\"",
+                "type": "str",
+                "label": "c"
+              },
+              {
+                "id": "\"e\"",
+                "type": "str",
+                "label": "e"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              },
+              {
+                "id": "2",
+                "type": "int",
+                "label": "2"
+              },
+              {
+                "id": "3",
+                "type": "int",
+                "label": "3"
+              },
+              {
+                "id": "4",
+                "type": "int",
+                "label": "4"
+              },
+              {
+                "id": "5",
+                "type": "int",
+                "label": "5"
+              },
+              {
+                "id": "6",
+                "type": "int",
+                "label": "6"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "DSUNode",
+            "types": [
+              "DSUNode",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n1",
+                "type": "DSUNode",
+                "label": "DSUNode0"
+              },
+              {
+                "id": "n2",
+                "type": "DSUNode",
+                "label": "DSUNode1"
+              },
+              {
+                "id": "n3",
+                "type": "DSUNode",
+                "label": "DSUNode2"
+              },
+              {
+                "id": "n4",
+                "type": "DSUNode",
+                "label": "DSUNode3"
+              },
+              {
+                "id": "n5",
+                "type": "DSUNode",
+                "label": "DSUNode4"
+              },
+              {
+                "id": "n6",
+                "type": "DSUNode",
+                "label": "DSUNode5"
+              },
+              {
+                "id": "n7",
+                "type": "DSUNode",
+                "label": "DSUNode6"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "list",
+                "label": "list[7]"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 10,
+      "label": "UNION(d,g)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "\"f\"",
+            "type": "str",
+            "label": "f"
+          },
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "n1",
+            "type": "DSUNode",
+            "label": "DSUNode0"
+          },
+          {
+            "id": "\"d\"",
+            "type": "str",
+            "label": "d"
+          },
+          {
+            "id": "\"g\"",
+            "type": "str",
+            "label": "g"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          },
+          {
+            "id": "n3",
+            "type": "DSUNode",
+            "label": "DSUNode2"
+          },
+          {
+            "id": "n2",
+            "type": "DSUNode",
+            "label": "DSUNode1"
+          },
+          {
+            "id": "\"b\"",
+            "type": "str",
+            "label": "b"
+          },
+          {
+            "id": "n4",
+            "type": "DSUNode",
+            "label": "DSUNode3"
+          },
+          {
+            "id": "\"h\"",
+            "type": "str",
+            "label": "h"
+          },
+          {
+            "id": "n5",
+            "type": "DSUNode",
+            "label": "DSUNode4"
+          },
+          {
+            "id": "\"c\"",
+            "type": "str",
+            "label": "c"
+          },
+          {
+            "id": "n6",
+            "type": "DSUNode",
+            "label": "DSUNode5"
+          },
+          {
+            "id": "\"e\"",
+            "type": "str",
+            "label": "e"
+          },
+          {
+            "id": "n7",
+            "type": "DSUNode",
+            "label": "DSUNode6"
+          },
+          {
+            "id": "n0",
+            "type": "list",
+            "label": "list[7]"
+          },
+          {
+            "id": "2",
+            "type": "int",
+            "label": "2"
+          },
+          {
+            "id": "3",
+            "type": "int",
+            "label": "3"
+          },
+          {
+            "id": "4",
+            "type": "int",
+            "label": "4"
+          },
+          {
+            "id": "5",
+            "type": "int",
+            "label": "5"
+          },
+          {
+            "id": "6",
+            "type": "int",
+            "label": "6"
+          }
+        ],
+        "relations": [
+          {
+            "id": "key",
+            "name": "key",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "\"f\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "\"g\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "\"d\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "\"b\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "\"h\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "\"c\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "\"e\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "parent",
+            "name": "parent",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "n1"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n3"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "n3"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n4"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n4"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "n4"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n4"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "rank",
+            "name": "rank",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "1"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "1"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "0",
+                  "n1"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "1",
+                  "n2"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "2",
+                  "n3"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "3",
+                  "n4"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "4",
+                  "n5"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "5",
+                  "n6"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "6",
+                  "n7"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "str",
+            "types": [
+              "str",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "\"f\"",
+                "type": "str",
+                "label": "f"
+              },
+              {
+                "id": "\"d\"",
+                "type": "str",
+                "label": "d"
+              },
+              {
+                "id": "\"g\"",
+                "type": "str",
+                "label": "g"
+              },
+              {
+                "id": "\"b\"",
+                "type": "str",
+                "label": "b"
+              },
+              {
+                "id": "\"h\"",
+                "type": "str",
+                "label": "h"
+              },
+              {
+                "id": "\"c\"",
+                "type": "str",
+                "label": "c"
+              },
+              {
+                "id": "\"e\"",
+                "type": "str",
+                "label": "e"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              },
+              {
+                "id": "2",
+                "type": "int",
+                "label": "2"
+              },
+              {
+                "id": "3",
+                "type": "int",
+                "label": "3"
+              },
+              {
+                "id": "4",
+                "type": "int",
+                "label": "4"
+              },
+              {
+                "id": "5",
+                "type": "int",
+                "label": "5"
+              },
+              {
+                "id": "6",
+                "type": "int",
+                "label": "6"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "DSUNode",
+            "types": [
+              "DSUNode",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n1",
+                "type": "DSUNode",
+                "label": "DSUNode0"
+              },
+              {
+                "id": "n3",
+                "type": "DSUNode",
+                "label": "DSUNode2"
+              },
+              {
+                "id": "n2",
+                "type": "DSUNode",
+                "label": "DSUNode1"
+              },
+              {
+                "id": "n4",
+                "type": "DSUNode",
+                "label": "DSUNode3"
+              },
+              {
+                "id": "n5",
+                "type": "DSUNode",
+                "label": "DSUNode4"
+              },
+              {
+                "id": "n6",
+                "type": "DSUNode",
+                "label": "DSUNode5"
+              },
+              {
+                "id": "n7",
+                "type": "DSUNode",
+                "label": "DSUNode6"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "list",
+                "label": "list[7]"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 11,
+      "label": "UNION(f,d)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "\"f\"",
+            "type": "str",
+            "label": "f"
+          },
+          {
+            "id": "\"g\"",
+            "type": "str",
+            "label": "g"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          },
+          {
+            "id": "n3",
+            "type": "DSUNode",
+            "label": "DSUNode1"
+          },
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "n1",
+            "type": "DSUNode",
+            "label": "DSUNode0"
+          },
+          {
+            "id": "\"d\"",
+            "type": "str",
+            "label": "d"
+          },
+          {
+            "id": "n2",
+            "type": "DSUNode",
+            "label": "DSUNode2"
+          },
+          {
+            "id": "\"b\"",
+            "type": "str",
+            "label": "b"
+          },
+          {
+            "id": "n4",
+            "type": "DSUNode",
+            "label": "DSUNode3"
+          },
+          {
+            "id": "\"h\"",
+            "type": "str",
+            "label": "h"
+          },
+          {
+            "id": "n5",
+            "type": "DSUNode",
+            "label": "DSUNode4"
+          },
+          {
+            "id": "\"c\"",
+            "type": "str",
+            "label": "c"
+          },
+          {
+            "id": "n6",
+            "type": "DSUNode",
+            "label": "DSUNode5"
+          },
+          {
+            "id": "\"e\"",
+            "type": "str",
+            "label": "e"
+          },
+          {
+            "id": "n7",
+            "type": "DSUNode",
+            "label": "DSUNode6"
+          },
+          {
+            "id": "n0",
+            "type": "list",
+            "label": "list[7]"
+          },
+          {
+            "id": "2",
+            "type": "int",
+            "label": "2"
+          },
+          {
+            "id": "3",
+            "type": "int",
+            "label": "3"
+          },
+          {
+            "id": "4",
+            "type": "int",
+            "label": "4"
+          },
+          {
+            "id": "5",
+            "type": "int",
+            "label": "5"
+          },
+          {
+            "id": "6",
+            "type": "int",
+            "label": "6"
+          }
+        ],
+        "relations": [
+          {
+            "id": "key",
+            "name": "key",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n3",
+                  "\"g\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "\"f\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "\"d\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "\"b\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "\"h\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "\"c\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "\"e\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "parent",
+            "name": "parent",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n3",
+                  "n3"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "n3"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "n3"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n4"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n4"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "n4"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n4"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "rank",
+            "name": "rank",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n3",
+                  "1"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "1"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "0",
+                  "n1"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "1",
+                  "n2"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "2",
+                  "n3"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "3",
+                  "n4"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "4",
+                  "n5"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "5",
+                  "n6"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "6",
+                  "n7"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "str",
+            "types": [
+              "str",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "\"f\"",
+                "type": "str",
+                "label": "f"
+              },
+              {
+                "id": "\"g\"",
+                "type": "str",
+                "label": "g"
+              },
+              {
+                "id": "\"d\"",
+                "type": "str",
+                "label": "d"
+              },
+              {
+                "id": "\"b\"",
+                "type": "str",
+                "label": "b"
+              },
+              {
+                "id": "\"h\"",
+                "type": "str",
+                "label": "h"
+              },
+              {
+                "id": "\"c\"",
+                "type": "str",
+                "label": "c"
+              },
+              {
+                "id": "\"e\"",
+                "type": "str",
+                "label": "e"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              },
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "2",
+                "type": "int",
+                "label": "2"
+              },
+              {
+                "id": "3",
+                "type": "int",
+                "label": "3"
+              },
+              {
+                "id": "4",
+                "type": "int",
+                "label": "4"
+              },
+              {
+                "id": "5",
+                "type": "int",
+                "label": "5"
+              },
+              {
+                "id": "6",
+                "type": "int",
+                "label": "6"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "DSUNode",
+            "types": [
+              "DSUNode",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n3",
+                "type": "DSUNode",
+                "label": "DSUNode1"
+              },
+              {
+                "id": "n1",
+                "type": "DSUNode",
+                "label": "DSUNode0"
+              },
+              {
+                "id": "n2",
+                "type": "DSUNode",
+                "label": "DSUNode2"
+              },
+              {
+                "id": "n4",
+                "type": "DSUNode",
+                "label": "DSUNode3"
+              },
+              {
+                "id": "n5",
+                "type": "DSUNode",
+                "label": "DSUNode4"
+              },
+              {
+                "id": "n6",
+                "type": "DSUNode",
+                "label": "DSUNode5"
+              },
+              {
+                "id": "n7",
+                "type": "DSUNode",
+                "label": "DSUNode6"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "list",
+                "label": "list[7]"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 12,
+      "label": "UNION(f,c)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "\"f\"",
+            "type": "str",
+            "label": "f"
+          },
+          {
+            "id": "\"g\"",
+            "type": "str",
+            "label": "g"
+          },
+          {
+            "id": "\"b\"",
+            "type": "str",
+            "label": "b"
+          },
+          {
+            "id": "2",
+            "type": "int",
+            "label": "2"
+          },
+          {
+            "id": "n4",
+            "type": "DSUNode",
+            "label": "DSUNode2"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          },
+          {
+            "id": "n3",
+            "type": "DSUNode",
+            "label": "DSUNode1"
+          },
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "n1",
+            "type": "DSUNode",
+            "label": "DSUNode0"
+          },
+          {
+            "id": "\"d\"",
+            "type": "str",
+            "label": "d"
+          },
+          {
+            "id": "n2",
+            "type": "DSUNode",
+            "label": "DSUNode3"
+          },
+          {
+            "id": "\"h\"",
+            "type": "str",
+            "label": "h"
+          },
+          {
+            "id": "n5",
+            "type": "DSUNode",
+            "label": "DSUNode4"
+          },
+          {
+            "id": "\"c\"",
+            "type": "str",
+            "label": "c"
+          },
+          {
+            "id": "n6",
+            "type": "DSUNode",
+            "label": "DSUNode5"
+          },
+          {
+            "id": "\"e\"",
+            "type": "str",
+            "label": "e"
+          },
+          {
+            "id": "n7",
+            "type": "DSUNode",
+            "label": "DSUNode6"
+          },
+          {
+            "id": "n0",
+            "type": "list",
+            "label": "list[7]"
+          },
+          {
+            "id": "3",
+            "type": "int",
+            "label": "3"
+          },
+          {
+            "id": "4",
+            "type": "int",
+            "label": "4"
+          },
+          {
+            "id": "5",
+            "type": "int",
+            "label": "5"
+          },
+          {
+            "id": "6",
+            "type": "int",
+            "label": "6"
+          }
+        ],
+        "relations": [
+          {
+            "id": "key",
+            "name": "key",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n4",
+                  "\"b\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "\"g\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "\"f\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "\"d\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "\"h\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "\"c\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "\"e\""
+                ],
+                "types": [
+                  "DSUNode",
+                  "str"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "parent",
+            "name": "parent",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n4",
+                  "n4"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "n4"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "n3"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "n3"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n4"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "n4"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n4"
+                ],
+                "types": [
+                  "DSUNode",
+                  "DSUNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "rank",
+            "name": "rank",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n4",
+                  "2"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n3",
+                  "1"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n2",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "0"
+                ],
+                "types": [
+                  "DSUNode",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "0",
+                  "n1"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "1",
+                  "n2"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "2",
+                  "n3"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "3",
+                  "n4"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "4",
+                  "n5"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "5",
+                  "n6"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n0",
+                  "6",
+                  "n7"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "DSUNode"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "str",
+            "types": [
+              "str",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "\"f\"",
+                "type": "str",
+                "label": "f"
+              },
+              {
+                "id": "\"g\"",
+                "type": "str",
+                "label": "g"
+              },
+              {
+                "id": "\"b\"",
+                "type": "str",
+                "label": "b"
+              },
+              {
+                "id": "\"d\"",
+                "type": "str",
+                "label": "d"
+              },
+              {
+                "id": "\"h\"",
+                "type": "str",
+                "label": "h"
+              },
+              {
+                "id": "\"c\"",
+                "type": "str",
+                "label": "c"
+              },
+              {
+                "id": "\"e\"",
+                "type": "str",
+                "label": "e"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "2",
+                "type": "int",
+                "label": "2"
+              },
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              },
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "3",
+                "type": "int",
+                "label": "3"
+              },
+              {
+                "id": "4",
+                "type": "int",
+                "label": "4"
+              },
+              {
+                "id": "5",
+                "type": "int",
+                "label": "5"
+              },
+              {
+                "id": "6",
+                "type": "int",
+                "label": "6"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "DSUNode",
+            "types": [
+              "DSUNode",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n4",
+                "type": "DSUNode",
+                "label": "DSUNode2"
+              },
+              {
+                "id": "n3",
+                "type": "DSUNode",
+                "label": "DSUNode1"
+              },
+              {
+                "id": "n1",
+                "type": "DSUNode",
+                "label": "DSUNode0"
+              },
+              {
+                "id": "n2",
+                "type": "DSUNode",
+                "label": "DSUNode3"
+              },
+              {
+                "id": "n5",
+                "type": "DSUNode",
+                "label": "DSUNode4"
+              },
+              {
+                "id": "n6",
+                "type": "DSUNode",
+                "label": "DSUNode5"
+              },
+              {
+                "id": "n7",
+                "type": "DSUNode",
+                "label": "DSUNode6"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "list",
+                "label": "list[7]"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    }
+  ]
+}

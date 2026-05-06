@@ -1,0 +1,6570 @@
+{
+  "algorithm": "dijkstra-shortest-paths",
+  "spec": "constraints: []\ndirectives:\n- hideAtom:\n    selector: list + tuple + Graph + int + str + NoneType + float\n- inferredEdge:\n    name: edge\n    selector: '{u : (tuple.t0), w : (tuple.t2), v : (tuple.t1) | some(u.~t0 & v.~t1\n      & w.~t2)}'\n- attribute:\n    field: dist\n- attribute:\n    field: key\n- hideAtom:\n    selector: list + tuple + Graph + int + str + NoneType + float\n- inferredEdge:\n    name: edge\n    selector: '{u : (tuple.t0), w : (tuple.t2), v : (tuple.t1) | some(u.~t0 & v.~t1\n      & w.~t2)}'\n- attribute:\n    field: dist\n- attribute:\n    field: key\n- hideAtom:\n    selector: list + tuple + Graph + int + str + NoneType + float\n- inferredEdge:\n    name: edge\n    selector: '{u : (tuple.t0), w : (tuple.t2), v : (tuple.t1) | some(u.~t0 & v.~t1\n      & w.~t2)}'\n- attribute:\n    field: dist\n- attribute:\n    field: key\n- hideAtom:\n    selector: list + tuple + Graph + int + str + NoneType + float\n- inferredEdge:\n    name: edge\n    selector: '{u : (tuple.t0), w : (tuple.t2), v : (tuple.t1) | some(u.~t0 & v.~t1\n      & w.~t2)}'\n- attribute:\n    field: dist\n- attribute:\n    field: key\n- hideAtom:\n    selector: list + tuple + Graph + int + str + NoneType + float\n- inferredEdge:\n    name: edge\n    selector: '{u : (tuple.t0), w : (tuple.t2), v : (tuple.t1) | some(u.~t0 & v.~t1\n      & w.~t2)}'\n- attribute:\n    field: dist\n- attribute:\n    field: key\n- hideAtom:\n    selector: list + tuple + Graph + int + str + NoneType + float\n- inferredEdge:\n    name: edge\n    selector: '{u : (tuple.t0), w : (tuple.t2), v : (tuple.t1) | some(u.~t0 & v.~t1\n      & w.~t2)}'\n- attribute:\n    field: dist\n- attribute:\n    field: key\n",
+  "frames": [
+    {
+      "step": 0,
+      "label": "INIT",
+      "instance": {
+        "atoms": [
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "\"s\"",
+            "type": "str",
+            "label": "s"
+          },
+          {
+            "id": "None",
+            "type": "NoneType",
+            "label": "None"
+          },
+          {
+            "id": "n3",
+            "type": "GNode",
+            "label": "GNode0"
+          },
+          {
+            "id": "inf",
+            "type": "float",
+            "label": "inf"
+          },
+          {
+            "id": "\"t\"",
+            "type": "str",
+            "label": "t"
+          },
+          {
+            "id": "n4",
+            "type": "GNode",
+            "label": "GNode1"
+          },
+          {
+            "id": "10",
+            "type": "int",
+            "label": "10"
+          },
+          {
+            "id": "n2",
+            "type": "tuple",
+            "label": "tuple0"
+          },
+          {
+            "id": "\"y\"",
+            "type": "str",
+            "label": "y"
+          },
+          {
+            "id": "n6",
+            "type": "GNode",
+            "label": "GNode2"
+          },
+          {
+            "id": "5",
+            "type": "int",
+            "label": "5"
+          },
+          {
+            "id": "n5",
+            "type": "tuple",
+            "label": "tuple1"
+          },
+          {
+            "id": "2",
+            "type": "int",
+            "label": "2"
+          },
+          {
+            "id": "n7",
+            "type": "tuple",
+            "label": "tuple2"
+          },
+          {
+            "id": "\"x\"",
+            "type": "str",
+            "label": "x"
+          },
+          {
+            "id": "n9",
+            "type": "GNode",
+            "label": "GNode3"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          },
+          {
+            "id": "n8",
+            "type": "tuple",
+            "label": "tuple3"
+          },
+          {
+            "id": "3",
+            "type": "int",
+            "label": "3"
+          },
+          {
+            "id": "n10",
+            "type": "tuple",
+            "label": "tuple4"
+          },
+          {
+            "id": "9",
+            "type": "int",
+            "label": "9"
+          },
+          {
+            "id": "n11",
+            "type": "tuple",
+            "label": "tuple5"
+          },
+          {
+            "id": "\"z\"",
+            "type": "str",
+            "label": "z"
+          },
+          {
+            "id": "n13",
+            "type": "GNode",
+            "label": "GNode4"
+          },
+          {
+            "id": "n12",
+            "type": "tuple",
+            "label": "tuple6"
+          },
+          {
+            "id": "4",
+            "type": "int",
+            "label": "4"
+          },
+          {
+            "id": "n14",
+            "type": "tuple",
+            "label": "tuple7"
+          },
+          {
+            "id": "7",
+            "type": "int",
+            "label": "7"
+          },
+          {
+            "id": "n15",
+            "type": "tuple",
+            "label": "tuple8"
+          },
+          {
+            "id": "6",
+            "type": "int",
+            "label": "6"
+          },
+          {
+            "id": "n16",
+            "type": "tuple",
+            "label": "tuple9"
+          },
+          {
+            "id": "n1",
+            "type": "list",
+            "label": "list[10]"
+          },
+          {
+            "id": "8",
+            "type": "int",
+            "label": "8"
+          },
+          {
+            "id": "n0",
+            "type": "Graph",
+            "label": "snap"
+          }
+        ],
+        "relations": [
+          {
+            "id": "dist",
+            "name": "dist",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n3",
+                  "0"
+                ],
+                "types": [
+                  "GNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "inf"
+                ],
+                "types": [
+                  "GNode",
+                  "float"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "inf"
+                ],
+                "types": [
+                  "GNode",
+                  "float"
+                ]
+              },
+              {
+                "atoms": [
+                  "n9",
+                  "inf"
+                ],
+                "types": [
+                  "GNode",
+                  "float"
+                ]
+              },
+              {
+                "atoms": [
+                  "n13",
+                  "inf"
+                ],
+                "types": [
+                  "GNode",
+                  "float"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "key",
+            "name": "key",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n3",
+                  "\"s\""
+                ],
+                "types": [
+                  "GNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "\"t\""
+                ],
+                "types": [
+                  "GNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "\"y\""
+                ],
+                "types": [
+                  "GNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n9",
+                  "\"x\""
+                ],
+                "types": [
+                  "GNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n13",
+                  "\"z\""
+                ],
+                "types": [
+                  "GNode",
+                  "str"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "pred",
+            "name": "pred",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n3",
+                  "None"
+                ],
+                "types": [
+                  "GNode",
+                  "NoneType"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "None"
+                ],
+                "types": [
+                  "GNode",
+                  "NoneType"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "None"
+                ],
+                "types": [
+                  "GNode",
+                  "NoneType"
+                ]
+              },
+              {
+                "atoms": [
+                  "n9",
+                  "None"
+                ],
+                "types": [
+                  "GNode",
+                  "NoneType"
+                ]
+              },
+              {
+                "atoms": [
+                  "n13",
+                  "None"
+                ],
+                "types": [
+                  "GNode",
+                  "NoneType"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "t0",
+            "name": "t0",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n3"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n3"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n4"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n8",
+                  "n4"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n10",
+                  "n6"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n11",
+                  "n6"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n12",
+                  "n6"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n14",
+                  "n9"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n15",
+                  "n13"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n16",
+                  "n13"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "t1",
+            "name": "t1",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n4"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n6"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n6"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n8",
+                  "n9"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n10",
+                  "n4"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n11",
+                  "n9"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n12",
+                  "n13"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n14",
+                  "n13"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n15",
+                  "n3"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n16",
+                  "n9"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "t2",
+            "name": "t2",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "10"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "5"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "2"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n8",
+                  "1"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n10",
+                  "3"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n11",
+                  "9"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n12",
+                  "2"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n14",
+                  "4"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n15",
+                  "7"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n16",
+                  "6"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "0",
+                  "n2"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "1",
+                  "n5"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "2",
+                  "n7"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "3",
+                  "n8"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "4",
+                  "n10"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "5",
+                  "n11"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "6",
+                  "n12"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "7",
+                  "n14"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "8",
+                  "n15"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "9",
+                  "n16"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "adj",
+            "name": "adj",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "n1"
+                ],
+                "types": [
+                  "Graph",
+                  "list"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "10",
+                "type": "int",
+                "label": "10"
+              },
+              {
+                "id": "5",
+                "type": "int",
+                "label": "5"
+              },
+              {
+                "id": "2",
+                "type": "int",
+                "label": "2"
+              },
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              },
+              {
+                "id": "3",
+                "type": "int",
+                "label": "3"
+              },
+              {
+                "id": "9",
+                "type": "int",
+                "label": "9"
+              },
+              {
+                "id": "4",
+                "type": "int",
+                "label": "4"
+              },
+              {
+                "id": "7",
+                "type": "int",
+                "label": "7"
+              },
+              {
+                "id": "6",
+                "type": "int",
+                "label": "6"
+              },
+              {
+                "id": "8",
+                "type": "int",
+                "label": "8"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "str",
+            "types": [
+              "str",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "\"s\"",
+                "type": "str",
+                "label": "s"
+              },
+              {
+                "id": "\"t\"",
+                "type": "str",
+                "label": "t"
+              },
+              {
+                "id": "\"y\"",
+                "type": "str",
+                "label": "y"
+              },
+              {
+                "id": "\"x\"",
+                "type": "str",
+                "label": "x"
+              },
+              {
+                "id": "\"z\"",
+                "type": "str",
+                "label": "z"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "NoneType",
+            "types": [
+              "NoneType",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "None",
+                "type": "NoneType",
+                "label": "None"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "GNode",
+            "types": [
+              "GNode",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n3",
+                "type": "GNode",
+                "label": "GNode0"
+              },
+              {
+                "id": "n4",
+                "type": "GNode",
+                "label": "GNode1"
+              },
+              {
+                "id": "n6",
+                "type": "GNode",
+                "label": "GNode2"
+              },
+              {
+                "id": "n9",
+                "type": "GNode",
+                "label": "GNode3"
+              },
+              {
+                "id": "n13",
+                "type": "GNode",
+                "label": "GNode4"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "float",
+            "types": [
+              "float",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "inf",
+                "type": "float",
+                "label": "inf"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "tuple",
+            "types": [
+              "tuple",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n2",
+                "type": "tuple",
+                "label": "tuple0"
+              },
+              {
+                "id": "n5",
+                "type": "tuple",
+                "label": "tuple1"
+              },
+              {
+                "id": "n7",
+                "type": "tuple",
+                "label": "tuple2"
+              },
+              {
+                "id": "n8",
+                "type": "tuple",
+                "label": "tuple3"
+              },
+              {
+                "id": "n10",
+                "type": "tuple",
+                "label": "tuple4"
+              },
+              {
+                "id": "n11",
+                "type": "tuple",
+                "label": "tuple5"
+              },
+              {
+                "id": "n12",
+                "type": "tuple",
+                "label": "tuple6"
+              },
+              {
+                "id": "n14",
+                "type": "tuple",
+                "label": "tuple7"
+              },
+              {
+                "id": "n15",
+                "type": "tuple",
+                "label": "tuple8"
+              },
+              {
+                "id": "n16",
+                "type": "tuple",
+                "label": "tuple9"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n1",
+                "type": "list",
+                "label": "list[10]"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "Graph",
+            "types": [
+              "Graph",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "Graph",
+                "label": "snap"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 1,
+      "label": "relax(s)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "\"s\"",
+            "type": "str",
+            "label": "s"
+          },
+          {
+            "id": "None",
+            "type": "NoneType",
+            "label": "None"
+          },
+          {
+            "id": "n3",
+            "type": "GNode",
+            "label": "GNode0"
+          },
+          {
+            "id": "10",
+            "type": "int",
+            "label": "10"
+          },
+          {
+            "id": "\"t\"",
+            "type": "str",
+            "label": "t"
+          },
+          {
+            "id": "n4",
+            "type": "GNode",
+            "label": "GNode1"
+          },
+          {
+            "id": "n2",
+            "type": "tuple",
+            "label": "tuple0"
+          },
+          {
+            "id": "5",
+            "type": "int",
+            "label": "5"
+          },
+          {
+            "id": "\"y\"",
+            "type": "str",
+            "label": "y"
+          },
+          {
+            "id": "n6",
+            "type": "GNode",
+            "label": "GNode2"
+          },
+          {
+            "id": "n5",
+            "type": "tuple",
+            "label": "tuple1"
+          },
+          {
+            "id": "2",
+            "type": "int",
+            "label": "2"
+          },
+          {
+            "id": "n7",
+            "type": "tuple",
+            "label": "tuple2"
+          },
+          {
+            "id": "inf",
+            "type": "float",
+            "label": "inf"
+          },
+          {
+            "id": "\"x\"",
+            "type": "str",
+            "label": "x"
+          },
+          {
+            "id": "n9",
+            "type": "GNode",
+            "label": "GNode3"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          },
+          {
+            "id": "n8",
+            "type": "tuple",
+            "label": "tuple3"
+          },
+          {
+            "id": "3",
+            "type": "int",
+            "label": "3"
+          },
+          {
+            "id": "n10",
+            "type": "tuple",
+            "label": "tuple4"
+          },
+          {
+            "id": "9",
+            "type": "int",
+            "label": "9"
+          },
+          {
+            "id": "n11",
+            "type": "tuple",
+            "label": "tuple5"
+          },
+          {
+            "id": "\"z\"",
+            "type": "str",
+            "label": "z"
+          },
+          {
+            "id": "n13",
+            "type": "GNode",
+            "label": "GNode4"
+          },
+          {
+            "id": "n12",
+            "type": "tuple",
+            "label": "tuple6"
+          },
+          {
+            "id": "4",
+            "type": "int",
+            "label": "4"
+          },
+          {
+            "id": "n14",
+            "type": "tuple",
+            "label": "tuple7"
+          },
+          {
+            "id": "7",
+            "type": "int",
+            "label": "7"
+          },
+          {
+            "id": "n15",
+            "type": "tuple",
+            "label": "tuple8"
+          },
+          {
+            "id": "6",
+            "type": "int",
+            "label": "6"
+          },
+          {
+            "id": "n16",
+            "type": "tuple",
+            "label": "tuple9"
+          },
+          {
+            "id": "n1",
+            "type": "list",
+            "label": "list[10]"
+          },
+          {
+            "id": "8",
+            "type": "int",
+            "label": "8"
+          },
+          {
+            "id": "n0",
+            "type": "Graph",
+            "label": "snap"
+          }
+        ],
+        "relations": [
+          {
+            "id": "dist",
+            "name": "dist",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n3",
+                  "0"
+                ],
+                "types": [
+                  "GNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "10"
+                ],
+                "types": [
+                  "GNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "5"
+                ],
+                "types": [
+                  "GNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n9",
+                  "inf"
+                ],
+                "types": [
+                  "GNode",
+                  "float"
+                ]
+              },
+              {
+                "atoms": [
+                  "n13",
+                  "inf"
+                ],
+                "types": [
+                  "GNode",
+                  "float"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "key",
+            "name": "key",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n3",
+                  "\"s\""
+                ],
+                "types": [
+                  "GNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "\"t\""
+                ],
+                "types": [
+                  "GNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "\"y\""
+                ],
+                "types": [
+                  "GNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n9",
+                  "\"x\""
+                ],
+                "types": [
+                  "GNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n13",
+                  "\"z\""
+                ],
+                "types": [
+                  "GNode",
+                  "str"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "pred",
+            "name": "pred",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n3",
+                  "None"
+                ],
+                "types": [
+                  "GNode",
+                  "NoneType"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n3"
+                ],
+                "types": [
+                  "GNode",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "n3"
+                ],
+                "types": [
+                  "GNode",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n9",
+                  "None"
+                ],
+                "types": [
+                  "GNode",
+                  "NoneType"
+                ]
+              },
+              {
+                "atoms": [
+                  "n13",
+                  "None"
+                ],
+                "types": [
+                  "GNode",
+                  "NoneType"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "t0",
+            "name": "t0",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n3"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n3"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n4"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n8",
+                  "n4"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n10",
+                  "n6"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n11",
+                  "n6"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n12",
+                  "n6"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n14",
+                  "n9"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n15",
+                  "n13"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n16",
+                  "n13"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "t1",
+            "name": "t1",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n4"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n6"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n6"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n8",
+                  "n9"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n10",
+                  "n4"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n11",
+                  "n9"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n12",
+                  "n13"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n14",
+                  "n13"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n15",
+                  "n3"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n16",
+                  "n9"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "t2",
+            "name": "t2",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "10"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "5"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "2"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n8",
+                  "1"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n10",
+                  "3"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n11",
+                  "9"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n12",
+                  "2"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n14",
+                  "4"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n15",
+                  "7"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n16",
+                  "6"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "0",
+                  "n2"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "1",
+                  "n5"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "2",
+                  "n7"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "3",
+                  "n8"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "4",
+                  "n10"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "5",
+                  "n11"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "6",
+                  "n12"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "7",
+                  "n14"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "8",
+                  "n15"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "9",
+                  "n16"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "adj",
+            "name": "adj",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "n1"
+                ],
+                "types": [
+                  "Graph",
+                  "list"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "10",
+                "type": "int",
+                "label": "10"
+              },
+              {
+                "id": "5",
+                "type": "int",
+                "label": "5"
+              },
+              {
+                "id": "2",
+                "type": "int",
+                "label": "2"
+              },
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              },
+              {
+                "id": "3",
+                "type": "int",
+                "label": "3"
+              },
+              {
+                "id": "9",
+                "type": "int",
+                "label": "9"
+              },
+              {
+                "id": "4",
+                "type": "int",
+                "label": "4"
+              },
+              {
+                "id": "7",
+                "type": "int",
+                "label": "7"
+              },
+              {
+                "id": "6",
+                "type": "int",
+                "label": "6"
+              },
+              {
+                "id": "8",
+                "type": "int",
+                "label": "8"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "str",
+            "types": [
+              "str",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "\"s\"",
+                "type": "str",
+                "label": "s"
+              },
+              {
+                "id": "\"t\"",
+                "type": "str",
+                "label": "t"
+              },
+              {
+                "id": "\"y\"",
+                "type": "str",
+                "label": "y"
+              },
+              {
+                "id": "\"x\"",
+                "type": "str",
+                "label": "x"
+              },
+              {
+                "id": "\"z\"",
+                "type": "str",
+                "label": "z"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "NoneType",
+            "types": [
+              "NoneType",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "None",
+                "type": "NoneType",
+                "label": "None"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "GNode",
+            "types": [
+              "GNode",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n3",
+                "type": "GNode",
+                "label": "GNode0"
+              },
+              {
+                "id": "n4",
+                "type": "GNode",
+                "label": "GNode1"
+              },
+              {
+                "id": "n6",
+                "type": "GNode",
+                "label": "GNode2"
+              },
+              {
+                "id": "n9",
+                "type": "GNode",
+                "label": "GNode3"
+              },
+              {
+                "id": "n13",
+                "type": "GNode",
+                "label": "GNode4"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "tuple",
+            "types": [
+              "tuple",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n2",
+                "type": "tuple",
+                "label": "tuple0"
+              },
+              {
+                "id": "n5",
+                "type": "tuple",
+                "label": "tuple1"
+              },
+              {
+                "id": "n7",
+                "type": "tuple",
+                "label": "tuple2"
+              },
+              {
+                "id": "n8",
+                "type": "tuple",
+                "label": "tuple3"
+              },
+              {
+                "id": "n10",
+                "type": "tuple",
+                "label": "tuple4"
+              },
+              {
+                "id": "n11",
+                "type": "tuple",
+                "label": "tuple5"
+              },
+              {
+                "id": "n12",
+                "type": "tuple",
+                "label": "tuple6"
+              },
+              {
+                "id": "n14",
+                "type": "tuple",
+                "label": "tuple7"
+              },
+              {
+                "id": "n15",
+                "type": "tuple",
+                "label": "tuple8"
+              },
+              {
+                "id": "n16",
+                "type": "tuple",
+                "label": "tuple9"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "float",
+            "types": [
+              "float",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "inf",
+                "type": "float",
+                "label": "inf"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n1",
+                "type": "list",
+                "label": "list[10]"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "Graph",
+            "types": [
+              "Graph",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "Graph",
+                "label": "snap"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 2,
+      "label": "relax(y)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "\"s\"",
+            "type": "str",
+            "label": "s"
+          },
+          {
+            "id": "None",
+            "type": "NoneType",
+            "label": "None"
+          },
+          {
+            "id": "n3",
+            "type": "GNode",
+            "label": "GNode0"
+          },
+          {
+            "id": "8",
+            "type": "int",
+            "label": "8"
+          },
+          {
+            "id": "\"t\"",
+            "type": "str",
+            "label": "t"
+          },
+          {
+            "id": "5",
+            "type": "int",
+            "label": "5"
+          },
+          {
+            "id": "\"y\"",
+            "type": "str",
+            "label": "y"
+          },
+          {
+            "id": "n6",
+            "type": "GNode",
+            "label": "GNode2"
+          },
+          {
+            "id": "n4",
+            "type": "GNode",
+            "label": "GNode1"
+          },
+          {
+            "id": "10",
+            "type": "int",
+            "label": "10"
+          },
+          {
+            "id": "n2",
+            "type": "tuple",
+            "label": "tuple0"
+          },
+          {
+            "id": "n5",
+            "type": "tuple",
+            "label": "tuple1"
+          },
+          {
+            "id": "2",
+            "type": "int",
+            "label": "2"
+          },
+          {
+            "id": "n7",
+            "type": "tuple",
+            "label": "tuple2"
+          },
+          {
+            "id": "14",
+            "type": "int",
+            "label": "14"
+          },
+          {
+            "id": "\"x\"",
+            "type": "str",
+            "label": "x"
+          },
+          {
+            "id": "n9",
+            "type": "GNode",
+            "label": "GNode3"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          },
+          {
+            "id": "n8",
+            "type": "tuple",
+            "label": "tuple3"
+          },
+          {
+            "id": "3",
+            "type": "int",
+            "label": "3"
+          },
+          {
+            "id": "n10",
+            "type": "tuple",
+            "label": "tuple4"
+          },
+          {
+            "id": "9",
+            "type": "int",
+            "label": "9"
+          },
+          {
+            "id": "n11",
+            "type": "tuple",
+            "label": "tuple5"
+          },
+          {
+            "id": "7",
+            "type": "int",
+            "label": "7"
+          },
+          {
+            "id": "\"z\"",
+            "type": "str",
+            "label": "z"
+          },
+          {
+            "id": "n13",
+            "type": "GNode",
+            "label": "GNode4"
+          },
+          {
+            "id": "n12",
+            "type": "tuple",
+            "label": "tuple6"
+          },
+          {
+            "id": "4",
+            "type": "int",
+            "label": "4"
+          },
+          {
+            "id": "n14",
+            "type": "tuple",
+            "label": "tuple7"
+          },
+          {
+            "id": "n15",
+            "type": "tuple",
+            "label": "tuple8"
+          },
+          {
+            "id": "6",
+            "type": "int",
+            "label": "6"
+          },
+          {
+            "id": "n16",
+            "type": "tuple",
+            "label": "tuple9"
+          },
+          {
+            "id": "n1",
+            "type": "list",
+            "label": "list[10]"
+          },
+          {
+            "id": "n0",
+            "type": "Graph",
+            "label": "snap"
+          }
+        ],
+        "relations": [
+          {
+            "id": "dist",
+            "name": "dist",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n3",
+                  "0"
+                ],
+                "types": [
+                  "GNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "5"
+                ],
+                "types": [
+                  "GNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "8"
+                ],
+                "types": [
+                  "GNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n9",
+                  "14"
+                ],
+                "types": [
+                  "GNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n13",
+                  "7"
+                ],
+                "types": [
+                  "GNode",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "key",
+            "name": "key",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n3",
+                  "\"s\""
+                ],
+                "types": [
+                  "GNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "\"y\""
+                ],
+                "types": [
+                  "GNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "\"t\""
+                ],
+                "types": [
+                  "GNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n9",
+                  "\"x\""
+                ],
+                "types": [
+                  "GNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n13",
+                  "\"z\""
+                ],
+                "types": [
+                  "GNode",
+                  "str"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "pred",
+            "name": "pred",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n3",
+                  "None"
+                ],
+                "types": [
+                  "GNode",
+                  "NoneType"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "n3"
+                ],
+                "types": [
+                  "GNode",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n6"
+                ],
+                "types": [
+                  "GNode",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n9",
+                  "n6"
+                ],
+                "types": [
+                  "GNode",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n13",
+                  "n6"
+                ],
+                "types": [
+                  "GNode",
+                  "GNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "t0",
+            "name": "t0",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n3"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n3"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n4"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n8",
+                  "n4"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n10",
+                  "n6"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n11",
+                  "n6"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n12",
+                  "n6"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n14",
+                  "n9"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n15",
+                  "n13"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n16",
+                  "n13"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "t1",
+            "name": "t1",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n4"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n6"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n6"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n8",
+                  "n9"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n10",
+                  "n4"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n11",
+                  "n9"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n12",
+                  "n13"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n14",
+                  "n13"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n15",
+                  "n3"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n16",
+                  "n9"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "t2",
+            "name": "t2",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "10"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "5"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "2"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n8",
+                  "1"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n10",
+                  "3"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n11",
+                  "9"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n12",
+                  "2"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n14",
+                  "4"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n15",
+                  "7"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n16",
+                  "6"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "0",
+                  "n2"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "1",
+                  "n5"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "2",
+                  "n7"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "3",
+                  "n8"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "4",
+                  "n10"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "5",
+                  "n11"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "6",
+                  "n12"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "7",
+                  "n14"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "8",
+                  "n15"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "9",
+                  "n16"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "adj",
+            "name": "adj",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "n1"
+                ],
+                "types": [
+                  "Graph",
+                  "list"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "8",
+                "type": "int",
+                "label": "8"
+              },
+              {
+                "id": "5",
+                "type": "int",
+                "label": "5"
+              },
+              {
+                "id": "10",
+                "type": "int",
+                "label": "10"
+              },
+              {
+                "id": "2",
+                "type": "int",
+                "label": "2"
+              },
+              {
+                "id": "14",
+                "type": "int",
+                "label": "14"
+              },
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              },
+              {
+                "id": "3",
+                "type": "int",
+                "label": "3"
+              },
+              {
+                "id": "9",
+                "type": "int",
+                "label": "9"
+              },
+              {
+                "id": "7",
+                "type": "int",
+                "label": "7"
+              },
+              {
+                "id": "4",
+                "type": "int",
+                "label": "4"
+              },
+              {
+                "id": "6",
+                "type": "int",
+                "label": "6"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "str",
+            "types": [
+              "str",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "\"s\"",
+                "type": "str",
+                "label": "s"
+              },
+              {
+                "id": "\"t\"",
+                "type": "str",
+                "label": "t"
+              },
+              {
+                "id": "\"y\"",
+                "type": "str",
+                "label": "y"
+              },
+              {
+                "id": "\"x\"",
+                "type": "str",
+                "label": "x"
+              },
+              {
+                "id": "\"z\"",
+                "type": "str",
+                "label": "z"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "NoneType",
+            "types": [
+              "NoneType",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "None",
+                "type": "NoneType",
+                "label": "None"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "GNode",
+            "types": [
+              "GNode",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n3",
+                "type": "GNode",
+                "label": "GNode0"
+              },
+              {
+                "id": "n6",
+                "type": "GNode",
+                "label": "GNode2"
+              },
+              {
+                "id": "n4",
+                "type": "GNode",
+                "label": "GNode1"
+              },
+              {
+                "id": "n9",
+                "type": "GNode",
+                "label": "GNode3"
+              },
+              {
+                "id": "n13",
+                "type": "GNode",
+                "label": "GNode4"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "tuple",
+            "types": [
+              "tuple",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n2",
+                "type": "tuple",
+                "label": "tuple0"
+              },
+              {
+                "id": "n5",
+                "type": "tuple",
+                "label": "tuple1"
+              },
+              {
+                "id": "n7",
+                "type": "tuple",
+                "label": "tuple2"
+              },
+              {
+                "id": "n8",
+                "type": "tuple",
+                "label": "tuple3"
+              },
+              {
+                "id": "n10",
+                "type": "tuple",
+                "label": "tuple4"
+              },
+              {
+                "id": "n11",
+                "type": "tuple",
+                "label": "tuple5"
+              },
+              {
+                "id": "n12",
+                "type": "tuple",
+                "label": "tuple6"
+              },
+              {
+                "id": "n14",
+                "type": "tuple",
+                "label": "tuple7"
+              },
+              {
+                "id": "n15",
+                "type": "tuple",
+                "label": "tuple8"
+              },
+              {
+                "id": "n16",
+                "type": "tuple",
+                "label": "tuple9"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n1",
+                "type": "list",
+                "label": "list[10]"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "Graph",
+            "types": [
+              "Graph",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "Graph",
+                "label": "snap"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 3,
+      "label": "relax(z)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "\"s\"",
+            "type": "str",
+            "label": "s"
+          },
+          {
+            "id": "None",
+            "type": "NoneType",
+            "label": "None"
+          },
+          {
+            "id": "n3",
+            "type": "GNode",
+            "label": "GNode0"
+          },
+          {
+            "id": "8",
+            "type": "int",
+            "label": "8"
+          },
+          {
+            "id": "\"t\"",
+            "type": "str",
+            "label": "t"
+          },
+          {
+            "id": "5",
+            "type": "int",
+            "label": "5"
+          },
+          {
+            "id": "\"y\"",
+            "type": "str",
+            "label": "y"
+          },
+          {
+            "id": "n6",
+            "type": "GNode",
+            "label": "GNode2"
+          },
+          {
+            "id": "n4",
+            "type": "GNode",
+            "label": "GNode1"
+          },
+          {
+            "id": "10",
+            "type": "int",
+            "label": "10"
+          },
+          {
+            "id": "n2",
+            "type": "tuple",
+            "label": "tuple0"
+          },
+          {
+            "id": "n5",
+            "type": "tuple",
+            "label": "tuple1"
+          },
+          {
+            "id": "2",
+            "type": "int",
+            "label": "2"
+          },
+          {
+            "id": "n7",
+            "type": "tuple",
+            "label": "tuple2"
+          },
+          {
+            "id": "13",
+            "type": "int",
+            "label": "13"
+          },
+          {
+            "id": "\"x\"",
+            "type": "str",
+            "label": "x"
+          },
+          {
+            "id": "7",
+            "type": "int",
+            "label": "7"
+          },
+          {
+            "id": "\"z\"",
+            "type": "str",
+            "label": "z"
+          },
+          {
+            "id": "n13",
+            "type": "GNode",
+            "label": "GNode4"
+          },
+          {
+            "id": "n9",
+            "type": "GNode",
+            "label": "GNode3"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          },
+          {
+            "id": "n8",
+            "type": "tuple",
+            "label": "tuple3"
+          },
+          {
+            "id": "3",
+            "type": "int",
+            "label": "3"
+          },
+          {
+            "id": "n10",
+            "type": "tuple",
+            "label": "tuple4"
+          },
+          {
+            "id": "9",
+            "type": "int",
+            "label": "9"
+          },
+          {
+            "id": "n11",
+            "type": "tuple",
+            "label": "tuple5"
+          },
+          {
+            "id": "n12",
+            "type": "tuple",
+            "label": "tuple6"
+          },
+          {
+            "id": "4",
+            "type": "int",
+            "label": "4"
+          },
+          {
+            "id": "n14",
+            "type": "tuple",
+            "label": "tuple7"
+          },
+          {
+            "id": "n15",
+            "type": "tuple",
+            "label": "tuple8"
+          },
+          {
+            "id": "6",
+            "type": "int",
+            "label": "6"
+          },
+          {
+            "id": "n16",
+            "type": "tuple",
+            "label": "tuple9"
+          },
+          {
+            "id": "n1",
+            "type": "list",
+            "label": "list[10]"
+          },
+          {
+            "id": "n0",
+            "type": "Graph",
+            "label": "snap"
+          }
+        ],
+        "relations": [
+          {
+            "id": "dist",
+            "name": "dist",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n3",
+                  "0"
+                ],
+                "types": [
+                  "GNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "5"
+                ],
+                "types": [
+                  "GNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "8"
+                ],
+                "types": [
+                  "GNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n13",
+                  "7"
+                ],
+                "types": [
+                  "GNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n9",
+                  "13"
+                ],
+                "types": [
+                  "GNode",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "key",
+            "name": "key",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n3",
+                  "\"s\""
+                ],
+                "types": [
+                  "GNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "\"y\""
+                ],
+                "types": [
+                  "GNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "\"t\""
+                ],
+                "types": [
+                  "GNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n13",
+                  "\"z\""
+                ],
+                "types": [
+                  "GNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n9",
+                  "\"x\""
+                ],
+                "types": [
+                  "GNode",
+                  "str"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "pred",
+            "name": "pred",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n3",
+                  "None"
+                ],
+                "types": [
+                  "GNode",
+                  "NoneType"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "n3"
+                ],
+                "types": [
+                  "GNode",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n6"
+                ],
+                "types": [
+                  "GNode",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n13",
+                  "n6"
+                ],
+                "types": [
+                  "GNode",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n9",
+                  "n13"
+                ],
+                "types": [
+                  "GNode",
+                  "GNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "t0",
+            "name": "t0",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n3"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n3"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n4"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n8",
+                  "n4"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n10",
+                  "n6"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n11",
+                  "n6"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n12",
+                  "n6"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n14",
+                  "n9"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n15",
+                  "n13"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n16",
+                  "n13"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "t1",
+            "name": "t1",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n4"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n6"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n6"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n8",
+                  "n9"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n10",
+                  "n4"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n11",
+                  "n9"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n12",
+                  "n13"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n14",
+                  "n13"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n15",
+                  "n3"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n16",
+                  "n9"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "t2",
+            "name": "t2",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "10"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "5"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "2"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n8",
+                  "1"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n10",
+                  "3"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n11",
+                  "9"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n12",
+                  "2"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n14",
+                  "4"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n15",
+                  "7"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n16",
+                  "6"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "0",
+                  "n2"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "1",
+                  "n5"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "2",
+                  "n7"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "3",
+                  "n8"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "4",
+                  "n10"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "5",
+                  "n11"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "6",
+                  "n12"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "7",
+                  "n14"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "8",
+                  "n15"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "9",
+                  "n16"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "adj",
+            "name": "adj",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "n1"
+                ],
+                "types": [
+                  "Graph",
+                  "list"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "8",
+                "type": "int",
+                "label": "8"
+              },
+              {
+                "id": "5",
+                "type": "int",
+                "label": "5"
+              },
+              {
+                "id": "10",
+                "type": "int",
+                "label": "10"
+              },
+              {
+                "id": "2",
+                "type": "int",
+                "label": "2"
+              },
+              {
+                "id": "13",
+                "type": "int",
+                "label": "13"
+              },
+              {
+                "id": "7",
+                "type": "int",
+                "label": "7"
+              },
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              },
+              {
+                "id": "3",
+                "type": "int",
+                "label": "3"
+              },
+              {
+                "id": "9",
+                "type": "int",
+                "label": "9"
+              },
+              {
+                "id": "4",
+                "type": "int",
+                "label": "4"
+              },
+              {
+                "id": "6",
+                "type": "int",
+                "label": "6"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "str",
+            "types": [
+              "str",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "\"s\"",
+                "type": "str",
+                "label": "s"
+              },
+              {
+                "id": "\"t\"",
+                "type": "str",
+                "label": "t"
+              },
+              {
+                "id": "\"y\"",
+                "type": "str",
+                "label": "y"
+              },
+              {
+                "id": "\"x\"",
+                "type": "str",
+                "label": "x"
+              },
+              {
+                "id": "\"z\"",
+                "type": "str",
+                "label": "z"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "NoneType",
+            "types": [
+              "NoneType",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "None",
+                "type": "NoneType",
+                "label": "None"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "GNode",
+            "types": [
+              "GNode",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n3",
+                "type": "GNode",
+                "label": "GNode0"
+              },
+              {
+                "id": "n6",
+                "type": "GNode",
+                "label": "GNode2"
+              },
+              {
+                "id": "n4",
+                "type": "GNode",
+                "label": "GNode1"
+              },
+              {
+                "id": "n13",
+                "type": "GNode",
+                "label": "GNode4"
+              },
+              {
+                "id": "n9",
+                "type": "GNode",
+                "label": "GNode3"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "tuple",
+            "types": [
+              "tuple",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n2",
+                "type": "tuple",
+                "label": "tuple0"
+              },
+              {
+                "id": "n5",
+                "type": "tuple",
+                "label": "tuple1"
+              },
+              {
+                "id": "n7",
+                "type": "tuple",
+                "label": "tuple2"
+              },
+              {
+                "id": "n8",
+                "type": "tuple",
+                "label": "tuple3"
+              },
+              {
+                "id": "n10",
+                "type": "tuple",
+                "label": "tuple4"
+              },
+              {
+                "id": "n11",
+                "type": "tuple",
+                "label": "tuple5"
+              },
+              {
+                "id": "n12",
+                "type": "tuple",
+                "label": "tuple6"
+              },
+              {
+                "id": "n14",
+                "type": "tuple",
+                "label": "tuple7"
+              },
+              {
+                "id": "n15",
+                "type": "tuple",
+                "label": "tuple8"
+              },
+              {
+                "id": "n16",
+                "type": "tuple",
+                "label": "tuple9"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n1",
+                "type": "list",
+                "label": "list[10]"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "Graph",
+            "types": [
+              "Graph",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "Graph",
+                "label": "snap"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 4,
+      "label": "relax(t)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "\"s\"",
+            "type": "str",
+            "label": "s"
+          },
+          {
+            "id": "None",
+            "type": "NoneType",
+            "label": "None"
+          },
+          {
+            "id": "n3",
+            "type": "GNode",
+            "label": "GNode0"
+          },
+          {
+            "id": "8",
+            "type": "int",
+            "label": "8"
+          },
+          {
+            "id": "\"t\"",
+            "type": "str",
+            "label": "t"
+          },
+          {
+            "id": "5",
+            "type": "int",
+            "label": "5"
+          },
+          {
+            "id": "\"y\"",
+            "type": "str",
+            "label": "y"
+          },
+          {
+            "id": "n6",
+            "type": "GNode",
+            "label": "GNode2"
+          },
+          {
+            "id": "n4",
+            "type": "GNode",
+            "label": "GNode1"
+          },
+          {
+            "id": "10",
+            "type": "int",
+            "label": "10"
+          },
+          {
+            "id": "n2",
+            "type": "tuple",
+            "label": "tuple0"
+          },
+          {
+            "id": "n5",
+            "type": "tuple",
+            "label": "tuple1"
+          },
+          {
+            "id": "2",
+            "type": "int",
+            "label": "2"
+          },
+          {
+            "id": "n7",
+            "type": "tuple",
+            "label": "tuple2"
+          },
+          {
+            "id": "9",
+            "type": "int",
+            "label": "9"
+          },
+          {
+            "id": "\"x\"",
+            "type": "str",
+            "label": "x"
+          },
+          {
+            "id": "n9",
+            "type": "GNode",
+            "label": "GNode3"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          },
+          {
+            "id": "n8",
+            "type": "tuple",
+            "label": "tuple3"
+          },
+          {
+            "id": "3",
+            "type": "int",
+            "label": "3"
+          },
+          {
+            "id": "n10",
+            "type": "tuple",
+            "label": "tuple4"
+          },
+          {
+            "id": "n11",
+            "type": "tuple",
+            "label": "tuple5"
+          },
+          {
+            "id": "7",
+            "type": "int",
+            "label": "7"
+          },
+          {
+            "id": "\"z\"",
+            "type": "str",
+            "label": "z"
+          },
+          {
+            "id": "n13",
+            "type": "GNode",
+            "label": "GNode4"
+          },
+          {
+            "id": "n12",
+            "type": "tuple",
+            "label": "tuple6"
+          },
+          {
+            "id": "4",
+            "type": "int",
+            "label": "4"
+          },
+          {
+            "id": "n14",
+            "type": "tuple",
+            "label": "tuple7"
+          },
+          {
+            "id": "n15",
+            "type": "tuple",
+            "label": "tuple8"
+          },
+          {
+            "id": "6",
+            "type": "int",
+            "label": "6"
+          },
+          {
+            "id": "n16",
+            "type": "tuple",
+            "label": "tuple9"
+          },
+          {
+            "id": "n1",
+            "type": "list",
+            "label": "list[10]"
+          },
+          {
+            "id": "n0",
+            "type": "Graph",
+            "label": "snap"
+          }
+        ],
+        "relations": [
+          {
+            "id": "dist",
+            "name": "dist",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n3",
+                  "0"
+                ],
+                "types": [
+                  "GNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "5"
+                ],
+                "types": [
+                  "GNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "8"
+                ],
+                "types": [
+                  "GNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n9",
+                  "9"
+                ],
+                "types": [
+                  "GNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n13",
+                  "7"
+                ],
+                "types": [
+                  "GNode",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "key",
+            "name": "key",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n3",
+                  "\"s\""
+                ],
+                "types": [
+                  "GNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "\"y\""
+                ],
+                "types": [
+                  "GNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "\"t\""
+                ],
+                "types": [
+                  "GNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n9",
+                  "\"x\""
+                ],
+                "types": [
+                  "GNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n13",
+                  "\"z\""
+                ],
+                "types": [
+                  "GNode",
+                  "str"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "pred",
+            "name": "pred",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n3",
+                  "None"
+                ],
+                "types": [
+                  "GNode",
+                  "NoneType"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "n3"
+                ],
+                "types": [
+                  "GNode",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n6"
+                ],
+                "types": [
+                  "GNode",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n9",
+                  "n4"
+                ],
+                "types": [
+                  "GNode",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n13",
+                  "n6"
+                ],
+                "types": [
+                  "GNode",
+                  "GNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "t0",
+            "name": "t0",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n3"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n3"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n4"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n8",
+                  "n4"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n10",
+                  "n6"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n11",
+                  "n6"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n12",
+                  "n6"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n14",
+                  "n9"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n15",
+                  "n13"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n16",
+                  "n13"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "t1",
+            "name": "t1",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n4"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n6"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n6"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n8",
+                  "n9"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n10",
+                  "n4"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n11",
+                  "n9"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n12",
+                  "n13"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n14",
+                  "n13"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n15",
+                  "n3"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n16",
+                  "n9"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "t2",
+            "name": "t2",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "10"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "5"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "2"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n8",
+                  "1"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n10",
+                  "3"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n11",
+                  "9"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n12",
+                  "2"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n14",
+                  "4"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n15",
+                  "7"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n16",
+                  "6"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "0",
+                  "n2"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "1",
+                  "n5"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "2",
+                  "n7"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "3",
+                  "n8"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "4",
+                  "n10"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "5",
+                  "n11"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "6",
+                  "n12"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "7",
+                  "n14"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "8",
+                  "n15"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "9",
+                  "n16"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "adj",
+            "name": "adj",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "n1"
+                ],
+                "types": [
+                  "Graph",
+                  "list"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "8",
+                "type": "int",
+                "label": "8"
+              },
+              {
+                "id": "5",
+                "type": "int",
+                "label": "5"
+              },
+              {
+                "id": "10",
+                "type": "int",
+                "label": "10"
+              },
+              {
+                "id": "2",
+                "type": "int",
+                "label": "2"
+              },
+              {
+                "id": "9",
+                "type": "int",
+                "label": "9"
+              },
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              },
+              {
+                "id": "3",
+                "type": "int",
+                "label": "3"
+              },
+              {
+                "id": "7",
+                "type": "int",
+                "label": "7"
+              },
+              {
+                "id": "4",
+                "type": "int",
+                "label": "4"
+              },
+              {
+                "id": "6",
+                "type": "int",
+                "label": "6"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "str",
+            "types": [
+              "str",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "\"s\"",
+                "type": "str",
+                "label": "s"
+              },
+              {
+                "id": "\"t\"",
+                "type": "str",
+                "label": "t"
+              },
+              {
+                "id": "\"y\"",
+                "type": "str",
+                "label": "y"
+              },
+              {
+                "id": "\"x\"",
+                "type": "str",
+                "label": "x"
+              },
+              {
+                "id": "\"z\"",
+                "type": "str",
+                "label": "z"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "NoneType",
+            "types": [
+              "NoneType",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "None",
+                "type": "NoneType",
+                "label": "None"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "GNode",
+            "types": [
+              "GNode",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n3",
+                "type": "GNode",
+                "label": "GNode0"
+              },
+              {
+                "id": "n6",
+                "type": "GNode",
+                "label": "GNode2"
+              },
+              {
+                "id": "n4",
+                "type": "GNode",
+                "label": "GNode1"
+              },
+              {
+                "id": "n9",
+                "type": "GNode",
+                "label": "GNode3"
+              },
+              {
+                "id": "n13",
+                "type": "GNode",
+                "label": "GNode4"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "tuple",
+            "types": [
+              "tuple",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n2",
+                "type": "tuple",
+                "label": "tuple0"
+              },
+              {
+                "id": "n5",
+                "type": "tuple",
+                "label": "tuple1"
+              },
+              {
+                "id": "n7",
+                "type": "tuple",
+                "label": "tuple2"
+              },
+              {
+                "id": "n8",
+                "type": "tuple",
+                "label": "tuple3"
+              },
+              {
+                "id": "n10",
+                "type": "tuple",
+                "label": "tuple4"
+              },
+              {
+                "id": "n11",
+                "type": "tuple",
+                "label": "tuple5"
+              },
+              {
+                "id": "n12",
+                "type": "tuple",
+                "label": "tuple6"
+              },
+              {
+                "id": "n14",
+                "type": "tuple",
+                "label": "tuple7"
+              },
+              {
+                "id": "n15",
+                "type": "tuple",
+                "label": "tuple8"
+              },
+              {
+                "id": "n16",
+                "type": "tuple",
+                "label": "tuple9"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n1",
+                "type": "list",
+                "label": "list[10]"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "Graph",
+            "types": [
+              "Graph",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "Graph",
+                "label": "snap"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    },
+    {
+      "step": 5,
+      "label": "relax(x)",
+      "instance": {
+        "atoms": [
+          {
+            "id": "0",
+            "type": "int",
+            "label": "0"
+          },
+          {
+            "id": "\"s\"",
+            "type": "str",
+            "label": "s"
+          },
+          {
+            "id": "None",
+            "type": "NoneType",
+            "label": "None"
+          },
+          {
+            "id": "n3",
+            "type": "GNode",
+            "label": "GNode0"
+          },
+          {
+            "id": "8",
+            "type": "int",
+            "label": "8"
+          },
+          {
+            "id": "\"t\"",
+            "type": "str",
+            "label": "t"
+          },
+          {
+            "id": "5",
+            "type": "int",
+            "label": "5"
+          },
+          {
+            "id": "\"y\"",
+            "type": "str",
+            "label": "y"
+          },
+          {
+            "id": "n6",
+            "type": "GNode",
+            "label": "GNode2"
+          },
+          {
+            "id": "n4",
+            "type": "GNode",
+            "label": "GNode1"
+          },
+          {
+            "id": "10",
+            "type": "int",
+            "label": "10"
+          },
+          {
+            "id": "n2",
+            "type": "tuple",
+            "label": "tuple0"
+          },
+          {
+            "id": "n5",
+            "type": "tuple",
+            "label": "tuple1"
+          },
+          {
+            "id": "2",
+            "type": "int",
+            "label": "2"
+          },
+          {
+            "id": "n7",
+            "type": "tuple",
+            "label": "tuple2"
+          },
+          {
+            "id": "9",
+            "type": "int",
+            "label": "9"
+          },
+          {
+            "id": "\"x\"",
+            "type": "str",
+            "label": "x"
+          },
+          {
+            "id": "n9",
+            "type": "GNode",
+            "label": "GNode3"
+          },
+          {
+            "id": "1",
+            "type": "int",
+            "label": "1"
+          },
+          {
+            "id": "n8",
+            "type": "tuple",
+            "label": "tuple3"
+          },
+          {
+            "id": "3",
+            "type": "int",
+            "label": "3"
+          },
+          {
+            "id": "n10",
+            "type": "tuple",
+            "label": "tuple4"
+          },
+          {
+            "id": "n11",
+            "type": "tuple",
+            "label": "tuple5"
+          },
+          {
+            "id": "7",
+            "type": "int",
+            "label": "7"
+          },
+          {
+            "id": "\"z\"",
+            "type": "str",
+            "label": "z"
+          },
+          {
+            "id": "n13",
+            "type": "GNode",
+            "label": "GNode4"
+          },
+          {
+            "id": "n12",
+            "type": "tuple",
+            "label": "tuple6"
+          },
+          {
+            "id": "4",
+            "type": "int",
+            "label": "4"
+          },
+          {
+            "id": "n14",
+            "type": "tuple",
+            "label": "tuple7"
+          },
+          {
+            "id": "n15",
+            "type": "tuple",
+            "label": "tuple8"
+          },
+          {
+            "id": "6",
+            "type": "int",
+            "label": "6"
+          },
+          {
+            "id": "n16",
+            "type": "tuple",
+            "label": "tuple9"
+          },
+          {
+            "id": "n1",
+            "type": "list",
+            "label": "list[10]"
+          },
+          {
+            "id": "n0",
+            "type": "Graph",
+            "label": "snap"
+          }
+        ],
+        "relations": [
+          {
+            "id": "dist",
+            "name": "dist",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n3",
+                  "0"
+                ],
+                "types": [
+                  "GNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "5"
+                ],
+                "types": [
+                  "GNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "8"
+                ],
+                "types": [
+                  "GNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n9",
+                  "9"
+                ],
+                "types": [
+                  "GNode",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n13",
+                  "7"
+                ],
+                "types": [
+                  "GNode",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "key",
+            "name": "key",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n3",
+                  "\"s\""
+                ],
+                "types": [
+                  "GNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "\"y\""
+                ],
+                "types": [
+                  "GNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "\"t\""
+                ],
+                "types": [
+                  "GNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n9",
+                  "\"x\""
+                ],
+                "types": [
+                  "GNode",
+                  "str"
+                ]
+              },
+              {
+                "atoms": [
+                  "n13",
+                  "\"z\""
+                ],
+                "types": [
+                  "GNode",
+                  "str"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "pred",
+            "name": "pred",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n3",
+                  "None"
+                ],
+                "types": [
+                  "GNode",
+                  "NoneType"
+                ]
+              },
+              {
+                "atoms": [
+                  "n6",
+                  "n3"
+                ],
+                "types": [
+                  "GNode",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n4",
+                  "n6"
+                ],
+                "types": [
+                  "GNode",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n9",
+                  "n4"
+                ],
+                "types": [
+                  "GNode",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n13",
+                  "n6"
+                ],
+                "types": [
+                  "GNode",
+                  "GNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "t0",
+            "name": "t0",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n3"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n3"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n4"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n8",
+                  "n4"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n10",
+                  "n6"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n11",
+                  "n6"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n12",
+                  "n6"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n14",
+                  "n9"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n15",
+                  "n13"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n16",
+                  "n13"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "t1",
+            "name": "t1",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "n4"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "n6"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "n6"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n8",
+                  "n9"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n10",
+                  "n4"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n11",
+                  "n9"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n12",
+                  "n13"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n14",
+                  "n13"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n15",
+                  "n3"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              },
+              {
+                "atoms": [
+                  "n16",
+                  "n9"
+                ],
+                "types": [
+                  "tuple",
+                  "GNode"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "t2",
+            "name": "t2",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n2",
+                  "10"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n5",
+                  "5"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n7",
+                  "2"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n8",
+                  "1"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n10",
+                  "3"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n11",
+                  "9"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n12",
+                  "2"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n14",
+                  "4"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n15",
+                  "7"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              },
+              {
+                "atoms": [
+                  "n16",
+                  "6"
+                ],
+                "types": [
+                  "tuple",
+                  "int"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "idx",
+            "name": "idx",
+            "types": [
+              "object",
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n1",
+                  "0",
+                  "n2"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "1",
+                  "n5"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "2",
+                  "n7"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "3",
+                  "n8"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "4",
+                  "n10"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "5",
+                  "n11"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "6",
+                  "n12"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "7",
+                  "n14"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "8",
+                  "n15"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              },
+              {
+                "atoms": [
+                  "n1",
+                  "9",
+                  "n16"
+                ],
+                "types": [
+                  "list",
+                  "int",
+                  "tuple"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "adj",
+            "name": "adj",
+            "types": [
+              "object",
+              "object"
+            ],
+            "tuples": [
+              {
+                "atoms": [
+                  "n0",
+                  "n1"
+                ],
+                "types": [
+                  "Graph",
+                  "list"
+                ]
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "id": "int",
+            "types": [
+              "int",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "0",
+                "type": "int",
+                "label": "0"
+              },
+              {
+                "id": "8",
+                "type": "int",
+                "label": "8"
+              },
+              {
+                "id": "5",
+                "type": "int",
+                "label": "5"
+              },
+              {
+                "id": "10",
+                "type": "int",
+                "label": "10"
+              },
+              {
+                "id": "2",
+                "type": "int",
+                "label": "2"
+              },
+              {
+                "id": "9",
+                "type": "int",
+                "label": "9"
+              },
+              {
+                "id": "1",
+                "type": "int",
+                "label": "1"
+              },
+              {
+                "id": "3",
+                "type": "int",
+                "label": "3"
+              },
+              {
+                "id": "7",
+                "type": "int",
+                "label": "7"
+              },
+              {
+                "id": "4",
+                "type": "int",
+                "label": "4"
+              },
+              {
+                "id": "6",
+                "type": "int",
+                "label": "6"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "str",
+            "types": [
+              "str",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "\"s\"",
+                "type": "str",
+                "label": "s"
+              },
+              {
+                "id": "\"t\"",
+                "type": "str",
+                "label": "t"
+              },
+              {
+                "id": "\"y\"",
+                "type": "str",
+                "label": "y"
+              },
+              {
+                "id": "\"x\"",
+                "type": "str",
+                "label": "x"
+              },
+              {
+                "id": "\"z\"",
+                "type": "str",
+                "label": "z"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "NoneType",
+            "types": [
+              "NoneType",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "None",
+                "type": "NoneType",
+                "label": "None"
+              }
+            ],
+            "isBuiltin": true
+          },
+          {
+            "id": "GNode",
+            "types": [
+              "GNode",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n3",
+                "type": "GNode",
+                "label": "GNode0"
+              },
+              {
+                "id": "n6",
+                "type": "GNode",
+                "label": "GNode2"
+              },
+              {
+                "id": "n4",
+                "type": "GNode",
+                "label": "GNode1"
+              },
+              {
+                "id": "n9",
+                "type": "GNode",
+                "label": "GNode3"
+              },
+              {
+                "id": "n13",
+                "type": "GNode",
+                "label": "GNode4"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "tuple",
+            "types": [
+              "tuple",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n2",
+                "type": "tuple",
+                "label": "tuple0"
+              },
+              {
+                "id": "n5",
+                "type": "tuple",
+                "label": "tuple1"
+              },
+              {
+                "id": "n7",
+                "type": "tuple",
+                "label": "tuple2"
+              },
+              {
+                "id": "n8",
+                "type": "tuple",
+                "label": "tuple3"
+              },
+              {
+                "id": "n10",
+                "type": "tuple",
+                "label": "tuple4"
+              },
+              {
+                "id": "n11",
+                "type": "tuple",
+                "label": "tuple5"
+              },
+              {
+                "id": "n12",
+                "type": "tuple",
+                "label": "tuple6"
+              },
+              {
+                "id": "n14",
+                "type": "tuple",
+                "label": "tuple7"
+              },
+              {
+                "id": "n15",
+                "type": "tuple",
+                "label": "tuple8"
+              },
+              {
+                "id": "n16",
+                "type": "tuple",
+                "label": "tuple9"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "list",
+            "types": [
+              "list",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n1",
+                "type": "list",
+                "label": "list[10]"
+              }
+            ],
+            "isBuiltin": false
+          },
+          {
+            "id": "Graph",
+            "types": [
+              "Graph",
+              "object"
+            ],
+            "atoms": [
+              {
+                "id": "n0",
+                "type": "Graph",
+                "label": "snap"
+              }
+            ],
+            "isBuiltin": false
+          }
+        ],
+        "rootId": "n0"
+      }
+    }
+  ]
+}

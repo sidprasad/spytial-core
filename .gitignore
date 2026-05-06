@@ -61,3 +61,13 @@ pids
 # Demo files (for testing)
 edge-input-demo.html
 .claude
+
+# Analysis-harness runtime output (unpublished tooling under analysis/)
+analysis/results/
+analysis/.venv/
+analysis/.ipynb_checkpoints/
+# Python caches anywhere under analysis/ (traces/, scripts/, runner/, ...)
+analysis/**/__pycache__/
+**/*.pyc
+# External-repo clones used as input fixtures (re-clonable from upstream)
+analysis/traces/uml_evolution/cache/
