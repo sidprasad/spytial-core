@@ -9,6 +9,7 @@
   * [The Four Subproblems](integration.md)
   * [Case Studies](case-studies.md)
   * [Custom Data Instances](custom-data-instance.md)
+  * [Claude Code Skill](skill.md)
 
 * **Data**
   * [JSON Data Format](json-data.md)
