@@ -32,6 +32,7 @@ Restart Claude Code, then say *"I want to integrate Haskell with Spytial"* (or y
 
 ```bash
 git clone https://github.com/sidprasad/spytial-core.git
+mkdir -p ~/.claude/skills
 cp -r spytial-core/.claude/skills/integrate-language ~/.claude/skills/
 ```
 
@@ -40,6 +41,7 @@ cp -r spytial-core/.claude/skills/integrate-language ~/.claude/skills/
 If you're hacking on the skill itself, symlink so edits take effect immediately:
 
 ```bash
+mkdir -p ~/.claude/skills
 ln -s "$(pwd)/.claude/skills/integrate-language" ~/.claude/skills/integrate-language
 ```
 
