@@ -1,5 +1,7 @@
 # The Four Subproblems
 
+> Using Claude Code? Run `/integrate-language` (see [skill.md](skill.md)) for a guided walkthrough of this recipe.
+
 > The goal is not merely to build three ports, but to extract what is **invariant** across hosts from what is **host-specific**.
 
 Every integration of Spytial — Python, Rust, Pyret, Lean, the next one you write — must resolve the same four subproblems. The mechanisms differ; the questions don't.

@@ -60,7 +60,8 @@ pids
 
 # Demo files (for testing)
 edge-input-demo.html
-.claude
+.claude/*
+!.claude/skills/
 
 # Analysis-harness runtime output (unpublished tooling under analysis/)
 analysis/results/
