@@ -1,0 +1,37 @@
+{
+  "eval_id": 2,
+  "eval_name": "eval-near-miss-graph",
+  "prompt": "I'm using spytial-py in my Python project to visualize a graph of dependencies. The arrows are pointing the wrong direction — I want parent -> child but it's rendering child -> parent. How do I flip the orientation?",
+  "assertions": [
+    {
+      "text": "Skill does NOT engage its phased walkthrough — response does not contain 'Phase 1' / 'Phase 2' / 'four subproblems' / 'recover/attach/present/gaps' framework",
+      "passed": null,
+      "evidence": ""
+    },
+    {
+      "text": "Response is concise — under ~3000 characters / ~500 words. The user asked a focused question, not a design question",
+      "passed": null,
+      "evidence": ""
+    },
+    {
+      "text": "Discusses orientation as a layout concept — either the orientation directive/decorator in spytial-py or reversing the relation in the data model",
+      "passed": null,
+      "evidence": ""
+    },
+    {
+      "text": "Does not interrogate the user with the five Phase 1 questions about identity model / spec idiom / surface / target user — those would be a sign the skill triggered inappropriately",
+      "passed": null,
+      "evidence": ""
+    },
+    {
+      "text": "Does not WebFetch or otherwise consult integration.md / case-studies.md / interfaces.ts — those sources are for building integrations, not consuming them",
+      "passed": null,
+      "evidence": ""
+    },
+    {
+      "text": "Provides at least one concrete code-shaped suggestion: a decorator like @spytial.orientation(...), a YAML directive, or a code snippet — actionable, not just abstract",
+      "passed": null,
+      "evidence": ""
+    }
+  ]
+}

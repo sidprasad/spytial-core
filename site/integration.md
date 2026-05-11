@@ -4,7 +4,7 @@
 
 > The goal is not merely to build three ports, but to extract what is **invariant** across hosts from what is **host-specific**.
 
-Every integration of Spytial — Python, Rust, Pyret, Lean, the next one you write — must resolve the same four subproblems. The mechanisms differ; the questions don't.
+Every integration of Spytial — Python, Rust, Pyret, the next one you write — must resolve the same four subproblems. The mechanisms differ; the questions don't.
 
 This page is the contract for an integrator. If you can answer all four for your host, you have a working Spytial port.
 
@@ -21,12 +21,11 @@ This page is the contract for an integrator. If you can answer all four for your
 | Python | **Run-time reflection**            | `__dict__`, `__slots__`, `id()`-based identity tracking   |
 | Rust   | **Type-directed serialization**    | A `derive` macro emits per-type traversal at compile time |
 | Pyret  | **Value-skeleton machinery**       | Pyret's reflection of constructor arity + field names     |
-| Lean   | **Elaborated-term walk**           | `Expr` after WHNF reduction; constructors → atoms         |
 
 What you produce, regardless of mechanism, is an `IDataInstance` (or its JSON serialization). See [Custom Data Instances](custom-data-instance.md).
 
 **Rules of thumb:**
-- Identity matters. Two distinct values must get distinct `id`s, even if structurally equal. Two references to the same value must share an `id`. (Python uses `id()`; Rust uses pointer addresses for shared boxed values; Lean uses `Expr` hash-cons identity.)
+- Identity matters. Two distinct values must get distinct `id`s, even if structurally equal. Two references to the same value must share an `id`. (Python uses `id()`. Caraspace, despite Rust having pointer identity, uses **counter-based IDs with singleton dedup** — pointer identity is fragile under move semantics, and most Rust diagrams don't share state across `Rc`/`Arc` anyway.)
 - Types should match what users will write in selectors. If a user types `selector: BST.left`, the atoms had better have type `BST` (or a subtype) and the relation had better be called `left`.
 - Built-in / primitive types (Int, String, …) should be marked with `isBuiltin: true` so `flag: hideDisconnectedBuiltIns` can clean up scaffolding.
 
@@ -43,14 +42,8 @@ Spytial doesn't dictate where the YAML comes from. Each host picks the seam that
 | Python | **Decorators** (`@spytial.orientation(...)`) and a registration API | Decorator state on the class; merged at `diagram(value)` time.                      |
 | Rust   | **Procedural macros** (`#[orientation(...)]`)                       | Compile-time decorator collection walked through generic type tree (`Vec<T>`, `Option<T>`, …). |
 | Pyret  | **Output-method attachment**                                        | Specs attached to a function's output method, applied when the value is rendered.   |
-| Lean   | **Tactic / elaborator hooks** + a typed Spec layer                  | Lean DSL → YAML emitted to the widget.                                              |
 
 Whatever mechanism you choose, the output is the same: a string of YAML matching the [spec language](yaml-reference.md).
-
-**Two patterns worth copying:**
-
-- **Per-type specs that compose.** Caraspace lets you put orientation constraints on `Vec<Person>` and `Person` independently; the macro merges them. Same idea works in Python (decorators on the class) and Lean (named spec layers).
-- **An "escape hatch" for raw YAML.** Caraspace ships `diagram_with_spec(value, spec)`. Always offer this — the typed DSL never covers everything.
 
 ---
 
@@ -58,27 +51,32 @@ Whatever mechanism you choose, the output is the same: a string of YAML matching
 
 > *How does the diagram surface to the user?*
 
-This is the most host-shaped subproblem. There are two broad patterns:
+This is the most host-shaped subproblem. The standard pattern is an **explicit rendering call**: Python and Rust expose a function (`spytial.diagram(...)`, `caraspace::diagram(...)`) that produces an HTML artifact and either opens a browser tab, writes a file, or returns an inline IPython display. This is the right default when the host doesn't already have an output channel.
 
-**Explicit rendering call.** Python and Rust expose a function (`spytial.diagram(...)`, `caraspace::diagram(...)`) that produces an HTML artifact and either opens a browser tab, writes a file, or returns an inline IPython display. This is the right default when the host doesn't already have an output channel.
-
-**Ambient output integration.** Pyret has a built-in display protocol; values render automatically. Spyret hooks into that — no explicit call. Lean has the infoview; spytial-lean uses ProofWidgets4 so diagrams appear next to the proof state.
-
-Whichever pattern you use, the browser-side payload is identical: load the spytial-core bundle (NPM or [CDN](#cdn)), build a `JSONDataInstance`, parse the spec, and call `renderLayout` on a `<webcola-cnd-graph>` (or `<spytial-explorer>` for accessibility).
+Whichever surface you use, the browser-side payload is identical: load the spytial-core bundle (NPM or [CDN](#cdn)), build a `JSONDataInstance`, parse the spec, and call `renderLayout` on a `<webcola-cnd-graph>` (or `<spytial-explorer>` for accessibility).
 
 ### CDN
 
 Most integrations ship the bundle from CDN rather than copying it:
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/spytial-core/dist/browser/spytial-core-complete.global.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/spytial-core@2.5.2/dist/browser/spytial-core-complete.global.js"></script>
 <script>
-  const { JSONDataInstance, parseLayoutSpec, SGraphQueryEvaluator, LayoutInstance, setupLayout } = spytialcore;
-  // ...
+  const { JSONDataInstance, parseLayoutSpec, SGraphQueryEvaluator, LayoutInstance } = spytialcore;
+
+  const instance  = new JSONDataInstance(jsonPayload);
+  const spec      = parseLayoutSpec(yamlSpec);
+  const evaluator = new SGraphQueryEvaluator();
+  evaluator.initialize({ sourceData: instance });
+
+  const layout = new LayoutInstance(spec, evaluator).generateLayout(instance);
+  document.querySelector('webcola-cnd-graph').renderLayout(layout);
 </script>
 ```
 
-For reproducibility (papers, locked notebooks), pin a version: `spytial-core@2.5.2`.
+(`spytial-core` also exports a `setupLayout(spec, instance, evaluator)` helper that collapses the `parseLayoutSpec` / `LayoutInstance.generateLayout` lines into one — equivalent shape, fewer keystrokes. Use whichever reads cleaner.)
+
+For reproducibility (papers, locked notebooks), keep the version pinned in the script `src` as above. Bare `spytial-core` URLs silently shift.
 
 ---
 
@@ -88,7 +86,7 @@ For reproducibility (papers, locked notebooks), pin a version: `spytial-core@2.5
 
 This is the subtlest subproblem and the one most likely to bite you. The categories:
 
-**Implicit ordering.** A `set` has no order. A red-black tree's left/right children are ordered, but a Python `dict` of children is not (until 3.7). When users want a stable left-to-right rendering, you need to either (a) preserve insertion order during relationalization, or (b) attach an `orderBy` directive (e.g. `projection.orderBy: "next"`). Caraspace uses field declaration order; sPyTial uses dictionary insertion order; Lean uses constructor argument position.
+**Implicit ordering.** A `set` has no order. A red-black tree's left/right children are ordered, but a Python `dict` of children is not (until 3.7). When users want a stable left-to-right rendering, you need to either (a) preserve insertion order during relationalization, or (b) attach an `orderBy` directive (e.g. `projection.orderBy: "next"`). Caraspace uses field declaration order; sPyTial uses dictionary insertion order.
 
 **Derived metrics.** Tree height, subtree size, RB-tree black-height, balance factor — none of these live in the data, but users want to color or label by them. Two options:
 
@@ -97,7 +95,7 @@ This is the subtlest subproblem and the one most likely to bite you. The categor
 
 Caraspace's red-black tree example does the first.
 
-**Hidden structure.** Sharing in immutable values (Lean), reference cycles (Python), interior pointers (Rust). The relationalizer must decide whether to expose sharing as one atom referenced twice (faithful) or two duplicate atoms (cleaner-looking but lying). Faithful is the default; offer a "duplicate-on-share" mode if the visual blow-up is too painful.
+**Hidden structure.** Sharing in immutable values, reference cycles (Python), interior pointers (Rust). The relationalizer must decide whether to expose sharing as one atom referenced twice (faithful) or two duplicate atoms (cleaner-looking but lying). Faithful is the default; offer a "duplicate-on-share" mode if the visual blow-up is too painful.
 
 **Cycles in the projection ordering.** When the user writes `projection.orderBy: "next"` and `next` has a cycle, `applyProjectionTransform` breaks the cycle by lexicographic order. If your host can produce a more meaningful tiebreak (e.g. source-position in Pyret), you can pass an `evaluateOrderBy` callback that returns a deterministic ordering.
 

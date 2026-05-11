@@ -1,0 +1,47 @@
+{
+  "eval_id": 0,
+  "eval_name": "eval-rust-backtest",
+  "prompt": "I want to build a Spytial integration for Rust. I have a few core types I'd like to visualize — Vec<Person> where Person is a struct with name/age/parent, and a binary tree of i32 with left/right children. What's the right shape for this integration? I want to use procedural macros since that's the Rust idiom.",
+  "assertions": [
+    {
+      "text": "Names a specific relationalizer technique (procedural macros, derive macros, or compile-time type-directed serialization) and ties it to the Rust type system",
+      "passed": null,
+      "evidence": ""
+    },
+    {
+      "text": "Addresses identity for Rust types — distinguishes value semantics from references (&, Box, Rc, Arc), or notes that struct field paths can serve as stable IDs",
+      "passed": null,
+      "evidence": ""
+    },
+    {
+      "text": "Drafts at least one concrete macro/attribute signature, e.g. #[orientation(...)] / #[align(...)] / #[group(...)] / #[derive(SpytialDecorators)]",
+      "passed": null,
+      "evidence": ""
+    },
+    {
+      "text": "Recommends emitting JSON conforming to JSONDataInstance (Path A) over implementing IDataInstance directly (Path B)",
+      "passed": null,
+      "evidence": ""
+    },
+    {
+      "text": "Addresses Subproblem 4 (Gaps) for at least one of the user's examples — e.g. binary tree height as a derived metric, Vec ordering, or sharing of Person via parent pointer",
+      "passed": null,
+      "evidence": ""
+    },
+    {
+      "text": "Mentions Caraspace or the existing Rust integration as a reference / precedent",
+      "passed": null,
+      "evidence": ""
+    },
+    {
+      "text": "States how the diagram will surface (browser tab, explicit diagram() call, file output) — Subproblem 3",
+      "passed": null,
+      "evidence": ""
+    },
+    {
+      "text": "Provides a path to a minimum-viable build (JSON emitter + HTML harness for one example), not just abstract design",
+      "passed": null,
+      "evidence": ""
+    }
+  ]
+}

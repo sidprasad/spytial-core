@@ -1,0 +1,47 @@
+{
+  "eval_id": 1,
+  "eval_name": "eval-haskell-forward",
+  "prompt": "hey i'm prototyping a haskell library for parsing recipe formats and i'd love to be able to visualize the AST trees as i go. each node has a constructor name and children. how do i hook this up to spytial? i've never integrated anything with spytial before",
+  "assertions": [
+    {
+      "text": "Identifies that pure-FP Haskell has no runtime object identity — equal values are indistinguishable — and flags this as a problem the integrator must solve, not assume away",
+      "passed": null,
+      "evidence": ""
+    },
+    {
+      "text": "Names at least one concrete strategy for supplying identity in Haskell: hash-consing, structural hash with cycle detection, path-from-root, explicit ID field, or System.Mem.StableName / observable sharing",
+      "passed": null,
+      "evidence": ""
+    },
+    {
+      "text": "Picks a Haskell-idiomatic spec-attachment seam: type-class instances (e.g. class Spytial a), Generic deriving, or a separate Spec ADT — and contrasts with non-natural choices",
+      "passed": null,
+      "evidence": ""
+    },
+    {
+      "text": "Names AST as the classical example for Subproblem 4 (Gaps) — the user explicitly said AST trees, so the design must engage with it concretely",
+      "passed": null,
+      "evidence": ""
+    },
+    {
+      "text": "Addresses ordering of child lists (insertion order, position-as-relation, or orderBy directive) — important for ASTs whose children have semantic positions",
+      "passed": null,
+      "evidence": ""
+    },
+    {
+      "text": "States a path to emit JSON conforming to JSONDataInstance, with Aeson or hand-rolled serialization",
+      "passed": null,
+      "evidence": ""
+    },
+    {
+      "text": "Acknowledges the user is a beginner — is welcoming, doesn't dump 4 phases of jargon without scaffolding, and offers a simple first step",
+      "passed": null,
+      "evidence": ""
+    },
+    {
+      "text": "Provides a path to a minimum-viable build (JSON emitter + HTML harness rendering one AST example), not just abstract design",
+      "passed": null,
+      "evidence": ""
+    }
+  ]
+}

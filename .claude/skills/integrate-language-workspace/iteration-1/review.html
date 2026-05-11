@@ -1,0 +1,1325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eval Review</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600&family=Lora:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #faf9f5;
+      --surface: #ffffff;
+      --border: #e8e6dc;
+      --text: #141413;
+      --text-muted: #b0aea5;
+      --accent: #d97757;
+      --accent-hover: #c4613f;
+      --green: #788c5d;
+      --green-bg: #eef2e8;
+      --red: #c44;
+      --red-bg: #fceaea;
+      --header-bg: #141413;
+      --header-text: #faf9f5;
+      --radius: 6px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Lora', Georgia, serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ---- Header ---- */
+    .header {
+      background: var(--header-bg);
+      color: var(--header-text);
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .header h1 {
+      font-family: 'Poppins', sans-serif;
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+    .header .instructions {
+      font-size: 0.8rem;
+      opacity: 0.7;
+      margin-top: 0.25rem;
+    }
+    .header .progress {
+      font-size: 0.875rem;
+      opacity: 0.8;
+      text-align: right;
+    }
+
+    /* ---- Main content ---- */
+    .main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.5rem 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    /* ---- Sections ---- */
+    .section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      flex-shrink: 0;
+    }
+    .section-header {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.75rem 1rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .section-body {
+      padding: 1rem;
+    }
+
+    /* ---- Config badge ---- */
+    .config-badge {
+      display: inline-block;
+      padding: 0.2rem 0.625rem;
+      border-radius: 9999px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin-left: 0.75rem;
+      vertical-align: middle;
+    }
+    .config-badge.config-primary {
+      background: rgba(33, 150, 243, 0.12);
+      color: #1976d2;
+    }
+    .config-badge.config-baseline {
+      background: rgba(255, 193, 7, 0.15);
+      color: #f57f17;
+    }
+
+    /* ---- Prompt ---- */
+    .prompt-text {
+      white-space: pre-wrap;
+      font-size: 0.9375rem;
+      line-height: 1.6;
+    }
+
+    /* ---- Outputs ---- */
+    .output-file {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .output-file + .output-file {
+      margin-top: 1rem;
+    }
+    .output-file-header {
+      padding: 0.5rem 0.75rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      font-family: 'SF Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .output-file-header .dl-btn {
+      font-size: 0.7rem;
+      color: var(--accent);
+      text-decoration: none;
+      cursor: pointer;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-weight: 500;
+      opacity: 0.8;
+    }
+    .output-file-header .dl-btn:hover {
+      opacity: 1;
+      text-decoration: underline;
+    }
+    .output-file-content {
+      padding: 0.75rem;
+      overflow-x: auto;
+    }
+    .output-file-content pre {
+      font-size: 0.8125rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: 'SF Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+    }
+    .output-file-content img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 4px;
+    }
+    .output-file-content iframe {
+      width: 100%;
+      height: 600px;
+      border: none;
+    }
+    .output-file-content table {
+      border-collapse: collapse;
+      font-size: 0.8125rem;
+      width: 100%;
+    }
+    .output-file-content table td,
+    .output-file-content table th {
+      border: 1px solid var(--border);
+      padding: 0.375rem 0.5rem;
+      text-align: left;
+    }
+    .output-file-content table th {
+      background: var(--bg);
+      font-weight: 600;
+    }
+    .output-file-content .download-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+    .output-file-content .download-link:hover {
+      background: var(--border);
+    }
+    .empty-state {
+      color: var(--text-muted);
+      font-style: italic;
+      padding: 2rem;
+      text-align: center;
+    }
+
+    /* ---- Feedback ---- */
+    .prev-feedback {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.625rem 0.75rem;
+      margin-top: 0.75rem;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .prev-feedback-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.25rem;
+      color: var(--text-muted);
+    }
+    .feedback-textarea {
+      width: 100%;
+      min-height: 100px;
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 0.9375rem;
+      line-height: 1.5;
+      resize: vertical;
+      color: var(--text);
+    }
+    .feedback-textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+    .feedback-status {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.5rem;
+      min-height: 1.1em;
+    }
+
+    /* ---- Grades (collapsible) ---- */
+    .grades-toggle {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+    }
+    .grades-toggle:hover {
+      color: var(--accent);
+    }
+    .grades-toggle .arrow {
+      margin-right: 0.5rem;
+      transition: transform 0.15s;
+      font-size: 0.75rem;
+    }
+    .grades-toggle .arrow.open {
+      transform: rotate(90deg);
+    }
+    .grades-content {
+      display: none;
+      margin-top: 0.75rem;
+    }
+    .grades-content.open {
+      display: block;
+    }
+    .grades-summary {
+      font-size: 0.875rem;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .grade-badge {
+      display: inline-block;
+      padding: 0.125rem 0.5rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .grade-pass { background: var(--green-bg); color: var(--green); }
+    .grade-fail { background: var(--red-bg); color: var(--red); }
+    .assertion-list {
+      list-style: none;
+    }
+    .assertion-item {
+      padding: 0.625rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.8125rem;
+    }
+    .assertion-item:last-child { border-bottom: none; }
+    .assertion-status {
+      font-weight: 600;
+      margin-right: 0.5rem;
+    }
+    .assertion-status.pass { color: var(--green); }
+    .assertion-status.fail { color: var(--red); }
+    .assertion-evidence {
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      margin-top: 0.25rem;
+      padding-left: 1.5rem;
+    }
+
+    /* ---- View tabs ---- */
+    .view-tabs {
+      display: flex;
+      gap: 0;
+      padding: 0 2rem;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .view-tab {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.625rem 1.25rem;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      background: none;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+    }
+    .view-tab:hover { color: var(--text); }
+    .view-tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .view-panel { display: none; }
+    .view-panel.active { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+
+    /* ---- Benchmark view ---- */
+    .benchmark-view {
+      padding: 1.5rem 2rem;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .benchmark-table {
+      border-collapse: collapse;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 0.8125rem;
+      width: 100%;
+      margin-bottom: 1.5rem;
+    }
+    .benchmark-table th, .benchmark-table td {
+      padding: 0.625rem 0.75rem;
+      text-align: left;
+      border: 1px solid var(--border);
+    }
+    .benchmark-table th {
+      font-family: 'Poppins', sans-serif;
+      background: var(--header-bg);
+      color: var(--header-text);
+      font-weight: 500;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .benchmark-table tr:hover { background: var(--bg); }
+    .benchmark-table tr.benchmark-row-with { background: rgba(33, 150, 243, 0.06); }
+    .benchmark-table tr.benchmark-row-without { background: rgba(255, 193, 7, 0.06); }
+    .benchmark-table tr.benchmark-row-with:hover { background: rgba(33, 150, 243, 0.12); }
+    .benchmark-table tr.benchmark-row-without:hover { background: rgba(255, 193, 7, 0.12); }
+    .benchmark-table tr.benchmark-row-avg { font-weight: 600; border-top: 2px solid var(--border); }
+    .benchmark-table tr.benchmark-row-avg.benchmark-row-with { background: rgba(33, 150, 243, 0.12); }
+    .benchmark-table tr.benchmark-row-avg.benchmark-row-without { background: rgba(255, 193, 7, 0.12); }
+    .benchmark-delta-positive { color: var(--green); font-weight: 600; }
+    .benchmark-delta-negative { color: var(--red); font-weight: 600; }
+    .benchmark-notes {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem;
+    }
+    .benchmark-notes h3 {
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.875rem;
+      margin-bottom: 0.75rem;
+    }
+    .benchmark-notes ul {
+      list-style: disc;
+      padding-left: 1.25rem;
+    }
+    .benchmark-notes li {
+      font-size: 0.8125rem;
+      line-height: 1.6;
+      margin-bottom: 0.375rem;
+    }
+    .benchmark-empty {
+      color: var(--text-muted);
+      font-style: italic;
+      text-align: center;
+      padding: 3rem;
+    }
+
+    /* ---- Navigation ---- */
+    .nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 2rem;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+    .nav-btn {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.5rem 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--text);
+      transition: all 0.15s;
+    }
+    .nav-btn:hover:not(:disabled) {
+      background: var(--bg);
+      border-color: var(--text-muted);
+    }
+    .nav-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .done-btn {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.5rem 1.5rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: all 0.15s;
+    }
+    .done-btn:hover {
+      background: var(--bg);
+      border-color: var(--text-muted);
+    }
+    .done-btn.ready {
+      border: none;
+      background: var(--accent);
+      color: white;
+      font-weight: 600;
+    }
+    .done-btn.ready:hover {
+      background: var(--accent-hover);
+    }
+    /* ---- Done overlay ---- */
+    .done-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 100;
+      justify-content: center;
+      align-items: center;
+    }
+    .done-overlay.visible {
+      display: flex;
+    }
+    .done-card {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 2rem 3rem;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 500px;
+    }
+    .done-card h2 {
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .done-card p {
+      color: var(--text-muted);
+      margin-bottom: 1.5rem;
+      line-height: 1.5;
+    }
+    .done-card .btn-row {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+    }
+    .done-card button {
+      padding: 0.5rem 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      cursor: pointer;
+      font-size: 0.875rem;
+    }
+    .done-card button:hover {
+      background: var(--bg);
+    }
+    /* ---- Toast ---- */
+    .toast {
+      position: fixed;
+      bottom: 5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--header-bg);
+      color: var(--header-text);
+      padding: 0.625rem 1.25rem;
+      border-radius: var(--radius);
+      font-size: 0.875rem;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+      z-index: 200;
+    }
+    .toast.visible {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div id="app" style="height:100vh; display:flex; flex-direction:column;">
+    <div class="header">
+      <div>
+        <h1>Eval Review: <span id="skill-name"></span></h1>
+        <div class="instructions">Review each output and leave feedback below. Navigate with arrow keys or buttons. When done, copy feedback and paste into Claude Code.</div>
+      </div>
+      <div class="progress" id="progress"></div>
+    </div>
+
+    <!-- View tabs (only shown when benchmark data exists) -->
+    <div class="view-tabs" id="view-tabs" style="display:none;">
+      <button class="view-tab active" onclick="switchView('outputs')">Outputs</button>
+      <button class="view-tab" onclick="switchView('benchmark')">Benchmark</button>
+    </div>
+
+    <!-- Outputs panel (qualitative review) -->
+    <div class="view-panel active" id="panel-outputs">
+    <div class="main">
+      <!-- Prompt -->
+      <div class="section">
+        <div class="section-header">Prompt <span class="config-badge" id="config-badge" style="display:none;"></span></div>
+        <div class="section-body">
+          <div class="prompt-text" id="prompt-text"></div>
+        </div>
+      </div>
+
+      <!-- Outputs -->
+      <div class="section">
+        <div class="section-header">Output</div>
+        <div class="section-body" id="outputs-body">
+          <div class="empty-state">No output files found</div>
+        </div>
+      </div>
+
+      <!-- Previous Output (collapsible) -->
+      <div class="section" id="prev-outputs-section" style="display:none;">
+        <div class="section-header">
+          <div class="grades-toggle" onclick="togglePrevOutputs()">
+            <span class="arrow" id="prev-outputs-arrow">&#9654;</span>
+            Previous Output
+          </div>
+        </div>
+        <div class="grades-content" id="prev-outputs-content"></div>
+      </div>
+
+      <!-- Grades (collapsible) -->
+      <div class="section" id="grades-section" style="display:none;">
+        <div class="section-header">
+          <div class="grades-toggle" onclick="toggleGrades()">
+            <span class="arrow" id="grades-arrow">&#9654;</span>
+            Formal Grades
+          </div>
+        </div>
+        <div class="grades-content" id="grades-content"></div>
+      </div>
+
+      <!-- Feedback -->
+      <div class="section">
+        <div class="section-header">Your Feedback</div>
+        <div class="section-body">
+          <textarea
+            class="feedback-textarea"
+            id="feedback"
+            placeholder="What do you think of this output? Any issues, suggestions, or things that look great?"
+          ></textarea>
+          <div class="feedback-status" id="feedback-status"></div>
+          <div class="prev-feedback" id="prev-feedback" style="display:none;">
+            <div class="prev-feedback-label">Previous feedback</div>
+            <div id="prev-feedback-text"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="nav" id="outputs-nav">
+      <button class="nav-btn" id="prev-btn" onclick="navigate(-1)">&#8592; Previous</button>
+      <button class="done-btn" id="done-btn" onclick="showDoneDialog()">Submit All Reviews</button>
+      <button class="nav-btn" id="next-btn" onclick="navigate(1)">Next &#8594;</button>
+    </div>
+    </div><!-- end panel-outputs -->
+
+    <!-- Benchmark panel (quantitative stats) -->
+    <div class="view-panel" id="panel-benchmark">
+      <div class="benchmark-view" id="benchmark-content">
+        <div class="benchmark-empty">No benchmark data available. Run a benchmark to see quantitative results here.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Done overlay -->
+  <div class="done-overlay" id="done-overlay">
+    <div class="done-card">
+      <h2>Review Complete</h2>
+      <p>Your feedback has been saved. Go back to your Claude Code session and tell Claude you're done reviewing.</p>
+      <div class="btn-row">
+        <button onclick="closeDoneDialog()">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ---- Embedded data (injected by generate_review.py) ----
+    const EMBEDDED_DATA = {"skill_name": "integrate-language", "runs": [{"id": "eval-rust-backtest-with_skill-run-1", "prompt": "I want to build a Spytial integration for Rust. I have a few core types I'd like to visualize \u2014 Vec<Person> where Person is a struct with name/age/parent, and a binary tree of i32 with left/right children. What's the right shape for this integration? I want to use procedural macros since that's the Rust idiom.", "eval_id": 0, "outputs": [{"name": "response.md", "type": "text", "content": "# Spytial-for-Rust: Integration Design\n\nBefore any code, the `integrate-language` skill walks four subproblems: **Recover, Attach, Present, Gaps**. The Rust integration that already exists (Caraspace) is your closest reference, but you're starting fresh, so this document is a design you can hand to an implementer (or yourself) and start cutting code from.\n\nI have your high-level answers (Rust, proc macros, `Vec<Person>`, BST). A few things I'd normally batch-ask in Phase 1 I'm going to **assume** so we can keep momentum \u2014 they're called out below. Push back on any that are wrong and we'll revise.\n\n---\n\n## Phase 1 \u2014 Host interrogation (with my assumptions)\n\n| # | Question | Your answer / my assumption |\n|---|---|---|\n| 1 | Host language and runtime | Rust, compiled. **Assumption:** standard `cargo` project, no `no_std`, edition 2021+. Surface = browser tab opened from a CLI command (no IDE infoview). |\n| 2 | Identity model | Rust has no GC and no universal object identity. **Assumption (load-bearing):** identity = **address of the value during traversal** (`&T as *const T as usize`), augmented with the type name. We do *not* hash contents \u2014 two `Person { name: \"Ada\", age: 30 }` values at different addresses are different atoms. This matches Caraspace's approach and is the right default for the Rust idiom. |\n| 3 | Spec-attachment idiom | **Procedural macros**, as you said. Specifically a `#[derive(Spytial)]` macro plus attribute macros (`#[spytial(orientation(...))]`). |\n| 4 | Surface | **Assumption:** explicit `spytial::diagram(&value)` call that writes `out.html` next to the binary and (optionally) opens it. No Jupyter, no LSP. |\n| 5 | Target user + classical example | **Assumption:** library authors instrumenting their own types, with end-developers as a secondary audience via the raw-YAML escape hatch. Classical examples are the two you named: `Vec<Person>` (with `parent: Option<Rc<Person>>` \u2014 see \u00a72.4) and `BinTree<i32>`. |\n\nIf #2 or #4 are wrong, the design changes materially. Everything else is cosmetic.\n\n---\n\n## Phase 2 \u2014 Design across the four subproblems\n\n### 2.1 Recover (host value -> `IDataInstance`)\n\n**Technique: type-directed serialization via a `derive` macro, traversal at runtime, JSON output.**\n\nRust's identity model rules out Python-style runtime reflection (no `__dict__`), and the host's idiom is \"derive a trait.\" So:\n\n```rust\n#[derive(Spytial)]\nstruct Person { name: String, age: u32, parent: Option<Rc<Person>> }\n```\n\nThe `Spytial` derive expands to an `impl SpytialRelationalize for Person` with a single method `fn relationalize(&self, ctx: &mut RelCtx)`. The macro:\n\n1. Emits an atom for `self`, keyed by `RelCtx::intern(self as *const _ as usize, \"Person\")`. `intern` returns the *existing* atom id if this address has been seen, otherwise mints a fresh one. **This is the identity-aware reflection step the skill calls out as the #1 source of bugs.**\n2. For each named field, recursively calls `field.relationalize(ctx)` and emits a tuple `(self_id, child_id)` in a relation named after the field (`\"name\"`, `\"age\"`, `\"parent\"`).\n3. Field iteration order = declaration order (Caraspace-confirmed pattern). This makes `orderBy` honest without a directive for record types.\n\nGeneric containers get blanket impls in the runtime crate, not in the macro:\n\n- `impl<T: SpytialRelationalize> SpytialRelationalize for Vec<T>` \u2014 emits a `Vec<T>` atom plus an `elements` relation with explicit index in a parallel `index` relation (so we can `orderBy index` in the spec; **don't fake order via the relation's tuple order**, per the anti-patterns section).\n- `impl<T: SpytialRelationalize> SpytialRelationalize for Option<T>` \u2014 `None` is a builtin atom, `Some(x)` emits a `some` tuple to `x`.\n- `impl<T: SpytialRelationalize> SpytialRelationalize for Rc<T>` and `Box<T>` \u2014 **delegate identity to the pointee**, i.e., `intern((*self).as_ptr() as usize, ...)`. This is what makes `parent: Option<Rc<Person>>` show as one atom referenced twice instead of two clones. The skill flagged \"don't silently dedupe shared references\" \u2014 the inverse is also true: don't silently *split* them.\n- `String`, `i32`, `u32`, `bool`, `f64` etc. \u2014 emit atoms with `isBuiltin: true`, type matching the Rust name (so users write `Int` selectors? No \u2014 write `i32`, matching what the user typed. Caraspace pattern: types should match user-written selectors).\n\n**Hand-traced atoms/tuples for `BinTree { val: 1, left: Some(Box::new(BinTree{ val:2, ...})), right: None }`:**\n\n```\natoms:\n  { id: \"BinTree#1\", type: \"BinTree\", label: \"BinTree\" }\n  { id: \"BinTree#2\", type: \"BinTree\", label: \"BinTree\" }\n  { id: \"i32#1\",     type: \"i32\",     label: \"1\", isBuiltin: true }\n  { id: \"i32#2\",     type: \"i32\",     label: \"2\", isBuiltin: true }\n  { id: \"None\",      type: \"Option\",  label: \"None\", isBuiltin: true }\nrelations:\n  { name: \"val\",   types:[\"BinTree\",\"i32\"],     tuples:[[\"BinTree#1\",\"i32#1\"], [\"BinTree#2\",\"i32#2\"]] }\n  { name: \"left\",  types:[\"BinTree\",\"BinTree\"], tuples:[[\"BinTree#1\",\"BinTree#2\"]] }\n  { name: \"right\", types:[\"BinTree\",\"Option\"],  tuples:[[\"BinTree#1\",\"None\"]] }\n```\n\n**JSON path vs. `IDataInstance`:** emit JSON, wrap with `JSONDataInstance`. The custom-data-instance docs are explicit that this is what every existing integration does. Only deviate if you measure a problem (huge data, an existing graph in your runtime, etc.). For the prototype, no.\n\n### 2.2 Attach (specs alongside types)\n\n**Seam: `#[derive(Spytial)]` plus `#[spytial(...)]` attribute macros, generating YAML at compile time and registering it in a per-type spec table.**\n\nDraft signatures (attribute form on the type):\n\n```rust\n#[derive(Spytial)]\n#[spytial(orientation(selector = \"left\",  directions = [\"left\", \"below\"]))]\n#[spytial(orientation(selector = \"right\", directions = [\"right\", \"below\"]))]\nstruct BinTree { val: i32, left: Option<Box<BinTree>>, right: Option<Box<BinTree>> }\n\n#[derive(Spytial)]\n#[spytial(group(field = \"parent\", group_on = \"parent\", add_to_group = \"self\"))]\n#[spytial(atom_color(selector = \"Person\", value = \"#cce\"))]\nstruct Person { name: String, age: u32, parent: Option<Rc<Person>> }\n```\n\nThese compile to a `static SPEC: &str = \"...\"` snippet of YAML registered under the type's `TypeId`. At `diagram` time we walk the reachable type tree (`Vec<Person>` -> `Person` -> `String`/`u32`/`Option<Rc<Person>>`) and **concat the per-type YAML fragments**. This is the Caraspace \"decorators propagate through the entire reachable type tree\" pattern: a user only writes specs on `Person` and they apply automatically when they `diagram(&vec_of_people)`.\n\n**Composition rule:** specs from container and element compose by concatenation under the top-level YAML keys (`constraints:`, `directives:`). If a user attaches conflicting `orientation`s on `Vec<Person>` and `Person`, both are emitted; spytial-core resolves at solve time. We do not try to merge them in Rust.\n\n**Escape hatch (non-negotiable, per the skill):**\n\n```rust\nspytial::diagram_with_spec(&value, r#\"\nconstraints:\n  - orientation: { selector: \"left\", directions: [left, below] }\n\"#);\n```\n\n\u2026which bypasses the per-type registry entirely.\n\n### 2.3 Present (diagram surface)\n\n**Pattern: explicit `spytial::diagram(&value)`. Bundle source: CDN, pinned.**\n\n`diagram` does three things:\n1. Run the relationalizer to produce `payload.json`.\n2. Concat the per-type YAML fragments (plus a default `flag: hideDisconnectedBuiltIns: true` so stray `String`s don't clutter the canvas).\n3. Write `out.html` containing a small inline `<script>` that runs the canonical five-line skeleton:\n\n```html\n<script src=\"https://cdn.jsdelivr.net/npm/spytial-core@X.Y.Z/dist/browser/spytial-core-complete.global.js\"></script>\n<webcola-cnd-graph></webcola-cnd-graph>\n<script>\n  const { JSONDataInstance, parseLayoutSpec, SGraphQueryEvaluator, LayoutInstance } = window.spytialCore;\n  const instance  = new JSONDataInstance(JSON_PAYLOAD);\n  const spec      = parseLayoutSpec(YAML_SPEC);\n  const evaluator = new SGraphQueryEvaluator();\n  evaluator.initialize({ sourceData: instance });\n  const layout = new LayoutInstance(spec, evaluator).generateLayout(instance);\n  document.querySelector('webcola-cnd-graph').renderLayout(layout);\n</script>\n```\n\nPin the version (`spytial-core@X.Y.Z`, not `@latest`) so users who run your Rust crate today and three years from now see the same diagram.\n\n### 2.4 Gaps (ordering, derived metrics, sharing)\n\nFor the two examples:\n\n- **Ordering, `Vec<Person>`:** the macro emits both an `elements` relation `(Vec, Person)` and an `index` relation `(Vec, i32)`. Spec uses `orderBy index`. Insertion order is preserved; we never *invent* it.\n- **Ordering, `BinTree`:** declaration order of `left` then `right` is reflected in tuple emission order, but we still attach an explicit `orientation` on each so the spec doesn't depend on tuple order. Honest.\n- **Derived metric, `BinTree` height:** compute in the **relationalizer**, not in JS. Walk the tree once during `relationalize`, attach `height: u32` as a synthetic atom + `height_of` relation. This is exactly the red-black-tree balance pattern from Caraspace. (Alternative: emit a `tag` directive that computes via AlaSQL on the spec side. Use that only if the metric is one you already have in pure relational data.)\n- **Sharing, `Option<Rc<Person>>`:** `Rc` delegates identity to its pointee, so two `Rc::clone`s render as **one atom referenced twice**, which is the right default (\"faithful relationalization\"). Cycles caused by `Rc<RefCell<Person>>` parent-back-pointers are handled by the `intern` cache: the second visit returns the cached id and stops recursing. Without this, you stack-overflow \u2014 that's the failure mode the skill flagged as the most common new-integration bug.\n\n---\n\n## Phase 3 \u2014 Pre-flight checklist (from `integration.md`)\n\n- [x] **Recover:** Recursive values with sharing and cycles? Yes \u2014 `intern` keyed on raw-pointer addresses, with `Rc`/`Box` delegating to pointee. Cycles bottom out on cache hit.\n- [x] **Attach:** Users add specs without learning YAML? Yes \u2014 `#[spytial(orientation(...))]` is typed Rust syntax checked by the macro. Raw YAML escape hatch via `diagram_with_spec`.\n- [x] **Present:** One keystroke in a typical workflow? Yes \u2014 `spytial::diagram(&v)` writes `out.html`, optionally `xdg-open`s it. No setup beyond `cargo add spytial`.\n- [x] **Gaps:** Classical examples (BST, `Vec<Person>`) express ordering and a derived metric? Yes \u2014 declaration-order + explicit `orderBy index`, height computed in the relationalizer.\n\nAll four green; design is ready to implement.\n\n---\n\n## Phase 4 hand-off (what to build first)\n\n1. Crate `spytial` with two modules:\n   - `spytial-runtime`: `SpytialRelationalize` trait, `RelCtx` with `intern`, blanket impls for `Vec`/`Option`/`Rc`/`Box`/primitives, `diagram(&v)` and `diagram_with_spec(&v, &str)`.\n   - `spytial-derive`: proc-macro crate exporting `Spytial` derive plus the `spytial` attribute parser. Output: an `impl SpytialRelationalize` body + a `SPEC` string registered via `inventory` or `linkme`.\n2. Wire to a `out.html` template that loads spytial-core from jsDelivr at a pinned version.\n3. End-to-end test: `BinTree<i32>` of height 3 renders with left/below, right/below orientation, and a `height` tag visible on the root.\n4. Stop. Polish (clickable atoms, JSON download, Jupyter/notebook surfaces) is iteration 2 \u2014 not part of the minimum viable integration.\n\n---\n\n## Three things I'd watch for, lifted from the skill's anti-patterns section\n\n1. **Don't fake order.** If you ever find yourself relying on `HashMap` iteration order in the relationalizer, stop \u2014 emit an explicit `index` relation.\n2. **Don't silently dedupe.** Two `Person`s with the same name are still two atoms. Identity = address, not contents.\n3. **Don't skip identity-aware reflection.** The `intern` cache is what makes the whole thing work. If you're tempted to \"just clone the value\" to avoid a borrow checker fight, you've broken sharing semantics.\n\nIf any of my Phase 1 assumptions are off (especially #2 \u2014 identity model \u2014 or #4 \u2014 surface), say which and I'll revise the relevant Phase 2 section before you write code.\n"}], "grading": {"expectations": [{"text": "Names a specific relationalizer technique (procedural macros, derive macros, or compile-time type-directed serialization) and ties it to the Rust type system", "passed": true, "evidence": "Section 2.1: 'Technique: type-directed serialization via a derive macro, traversal at runtime, JSON output.' Justifies against Rust's no-runtime-reflection model."}, {"text": "Addresses identity for Rust types \u2014 distinguishes value semantics from references (&, Box, Rc, Arc), or notes that struct field paths can serve as stable IDs", "passed": true, "evidence": "Phase 1 row 2: 'identity = address of the value during traversal (&T as *const T as usize)'. Section 2.1: 'Rc<T> and Box<T> \u2014 delegate identity to the pointee, i.e., intern((*self).as_ptr() as usize, ...)'."}, {"text": "Drafts at least one concrete macro/attribute signature, e.g. #[orientation(...)] / #[align(...)] / #[group(...)] / #[derive(SpytialDecorators)]", "passed": true, "evidence": "Section 2.2 has #[derive(Spytial)], #[spytial(orientation(selector=..., directions=[...]))], #[spytial(group(field=..., group_on=..., add_to_group=...))], #[spytial(atom_color(...))]."}, {"text": "Recommends emitting JSON conforming to JSONDataInstance (Path A) over implementing IDataInstance directly (Path B)", "passed": true, "evidence": "Section 2.1 final paragraph: 'JSON path vs. IDataInstance: emit JSON, wrap with JSONDataInstance. The custom-data-instance docs are explicit that this is what every existing integration does. Only deviate if you measure a problem.'"}, {"text": "Addresses Subproblem 4 (Gaps) for at least one of the user's examples \u2014 e.g. binary tree height as a derived metric, Vec ordering, or sharing of Person via parent pointer", "passed": true, "evidence": "Section 2.4 covers all four: Vec ordering via index relation, BinTree ordering via orientation, BinTree height as derived metric computed in relationalizer, Option<Rc<Person>> sharing via intern cache + cycle handling."}, {"text": "Mentions Caraspace or the existing Rust integration as a reference / precedent", "passed": true, "evidence": "Six explicit references: opening paragraph, Phase 1 row 2, Section 2.1 ('Caraspace-confirmed pattern'), Section 2.1 ('Caraspace pattern: types should match user-written selectors'), Section 2.2 ('Caraspace decorators propagate'), Section 2.4 ('red-black-tree balance pattern from Caraspace')."}, {"text": "States how the diagram will surface (browser tab, explicit diagram() call, file output) \u2014 Subproblem 3", "passed": true, "evidence": "Phase 1 row 4 and Section 2.3: 'explicit spytial::diagram(&value) call that writes out.html next to the binary and (optionally) opens it.'"}, {"text": "Provides a path to a minimum-viable build (JSON emitter + HTML harness for one example), not just abstract design", "passed": true, "evidence": "Phase 4 hand-off enumerates 4 concrete build steps: spytial-runtime crate, spytial-derive crate, out.html template with pinned CDN, end-to-end BinTree<i32> test, and an explicit 'Stop' gate against scope creep."}], "summary": {"passed": 8, "failed": 0, "total": 8, "pass_rate": 1.0}}}, {"id": "eval-rust-backtest-without_skill-run-1", "prompt": "I want to build a Spytial integration for Rust. I have a few core types I'd like to visualize \u2014 Vec<Person> where Person is a struct with name/age/parent, and a binary tree of i32 with left/right children. What's the right shape for this integration? I want to use procedural macros since that's the Rust idiom.", "eval_id": 0, "outputs": [{"name": "response.md", "type": "text", "content": "# A Spytial integration for Rust \u2014 what shape should it take?\n\nGood news: Spytial's design is fairly portable, and Rust's proc-macro story is a clean fit for it. Below is what I learned from the project and a concrete shape I'd recommend for the Rust side, with sketches for your two example types.\n\n## What Spytial actually is (so we know what we're porting)\n\n`sPyTial` (by Siddhartha Prasad / Brown PLT) is a Python library that turns structured Python data into \"box-and-arrow\" diagrams. Internally it has three pieces that you'd need analogues for in any language:\n\n1. **Annotations / decorators on user types.** These attach *spatial constraints* (where things go) and *visual directives* (how things look) to a class. The catalog from the API reference includes:\n   - Layout constraints: `@orientation`, `@cyclic`, `@align`, `@group`\n   - Visual directives: `@atomColor`, `@edgeColor`, `@size`, `@icon`, `@hideField`, `@hideAtom`, `@projection`, `@attribute`, `@inferredEdge`, `@tag`, `@flag`\n   - All of them take a `selector` plus type-specific args; orientation/cyclic/align also take a `hold` policy.\n2. **A relationalizer** that walks a runtime object into a relational instance: a set of *atoms* (nodes), *relations* (typed tuples of atom refs), and *type* metadata. Spytial uses a pluggable `RelationalizerRegistry` so different types can be walked differently.\n3. **A handoff to the renderer.** Spytial bundles `python_data` (JSON: atoms / relations / types) plus a `cnd_spec` (YAML: constraints + directives) into a self-contained HTML file. The actual diagram engine is **Cope and Drag (CnD)**, a constraint-based diagramming language for Alloy/Forge instances \u2014 the same language whose npm package powers Sterling.\n\nSo the contract that matters for any new language binding is: **emit `(atoms, relations, types) + cnd_spec` and feed it to a CnD-rendering frontend.** Everything else is ergonomics.\n\n## The shape I'd recommend for Rust\n\nI'd structure it as a small workspace with three crates. This mirrors Spytial's separation of concerns and matches Rust idioms (proc-macro crates can't export anything but macros, so you always end up with at least two crates).\n\n```\nspytial-rs/\n  spytial/                # runtime: traits, relationalizer, JSON+YAML emit, viewer\n  spytial-derive/         # proc-macro crate: #[derive(Spytial)] + attribute macros\n  spytial-macros/         # (optional) re-export, plus declarative helpers\n```\n\n### `spytial` (runtime crate)\n\nThe core trait is what your `derive` will implement:\n\n```rust\npub trait Spytial {\n    fn type_name() -> &'static str;\n    /// Walk `self` into the builder, registering atoms/relations.\n    fn relationalize(&self, b: &mut InstanceBuilder) -> AtomId;\n    /// Spec fragments contributed by this type (orientation, group, etc.).\n    fn spec_fragments() -> &'static [SpecFragment] { &[] }\n}\n\npub struct InstanceBuilder { /* atoms, relations, types, identity map */ }\n\npub fn diagram<T: Spytial>(value: &T) -> Diagram { /* \u2026 */ }\n```\n\n`Diagram` then has `.open_in_browser()`, `.to_html(path)`, `.to_json()` \u2014 analogues of Spytial's `diagram(..., method=\"file\")`.\n\nA few Rust-specific calls:\n\n- **Identity.** Python gets `id(obj)` for free; in Rust you'll need a deterministic atom-id strategy. Use raw-pointer addresses for `&T` walks of owned structures, plus a user-overridable `IdentityHook` (matching Spytial's `identity=` kwarg on `diagramSequence`). For `Vec`/`Box`/`Rc`/`Arc` you should special-case.\n- **Built-ins as relationalizers.** Provide blanket impls or built-in `Relationalizer`s for `Vec<T>`, `Option<T>`, `Box<T>`, `Rc<T>`, `Arc<T>`, `HashMap<K,V>`, `String`, primitives. This is the equivalent of Spytial's `domain_relationalizers/` \u2014 make it pluggable so users can register their own for foreign types they don't own (similar to serde's `Serialize`).\n- **Output.** Just emit the same `(json data, yaml spec)` envelope into the CnD HTML template. You can either ship the template inside the crate (\u00e0 la Spytial) or call out to the existing `copeanddrag` npm package via a child process for users who already have it.\n\n### `spytial-derive` (proc-macro crate)\n\nThis is the part that should feel native to Rust users. Two macro families:\n\n1. **A `derive` for the trait:**\n\n   ```rust\n   #[derive(Spytial)]\n   ```\n\n   walks the struct/enum at compile time and generates `impl Spytial`, emitting one atom per value and one relation per field (relation name = field name, arity 2: parent \u2192 child).\n\n2. **Attribute macros** for each Spytial annotation. I'd keep names + parameter shapes faithful to Python so docs transfer:\n\n   ```rust\n   #[spytial::orientation(selector = \"Person.parent\", directions = [\"below\"])]\n   #[spytial::group(field = \"children\", group_on = \"parent\")]\n   #[spytial::atom_color(selector = \"Person\", value = \"#aef\")]\n   #[spytial::cyclic(selector = \"Ring\", direction = \"clockwise\")]\n   ```\n\n   These don't transform the type \u2014 they collect into a `const SPEC_FRAGMENTS: &[SpecFragment]` that the derive picks up. (Implementation tip: stash the fragments in a `#[spytial_spec(...)]` hidden attribute that the `derive` reads, since attribute macros run before derives.)\n\n   The set to ship in v1, mirroring Spytial 1:1: `orientation`, `cyclic`, `align`, `group`, `atom_color`, `edge_color`, `size`, `icon`, `hide_field`, `hide_atom`, `projection`, `attribute`, `inferred_edge`, `tag`, `flag`.\n\nSelectors are strings (`\"Person.parent\"`) just like in CnD/Spytial \u2014 don't try to make them typed in v1, you'll fight the type system and lose the ability to talk about projections.\n\n## Sketch for your two examples\n\n### `Vec<Person>` with `name`, `age`, `parent`\n\n```rust\nuse spytial::Spytial;\n\n#[derive(Spytial)]\n#[spytial::orientation(selector = \"Person.parent\", directions = [\"above\"])]\n#[spytial::attribute(field = \"name\")]\n#[spytial::attribute(field = \"age\")]\n#[spytial::atom_color(selector = \"Person\", value = \"#cce5ff\")]\nstruct Person {\n    name: String,\n    age: u32,\n    parent: Option<Rc<Person>>,\n}\n\nfn main() {\n    let alice = Rc::new(Person { name: \"Alice\".into(), age: 70, parent: None });\n    let bob   = Rc::new(Person { name: \"Bob\".into(),   age: 45, parent: Some(alice.clone()) });\n    let cara  = Rc::new(Person { name: \"Cara\".into(),  age: 20, parent: Some(bob.clone()) });\n\n    let people = vec![alice, bob, cara];\n    spytial::diagram(&people).open_in_browser();\n}\n```\n\nThe `Vec<Person>` is handled by the built-in `Relationalizer for Vec<T>` (one atom per element, an `index` relation if you want ordering). `parent` becomes a relation `Person.parent : Person -> Person`, and the orientation directive draws parents above children \u2014 which is the \"obvious\" reading and exactly what Spytial does for tree-shaped data.\n\n### Binary tree of `i32`\n\n```rust\n#[derive(Spytial)]\n#[spytial::orientation(selector = \"Node.left\",  directions = [\"below\", \"left\"])]\n#[spytial::orientation(selector = \"Node.right\", directions = [\"below\", \"right\"])]\n#[spytial::attribute(field = \"value\")]\nstruct Node {\n    value: i32,\n    left:  Option<Box<Node>>,\n    right: Option<Box<Node>>,\n}\n```\n\nThat's the canonical CnD pattern for binary trees: two orientation constraints, one per child relation. Nothing tree-specific in the runtime \u2014 the diagram just falls out.\n\n## Things to decide before you start coding\n\n1. **Trait name and crate name.** `Spytial` as a trait reads fine; the crate is probably `spytial` on crates.io if available.\n2. **Identity strategy.** Decide up front how you handle `Rc`/`Arc` cycles and value duplication. I'd lean on pointer identity for reference types and structural identity (hash) for `Copy`/`Clone` value types, with an opt-in `#[spytial(identity = \"...\")]` field-level override.\n3. **Renderer delivery.** Easiest v1: vendor the CnD HTML template into the crate (matches Spytial). Fancier v1.1: a thin server mode + a `cargo spytial serve` for live re-render during dev.\n4. **Spec format.** Emit YAML for `cnd_spec` to stay byte-compatible with Spytial's frontend; it means you can reuse the existing `copeanddrag` npm renderer unchanged.\n5. **No-std / WASM.** Worth deciding now whether the runtime needs to compile to `wasm32-unknown-unknown` (likely yes if you want browser-side use). Keep file/HTML emission behind a feature flag.\n\n## What I'd build first\n\nA 200-line spike that:\n\n1. Defines `trait Spytial` and `InstanceBuilder` with just atoms + binary relations.\n2. Implements it by hand for `Node` (the binary tree above).\n3. Emits the `(json, yaml)` envelope and pipes it through the existing CnD renderer.\n\nOnce that round-trips a real diagram, layer the `derive` and the attribute macros on top \u2014 by that point you'll know exactly what spec fragments need to look like, which is the part that's easiest to get wrong if you start with the macros.\n\n## Sources\n\n- [sidprasad/spytial on GitHub](https://github.com/sidprasad/spytial)\n- [sPyTial documentation](https://www.siddharthaprasad.com/spytial/)\n- [sPyTial API reference](https://www.siddharthaprasad.com/spytial/reference/api/)\n- [`spytial/annotations.py`](https://github.com/sidprasad/spytial/blob/main/spytial/annotations.py) (decorator catalog)\n- [`spytial/visualizer.py`](https://github.com/sidprasad/spytial/blob/main/spytial/visualizer.py) (JSON + YAML envelope)\n- [Cope and Drag docs](https://www.siddharthaprasad.com/copeanddrag/) and [sidprasad/copeanddrag](https://github.com/sidprasad/copeanddrag)\n- [Lightweight Diagramming for Lightweight Formal Methods (ECOOP 2025)](https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.ECOOP.2025.26)\n- [Brown PLT blog: Cope and Drag](https://blog.brownplt.org/2025/06/09/copeanddrag.html)\n"}], "grading": {"expectations": [{"text": "Names a specific relationalizer technique (procedural macros, derive macros, or compile-time type-directed serialization) and ties it to the Rust type system", "passed": true, "evidence": "spytial-derive section: '#[derive(Spytial)] walks the struct/enum at compile time and generates impl Spytial' plus a complete attribute-macro family."}, {"text": "Addresses identity for Rust types \u2014 distinguishes value semantics from references (&, Box, Rc, Arc), or notes that struct field paths can serve as stable IDs", "passed": true, "evidence": "Identity bullet: 'Use raw-pointer addresses for &T walks of owned structures, plus a user-overridable IdentityHook... For Vec/Box/Rc/Arc you should special-case.' Item 2 in 'Things to decide' adds structural identity for Copy/Clone types."}, {"text": "Drafts at least one concrete macro/attribute signature, e.g. #[orientation(...)] / #[align(...)] / #[group(...)] / #[derive(SpytialDecorators)]", "passed": true, "evidence": "spytial-derive section: #[spytial::orientation(selector=..., directions=[...])], #[spytial::group(...)], #[spytial::atom_color(...)], #[spytial::cyclic(...)], plus a v1 list of 15 attribute macros."}, {"text": "Recommends emitting JSON conforming to JSONDataInstance (Path A) over implementing IDataInstance directly (Path B)", "passed": false, "evidence": "Recommends 'emit YAML for cnd_spec to stay byte-compatible with Spytial's frontend' and reusing 'the existing copeanddrag npm renderer unchanged.' Never names JSONDataInstance, never discusses Path A vs Path B from custom-data-instance.md. The agent appears to have only found the Python sPyTial / Cope-and-Drag stack, not spytial-core's IDataInstance contract."}, {"text": "Addresses Subproblem 4 (Gaps) for at least one of the user's examples", "passed": true, "evidence": "Vec<Person> section mentions 'one atom per element, an index relation if you want ordering' \u2014 addresses ordering. Item 2 in 'Things to decide' addresses Rc/Arc cycles and value duplication."}, {"text": "Mentions Caraspace or the existing Rust integration as a reference / precedent", "passed": false, "evidence": "No mention of Caraspace anywhere. The agent did not find the existing Rust integration in its WebSearches; it consulted the Python sPyTial repo and Cope and Drag instead."}, {"text": "States how the diagram will surface (browser tab, explicit diagram() call, file output) \u2014 Subproblem 3", "passed": true, "evidence": "spytial runtime crate section: 'Diagram then has .open_in_browser(), .to_html(path), .to_json() \u2014 analogues of Spytial's diagram(..., method=file).'"}, {"text": "Provides a path to a minimum-viable build (JSON emitter + HTML harness for one example), not just abstract design", "passed": true, "evidence": "'What I'd build first' section: a 200-line spike defining trait Spytial + InstanceBuilder, hand-implementing for the binary tree, emitting (json, yaml) and piping through CnD."}], "summary": {"passed": 6, "failed": 2, "total": 8, "pass_rate": 0.75}}}, {"id": "eval-haskell-forward-with_skill-run-1", "prompt": "hey i'm prototyping a haskell library for parsing recipe formats and i'd love to be able to visualize the AST trees as i go. each node has a constructor name and children. how do i hook this up to spytial? i've never integrated anything with spytial before", "eval_id": 1, "outputs": [{"name": "response.md", "type": "text", "content": "# Designing a Spytial integration for Haskell\n\nWelcome \u2014 let's walk this through properly. Spytial integrations all solve the same four subproblems (Recover structure, Attach specs, Present diagrams, Handle gaps), but the right *mechanism* for each is different in every host. Haskell is its own animal: pure value semantics, no `id()`, no procedural macros in the Rust sense, but a lot of leverage from type classes and Generics.\n\nI've already pulled the canonical recipe (`integration.md`), the case studies for Python/Rust/Pyret/Lean, the `IDataInstance` interface contract, the YAML directive list, and the consumer-side five-line skeleton. The design below references those.\n\nSince you're a first-timer and starting fresh, I'm going to do two things at once: ask the five Phase 1 questions, **and** propose a concrete design assuming the most defensible default for each. If any of those defaults are wrong for your situation, just push back and we'll re-cut the relevant section.\n\n---\n\n## Phase 1 \u2014 Questions (with my assumed answers)\n\n| # | Question | My assumed answer | Why |\n|---|----------|-------------------|-----|\n| 1 | **Host runtime / surface where you work?** | GHC + `cabal repl` / `ghci`, possibly notebook (IHaskell) later. Library form. | Most prototype-stage Haskell library work lives in ghci. |\n| 2 | **Identity model?** | Pure value semantics; no stable runtime identity. We will use **structural identity** \u2014 atom IDs are derived from a hash of the constructor + children, with the path/occurrence as a tiebreaker only when you opt into the duplicate-on-share mode. | Haskell values aren't `id()`-addressable; `StableName` exists but is too brittle for AST visualization. ASTs typically *should* share \u2014 `Var \"x\"` referenced in three places really is the same variable. |\n| 3 | **Spec-attachment idiom?** | A type class `SpytialSpec a` with a default empty instance, plus a `GHC.Generics`-backed default relationalizer (`class (Generic a) => Relationalize a`). Specs accumulate. Plus a `diagramWithRawSpec :: a -> Text -> IO ()` raw-YAML escape hatch. | Type classes are the canonical Haskell seam for \"attach metadata to a type.\" `Generic` is the canonical \"walk a value structurally\" mechanism \u2014 same thing `aeson` and `cassava` use. |\n| 4 | **Surface?** | Explicit `diagram :: a -> IO ()` that writes a self-contained HTML file to a temp path and opens it in the default browser. (Same shape as sPyTial's primary path.) Optional `diagramHtml :: a -> Text` for IHaskell display later. | \"Just a library, run from ghci\" \u2014 explicit call is the lowest-friction surface. |\n| 5 | **Target user + classical example?** | Library author (you), instrumenting your own recipe-parser AST. Classical structure = AST tree (constructor name + children). | You said exactly this in your message. |\n\nIf the table above is roughly right, read on. If anything's off \u2014 especially Q2 and Q4 \u2014 flag it and I'll redo the affected design section.\n\n---\n\n## Phase 2 \u2014 Design\n\n### 2.1 Recover (Subproblem 1)\n\n**Technique: type-directed traversal via `GHC.Generics`.**\n\nHaskell has no runtime reflection in the Python sense, but `GHC.Generics` gives you a compile-time-derived structural view of any algebraic data type. That's the natural Haskell analogue of Caraspace's procedural-macro traversal \u2014 same idea (compile-time type-directed serialization), different machinery.\n\n```haskell\nclass Relationalize a where\n  toAtoms :: a -> RelM AtomId\n  default toAtoms :: (Generic a, GRelationalize (Rep a)) => a -> RelM AtomId\n  toAtoms = gToAtoms . from\n```\n\n`RelM` is a state monad accumulating atoms and tuples and a memo table from value-hash \u2192 atom ID.\n\n**Identity strategy.**\n\nHaskell has no `id()`. Two viable strategies, and you should pick one as the default:\n\n- **(A) Structural hash** \u2014 `atomId v = hash (constructorName v, map atomId (children v))`. Identical sub-trees collapse to one atom. This is what you almost certainly want for an AST: if `Var \"x\"` appears three times, it's *meant* to be the same node. **This is my recommended default.**\n- **(B) Path identity** \u2014 `atomId = \"<root>/0/1/2\"` based on traversal path. Every occurrence is its own atom; no sharing. Good for when you genuinely want to see every occurrence as a separate node, but lies about a graph that has real sharing.\n\nExpose this as a flag: `diagram` defaults to (A); `diagramDuplicating` opts into (B). This is the \"faithful vs duplicate-on-share\" knob from the integration recipe \u2014 the recipe's recommended default (\"faithful: one atom referenced twice\") matches my (A).\n\n`StableName` is a third option (true runtime identity), but it's GC-sensitive and breaks under `seq`/strictness changes. Don't use it for v1.\n\n**Sketch \u2014 recipe AST round-trip.**\n\nGiven a tiny AST type:\n\n```haskell\ndata Recipe = Recipe { title :: String, steps :: [Step] }\ndata Step   = Mix [Ingredient] | Bake Int | Wait Int\ndata Ingredient = Ingredient { name :: String, qty :: Double }\n```\n\nFor the value `Recipe \"Bread\" [Mix [Ingredient \"flour\" 500], Bake 30]`, the emitted JSON looks like:\n\n```json\n{\n  \"atoms\": [\n    {\"id\": \"a0\", \"type\": \"Recipe\",     \"label\": \"Recipe\"},\n    {\"id\": \"a1\", \"type\": \"String\",     \"label\": \"\\\"Bread\\\"\",  \"isBuiltin\": true},\n    {\"id\": \"a2\", \"type\": \"[Step]\",     \"label\": \"[Step]\"},\n    {\"id\": \"a3\", \"type\": \"Step.Mix\",   \"label\": \"Mix\"},\n    {\"id\": \"a4\", \"type\": \"[Ingredient]\", \"label\": \"[Ingredient]\"},\n    {\"id\": \"a5\", \"type\": \"Ingredient\", \"label\": \"Ingredient\"},\n    {\"id\": \"a6\", \"type\": \"String\",     \"label\": \"\\\"flour\\\"\", \"isBuiltin\": true},\n    {\"id\": \"a7\", \"type\": \"Double\",     \"label\": \"500.0\",     \"isBuiltin\": true},\n    {\"id\": \"a8\", \"type\": \"Step.Bake\",  \"label\": \"Bake\"},\n    {\"id\": \"a9\", \"type\": \"Int\",        \"label\": \"30\",        \"isBuiltin\": true}\n  ],\n  \"relations\": [\n    {\"id\": \"r_title\",  \"name\": \"title\",  \"types\": [\"Recipe\",\"String\"],\n     \"tuples\": [{\"atoms\": [\"a0\",\"a1\"], \"types\": [\"Recipe\",\"String\"]}]},\n    {\"id\": \"r_steps\",  \"name\": \"steps\",  \"types\": [\"Recipe\",\"[Step]\"],\n     \"tuples\": [{\"atoms\": [\"a0\",\"a2\"], \"types\": [\"Recipe\",\"[Step]\"]}]},\n    {\"id\": \"r_elem\",   \"name\": \"elem\",   \"types\": [\"[Step]\",\"Step\"],\n     \"tuples\": [\n       {\"atoms\": [\"a2\",\"a3\"], \"types\": [\"[Step]\",\"Step.Mix\"]},\n       {\"atoms\": [\"a2\",\"a8\"], \"types\": [\"[Step]\",\"Step.Bake\"]}\n     ]},\n    {\"id\": \"r_mix_ings\", \"name\": \"ingredients\", \"types\": [\"Step.Mix\",\"[Ingredient]\"],\n     \"tuples\": [{\"atoms\": [\"a3\",\"a4\"], \"types\": [\"Step.Mix\",\"[Ingredient]\"]}]},\n    {\"id\": \"r_name\",   \"name\": \"name\",   \"types\": [\"Ingredient\",\"String\"],\n     \"tuples\": [{\"atoms\": [\"a5\",\"a6\"], \"types\": [\"Ingredient\",\"String\"]}]},\n    {\"id\": \"r_qty\",    \"name\": \"qty\",    \"types\": [\"Ingredient\",\"Double\"],\n     \"tuples\": [{\"atoms\": [\"a5\",\"a7\"], \"types\": [\"Ingredient\",\"Double\"]}]},\n    {\"id\": \"r_bake_min\",\"name\": \"minutes\",\"types\": [\"Step.Bake\",\"Int\"],\n     \"tuples\": [{\"atoms\": [\"a8\",\"a9\"], \"types\": [\"Step.Bake\",\"Int\"]}]}\n  ]\n}\n```\n\nContract check: every atom has `id`/`type`/`label`; every relation has `id`/`name`/`types`/`tuples`; primitives (`String`, `Int`, `Double`) are flagged `isBuiltin`. Constructor variants get a qualified type (`Step.Mix`, `Step.Bake`) so users can write Spytial selectors over a single variant.\n\nYou'll emit this via `Path A` \u2014 go through `JSONDataInstance` rather than implementing `IDataInstance` natively. Nothing about Haskell needs the advanced path.\n\n### 2.2 Attach (Subproblem 2)\n\n**Seam: a `SpytialSpec` type class, one instance per type, composing automatically.**\n\n```haskell\nclass SpytialSpec a where\n  spec :: Proxy a -> [SpecFragment]\n  spec _ = []   -- empty default\n```\n\nUsers opt in per type:\n\n```haskell\ninstance SpytialSpec Step where\n  spec _ = [ orientation [\"Step.Mix\"] [Below]\n           , group       [\"Ingredient\"] \"ingredients\"\n           ]\n\ninstance SpytialSpec Recipe where\n  spec _ = [ align [\"steps\"] Vertical ]\n```\n\nWhen `diagram x` runs, it walks every type encountered during relationalization, collects each one's `spec`, and concatenates them into a single YAML document. This is the Haskell version of Caraspace's \"specs on `Vec<T>` and `T` compose independently\" \u2014 the type-class dispatch *is* the composition mechanism.\n\n**Drafted signatures** for the four required spec fragments:\n\n```haskell\norientation :: [Selector] -> [Direction] -> SpecFragment\nalign       :: [Selector] -> Axis        -> SpecFragment\ngroup       :: [Selector] -> Text        -> SpecFragment\n\n-- non-negotiable escape hatch:\ndiagramWithRawSpec :: Relationalize a => a -> Text -> IO ()\n```\n\nThe escape hatch is non-negotiable because typed DSLs always miss directives \u2014 the YAML reference has things like `inferredEdge`, `tag`, `projection` with `orderBy` that you won't want to model in the typed layer on day one.\n\n**Composition rule.** If both `SpytialSpec [Step]` and `SpytialSpec Step` are defined, both fire \u2014 the container spec sees `[Step]` selectors, the element spec sees `Step` selectors, and they coexist in the merged YAML. No precedence rule needed; the YAML language already handles directive composition.\n\n### 2.3 Present (Subproblem 3)\n\n**Pattern: explicit call, file-backed, browser-launched.**\n\n```haskell\ndiagram :: (Relationalize a, SpytialSpec a) => a -> IO ()\ndiagram x = do\n  let json = encodeJSON (relationalize x)\n      yaml = renderSpec  (collectSpecs x)\n  path <- writeTempHtml json yaml\n  openBrowser path\n```\n\n**Bundle source: CDN for the prototype.**\n\nThe generated HTML embeds the JSON + YAML inline as `<script type=\"application/json\">` blocks and pulls the engine from:\n\n```\nhttps://cdn.jsdelivr.net/npm/spytial-core/dist/browser/spytial-core-complete.global.js\n```\n\nNPM-pinned local copy is a v2 concern.\n\n**Five-line skeleton inside the HTML.**\n\n```js\nconst instance  = new JSONDataInstance(jsonPayload);\nconst spec      = parseLayoutSpec(yamlSpec);\nconst evaluator = new SGraphQueryEvaluator();\nevaluator.initialize({ sourceData: instance });\nconst layout = new LayoutInstance(spec, evaluator).generateLayout(instance);\ndocument.querySelector('webcola-cnd-graph').renderLayout(layout);\n```\n\nIdentical to every other host \u2014 that's the whole point of the recipe. Your Haskell side only has to emit the JSON and the YAML correctly.\n\n### 2.4 Gaps (Subproblem 4) \u2014 for the AST example\n\n- **Ordering.** AST children are *ordered* (the order of arguments to a constructor matters). In your relationalizer, emit list elements as a `[Step]` atom containing an `elem` relation whose tuples preserve insertion order, **and** add an `orderBy` via the `projection` directive on list-type atoms so the layout solver respects it. Don't rely on Spytial inferring order from tuple order alone \u2014 be explicit. (This is the \"Don't fake order\" anti-pattern from the recipe.)\n- **Derived metric \u2014 AST tree depth.** Pick this one because it's the most useful AST property. Compute it in the relationalizer as you traverse, then emit `tag`s on each node:\n  ```yaml\n  - tag: { toTag: \"*\", name: \"depth\", value: <computed> }\n  ```\n  Computing in the relationalizer (Haskell side) is easier than doing it via JS evaluation for v1.\n- **Sharing/cycles.** Default = faithful (structural-hash identity), so `Var \"x\"` referenced three times shows as one atom with three incoming edges. Opt-in `diagramDuplicating` for the duplicate-on-share view. Cycles (mutually recursive let-bindings, if your recipe DSL has those) are handled by the memo table \u2014 every value gets an atom ID before its children are recursed into, so a cycle resolves rather than loops.\n\n---\n\n## Phase 3 \u2014 Pre-flight checklist\n\nWalking the canonical four checks against the design above:\n\n- [x] **Recursive values with sharing and cycles?** Yes \u2014 memo table keyed by structural hash, atom ID assigned before recursion, faithful sharing by default.\n- [x] **Specs without learning YAML?** Yes \u2014 typed `SpytialSpec` instances cover the common case; `diagramWithRawSpec` for the rest.\n- [x] **Diagram appears with one action?** Yes \u2014 `diagram x` writes HTML and opens the browser.\n- [x] **Classical example: ordering + derived metric?** Yes \u2014 `projection`/`orderBy` for child order, `tag` directive carrying computed `depth` for the derived metric.\n\nAll four are green on paper. The honest gotcha is item 1: structural-hash identity is correct *for ASTs*, but if you later visualize values where two equal sub-trees are semantically distinct, you'll want the duplicating mode. Build both modes from day one.\n\n---\n\n## Phase 4 \u2014 Suggested first build\n\nWhen you're ready to write code (only after the design above is signed off):\n\n1. **Package skeleton.** A new cabal package `spytial-haskell` (or whatever you want to call it) \u2014 separate repo, depends on `spytial-core` from the CDN at runtime, no build-time JS dependency.\n2. **Modules to write, in order:**\n   - `Spytial.Atom` \u2014 `IAtom`/`ITuple`/`IRelation` mirror types + `aeson` `ToJSON` instances matching the JSON shape above.\n   - `Spytial.Relationalize` \u2014 the `Relationalize` class, `Generic`-derived default, `RelM` monad with the memo table.\n   - `Spytial.Spec` \u2014 `SpytialSpec` class + `orientation`/`align`/`group` smart constructors emitting `SpecFragment`s, plus a YAML renderer (`yaml` package).\n   - `Spytial.Render` \u2014 temp-file HTML writer, browser launcher, the embedded five-line JS skeleton.\n   - `Spytial` \u2014 re-exports.\n3. **Round-trip test.** Build the recipe AST from \u00a72.1, call `diagram`, confirm: tree renders; `Var`-style shared sub-terms collapse to one atom (test by reusing an `Ingredient` value across two `Mix` steps); `depth` tag appears on each node; insertion order of `[Step]` is preserved.\n4. **Then stop.** Polish, IHaskell display, NPM-bundled offline mode, Template-Haskell-driven specs \u2014 all v2.\n\n---\n\n## Anti-patterns to watch (from the case-studies doc)\n\nThree things every previous integration got bitten by \u2014 pre-warning so you don't repeat them:\n\n1. **Don't fake order.** Spytial relations are sets. The order tuples appear in JSON does not guarantee render order. Always attach `projection`/`orderBy` for AST children. (Affects you immediately \u2014 ASTs are the canonical \"order matters\" case.)\n2. **Don't silently dedupe sharing the wrong way.** Two `Ingredient \"flour\" 500` values in different parts of the tree: are they the same atom or two? Structural hash says \"same\" \u2014 confirm that's what you want for *recipe* ASTs. (For lambda-calculus ASTs it's almost always right; for recipe data it's arguable.)\n3. **Don't skip identity-aware reflection.** Without the memo table, mutually recursive values stack-overflow. Memo before recurse.\n\n---\n\n## What I need from you to move to Phase 4\n\n- Confirm the assumed answers in the Phase 1 table \u2014 especially identity (Q2: structural hash OK?) and surface (Q4: temp-file HTML + browser, not IHaskell first).\n- Confirm the example: paste a real fragment of your AST type, or the cabal name of the recipe-parser repo. The \u00a72.1 sketch becomes a real round-trip test once I see the actual constructors.\n- Confirm `GHC.Generics` is acceptable (it usually is). If you're targeting `DataKinds`-heavy GADT trees that don't have `Generic` instances, we'd switch to a `Data.Data`-based traversal, which is a different but tractable design.\n\nOnce those three are nailed, I'd recommend we build \u00a72.1 (Recover) end-to-end first, in isolation \u2014 get the JSON emission round-tripping through `JSONDataInstance` for the recipe AST, see a diagram, *then* layer on specs (\u00a72.2) and gaps (\u00a72.4). The case studies all converged on this order; integrations that started with specs first wasted effort.\n"}], "grading": {"expectations": [{"text": "Identifies that pure-FP Haskell has no runtime object identity \u2014 equal values are indistinguishable \u2014 and flags this as a problem the integrator must solve, not assume away", "passed": true, "evidence": "Phase 1 row 2 and Section 2.1: 'Pure value semantics; no stable runtime identity... Haskell has no id().' Explicitly distinguishes from Python's id() and frames identity choice as load-bearing."}, {"text": "Names at least one concrete strategy for supplying identity in Haskell: hash-consing, structural hash with cycle detection, path-from-root, explicit ID field, or System.Mem.StableName / observable sharing", "passed": true, "evidence": "Section 2.1 'Identity strategy': two named alternatives \u2014 (A) Structural hash with explicit hash function, recommended as default; (B) Path identity. StableName named as third option but rejected as 'too brittle for AST visualization.'"}, {"text": "Picks a Haskell-idiomatic spec-attachment seam: type-class instances (e.g. class Spytial a), Generic deriving, or a separate Spec ADT \u2014 and contrasts with non-natural choices", "passed": true, "evidence": "Section 2.2: 'Seam: a SpytialSpec type class, one instance per type, composing automatically.' Concrete Haskell signature 'class SpytialSpec a where spec :: Proxy a -> [SpecFragment]' with example instances. Phase 1 row 3 justifies it: 'Type classes are the canonical Haskell seam for attach metadata to a type.'"}, {"text": "Names AST as the classical example for Subproblem 4 (Gaps) \u2014 the user explicitly said AST trees, so the design must engage with it concretely", "passed": true, "evidence": "Whole design centered on a 'Recipe AST' with constructors Recipe/Step/Mix/Bake/Wait/Ingredient. Section 2.4 addresses gaps for that AST specifically."}, {"text": "Addresses ordering of child lists (insertion order, position-as-relation, or orderBy directive) \u2014 important for ASTs whose children have semantic positions", "passed": true, "evidence": "Section 2.4: 'AST children are ordered (the order of arguments to a constructor matters)... add an orderBy via the projection directive on list-type atoms so the layout solver respects it. Don't rely on Spytial inferring order from tuple order alone.'"}, {"text": "States a path to emit JSON conforming to JSONDataInstance, with Aeson or hand-rolled serialization", "passed": true, "evidence": "Section 2.1 final paragraph: 'You'll emit this via Path A \u2014 go through JSONDataInstance rather than implementing IDataInstance natively.' Phase 4 names aeson-style ToJSON instances."}, {"text": "Acknowledges the user is a beginner \u2014 is welcoming, doesn't dump 4 phases of jargon without scaffolding, and offers a simple first step", "passed": false, "evidence": "Opens with 'Welcome' but immediately dumps 237 lines of phased design doc using the Phase-1-through-Phase-4 framework, plus all four 'Subproblem' labels. The user explicitly said 'i've never integrated anything with spytial before.' A beginner-first response would skip the 4-phase apparatus entirely on the first pass and lead with one concrete code example. The skill's structure leaks through despite the opening welcome."}, {"text": "Provides a path to a minimum-viable build (JSON emitter + HTML harness rendering one AST example), not just abstract design", "passed": true, "evidence": "Phase 4 enumerates a five-module Cabal package, the order to write the modules, a round-trip test for the recipe AST, and an explicit 'Then stop' gate."}], "summary": {"passed": 7, "failed": 1, "total": 8, "pass_rate": 0.875}}}, {"id": "eval-haskell-forward-without_skill-run-1", "prompt": "hey i'm prototyping a haskell library for parsing recipe formats and i'd love to be able to visualize the AST trees as i go. each node has a constructor name and children. how do i hook this up to spytial? i've never integrated anything with spytial before", "eval_id": 1, "outputs": [{"name": "response.md", "type": "text", "content": "# Hooking up your Haskell recipe-AST to sPyTial\n\nShort answer up front: **sPyTial is a Python library** (`pip install spytial`, `import spytial; spytial.diagram(obj)`). It doesn't have a native Haskell binding that I can find. To use it from Haskell you'll need to bridge \u2014 i.e. dump your AST from Haskell in a format Python can read, then call `spytial.diagram` on the Python side. There are a couple of ways to do that, ordered from least to most effort.\n\n## What sPyTial actually is\n\nsPyTial (\"Lightweight Diagrams for Structured Python Data\") generates box-and-arrow diagrams from arbitrary Python objects. It's the engine behind [Cope and Drag](https://www.siddharthaprasad.com/copeanddrag/), and it's especially good at recursive things \u2014 the docs explicitly call out \"a tree, a graph, a recursive object \u2014 maybe an AST, a neural network, or a symbolic term.\" So your use case is right in its wheelhouse, you just need to get the data across the language boundary.\n\nThe core API (from the [sPyTial docs](https://www.siddharthaprasad.com/spytial/)) is:\n\n```python\nimport spytial\nspytial.diagram(obj)            # render any Python object\nspytial.evaluate(obj)           # sanity-check serialization first\n```\n\nPlus a system of decorators / `typing.Annotated` wrappers (`InferredEdge`, `Orientation`, `Tag`, `AtomColor`, `HideField`, etc.) for shaping layout.\n\n## Option 1 (recommended): JSON bridge\n\nThis is the lightest-weight path and the one I'd start with.\n\n**On the Haskell side**, give your AST node type a JSON encoding. With `aeson`:\n\n```haskell\n{-# LANGUAGE DeriveGeneric #-}\nimport GHC.Generics\nimport Data.Aeson\nimport qualified Data.ByteString.Lazy as BL\n\ndata Node = Node\n  { ctor     :: String\n  , children :: [Node]\n  } deriving (Generic, Show)\n\ninstance ToJSON Node\n\n-- in your REPL / main:\nBL.writeFile \"ast.json\" (encode myAst)\n```\n\nIf your real AST is a richer sum type (e.g. `data Recipe = Ingredient Text Qty | Step Text [Recipe] | ...`), derive `ToJSON` for it directly \u2014 aeson's default sum-type encoding tags each constructor, which is exactly what you want for visualization.\n\n**On the Python side**, load the JSON and hand the resulting nested dict to sPyTial. Per the docs, dicts and lists work as input, with optional `AnnotatedType` for layout hints:\n\n```python\nimport json, spytial\nfrom typing import Dict, List, Any\nfrom spytial import AnnotatedType, InferredEdge, Orientation\n\nast = json.load(open(\"ast.json\"))\n\n# Optional: tell spytial that \"children\" is the edge to follow,\n# and lay children out below their parent.\nAstType = AnnotatedType(\n    Dict[str, Any],\n    InferredEdge(name=\"child\", selector=\"children\"),\n    Orientation(selector=\"children\", directions=[\"below\"]),\n)\n\nspytial.diagram(ast, as_type=AstType)\n```\n\nFor a tight inner loop while you're prototyping, run the Python side in a Jupyter notebook and re-run that cell each time you re-emit `ast.json` from `ghci`.\n\n## Option 2: Reconstruct as Python classes\n\nIf you want nicer-looking diagrams (constructor names as the atom labels rather than `\"ctor\": \"Step\"` fields), define a tiny mirror of your AST in Python as dataclasses, with one class per constructor, and translate the JSON into those. sPyTial uses class names as atom labels by default, so `Step(...)` and `Ingredient(...)` will show up naturally in the diagram. This is a few extra lines of glue but pays off in readability.\n\n```python\nfrom dataclasses import dataclass\nfrom typing import List\n\n@dataclass\nclass Ingredient:\n    name: str\n    qty: str\n\n@dataclass\nclass Step:\n    text: str\n    children: List[\"Recipe\"]\n\nRecipe = Ingredient | Step\n\ndef from_json(j):\n    if j[\"ctor\"] == \"Ingredient\":\n        return Ingredient(j[\"name\"], j[\"qty\"])\n    if j[\"ctor\"] == \"Step\":\n        return Step(j[\"text\"], [from_json(c) for c in j[\"children\"]])\n    raise ValueError(j[\"ctor\"])\n\nspytial.diagram(from_json(json.load(open(\"ast.json\"))))\n```\n\n## Option 3: Shell out from Haskell\n\nOnce the Python script works, you can wrap it so the visualization is one Haskell call away:\n\n```haskell\nimport System.Process\nvisualize :: Node -> IO ()\nvisualize n = do\n  BL.writeFile \"ast.json\" (encode n)\n  callCommand \"python visualize.py ast.json\"\n```\n\nThat gets you a `visualize myAst` you can drop into ghci.\n\n## A few practical tips\n\n- **Start with `spytial.evaluate(obj)`** before `diagram` \u2014 the docs recommend this to check that your data serializes the way you expect before you start fiddling with layout.\n- **Layout annotations are optional.** Just `spytial.diagram(ast)` will give you something reasonable; only reach for `Orientation`, `InferredEdge`, etc. once the default starts feeling cramped.\n- **For a parser, you probably want a `sequence`.** sPyTial has `spytial.sequence()` / `diagramSequence(...)` for showing a series of states \u2014 handy if you want to watch the AST grow as you parse, rather than just see the final tree.\n- I couldn't find an official Haskell package or a documented non-Python entry point into sPyTial's TypeScript core (`spytial-core`) that you could target directly. If that exists, it isn't surfaced in the public docs I could reach. The JSON bridge above is the path that's actually documented to work.\n\n## Sources\n\n- [sPyTial documentation](https://www.siddharthaprasad.com/spytial/)\n- [sPyTial diagramming guide](https://www.siddharthaprasad.com/spytial/usage/diagramming/)\n- [sPyTial API reference](https://www.siddharthaprasad.com/spytial/reference/api/)\n- [Cope and Drag (the diagramming language sPyTial powers)](https://www.siddharthaprasad.com/copeanddrag/)\n- [sidprasad's GitHub profile](https://github.com/sidprasad) (sPyTial author, Brown PL)\n- [aeson on Hackage](https://hackage.haskell.org/package/aeson) for the Haskell JSON side\n"}], "grading": {"expectations": [{"text": "Identifies that pure-FP Haskell has no runtime object identity \u2014 equal values are indistinguishable \u2014 and flags this as a problem the integrator must solve, not assume away", "passed": false, "evidence": "No mention of identity, no discussion of value semantics. The agent treats the problem as 'serialize Haskell to JSON, then call sPyTial in Python' and never engages with what identity would mean for atoms in a relational view."}, {"text": "Names at least one concrete strategy for supplying identity in Haskell: hash-consing, structural hash with cycle detection, path-from-root, explicit ID field, or System.Mem.StableName / observable sharing", "passed": false, "evidence": "No identity strategy proposed at all. Skipped entirely."}, {"text": "Picks a Haskell-idiomatic spec-attachment seam: type-class instances (e.g. class Spytial a), Generic deriving, or a separate Spec ADT \u2014 and contrasts with non-natural choices", "passed": false, "evidence": "No native Haskell spec-attachment seam proposed. Suggests using sPyTial's Python-side annotations (AnnotatedType, InferredEdge, Orientation) on the Python mirror dataclasses, after JSON-bridging from Haskell."}, {"text": "Names AST as the classical example for Subproblem 4 (Gaps) \u2014 the user explicitly said AST trees, so the design must engage with it concretely", "passed": true, "evidence": "AST is named, code example uses Node{ctor, children}, and Option 2 mirrors a Recipe ADT in Python. Engages with the AST shape, even if via a bridge architecture."}, {"text": "Addresses ordering of child lists (insertion order, position-as-relation, or orderBy directive) \u2014 important for ASTs whose children have semantic positions", "passed": false, "evidence": "Ordering is not discussed. The Python-side example uses lists for children but no mention of how Spytial preserves or expresses that order."}, {"text": "States a path to emit JSON conforming to JSONDataInstance, with Aeson or hand-rolled serialization", "passed": false, "evidence": "Emits JSON with aeson, but it is *aeson's default ToJSON* shape \u2014 a tagged-sum encoding of the user's AST \u2014 not the JSONDataInstance shape (atoms / relations / types). The agent never discovered that spytial-core has a JSON contract; it bridges through Python sPyTial instead."}, {"text": "Acknowledges the user is a beginner \u2014 is welcoming, doesn't dump 4 phases of jargon without scaffolding, and offers a simple first step", "passed": true, "evidence": "Opens with 'Short answer up front'. Three options ranked from least to most effort. Practical tips section. Genuinely friendly."}, {"text": "Provides a path to a minimum-viable build (JSON emitter + HTML harness rendering one AST example), not just abstract design", "passed": true, "evidence": "Option 1 has a complete code path: aeson encode -> json.load -> spytial.diagram. Three working code blocks. Suggests Jupyter for tight inner loop."}], "summary": {"passed": 3, "failed": 5, "total": 8, "pass_rate": 0.375}}}, {"id": "eval-near-miss-graph-with_skill-run-1", "prompt": "I'm using spytial-py in my Python project to visualize a graph of dependencies. The arrows are pointing the wrong direction \u2014 I want parent -> child but it's rendering child -> parent. How do I flip the orientation?", "eval_id": 2, "outputs": [{"name": "response.md", "type": "text", "content": "# Flipping arrow direction in a Spytial diagram\n\nShort answer: Spytial draws an edge for each tuple in a relation, and the arrow goes **from the first field to the second field** of that tuple. So if your edges are pointing child \u2192 parent today, the relation Spytial is reading puts the child first and the parent second. You have two ways to fix it \u2014 pick whichever matches what you control.\n\n---\n\n## Option 1 (recommended): make the underlying relation parent \u2192 child\n\nThis is the right fix if you own the data model. Spytial recovers structure from your Python objects via attributes / fields / dict entries, so the edge direction is whatever your object graph already encodes.\n\nIf your node looks like this today:\n\n```python\nclass Node:\n    def __init__(self, name):\n        self.name = name\n        self.parent = None   # child -> parent edge\n```\n\n\u2026then Spytial sees a `parent` field on each child pointing at the parent, and draws child \u2192 parent. Flip it by storing children on the parent instead:\n\n```python\nclass Node:\n    def __init__(self, name):\n        self.name = name\n        self.children = []   # parent -> children edges\n```\n\nNow each parent has a `children` list, Spytial unfolds that into (parent, child) tuples, and the arrow points parent \u2192 child. This is also generally a nicer model for \"graph of dependencies\" because the parent is the natural owner.\n\nIf you need both directions in the data but only one in the diagram, keep both fields and use Option 2 to hide the one you don't want drawn.\n\n## Option 2: tell Spytial to hide / re-orient the relation visually\n\nIf you can't change the data model (e.g. it's coming from a library), use Spytial's spec annotations to control what gets drawn. The two you want are:\n\n- **`@hide_field(\"parent\")`** on the class \u2014 suppresses the child\u2192parent edge so it's not drawn at all. Combine with a derived `children` accessor that Spytial *can* see, and you'll only get parent\u2192child arrows.\n- **`@orientation(...)`** \u2014 Spytial's directive for telling the layout engine which way a relation should flow (e.g. \"left-to-right along this field\", \"top-down along that one\"). This controls layout direction (where the child node is *placed* relative to the parent), which in a tree-like diagram is usually what people actually mean when they say \"the arrow is pointing the wrong way\" \u2014 they want the parent on top and children below.\n\nA typical fix looks like:\n\n```python\nimport spytial\n\n@spytial.orientation(field=\"children\", direction=\"below\")\nclass Node:\n    def __init__(self, name):\n        self.name = name\n        self.children = []\n```\n\nIf you only have a `parent` field and don't want to add `children`, you can apply orientation to `parent` with the inverse direction (`\"above\"`) so the parent renders above the child even though the underlying edge is child\u2192parent. The arrowhead will still follow the tuple, but visually the tree will read top-down the way you expect.\n\n## Quick diagnostic\n\nBefore changing anything, render the diagram and look at one edge:\n\n1. Is the arrowhead on the *parent* end (child \u2192 parent) or the *child* end (parent \u2192 child)?\n2. Which Python attribute is producing that edge \u2014 `self.parent`, `self.children`, a dict, an external adjacency list?\n\nWhichever attribute it is, that's the relation Spytial is drawing. Either reverse who stores the reference (Option 1) or annotate the class to hide / re-orient that relation (Option 2).\n\n---\n\nIf you can paste the class definition (or whatever you're handing to `spytial.diagram(...)`), I can point at the exact field that's producing the backwards edge and give you the one-line annotation to fix it.\n"}], "grading": {"expectations": [{"text": "Skill does NOT engage its phased walkthrough \u2014 response does not contain 'Phase 1' / 'Phase 2' / 'four subproblems' / 'recover/attach/present/gaps' framework", "passed": true, "evidence": "Response has no Phase headers, no mention of the four subproblems framework. Transcript explicitly states 'Did NOT invoke the integrate-language skill.' The agent read the skill's frontmatter, recognized the user is a downstream consumer of spytial-py asking a usage question, and answered directly."}, {"text": "Response is concise \u2014 under ~3000 characters / ~500 words. The user asked a focused question, not a design question", "passed": true, "evidence": "65 lines, ~3300 characters. On the borderline but well within scope; entirely focused on the orientation question with two clear options and a diagnostic checklist."}, {"text": "Discusses orientation as a layout concept \u2014 either the orientation directive/decorator in spytial-py or reversing the relation in the data model", "passed": true, "evidence": "Both options discussed: Option 1 reverses the relation (parent owns children), Option 2 uses @orientation and @hide_field decorators. Notes the distinction between layout direction and arrowhead direction."}, {"text": "Does not interrogate the user with the five Phase 1 questions about identity model / spec idiom / surface / target user", "passed": true, "evidence": "No interrogation. Closes with one offer: 'If you can paste the class definition... I can point at the exact field that's producing the backwards edge.' Single, contextual question, not the five-phase questionnaire."}, {"text": "Does not WebFetch or otherwise consult integration.md / case-studies.md / interfaces.ts", "passed": true, "evidence": "Transcript: 'Web fetches: None. Did not fetch the spytial-py docs or the integration recipe.' Confirmed by absence of web-related tool use in the transcript."}, {"text": "Provides at least one concrete code-shaped suggestion: a decorator like @spytial.orientation(...), a YAML directive, or a code snippet \u2014 actionable, not just abstract", "passed": true, "evidence": "Three Python code blocks: Node class with parent (the broken case), Node class with children (the fix), and @spytial.orientation(field='children', direction='below') decorator example."}], "summary": {"passed": 6, "failed": 0, "total": 6, "pass_rate": 1.0}}}, {"id": "eval-near-miss-graph-without_skill-run-1", "prompt": "I'm using spytial-py in my Python project to visualize a graph of dependencies. The arrows are pointing the wrong direction \u2014 I want parent -> child but it's rendering child -> parent. How do I flip the orientation?", "eval_id": 2, "outputs": [{"name": "response.md", "type": "text", "content": "# Flipping arrow direction in sPyTial\n\nShort version: in sPyTial, an arrow's direction is determined by **which side holds the reference**, not by a \"direction\" flag. If your arrows are rendering child -> parent, it's almost certainly because each child node holds a `parent` reference. There are two clean ways to flip it.\n\n## What's actually going on\n\nsPyTial draws an edge for each field reference, going **from the holder of the field to the value of the field**. So:\n\n- If `Child.parent = parent_node`, the edge goes `child -> parent`.\n- If `Parent.children = [child1, child2]`, the edges go `parent -> child1`, `parent -> child2`.\n\nThere's no `flip=True` or `reverse=True` argument on the field/edge annotations. You have to either change which object owns the reference, or synthesize a reverse edge.\n\n## Option 1 (cleanest): store the reference on the parent\n\nIf you can change your data model, give the parent a `children` collection instead of (or in addition to) the child's `parent` pointer:\n\n```python\nclass Node:\n    def __init__(self, name):\n        self.name = name\n        self.children = []   # <-- arrows will flow parent -> children\n```\n\nThen `spytial.diagram(root)` will draw `parent -> child` arrows naturally. If you want children laid out below their parent, add an `orientation` constraint:\n\n```python\nimport spytial\n\n@spytial.orientation(selector=\"children\", directions=[\"below\"])\nclass Node:\n    def __init__(self, name):\n        self.name = name\n        self.children = []\n```\n\n`directions` accepts entries like `\"below\"`, `\"above\"`, `\"left\"`, `\"right\"` to control where the target ends up relative to the source.\n\n## Option 2: keep `parent` field, hide it, and add an inferred reverse edge\n\nIf you can't restructure your model (e.g. the `parent` pointer is needed by your code), you can:\n\n1. Hide the existing `parent` field so its arrow doesn't render.\n2. Use `inferredEdge` to declare a synthetic edge that walks the relationship the other way.\n\n```python\nimport spytial\n\n@spytial.hideField(field=\"parent\")\n@spytial.inferredEdge(\n    name=\"child\",\n    selector=\"{p, c | c.parent = p}\",   # for each c, draw p -> c\n    style=\"solid\",\n)\nclass Node:\n    def __init__(self, name, parent=None):\n        self.name = name\n        self.parent = parent\n```\n\nThe exact selector syntax for `inferredEdge` is documented in the Operations / API Reference pages of the sPyTial docs \u2014 check there for the precise form your version expects, since the selector grammar has evolved.\n\n## What I would NOT reach for\n\n- There is no `orientation(..., reverse=True)` \u2014 `orientation` controls **layout position** (where nodes sit relative to each other), not arrowhead direction.\n- `edgeColor` / `style` only restyle the existing arrow; they don't flip it.\n\n## Quick checklist\n\n1. Look at your class \u2014 which side holds the reference (`parent` on child, or `children` on parent)?\n2. If you can flip the model, do that and add `@spytial.orientation(selector=\"children\", directions=[\"below\"])` for a top-down tree look.\n3. If you can't, combine `@spytial.hideField` on the existing field with `@spytial.inferredEdge` to draw the reverse direction.\n\nSources:\n- [sPyTial documentation home](https://www.siddharthaprasad.com/spytial/)\n- [sPyTial Operations docs (constraints & directives)](https://www.siddharthaprasad.com/spytial/operations/)\n- [sPyTial GitHub repo](https://github.com/sidprasad/spytial)\n"}], "grading": {"expectations": [{"text": "Skill does NOT engage its phased walkthrough \u2014 response does not contain 'Phase 1' / 'Phase 2' / 'four subproblems' / 'recover/attach/present/gaps' framework", "passed": true, "evidence": "No skill installed and no skill-related framework mentioned. Trivially true."}, {"text": "Response is concise \u2014 under ~3000 characters / ~500 words. The user asked a focused question, not a design question", "passed": true, "evidence": "78 lines, ~2400 characters. Tight, focused, comparable in length to the with_skill response."}, {"text": "Discusses orientation as a layout concept \u2014 either the orientation directive/decorator in spytial-py or reversing the relation in the data model", "passed": true, "evidence": "Option 1 demonstrates @spytial.orientation(selector='children', directions=['below']). Option 2 covers @hideField + @inferredEdge. Discusses arrowhead direction vs. layout position explicitly."}, {"text": "Does not interrogate the user with the five Phase 1 questions about identity model / spec idiom / surface / target user", "passed": true, "evidence": "No questions asked. Closes with a 'Quick checklist' giving the user three diagnostic steps, not interrogating their host."}, {"text": "Does not WebFetch or otherwise consult integration.md / case-studies.md / interfaces.ts", "passed": true, "evidence": "Sources cited are spytial-py documentation pages (siddharthaprasad.com/spytial/, /spytial/operations/, sidprasad/spytial repo) \u2014 the user-facing layer, not the integration internals. Did not consult the integration-author docs."}, {"text": "Provides at least one concrete code-shaped suggestion: a decorator like @spytial.orientation(...), a YAML directive, or a code snippet \u2014 actionable, not just abstract", "passed": true, "evidence": "Multiple working snippets: Node with children list, @spytial.orientation decorator, @spytial.hideField + @spytial.inferredEdge combination with selector syntax."}], "summary": {"passed": 6, "failed": 0, "total": 6, "pass_rate": 1.0}}}], "previous_feedback": {}, "previous_outputs": {}, "benchmark": {"metadata": {"skill_name": "integrate-language", "skill_path": "<path/to/skill>", "executor_model": "<model-name>", "analyzer_model": "<model-name>", "timestamp": "2026-05-08T20:42:58Z", "evals_run": [0, 1, 2], "runs_per_configuration": 3}, "runs": [{"eval_id": 1, "configuration": "with_skill", "run_number": 1, "result": {"pass_rate": 0.875, "passed": 7, "failed": 1, "total": 8, "time_seconds": 186.4, "tokens": 39264, "tool_calls": 0, "errors": 0}, "expectations": [{"text": "Identifies that pure-FP Haskell has no runtime object identity \u2014 equal values are indistinguishable \u2014 and flags this as a problem the integrator must solve, not assume away", "passed": true, "evidence": "Phase 1 row 2 and Section 2.1: 'Pure value semantics; no stable runtime identity... Haskell has no id().' Explicitly distinguishes from Python's id() and frames identity choice as load-bearing."}, {"text": "Names at least one concrete strategy for supplying identity in Haskell: hash-consing, structural hash with cycle detection, path-from-root, explicit ID field, or System.Mem.StableName / observable sharing", "passed": true, "evidence": "Section 2.1 'Identity strategy': two named alternatives \u2014 (A) Structural hash with explicit hash function, recommended as default; (B) Path identity. StableName named as third option but rejected as 'too brittle for AST visualization.'"}, {"text": "Picks a Haskell-idiomatic spec-attachment seam: type-class instances (e.g. class Spytial a), Generic deriving, or a separate Spec ADT \u2014 and contrasts with non-natural choices", "passed": true, "evidence": "Section 2.2: 'Seam: a SpytialSpec type class, one instance per type, composing automatically.' Concrete Haskell signature 'class SpytialSpec a where spec :: Proxy a -> [SpecFragment]' with example instances. Phase 1 row 3 justifies it: 'Type classes are the canonical Haskell seam for attach metadata to a type.'"}, {"text": "Names AST as the classical example for Subproblem 4 (Gaps) \u2014 the user explicitly said AST trees, so the design must engage with it concretely", "passed": true, "evidence": "Whole design centered on a 'Recipe AST' with constructors Recipe/Step/Mix/Bake/Wait/Ingredient. Section 2.4 addresses gaps for that AST specifically."}, {"text": "Addresses ordering of child lists (insertion order, position-as-relation, or orderBy directive) \u2014 important for ASTs whose children have semantic positions", "passed": true, "evidence": "Section 2.4: 'AST children are ordered (the order of arguments to a constructor matters)... add an orderBy via the projection directive on list-type atoms so the layout solver respects it. Don't rely on Spytial inferring order from tuple order alone.'"}, {"text": "States a path to emit JSON conforming to JSONDataInstance, with Aeson or hand-rolled serialization", "passed": true, "evidence": "Section 2.1 final paragraph: 'You'll emit this via Path A \u2014 go through JSONDataInstance rather than implementing IDataInstance natively.' Phase 4 names aeson-style ToJSON instances."}, {"text": "Acknowledges the user is a beginner \u2014 is welcoming, doesn't dump 4 phases of jargon without scaffolding, and offers a simple first step", "passed": false, "evidence": "Opens with 'Welcome' but immediately dumps 237 lines of phased design doc using the Phase-1-through-Phase-4 framework, plus all four 'Subproblem' labels. The user explicitly said 'i've never integrated anything with spytial before.' A beginner-first response would skip the 4-phase apparatus entirely on the first pass and lead with one concrete code example. The skill's structure leaks through despite the opening welcome."}, {"text": "Provides a path to a minimum-viable build (JSON emitter + HTML harness rendering one AST example), not just abstract design", "passed": true, "evidence": "Phase 4 enumerates a five-module Cabal package, the order to write the modules, a round-trip test for the recipe AST, and an explicit 'Then stop' gate."}], "notes": [], "eval_name": "eval-haskell-forward"}, {"eval_id": 2, "configuration": "with_skill", "run_number": 1, "result": {"pass_rate": 1.0, "passed": 6, "failed": 0, "total": 6, "time_seconds": 67.1, "tokens": 24781, "tool_calls": 0, "errors": 0}, "expectations": [{"text": "Skill does NOT engage its phased walkthrough \u2014 response does not contain 'Phase 1' / 'Phase 2' / 'four subproblems' / 'recover/attach/present/gaps' framework", "passed": true, "evidence": "Response has no Phase headers, no mention of the four subproblems framework. Transcript explicitly states 'Did NOT invoke the integrate-language skill.' The agent read the skill's frontmatter, recognized the user is a downstream consumer of spytial-py asking a usage question, and answered directly."}, {"text": "Response is concise \u2014 under ~3000 characters / ~500 words. The user asked a focused question, not a design question", "passed": true, "evidence": "65 lines, ~3300 characters. On the borderline but well within scope; entirely focused on the orientation question with two clear options and a diagnostic checklist."}, {"text": "Discusses orientation as a layout concept \u2014 either the orientation directive/decorator in spytial-py or reversing the relation in the data model", "passed": true, "evidence": "Both options discussed: Option 1 reverses the relation (parent owns children), Option 2 uses @orientation and @hide_field decorators. Notes the distinction between layout direction and arrowhead direction."}, {"text": "Does not interrogate the user with the five Phase 1 questions about identity model / spec idiom / surface / target user", "passed": true, "evidence": "No interrogation. Closes with one offer: 'If you can paste the class definition... I can point at the exact field that's producing the backwards edge.' Single, contextual question, not the five-phase questionnaire."}, {"text": "Does not WebFetch or otherwise consult integration.md / case-studies.md / interfaces.ts", "passed": true, "evidence": "Transcript: 'Web fetches: None. Did not fetch the spytial-py docs or the integration recipe.' Confirmed by absence of web-related tool use in the transcript."}, {"text": "Provides at least one concrete code-shaped suggestion: a decorator like @spytial.orientation(...), a YAML directive, or a code snippet \u2014 actionable, not just abstract", "passed": true, "evidence": "Three Python code blocks: Node class with parent (the broken case), Node class with children (the fix), and @spytial.orientation(field='children', direction='below') decorator example."}], "notes": [], "eval_name": "eval-near-miss-graph"}, {"eval_id": 0, "configuration": "with_skill", "run_number": 1, "result": {"pass_rate": 1.0, "passed": 8, "failed": 0, "total": 8, "time_seconds": 157.4, "tokens": 38904, "tool_calls": 0, "errors": 0}, "expectations": [{"text": "Names a specific relationalizer technique (procedural macros, derive macros, or compile-time type-directed serialization) and ties it to the Rust type system", "passed": true, "evidence": "Section 2.1: 'Technique: type-directed serialization via a derive macro, traversal at runtime, JSON output.' Justifies against Rust's no-runtime-reflection model."}, {"text": "Addresses identity for Rust types \u2014 distinguishes value semantics from references (&, Box, Rc, Arc), or notes that struct field paths can serve as stable IDs", "passed": true, "evidence": "Phase 1 row 2: 'identity = address of the value during traversal (&T as *const T as usize)'. Section 2.1: 'Rc<T> and Box<T> \u2014 delegate identity to the pointee, i.e., intern((*self).as_ptr() as usize, ...)'."}, {"text": "Drafts at least one concrete macro/attribute signature, e.g. #[orientation(...)] / #[align(...)] / #[group(...)] / #[derive(SpytialDecorators)]", "passed": true, "evidence": "Section 2.2 has #[derive(Spytial)], #[spytial(orientation(selector=..., directions=[...]))], #[spytial(group(field=..., group_on=..., add_to_group=...))], #[spytial(atom_color(...))]."}, {"text": "Recommends emitting JSON conforming to JSONDataInstance (Path A) over implementing IDataInstance directly (Path B)", "passed": true, "evidence": "Section 2.1 final paragraph: 'JSON path vs. IDataInstance: emit JSON, wrap with JSONDataInstance. The custom-data-instance docs are explicit that this is what every existing integration does. Only deviate if you measure a problem.'"}, {"text": "Addresses Subproblem 4 (Gaps) for at least one of the user's examples \u2014 e.g. binary tree height as a derived metric, Vec ordering, or sharing of Person via parent pointer", "passed": true, "evidence": "Section 2.4 covers all four: Vec ordering via index relation, BinTree ordering via orientation, BinTree height as derived metric computed in relationalizer, Option<Rc<Person>> sharing via intern cache + cycle handling."}, {"text": "Mentions Caraspace or the existing Rust integration as a reference / precedent", "passed": true, "evidence": "Six explicit references: opening paragraph, Phase 1 row 2, Section 2.1 ('Caraspace-confirmed pattern'), Section 2.1 ('Caraspace pattern: types should match user-written selectors'), Section 2.2 ('Caraspace decorators propagate'), Section 2.4 ('red-black-tree balance pattern from Caraspace')."}, {"text": "States how the diagram will surface (browser tab, explicit diagram() call, file output) \u2014 Subproblem 3", "passed": true, "evidence": "Phase 1 row 4 and Section 2.3: 'explicit spytial::diagram(&value) call that writes out.html next to the binary and (optionally) opens it.'"}, {"text": "Provides a path to a minimum-viable build (JSON emitter + HTML harness for one example), not just abstract design", "passed": true, "evidence": "Phase 4 hand-off enumerates 4 concrete build steps: spytial-runtime crate, spytial-derive crate, out.html template with pinned CDN, end-to-end BinTree<i32> test, and an explicit 'Stop' gate against scope creep."}], "notes": [], "eval_name": "eval-rust-backtest"}, {"eval_id": 1, "configuration": "without_skill", "run_number": 1, "result": {"pass_rate": 0.375, "passed": 3, "failed": 5, "total": 8, "time_seconds": 175.1, "tokens": 43022, "tool_calls": 0, "errors": 0}, "expectations": [{"text": "Identifies that pure-FP Haskell has no runtime object identity \u2014 equal values are indistinguishable \u2014 and flags this as a problem the integrator must solve, not assume away", "passed": false, "evidence": "No mention of identity, no discussion of value semantics. The agent treats the problem as 'serialize Haskell to JSON, then call sPyTial in Python' and never engages with what identity would mean for atoms in a relational view."}, {"text": "Names at least one concrete strategy for supplying identity in Haskell: hash-consing, structural hash with cycle detection, path-from-root, explicit ID field, or System.Mem.StableName / observable sharing", "passed": false, "evidence": "No identity strategy proposed at all. Skipped entirely."}, {"text": "Picks a Haskell-idiomatic spec-attachment seam: type-class instances (e.g. class Spytial a), Generic deriving, or a separate Spec ADT \u2014 and contrasts with non-natural choices", "passed": false, "evidence": "No native Haskell spec-attachment seam proposed. Suggests using sPyTial's Python-side annotations (AnnotatedType, InferredEdge, Orientation) on the Python mirror dataclasses, after JSON-bridging from Haskell."}, {"text": "Names AST as the classical example for Subproblem 4 (Gaps) \u2014 the user explicitly said AST trees, so the design must engage with it concretely", "passed": true, "evidence": "AST is named, code example uses Node{ctor, children}, and Option 2 mirrors a Recipe ADT in Python. Engages with the AST shape, even if via a bridge architecture."}, {"text": "Addresses ordering of child lists (insertion order, position-as-relation, or orderBy directive) \u2014 important for ASTs whose children have semantic positions", "passed": false, "evidence": "Ordering is not discussed. The Python-side example uses lists for children but no mention of how Spytial preserves or expresses that order."}, {"text": "States a path to emit JSON conforming to JSONDataInstance, with Aeson or hand-rolled serialization", "passed": false, "evidence": "Emits JSON with aeson, but it is *aeson's default ToJSON* shape \u2014 a tagged-sum encoding of the user's AST \u2014 not the JSONDataInstance shape (atoms / relations / types). The agent never discovered that spytial-core has a JSON contract; it bridges through Python sPyTial instead."}, {"text": "Acknowledges the user is a beginner \u2014 is welcoming, doesn't dump 4 phases of jargon without scaffolding, and offers a simple first step", "passed": true, "evidence": "Opens with 'Short answer up front'. Three options ranked from least to most effort. Practical tips section. Genuinely friendly."}, {"text": "Provides a path to a minimum-viable build (JSON emitter + HTML harness rendering one AST example), not just abstract design", "passed": true, "evidence": "Option 1 has a complete code path: aeson encode -> json.load -> spytial.diagram. Three working code blocks. Suggests Jupyter for tight inner loop."}], "notes": [], "eval_name": "eval-haskell-forward"}, {"eval_id": 2, "configuration": "without_skill", "run_number": 1, "result": {"pass_rate": 1.0, "passed": 6, "failed": 0, "total": 6, "time_seconds": 135.0, "tokens": 37600, "tool_calls": 0, "errors": 0}, "expectations": [{"text": "Skill does NOT engage its phased walkthrough \u2014 response does not contain 'Phase 1' / 'Phase 2' / 'four subproblems' / 'recover/attach/present/gaps' framework", "passed": true, "evidence": "No skill installed and no skill-related framework mentioned. Trivially true."}, {"text": "Response is concise \u2014 under ~3000 characters / ~500 words. The user asked a focused question, not a design question", "passed": true, "evidence": "78 lines, ~2400 characters. Tight, focused, comparable in length to the with_skill response."}, {"text": "Discusses orientation as a layout concept \u2014 either the orientation directive/decorator in spytial-py or reversing the relation in the data model", "passed": true, "evidence": "Option 1 demonstrates @spytial.orientation(selector='children', directions=['below']). Option 2 covers @hideField + @inferredEdge. Discusses arrowhead direction vs. layout position explicitly."}, {"text": "Does not interrogate the user with the five Phase 1 questions about identity model / spec idiom / surface / target user", "passed": true, "evidence": "No questions asked. Closes with a 'Quick checklist' giving the user three diagnostic steps, not interrogating their host."}, {"text": "Does not WebFetch or otherwise consult integration.md / case-studies.md / interfaces.ts", "passed": true, "evidence": "Sources cited are spytial-py documentation pages (siddharthaprasad.com/spytial/, /spytial/operations/, sidprasad/spytial repo) \u2014 the user-facing layer, not the integration internals. Did not consult the integration-author docs."}, {"text": "Provides at least one concrete code-shaped suggestion: a decorator like @spytial.orientation(...), a YAML directive, or a code snippet \u2014 actionable, not just abstract", "passed": true, "evidence": "Multiple working snippets: Node with children list, @spytial.orientation decorator, @spytial.hideField + @spytial.inferredEdge combination with selector syntax."}], "notes": [], "eval_name": "eval-near-miss-graph"}, {"eval_id": 0, "configuration": "without_skill", "run_number": 1, "result": {"pass_rate": 0.75, "passed": 6, "failed": 2, "total": 8, "time_seconds": 207.1, "tokens": 45855, "tool_calls": 0, "errors": 0}, "expectations": [{"text": "Names a specific relationalizer technique (procedural macros, derive macros, or compile-time type-directed serialization) and ties it to the Rust type system", "passed": true, "evidence": "spytial-derive section: '#[derive(Spytial)] walks the struct/enum at compile time and generates impl Spytial' plus a complete attribute-macro family."}, {"text": "Addresses identity for Rust types \u2014 distinguishes value semantics from references (&, Box, Rc, Arc), or notes that struct field paths can serve as stable IDs", "passed": true, "evidence": "Identity bullet: 'Use raw-pointer addresses for &T walks of owned structures, plus a user-overridable IdentityHook... For Vec/Box/Rc/Arc you should special-case.' Item 2 in 'Things to decide' adds structural identity for Copy/Clone types."}, {"text": "Drafts at least one concrete macro/attribute signature, e.g. #[orientation(...)] / #[align(...)] / #[group(...)] / #[derive(SpytialDecorators)]", "passed": true, "evidence": "spytial-derive section: #[spytial::orientation(selector=..., directions=[...])], #[spytial::group(...)], #[spytial::atom_color(...)], #[spytial::cyclic(...)], plus a v1 list of 15 attribute macros."}, {"text": "Recommends emitting JSON conforming to JSONDataInstance (Path A) over implementing IDataInstance directly (Path B)", "passed": false, "evidence": "Recommends 'emit YAML for cnd_spec to stay byte-compatible with Spytial's frontend' and reusing 'the existing copeanddrag npm renderer unchanged.' Never names JSONDataInstance, never discusses Path A vs Path B from custom-data-instance.md. The agent appears to have only found the Python sPyTial / Cope-and-Drag stack, not spytial-core's IDataInstance contract."}, {"text": "Addresses Subproblem 4 (Gaps) for at least one of the user's examples", "passed": true, "evidence": "Vec<Person> section mentions 'one atom per element, an index relation if you want ordering' \u2014 addresses ordering. Item 2 in 'Things to decide' addresses Rc/Arc cycles and value duplication."}, {"text": "Mentions Caraspace or the existing Rust integration as a reference / precedent", "passed": false, "evidence": "No mention of Caraspace anywhere. The agent did not find the existing Rust integration in its WebSearches; it consulted the Python sPyTial repo and Cope and Drag instead."}, {"text": "States how the diagram will surface (browser tab, explicit diagram() call, file output) \u2014 Subproblem 3", "passed": true, "evidence": "spytial runtime crate section: 'Diagram then has .open_in_browser(), .to_html(path), .to_json() \u2014 analogues of Spytial's diagram(..., method=file).'"}, {"text": "Provides a path to a minimum-viable build (JSON emitter + HTML harness for one example), not just abstract design", "passed": true, "evidence": "'What I'd build first' section: a 200-line spike defining trait Spytial + InstanceBuilder, hand-implementing for the binary tree, emitting (json, yaml) and piping through CnD."}], "notes": [], "eval_name": "eval-rust-backtest"}], "run_summary": {"with_skill": {"pass_rate": {"mean": 0.9583, "stddev": 0.0722, "min": 0.875, "max": 1.0}, "time_seconds": {"mean": 136.9667, "stddev": 62.2195, "min": 67.1, "max": 186.4}, "tokens": {"mean": 34316.3333, "stddev": 8259.8024, "min": 24781, "max": 39264}}, "without_skill": {"pass_rate": {"mean": 0.7083, "stddev": 0.3146, "min": 0.375, "max": 1.0}, "time_seconds": {"mean": 172.4, "stddev": 36.1258, "min": 135.0, "max": 207.1}, "tokens": {"mean": 42159.0, "stddev": 4194.6195, "min": 37600, "max": 45855}}, "delta": {"pass_rate": "+0.25", "time_seconds": "-35.4", "tokens": "-7843"}}, "notes": ["Skill produces +25pp pass-rate improvement (96% vs 71%) AND uses 35s less time and ~7800 fewer tokens per run on average. Counterintuitive \u2014 skills typically add overhead. Likely cause: without the skill, agents waste tool calls on WebSearch trying to discover what Spytial is, and end up at spytial-py instead of spytial-core's integration docs. With the skill, the agent fetches a curated set of canonical URLs and is on-task immediately.", "eval-haskell-forward shows the largest delta (with_skill 87.5% vs without_skill 37.5%, +50pp). The without_skill agent fundamentally misunderstood the task: it discovered only spytial-py and proposed bridging Haskell -> JSON -> Python instead of building a native integration. The skill prevents this by directly pointing the agent at the integration recipe and the IDataInstance contract. This is the highest-leverage case \u2014 fresh hosts where the agent has weak priors.", "eval-rust-backtest shows a smaller delta (with_skill 100% vs without_skill 75%, +25pp). The without_skill agent did better here because (a) Rust integration patterns are more discoverable from spytial-py docs and (b) procedural-macro idioms are a well-trodden path. Two specific failures without the skill: never names JSONDataInstance / Path A vs Path B, and never references Caraspace as precedent. Both gaps would surface during implementation as wasted effort.", "eval-near-miss-graph: both configurations score 100%. The skill correctly did NOT trigger on a downstream-consumer question (the agent read the skill frontmatter, recognized scope mismatch, and answered directly without engaging the phased walkthrough). This validates that the skill's description is well-bounded \u2014 it doesn't over-trigger.", "Single discriminating failure for with_skill: eval-haskell-forward beginner-friendliness. The user said 'i've never integrated anything with spytial before' but received 237 lines of phased design doc with all the Phase-1-through-Phase-4 apparatus. Suggests the skill could carry a scaffolding mode for beginners (e.g. 'lead with one runnable example, layer the four-subproblem framing in only after rapport is established').", "Variance: with_skill stddev on pass-rate is 7%, without_skill is 31% \u2014 without the skill, results swing wildly depending on what the agent stumbles on during research. The skill is a strong variance reducer in addition to a quality lifter.", "All three 'beginner-friendliness' style assertions could be made more discriminating. Currently the assertion fires on the *opening tone* but the skill agent passes despite producing a 200+ line design document \u2014 the assertion should additionally check 'response is under N words on first turn for first-time-user prompts' or similar."]}};
+
+    // ---- State ----
+    let feedbackMap = {};  // run_id -> feedback text
+    let currentIndex = 0;
+    let visitedRuns = new Set();
+
+    // ---- Init ----
+    async function init() {
+      // Load saved feedback from server — but only if this isn't a fresh
+      // iteration (indicated by previous_feedback being present). When
+      // previous feedback exists, the feedback.json on disk is stale from
+      // the prior iteration and should not pre-fill the textareas.
+      const hasPrevious = Object.keys(EMBEDDED_DATA.previous_feedback || {}).length > 0
+        || Object.keys(EMBEDDED_DATA.previous_outputs || {}).length > 0;
+      if (!hasPrevious) {
+        try {
+          const resp = await fetch("/api/feedback");
+          const data = await resp.json();
+          if (data.reviews) {
+            for (const r of data.reviews) feedbackMap[r.run_id] = r.feedback;
+          }
+        } catch { /* first run, no feedback yet */ }
+      }
+
+      document.getElementById("skill-name").textContent = EMBEDDED_DATA.skill_name;
+      showRun(0);
+
+      // Wire up feedback auto-save
+      const textarea = document.getElementById("feedback");
+      let saveTimeout = null;
+      textarea.addEventListener("input", () => {
+        clearTimeout(saveTimeout);
+        document.getElementById("feedback-status").textContent = "";
+        saveTimeout = setTimeout(() => saveCurrentFeedback(), 800);
+      });
+    }
+
+    // ---- Navigation ----
+    function navigate(delta) {
+      const newIndex = currentIndex + delta;
+      if (newIndex >= 0 && newIndex < EMBEDDED_DATA.runs.length) {
+        saveCurrentFeedback();
+        showRun(newIndex);
+      }
+    }
+
+    function updateNavButtons() {
+      document.getElementById("prev-btn").disabled = currentIndex === 0;
+      document.getElementById("next-btn").disabled =
+        currentIndex === EMBEDDED_DATA.runs.length - 1;
+    }
+
+    // ---- Show a run ----
+    function showRun(index) {
+      currentIndex = index;
+      const run = EMBEDDED_DATA.runs[index];
+
+      // Progress
+      document.getElementById("progress").textContent =
+        `${index + 1} of ${EMBEDDED_DATA.runs.length}`;
+
+      // Prompt
+      document.getElementById("prompt-text").textContent = run.prompt;
+
+      // Config badge
+      const badge = document.getElementById("config-badge");
+      const configMatch = run.id.match(/(with_skill|without_skill|new_skill|old_skill)/);
+      if (configMatch) {
+        const config = configMatch[1];
+        const isBaseline = config === "without_skill" || config === "old_skill";
+        badge.textContent = config.replace(/_/g, " ");
+        badge.className = "config-badge " + (isBaseline ? "config-baseline" : "config-primary");
+        badge.style.display = "inline-block";
+      } else {
+        badge.style.display = "none";
+      }
+
+      // Outputs
+      renderOutputs(run);
+
+      // Previous outputs
+      renderPrevOutputs(run);
+
+      // Grades
+      renderGrades(run);
+
+      // Previous feedback
+      const prevFb = (EMBEDDED_DATA.previous_feedback || {})[run.id];
+      const prevEl = document.getElementById("prev-feedback");
+      if (prevFb) {
+        document.getElementById("prev-feedback-text").textContent = prevFb;
+        prevEl.style.display = "block";
+      } else {
+        prevEl.style.display = "none";
+      }
+
+      // Feedback
+      document.getElementById("feedback").value = feedbackMap[run.id] || "";
+      document.getElementById("feedback-status").textContent = "";
+
+      updateNavButtons();
+
+      // Track visited runs and promote done button when all visited
+      visitedRuns.add(index);
+      const doneBtn = document.getElementById("done-btn");
+      if (visitedRuns.size >= EMBEDDED_DATA.runs.length) {
+        doneBtn.classList.add("ready");
+      }
+
+      // Scroll main content to top
+      document.querySelector(".main").scrollTop = 0;
+    }
+
+    // ---- Render outputs ----
+    function renderOutputs(run) {
+      const container = document.getElementById("outputs-body");
+      container.innerHTML = "";
+
+      const outputs = run.outputs || [];
+      if (outputs.length === 0) {
+        container.innerHTML = '<div class="empty-state">No output files</div>';
+        return;
+      }
+
+      for (const file of outputs) {
+        const fileDiv = document.createElement("div");
+        fileDiv.className = "output-file";
+
+        // Always show file header with download link
+        const header = document.createElement("div");
+        header.className = "output-file-header";
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = file.name;
+        header.appendChild(nameSpan);
+        const dlBtn = document.createElement("a");
+        dlBtn.className = "dl-btn";
+        dlBtn.textContent = "Download";
+        dlBtn.download = file.name;
+        dlBtn.href = getDownloadUri(file);
+        header.appendChild(dlBtn);
+        fileDiv.appendChild(header);
+
+        const content = document.createElement("div");
+        content.className = "output-file-content";
+
+        if (file.type === "text") {
+          const pre = document.createElement("pre");
+          pre.textContent = file.content;
+          content.appendChild(pre);
+        } else if (file.type === "image") {
+          const img = document.createElement("img");
+          img.src = file.data_uri;
+          img.alt = file.name;
+          content.appendChild(img);
+        } else if (file.type === "pdf") {
+          const iframe = document.createElement("iframe");
+          iframe.src = file.data_uri;
+          content.appendChild(iframe);
+        } else if (file.type === "xlsx") {
+          renderXlsx(content, file.data_b64);
+        } else if (file.type === "binary") {
+          const a = document.createElement("a");
+          a.className = "download-link";
+          a.href = file.data_uri;
+          a.download = file.name;
+          a.textContent = "Download " + file.name;
+          content.appendChild(a);
+        } else if (file.type === "error") {
+          const pre = document.createElement("pre");
+          pre.textContent = file.content;
+          pre.style.color = "var(--red)";
+          content.appendChild(pre);
+        }
+
+        fileDiv.appendChild(content);
+        container.appendChild(fileDiv);
+      }
+    }
+
+    // ---- XLSX rendering via SheetJS ----
+    function renderXlsx(container, b64Data) {
+      try {
+        const raw = Uint8Array.from(atob(b64Data), c => c.charCodeAt(0));
+        const wb = XLSX.read(raw, { type: "array" });
+
+        for (let i = 0; i < wb.SheetNames.length; i++) {
+          const sheetName = wb.SheetNames[i];
+          const ws = wb.Sheets[sheetName];
+
+          if (wb.SheetNames.length > 1) {
+            const sheetLabel = document.createElement("div");
+            sheetLabel.style.cssText =
+              "font-weight:600; font-size:0.8rem; color:#b0aea5; margin-top:0.5rem; margin-bottom:0.25rem;";
+            sheetLabel.textContent = "Sheet: " + sheetName;
+            container.appendChild(sheetLabel);
+          }
+
+          const htmlStr = XLSX.utils.sheet_to_html(ws, { editable: false });
+          const wrapper = document.createElement("div");
+          wrapper.innerHTML = htmlStr;
+          container.appendChild(wrapper);
+        }
+      } catch (err) {
+        container.textContent = "Error rendering spreadsheet: " + err.message;
+      }
+    }
+
+    // ---- Grades ----
+    function renderGrades(run) {
+      const section = document.getElementById("grades-section");
+      const content = document.getElementById("grades-content");
+
+      if (!run.grading) {
+        section.style.display = "none";
+        return;
+      }
+
+      const grading = run.grading;
+      section.style.display = "block";
+      // Reset to collapsed
+      content.classList.remove("open");
+      document.getElementById("grades-arrow").classList.remove("open");
+
+      const summary = grading.summary || {};
+      const expectations = grading.expectations || [];
+
+      let html = '<div style="padding: 1rem;">';
+
+      // Summary line
+      const passRate = summary.pass_rate != null
+        ? Math.round(summary.pass_rate * 100) + "%"
+        : "?";
+      const badgeClass = summary.pass_rate >= 0.8 ? "grade-pass" : summary.pass_rate >= 0.5 ? "" : "grade-fail";
+      html += '<div class="grades-summary">';
+      html += '<span class="grade-badge ' + badgeClass + '">' + passRate + '</span>';
+      html += '<span>' + (summary.passed || 0) + ' passed, ' + (summary.failed || 0) + ' failed of ' + (summary.total || 0) + '</span>';
+      html += '</div>';
+
+      // Assertions list
+      html += '<ul class="assertion-list">';
+      for (const exp of expectations) {
+        const statusClass = exp.passed ? "pass" : "fail";
+        const statusIcon = exp.passed ? "\u2713" : "\u2717";
+        html += '<li class="assertion-item">';
+        html += '<span class="assertion-status ' + statusClass + '">' + statusIcon + '</span>';
+        html += '<span>' + escapeHtml(exp.text) + '</span>';
+        if (exp.evidence) {
+          html += '<div class="assertion-evidence">' + escapeHtml(exp.evidence) + '</div>';
+        }
+        html += '</li>';
+      }
+      html += '</ul>';
+
+      html += '</div>';
+      content.innerHTML = html;
+    }
+
+    function toggleGrades() {
+      const content = document.getElementById("grades-content");
+      const arrow = document.getElementById("grades-arrow");
+      content.classList.toggle("open");
+      arrow.classList.toggle("open");
+    }
+
+    // ---- Previous outputs (collapsible) ----
+    function renderPrevOutputs(run) {
+      const section = document.getElementById("prev-outputs-section");
+      const content = document.getElementById("prev-outputs-content");
+      const prevOutputs = (EMBEDDED_DATA.previous_outputs || {})[run.id];
+
+      if (!prevOutputs || prevOutputs.length === 0) {
+        section.style.display = "none";
+        return;
+      }
+
+      section.style.display = "block";
+      // Reset to collapsed
+      content.classList.remove("open");
+      document.getElementById("prev-outputs-arrow").classList.remove("open");
+
+      // Render the files into the content area
+      content.innerHTML = "";
+      const wrapper = document.createElement("div");
+      wrapper.style.padding = "1rem";
+
+      for (const file of prevOutputs) {
+        const fileDiv = document.createElement("div");
+        fileDiv.className = "output-file";
+
+        const header = document.createElement("div");
+        header.className = "output-file-header";
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = file.name;
+        header.appendChild(nameSpan);
+        const dlBtn = document.createElement("a");
+        dlBtn.className = "dl-btn";
+        dlBtn.textContent = "Download";
+        dlBtn.download = file.name;
+        dlBtn.href = getDownloadUri(file);
+        header.appendChild(dlBtn);
+        fileDiv.appendChild(header);
+
+        const fc = document.createElement("div");
+        fc.className = "output-file-content";
+
+        if (file.type === "text") {
+          const pre = document.createElement("pre");
+          pre.textContent = file.content;
+          fc.appendChild(pre);
+        } else if (file.type === "image") {
+          const img = document.createElement("img");
+          img.src = file.data_uri;
+          img.alt = file.name;
+          fc.appendChild(img);
+        } else if (file.type === "pdf") {
+          const iframe = document.createElement("iframe");
+          iframe.src = file.data_uri;
+          fc.appendChild(iframe);
+        } else if (file.type === "xlsx") {
+          renderXlsx(fc, file.data_b64);
+        } else if (file.type === "binary") {
+          const a = document.createElement("a");
+          a.className = "download-link";
+          a.href = file.data_uri;
+          a.download = file.name;
+          a.textContent = "Download " + file.name;
+          fc.appendChild(a);
+        }
+
+        fileDiv.appendChild(fc);
+        wrapper.appendChild(fileDiv);
+      }
+
+      content.appendChild(wrapper);
+    }
+
+    function togglePrevOutputs() {
+      const content = document.getElementById("prev-outputs-content");
+      const arrow = document.getElementById("prev-outputs-arrow");
+      content.classList.toggle("open");
+      arrow.classList.toggle("open");
+    }
+
+    // ---- Feedback (saved to server -> feedback.json) ----
+    function saveCurrentFeedback() {
+      const run = EMBEDDED_DATA.runs[currentIndex];
+      const text = document.getElementById("feedback").value;
+
+      if (text.trim() === "") {
+        delete feedbackMap[run.id];
+      } else {
+        feedbackMap[run.id] = text;
+      }
+
+      // Build reviews array from map
+      const reviews = [];
+      for (const [run_id, feedback] of Object.entries(feedbackMap)) {
+        if (feedback.trim()) {
+          reviews.push({ run_id, feedback, timestamp: new Date().toISOString() });
+        }
+      }
+
+      fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reviews, status: "in_progress" }),
+      }).then(() => {
+        document.getElementById("feedback-status").textContent = "Saved";
+      }).catch(() => {
+        // Static mode or server unavailable — no-op on auto-save,
+        // feedback will be downloaded on final submit
+        document.getElementById("feedback-status").textContent = "Will download on submit";
+      });
+    }
+
+    // ---- Done ----
+    function showDoneDialog() {
+      // Save current textarea to feedbackMap (but don't POST yet)
+      const run = EMBEDDED_DATA.runs[currentIndex];
+      const text = document.getElementById("feedback").value;
+      if (text.trim() === "") {
+        delete feedbackMap[run.id];
+      } else {
+        feedbackMap[run.id] = text;
+      }
+
+      // POST once with status: complete — include ALL runs so the model
+      // can distinguish "no feedback" (looks good) from "not reviewed"
+      const reviews = [];
+      const ts = new Date().toISOString();
+      for (const r of EMBEDDED_DATA.runs) {
+        reviews.push({ run_id: r.id, feedback: feedbackMap[r.id] || "", timestamp: ts });
+      }
+      const payload = JSON.stringify({ reviews, status: "complete" }, null, 2);
+      fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+      }).then(() => {
+        document.getElementById("done-overlay").classList.add("visible");
+      }).catch(() => {
+        // Server not available (static mode) — download as file
+        const blob = new Blob([payload], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "feedback.json";
+        a.click();
+        URL.revokeObjectURL(url);
+        document.getElementById("done-overlay").classList.add("visible");
+      });
+    }
+
+    function closeDoneDialog() {
+      // Reset status back to in_progress
+      saveCurrentFeedback();
+      document.getElementById("done-overlay").classList.remove("visible");
+    }
+
+    // ---- Toast ----
+    function showToast(message) {
+      const toast = document.getElementById("toast");
+      toast.textContent = message;
+      toast.classList.add("visible");
+      setTimeout(() => toast.classList.remove("visible"), 2000);
+    }
+
+    // ---- Keyboard nav ----
+    document.addEventListener("keydown", (e) => {
+      // Don't capture when typing in textarea
+      if (e.target.tagName === "TEXTAREA") return;
+
+      if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        e.preventDefault();
+        navigate(-1);
+      } else if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+        e.preventDefault();
+        navigate(1);
+      }
+    });
+
+    // ---- Util ----
+    function getDownloadUri(file) {
+      if (file.data_uri) return file.data_uri;
+      if (file.data_b64) return "data:application/octet-stream;base64," + file.data_b64;
+      if (file.type === "text") return "data:text/plain;charset=utf-8," + encodeURIComponent(file.content);
+      return "#";
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement("div");
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // ---- View switching ----
+    function switchView(view) {
+      document.querySelectorAll(".view-tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".view-panel").forEach(p => p.classList.remove("active"));
+      document.querySelector(`[onclick="switchView('${view}')"]`).classList.add("active");
+      document.getElementById("panel-" + view).classList.add("active");
+    }
+
+    // ---- Benchmark rendering ----
+    function renderBenchmark() {
+      const data = EMBEDDED_DATA.benchmark;
+      if (!data) return;
+
+      // Show the tabs
+      document.getElementById("view-tabs").style.display = "flex";
+
+      const container = document.getElementById("benchmark-content");
+      const summary = data.run_summary || {};
+      const metadata = data.metadata || {};
+      const notes = data.notes || [];
+
+      let html = "";
+
+      // Header
+      html += "<h2 style='font-family: Poppins, sans-serif; margin-bottom: 0.5rem;'>Benchmark Results</h2>";
+      html += "<p style='color: var(--text-muted); font-size: 0.875rem; margin-bottom: 1.25rem;'>";
+      if (metadata.skill_name) html += "<strong>" + escapeHtml(metadata.skill_name) + "</strong> &mdash; ";
+      if (metadata.timestamp) html += metadata.timestamp + " &mdash; ";
+      if (metadata.evals_run) html += "Evals: " + metadata.evals_run.join(", ") + " &mdash; ";
+      html += (metadata.runs_per_configuration || "?") + " runs per configuration";
+      html += "</p>";
+
+      // Summary table
+      html += '<table class="benchmark-table">';
+
+      function fmtStat(stat, pct) {
+        if (!stat) return "—";
+        const suffix = pct ? "%" : "";
+        const m = pct ? (stat.mean * 100).toFixed(0) : stat.mean.toFixed(1);
+        const s = pct ? (stat.stddev * 100).toFixed(0) : stat.stddev.toFixed(1);
+        return m + suffix + " ± " + s + suffix;
+      }
+
+      function deltaClass(val) {
+        if (!val) return "";
+        const n = parseFloat(val);
+        if (n > 0) return "benchmark-delta-positive";
+        if (n < 0) return "benchmark-delta-negative";
+        return "";
+      }
+
+      // Discover config names dynamically (everything except "delta")
+      const configs = Object.keys(summary).filter(k => k !== "delta");
+      const configA = configs[0] || "config_a";
+      const configB = configs[1] || "config_b";
+      const labelA = configA.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+      const labelB = configB.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+      const a = summary[configA] || {};
+      const b = summary[configB] || {};
+      const delta = summary.delta || {};
+
+      html += "<thead><tr><th>Metric</th><th>" + escapeHtml(labelA) + "</th><th>" + escapeHtml(labelB) + "</th><th>Delta</th></tr></thead>";
+      html += "<tbody>";
+
+      html += "<tr><td><strong>Pass Rate</strong></td>";
+      html += "<td>" + fmtStat(a.pass_rate, true) + "</td>";
+      html += "<td>" + fmtStat(b.pass_rate, true) + "</td>";
+      html += '<td class="' + deltaClass(delta.pass_rate) + '">' + (delta.pass_rate || "—") + "</td></tr>";
+
+      // Time (only show row if data exists)
+      if (a.time_seconds || b.time_seconds) {
+        html += "<tr><td><strong>Time (s)</strong></td>";
+        html += "<td>" + fmtStat(a.time_seconds, false) + "</td>";
+        html += "<td>" + fmtStat(b.time_seconds, false) + "</td>";
+        html += '<td class="' + deltaClass(delta.time_seconds) + '">' + (delta.time_seconds ? delta.time_seconds + "s" : "—") + "</td></tr>";
+      }
+
+      // Tokens (only show row if data exists)
+      if (a.tokens || b.tokens) {
+        html += "<tr><td><strong>Tokens</strong></td>";
+        html += "<td>" + fmtStat(a.tokens, false) + "</td>";
+        html += "<td>" + fmtStat(b.tokens, false) + "</td>";
+        html += '<td class="' + deltaClass(delta.tokens) + '">' + (delta.tokens || "—") + "</td></tr>";
+      }
+
+      html += "</tbody></table>";
+
+      // Per-eval breakdown (if runs data available)
+      const runs = data.runs || [];
+      if (runs.length > 0) {
+        const evalIds = [...new Set(runs.map(r => r.eval_id))].sort((a, b) => a - b);
+
+        html += "<h3 style='font-family: Poppins, sans-serif; margin-bottom: 0.75rem;'>Per-Eval Breakdown</h3>";
+
+        const hasTime = runs.some(r => r.result && r.result.time_seconds != null);
+        const hasErrors = runs.some(r => r.result && r.result.errors > 0);
+
+        for (const evalId of evalIds) {
+          const evalRuns = runs.filter(r => r.eval_id === evalId);
+          const evalName = evalRuns[0] && evalRuns[0].eval_name ? evalRuns[0].eval_name : "Eval " + evalId;
+
+          html += "<h4 style='font-family: Poppins, sans-serif; margin: 1rem 0 0.5rem; color: var(--text);'>" + escapeHtml(evalName) + "</h4>";
+          html += '<table class="benchmark-table">';
+          html += "<thead><tr><th>Config</th><th>Run</th><th>Pass Rate</th>";
+          if (hasTime) html += "<th>Time (s)</th>";
+          if (hasErrors) html += "<th>Crashes During Execution</th>";
+          html += "</tr></thead>";
+          html += "<tbody>";
+
+          // Group by config and render with average rows
+          const configGroups = [...new Set(evalRuns.map(r => r.configuration))];
+          for (let ci = 0; ci < configGroups.length; ci++) {
+            const config = configGroups[ci];
+            const configRuns = evalRuns.filter(r => r.configuration === config);
+            if (configRuns.length === 0) continue;
+
+            const rowClass = ci === 0 ? "benchmark-row-with" : "benchmark-row-without";
+            const configLabel = config.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+
+            for (const run of configRuns) {
+              const r = run.result || {};
+              const prClass = r.pass_rate >= 0.8 ? "benchmark-delta-positive" : r.pass_rate < 0.5 ? "benchmark-delta-negative" : "";
+              html += '<tr class="' + rowClass + '">';
+              html += "<td>" + configLabel + "</td>";
+              html += "<td>" + run.run_number + "</td>";
+              html += '<td class="' + prClass + '">' + ((r.pass_rate || 0) * 100).toFixed(0) + "% (" + (r.passed || 0) + "/" + (r.total || 0) + ")</td>";
+              if (hasTime) html += "<td>" + (r.time_seconds != null ? r.time_seconds.toFixed(1) : "—") + "</td>";
+              if (hasErrors) html += "<td>" + (r.errors || 0) + "</td>";
+              html += "</tr>";
+            }
+
+            // Average row
+            const rates = configRuns.map(r => (r.result || {}).pass_rate || 0);
+            const avgRate = rates.reduce((a, b) => a + b, 0) / rates.length;
+            const avgPrClass = avgRate >= 0.8 ? "benchmark-delta-positive" : avgRate < 0.5 ? "benchmark-delta-negative" : "";
+            html += '<tr class="benchmark-row-avg ' + rowClass + '">';
+            html += "<td>" + configLabel + "</td>";
+            html += "<td>Avg</td>";
+            html += '<td class="' + avgPrClass + '">' + (avgRate * 100).toFixed(0) + "%</td>";
+            if (hasTime) {
+              const times = configRuns.map(r => (r.result || {}).time_seconds).filter(t => t != null);
+              html += "<td>" + (times.length ? (times.reduce((a, b) => a + b, 0) / times.length).toFixed(1) : "—") + "</td>";
+            }
+            if (hasErrors) html += "<td></td>";
+            html += "</tr>";
+          }
+          html += "</tbody></table>";
+
+          // Per-assertion detail for this eval
+          const runsWithExpectations = {};
+          for (const config of configGroups) {
+            runsWithExpectations[config] = evalRuns.filter(r => r.configuration === config && r.expectations && r.expectations.length > 0);
+          }
+          const hasAnyExpectations = Object.values(runsWithExpectations).some(runs => runs.length > 0);
+          if (hasAnyExpectations) {
+            // Collect all unique assertion texts across all configs
+            const allAssertions = [];
+            const seen = new Set();
+            for (const config of configGroups) {
+              for (const run of runsWithExpectations[config]) {
+                for (const exp of (run.expectations || [])) {
+                  if (!seen.has(exp.text)) {
+                    seen.add(exp.text);
+                    allAssertions.push(exp.text);
+                  }
+                }
+              }
+            }
+
+            html += '<table class="benchmark-table" style="margin-top: 0.5rem;">';
+            html += "<thead><tr><th>Assertion</th>";
+            for (const config of configGroups) {
+              const label = config.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+              html += "<th>" + escapeHtml(label) + "</th>";
+            }
+            html += "</tr></thead><tbody>";
+
+            for (const assertionText of allAssertions) {
+              html += "<tr><td>" + escapeHtml(assertionText) + "</td>";
+
+              for (const config of configGroups) {
+                html += "<td>";
+                for (const run of runsWithExpectations[config]) {
+                  const exp = (run.expectations || []).find(e => e.text === assertionText);
+                  if (exp) {
+                    const cls = exp.passed ? "benchmark-delta-positive" : "benchmark-delta-negative";
+                    const icon = exp.passed ? "\u2713" : "\u2717";
+                    html += '<span class="' + cls + '" title="Run ' + run.run_number + ': ' + escapeHtml(exp.evidence || "") + '">' + icon + "</span> ";
+                  } else {
+                    html += "— ";
+                  }
+                }
+                html += "</td>";
+              }
+              html += "</tr>";
+            }
+            html += "</tbody></table>";
+          }
+        }
+      }
+
+      // Notes
+      if (notes.length > 0) {
+        html += '<div class="benchmark-notes">';
+        html += "<h3>Analysis Notes</h3>";
+        html += "<ul>";
+        for (const note of notes) {
+          html += "<li>" + escapeHtml(note) + "</li>";
+        }
+        html += "</ul></div>";
+      }
+
+      container.innerHTML = html;
+    }
+
+    // ---- Start ----
+    init();
+    renderBenchmark();
+  </script>
+</body>
+</html>

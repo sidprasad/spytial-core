@@ -1,0 +1,55 @@
+{
+  "skill_name": "integrate-language",
+  "evals": [
+    {
+      "id": 0,
+      "eval_name": "eval-rust-backtest",
+      "prompt": "I want to build a Spytial integration for Rust. I have a few core types I'd like to visualize — Vec<Person> where Person is a struct with name/age/parent, and a binary tree of i32 with left/right children. What's the right shape for this integration? I want to use procedural macros since that's the Rust idiom.",
+      "expected_output": "Design document covering the four subproblems for a Rust integration, resembling the existing Caraspace shape (proc macros, derive-based relationalization, JSON emission via JSONDataInstance).",
+      "files": [],
+      "assertions": [
+        "Names a specific relationalizer technique (procedural macros, derive macros, or compile-time type-directed serialization) and ties it to the Rust type system",
+        "Addresses identity for Rust types — distinguishes value semantics from references (&, Box, Rc, Arc), or notes that struct field paths can serve as stable IDs",
+        "Drafts at least one concrete macro/attribute signature, e.g. #[orientation(...)] / #[align(...)] / #[group(...)] / #[derive(SpytialDecorators)]",
+        "Recommends emitting JSON conforming to JSONDataInstance (Path A) over implementing IDataInstance directly (Path B)",
+        "Addresses Subproblem 4 (Gaps) for at least one of the user's examples — e.g. binary tree height as a derived metric, Vec ordering, or sharing of Person via parent pointer",
+        "Mentions Caraspace or the existing Rust integration as a reference / precedent",
+        "States how the diagram will surface (browser tab, explicit diagram() call, file output) — Subproblem 3",
+        "Provides a path to a minimum-viable build (JSON emitter + HTML harness for one example), not just abstract design"
+      ]
+    },
+    {
+      "id": 1,
+      "eval_name": "eval-haskell-forward",
+      "prompt": "hey i'm prototyping a haskell library for parsing recipe formats and i'd love to be able to visualize the AST trees as i go. each node has a constructor name and children. how do i hook this up to spytial? i've never integrated anything with spytial before",
+      "expected_output": "Design document for a Haskell integration. Critical: must address that pure-FP Haskell has no runtime identity, so the integrator must supply hash-cons or structural hash with cycle detection.",
+      "files": [],
+      "assertions": [
+        "Identifies that pure-FP Haskell has no runtime object identity — equal values are indistinguishable — and flags this as a problem the integrator must solve, not assume away",
+        "Names at least one concrete strategy for supplying identity in Haskell: hash-consing, structural hash with cycle detection, path-from-root, explicit ID field, or System.Mem.StableName / observable sharing",
+        "Picks a Haskell-idiomatic spec-attachment seam: type-class instances (e.g. class Spytial a), Generic deriving, or a separate Spec ADT — and contrasts with non-natural choices",
+        "Names AST as the classical example for Subproblem 4 (Gaps) — the user explicitly said AST trees, so the design must engage with it concretely",
+        "Addresses ordering of child lists (insertion order, position-as-relation, or orderBy directive) — important for ASTs whose children have semantic positions",
+        "States a path to emit JSON conforming to JSONDataInstance, with Aeson or hand-rolled serialization",
+        "Acknowledges the user is a beginner — is welcoming, doesn't dump 4 phases of jargon without scaffolding, and offers a simple first step",
+        "Provides a path to a minimum-viable build (JSON emitter + HTML harness rendering one AST example), not just abstract design",
+        "Leads with code, not framework: the response surfaces a runnable example (host-side JSON emitter + HTML harness) before any extended walkthrough of the four-subproblem framework. The four subproblems may appear as a postscript or follow-up offer, but not as a preamble that gates the example. A 200+ line phased design wall before any code fails this assertion."
+      ]
+    },
+    {
+      "id": 2,
+      "eval_name": "eval-near-miss-graph",
+      "prompt": "I'm using spytial-py in my Python project to visualize a graph of dependencies. The arrows are pointing the wrong direction — I want parent -> child but it's rendering child -> parent. How do I flip the orientation?",
+      "expected_output": "Direct answer about flipping edge orientation in spytial-py — likely about the orientation directive or reversing the relation. The integrate-language skill should NOT engage.",
+      "files": [],
+      "assertions": [
+        "Skill does NOT engage its phased walkthrough — response does not contain 'Phase 1' / 'Phase 2' / 'four subproblems' / 'recover/attach/present/gaps' framework",
+        "Response is concise — under ~3000 characters / ~500 words",
+        "Discusses orientation as a layout concept — either the orientation directive/decorator in spytial-py or reversing the relation in the data model",
+        "Does not interrogate the user with the five Phase 1 questions about identity model / spec idiom / surface / target user",
+        "Does not WebFetch or otherwise consult integration.md / case-studies.md / interfaces.ts",
+        "Provides at least one concrete code-shaped suggestion: a decorator like @spytial.orientation(...), a YAML directive, or a code snippet"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "expectations": [
+    {
+      "text": "Identifies that pure-FP Haskell has no runtime object identity — equal values are indistinguishable — and flags this as a problem the integrator must solve, not assume away",
+      "passed": true,
+      "evidence": "Phase 1 row 2 and Section 2.1: 'Pure value semantics; no stable runtime identity... Haskell has no id().' Explicitly distinguishes from Python's id() and frames identity choice as load-bearing."
+    },
+    {
+      "text": "Names at least one concrete strategy for supplying identity in Haskell: hash-consing, structural hash with cycle detection, path-from-root, explicit ID field, or System.Mem.StableName / observable sharing",
+      "passed": true,
+      "evidence": "Section 2.1 'Identity strategy': two named alternatives — (A) Structural hash with explicit hash function, recommended as default; (B) Path identity. StableName named as third option but rejected as 'too brittle for AST visualization.'"
+    },
+    {
+      "text": "Picks a Haskell-idiomatic spec-attachment seam: type-class instances (e.g. class Spytial a), Generic deriving, or a separate Spec ADT — and contrasts with non-natural choices",
+      "passed": true,
+      "evidence": "Section 2.2: 'Seam: a SpytialSpec type class, one instance per type, composing automatically.' Concrete Haskell signature 'class SpytialSpec a where spec :: Proxy a -> [SpecFragment]' with example instances. Phase 1 row 3 justifies it: 'Type classes are the canonical Haskell seam for attach metadata to a type.'"
+    },
+    {
+      "text": "Names AST as the classical example for Subproblem 4 (Gaps) — the user explicitly said AST trees, so the design must engage with it concretely",
+      "passed": true,
+      "evidence": "Whole design centered on a 'Recipe AST' with constructors Recipe/Step/Mix/Bake/Wait/Ingredient. Section 2.4 addresses gaps for that AST specifically."
+    },
+    {
+      "text": "Addresses ordering of child lists (insertion order, position-as-relation, or orderBy directive) — important for ASTs whose children have semantic positions",
+      "passed": true,
+      "evidence": "Section 2.4: 'AST children are ordered (the order of arguments to a constructor matters)... add an orderBy via the projection directive on list-type atoms so the layout solver respects it. Don't rely on Spytial inferring order from tuple order alone.'"
+    },
+    {
+      "text": "States a path to emit JSON conforming to JSONDataInstance, with Aeson or hand-rolled serialization",
+      "passed": true,
+      "evidence": "Section 2.1 final paragraph: 'You'll emit this via Path A — go through JSONDataInstance rather than implementing IDataInstance natively.' Phase 4 names aeson-style ToJSON instances."
+    },
+    {
+      "text": "Acknowledges the user is a beginner — is welcoming, doesn't dump 4 phases of jargon without scaffolding, and offers a simple first step",
+      "passed": false,
+      "evidence": "Opens with 'Welcome' but immediately dumps 237 lines of phased design doc using the Phase-1-through-Phase-4 framework, plus all four 'Subproblem' labels. The user explicitly said 'i've never integrated anything with spytial before.' A beginner-first response would skip the 4-phase apparatus entirely on the first pass and lead with one concrete code example. The skill's structure leaks through despite the opening welcome."
+    },
+    {
+      "text": "Provides a path to a minimum-viable build (JSON emitter + HTML harness rendering one AST example), not just abstract design",
+      "passed": true,
+      "evidence": "Phase 4 enumerates a five-module Cabal package, the order to write the modules, a round-trip test for the recipe AST, and an explicit 'Then stop' gate."
+    }
+  ],
+  "summary": {
+    "passed": 7,
+    "failed": 1,
+    "total": 8,
+    "pass_rate": 0.875
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "expectations": [
+    {
+      "text": "Skill does NOT engage its phased walkthrough — response does not contain 'Phase 1' / 'Phase 2' / 'four subproblems' / 'recover/attach/present/gaps' framework",
+      "passed": true,
+      "evidence": "No skill installed and no skill-related framework mentioned. Trivially true."
+    },
+    {
+      "text": "Response is concise — under ~3000 characters / ~500 words. The user asked a focused question, not a design question",
+      "passed": true,
+      "evidence": "78 lines, ~2400 characters. Tight, focused, comparable in length to the with_skill response."
+    },
+    {
+      "text": "Discusses orientation as a layout concept — either the orientation directive/decorator in spytial-py or reversing the relation in the data model",
+      "passed": true,
+      "evidence": "Option 1 demonstrates @spytial.orientation(selector='children', directions=['below']). Option 2 covers @hideField + @inferredEdge. Discusses arrowhead direction vs. layout position explicitly."
+    },
+    {
+      "text": "Does not interrogate the user with the five Phase 1 questions about identity model / spec idiom / surface / target user",
+      "passed": true,
+      "evidence": "No questions asked. Closes with a 'Quick checklist' giving the user three diagnostic steps, not interrogating their host."
+    },
+    {
+      "text": "Does not WebFetch or otherwise consult integration.md / case-studies.md / interfaces.ts",
+      "passed": true,
+      "evidence": "Sources cited are spytial-py documentation pages (siddharthaprasad.com/spytial/, /spytial/operations/, sidprasad/spytial repo) — the user-facing layer, not the integration internals. Did not consult the integration-author docs."
+    },
+    {
+      "text": "Provides at least one concrete code-shaped suggestion: a decorator like @spytial.orientation(...), a YAML directive, or a code snippet — actionable, not just abstract",
+      "passed": true,
+      "evidence": "Multiple working snippets: Node with children list, @spytial.orientation decorator, @spytial.hideField + @spytial.inferredEdge combination with selector syntax."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}

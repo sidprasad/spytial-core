@@ -1,0 +1,50 @@
+{
+  "expectations": [
+    {
+      "text": "Names a specific relationalizer technique (procedural macros, derive macros, or compile-time type-directed serialization) and ties it to the Rust type system",
+      "passed": true,
+      "evidence": "Section 2.1: 'Technique: type-directed serialization via a derive macro, traversal at runtime, JSON output.' Justifies against Rust's no-runtime-reflection model."
+    },
+    {
+      "text": "Addresses identity for Rust types — distinguishes value semantics from references (&, Box, Rc, Arc), or notes that struct field paths can serve as stable IDs",
+      "passed": true,
+      "evidence": "Phase 1 row 2: 'identity = address of the value during traversal (&T as *const T as usize)'. Section 2.1: 'Rc<T> and Box<T> — delegate identity to the pointee, i.e., intern((*self).as_ptr() as usize, ...)'."
+    },
+    {
+      "text": "Drafts at least one concrete macro/attribute signature, e.g. #[orientation(...)] / #[align(...)] / #[group(...)] / #[derive(SpytialDecorators)]",
+      "passed": true,
+      "evidence": "Section 2.2 has #[derive(Spytial)], #[spytial(orientation(selector=..., directions=[...]))], #[spytial(group(field=..., group_on=..., add_to_group=...))], #[spytial(atom_color(...))]."
+    },
+    {
+      "text": "Recommends emitting JSON conforming to JSONDataInstance (Path A) over implementing IDataInstance directly (Path B)",
+      "passed": true,
+      "evidence": "Section 2.1 final paragraph: 'JSON path vs. IDataInstance: emit JSON, wrap with JSONDataInstance. The custom-data-instance docs are explicit that this is what every existing integration does. Only deviate if you measure a problem.'"
+    },
+    {
+      "text": "Addresses Subproblem 4 (Gaps) for at least one of the user's examples — e.g. binary tree height as a derived metric, Vec ordering, or sharing of Person via parent pointer",
+      "passed": true,
+      "evidence": "Section 2.4 covers all four: Vec ordering via index relation, BinTree ordering via orientation, BinTree height as derived metric computed in relationalizer, Option<Rc<Person>> sharing via intern cache + cycle handling."
+    },
+    {
+      "text": "Mentions Caraspace or the existing Rust integration as a reference / precedent",
+      "passed": true,
+      "evidence": "Six explicit references: opening paragraph, Phase 1 row 2, Section 2.1 ('Caraspace-confirmed pattern'), Section 2.1 ('Caraspace pattern: types should match user-written selectors'), Section 2.2 ('Caraspace decorators propagate'), Section 2.4 ('red-black-tree balance pattern from Caraspace')."
+    },
+    {
+      "text": "States how the diagram will surface (browser tab, explicit diagram() call, file output) — Subproblem 3",
+      "passed": true,
+      "evidence": "Phase 1 row 4 and Section 2.3: 'explicit spytial::diagram(&value) call that writes out.html next to the binary and (optionally) opens it.'"
+    },
+    {
+      "text": "Provides a path to a minimum-viable build (JSON emitter + HTML harness for one example), not just abstract design",
+      "passed": true,
+      "evidence": "Phase 4 hand-off enumerates 4 concrete build steps: spytial-runtime crate, spytial-derive crate, out.html template with pinned CDN, end-to-end BinTree<i32> test, and an explicit 'Stop' gate against scope creep."
+    }
+  ],
+  "summary": {
+    "passed": 8,
+    "failed": 0,
+    "total": 8,
+    "pass_rate": 1.0
+  }
+}

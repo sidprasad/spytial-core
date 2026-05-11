@@ -1,0 +1,50 @@
+{
+  "expectations": [
+    {
+      "text": "Names a specific relationalizer technique (procedural macros, derive macros, or compile-time type-directed serialization) and ties it to the Rust type system",
+      "passed": true,
+      "evidence": "spytial-derive section: '#[derive(Spytial)] walks the struct/enum at compile time and generates impl Spytial' plus a complete attribute-macro family."
+    },
+    {
+      "text": "Addresses identity for Rust types — distinguishes value semantics from references (&, Box, Rc, Arc), or notes that struct field paths can serve as stable IDs",
+      "passed": true,
+      "evidence": "Identity bullet: 'Use raw-pointer addresses for &T walks of owned structures, plus a user-overridable IdentityHook... For Vec/Box/Rc/Arc you should special-case.' Item 2 in 'Things to decide' adds structural identity for Copy/Clone types."
+    },
+    {
+      "text": "Drafts at least one concrete macro/attribute signature, e.g. #[orientation(...)] / #[align(...)] / #[group(...)] / #[derive(SpytialDecorators)]",
+      "passed": true,
+      "evidence": "spytial-derive section: #[spytial::orientation(selector=..., directions=[...])], #[spytial::group(...)], #[spytial::atom_color(...)], #[spytial::cyclic(...)], plus a v1 list of 15 attribute macros."
+    },
+    {
+      "text": "Recommends emitting JSON conforming to JSONDataInstance (Path A) over implementing IDataInstance directly (Path B)",
+      "passed": false,
+      "evidence": "Recommends 'emit YAML for cnd_spec to stay byte-compatible with Spytial's frontend' and reusing 'the existing copeanddrag npm renderer unchanged.' Never names JSONDataInstance, never discusses Path A vs Path B from custom-data-instance.md. The agent appears to have only found the Python sPyTial / Cope-and-Drag stack, not spytial-core's IDataInstance contract."
+    },
+    {
+      "text": "Addresses Subproblem 4 (Gaps) for at least one of the user's examples",
+      "passed": true,
+      "evidence": "Vec<Person> section mentions 'one atom per element, an index relation if you want ordering' — addresses ordering. Item 2 in 'Things to decide' addresses Rc/Arc cycles and value duplication."
+    },
+    {
+      "text": "Mentions Caraspace or the existing Rust integration as a reference / precedent",
+      "passed": false,
+      "evidence": "No mention of Caraspace anywhere. The agent did not find the existing Rust integration in its WebSearches; it consulted the Python sPyTial repo and Cope and Drag instead."
+    },
+    {
+      "text": "States how the diagram will surface (browser tab, explicit diagram() call, file output) — Subproblem 3",
+      "passed": true,
+      "evidence": "spytial runtime crate section: 'Diagram then has .open_in_browser(), .to_html(path), .to_json() — analogues of Spytial's diagram(..., method=file).'"
+    },
+    {
+      "text": "Provides a path to a minimum-viable build (JSON emitter + HTML harness for one example), not just abstract design",
+      "passed": true,
+      "evidence": "'What I'd build first' section: a 200-line spike defining trait Spytial + InstanceBuilder, hand-implementing for the binary tree, emitting (json, yaml) and piping through CnD."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 2,
+    "total": 8,
+    "pass_rate": 0.75
+  }
+}

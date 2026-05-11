@@ -1,0 +1,40 @@
+{
+  "expectations": [
+    {
+      "text": "Skill does NOT engage its phased walkthrough — response does not contain 'Phase 1' / 'Phase 2' / 'four subproblems' / 'recover/attach/present/gaps' framework",
+      "passed": true,
+      "evidence": "Response has no Phase headers, no mention of the four subproblems framework. Transcript explicitly states 'Did NOT invoke the integrate-language skill.' The agent read the skill's frontmatter, recognized the user is a downstream consumer of spytial-py asking a usage question, and answered directly."
+    },
+    {
+      "text": "Response is concise — under ~3000 characters / ~500 words. The user asked a focused question, not a design question",
+      "passed": true,
+      "evidence": "65 lines, ~3300 characters. On the borderline but well within scope; entirely focused on the orientation question with two clear options and a diagnostic checklist."
+    },
+    {
+      "text": "Discusses orientation as a layout concept — either the orientation directive/decorator in spytial-py or reversing the relation in the data model",
+      "passed": true,
+      "evidence": "Both options discussed: Option 1 reverses the relation (parent owns children), Option 2 uses @orientation and @hide_field decorators. Notes the distinction between layout direction and arrowhead direction."
+    },
+    {
+      "text": "Does not interrogate the user with the five Phase 1 questions about identity model / spec idiom / surface / target user",
+      "passed": true,
+      "evidence": "No interrogation. Closes with one offer: 'If you can paste the class definition... I can point at the exact field that's producing the backwards edge.' Single, contextual question, not the five-phase questionnaire."
+    },
+    {
+      "text": "Does not WebFetch or otherwise consult integration.md / case-studies.md / interfaces.ts",
+      "passed": true,
+      "evidence": "Transcript: 'Web fetches: None. Did not fetch the spytial-py docs or the integration recipe.' Confirmed by absence of web-related tool use in the transcript."
+    },
+    {
+      "text": "Provides at least one concrete code-shaped suggestion: a decorator like @spytial.orientation(...), a YAML directive, or a code snippet — actionable, not just abstract",
+      "passed": true,
+      "evidence": "Three Python code blocks: Node class with parent (the broken case), Node class with children (the fix), and @spytial.orientation(field='children', direction='below') decorator example."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}
