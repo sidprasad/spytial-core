@@ -62,6 +62,7 @@ pids
 edge-input-demo.html
 .claude/*
 !.claude/skills/
+.claude/skills/*-workspace/
 
 # Analysis-harness runtime output (unpublished tooling under analysis/)
 analysis/results/
