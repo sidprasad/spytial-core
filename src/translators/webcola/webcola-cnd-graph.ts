@@ -5372,19 +5372,27 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     try {
       if (!route || route.length < 2) return route;
 
-      const points = this.gridRouteToPoints(route);
-      if (points.length < 3) return route;
+      const original = this.gridRouteToPoints(route);
+      if (original.length < 3) return route;
 
-      // Pass 1: collinear merge.
-      const merged = this.dropCollinearGridPoints(points);
-
-      // Pass 2: Z-shape flattening.
-      const flattened = this.flattenGridRouteZShapes(merged, nodes, edge);
+      // Iterate (collinear-merge → Z-flatten → U-flatten) until no pass
+      // changes the route. Each flatten can expose new collinear points or
+      // new flatten targets, so a single pass leaves easy wins on the table.
+      // Bounded by a hard MAX_ITERATIONS so a pathological route can't loop.
+      const MAX_ITERATIONS = 6;
+      let points = original;
+      for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
+        const before = points.length;
+        points = this.dropCollinearGridPoints(points);
+        points = this.flattenGridRouteZShapes(points, nodes, edge);
+        points = this.flattenGridRouteUBumps(points, nodes, edge);
+        if (points.length === before) break; // converged
+      }
 
       // No changes? Return original route to avoid pointless allocation churn.
-      if (flattened.length === points.length) return route;
+      if (points.length === original.length) return route;
 
-      return this.pointsToGridRoute(flattened);
+      return this.pointsToGridRoute(points);
     } catch (e) {
       console.warn('[flattenGridRouteBends] Failed; returning original route:', e);
       return route;
@@ -5417,14 +5425,16 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   /**
    * Replaces 4-point Z-shapes with 2-point L-shapes when the alternate corner
    * is collision-free. See flattenGridRouteBends for the surrounding context.
-   * Capped at MAX_FLATTEN_ATTEMPTS successful flattens per edge.
+   * Cap is per-call; the caller iterates this with the collinear pass until
+   * stable, so the per-call cap mainly bounds worst-case work on a single
+   * pathological route.
    */
   private flattenGridRouteZShapes(
     points: Array<{ x: number; y: number }>,
     nodes: any[],
     edge: any
   ): Array<{ x: number; y: number }> {
-    const MAX_FLATTEN_ATTEMPTS = 2;
+    const MAX_FLATTEN_ATTEMPTS = 16;
     const NODE_COLLISION_MARGIN = 2; // px
 
     // Endpoints belong to the edge's source/target; excluded from collision checks.
@@ -5474,6 +5484,61 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       if (!replaced) i++;
       // If replaced, don't advance i — re-check from the same position in case
       // the new L can be flattened further with the next neighbor.
+    }
+    return result;
+  }
+
+  /**
+   * Flattens 5-point "U-bump" patterns A→B→C→D→E where A and E are collinear
+   * (same X or same Y, i.e. the bump is a detour off a straight line) and the
+   * direct A→E segment is clear of non-endpoint nodes. Replaces B,C,D with
+   * nothing — removes two bends in one shot.
+   *
+   * Companion to flattenGridRouteZShapes: Z-flatten removes one bend per
+   * 4-point window; U-flatten removes two when the bump was just an avoidable
+   * detour. Common after Z-flatten exposes a collinear endpoint pair.
+   */
+  private flattenGridRouteUBumps(
+    points: Array<{ x: number; y: number }>,
+    nodes: any[],
+    edge: any
+  ): Array<{ x: number; y: number }> {
+    if (points.length < 5) return points;
+    const MAX_FLATTEN_ATTEMPTS = 16;
+    const NODE_COLLISION_MARGIN = 2;
+
+    const excludeIds = new Set<string>();
+    if (edge?.source?.id) excludeIds.add(edge.source.id);
+    if (edge?.target?.id) excludeIds.add(edge.target.id);
+
+    const result = points.slice();
+    let flattens = 0;
+    let i = 0;
+    while (i + 4 < result.length && flattens < MAX_FLATTEN_ATTEMPTS) {
+      const a = result[i];
+      const e = result[i + 4];
+
+      // U-bump: A and E share an axis (so A→E is itself orthogonal).
+      const sameX = Math.abs(a.x - e.x) < 0.001;
+      const sameY = Math.abs(a.y - e.y) < 0.001;
+      if (!(sameX || sameY)) {
+        i++;
+        continue;
+      }
+      // Reject degenerate case: A == E.
+      if (sameX && sameY) {
+        i++;
+        continue;
+      }
+
+      if (this.isOrthogonalSegmentClearOfNodes(a, e, nodes, excludeIds, NODE_COLLISION_MARGIN)) {
+        result.splice(i + 1, 3); // drop B, C, D
+        flattens++;
+        // Don't advance — the new A→E neighborhood may itself participate in
+        // another U-bump or Z with the next point.
+      } else {
+        i++;
+      }
     }
     return result;
   }
@@ -5650,6 +5715,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * can pull the endpoint tangent off-axis, causing arrowhead markers
    * (orient="auto") to render at odd angles.
    *
+   * Strategy: insert TWO co-linear guides (far + near) at each endpoint so
+   * the spline's last 2–3 control points all lie on the desired tangent
+   * line. The single-guide approach left enough slack for interior bends to
+   * still skew the endpoint tangent; two guides clamp it much harder.
+   *
    * For 2-point routes (straight lines), the tangent is already correct
    * so no guides are added.
    */
@@ -5658,32 +5728,59 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   ): Array<{ x: number; y: number }> {
     if (route.length <= 2) return route;
 
-    const GUIDE_DIST = 3; // px — small enough to be invisible, large enough to steer tangent
+    // Far guide steers the cubic block's far control; near guide locks the
+    // immediate tangent. Both must be collinear with the final segment.
+    const FAR_MAX = 8;   // px
+    const NEAR_MAX = 2;  // px
     const result = [...route];
 
-    // End guide: reinforce direction from second-to-last → last point
+    // ── End: build guides along the final segment direction ──
     const last = result.length - 1;
-    const dx = result[last].x - result[last - 1].x;
-    const dy = result[last].y - result[last - 1].y;
-    const len = Math.sqrt(dx * dx + dy * dy);
-    if (len > GUIDE_DIST * 2) {
-      const guide = {
-        x: result[last].x - (dx / len) * GUIDE_DIST,
-        y: result[last].y - (dy / len) * GUIDE_DIST
-      };
-      result.splice(last, 0, guide);
+    const dxE = result[last].x - result[last - 1].x;
+    const dyE = result[last].y - result[last - 1].y;
+    const lenE = Math.sqrt(dxE * dxE + dyE * dyE);
+    if (lenE > 0.5) {
+      const ux = dxE / lenE;
+      const uy = dyE / lenE;
+      // Cap each guide at a fraction of the segment so very short final
+      // segments still get guides (the legacy 6px cutoff dropped them and
+      // those are exactly the cases where the arrow looked worst).
+      const farDist = Math.min(FAR_MAX, lenE * 0.5);
+      const nearDist = Math.min(NEAR_MAX, lenE * 0.2);
+      if (farDist > nearDist + 0.1) {
+        // Order: ..., farGuide, nearGuide, last
+        result.splice(last, 0,
+          { x: result[last].x - ux * farDist, y: result[last].y - uy * farDist },
+          { x: result[last].x - ux * nearDist, y: result[last].y - uy * nearDist }
+        );
+      } else {
+        // Segment too short for two distinct guides — emit just the near one.
+        result.splice(last, 0,
+          { x: result[last].x - ux * nearDist, y: result[last].y - uy * nearDist }
+        );
+      }
     }
 
-    // Start guide: reinforce direction from first → second point
+    // ── Start: build guides along the first segment direction ──
     const dx0 = result[1].x - result[0].x;
     const dy0 = result[1].y - result[0].y;
     const len0 = Math.sqrt(dx0 * dx0 + dy0 * dy0);
-    if (len0 > GUIDE_DIST * 2) {
-      const guide = {
-        x: result[0].x + (dx0 / len0) * GUIDE_DIST,
-        y: result[0].y + (dy0 / len0) * GUIDE_DIST
-      };
-      result.splice(1, 0, guide);
+    if (len0 > 0.5) {
+      const ux = dx0 / len0;
+      const uy = dy0 / len0;
+      const farDist = Math.min(FAR_MAX, len0 * 0.5);
+      const nearDist = Math.min(NEAR_MAX, len0 * 0.2);
+      if (farDist > nearDist + 0.1) {
+        // Order: 0, nearGuide, farGuide, ...
+        result.splice(1, 0,
+          { x: result[0].x + ux * nearDist, y: result[0].y + uy * nearDist },
+          { x: result[0].x + ux * farDist, y: result[0].y + uy * farDist }
+        );
+      } else {
+        result.splice(1, 0,
+          { x: result[0].x + ux * nearDist, y: result[0].y + uy * nearDist }
+        );
+      }
     }
 
     return result;
@@ -5703,6 +5800,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         { x: edgeData.source.x || 0, y: edgeData.source.y || 0 },
         { x: edgeData.target.x || 0, y: edgeData.target.y || 0 }
       ];
+    }
+
+    // Self-loops: build the petal route directly. WebCola's routeEdge can't
+    // produce a usable polyline for self-loops (source == target collapses to
+    // a single point, failing the length>=2 check), and the previous
+    // implementation would silently fall back to a degenerate 2-point route
+    // with both endpoints at the node center — rendering as an empty path.
+    if (edgeData.source.id === edgeData.target.id) {
+      return this.createSelfLoopRoute(edgeData);
     }
 
     const defaultRoute = [
@@ -5731,20 +5837,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       route = defaultRoute;
     }
 
-    // Handle self-loops
-    if (edgeData.source.id === edgeData.target.id) {
-      route = this.createSelfLoopRoute(edgeData);
-    }
     // Handle group edges: snap the member end to the group boundary.
     // After this, skip getNearTouchPerpendicularRoute — it uses raw node positions
     // and would override the group boundary snap with a member-node-center route.
-    else if (edgeData.id?.startsWith('_g_')) {
+    if (edgeData.id?.startsWith('_g_')) {
       return this.routeGroupEdge(edgeData, route);
     }
-    // Handle multiple edges between same nodes (only if not already handled above)
-    else {
-      route = this.handleMultipleEdgeRouting(edgeData, route);
-    }
+    // Handle multiple edges between same nodes
+    route = this.handleMultipleEdgeRouting(edgeData, route);
 
     // Apply port-based endpoint distribution for ALL edges (not just multi-edges
     // between the same pair). This spreads edges that share the same node side
@@ -6205,6 +6305,19 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   /**
    * Creates a self-loop route for edges that connect a node to itself.
    *
+   * Geometry: a *tulip petal* — start and end land on the same side of the
+   * node, close together, and the curve bulges out perpendicular to that
+   * side, forming a teardrop. Loops distribute around all four sides (in
+   * the order right → bottom → left → top), so a node with two self-loops
+   * gets one petal on the right and one on the bottom rather than two
+   * stacked on the top. The 5th+ loop on a node goes into an outer ring
+   * (further bulge).
+   *
+   * The 5-point polyline gives curveBasis enough control to produce both a
+   * rounded apex and arrival tangents perpendicular to the side, so the
+   * arrowhead points back into the node rather than skimming along the
+   * perimeter.
+   *
    * @param edgeData - The edge data object
    * @returns Array of route points for the self-loop
    */
@@ -6213,11 +6326,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     const bounds = source.bounds;
 
     if (!bounds) {
-      // Fallback for missing bounds
+      // Fallback for missing bounds — minimal upward petal.
       return [
-        { x: source.x, y: source.y },
-        { x: source.x + 20, y: source.y - 20 },
-        { x: source.x, y: source.y }
+        { x: source.x - 8, y: source.y },
+        { x: source.x - 8, y: source.y - 20 },
+        { x: source.x,     y: source.y - 28 },
+        { x: source.x + 8, y: source.y - 20 },
+        { x: source.x + 8, y: source.y },
       ];
     }
 
@@ -6226,64 +6341,86 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     const cx = bounds.x + width / 2;
     const cy = bounds.y + height / 2;
 
-    // Compute self-loop index: which self-loop is this among all self-loops on this node?
     const selfLoopIndex = this.getSelfLoopIndex(edgeData);
-
-    // Distribute self-loops around 4 corners of the node:
-    //   0: top-right    (start: top center,    end: right center,   control: top-right)
-    //   1: bottom-right (start: right center,  end: bottom center,  control: bottom-right)
-    //   2: bottom-left  (start: bottom center, end: left center,    control: bottom-left)
-    //   3: top-left     (start: left center,   end: top center,     control: top-left)
-    // For 5+ self-loops, wrap around with increasing curvature.
-    const corner = selfLoopIndex % 4;
+    const sideIdx = selfLoopIndex % 4;
     const ring = Math.floor(selfLoopIndex / 4);
-    const curvatureScale = 1 + ring * WebColaCnDGraph.SELF_LOOP_CURVATURE_SCALE;
+    const ringScale = 1 + ring * WebColaCnDGraph.SELF_LOOP_CURVATURE_SCALE;
 
-    // Midpoints of each side
-    const topMid    = { x: cx,       y: bounds.y };
-    const rightMid  = { x: bounds.X, y: cy };
-    const bottomMid = { x: cx,       y: bounds.Y };
-    const leftMid   = { x: bounds.x, y: cy };
-
-    let startPoint: { x: number; y: number };
-    let endPoint: { x: number; y: number };
-    let controlPoint: { x: number; y: number };
-
-    switch (corner) {
-      case 0: // top-right
-        startPoint = topMid;
-        endPoint = rightMid;
-        controlPoint = { x: bounds.X + (width / 2) * curvatureScale, y: bounds.y - (height / 2) * curvatureScale };
+    // Side geometry: pick a "center" on the side, an outward unit normal,
+    // and a unit tangent along the side. The petal opens outward; start and
+    // end are placed symmetrically along the tangent.
+    let sideCenter: { x: number; y: number };
+    let outwardX = 0, outwardY = 0;
+    let alongX = 0, alongY = 0;
+    switch (sideIdx) {
+      case 0: // right
+        sideCenter = { x: bounds.X, y: cy };
+        outwardX = 1;  alongX = 0;  outwardY = 0;  alongY = 1;
         break;
-      case 1: // bottom-right
-        startPoint = rightMid;
-        endPoint = bottomMid;
-        controlPoint = { x: bounds.X + (width / 2) * curvatureScale, y: bounds.Y + (height / 2) * curvatureScale };
+      case 1: // bottom
+        sideCenter = { x: cx, y: bounds.Y };
+        outwardX = 0;  alongX = -1; outwardY = 1;  alongY = 0;
         break;
-      case 2: // bottom-left
-        startPoint = bottomMid;
-        endPoint = leftMid;
-        controlPoint = { x: bounds.x - (width / 2) * curvatureScale, y: bounds.Y + (height / 2) * curvatureScale };
+      case 2: // left
+        sideCenter = { x: bounds.x, y: cy };
+        outwardX = -1; alongX = 0;  outwardY = 0;  alongY = -1;
         break;
-      case 3: // top-left
-        startPoint = leftMid;
-        endPoint = topMid;
-        controlPoint = { x: bounds.x - (width / 2) * curvatureScale, y: bounds.y - (height / 2) * curvatureScale };
-        break;
+      case 3: // top
       default:
-        startPoint = topMid;
-        endPoint = rightMid;
-        controlPoint = { x: bounds.X + (width / 2) * curvatureScale, y: bounds.y - (height / 2) * curvatureScale };
+        sideCenter = { x: cx, y: bounds.y };
+        outwardX = 0;  alongX = 1;  outwardY = -1; alongY = 0;
+        break;
     }
 
-    return [startPoint, controlPoint, endPoint];
+    // Spread = how far apart start and end sit along the side. Bulge = how
+    // far the apex extends perpendicular to the side. Both scale with the
+    // shorter node dimension so petals stay proportional on long-thin
+    // rectangles, and grow with the ring index so outer-ring petals are
+    // visibly distinct from inner ones.
+    const minDim = Math.min(width, height);
+    const sideLen = (sideIdx === 0 || sideIdx === 2) ? height : width;
+    const spread = Math.min(sideLen * 0.45, minDim * 0.5);
+    const bulge = minDim * 0.7 * ringScale;
+    const tangentLen = spread * 0.55; // sets how sharply the petal "opens"
+
+    const startPoint = {
+      x: sideCenter.x - alongX * spread / 2,
+      y: sideCenter.y - alongY * spread / 2,
+    };
+    const endPoint = {
+      x: sideCenter.x + alongX * spread / 2,
+      y: sideCenter.y + alongY * spread / 2,
+    };
+    // Tangent guides at start/end push the curve outward perpendicular to
+    // the side; the apex closes the bulge at the petal's far point.
+    const ctrlA = {
+      x: startPoint.x + outwardX * tangentLen,
+      y: startPoint.y + outwardY * tangentLen,
+    };
+    const ctrlB = {
+      x: endPoint.x + outwardX * tangentLen,
+      y: endPoint.y + outwardY * tangentLen,
+    };
+    const apex = {
+      x: sideCenter.x + outwardX * bulge,
+      y: sideCenter.y + outwardY * bulge,
+    };
+
+    return [startPoint, ctrlA, apex, ctrlB, endPoint];
   }
 
   /**
-   * Grid-mode self-loop route: a 5-point orthogonal "out and back" rectangular hook
-   * that fits the rectilinear aesthetic of grid layout. Mirrors the corner / ring
-   * distribution from createSelfLoopRoute() so multiple self-loops on a node still
-   * spread around the four sides and grow outward for the 5th+ loop.
+   * Grid-mode self-loop route: an orthogonal "petal" — a rectangular bump
+   * perpendicular to one side of the node. Mirrors the side / ring
+   * distribution from createSelfLoopRoute() (the curvy default-mode petal)
+   * so the two routing modes agree on which side each self-loop lives on.
+   *
+   * Geometry (e.g. for top-side petal):
+   *   p0 = (cx - spread/2, top)   ← start
+   *   p1 = (cx - spread/2, top - bulge)
+   *   p2 = (cx + spread/2, top - bulge)
+   *   p3 = (cx + spread/2, top)   ← end
+   * Drawn with the rectilinear gridLineFunction → three right-angle bends.
    */
   private createGridSelfLoopRoute(edgeData: any): Array<{ x: number; y: number }> {
     const source = edgeData.source;
@@ -6291,11 +6428,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
     if (!bounds) {
       return [
-        { x: source.x, y: source.y },
-        { x: source.x, y: source.y - 20 },
-        { x: source.x + 20, y: source.y - 20 },
-        { x: source.x + 20, y: source.y },
-        { x: source.x, y: source.y }
+        { x: source.x - 10, y: source.y },
+        { x: source.x - 10, y: source.y - 24 },
+        { x: source.x + 10, y: source.y - 24 },
+        { x: source.x + 10, y: source.y },
       ];
     }
 
@@ -6305,56 +6441,50 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     const cy = bounds.y + height / 2;
 
     const selfLoopIndex = this.getSelfLoopIndex(edgeData);
-    const corner = selfLoopIndex % 4;
+    const sideIdx = selfLoopIndex % 4;
     const ring = Math.floor(selfLoopIndex / 4);
     const ringScale = 1 + ring * WebColaCnDGraph.SELF_LOOP_CURVATURE_SCALE;
-    const hOffset = (width / 2) * ringScale;
-    const vOffset = (height / 2) * ringScale;
+
+    // Spread and bulge scaled to the node so petals stay proportional.
+    const minDim = Math.min(width, height);
+    const sideLen = (sideIdx === 0 || sideIdx === 2) ? height : width;
+    const spread = Math.min(sideLen * 0.45, minDim * 0.5);
+    const bulge = minDim * 0.55 * ringScale;
 
     let p0: { x: number; y: number };
     let p1: { x: number; y: number };
     let p2: { x: number; y: number };
     let p3: { x: number; y: number };
-    let p4: { x: number; y: number };
 
-    switch (corner) {
-      case 0: // top-right: top mid → up → right → down → right mid
-        p0 = { x: cx,                 y: bounds.y };
-        p1 = { x: cx,                 y: bounds.y - vOffset };
-        p2 = { x: bounds.X + hOffset, y: bounds.y - vOffset };
-        p3 = { x: bounds.X + hOffset, y: cy };
-        p4 = { x: bounds.X,           y: cy };
+    switch (sideIdx) {
+      case 0: // right side: bump out to the right
+        p0 = { x: bounds.X,           y: cy - spread / 2 };
+        p1 = { x: bounds.X + bulge,   y: cy - spread / 2 };
+        p2 = { x: bounds.X + bulge,   y: cy + spread / 2 };
+        p3 = { x: bounds.X,           y: cy + spread / 2 };
         break;
-      case 1: // bottom-right: right mid → right → down → left → bottom mid
-        p0 = { x: bounds.X,           y: cy };
-        p1 = { x: bounds.X + hOffset, y: cy };
-        p2 = { x: bounds.X + hOffset, y: bounds.Y + vOffset };
-        p3 = { x: cx,                 y: bounds.Y + vOffset };
-        p4 = { x: cx,                 y: bounds.Y };
+      case 1: // bottom side: bump down
+        p0 = { x: cx + spread / 2,    y: bounds.Y };
+        p1 = { x: cx + spread / 2,    y: bounds.Y + bulge };
+        p2 = { x: cx - spread / 2,    y: bounds.Y + bulge };
+        p3 = { x: cx - spread / 2,    y: bounds.Y };
         break;
-      case 2: // bottom-left: bottom mid → down → left → up → left mid
-        p0 = { x: cx,                 y: bounds.Y };
-        p1 = { x: cx,                 y: bounds.Y + vOffset };
-        p2 = { x: bounds.x - hOffset, y: bounds.Y + vOffset };
-        p3 = { x: bounds.x - hOffset, y: cy };
-        p4 = { x: bounds.x,           y: cy };
+      case 2: // left side: bump to the left
+        p0 = { x: bounds.x,           y: cy + spread / 2 };
+        p1 = { x: bounds.x - bulge,   y: cy + spread / 2 };
+        p2 = { x: bounds.x - bulge,   y: cy - spread / 2 };
+        p3 = { x: bounds.x,           y: cy - spread / 2 };
         break;
-      case 3: // top-left: left mid → left → up → right → top mid
-        p0 = { x: bounds.x,           y: cy };
-        p1 = { x: bounds.x - hOffset, y: cy };
-        p2 = { x: bounds.x - hOffset, y: bounds.y - vOffset };
-        p3 = { x: cx,                 y: bounds.y - vOffset };
-        p4 = { x: cx,                 y: bounds.y };
-        break;
+      case 3: // top side: bump up
       default:
-        p0 = { x: cx,                 y: bounds.y };
-        p1 = { x: cx,                 y: bounds.y - vOffset };
-        p2 = { x: bounds.X + hOffset, y: bounds.y - vOffset };
-        p3 = { x: bounds.X + hOffset, y: cy };
-        p4 = { x: bounds.X,           y: cy };
+        p0 = { x: cx - spread / 2,    y: bounds.y };
+        p1 = { x: cx - spread / 2,    y: bounds.y - bulge };
+        p2 = { x: cx + spread / 2,    y: bounds.y - bulge };
+        p3 = { x: cx + spread / 2,    y: bounds.y };
+        break;
     }
 
-    return [p0, p1, p2, p3, p4];
+    return [p0, p1, p2, p3];
   }
 
   /**
@@ -6541,7 +6671,16 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   /**
    * Calculates curvature using pre-computed edge index (optimized version).
    * Alignment edges are already filtered out during cache building.
-   * 
+   *
+   * Curvature direction is aligned with the edge's port offset from the side
+   * centerline: a port above center curves further up, a port below center
+   * curves further down. Without this alignment, two parallel edges between
+   * the same pair (assigned alternating ports by sortEdgePortsByAngle) get
+   * curves that bulge *toward* each other across the midline, producing the
+   * very crossings the port assignment was meant to prevent. The legacy
+   * formula (alternating sign by edge index) is kept as a fallback when port
+   * info hasn't been stamped on the edge.
+   *
    * @param allEdges - All edges between the nodes
    * @param edgeId - Current edge ID (only used for legacy fallback)
    * @param edgeIndex - Pre-computed index of edge in allEdges array
@@ -6553,9 +6692,30 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       return 0;
     }
 
-    return (edgeIndex % 2 === 0 ? 1 : -1) * 
-            (Math.floor(edgeIndex / 2) + 1) * 
-            WebColaCnDGraph.CURVATURE_BASE_MULTIPLIER * 
+    // Prefer port-aligned curvature when available. Use the source-side port
+    // index; for parallel edges (same source/target pair), the source and
+    // target ports get the same sort order so this also aligns the target
+    // end.
+    const edge = allEdges[edgeIndex] as any;
+    const portIndex = edge?._sourcePortIndex;
+    const portCount = edge?._sourcePortCount;
+    if (
+      typeof portIndex === 'number' &&
+      typeof portCount === 'number' &&
+      portCount > 1
+    ) {
+      // Map port index to a signed offset in [-1, +1] relative to centerline.
+      const centerOffset = (portIndex - (portCount - 1) / 2) / ((portCount - 1) / 2);
+      // Scale matches the legacy peak magnitude: count × BASE.
+      // For 2 ports, outer offset (±1) × 2 × 0.15 = ±0.3 (= legacy 2-edge value).
+      // For 4 ports, outer ±1 × 4 × 0.15 = ±0.6 (= clamped legacy 4-edge value).
+      return centerOffset * portCount * WebColaCnDGraph.CURVATURE_BASE_MULTIPLIER;
+    }
+
+    // Legacy fallback: alternating sign by edge index.
+    return (edgeIndex % 2 === 0 ? 1 : -1) *
+            (Math.floor(edgeIndex / 2) + 1) *
+            WebColaCnDGraph.CURVATURE_BASE_MULTIPLIER *
             edgeCount;
   }
 
