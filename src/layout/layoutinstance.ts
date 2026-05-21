@@ -2336,6 +2336,7 @@ export class LayoutInstance {
             let style = this.getEdgeStyle(relName, edge.v, edge.w, edgeId);
             let weight = this.getEdgeWeight(relName, edge.v, edge.w, edgeId);
             let showLabel = this.getEdgeShowLabel(relName, edge.v, edge.w, edgeId);
+            let highlight = this.getEdgeHighlight(relName, edge.v, edge.w, edgeId);
 
             // Skip edges with missing source or target nodes
             if (!source || !target || !edgeId) {
@@ -2352,6 +2353,7 @@ export class LayoutInstance {
                 style: style,
                 weight: weight,
                 showLabel: showLabel,
+                highlight: highlight,
                 // For group edges the graphlib edge label IS the group name (see constructGroupEdgeID).
                 // Carry it forward so the renderer can look up the group directly by ID
                 // without re-parsing the edge ID string or matching fragile leaf indices.
@@ -2648,6 +2650,16 @@ export class LayoutInstance {
 
         const directive = this.findEdgeDirective(relName, sourceAtom, targetAtom);
         return normalizeEdgeStyle(directive?.style);
+    }
+
+    private getEdgeHighlight(relName: string, sourceAtom: string, targetAtom: string, edgeId?: string): string | undefined {
+        const inferredDirective = this.getInferredEdgeDirective(edgeId);
+        if (inferredDirective?.highlight) {
+            return inferredDirective.highlight;
+        }
+
+        const directive = this.findEdgeDirective(relName, sourceAtom, targetAtom);
+        return directive?.highlight;
     }
 
     private getEdgeWeight(relName: string, sourceAtom: string, targetAtom: string, edgeId?: string): number | undefined {

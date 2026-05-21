@@ -62,6 +62,8 @@ export interface LayoutEdge {
     weight?: number;
     showLabel?: boolean;
     hidden?: boolean;
+    /** Highlight color rendered as a wider underlay beneath the edge. Undefined = no highlight. */
+    highlight?: string;
     /**
      * For group edges (_g_ prefix), the name of the group this edge was created for.
      * Matches `group.id` in the WebCola translator so routing can look up the group

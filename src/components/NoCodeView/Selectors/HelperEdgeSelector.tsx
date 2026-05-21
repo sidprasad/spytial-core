@@ -23,6 +23,7 @@ export const HelperEdgeSelector: React.FC<HelperEdgeSelectorProps> = ({
   const color = (directiveData.params.color as string) || '#000000';
   const style = (directiveData.params.style as string) || '';
   const weight = directiveData.params.weight as number | undefined;
+  const highlight = (directiveData.params.highlight as string) || '';
 
   const handleSelectorChange = (event: SelectorChangeEvent) => {
     onUpdate({ params: { ...directiveData.params, selector: event.target.value } });
@@ -59,6 +60,28 @@ export const HelperEdgeSelector: React.FC<HelperEdgeSelectorProps> = ({
           defaultValue={color}
           onChange={(e) => onUpdate({ params: { ...directiveData.params, color: e.target.value } })}
         />
+      </div>
+      <div className="field-group">
+        <label className="field-label" title="Optional highlight color drawn as a wider underlay beneath the edge">
+          Highlight
+        </label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <input
+            type="color"
+            name="highlight"
+            value={highlight || '#ffeb3b'}
+            disabled={!highlight}
+            onChange={(e) => onUpdate({ params: { ...directiveData.params, highlight: e.target.value } })}
+          />
+          <label className="inline-toggle" style={{ margin: 0 }}>
+            <input
+              type="checkbox"
+              checked={!!highlight}
+              onChange={(e) => onUpdate({ params: { ...directiveData.params, highlight: e.target.checked ? '#ffeb3b' : undefined } })}
+            />
+            <span>Enabled</span>
+          </label>
+        </div>
       </div>
       <div className="field-group">
         <label className="field-label">Style</label>

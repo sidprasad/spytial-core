@@ -2162,7 +2162,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // Animate exiting edge paths with stroke-dashoffset (draw-out effect).
     snapshotSel.selectAll('g.link-group, g.inferredLinkGroup, g.alignmentLinkGroup')
       .each(function(this: SVGGElement) {
-        const pathEl = this.querySelector('path') as SVGPathElement | null;
+        const pathEl = this.querySelector('path[data-link-id]') as SVGPathElement | null;
         if (!pathEl) return;
         const totalLength = pathEl.getTotalLength();
         if (!totalLength || totalLength <= 0) return;
@@ -2268,7 +2268,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           return enterNodeIds.has(srcId) || enterNodeIds.has(tgtId);
         })
         .each(function(this: SVGGElement) {
-          const pathEl = this.querySelector('path') as SVGPathElement | null;
+          const pathEl = this.querySelector('path[data-link-id]') as SVGPathElement | null;
           if (!pathEl) return;
           const totalLength = pathEl.getTotalLength();
           if (!totalLength || totalLength <= 0) return;
@@ -2287,7 +2287,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         .duration(this.morphEnterDurationMs)
         .ease(d3.easeCubicOut)
         .tween('draw-in', function(this: SVGGElement) {
-          const pathEl = this.querySelector('path') as SVGPathElement | null;
+          const pathEl = this.querySelector('path[data-link-id]') as SVGPathElement | null;
           if (!pathEl) return () => {};
           const totalLength = pathEl.getTotalLength();
           if (!totalLength || totalLength <= 0) return () => {};
@@ -2298,7 +2298,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         })
         .on('end', function(this: SVGGElement) {
           // Clean up dash attributes and show labels/arrows
-          const pathEl = this.querySelector('path');
+          const pathEl = this.querySelector('path[data-link-id]');
           if (pathEl) {
             pathEl.removeAttribute('stroke-dasharray');
             pathEl.removeAttribute('stroke-dashoffset');
@@ -2694,6 +2694,24 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .style('cursor', () => {
         return this.isInputModeActive ? 'pointer' : 'default';
       });
+
+    // Highlight underlay: a wider, translucent path drawn beneath the main edge.
+    // Only created for edges that actually set `highlight`, so non-highlighted
+    // edges pay zero extra cost. Inserted as the first child of the link-group
+    // so SVG painter's order renders it underneath the main edge.
+    linkGroups
+      .filter((d: any) => !!d.highlight && !this.isAlignmentEdge(d))
+      .insert("path", ":first-child")
+      .attr("class", "highlight-underlay")
+      .attr("stroke", (d: any) => d.highlight)
+      .attr("fill", "none")
+      .attr("stroke-linecap", "round")
+      .style("stroke-width", (d: any) => {
+        const base = d.weight != null ? d.weight : 2;
+        return `${base + 8}px`;
+      })
+      .attr("opacity", 0.45)
+      .style("pointer-events", "none");
   }
 
   private getEdgeDasharray(style?: string): string | null {
@@ -3771,9 +3789,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       })
       .raise();
 
-    // Update link paths with stable anchor-based routing to prevent jitter during dragging
-    // Select 'path' to include all edge types: .link, .inferredLink, and .alignmentLink
-    this.svgLinkGroups.select('path')
+    // Update link paths with stable anchor-based routing to prevent jitter during dragging.
+    // Select the main path (identified by data-link-id) so any highlight underlay sibling
+    // is not picked up here — markers and .raise() apply only to the main edge.
+    this.svgLinkGroups.select('path[data-link-id]')
       .attr('d', (d: EdgeWithMetadata) => {
         // Resolve group-edge endpoints (group boundary instead of member node center).
         const { source, target } = this.resolveGroupEdgeEndpoints(d);
@@ -3794,6 +3813,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         return 'url(#start-arrow)';
       })
       .raise();
+
+    // Mirror the main path's `d` onto the highlight underlay sibling.
+    // Cheap: one getAttribute + setAttribute per highlighted edge per tick.
+    this.svgLinkGroups.select('path.highlight-underlay')
+      .attr('d', function () {
+        const parent = (this as SVGPathElement).parentNode as Element | null;
+        const main = parent?.querySelector('path[data-link-id]');
+        return main?.getAttribute('d') ?? null;
+      });
 
     // Update link labels using path midpoint calculation
     this.svgLinkGroups.select('.linklabel')

@@ -64,6 +64,8 @@ type EdgeWithMetadata = Link<NodeWithMetadata> & {
   color: string,
   style?: EdgeStyle,
   weight?: number,
+  /** Highlight color rendered as a wider underlay beneath the edge. Undefined = no highlight. */
+  highlight?: string,
   showLabel?: boolean, // Whether to show the edge label (default: true)
   bidirectional?: boolean, // Flag to indicate if this edge represents a bidirectional relationship
   /**
@@ -701,6 +703,7 @@ export class WebColaLayout {
       color: edge.color,
       style: edge.style,
       weight: edge.weight,
+      highlight: edge.highlight,
       showLabel: edge.showLabel,
       groupId: edge.groupId,
       keyNodeId: edge.keyNodeId,

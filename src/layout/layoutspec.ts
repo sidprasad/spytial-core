@@ -244,6 +244,8 @@ export interface InferredEdgeDirective extends VisualManipulation {
     color?: string;
     style?: EdgeStyle;
     weight?: number;
+    /** Optional highlight color drawn as a wider underlay beneath the edge. */
+    highlight?: string;
 }
 
 export interface AtomHidingDirective extends VisualManipulation {
@@ -299,6 +301,8 @@ export interface EdgeStyleDirective extends FieldDirective {
     weight?: number;
     showLabel?: boolean;
     hidden?: boolean;
+    /** Optional highlight color drawn as a wider underlay beneath the edge. */
+    highlight?: string;
 }
 
 /**
@@ -814,7 +818,8 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
                         style: d.edgeColor.style,
                         weight: d.edgeColor.weight,
                         showLabel: d.edgeColor.showLabel,
-                        hidden: d.edgeColor.hidden
+                        hidden: d.edgeColor.hidden,
+                        highlight: d.edgeColor.highlight
                     }
                 });
 
@@ -844,7 +849,8 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
             selector: d.inferredEdge.selector,
             color: d.inferredEdge.color,
             style: d.inferredEdge.style,
-            weight: d.inferredEdge.weight
+            weight: d.inferredEdge.weight,
+            highlight: d.inferredEdge.highlight
         }
     });
 
