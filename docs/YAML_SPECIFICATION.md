@@ -404,6 +404,7 @@ Customizes the appearance of edges for a specific field/relation.
     filter: <n-ary-selector>     # Optional: Filter which tuples apply
     style: <line-style>          # Optional: Line style
     weight: <number>             # Optional: Line thickness
+    highlight: <color>           # Optional: Highlight color (underlay)
     showLabel: <boolean>         # Optional: Show edge label
     hidden: <boolean>            # Optional: Hide the edge entirely
 ```
@@ -418,6 +419,7 @@ Customizes the appearance of edges for a specific field/relation.
 | `filter` | ❌ No | string | - | N-ary selector to filter specific tuples |
 | `style` | ❌ No | string | `solid` | `solid`, `dashed`, or `dotted` |
 | `weight` | ❌ No | number | - | Line thickness in pixels |
+| `highlight` | ❌ No | string | - | CSS color drawn as a wider, translucent underlay beneath the edge. Orthogonal to `style`/`value` — combine with any line style or color. Omit for no highlight. |
 | `showLabel` | ❌ No | boolean | `true` | Whether to display the edge label |
 | `hidden` | ❌ No | boolean | `false` | Hide the edge from display |
 
@@ -442,6 +444,12 @@ Customizes the appearance of edges for a specific field/relation.
     field: internal
     value: gray
     hidden: true
+
+# Yellow highlight glow under black edges
+- edgeColor:
+    field: critical_path
+    value: black
+    highlight: "#ffeb3b"
 ```
 
 ---
@@ -671,6 +679,7 @@ Creates visual edges based on a selector expression (edges that don't exist in t
     color: <color>               # Optional: Edge color
     style: <line-style>          # Optional: Line style
     weight: <number>             # Optional: Line thickness
+    highlight: <color>           # Optional: Highlight color (underlay)
 ```
 
 **Fields:**
@@ -682,6 +691,7 @@ Creates visual edges based on a selector expression (edges that don't exist in t
 | `color` | ❌ No | string | `#000000` | CSS color value |
 | `style` | ❌ No | string | `solid` | `solid`, `dashed`, or `dotted` |
 | `weight` | ❌ No | number | - | Line thickness in pixels |
+| `highlight` | ❌ No | string | - | CSS color drawn as a wider, translucent underlay beneath the edge. Omit for no highlight. |
 
 **Examples:**
 

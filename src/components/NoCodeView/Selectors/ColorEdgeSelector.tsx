@@ -12,7 +12,7 @@ interface ColorEdgeSelectorProps {
 
 /**
  * Minimal React component for edge style directive.
- * Includes field input, color picker, line style, weight, label visibility, and edge visibility.
+ * Includes field input, color picker, highlight color, line style, weight, label visibility, and edge visibility.
  */
 export const ColorEdgeSelector: React.FC<ColorEdgeSelectorProps> = ({
   directiveData,
@@ -26,6 +26,7 @@ export const ColorEdgeSelector: React.FC<ColorEdgeSelectorProps> = ({
   const weight = directiveData.params.weight as number | undefined;
   const showLabel = directiveData.params.showLabel as boolean | undefined;
   const hidden = directiveData.params.hidden as boolean | undefined;
+  const highlight = (directiveData.params.highlight as string) || '';
 
   const handleSelectorChange = (event: SelectorChangeEvent) => {
     const { name, value } = event.target;
@@ -75,6 +76,28 @@ export const ColorEdgeSelector: React.FC<ColorEdgeSelectorProps> = ({
           onChange={(e) => onUpdate({ params: { ...directiveData.params, value: e.target.value } })}
           required
         />
+      </div>
+      <div className="field-group">
+        <label className="field-label" title="Optional highlight color drawn as a wider underlay beneath the edge">
+          Highlight
+        </label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <input
+            type="color"
+            name="highlight"
+            value={highlight || '#ffeb3b'}
+            disabled={!highlight}
+            onChange={(e) => onUpdate({ params: { ...directiveData.params, highlight: e.target.value } })}
+          />
+          <label className="inline-toggle" style={{ margin: 0 }}>
+            <input
+              type="checkbox"
+              checked={!!highlight}
+              onChange={(e) => onUpdate({ params: { ...directiveData.params, highlight: e.target.checked ? '#ffeb3b' : undefined } })}
+            />
+            <span>Enabled</span>
+          </label>
+        </div>
       </div>
       <div className="field-group">
         <label className="field-label">Style</label>
