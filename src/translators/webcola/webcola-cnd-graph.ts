@@ -5815,6 +5815,114 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
+   * Direct-line fast path. Returns a 2-point perimeter-to-perimeter route iff:
+   *   (a) the edge has no parallel siblings between the same pair (multi-edge
+   *       logic owns those), and
+   *   (b) source and target are not near-touching (perpendicular-route logic
+   *       owns those), and
+   *   (c) no *other* node's visible rectangle intersects the source-center to
+   *       target-center line.
+   *
+   * Otherwise returns null and the caller falls back to WebCola's router.
+   * Group containers are not treated as obstacles here — edges from one group
+   * to another necessarily cross group boundaries, and the visible rectangle
+   * is the only obstacle the eye actually registers.
+   *
+   * Why this exists: empirically (Purchase 1997/2002; Huang/Hong/Eades 2008)
+   * the dominant readability cost on a clear path is *exit angle*, not bend
+   * count — an arrow that leaves a node pointing 90° away from its target
+   * reads as wrong even if the curve eventually arrives. WebCola's
+   * visibility-graph router snaps endpoints to N/S/E/W rectangle midpoints
+   * regardless of target direction, so on layouts where the inflated
+   * collision bounds form a phantom corridor, it produces routes that exit
+   * anti-parallel to the target. The fast path short-circuits those cases.
+   */
+  private tryDirectLineRoute(edgeData: any): Array<{ x: number; y: number }> | null {
+    if (!edgeData?.source || !edgeData?.target) return null;
+    if (edgeData.source.id === edgeData.target.id) return null;
+
+    // (a) Skip if there are parallel siblings — handleMultipleEdgeRouting +
+    // applyPortBasedEndpoints want to see WebCola's route to apply curvature
+    // and port distribution.
+    const siblings = this.getAllEdgesBetweenNodes(edgeData.source.id, edgeData.target.id);
+    if (siblings.length > 1) return null;
+
+    const sourceBounds = this.normalizeNodeBounds(edgeData.source);
+    const targetBounds = this.normalizeNodeBounds(edgeData.target);
+
+    // (b) Skip if near-touching — getNearTouchPerpendicularRoute handles those
+    // with a U-bend that the direct line would skip entirely.
+    const NEAR_TOUCH_THRESHOLD = 5;
+    if (this.getTouchDirection(sourceBounds, targetBounds, NEAR_TOUCH_THRESHOLD) !== 'none') {
+      return null;
+    }
+
+    const sourceCenter = {
+      x: sourceBounds.x + sourceBounds.width() / 2,
+      y: sourceBounds.y + sourceBounds.height() / 2
+    };
+    const targetCenter = {
+      x: targetBounds.x + targetBounds.width() / 2,
+      y: targetBounds.y + targetBounds.height() / 2
+    };
+
+    // (c) Bail if any other node's visible rectangle intersects the line.
+    if (this.currentLayout?.nodes) {
+      for (const node of this.currentLayout.nodes) {
+        if (node.id === edgeData.source.id || node.id === edgeData.target.id) continue;
+        const nb = this.normalizeNodeBounds(node);
+        if (this.lineIntersectsRect(sourceCenter, targetCenter, nb)) return null;
+      }
+    }
+
+    // Clip endpoints to perimeters so arrowheads land on the rendered boundary
+    // rather than at the node centers (which would put them behind the fill).
+    const sourcePoint = this.clipLineToRectExit(sourceCenter, targetCenter, sourceBounds);
+    const targetPoint = this.clipLineToRectExit(targetCenter, sourceCenter, targetBounds);
+
+    return [sourcePoint, targetPoint];
+  }
+
+  /**
+   * Given a point `inside` a rectangle and another point `outside` (or at
+   * least farther along the ray direction), returns the point where the line
+   * from `inside` toward `outside` exits the rectangle.
+   *
+   * Used by tryDirectLineRoute to clip the source-center → target-center line
+   * to the source and target rectangle perimeters so the arrowhead lands on
+   * the rendered boundary.
+   */
+  private clipLineToRectExit(
+    inside: { x: number; y: number },
+    outside: { x: number; y: number },
+    rect: { x: number; y: number; width: () => number; height: () => number }
+  ): { x: number; y: number } {
+    const dx = outside.x - inside.x;
+    const dy = outside.y - inside.y;
+    if (dx === 0 && dy === 0) return { x: inside.x, y: inside.y };
+
+    const left = rect.x;
+    const right = rect.x + rect.width();
+    const top = rect.y;
+    const bottom = rect.y + rect.height();
+
+    const candidates: number[] = [];
+    if (dx > 0) candidates.push((right - inside.x) / dx);
+    else if (dx < 0) candidates.push((left - inside.x) / dx);
+    if (dy > 0) candidates.push((bottom - inside.y) / dy);
+    else if (dy < 0) candidates.push((top - inside.y) / dy);
+
+    // Smallest positive t is the first boundary crossing from `inside`.
+    let t = Infinity;
+    for (const c of candidates) {
+      if (c > 0 && c < t) t = c;
+    }
+    if (!Number.isFinite(t)) return { x: inside.x, y: inside.y };
+
+    return { x: inside.x + t * dx, y: inside.y + t * dy };
+  }
+
+  /**
    * Computes route points for a single edge.
    * Returns an array of {x, y} points (not an SVG path string).
    *
@@ -5837,6 +5945,18 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // with both endpoints at the node center — rendering as an empty path.
     if (edgeData.source.id === edgeData.target.id) {
       return this.createSelfLoopRoute(edgeData);
+    }
+
+    // Direct-line fast path: when nothing visible sits between source and target
+    // and there are no parallel siblings or near-touch conditions, WebCola's
+    // visibility-graph router still occasionally produces snake-shaped routes
+    // (its obstacle set includes the *inflated* collision bounds, not the
+    // visible rectangles, so clear-looking corridors register as blocked).
+    // Bypass it for these cases — the result is a straight diagonal that
+    // exits the source pointing at the target, which is what the eye expects.
+    if (!edgeData.id?.startsWith('_g_')) {
+      const direct = this.tryDirectLineRoute(edgeData);
+      if (direct) return direct;
     }
 
     const defaultRoute = [
