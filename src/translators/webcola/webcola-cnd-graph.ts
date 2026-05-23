@@ -5884,6 +5884,74 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
+   * Run port distribution on a direct-line fast-path route while preserving
+   * the invariant that endpoints sit on their nodes' visible perimeters.
+   *
+   * applyPortBasedEndpoints distributes endpoints along the dominant-direction
+   * side (height for horizontal-axis edges, width for vertical-axis edges).
+   * For purely cardinal edges (target directly N/S/E/W of source) my fast-path
+   * clip already exits on that side, so distribution slides cleanly along it.
+   * For diagonal edges in the 31–45° band (or whatever the rect's
+   * aspect-ratio-corner band is), the natural line-intersection clip can hit
+   * the bottom/top while dominant direction expects left/right — distribution
+   * would then shift the endpoint *inside* the rectangle.
+   *
+   * Strategy: try distribution; if either endpoint leaves the perimeter, fall
+   * back to the un-distributed clip. The un-distributed clip already provides
+   * meaningful endpoint separation via the line-geometry difference between
+   * sibling edges (their target directions differ → their clip points differ),
+   * so the worst case is "less spread" rather than "wrong attachment."
+   */
+  private applyPortBasedEndpointsToDirectRoute(
+    edgeData: any,
+    route: Array<{ x: number; y: number }>
+  ): Array<{ x: number; y: number }> {
+    const hasSourcePort = edgeData._sourcePortCount > 1;
+    const hasTargetPort = edgeData._targetPortCount > 1;
+    if (!hasSourcePort && !hasTargetPort) return route;
+
+    const distributed = this.applyPortBasedEndpoints(
+      edgeData,
+      route.map(p => ({ ...p }))
+    );
+
+    const sourceBounds = this.normalizeNodeBounds(edgeData.source);
+    const targetBounds = this.normalizeNodeBounds(edgeData.target);
+    if (
+      this.isPointOnRectPerimeter(distributed[0], sourceBounds) &&
+      this.isPointOnRectPerimeter(distributed[distributed.length - 1], targetBounds)
+    ) {
+      return distributed;
+    }
+    return route;
+  }
+
+  /**
+   * Returns true if `point` lies within `tolerance` pixels of any of the four
+   * edges of `rect`. Used by the direct-line fast path to validate that port
+   * distribution didn't shift an endpoint inside the rectangle.
+   */
+  private isPointOnRectPerimeter(
+    point: { x: number; y: number },
+    rect: { x: number; y: number; width: () => number; height: () => number },
+    tolerance: number = 1
+  ): boolean {
+    const left = rect.x;
+    const right = rect.x + rect.width();
+    const top = rect.y;
+    const bottom = rect.y + rect.height();
+    const withinX = point.x >= left - tolerance && point.x <= right + tolerance;
+    const withinY = point.y >= top - tolerance && point.y <= bottom + tolerance;
+    if (!withinX || !withinY) return false;
+    return (
+      Math.abs(point.x - left) <= tolerance ||
+      Math.abs(point.x - right) <= tolerance ||
+      Math.abs(point.y - top) <= tolerance ||
+      Math.abs(point.y - bottom) <= tolerance
+    );
+  }
+
+  /**
    * Given a point `inside` a rectangle and another point `outside` (or at
    * least farther along the ray direction), returns the point where the line
    * from `inside` toward `outside` exits the rectangle.
@@ -5954,9 +6022,16 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // visible rectangles, so clear-looking corridors register as blocked).
     // Bypass it for these cases — the result is a straight diagonal that
     // exits the source pointing at the target, which is what the eye expects.
+    //
+    // Port distribution still applies to fast-path edges: edges that share a
+    // node side with siblings (multiple incoming arrows on a BDD terminal,
+    // multiple outgoing arrows from a hub) need their endpoints spread along
+    // the side or they cluster at the natural line-intersection point.
     if (!edgeData.id?.startsWith('_g_')) {
       const direct = this.tryDirectLineRoute(edgeData);
-      if (direct) return direct;
+      if (direct) {
+        return this.applyPortBasedEndpointsToDirectRoute(edgeData, direct);
+      }
     }
 
     const defaultRoute = [
