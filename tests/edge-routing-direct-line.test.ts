@@ -34,6 +34,8 @@ describe('tryDirectLineRoute', () => {
       nodeEdgesBySide: new Map(),
     },
     normalizeNodeBounds: proto.normalizeNodeBounds,
+    getVisibleBounds: proto.getVisibleBounds,
+    getRenderedBounds: proto.getRenderedBounds,
     lineIntersectsRect: proto.lineIntersectsRect,
     getAllEdgesBetweenNodes: proto.getAllEdgesBetweenNodes,
     isAlignmentEdge: proto.isAlignmentEdge,
@@ -128,6 +130,58 @@ describe('tryDirectLineRoute', () => {
     expect(route).toBeNull();
   });
 
+  it('clips to the visible perimeter, not the inflated collision bounds', () => {
+    // After WebCola.prepareEdgeRouting, node.bounds is inflated by a few px
+    // for collision avoidance, while the rendered rectangle is still
+    // visualWidth × visualHeight. Clipping to bounds would put the arrow tip
+    // in the padding region; the marker body (12 px) would extend back into
+    // the visible rect and be covered by node fill. tryDirectLineRoute must
+    // use visualWidth/visualHeight, not bounds, for the perimeter clip.
+    const sourceVisual = 50, targetVisual = 50;
+    const inflation = 4; // simulate WebCola's prepareEdgeRouting inflation
+
+    const inflatedSource = {
+      id: 'A',
+      x: 0, y: 0,
+      visualWidth: sourceVisual,
+      visualHeight: 30,
+      bounds: {
+        x: -sourceVisual / 2 - inflation,
+        y: -15 - inflation,
+        X: sourceVisual / 2 + inflation,
+        Y: 15 + inflation,
+        width: () => sourceVisual + 2 * inflation,
+        height: () => 30 + 2 * inflation,
+      }
+    };
+    const inflatedTarget = {
+      id: 'B',
+      x: 200, y: 0,
+      visualWidth: targetVisual,
+      visualHeight: 30,
+      bounds: {
+        x: 200 - targetVisual / 2 - inflation,
+        y: -15 - inflation,
+        X: 200 + targetVisual / 2 + inflation,
+        Y: 15 + inflation,
+        width: () => targetVisual + 2 * inflation,
+        height: () => 30 + 2 * inflation,
+      }
+    };
+    const edge = { id: 'e1', source: inflatedSource, target: inflatedTarget };
+
+    const fakeThis = setupFakeThis([inflatedSource, inflatedTarget], [edge]);
+    const route = fakeThis.tryDirectLineRoute.call(fakeThis, edge);
+
+    expect(route).not.toBeNull();
+    // Source exit should be on the VISIBLE right edge (x=25), NOT the inflated one (x=29).
+    expect(route[0].x).toBeCloseTo(25, 1);
+    expect(route[0].x).not.toBeCloseTo(25 + inflation, 1);
+    // Target entry should be on the VISIBLE left edge (x=175), NOT the inflated one (x=171).
+    expect(route[1].x).toBeCloseTo(175, 1);
+    expect(route[1].x).not.toBeCloseTo(175 - inflation, 1);
+  });
+
   it('handles the BDD Node0→Node1 case: vertically stacked, clear path', () => {
     // Mirror stage 5 of the blog BDD: Node0 directly above Node1, with
     // Node4 to the right (the blog renders Node0→Node1 with tortuosity 4.46,
@@ -179,6 +233,8 @@ describe('applyPortBasedEndpointsToDirectRoute', () => {
 
   const setupThis = () => ({
     normalizeNodeBounds: proto.normalizeNodeBounds,
+    getVisibleBounds: proto.getVisibleBounds,
+    getRenderedBounds: proto.getRenderedBounds,
     lineIntersectsRect: proto.lineIntersectsRect,
     getAllEdgesBetweenNodes: proto.getAllEdgesBetweenNodes,
     isAlignmentEdge: proto.isAlignmentEdge,

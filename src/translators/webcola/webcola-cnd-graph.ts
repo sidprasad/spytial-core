@@ -5847,8 +5847,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     const siblings = this.getAllEdgesBetweenNodes(edgeData.source.id, edgeData.target.id);
     if (siblings.length > 1) return null;
 
-    const sourceBounds = this.normalizeNodeBounds(edgeData.source);
-    const targetBounds = this.normalizeNodeBounds(edgeData.target);
+    // Use the *visible* rectangle (visualWidth/visualHeight for nodes, inset
+    // bounds for groups) so the arrowhead lands on the rendered border. The
+    // alternative — normalizeNodeBounds — returns WebCola's inflated collision
+    // bounds, which are ~3 px outside the rendered rectangle; clipping to
+    // those puts the arrow tip in the padding region and lets the 12 px
+    // marker body extend back into the node fill (which then covers it since
+    // renderNodes appends after renderLinks).
+    const sourceBounds = this.getRenderedBounds(edgeData.source);
+    const targetBounds = this.getRenderedBounds(edgeData.target);
 
     // (b) Skip if near-touching — getNearTouchPerpendicularRoute handles those
     // with a U-bend that the direct line would skip entirely.
@@ -5915,8 +5922,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       route.map(p => ({ ...p }))
     );
 
-    const sourceBounds = this.normalizeNodeBounds(edgeData.source);
-    const targetBounds = this.normalizeNodeBounds(edgeData.target);
+    // Validate against rendered bounds (matches what tryDirectLineRoute
+    // clipped against — using inflated bounds here would let an endpoint that
+    // shifted into the padding region pass the check).
+    const sourceBounds = this.getRenderedBounds(edgeData.source);
+    const targetBounds = this.getRenderedBounds(edgeData.target);
     if (
       this.isPointOnRectPerimeter(distributed[0], sourceBounds) &&
       this.isPointOnRectPerimeter(distributed[distributed.length - 1], targetBounds)
@@ -5924,6 +5934,29 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       return distributed;
     }
     return route;
+  }
+
+  /**
+   * Returns the *rendered* rectangle of a node — what the user actually sees,
+   * not WebCola's inflated collision bounds. Prefers getVisibleBounds (which
+   * applies visualWidth/visualHeight and the group inset) and falls back to
+   * normalizeNodeBounds when getVisibleBounds can't derive a size.
+   *
+   * Edge endpoint placement should always use this; routing it against
+   * inflated bounds puts the arrowhead in the padding region where the node's
+   * fill covers the marker body.
+   */
+  private getRenderedBounds(node: any): { x: number; y: number; width: () => number; height: () => number } {
+    const visible = this.getVisibleBounds(node);
+    if (visible) {
+      return {
+        x: visible.x,
+        y: visible.y,
+        width: visible.width,
+        height: visible.height,
+      };
+    }
+    return this.normalizeNodeBounds(node);
   }
 
   /**
