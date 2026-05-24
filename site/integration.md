@@ -2,11 +2,11 @@
 
 > Using Claude Code? Run `/integrate-language` (see [skill.md](skill.md)) for a guided walkthrough of this recipe.
 
-> The goal is not merely to build three ports, but to extract what is **invariant** across hosts from what is **host-specific**.
+> The goal is not merely to build three integrations, but to extract what is **invariant** across hosts from what is **host-specific**.
 
 Every integration of Spytial — Python, Rust, Pyret, the next one you write — must resolve the same four subproblems. The mechanisms differ; the questions don't.
 
-This page is the contract for an integrator. If you can answer all four for your host, you have a working Spytial port.
+This page is the contract for an integrator. If you can answer all four for your host, you have a working Spytial integration.
 
 ---
 
@@ -105,7 +105,7 @@ When in doubt: **start by faithfully relationalizing what's there**, then layer 
 
 ---
 
-## A checklist for a new port
+## A checklist for a new integration
 
 Before you publish, make sure you can answer these:
 

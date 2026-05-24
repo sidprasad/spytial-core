@@ -1,6 +1,6 @@
 # The Integration Pipeline
 
-Every Spytial integration — Python, Rust, Pyret, Lean, your future host — funnels through the same five-stage pipeline. Internalising this picture is the single most useful thing for an integrator.
+Every Spytial integration — Python, Rust, Pyret, your future host — funnels through the same five-stage pipeline. Internalising this picture is the single most useful thing for an integrator.
 
 ```
    ┌─── HOST SIDE (you write) ────┐   ┌──────── spytial-core (browser) ────────┐
@@ -36,7 +36,7 @@ Walk your host's value graph and emit:
 - **Tuples**: ordered atom-id sequences for every edge / field / relation. Arity is unrestricted (binary is most common, but ternary+ is fine).
 - **Types** (optional): a hierarchy if your host has subtyping. If you skip this, types are inferred from atom `type` fields.
 
-This is where host knowledge lives. Python uses `id()`-keyed reflection, Rust uses procedural macros, Pyret uses a value-skeleton helper, Lean walks the elaborated `Expr` tree.
+This is where host knowledge lives. Python uses `id()`-keyed reflection, Rust uses procedural macros, Pyret uses a value-skeleton helper.
 
 → See [Custom Data Instances](custom-data-instance.md) and the [JSON format](json-data.md).
 
@@ -62,7 +62,6 @@ The library is browser-side. You decide how to get JSON + YAML there:
 
 - **Local HTTP** (Caraspace): write `rust_viz_data.html` and `rust_viz_data.json` to disk, start `python -m http.server`, open the page.
 - **Jupyter widget / inline HTML** (sPyTial): `IPython.display.HTML(...)` with the bundle and JSON inlined.
-- **IDE webview** (Spytial-Lean): ProofWidgets4 message-passes data into a webview that imports `spytial-core`.
 - **Editor extension** (Spyret IDE): VS Code webview talks to a language server.
 
 There's no required transport. Whatever channel you have, push two strings: the JSON instance and the YAML spec.
@@ -113,4 +112,4 @@ If your host has time/state — Alloy traces, Pyret reactor states, debugger ste
 
 - [The Four Subproblems](integration.md) — the principled framing of the integrator's job.
 - [Quick Start](quickstart.md) — the smallest possible end-to-end integration.
-- [Case Studies](case-studies.md) — how Python, Rust, Pyret, and Lean each solve the four subproblems.
+- [Case Studies](case-studies.md) — how Python, Rust, and Pyret each solve the four subproblems.

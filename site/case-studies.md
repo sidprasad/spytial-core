@@ -1,6 +1,6 @@
 # Case Studies
 
-Three (and a half) integrations, framed as their answers to [the four subproblems](integration.md).
+Three integrations, framed as their answers to [the four subproblems](integration.md).
 
 ---
 
@@ -45,21 +45,7 @@ Repos: [spyret-lang](https://github.com/sidprasad/spyret-lang), [spyret-ide](htt
 
 ---
 
-## Spytial-Lean — Lean 4
-
-Repo: [github.com/sidprasad/spytial-lean](https://github.com/sidprasad/spytial-lean)
-
-| Subproblem            | Answer                                                                                                |
-|-----------------------|-------------------------------------------------------------------------------------------------------|
-| Recovering structure  | A *Relationalizer* walks the elaborated `Expr` tree after WHNF reduction. Constructors → atoms; data arguments → tuples in named relations. Hash-cons identity from Lean's `Expr` gives sharing for free. |
-| Attaching specs       | A typed Spec layer in Lean compiles to YAML for `spytial-core`. Users write Lean operations; the layer translates. Raw-YAML escape hatch is also exposed. |
-| Presenting diagrams   | A ProofWidgets4 widget loads `spytial-core` and renders inside VS Code's infoview, alongside the proof state. |
-| Representation gaps   | Implicit arguments and types can be hidden via directives. Derived structure (e.g. tree height in inductive types) is computed in the Spec layer and attached as `tag` directives. |
-
-
----
-
-## Patterns across all five
+## Patterns across all three
 
 A few things every working integration ends up doing:
 

@@ -19,7 +19,7 @@ const instance = new JSONDataInstance(jsonPayload, {
 });
 ```
 
-Every existing host integration (Python, Rust, Pyret, Lean, Racket) flows through this class.
+Every existing host integration (Python, Rust, Pyret) flows through this class.
 
 ---
 
@@ -61,12 +61,6 @@ const instance = new DotDataInstance(dotSource, { typeConfig });
 ```
 
 If you skip the config, every node is `Node` with a flat hierarchy.
-
----
-
-## RacketGDataInstance
-
-Adapter for [rkt-graphable](https://github.com/sidprasad/rkt-graphable), the Racket `#lang` integration.
 
 ---
 

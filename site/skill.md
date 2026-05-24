@@ -11,7 +11,6 @@ Trigger phrases the skill listens for:
 - "integrate <X> with Spytial"
 - "make Spytial work with <X>"
 - "build a Spytial frontend / binding / adapter for <X>"
-- "port spytial / caraspace to <X>"
 - "Spytial bindings for <X>"
 
 Or invoke it explicitly: `/integrate-language`.
@@ -65,5 +64,5 @@ The skill is currently distributed via this repo. A future Claude Code plugin ma
 ## See also
 
 - [The Four Subproblems](integration.md) — the canonical recipe the skill is built on.
-- [Case Studies](case-studies.md) — Python, Rust, Pyret, Lean worked examples.
+- [Case Studies](case-studies.md) — Python, Rust, Pyret worked examples.
 - [Custom Data Instances](custom-data-instance.md) — the JSON-vs-`IDataInstance` decision.

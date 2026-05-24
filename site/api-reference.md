@@ -65,7 +65,6 @@ Sugar for the three-line incantation: parses `spec` if it's a string, builds a `
 | `JSONDataInstance`, `DataInstanceNormalizer`             | Canonical JSON path. |
 | `AlloyDataInstance`, `createEmptyAlloyDataInstance`      | Alloy XML evaluator output. |
 | `DotDataInstance`, `DotTypeConfig`, `DotTypeDescriptor`, `DotDataInstanceOptions` | Graphviz DOT with optional layered type system. |
-| `RacketGDataInstance`                                     | rkt-graphable. |
 | `PyretDataInstance`                                       | Pyret value-skeleton output. |
 | `TlaDataInstance`, `createTlaDataInstance`, `isTlaDataInstance` | TLA+ traces. |
 | `IDataInstance`, `IInputDataInstance`, `IAtom`, `ITuple`, `IType`, `IRelation`, `DataInstanceEvent`, `DataInstanceEventListener`, `DataInstanceEventType` | Core interface types. |

@@ -1,6 +1,6 @@
 # Sequences of States
 
-Most diagrams are static — one value, one diagram. But many useful host scenarios are sequential: an Alloy trace, a Pyret reactor's state stream, a debugger stepping through frames, a proof-state evolution in Lean.
+Most diagrams are static — one value, one diagram. But many useful host scenarios are sequential: an Alloy trace, a Pyret reactor's state stream, a debugger stepping through frames.
 
 `spytial-core` supports rendering an ordered sequence of `IDataInstance`s with **inter-step continuity**: nodes that survive between frames stay roughly where they were; nodes that change get visually emphasised; layout doesn't shuffle randomly when the data barely changes.
 
@@ -117,7 +117,7 @@ After registration, `getSequencePolicy('pin_roots')` returns it.
 
 When you'd write one:
 
-- The host has structural information that the diff-based policies miss (e.g. Lean's hash-cons tells you exactly which `Expr` survived).
+- The host has structural information that the diff-based policies miss (e.g. a hash-cons table that tells you exactly which nodes survived).
 - You want a host-specific cadence — pin during a sub-sequence, randomise on phase change, freeze during animations.
 - You want to drive the iteration count from a frame-rate budget instead of a boolean.
 

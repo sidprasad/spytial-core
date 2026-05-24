@@ -7,7 +7,6 @@
 If you want to render Python objects, use **[sPyTial](https://github.com/sidprasad/spytial)**.
 If you want to render Rust values, use **[Caraspace](https://github.com/sidprasad/caraspace)**.
 If you want to render Pyret values, use **[Spyret](https://github.com/sidprasad/spyret-lang)**.
-If you want to render Lean terms, use **[spytial-lean](https://github.com/sidprasad/spytial-lean)**.
 If you want to add a new host to that list — read on.
 
 ---
@@ -80,7 +79,7 @@ That's the entire core pipeline. Where `jsonPayload` and `yamlSpec` come from is
 
 | Layer                | Highlights                                                                            |
 |----------------------|---------------------------------------------------------------------------------------|
-| **Data instances**   | `JSONDataInstance`, `AlloyDataInstance`, `DotDataInstance`, `RacketGDataInstance`, `PyretDataInstance`, `TlaDataInstance`, plus the `IDataInstance` interface for custom adapters. |
+| **Data instances**   | `JSONDataInstance`, `AlloyDataInstance`, `DotDataInstance`, `PyretDataInstance`, `TlaDataInstance`, plus the `IDataInstance` interface for custom adapters. |
 | **Spec language**    | YAML constraints (`orientation`, `align`, `cyclic`, `group`, `size`, `hideAtom`) and directives (`atomColor`, `edgeColor`, `icon`, `attribute`, `tag`, `inferredEdge`, `flag`, …). |
 | **Selector engine**  | `SGraphQueryEvaluator` (Forge-style relational expressions) plus optional Forge / SQL evaluators. |
 | **Layout solver**    | `LayoutInstance` + `QualitativeConstraintValidator` — qualitative spatial constraints with IIS reporting. |

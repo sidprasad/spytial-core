@@ -76,11 +76,10 @@ The cleanest reference implementation is [`JSONDataInstance`](https://github.com
 | `JSONDataInstance`         | The canonical JSON shape     | The default for every host integration.                                                     |
 | `AlloyDataInstance`        | Alloy XML evaluator output   | Use `createEmptyAlloyDataInstance()` to build incrementally.                                |
 | `DotDataInstance`          | Graphviz DOT                 | Configurable type system (`DotTypeConfig`) since DOT has no native types.                   |
-| `RacketGDataInstance`      | rkt-graphable JSON           |                                                                                             |
 | `PyretDataInstance`        | Pyret value-skeleton output  |                                                                                             |
 | `TlaDataInstance`          | TLA+ trace output            | `createTlaDataInstance(...)` factory, `isTlaDataInstance(x)` predicate.                     |
 
-Pick the one that matches your host's serialization, or use them as templates. All five expose the same `IDataInstance` surface to the rest of `spytial-core`.
+Pick the one that matches your host's serialization, or use them as templates. All expose the same `IDataInstance` surface to the rest of `spytial-core`.
 
 ---
 
