@@ -2,11 +2,11 @@
 
 # spytial-core <small>integration guide</small>
 
-> The host-agnostic engine behind Spytial. Integrate spatial diagramming into your language.
+> Feed it relational data and a spatial spec; get back a diagram. This guide is for writing the part that connects your language to that engine.
 
-- A **canonical relational data model** — atoms, tuples, types
-- A **YAML constraint + directive language** for spatial layout
-- A **constraint solver, evaluator, and renderer** ready to embed
+- Represent host values as **atoms, tuples, and types**
+- Write layout intent as **YAML constraints and directives**
+- Hand both to the **solver, evaluator, and browser renderer**
 
 [Get Started](getting-started.md)
 [Four Subproblems](integration.md)

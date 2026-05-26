@@ -1,32 +1,51 @@
 # The Integration Pipeline
 
-Every Spytial integration — Python, Rust, Pyret, your future host — funnels through the same five-stage pipeline. Internalising this picture is the single most useful thing for an integrator.
+Every Spytial integration does the same five jobs. Some happen in the host; the rest happen in `spytial-core` in the browser. The diagram below is itself rendered with Spytial — `next` orients stages top-to-bottom and `runsOn` groups them by side:
 
-```
-   ┌─── HOST SIDE (you write) ────┐   ┌──────── spytial-core (browser) ────────┐
-   │                              │   │                                        │
-   │   host value                 │   │                                        │
-   │      │                       │   │                                        │
-   │      ▼                       │   │                                        │
-   │   1. Relationalize           │   │                                        │
-   │      → atoms, tuples, types  │   │                                        │
-   │                              │   │                                        │
-   │   2. Collect spec            │   │                                        │
-   │      → YAML CnD              │   │                                        │
-   │                              │   │                                        │
-   │   3. Serialize + deliver     │   │                                        │
-   │      → JSON over HTTP /      │   │                                        │
-   │        webview / widget      │──▶│  4. JSONDataInstance + parseLayoutSpec │
-   │                              │   │     → SGraphQueryEvaluator             │
-   │                              │   │     → LayoutInstance.generateLayout()  │
-   │                              │   │                                        │
-   │                              │   │  5. Translator                         │
-   │                              │   │     → WebColaCnDGraph (visual)         │
-   │                              │   │     → AccessibleTranslator (a11y)      │
-   └──────────────────────────────┘   └────────────────────────────────────────┘
-```
+<div class="spytial-diagram" data-height="520" data-caption="The pipeline, drawn with Spytial: five Stage atoms chained by `next` (orientation [below]) and grouped by `runsOn` Side (group-by-field).">
+<template class="data">
+{
+  "atoms": [
+    {"id": "host",    "type": "Side",  "label": "Host side (you write)"},
+    {"id": "browser", "type": "Side",  "label": "spytial-core (browser)"},
+    {"id": "s1", "type": "Stage", "label": "1. Relationalize — atoms, tuples, types"},
+    {"id": "s2", "type": "Stage", "label": "2. Collect spec — YAML CnD"},
+    {"id": "s3", "type": "Stage", "label": "3. Serialize + deliver — JSON + YAML"},
+    {"id": "s4", "type": "Stage", "label": "4. Run layout — LayoutInstance.generateLayout"},
+    {"id": "s5", "type": "Stage", "label": "5. Render — WebColaCnDGraph / AccessibleTranslator"}
+  ],
+  "relations": [
+    {"id": "next", "name": "next", "types": ["Stage", "Stage"],
+     "tuples": [
+       {"atoms": ["s1", "s2"], "types": ["Stage", "Stage"]},
+       {"atoms": ["s2", "s3"], "types": ["Stage", "Stage"]},
+       {"atoms": ["s3", "s4"], "types": ["Stage", "Stage"]},
+       {"atoms": ["s4", "s5"], "types": ["Stage", "Stage"]}
+     ]},
+    {"id": "runsOn", "name": "runsOn", "types": ["Stage", "Side"],
+     "tuples": [
+       {"atoms": ["s1", "host"],    "types": ["Stage", "Side"]},
+       {"atoms": ["s2", "host"],    "types": ["Stage", "Side"]},
+       {"atoms": ["s3", "host"],    "types": ["Stage", "Side"]},
+       {"atoms": ["s4", "browser"], "types": ["Stage", "Side"]},
+       {"atoms": ["s5", "browser"], "types": ["Stage", "Side"]}
+     ]}
+  ]
+}
+</template>
+<template class="spec">
+constraints:
+  - orientation: { selector: next, directions: [below] }
+  - group: { field: runsOn, groupOn: 1, addToGroup: 0 }
+  - size: { selector: Stage, width: 340, height: 50 }
+directives:
+  - atomColor: { selector: Stage, value: "#dbe7f3" }
+  - atomColor: { selector: Side,  value: "#f6f8fa" }
+  - flag: hideDisconnectedBuiltIns
+</template>
+</div>
 
-## Stage-by-stage
+## Stage by stage
 
 ### 1. Relationalize
 
@@ -36,13 +55,13 @@ Walk your host's value graph and emit:
 - **Tuples**: ordered atom-id sequences for every edge / field / relation. Arity is unrestricted (binary is most common, but ternary+ is fine).
 - **Types** (optional): a hierarchy if your host has subtyping. If you skip this, types are inferred from atom `type` fields.
 
-This is where host knowledge lives. Python uses `id()`-keyed reflection, Rust uses procedural macros, Pyret uses a value-skeleton helper.
+This is where host knowledge lives. Python uses `id()`-keyed reflection, Rust uses procedural macros, and Pyret uses a value-skeleton helper.
 
 → See [Custom Data Instances](custom-data-instance.md) and the [JSON format](json-data.md).
 
-### 2. Collect spec
+### 2. Collect the spec
 
-Your host's annotations / decorators / attributes / DSL → a YAML CnD spec. Two parts:
+Your host's annotations, decorators, attributes, or DSL become a YAML CnD spec. The spec has two parts:
 
 ```yaml
 constraints:
@@ -56,7 +75,7 @@ Directives control appearance (`atomColor`, `edgeColor`, `icon`, `attribute`, `t
 
 → See [YAML Reference](yaml-reference.md), [Constraints](constraints.md), [Directives](directives.md).
 
-### 3. Deliver to the browser
+### 3. Deliver the inputs to the browser
 
 The library is browser-side. You decide how to get JSON + YAML there:
 
@@ -64,11 +83,11 @@ The library is browser-side. You decide how to get JSON + YAML there:
 - **Jupyter widget / inline HTML** (sPyTial): `IPython.display.HTML(...)` with the bundle and JSON inlined.
 - **Editor extension** (Spyret IDE): VS Code webview talks to a language server.
 
-There's no required transport. Whatever channel you have, push two strings: the JSON instance and the YAML spec.
+There is no required transport. Whatever channel you have, send two strings: the JSON instance and the YAML spec.
 
 ### 4. Run the layout
 
-Inside the browser, the canonical recipe is:
+Inside the browser, layout setup looks like this:
 
 ```typescript
 import {
@@ -93,7 +112,7 @@ The convenience helper `setupLayout(spec, instance, evaluator)` does the last th
 
 ### 5. Render
 
-The layout is just data. Most integrations hand it to the bundled custom element:
+The layout is just data. Most integrations pass it to the bundled custom element:
 
 ```html
 <webcola-cnd-graph id="g" width="800" height="600"></webcola-cnd-graph>
@@ -102,14 +121,14 @@ The layout is just data. Most integrations hand it to the bundled custom element
 </script>
 ```
 
-For accessibility, swap in `<spytial-explorer>` (Data Navigator overlay, screen-reader spatial REPL, must/can modal queries) or call `AccessibleTranslator` directly to produce semantic HTML / alt-text / a `SpatialNavigationMap`.
+For accessibility, use `<spytial-explorer>` (Data Navigator overlay, screen-reader spatial REPL, must/can modal queries) or call `AccessibleTranslator` directly to produce semantic HTML, alt text, and a `SpatialNavigationMap`.
 
 ## Sequences
 
-If your host has time/state — Alloy traces, Pyret reactor states, debugger steps — you don't loop through stage 4 blindly. You pass a [sequence policy](sequences.md) (`stability`, `changeEmphasis`, `randomPositioning`, …) so consecutive frames stay visually continuous.
+If your host has time or state (Alloy traces, Pyret reactor states, debugger steps), do not treat each frame as an unrelated diagram. Pass a [sequence policy](sequences.md) (`stability`, `changeEmphasis`, `randomPositioning`, ...) so consecutive frames stay visually continuous.
 
 ## Where to go next
 
-- [The Four Subproblems](integration.md) — the principled framing of the integrator's job.
+- [The Four Subproblems](integration.md) — the main design questions for an integration.
 - [Quick Start](quickstart.md) — the smallest possible end-to-end integration.
 - [Case Studies](case-studies.md) — how Python, Rust, and Pyret each solve the four subproblems.

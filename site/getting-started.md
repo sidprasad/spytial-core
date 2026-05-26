@@ -1,25 +1,61 @@
 # Spytial
 
-> Spatial diagrams of structured data — declarative, lightweight, available across many languages.
+> Diagrams for structured data, with layout rules written down instead of baked into drawing code.
 
-**Spytial** turns your code's data — a tree, a graph, an AST, a state snapshot — into a box-and-arrow diagram whose layout is driven by declarative spatial constraints. The diagram reflects how the parts are *connected*, not how they happen to be stored.
+**Spytial** is for values whose shape matters: trees, graphs, ASTs, heap snapshots, trace states. It asks the host language to describe two things:
 
-You write data in your host language (Python, Rust, Pyret, …), attach lightweight constraint annotations (`orientation`, `align`, `group`, `cyclic`), and call one function. A diagram appears — inline in your notebook, in a browser tab, in your IDE — laid out the way you said.
+- the value as atoms and relations
+- the intended layout as constraints such as `orientation`, `align`, `group`, and `cyclic`
+
+The result is a box-and-arrow diagram whose geometry follows those constraints. The point is not to guess a pretty drawing; the point is to make the structure visible without hand-positioning nodes.
+
+<div class="spytial-diagram" data-height="320" data-caption="A binary tree, drawn with Spytial. The data: 5 Node atoms + left/right relations. The spec: orientation [above, right] for left-children, [above, left] for right-children. Nothing in this page hand-positions a node.">
+<template class="data">
+{
+  "atoms": [
+    {"id": "n0", "type": "Node", "label": "5"},
+    {"id": "n1", "type": "Node", "label": "3"},
+    {"id": "n2", "type": "Node", "label": "8"},
+    {"id": "n3", "type": "Node", "label": "1"},
+    {"id": "n4", "type": "Node", "label": "9"}
+  ],
+  "relations": [
+    {"id": "left", "name": "left", "types": ["Node", "Node"],
+     "tuples": [
+       {"atoms": ["n0", "n1"], "types": ["Node", "Node"]},
+       {"atoms": ["n1", "n3"], "types": ["Node", "Node"]}
+     ]},
+    {"id": "right", "name": "right", "types": ["Node", "Node"],
+     "tuples": [
+       {"atoms": ["n0", "n2"], "types": ["Node", "Node"]},
+       {"atoms": ["n2", "n4"], "types": ["Node", "Node"]}
+     ]}
+  ]
+}
+</template>
+<template class="spec">
+constraints:
+  - orientation: { selector: left,  directions: [above, right] }
+  - orientation: { selector: right, directions: [above, left]  }
+directives:
+  - atomColor: { selector: Node, value: "#4a90d9" }
+  - flag: hideDisconnectedBuiltIns
+</template>
+</div>
 
 ---
 
-## What every Spytial integration gives you
+## What an integration gets from the core
 
-Every Spytial host shares the same core capabilities, because they share the same engine. Whatever your language, you get:
+The host-specific work is deliberately small: recover structure, collect layout annotations, and deliver both to the browser. Once you have done that, `spytial-core` handles the parts that should not be reimplemented for each language:
 
-- **One-call rendering.** Pass a value, get a diagram — inline in a notebook, in a browser tab, or saved as HTML.
-- **Declarative spatial constraints.** `orientation`, `align`, `group`, `cyclic` — applied via decorators (Python), derive macros (Rust), output methods (Pyret), or whichever idiom is natural to your host. The same spec vocabulary applies everywhere.
-- **Honest layout feedback.** When the constraints you wrote conflict, Spytial reports *exactly which subset is unsatisfiable* — no silently mangled diagrams.
-- **Sequences of states.** Step through traces, reactor state streams, or any ordered sequence with visual continuity between frames, so things don't jump when the data barely changes.
-- **Accessible by default.** Every diagram has a parallel screen-reader view (Data Navigator + spatial REPL) alongside the visual rendering.
-- **Same engine everywhere.** All integrations share the browser-side `spytial-core` engine — YAML spec language, selector syntax, constraint solver, renderer — so a diagram looks and behaves the same across hosts.
+- **Rendering from host values.** A host API can be as small as `diagram(value)`, returning inline HTML, opening a browser tab, or writing a file.
+- **One layout vocabulary.** Python decorators, Rust derive attributes, and Pyret output methods can all compile to the same YAML spec.
+- **Conflict reports.** If the constraints cannot all hold, Spytial reports the inconsistent subset instead of quietly drawing something else.
+- **Sequences.** Ordered states can keep visual continuity across frames, which matters for traces and stepping debuggers.
+- **Accessible output.** The visual rendering can be paired with a Data Navigator and spatial REPL for screen-reader users.
 
-What *changes* per host is how you reflect your data into Spytial's relational view and how you attach the spec. Everything downstream of that is shared.
+The dividing line is simple: the host explains the program value; `spytial-core` evaluates selectors, solves layout constraints, and renders.
 
 ---
 
@@ -35,25 +71,25 @@ Each row links to that language's own user-facing documentation — install, exa
 
 ---
 
-## Integrate Spytial into your favourite language
+## Integrate Spytial into another language
 
-Don't see your host above? Spytial is designed to integrate with any host. Every integration resolves the **same four subproblems** — the mechanisms differ, the questions don't.
+Do not see your host above? A new integration is mostly an exercise in answering four questions. The answers are language-specific, but the questions are stable.
 
-➡ **[The Four Subproblems](integration.md)** — the integrator's contract. Read this first.
+Start with **[The Four Subproblems](integration.md)**. It is the design checklist for a new host.
 
 Then in order:
 
-- **[The Integration Pipeline](pipeline.md)** — the one diagram every integration instantiates.
+- **[The Integration Pipeline](pipeline.md)** — where data, specs, layout, and rendering meet.
 - **[Case Studies](case-studies.md)** — how Python, Rust, and Pyret each answer the four.
 - **[Custom Data Instances](custom-data-instance.md)** — the relational view your host needs to produce.
 - **[Quick Start](quickstart.md)** — minimal end-to-end demo in the browser.
-- **[Claude Code Skill](skill.md)** — `/integrate-language` walks you through the recipe and produces an integration design before you write any code.
+- **[Claude Code Skill](skill.md)** — `/integrate-language` turns the four questions into a design checklist.
 
 ---
 
 ## Under the hood: `spytial-core`
 
-Every Spytial integration is built on the same browser-side engine, [`spytial-core`](https://github.com/sidprasad/spytial-core) — the piece that consumes a relational data instance plus a YAML spec and produces a rendered diagram. The rest of this site is the engine's integrator reference: the [data model](json-data.md), the [YAML spec language](yaml-reference.md), the [selector engine](selectors.md), the [constraint solver](constraints.md), the [renderers](api-reference.md), and [sequence support](sequences.md).
+[`spytial-core`](https://github.com/sidprasad/spytial-core) is the browser-side part of Spytial. It consumes a relational data instance plus a YAML spec and produces a rendered diagram. The rest of this site documents that interface: the [data model](json-data.md), the [YAML spec language](yaml-reference.md), the [selector engine](selectors.md), the [constraint solver](constraints.md), the [renderers](api-reference.md), and [sequence support](sequences.md).
 
 What `spytial-core` does *not* give you on its own:
 
@@ -61,4 +97,4 @@ What `spytial-core` does *not* give you on its own:
 - A way to capture annotations from the source language. **The integrator writes the spec collector.**
 - A delivery mechanism. The library is browser-side; the integrator decides how data + spec get there.
 
-Those three pieces are what the integration recipe above walks you through.
+Those three pieces are the work of a host integration.

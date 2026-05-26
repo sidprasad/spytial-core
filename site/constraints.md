@@ -59,6 +59,32 @@ The **`directly*`** variants are stricter — they enforce axis alignment. For e
     directions: [above, left]
 ```
 
+<div class="spytial-diagram" data-height="260" data-caption="Live: parent selector with directions [above] — Alice ends up above Bob and Carol.">
+<template class="data">
+{
+  "atoms": [
+    {"id": "a", "type": "Node", "label": "Alice"},
+    {"id": "b", "type": "Node", "label": "Bob"},
+    {"id": "c", "type": "Node", "label": "Carol"}
+  ],
+  "relations": [
+    {"id": "parent", "name": "parent", "types": ["Node", "Node"],
+     "tuples": [
+       {"atoms": ["a", "b"], "types": ["Node", "Node"]},
+       {"atoms": ["a", "c"], "types": ["Node", "Node"]}
+     ]}
+  ]
+}
+</template>
+<template class="spec">
+constraints:
+  - orientation: { selector: parent, directions: [above] }
+directives:
+  - atomColor: { selector: Node, value: "#4a90d9" }
+  - flag: hideDisconnectedBuiltIns
+</template>
+</div>
+
 > **Tip:** If your selector uses special characters (like `^` or `~`), wrap it in quotes: `selector: "^parent"`.
 
 ---
@@ -91,6 +117,35 @@ Arranges nodes along the perimeter of a circle, based on the order defined by a 
     selector: follows
     direction: counterclockwise
 ```
+
+<div class="spytial-diagram" data-height="320" data-caption="Live: four states s0→s1→s2→s3→s0 arranged in a clockwise cycle.">
+<template class="data">
+{
+  "atoms": [
+    {"id": "s0", "type": "State", "label": "s0"},
+    {"id": "s1", "type": "State", "label": "s1"},
+    {"id": "s2", "type": "State", "label": "s2"},
+    {"id": "s3", "type": "State", "label": "s3"}
+  ],
+  "relations": [
+    {"id": "nextState", "name": "nextState", "types": ["State", "State"],
+     "tuples": [
+       {"atoms": ["s0", "s1"], "types": ["State", "State"]},
+       {"atoms": ["s1", "s2"], "types": ["State", "State"]},
+       {"atoms": ["s2", "s3"], "types": ["State", "State"]},
+       {"atoms": ["s3", "s0"], "types": ["State", "State"]}
+     ]}
+  ]
+}
+</template>
+<template class="spec">
+constraints:
+  - cyclic: { selector: nextState, direction: clockwise }
+directives:
+  - atomColor: { selector: State, value: "#7eb77f" }
+  - flag: hideDisconnectedBuiltIns
+</template>
+</div>
 
 > **How it works:** Spytial tries all valid rotational orderings of the nodes identified by the selector and picks one that satisfies the other constraints. If you have conflicting constraints, Spytial will report the minimal set of conflicts.
 
@@ -128,6 +183,32 @@ Ensures pairs of nodes share the same horizontal or vertical position.
     direction: vertical
 ```
 
+<div class="spytial-diagram" data-height="220" data-caption="Live: align horizontal forces both Persons onto the same row.">
+<template class="data">
+{
+  "atoms": [
+    {"id": "p1", "type": "Person", "label": "Ada"},
+    {"id": "p2", "type": "Person", "label": "Bea"},
+    {"id": "p3", "type": "Person", "label": "Cay"}
+  ],
+  "relations": [
+    {"id": "pair", "name": "pair", "types": ["Person", "Person"],
+     "tuples": [
+       {"atoms": ["p1", "p2"], "types": ["Person", "Person"]},
+       {"atoms": ["p2", "p3"], "types": ["Person", "Person"]}
+     ]}
+  ]
+}
+</template>
+<template class="spec">
+constraints:
+  - align: { selector: pair, direction: horizontal }
+directives:
+  - atomColor: { selector: Person, value: "#d98c4a" }
+  - flag: hideDisconnectedBuiltIns
+</template>
+</div>
+
 ---
 
 ## Grouping by Selector
@@ -161,6 +242,35 @@ Draws a visual bounding box around nodes matched by a selector.
     name: "Department"
     addEdge: true
 ```
+
+<div class="spytial-diagram" data-height="280" data-caption="Live: Team.members draws a bounding box around the three members.">
+<template class="data">
+{
+  "atoms": [
+    {"id": "t",  "type": "Team",   "label": "Team Alpha"},
+    {"id": "m1", "type": "Member", "label": "Ada"},
+    {"id": "m2", "type": "Member", "label": "Bea"},
+    {"id": "m3", "type": "Member", "label": "Cay"}
+  ],
+  "relations": [
+    {"id": "members", "name": "members", "types": ["Team", "Member"],
+     "tuples": [
+       {"atoms": ["t", "m1"], "types": ["Team", "Member"]},
+       {"atoms": ["t", "m2"], "types": ["Team", "Member"]},
+       {"atoms": ["t", "m3"], "types": ["Team", "Member"]}
+     ]}
+  ]
+}
+</template>
+<template class="spec">
+constraints:
+  - group: { selector: Team.members, name: "Team Members" }
+directives:
+  - atomColor: { selector: Team,   value: "#4a90d9" }
+  - atomColor: { selector: Member, value: "#7eb77f" }
+  - flag: hideDisconnectedBuiltIns
+</template>
+</div>
 
 ---
 
@@ -215,6 +325,38 @@ To group employees by department:
     selector: Person
 ```
 
+<div class="spytial-diagram" data-height="320" data-caption="Live: worksIn groups employees by their department (groupOn:1, addToGroup:0).">
+<template class="data">
+{
+  "atoms": [
+    {"id": "d1", "type": "Department", "label": "Eng"},
+    {"id": "d2", "type": "Department", "label": "Design"},
+    {"id": "e1", "type": "Employee",   "label": "Ada"},
+    {"id": "e2", "type": "Employee",   "label": "Bea"},
+    {"id": "e3", "type": "Employee",   "label": "Cay"},
+    {"id": "e4", "type": "Employee",   "label": "Dee"}
+  ],
+  "relations": [
+    {"id": "worksIn", "name": "worksIn", "types": ["Employee", "Department"],
+     "tuples": [
+       {"atoms": ["e1", "d1"], "types": ["Employee", "Department"]},
+       {"atoms": ["e2", "d1"], "types": ["Employee", "Department"]},
+       {"atoms": ["e3", "d2"], "types": ["Employee", "Department"]},
+       {"atoms": ["e4", "d2"], "types": ["Employee", "Department"]}
+     ]}
+  ]
+}
+</template>
+<template class="spec">
+constraints:
+  - group: { field: worksIn, groupOn: 1, addToGroup: 0 }
+directives:
+  - atomColor: { selector: Department, value: "#4a90d9" }
+  - atomColor: { selector: Employee,   value: "#7eb77f" }
+  - flag: hideDisconnectedBuiltIns
+</template>
+</div>
+
 ---
 
 ## Size
@@ -245,6 +387,33 @@ Sets the width and height of nodes matching a selector.
     height: 80
 ```
 
+<div class="spytial-diagram" data-height="240" data-caption="Live: the ImportantNode is sized 150×80 while ordinary Nodes use the default.">
+<template class="data">
+{
+  "atoms": [
+    {"id": "big", "type": "ImportantNode", "label": "Important"},
+    {"id": "n1",  "type": "Node",          "label": "n1"},
+    {"id": "n2",  "type": "Node",          "label": "n2"}
+  ],
+  "relations": [
+    {"id": "link", "name": "link", "types": ["ImportantNode", "Node"],
+     "tuples": [
+       {"atoms": ["big", "n1"], "types": ["ImportantNode", "Node"]},
+       {"atoms": ["big", "n2"], "types": ["ImportantNode", "Node"]}
+     ]}
+  ]
+}
+</template>
+<template class="spec">
+constraints:
+  - size: { selector: ImportantNode, width: 150, height: 80 }
+directives:
+  - atomColor: { selector: ImportantNode, value: "#d98c4a" }
+  - atomColor: { selector: Node,          value: "#4a90d9" }
+  - flag: hideDisconnectedBuiltIns
+</template>
+</div>
+
 ---
 
 ## Hiding Atoms
@@ -264,6 +433,37 @@ Removes atoms from the visualization entirely. The atom and all its edges disapp
 - hideAtom:
     selector: InternalNode
 ```
+
+<div class="spytial-diagram" data-height="240" data-caption="Live: the two InternalNodes (and their edges) are removed; only Node atoms remain.">
+<template class="data">
+{
+  "atoms": [
+    {"id": "n1", "type": "Node",         "label": "Visible 1"},
+    {"id": "n2", "type": "Node",         "label": "Visible 2"},
+    {"id": "i1", "type": "InternalNode", "label": "hidden 1"},
+    {"id": "i2", "type": "InternalNode", "label": "hidden 2"}
+  ],
+  "relations": [
+    {"id": "uses", "name": "uses", "types": ["Node", "InternalNode"],
+     "tuples": [
+       {"atoms": ["n1", "i1"], "types": ["Node", "InternalNode"]},
+       {"atoms": ["n2", "i2"], "types": ["Node", "InternalNode"]}
+     ]},
+    {"id": "link", "name": "link", "types": ["Node", "Node"],
+     "tuples": [
+       {"atoms": ["n1", "n2"], "types": ["Node", "Node"]}
+     ]}
+  ]
+}
+</template>
+<template class="spec">
+constraints:
+  - hideAtom: { selector: InternalNode }
+directives:
+  - atomColor: { selector: Node, value: "#4a90d9" }
+  - flag: hideDisconnectedBuiltIns
+</template>
+</div>
 
 ---
 
@@ -339,6 +539,30 @@ constraints:
       hold: never
 ```
 
+<div class="spytial-diagram" data-height="240" data-caption="Live: A is left of B but never above B — so A ends up at the same level or below B.">
+<template class="data">
+{
+  "atoms": [
+    {"id": "a", "type": "Node", "label": "A"},
+    {"id": "b", "type": "Node", "label": "B"}
+  ],
+  "relations": [
+    {"id": "r", "name": "r", "types": ["Node", "Node"],
+     "tuples": [
+       {"atoms": ["a", "b"], "types": ["Node", "Node"]}
+     ]}
+  ]
+}
+</template>
+<template class="spec">
+constraints:
+  - orientation: { selector: r, directions: [left] }
+  - orientation: { selector: r, directions: [above], hold: never }
+directives:
+  - atomColor: { selector: Node, value: "#a060d9" }
+  - flag: hideDisconnectedBuiltIns
+</template>
+</div>
 
 ---
 
@@ -368,3 +592,46 @@ constraints:
       width: 200
       height: 100
 ```
+
+<div class="spytial-diagram" data-height="380" data-caption="Live: orientation + align + group composing together. Root is above the two children, the children are aligned horizontally, and the Team contains its members.">
+<template class="data">
+{
+  "atoms": [
+    {"id": "root", "type": "RootNode", "label": "Root"},
+    {"id": "p1",   "type": "Person",   "label": "Ada"},
+    {"id": "p2",   "type": "Person",   "label": "Bea"},
+    {"id": "team", "type": "Team",     "label": "Team Alpha"},
+    {"id": "m1",   "type": "Person",   "label": "Cay"},
+    {"id": "m2",   "type": "Person",   "label": "Dee"}
+  ],
+  "relations": [
+    {"id": "parent", "name": "parent", "types": ["RootNode", "Person"],
+     "tuples": [
+       {"atoms": ["root", "p1"], "types": ["RootNode", "Person"]},
+       {"atoms": ["root", "p2"], "types": ["RootNode", "Person"]}
+     ]},
+    {"id": "siblings", "name": "siblings", "types": ["Person", "Person"],
+     "tuples": [
+       {"atoms": ["p1", "p2"], "types": ["Person", "Person"]}
+     ]},
+    {"id": "members", "name": "members", "types": ["Team", "Person"],
+     "tuples": [
+       {"atoms": ["team", "m1"], "types": ["Team", "Person"]},
+       {"atoms": ["team", "m2"], "types": ["Team", "Person"]}
+     ]}
+  ]
+}
+</template>
+<template class="spec">
+constraints:
+  - orientation: { selector: parent,   directions: [above] }
+  - align:       { selector: siblings, direction: horizontal }
+  - group:       { selector: Team.members, name: "Team" }
+  - size:        { selector: RootNode, width: 180, height: 80 }
+directives:
+  - atomColor: { selector: RootNode, value: "#d98c4a" }
+  - atomColor: { selector: Person,   value: "#4a90d9" }
+  - atomColor: { selector: Team,     value: "#7eb77f" }
+  - flag: hideDisconnectedBuiltIns
+</template>
+</div>

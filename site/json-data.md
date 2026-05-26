@@ -165,6 +165,42 @@ directives:
 
 This produces a tree with Alice at the top (parent of Bob and Carol), ages displayed as labels, and integer atoms hidden.
 
+<div class="spytial-diagram" data-height="320" data-caption="The complete example above, rendered live: Alice is parent of Bob and Carol; ages appear as attributes; the disconnected Int atoms are hidden.">
+<template class="data">
+{
+  "atoms": [
+    {"id": "alice", "type": "Person", "label": "Alice"},
+    {"id": "bob",   "type": "Person", "label": "Bob"},
+    {"id": "carol", "type": "Person", "label": "Carol"},
+    {"id": "35", "type": "Int", "label": "35"},
+    {"id": "10", "type": "Int", "label": "10"},
+    {"id": "8",  "type": "Int", "label": "8"}
+  ],
+  "relations": [
+    {"id": "parent", "name": "parent", "types": ["Person", "Person"],
+     "tuples": [
+       {"atoms": ["bob",   "alice"], "types": ["Person", "Person"]},
+       {"atoms": ["carol", "alice"], "types": ["Person", "Person"]}
+     ]},
+    {"id": "age", "name": "age", "types": ["Person", "Int"],
+     "tuples": [
+       {"atoms": ["alice", "35"], "types": ["Person", "Int"]},
+       {"atoms": ["bob",   "10"], "types": ["Person", "Int"]},
+       {"atoms": ["carol", "8"],  "types": ["Person", "Int"]}
+     ]}
+  ]
+}
+</template>
+<template class="spec">
+constraints:
+  - orientation: { selector: parent, directions: [above] }
+directives:
+  - attribute: { field: age }
+  - atomColor: { selector: Person, value: "#4a90d9" }
+  - flag: hideDisconnectedBuiltIns
+</template>
+</div>
+
 ---
 
 ## Tips
