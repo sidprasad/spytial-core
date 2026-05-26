@@ -2,7 +2,7 @@
 
 Every Spytial integration does the same five jobs. Some happen in the host; the rest happen in `spytial-core` in the browser. The diagram below is itself rendered with Spytial — `next` orients stages top-to-bottom and `runsOn` groups them by side:
 
-<div class="spytial-diagram" data-height="520" data-caption="The pipeline, drawn with Spytial: five Stage atoms chained by `next` (orientation [below]) and grouped by `runsOn` Side (group-by-field).">
+<div class="spytial-diagram" data-height="520" data-caption="The pipeline, drawn with Spytial: five Stage atoms chained by `next` (orientation [below]) and grouped by Side via the `contains` relation.">
 <template class="data">
 {
   "atoms": [
@@ -22,13 +22,13 @@ Every Spytial integration does the same five jobs. Some happen in the host; the 
        {"atoms": ["s3", "s4"], "types": ["Stage", "Stage"]},
        {"atoms": ["s4", "s5"], "types": ["Stage", "Stage"]}
      ]},
-    {"id": "runsOn", "name": "runsOn", "types": ["Stage", "Side"],
+    {"id": "contains", "name": "contains", "types": ["Side", "Stage"],
      "tuples": [
-       {"atoms": ["s1", "host"],    "types": ["Stage", "Side"]},
-       {"atoms": ["s2", "host"],    "types": ["Stage", "Side"]},
-       {"atoms": ["s3", "host"],    "types": ["Stage", "Side"]},
-       {"atoms": ["s4", "browser"], "types": ["Stage", "Side"]},
-       {"atoms": ["s5", "browser"], "types": ["Stage", "Side"]}
+       {"atoms": ["host", "s1"],    "types": ["Side", "Stage"]},
+       {"atoms": ["host", "s2"],    "types": ["Side", "Stage"]},
+       {"atoms": ["host", "s3"],    "types": ["Side", "Stage"]},
+       {"atoms": ["browser", "s4"], "types": ["Side", "Stage"]},
+       {"atoms": ["browser", "s5"], "types": ["Side", "Stage"]}
      ]}
   ]
 }
@@ -36,7 +36,7 @@ Every Spytial integration does the same five jobs. Some happen in the host; the 
 <template class="spec">
 constraints:
   - orientation: { selector: next, directions: [below] }
-  - group: { field: runsOn, groupOn: 1, addToGroup: 0 }
+  - group: { selector: contains, name: "Side" }
   - size: { selector: Stage, width: 340, height: 50 }
 directives:
   - atomColor: { selector: Stage, value: "#dbe7f3" }
