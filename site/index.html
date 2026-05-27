@@ -8,10 +8,147 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/docsify@4/lib/themes/vue.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/spytial-core@2.6.2/dist/components/react-component-integration.css">
+  <style>
+    .spytial-diagram {
+      border: 1px solid #e1e4e8;
+      border-radius: 6px;
+      padding: 0;
+      margin: 1.2em 0;
+      background: #fff;
+      overflow: hidden;
+    }
+    .spytial-diagram webcola-cnd-graph,
+    .spytial-diagram spytial-explorer { display: block; width: 100%; }
+    .spytial-diagram .spytial-caption {
+      display: block;
+      padding: 6px 10px;
+      font-size: 0.85em;
+      color: #586069;
+      background: #f6f8fa;
+      border-top: 1px solid #e1e4e8;
+    }
+    .spytial-diagram .spytial-error {
+      padding: 10px;
+      color: #b00020;
+      font-family: monospace;
+      font-size: 0.85em;
+      white-space: pre-wrap;
+    }
+    .spytial-diagram .spytial-conflict-mount {
+      border-top: 1px solid #e1e4e8;
+      padding: 8px;
+      background: #fff;
+    }
+    .repl-vs-spytial {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      align-items: stretch;
+      margin: 1.4em 0;
+    }
+    .repl-vs-spytial > .pane > .pane-label {
+      font-weight: 600;
+      font-size: 0.85em;
+      color: #586069;
+      margin-bottom: 4px;
+    }
+    .repl-vs-spytial > .pane > pre {
+      margin: 0;
+      height: 100%;
+      box-sizing: border-box;
+    }
+    .repl-vs-spytial > .pane > .spytial-diagram { margin: 0; }
+    @media (max-width: 700px) {
+      .repl-vs-spytial { grid-template-columns: 1fr; }
+    }
+  </style>
 </head>
 <body>
   <div id="app"></div>
   <script>
+    // Docsify plugin: render <div class="spytial-diagram"> blocks as live Spytial diagrams.
+    // Each block contains <template class="data"> (JSON) and <template class="spec"> (YAML).
+    // Optional attributes: data-height (default 260), data-width (default 100%), data-caption.
+    function spytialDocsifyPlugin(hook) {
+      let n = 0;
+      hook.doneEach(function () {
+        const blocks = document.querySelectorAll('.spytial-diagram:not([data-spytial-rendered])');
+        blocks.forEach(function (block) {
+          block.setAttribute('data-spytial-rendered', '1');
+          try {
+            const dataTpl = block.querySelector('template.data');
+            const specTpl = block.querySelector('template.spec');
+            if (!dataTpl || !specTpl) {
+              throw new Error('spytial-diagram needs <template class="data"> and <template class="spec"> children');
+            }
+            const jsonText = dataTpl.innerHTML.trim();
+            const yamlText = specTpl.innerHTML.trim();
+            const data = JSON.parse(jsonText);
+
+            const height = block.getAttribute('data-height') || '260';
+            const width = block.getAttribute('data-width') || '760';
+            const caption = block.getAttribute('data-caption');
+            const accessible = block.hasAttribute('data-accessible');
+
+            const id = 'spytial-graph-' + (++n);
+            const mountId = 'spytial-conflict-' + n;
+            const tag = accessible ? 'spytial-explorer' : 'webcola-cnd-graph';
+            const sizeStyle = 'style="display:block;width:100%;height:' + height + 'px;"';
+            block.innerHTML =
+              '<' + tag + ' id="' + id + '" width="' + width + '" height="' + height + '" ' + sizeStyle + '></' + tag + '>' +
+              (caption ? '<span class="spytial-caption">' + caption + '</span>' : '') +
+              '<div id="' + mountId + '" class="spytial-conflict-mount" style="display:none;"></div>';
+
+            // Wait until the spytialcore bundle is available before rendering.
+            const render = function () {
+              const sc = window.spytialcore;
+              if (!sc) { setTimeout(render, 50); return; }
+              try {
+                const instance  = new sc.JSONDataInstance(data);
+                const layoutSpec = sc.parseLayoutSpec(yamlText);
+                const evaluator  = new sc.SGraphQueryEvaluator();
+                evaluator.initialize({ sourceData: instance });
+                const result = new sc.LayoutInstance(layoutSpec, evaluator).generateLayout(instance);
+                const layout = result && result.layout ? result.layout : result;
+                const el = document.getElementById(id);
+                el.renderLayout(layout);
+                if (accessible && typeof el.enableAccessibility === 'function') {
+                  el.enableAccessibility(layout, null, evaluator);
+                }
+                if (result && result.error) {
+                  const mount = document.getElementById(mountId);
+                  mount.style.display = '';
+                  // Mount the React ErrorMessageModal into this diagram's per-block container.
+                  const mountModal = function () {
+                    if (typeof window.mountErrorMessageModal !== 'function') {
+                      setTimeout(mountModal, 50);
+                      return;
+                    }
+                    window.mountErrorMessageModal(mountId);
+                    const em = result.error.errorMessages;
+                    if (result.error.type === 'hidden-node-conflict' && typeof window.showHiddenNodeConflict === 'function') {
+                      window.showHiddenNodeConflict(em);
+                    } else if (typeof window.showPositionalError === 'function') {
+                      window.showPositionalError(em);
+                    }
+                  };
+                  mountModal();
+                }
+              } catch (err) {
+                console.error('spytial-diagram render error', err);
+                block.innerHTML = '<div class="spytial-error">Render error: ' + (err && err.message || err) + '</div>';
+              }
+            };
+            render();
+          } catch (err) {
+            console.error('spytial-diagram setup error', err);
+            block.innerHTML = '<div class="spytial-error">Setup error: ' + (err && err.message || err) + '</div>';
+          }
+        });
+      });
+    }
+
     window.$docsify = {
       name: 'spytial-core',
       repo: 'https://github.com/sidprasad/spytial-core',
@@ -25,6 +162,7 @@
         depth: 3,
       },
       copyCode: { buttonText: 'Copy', successText: 'Copied' },
+      plugins: [spytialDocsifyPlugin],
     }
   </script>
 
@@ -35,5 +173,10 @@
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-json.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-typescript.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-bash.min.js"></script>
+
+  <!-- spytial-core bundle: registers <webcola-cnd-graph> and <spytial-explorer> custom elements. -->
+  <script src="https://cdn.jsdelivr.net/npm/spytial-core@2.6.2/dist/browser/spytial-core-complete.global.js"></script>
+  <!-- React component integration: exposes window.mountErrorMessageModal / showPositionalError / showHiddenNodeConflict / clearAllErrors. -->
+  <script src="https://cdn.jsdelivr.net/npm/spytial-core@2.6.2/dist/components/react-component-integration.global.js"></script>
 </body>
 </html>

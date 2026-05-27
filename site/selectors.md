@@ -76,15 +76,15 @@ Here's how unary and binary selectors map to spec entries, using our binary tree
 
 ```yaml
 constraints:
-  # Binary selector: left-children appear below-right of parent
+  # Binary selector: left-child appears below-left of parent
   - orientation:
       selector: left
-      directions: [above, right]
+      directions: [below, left]
 
-  # Binary selector: right-children appear below-left of parent
+  # Binary selector: right-child appears below-right of parent
   - orientation:
       selector: right
-      directions: [above, left]
+      directions: [below, right]
 
   # Unary selector: align all leaf nodes horizontally
   - align:
@@ -110,6 +110,56 @@ directives:
 
   - flag: hideDisconnectedBuiltIns
 ```
+
+<div class="spytial-diagram" data-height="480" data-caption="The running binary tree, rendered live with the spec above. The dotted gray edges are the inferredEdge selector `^(left + right)` — every ancestor→descendant pair.">
+<template class="data">
+{
+  "atoms": [
+    {"id": "n0", "type": "Node", "label": "Node0"},
+    {"id": "n1", "type": "Node", "label": "Node1"},
+    {"id": "n2", "type": "Node", "label": "Node2"},
+    {"id": "n3", "type": "Node", "label": "Node3"},
+    {"id": "n4", "type": "Node", "label": "Node4"},
+    {"id": "k0", "type": "Int",  "label": "5"},
+    {"id": "k1", "type": "Int",  "label": "3"},
+    {"id": "k2", "type": "Int",  "label": "8"},
+    {"id": "k3", "type": "Int",  "label": "1"},
+    {"id": "k4", "type": "Int",  "label": "9"}
+  ],
+  "relations": [
+    {"id": "left", "name": "left", "types": ["Node", "Node"],
+     "tuples": [
+       {"atoms": ["n3", "n1"], "types": ["Node", "Node"]},
+       {"atoms": ["n4", "n2"], "types": ["Node", "Node"]}
+     ]},
+    {"id": "right", "name": "right", "types": ["Node", "Node"],
+     "tuples": [
+       {"atoms": ["n1", "n4"], "types": ["Node", "Node"]},
+       {"atoms": ["n3", "n0"], "types": ["Node", "Node"]}
+     ]},
+    {"id": "key", "name": "key", "types": ["Node", "Int"],
+     "tuples": [
+       {"atoms": ["n0", "k0"], "types": ["Node", "Int"]},
+       {"atoms": ["n1", "k1"], "types": ["Node", "Int"]},
+       {"atoms": ["n2", "k2"], "types": ["Node", "Int"]},
+       {"atoms": ["n3", "k3"], "types": ["Node", "Int"]},
+       {"atoms": ["n4", "k4"], "types": ["Node", "Int"]}
+     ]}
+  ]
+}
+</template>
+<template class="spec">
+constraints:
+  - orientation: { selector: left,  directions: [below, left]  }
+  - orientation: { selector: right, directions: [below, right] }
+  - align:       { selector: "Node - left.Node - right.Node",  direction: horizontal }
+directives:
+  - atomColor:    { selector: Node, value: "#4a90d9" }
+  - attribute:    { field: key }
+  - inferredEdge: { name: "descendant", selector: "^(left + right)", color: gray, style: dotted }
+  - flag: hideDisconnectedBuiltIns
+</template>
+</div>
 
 ---
 

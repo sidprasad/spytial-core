@@ -21,18 +21,20 @@ The most commonly used constraint. It defines the spatial relationship between p
 
 ### Available Directions
 
+Each direction describes where the **target** of a `(source, target)` pair ends up relative to the **source**.
+
 | Direction | Meaning |
 |-----------|---------|
-| `above` | Source is above target (allows horizontal offset) |
-| `below` | Source is below target (allows horizontal offset) |
-| `left` | Source is left of target (allows vertical offset) |
-| `right` | Source is right of target (allows vertical offset) |
-| `directlyAbove` | Source is directly above target (strict vertical alignment) |
-| `directlyBelow` | Source is directly below target (strict vertical alignment) |
-| `directlyLeft` | Source is directly left of target (strict horizontal alignment) |
-| `directlyRight` | Source is directly right of target (strict horizontal alignment) |
+| `above` | Target is above source (allows horizontal offset) |
+| `below` | Target is below source (allows horizontal offset) |
+| `left` | Target is left of source (allows vertical offset) |
+| `right` | Target is right of source (allows vertical offset) |
+| `directlyAbove` | Target is directly above source (strict vertical alignment) |
+| `directlyBelow` | Target is directly below source (strict vertical alignment) |
+| `directlyLeft` | Target is directly left of source (strict horizontal alignment) |
+| `directlyRight` | Target is directly right of source (strict horizontal alignment) |
 
-The **`directly*`** variants are stricter — they enforce axis alignment. For example, `directlyAbove` means the source is above the target **and** horizontally centered with it.
+The **`directly*`** variants are stricter — they enforce axis alignment. For example, `directlyAbove` means the target is above the source **and** horizontally centered with it.
 
 ### Direction Restrictions
 
@@ -44,20 +46,45 @@ The **`directly*`** variants are stricter — they enforce axis alignment. For e
 
 ```yaml
 # Parents appear above children
+# (Assumes `parent: child → parent`, so target = parent, source = child.)
 - orientation:
     selector: parent
     directions: [above]
 
 # Left-to-right flow with strict horizontal alignment
+# (Assumes `next: prev → next`, so target = next.)
 - orientation:
     selector: next
-    directions: [directlyLeft]
+    directions: [directlyRight]
 
-# Source is above AND to the left of target
+# Target ends up above AND to the left of source
 - orientation:
     selector: precedes
     directions: [above, left]
 ```
+
+<div class="spytial-diagram" data-height="360" data-caption="Live: parent selector with directions [above] — Alice ends up above Bob and Carol. (Here `parent: child → parent`, so Bob's parent is Alice.)">
+<template class="data">
+{
+  "atoms": [
+    {"id": "a", "type": "Node", "label": "Alice"},
+    {"id": "b", "type": "Node", "label": "Bob"},
+    {"id": "c", "type": "Node", "label": "Carol"}
+  ],
+  "relations": [
+    {"id": "parent", "name": "parent", "types": ["Node", "Node"],
+     "tuples": [
+       {"atoms": ["b", "a"], "types": ["Node", "Node"]},
+       {"atoms": ["c", "a"], "types": ["Node", "Node"]}
+     ]}
+  ]
+}
+</template>
+<template class="spec">
+constraints:
+  - orientation: { selector: parent, directions: [above] }
+</template>
+</div>
 
 > **Tip:** If your selector uses special characters (like `^` or `~`), wrap it in quotes: `selector: "^parent"`.
 
@@ -91,6 +118,32 @@ Arranges nodes along the perimeter of a circle, based on the order defined by a 
     selector: follows
     direction: counterclockwise
 ```
+
+<div class="spytial-diagram" data-height="400" data-caption="Live: four states s0→s1→s2→s3→s0 arranged in a clockwise cycle.">
+<template class="data">
+{
+  "atoms": [
+    {"id": "s0", "type": "State", "label": "s0"},
+    {"id": "s1", "type": "State", "label": "s1"},
+    {"id": "s2", "type": "State", "label": "s2"},
+    {"id": "s3", "type": "State", "label": "s3"}
+  ],
+  "relations": [
+    {"id": "nextState", "name": "nextState", "types": ["State", "State"],
+     "tuples": [
+       {"atoms": ["s0", "s1"], "types": ["State", "State"]},
+       {"atoms": ["s1", "s2"], "types": ["State", "State"]},
+       {"atoms": ["s2", "s3"], "types": ["State", "State"]},
+       {"atoms": ["s3", "s0"], "types": ["State", "State"]}
+     ]}
+  ]
+}
+</template>
+<template class="spec">
+constraints:
+  - cyclic: { selector: nextState, direction: clockwise }
+</template>
+</div>
 
 > **How it works:** Spytial tries all valid rotational orderings of the nodes identified by the selector and picks one that satisfies the other constraints. If you have conflicting constraints, Spytial will report the minimal set of conflicts.
 
@@ -128,6 +181,29 @@ Ensures pairs of nodes share the same horizontal or vertical position.
     direction: vertical
 ```
 
+<div class="spytial-diagram" data-height="280" data-caption="Live: align horizontal forces both Persons onto the same row.">
+<template class="data">
+{
+  "atoms": [
+    {"id": "p1", "type": "Person", "label": "Ada"},
+    {"id": "p2", "type": "Person", "label": "Bea"},
+    {"id": "p3", "type": "Person", "label": "Cay"}
+  ],
+  "relations": [
+    {"id": "pair", "name": "pair", "types": ["Person", "Person"],
+     "tuples": [
+       {"atoms": ["p1", "p2"], "types": ["Person", "Person"]},
+       {"atoms": ["p2", "p3"], "types": ["Person", "Person"]}
+     ]}
+  ]
+}
+</template>
+<template class="spec">
+constraints:
+  - align: { selector: pair, direction: horizontal }
+</template>
+</div>
+
 ---
 
 ## Grouping by Selector
@@ -162,58 +238,30 @@ Draws a visual bounding box around nodes matched by a selector.
     addEdge: true
 ```
 
----
-
-## Grouping by Field
-
-An alternative grouping mechanism that uses a relational field (tuple) to determine group membership. Useful when the grouping relationship is defined by a relation in your data.
-
-```yaml
-- group:
-    field: <field-name>          # Required
-    groupOn: <index>             # Required
-    addToGroup: <index>          # Required
-    selector: <unary-selector>   # Optional
-```
-
-| Field | Required | Type | Description |
-|-------|----------|------|-------------|
-| `field` | Yes | string | Name of the relation |
-| `groupOn` | Yes | integer | Tuple index (0-based) for the group key |
-| `addToGroup` | Yes | integer | Tuple index (0-based) for the element to group |
-| `selector` | No | string | Unary selector to filter which atoms apply |
-
-### How Tuple Indices Work
-
-Consider a relation `worksIn` with tuples like `(Employee, Department)`:
-- Index `0` is the Employee
-- Index `1` is the Department
-
-To group employees by department:
-
-```yaml
-- group:
-    field: worksIn
-    groupOn: 1      # Department is the group key
-    addToGroup: 0   # Employee gets added to the group
-```
-
-### Examples
-
-```yaml
-# Group employees by department
-- group:
-    field: worksIn
-    groupOn: 1
-    addToGroup: 0
-
-# Group with selector filter
-- group:
-    field: owns
-    groupOn: 0
-    addToGroup: 1
-    selector: Person
-```
+<div class="spytial-diagram" data-height="360" data-caption="Live: Team.members draws a bounding box around the three members.">
+<template class="data">
+{
+  "atoms": [
+    {"id": "t",  "type": "Team",   "label": "Team Alpha"},
+    {"id": "m1", "type": "Member", "label": "Ada"},
+    {"id": "m2", "type": "Member", "label": "Bea"},
+    {"id": "m3", "type": "Member", "label": "Cay"}
+  ],
+  "relations": [
+    {"id": "members", "name": "members", "types": ["Team", "Member"],
+     "tuples": [
+       {"atoms": ["t", "m1"], "types": ["Team", "Member"]},
+       {"atoms": ["t", "m2"], "types": ["Team", "Member"]},
+       {"atoms": ["t", "m3"], "types": ["Team", "Member"]}
+     ]}
+  ]
+}
+</template>
+<template class="spec">
+constraints:
+  - group: { selector: Team.members, name: "Team Members" }
+</template>
+</div>
 
 ---
 
@@ -245,6 +293,29 @@ Sets the width and height of nodes matching a selector.
     height: 80
 ```
 
+<div class="spytial-diagram" data-height="320" data-caption="Live: the ImportantNode is sized 150×80 while ordinary Nodes use the default.">
+<template class="data">
+{
+  "atoms": [
+    {"id": "big", "type": "ImportantNode", "label": "Important"},
+    {"id": "n1",  "type": "Node",          "label": "n1"},
+    {"id": "n2",  "type": "Node",          "label": "n2"}
+  ],
+  "relations": [
+    {"id": "link", "name": "link", "types": ["ImportantNode", "Node"],
+     "tuples": [
+       {"atoms": ["big", "n1"], "types": ["ImportantNode", "Node"]},
+       {"atoms": ["big", "n2"], "types": ["ImportantNode", "Node"]}
+     ]}
+  ]
+}
+</template>
+<template class="spec">
+constraints:
+  - size: { selector: ImportantNode, width: 150, height: 80 }
+</template>
+</div>
+
 ---
 
 ## Hiding Atoms
@@ -265,6 +336,34 @@ Removes atoms from the visualization entirely. The atom and all its edges disapp
     selector: InternalNode
 ```
 
+<div class="spytial-diagram" data-height="320" data-caption="Live: the two InternalNodes (and their edges) are removed; only Node atoms remain.">
+<template class="data">
+{
+  "atoms": [
+    {"id": "n1", "type": "Node",         "label": "Visible 1"},
+    {"id": "n2", "type": "Node",         "label": "Visible 2"},
+    {"id": "i1", "type": "InternalNode", "label": "hidden 1"},
+    {"id": "i2", "type": "InternalNode", "label": "hidden 2"}
+  ],
+  "relations": [
+    {"id": "uses", "name": "uses", "types": ["Node", "InternalNode"],
+     "tuples": [
+       {"atoms": ["n1", "i1"], "types": ["Node", "InternalNode"]},
+       {"atoms": ["n2", "i2"], "types": ["Node", "InternalNode"]}
+     ]},
+    {"id": "link", "name": "link", "types": ["Node", "Node"],
+     "tuples": [
+       {"atoms": ["n1", "n2"], "types": ["Node", "Node"]}
+     ]}
+  ]
+}
+</template>
+<template class="spec">
+constraints:
+  - hideAtom: { selector: InternalNode }
+</template>
+</div>
+
 ---
 
 ## Negation (`hold: never`)
@@ -279,17 +378,19 @@ Any constraint can be negated by adding `hold: never`. By default, all constrain
 
 ### Semantics
 
+For an `orientation` constraint with a selector returning `(source, target)` pairs:
+
 | Positive constraint | Meaning | `hold: never` meaning |
 |---|---|---|
-| `above` | A.y > B.y (A strictly above B) | A.y ≤ B.y (A at same level or below B) |
-| `below` | A.y < B.y | A.y ≥ B.y |
-| `left` | A.x < B.x | A.x ≥ B.x |
-| `right` | A.x > B.x | A.x ≤ B.x |
-| `align horizontal` | Same Y coordinate | Different Y coordinates |
+| `above` | target strictly above source | target may be at the same level or below source |
+| `below` | target strictly below source | target may be at the same level or above source |
+| `left` | target strictly left of source | target may be at the same column or right of source |
+| `right` | target strictly right of source | target may be at the same column or left of source |
+| `align horizontal` | source and target share a Y coordinate | source and target differ in Y |
 | `cyclic clockwise` | Clockwise arrangement | No valid clockwise rotation holds |
 | `group` | Clean bounding rectangle exists | No clean rectangle possible |
 
-For orientation, `hold: never` on `above` does **not** mean "below or left or right." It means the weaker claim: "A's y-coordinate is less than or equal to B's y-coordinate." This allows A and B to be at the same level (aligned) or for B to be above A.
+For orientation, `hold: never` on `above` does **not** mean "below or left or right." It means the weaker claim: "the target is **not** strictly above the source." The target may be at the same y-coordinate or below.
 
 For alignment, negation requires a disjunction — `hold: never` on horizontal means "one must be above the other."
 
@@ -300,10 +401,12 @@ For groups, `hold: never` asserts that no axis-aligned rectangle can contain exa
 ### Examples
 
 ```yaml
-# Children must NEVER appear above parents
+# Children must NEVER appear above their parents
+# (Assumes `parent: child → parent`. `[below] hold: never` says target = parent
+#  is never strictly below source = child, i.e. parent stays on top or aligned.)
 - orientation:
     selector: parent
-    directions: [above]
+    directions: [below]
     hold: never
 
 # These two nodes must NEVER be horizontally aligned
@@ -339,6 +442,27 @@ constraints:
       hold: never
 ```
 
+<div class="spytial-diagram" data-height="300" data-caption="Live: A is left of B but never above B — so A ends up at the same level or below B.">
+<template class="data">
+{
+  "atoms": [
+    {"id": "a", "type": "Node", "label": "A"},
+    {"id": "b", "type": "Node", "label": "B"}
+  ],
+  "relations": [
+    {"id": "r", "name": "r", "types": ["Node", "Node"],
+     "tuples": [
+       {"atoms": ["b", "a"], "types": ["Node", "Node"]}
+     ]}
+  ]
+}
+</template>
+<template class="spec">
+constraints:
+  - orientation: { selector: r, directions: [left] }
+  - orientation: { selector: r, directions: [above], hold: never }
+</template>
+</div>
 
 ---
 
@@ -368,3 +492,41 @@ constraints:
       width: 200
       height: 100
 ```
+
+<div class="spytial-diagram" data-height="480" data-caption="Live: orientation + align + group composing together. Root is above the two children, the children are aligned horizontally, and the Team contains its members.">
+<template class="data">
+{
+  "atoms": [
+    {"id": "root", "type": "RootNode", "label": "Root"},
+    {"id": "p1",   "type": "Person",   "label": "Ada"},
+    {"id": "p2",   "type": "Person",   "label": "Bea"},
+    {"id": "team", "type": "Team",     "label": "Team Alpha"},
+    {"id": "m1",   "type": "Person",   "label": "Cay"},
+    {"id": "m2",   "type": "Person",   "label": "Dee"}
+  ],
+  "relations": [
+    {"id": "parent", "name": "parent", "types": ["Person", "RootNode"],
+     "tuples": [
+       {"atoms": ["p1", "root"], "types": ["Person", "RootNode"]},
+       {"atoms": ["p2", "root"], "types": ["Person", "RootNode"]}
+     ]},
+    {"id": "siblings", "name": "siblings", "types": ["Person", "Person"],
+     "tuples": [
+       {"atoms": ["p1", "p2"], "types": ["Person", "Person"]}
+     ]},
+    {"id": "members", "name": "members", "types": ["Team", "Person"],
+     "tuples": [
+       {"atoms": ["team", "m1"], "types": ["Team", "Person"]},
+       {"atoms": ["team", "m2"], "types": ["Team", "Person"]}
+     ]}
+  ]
+}
+</template>
+<template class="spec">
+constraints:
+  - orientation: { selector: parent,   directions: [above] }
+  - align:       { selector: siblings, direction: horizontal }
+  - group:       { selector: Team.members, name: "Team" }
+  - size:        { selector: RootNode, width: 180, height: 80 }
+</template>
+</div>

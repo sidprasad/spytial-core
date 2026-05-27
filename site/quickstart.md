@@ -70,6 +70,32 @@ The four numbered comments map directly to the [pipeline stages](pipeline.md). I
 - Step 2 comes from your **spec collector** (decorators, attributes, output methods, …).
 - Steps 3–4 are identical across every host.
 
+<div class="spytial-diagram" data-height="400" data-caption="What the page above actually renders — the exact same JSON + YAML, run live in this doc.">
+<template class="data">
+{
+  "atoms": [
+    {"id": "a", "type": "Node", "label": "Alice"},
+    {"id": "b", "type": "Node", "label": "Bob"},
+    {"id": "c", "type": "Node", "label": "Carol"}
+  ],
+  "relations": [
+    {"id": "parent", "name": "parent", "types": ["Node", "Node"],
+     "tuples": [
+       {"atoms": ["a", "b"], "types": ["Node", "Node"]},
+       {"atoms": ["a", "c"], "types": ["Node", "Node"]}
+     ]}
+  ]
+}
+</template>
+<template class="spec">
+constraints:
+  - orientation: { selector: parent, directions: [above] }
+directives:
+  - atomColor: { selector: Node, value: "#4a90d9" }
+  - flag: hideDisconnectedBuiltIns
+</template>
+</div>
+
 ---
 
 ## Convenience: `setupLayout`
@@ -88,7 +114,7 @@ const layout = setupLayout(spec, instance, evaluator);
 
 ## Accessibility variant
 
-Swap `<webcola-cnd-graph>` for `<spytial-explorer>` to get keyboard navigation, screen-reader announcements, and the must/can spatial REPL out of the box:
+Swap `<webcola-cnd-graph>` for `<spytial-explorer>` to add keyboard navigation, screen-reader announcements, and the must/can spatial REPL:
 
 ```html
 <spytial-explorer id="g" width="800" height="500"></spytial-explorer>

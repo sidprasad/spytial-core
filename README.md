@@ -18,12 +18,12 @@ The full guide is published from [`site/`](./site/) and rendered with Docsify.
 The structure mirrors the integrator's job:
 
 - **Overview** — [What is spytial-core?](./site/getting-started.md) · [The Integration Pipeline](./site/pipeline.md) · [Quick Start](./site/quickstart.md)
-- **Integrating Spytial Into a Language** — [The Four Subproblems](./site/integration.md) · [Case Studies](./site/case-studies.md) · [Custom Data Instances](./site/custom-data-instance.md)
+- **Integrating Spytial Into a Language** — [The Four Subproblems](./site/integration.md) · [Custom Data Instances](./site/custom-data-instance.md)
 - **Data** — [JSON Data Format](./site/json-data.md) · [Built-in Adapters](./site/data-adapters.md)
 - **The YAML Spec Language** — [YAML Reference](./site/yaml-reference.md) · [Constraints](./site/constraints.md) · [Directives](./site/directives.md) · [Selector Syntax](./site/selectors.md)
 - **Sequences of States** — [Sequence Layouts](./site/sequences.md)
 - **API Reference** — [Exported API](./site/api-reference.md)
-- **Cookbook** — [Examples](./site/examples.md)
+- **Cookbook** — [Examples](https://github.com/sidprasad/spytial-clrs)
 
 To browse the guide locally:
 

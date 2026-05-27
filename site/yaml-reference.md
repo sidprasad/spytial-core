@@ -25,7 +25,6 @@ Both sections are optional. An empty specification is valid.
 | [`align`](constraints.md#alignment) | Align elements on an axis | `selector`, `direction` |
 | [`hold: never`](constraints.md#negation-hold-never) | Negate any constraint | Add `hold: never` to any constraint |
 | [`group`](constraints.md#grouping-by-selector) | Group elements visually | `selector`, `name` |
-| [`group` (by field)](constraints.md#grouping-by-field) | Group by relational field | `field`, `groupOn`, `addToGroup` |
 | [`size`](constraints.md#size) | Set node dimensions | `selector` |
 | [`hideAtom`](constraints.md#hiding-atoms) | Remove atoms from view | `selector` |
 
