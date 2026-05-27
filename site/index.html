@@ -34,6 +34,44 @@
       font-size: 0.85em;
       white-space: pre-wrap;
     }
+    .spytial-diagram .spytial-conflict {
+      padding: 10px 14px;
+      background: #fff7e6;
+      border-top: 1px solid #f0c674;
+      color: #6b4f1f;
+      font-size: 0.85em;
+    }
+    .spytial-diagram .spytial-conflict-title { font-weight: 600; }
+    .spytial-diagram .spytial-conflict-group { margin-top: 6px; }
+    .spytial-diagram .spytial-conflict-source {
+      font-family: ui-monospace, monospace;
+      font-size: 0.9em;
+      color: #6b4f1f;
+    }
+    .spytial-diagram .spytial-conflict ul { margin: 4px 0 0 18px; padding: 0; }
+    .spytial-diagram .spytial-conflict li { margin: 2px 0; }
+    .repl-vs-spytial {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      align-items: stretch;
+      margin: 1.4em 0;
+    }
+    .repl-vs-spytial > .pane > .pane-label {
+      font-weight: 600;
+      font-size: 0.85em;
+      color: #586069;
+      margin-bottom: 4px;
+    }
+    .repl-vs-spytial > .pane > pre {
+      margin: 0;
+      height: 100%;
+      box-sizing: border-box;
+    }
+    .repl-vs-spytial > .pane > .spytial-diagram { margin: 0; }
+    @media (max-width: 700px) {
+      .repl-vs-spytial { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
@@ -85,6 +123,32 @@
                 el.renderLayout(layout);
                 if (accessible && typeof el.enableAccessibility === 'function') {
                   el.enableAccessibility(layout, null, evaluator);
+                }
+                if (result && result.error) {
+                  const em = result.error.errorMessages;
+                  const mcc = em && em.minimalConflictingConstraints;
+                  const groups = [];
+                  if (mcc && typeof mcc.forEach === 'function') {
+                    mcc.forEach(function (descs, srcDesc) {
+                      groups.push({ src: srcDesc, items: descs || [] });
+                    });
+                  }
+                  let html = '<div class="spytial-conflict">' +
+                    '<div class="spytial-conflict-title">Spytial can\'t satisfy all the rules. Minimal conflicting subset:</div>';
+                  if (groups.length) {
+                    groups.forEach(function (g) {
+                      html += '<div class="spytial-conflict-group">';
+                      if (g.src) html += '<div class="spytial-conflict-source">' + g.src + '</div>';
+                      if (g.items.length) {
+                        html += '<ul>' + g.items.map(function (s) { return '<li>' + s + '</li>'; }).join('') + '</ul>';
+                      }
+                      html += '</div>';
+                    });
+                  } else {
+                    html += '<div>' + (result.error.message || 'Unsatisfiable spec.') + '</div>';
+                  }
+                  html += '</div>';
+                  block.insertAdjacentHTML('beforeend', html);
                 }
               } catch (err) {
                 console.error('spytial-diagram render error', err);

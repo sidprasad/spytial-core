@@ -1,57 +1,101 @@
 # Spytial
 
-> The diagram is already in the value graph. Spytial just refines it.
+We have automated huge amounts of programming work over the last decade. Compilers do vectorization no one types by hand. Editors finish your sentences. Agents take a one-line prompt and edit ten files. None of that has touched the REPL: when you ask your program to *show you the value it just produced*, you still get back a string and you read the string. Here's Python on a binary decision diagram:
 
-A binary search tree is a tree. A region graph is a graph. An Alloy trace is a state machine. But the REPL prints them all the same way — nested parentheses you reconstruct in your head.
+```python
+Node(15, 'x1', Node(14, 'x2', Node(8, 'x3', TRUE, FALSE), Node(4, 'x3', FALSE, TRUE)), Node(3, 'x2', FALSE, TRUE))
+```
 
-So why not generate a diagram every time? Because the usual route is to write drawing code. Before the picture can tell you anything you have chosen marks, computed positions, wired up updates, and bought into a small rendering project. Some of that scaffolding captures the conventions that actually matter for *this* value (BDD nodes layered by variable, AST bindings above their use sites, trace states clockwise); most of it is plumbing that does not transfer to the next value type.
+That string *is* the BDD — same information, same structure, no loss. It is also useless. The next thing anyone who has actually debugged one of these will do is pick up a pen and sketch it on the back of an envelope, because BDDs (and trees, and graphs, and traces) are spatial. The "diagram" in *binary decision diagram* is the part that matters.
 
-Here is the load-bearing observation: **the runtime already walks your value to print it.** Introspection, serialization, reflection — every REPL traversal visits records, atoms, fields, and references. Turn records into nodes and fields into edges, and you have a faithful diagram of the value, paid for by a traversal you were already doing. It will not be pretty, but it is the right shape. Everything else is refinement.
+What you wanted on screen was this:
 
-Spytial is built around that refinement. Starting from the faithful value graph, you add **rules** — *parents above children*, *same-variable nodes aligned*, *implementation atoms hidden*, *trace states cyclic* — and a constraint solver delivers any picture that satisfies them. Because the rules describe relationships rather than drawing steps, you are writing a specification of the diagram you want, not a rendering pipeline. When rules contradict, Spytial returns a minimal explanation of the conflict instead of a quietly-wrong picture.
-
-<div class="spytial-diagram" data-height="440" data-caption="Five `Node` atoms with `left`/`right` relations, plus two rules: left-children below-left, right-children below-right. No pixel positions, no drawing code — and the tree obeys both rules simultaneously.">
+<div class="spytial-diagram" data-height="440" data-caption="The same BDD, drawn from rules. Same-variable nodes share a row; lo edges dashed orange, hi edges solid green; terminals colored. Drag the nodes — the constraints keep holding.">
 <template class="data">
 {
   "atoms": [
-    {"id": "n0", "type": "Node", "label": "5"},
-    {"id": "n1", "type": "Node", "label": "3"},
-    {"id": "n2", "type": "Node", "label": "8"},
-    {"id": "n3", "type": "Node", "label": "1"},
-    {"id": "n4", "type": "Node", "label": "9"}
+    {"id": "n15", "type": "Node", "label": "15"},
+    {"id": "n14", "type": "Node", "label": "14"},
+    {"id": "n8",  "type": "Node", "label": "8"},
+    {"id": "n4",  "type": "Node", "label": "4"},
+    {"id": "n3",  "type": "Node", "label": "3"},
+    {"id": "vx1", "type": "Variable", "label": "x1"},
+    {"id": "vx2", "type": "Variable", "label": "x2"},
+    {"id": "vx3", "type": "Variable", "label": "x3"},
+    {"id": "tT",  "type": "Terminal", "label": "TRUE"},
+    {"id": "tF",  "type": "Terminal", "label": "FALSE"}
   ],
   "relations": [
-    {"id": "left", "name": "left", "types": ["Node", "Node"],
+    {"id": "v", "name": "v", "types": ["Node", "Variable"],
      "tuples": [
-       {"atoms": ["n0", "n1"], "types": ["Node", "Node"]},
-       {"atoms": ["n1", "n3"], "types": ["Node", "Node"]}
+       {"atoms": ["n15", "vx1"], "types": ["Node", "Variable"]},
+       {"atoms": ["n14", "vx2"], "types": ["Node", "Variable"]},
+       {"atoms": ["n8",  "vx3"], "types": ["Node", "Variable"]},
+       {"atoms": ["n4",  "vx3"], "types": ["Node", "Variable"]},
+       {"atoms": ["n3",  "vx2"], "types": ["Node", "Variable"]}
      ]},
-    {"id": "right", "name": "right", "types": ["Node", "Node"],
+    {"id": "lo", "name": "lo", "types": ["Node", "Node"],
      "tuples": [
-       {"atoms": ["n0", "n2"], "types": ["Node", "Node"]},
-       {"atoms": ["n2", "n4"], "types": ["Node", "Node"]}
+       {"atoms": ["n15", "n14"], "types": ["Node", "Node"]},
+       {"atoms": ["n14", "n8"],  "types": ["Node", "Node"]},
+       {"atoms": ["n8",  "tT"],  "types": ["Node", "Terminal"]},
+       {"atoms": ["n4",  "tF"],  "types": ["Node", "Terminal"]},
+       {"atoms": ["n3",  "tF"],  "types": ["Node", "Terminal"]}
+     ]},
+    {"id": "hi", "name": "hi", "types": ["Node", "Node"],
+     "tuples": [
+       {"atoms": ["n15", "n3"],  "types": ["Node", "Node"]},
+       {"atoms": ["n14", "n4"],  "types": ["Node", "Node"]},
+       {"atoms": ["n8",  "tF"],  "types": ["Node", "Terminal"]},
+       {"atoms": ["n4",  "tT"],  "types": ["Node", "Terminal"]},
+       {"atoms": ["n3",  "tT"],  "types": ["Node", "Terminal"]}
      ]}
   ]
 }
 </template>
 <template class="spec">
 constraints:
-  - orientation: { selector: left,  directions: [below, left]  }
-  - orientation: { selector: right, directions: [below, right] }
+  - orientation: { selector: "lo + hi", directions: [below] }
+  - align:       { selector: "{x, y : Node | (x != y) and (x.v) = (y.v)}", direction: horizontal }
 directives:
-  - atomColor: { selector: Node, value: "#4a90d9" }
+  - edgeColor: { field: hi, value: "#1f7a1f" }
+  - edgeColor: { field: lo, value: "#cc6600", style: dashed }
+  - atomColor: { selector: Node,     value: "#dbe7f3" }
+  - atomColor: { selector: Terminal, value: "#f6d6c5" }
+  - hideField: { field: v }
+  - hideAtom:  { selector: Variable }
 </template>
 </div>
 
+This is readable because it follows the conventions BDD people already use: layered top-to-bottom, same-variable nodes on the same row, lo and hi edges distinguished, terminals visually distinct from internal nodes.
+
+So why not draw values like this whenever we want to look at them? Because the usual route is to write drawing code — choose marks, compute positions, handle every update, own a small rendering project per value type. Some of that scaffolding captures the conventions that actually matter for *this* value; most of it does not transfer to the next.
+
+Here is the load-bearing observation: **the runtime already walks your value to print it.** Introspection, serialization, `__repr__`, `Show`, reflection — every "show me this thing" goes through a traversal that visits records, atoms, fields, and references. Turn records into nodes and fields into edges and you have a faithful diagram for free. It will not be pretty, but it is the right shape. Everything after is refinement.
+
+**Spytial** is the refinement layer. Starting from the runtime's walk of your value, you add rules — one at a time — that narrow the layout until the picture is the one you wanted. The BDD above was produced by exactly five:
+
+```yaml
+constraints:
+  - orientation: { selector: "lo + hi", directions: [below] }                                  # layers go top-down
+  - align:       { selector: "{x, y : Node | (x != y) and (x.v) = (y.v)}", direction: horizontal }  # same var, same row
+directives:
+  - edgeColor: { field: hi, value: "#1f7a1f" }                                                  # hi edges green
+  - edgeColor: { field: lo, value: "#cc6600", style: dashed }                                   # lo edges dashed orange
+  - hideAtom:  { selector: Variable }                                                            # variable atoms out of the picture
+```
+
+The selector `{x, y : Node | (x != y) and (x.v) = (y.v)}` picks out a *structural pattern* — every pair of distinct nodes that test the same variable. It will match on the BDD above and on every other BDD; it is a property of the data, not a hand-written list. Because each rule is a property like that and not a step in a pipeline, the rules don't have an order, can't conflict with themselves, and don't need to be re-derived when the value changes. The layout solver re-runs; the rules don't.
+
 ---
 
-## When rules conflict, you find out
+## Counterfactual diagrams
 
-Drawing code can't be wrong about itself: if it draws something misleading, it draws it confidently. A specification can — the rules can contradict, and Spytial can tell you exactly which ones.
+The biggest reason to write layout as a specification rather than imperative drawing code: when the rules don't all fit, Spytial can tell you which ones. Drawing code can't — it picks a layout or crashes.
 
-Take the previous tree and add one more edge: now node `L` and node `R` both point to the same child `B`. As a graph it is well-formed (a diamond DAG). As a *tree* it isn't — and the moment you ask Spytial to lay it out with the natural tree rules (left-child below-*left* of parent, right-child below-*right*), the rules contradict at `B`. It would have to sit below-left of `L` *and* below-right of `R`, while `L` itself is constrained to be left of `R`. There is no x-coordinate that satisfies both.
+Suppose you reach for the natural tree rules — left-child below-*left* of parent, right-child below-*right* — and apply them to a graph that isn't a tree: a diamond DAG where `L` and `R` both point to the same `B`. `B` would have to sit below-*left* of `L` *and* below-*right* of `R`, while `L` is already left of `R`. No x-coordinate satisfies both.
 
-<div class="spytial-diagram" data-height="380" data-caption="Same two rules as the tree above, on a diamond DAG. Spytial places what it can and reports the minimal conflicting subset — the smallest set of rules that can't hold together — instead of choosing one to silently violate.">
+<div class="spytial-diagram" data-height="380" data-caption="Tree rules applied to a diamond DAG. Spytial lays out what it can; the dashed borders mark the nodes caught in the unsatisfiable subset, and the rules underneath spell out the conflict.">
 <template class="data">
 {
   "atoms": [
@@ -83,58 +127,16 @@ directives:
 </template>
 </div>
 
-This is what "spec over construction" buys you. Drawing code that hit the same contradiction would either silently pick a layout (and you'd never know which rule it violated) or just crash. Spytial returns an *actionable* failure: a short list of constraints whose conjunction is unsatisfiable, plus a degraded layout that respects everything it could. You read the report, decide which rule to drop or weaken — *the tree assumption was the lie; B has two parents* — and try again.
+Spytial isolates the minimal conflicting subset of constraints, relaxes it to produce a *counterfactual* layout, and points you at the rules that caused the inconsistency. You decide which one to weaken.
 
 ---
 
-## What an integration gets from the core
+## Where to go from here
 
-The host-specific work is deliberately small: recover structure, collect layout annotations, and deliver both to the browser. Once you have done that, `spytial-core` handles the parts that should not be reimplemented for each language:
+This site has three audiences. Pick yours:
 
-- **Rendering from host values.** A host API can be as small as `diagram(value)`, returning inline HTML, opening a browser tab, or writing a file.
-- **One layout vocabulary.** Python decorators, Rust derive attributes, and Pyret output methods can all compile to the same YAML spec.
-- **Conflict reports.** If the constraints cannot all hold, Spytial reports the inconsistent subset instead of quietly drawing something else.
-- **Sequences.** Ordered states can keep visual continuity across frames, which matters for traces and stepping debuggers.
-- **Accessible output.** The visual rendering can be paired with a Data Navigator and spatial REPL for screen-reader users.
+- **You want to use Spytial.** → **[Integrations](integrations.md)** — Python, Rust, Pyret. Install, badges, docs links.
+- **You want to add Spytial to a new language.** → **[The Four Subproblems](integration.md)** — the integrator's design checklist, plus the [pipeline](pipeline.md), [data format](json-data.md), and a [quick start](quickstart.md).
+- **You want to hack on `spytial-core` itself.** → **[Contributing](contributing.md)** — build, test, code layout, how to add a constraint or directive.
 
-The dividing line is simple: the host explains the program value; `spytial-core` evaluates selectors, solves layout constraints, and renders.
-
----
-
-## Languages with Spytial integrations
-
-Each row links to that language's own user-facing documentation — install, examples, host-specific API.
-
-| Host       | Install                                              | Badge                                                                                                                       | Docs & Repo                                                                                                                                  |
-|------------|------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------|
-| **Python** (sPyTial)        | `pip install spytial-diagramming`                    | [![PyPI](https://img.shields.io/pypi/v/spytial-diagramming.svg?label=pypi%3A%20spytial-diagramming)](https://pypi.org/project/spytial-diagramming/) | [sidprasad.github.io/spytial](https://sidprasad.github.io/spytial/) · [github.com/sidprasad/spytial](https://github.com/sidprasad/spytial) |
-| **Rust** (Caraspace)        | `caraspace = { git = "https://github.com/sidprasad/caraspace" }` in `Cargo.toml` (not yet on crates.io) | —                                                                                                                           | [github.com/sidprasad/caraspace](https://github.com/sidprasad/caraspace)                                                                     |
-| **Pyret** (Spyret)          | Use the [Spyret IDE](https://github.com/sidprasad/spyret-ide) | —                                                                                                                           | [github.com/sidprasad/spyret-lang](https://github.com/sidprasad/spyret-lang) · [spyret-ide](https://github.com/sidprasad/spyret-ide)         |
-
----
-
-## Integrate Spytial into another language
-
-Do not see your host above? A new integration is mostly an exercise in answering four questions. The answers are language-specific, but the questions are stable.
-
-Start with **[The Four Subproblems](integration.md)**. It is the design checklist for a new host.
-
-Then in order:
-
-- **[The Integration Pipeline](pipeline.md)** — where data, specs, layout, and rendering meet.
-- **[Custom Data Instances](custom-data-instance.md)** — the relational view your host needs to produce.
-- **[Quick Start](quickstart.md)** — minimal end-to-end demo in the browser.
-
----
-
-## Under the hood: `spytial-core`
-
-[`spytial-core`](https://github.com/sidprasad/spytial-core) is the browser-side part of Spytial. It consumes a relational data instance plus a YAML spec and produces a rendered diagram. The rest of this site documents that interface: the [data model](json-data.md), the [YAML spec language](yaml-reference.md), the [selector engine](selectors.md), the [constraint solver](constraints.md), the [renderers](api-reference.md), and [sequence support](sequences.md).
-
-What `spytial-core` does *not* give you on its own:
-
-- Anything host-specific. **The integrator writes the relationalizer.**
-- A way to capture annotations from the source language. **The integrator writes the spec collector.**
-- A delivery mechanism. The library is browser-side; the integrator decides how data + spec get there.
-
-Those three pieces are the work of a host integration.
+Every constraint and directive in the spec language is documented [by example](constraints.md), with a live diagram you can read off the page.

@@ -1,16 +1,17 @@
 # The Integration Pipeline
 
-The best integration example in this repo is the JSON demo:
+Complete presentational demo: [`webcola-demo/json-demo.html`](https://github.com/sidprasad/spytial-core/blob/main/webcola-demo/json-demo.html).
 
-[`webcola-demo/json-demo.html`](https://github.com/sidprasad/spytial-core/blob/main/webcola-demo/json-demo.html)
+This page pulls out the browser-side calls from that demo. It starts at the browser boundary, where the host has already produced two values:
 
-It is not a toy separate from the real path. It is the path: data comes in, a layout spec comes in, `spytial-core` produces an `InstanceLayout`, and the web component renders it.
+- serialized data, usually JSON
+- a layout spec
 
-The sections below break that demo into the parts an integration needs.
+The browser-side code turns those into a rendered diagram.
 
 ## 1. Put a renderer on the page
 
-The demo page has a custom element where the diagram will appear:
+Add the custom element that will receive the final layout:
 
 ```html
 <webcola-cnd-graph
@@ -21,50 +22,48 @@ The demo page has a custom element where the diagram will appear:
 </webcola-cnd-graph>
 ```
 
-It also loads the browser bundle:
+Load the browser bundle:
 
 ```html
 <script src="../dist/browser/spytial-core-complete.global.js"></script>
 ```
 
-In a published integration, that script can come from a CDN instead of `../dist`.
+In a published integration, the script can come from a CDN instead of `../dist`.
 
-## 2. Build the data instance
+## 2. Build an `IDataInstance`
 
-The demo reads JSON from a textarea. A language integration would usually generate the same JSON from a host value.
+If the host emits JSON, adapt it into the data interface:
 
 ```javascript
-const jsonText = getCurrentJsonText();
 const dataInstance = new CndCore.JSONDataInstance(jsonText);
 ```
 
-Interface-wise, the important thing is that `dataInstance` is an `IDataInstance`. `JSONDataInstance` is just the usual adapter for getting there.
+`JSONDataInstance` is the adapter. The rest of the pipeline only needs the `IDataInstance` interface.
 
 ## 3. Parse the layout spec
 
-The demo also reads a CnD spec from the UI:
+Turn the Spytial spec into a `LayoutSpec`:
 
 ```javascript
-const cndSpec = getCurrentCNDSpec() || "";
 const layoutSpec = CndCore.parseLayoutSpec(cndSpec);
 ```
 
-`layoutSpec` is the parsed `LayoutSpec`. In a host integration, `cndSpec` might come from decorators, attributes, macros, a method on the value, or plain YAML supplied by the user.
+The `cndSpec` string can come from decorators, attributes, macros, a method on the value, a config file, or a textarea.
 
-## 4. Create an evaluator
+## 4. Initialize an `IEvaluator`
 
-Selectors in the layout spec need to be evaluated against the data instance. The demo creates an evaluator and initializes it with the data:
+Selectors in the layout spec are evaluated against the data instance:
 
 ```javascript
 const evaluator = new CndCore.SGraphQueryEvaluator();
 evaluator.initialize({ sourceData: dataInstance });
 ```
 
-Interface-wise, `evaluator` is an `IEvaluator`. The concrete evaluator can vary; the rest of the layout path only needs the interface.
+The concrete evaluator can vary. The layout step only needs an `IEvaluator`.
 
-## 5. Generate the layout
+## 5. Generate an `InstanceLayout`
 
-Now the data, spec, and evaluator meet:
+The data, spec, and evaluator meet in `LayoutInstance`:
 
 ```javascript
 const layoutResult = new CndCore.LayoutInstance(layoutSpec, evaluator)
@@ -73,28 +72,25 @@ const layoutResult = new CndCore.LayoutInstance(layoutSpec, evaluator)
 const instanceLayout = layoutResult.layout;
 ```
 
-`instanceLayout` is the `InstanceLayout`: nodes, edges, groups, constraints, and metadata in the form the renderer expects.
+`instanceLayout` contains the nodes, edges, groups, constraints, and metadata needed by the renderer.
 
-## 6. Render it
+## 6. Render
 
-The demo hands the layout to the custom element:
+Pass the layout to the custom element:
 
 ```javascript
 const graph = document.getElementById("graph-container");
 await graph.renderLayout(instanceLayout);
 ```
 
-That is the browser side of the integration.
+That is the browser-side path.
 
-## The whole browser path
+## Complete Browser Path
 
-Stripped down, the demo's core path is:
+Put together:
 
 ```javascript
-async function loadGraph() {
-  const jsonText = getCurrentJsonText();
-  const cndSpec = getCurrentCNDSpec() || "";
-
+async function loadGraph(jsonText, cndSpec) {
   const dataInstance = new CndCore.JSONDataInstance(jsonText); // IDataInstance
 
   const evaluator = new CndCore.SGraphQueryEvaluator();        // IEvaluator
@@ -109,15 +105,11 @@ async function loadGraph() {
 }
 ```
 
-For a new host, the main question is not how to rewrite this browser path. It is how the host produces `jsonText` and `cndSpec`.
+For a complete presentational demo around these calls, see [`webcola-demo/json-demo.html`](https://github.com/sidprasad/spytial-core/blob/main/webcola-demo/json-demo.html).
 
-## Swapping in Alloy
+## Alloy Variant
 
-The Alloy demo follows the same path:
-
-[`webcola-demo/alloy-demo.html`](https://github.com/sidprasad/spytial-core/blob/main/webcola-demo/alloy-demo.html)
-
-Only the data-instance step changes. Instead of JSON:
+The Alloy demo uses the same interface-level path. Only the data-adapter step changes:
 
 ```javascript
 const parsed = CndCore.AlloyInstance.parseAlloyXML(alloyXml);
@@ -126,12 +118,7 @@ const dataInstance = new CndCore.AlloyDataInstance(
 );
 ```
 
-After that, the same interface-level path resumes:
-
-- `IDataInstance` feeds an `IEvaluator`
-- CnD text becomes a `LayoutSpec`
-- `LayoutInstance.generateLayout(...)` returns an `InstanceLayout`
-- the graph element renders that layout
+After that, `dataInstance` is still an `IDataInstance`, so the evaluator, layout, and render steps are the same. The complete Alloy version is [`webcola-demo/alloy-demo.html`](https://github.com/sidprasad/spytial-core/blob/main/webcola-demo/alloy-demo.html).
 
 ## Where to go next
 
