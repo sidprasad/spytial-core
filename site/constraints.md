@@ -170,7 +170,7 @@ Ensures pairs of nodes share the same horizontal or vertical position.
 </template>
 <template class="spec">
 constraints:
-  - align: { selector: pair, direction: horizontal }
+  - align: { selector: Person->Person, direction: horizontal }
 </template>
 </div>
 
