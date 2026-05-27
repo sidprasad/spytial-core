@@ -45,22 +45,9 @@ The **`directly*`** variants are stricter — they enforce axis alignment. For e
 ### Examples
 
 ```yaml
-# Parents appear above children
-# (Assumes `parent: child → parent`, so target = parent, source = child.)
 - orientation:
     selector: parent
     directions: [above]
-
-# Left-to-right flow with strict horizontal alignment
-# (Assumes `next: prev → next`, so target = next.)
-- orientation:
-    selector: next
-    directions: [directlyRight]
-
-# Target ends up above AND to the left of source
-- orientation:
-    selector: precedes
-    directions: [above, left]
 ```
 
 <div class="spytial-diagram" data-height="360" data-caption="Live: parent selector with directions [above] — Alice ends up above Bob and Carol. (Here `parent: child → parent`, so Bob's parent is Alice.)">
@@ -86,8 +73,6 @@ constraints:
 </template>
 </div>
 
-> **Tip:** If your selector uses special characters (like `^` or `~`), wrap it in quotes: `selector: "^parent"`.
-
 ---
 
 ## Cyclic
@@ -112,11 +97,6 @@ Arranges nodes along the perimeter of a circle, based on the order defined by a 
 - cyclic:
     selector: nextState
     direction: clockwise
-
-# Counter-clockwise arrangement
-- cyclic:
-    selector: follows
-    direction: counterclockwise
 ```
 
 <div class="spytial-diagram" data-height="400" data-caption="Live: four states s0→s1→s2→s3→s0 arranged in a clockwise cycle.">
@@ -170,15 +150,10 @@ Ensures pairs of nodes share the same horizontal or vertical position.
 ### Examples
 
 ```yaml
-# Align all Person pairs horizontally
+# Align all Person's horizontally.
 - align:
     selector: Person->Person
     direction: horizontal
-
-# Align selected nodes vertically
-- align:
-    selector: Node.selected->Node.selected
-    direction: vertical
 ```
 
 <div class="spytial-diagram" data-height="280" data-caption="Live: align horizontal forces both Persons onto the same row.">
@@ -190,17 +165,12 @@ Ensures pairs of nodes share the same horizontal or vertical position.
     {"id": "p3", "type": "Person", "label": "Cay"}
   ],
   "relations": [
-    {"id": "pair", "name": "pair", "types": ["Person", "Person"],
-     "tuples": [
-       {"atoms": ["p1", "p2"], "types": ["Person", "Person"]},
-       {"atoms": ["p2", "p3"], "types": ["Person", "Person"]}
-     ]}
   ]
 }
 </template>
 <template class="spec">
 constraints:
-  - align: { selector: pair, direction: horizontal }
+  - align: { selector: Person->Person, direction: horizontal }
 </template>
 </div>
 
@@ -230,12 +200,6 @@ Draws a visual bounding box around nodes matched by a selector.
 - group:
     selector: Team.members
     name: "Team Members"
-
-# Group with connecting edges
-- group:
-    selector: Department.employees
-    name: "Department"
-    addEdge: true
 ```
 
 <div class="spytial-diagram" data-height="360" data-caption="Live: Team.members draws a bounding box around the three members.">

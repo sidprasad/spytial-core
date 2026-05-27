@@ -62,28 +62,145 @@
     @media (max-width: 700px) {
       .repl-vs-spytial { grid-template-columns: 1fr; }
     }
+
+    /* Refinement carousel */
+    .spytial-carousel-wrap { margin: 1.4em 0; }
+    .spytial-carousel {
+      display: flex;
+      gap: 0.6rem;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      scroll-behavior: smooth;
+      -webkit-overflow-scrolling: touch;
+      padding: 0.15rem 0 0.5rem;
+    }
+    .spytial-carousel .step-card {
+      flex: 0 0 100%;
+      scroll-snap-align: start;
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+      border: 1px solid #e3e3e3;
+      border-radius: 5px;
+      padding: 0.7rem 0.85rem 0.85rem;
+      background: #fcfcfc;
+      min-width: 0;
+    }
+    .spytial-carousel .step-card h3 {
+      margin: 0;
+      font-size: 1rem;
+      line-height: 1.2;
+      font-weight: 600;
+      color: #2b2b2b;
+    }
+    .spytial-carousel .step-card pre {
+      margin: 0;
+      font-size: 0.82em;
+      line-height: 1.45;
+      background: #f6f8fa;
+      border: 1px solid #e1e4e8;
+      border-radius: 4px;
+      padding: 0.55em 0.7em;
+      overflow-x: auto;
+    }
+    .spytial-carousel .step-pair {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 2rem minmax(0, 1fr);
+      gap: 0.55rem;
+      align-items: stretch;
+    }
+    .spytial-carousel .step-pair > .spytial-diagram { margin: 0; }
+    .spytial-carousel .step-arrow {
+      justify-self: center;
+      align-self: center;
+      font-size: 1.5rem;
+      color: #666;
+      line-height: 1;
+    }
+    @media (max-width: 720px) {
+      .spytial-carousel .step-pair { grid-template-columns: 1fr; }
+      .spytial-carousel .step-arrow { transform: rotate(90deg); }
+    }
+    .spytial-nav {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+    .spytial-nav button {
+      padding: 0.3rem 0.75rem;
+      border: 1px solid #bbb;
+      background: #f7f7f7;
+      color: #111;
+      cursor: pointer;
+      font: inherit;
+      font-size: 0.85em;
+      border-radius: 4px;
+    }
+    .spytial-nav button:hover:not(:disabled) { background: #ececec; }
+    .spytial-nav button:disabled {
+      color: #999;
+      border-color: #ddd;
+      background: #fafafa;
+      cursor: default;
+    }
+    .spytial-nav .spytial-nav-pos {
+      font-size: 0.85em;
+      color: #586069;
+      min-width: 3em;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
   <div id="app"></div>
   <script>
     // Docsify plugin: render <div class="spytial-diagram"> blocks as live Spytial diagrams.
-    // Each block contains <template class="data"> (JSON) and <template class="spec"> (YAML).
-    // Optional attributes: data-height (default 260), data-width (default 100%), data-caption.
+    // Each block has a data source (<template class="data"> child OR data-data-ref="<id>")
+    // and a spec source (<template class="spec"> child OR data-spec-ref="<id>").
+    // Optional attributes: data-height, data-width, data-caption, data-accessible.
     function spytialDocsifyPlugin(hook) {
       let n = 0;
       hook.doneEach(function () {
+        const tplTextById = function (id) {
+          const el = document.getElementById(id);
+          if (!el) return null;
+          return (el.content ? el.content.textContent : el.textContent).trim();
+        };
+        const tplText = function (tpl) {
+          if (tpl.content && tpl.content.textContent !== undefined) {
+            return tpl.content.textContent.trim();
+          }
+          return tpl.textContent.trim();
+        };
+
         const blocks = document.querySelectorAll('.spytial-diagram:not([data-spytial-rendered])');
         blocks.forEach(function (block) {
           block.setAttribute('data-spytial-rendered', '1');
           try {
-            const dataTpl = block.querySelector('template.data');
-            const specTpl = block.querySelector('template.spec');
-            if (!dataTpl || !specTpl) {
-              throw new Error('spytial-diagram needs <template class="data"> and <template class="spec"> children');
+            // Data source: <template class="data"> child, or data-data-ref="<id>".
+            const dataRef = block.getAttribute('data-data-ref');
+            let jsonText;
+            if (dataRef) {
+              jsonText = tplTextById(dataRef);
+              if (jsonText == null) throw new Error('spytial-diagram data-data-ref="' + dataRef + '" not found');
+            } else {
+              const dataTpl = block.querySelector('template.data');
+              if (!dataTpl) throw new Error('spytial-diagram needs <template class="data"> or data-data-ref');
+              jsonText = tplText(dataTpl);
             }
-            const jsonText = dataTpl.innerHTML.trim();
-            const yamlText = specTpl.innerHTML.trim();
+            // Spec source: <template class="spec"> child, or data-spec-ref="<id>".
+            const specRef = block.getAttribute('data-spec-ref');
+            let yamlText;
+            if (specRef) {
+              yamlText = tplTextById(specRef);
+              if (yamlText == null) throw new Error('spytial-diagram data-spec-ref="' + specRef + '" not found');
+            } else {
+              const specTpl = block.querySelector('template.spec');
+              if (!specTpl) throw new Error('spytial-diagram needs <template class="spec"> or data-spec-ref');
+              yamlText = tplText(specTpl);
+            }
             const data = JSON.parse(jsonText);
 
             const height = block.getAttribute('data-height') || '260';
@@ -119,7 +236,6 @@
                 if (result && result.error) {
                   const mount = document.getElementById(mountId);
                   mount.style.display = '';
-                  // Mount the React ErrorMessageModal into this diagram's per-block container.
                   const mountModal = function () {
                     if (typeof window.mountErrorMessageModal !== 'function') {
                       setTimeout(mountModal, 50);
@@ -145,6 +261,47 @@
             console.error('spytial-diagram setup error', err);
             block.innerHTML = '<div class="spytial-error">Setup error: ' + (err && err.message || err) + '</div>';
           }
+        });
+
+        // Wire any unwired refinement carousels.
+        document.querySelectorAll('.spytial-carousel-wrap:not([data-carousel-ready])').forEach(function (wrap) {
+          wrap.setAttribute('data-carousel-ready', '1');
+          const carousel = wrap.querySelector('.spytial-carousel');
+          const cards = Array.prototype.slice.call(wrap.querySelectorAll('.step-card'));
+          const buttons = Array.prototype.slice.call(wrap.querySelectorAll('.spytial-nav button'));
+          const pos = wrap.querySelector('.spytial-nav-pos');
+          if (!carousel || !cards.length || !buttons.length) return;
+
+          function currentCardIndex() {
+            const left = carousel.scrollLeft;
+            const base = cards[0].offsetLeft;
+            let best = 0, bestDist = Infinity;
+            cards.forEach(function (c, i) {
+              const dist = Math.abs((c.offsetLeft - base) - left);
+              if (dist < bestDist) { bestDist = dist; best = i; }
+            });
+            return best;
+          }
+
+          function updateNav() {
+            const current = currentCardIndex();
+            buttons.forEach(function (btn) {
+              const dir = parseInt(btn.getAttribute('data-dir'), 10);
+              btn.disabled = (current + dir < 0) || (current + dir >= cards.length);
+            });
+            if (pos) pos.textContent = (current + 1) + ' / ' + cards.length;
+          }
+
+          buttons.forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              const dir = parseInt(btn.getAttribute('data-dir'), 10);
+              const target = cards[currentCardIndex() + dir];
+              if (target) target.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' });
+            });
+          });
+
+          carousel.addEventListener('scroll', updateNav);
+          updateNav();
         });
       });
     }
