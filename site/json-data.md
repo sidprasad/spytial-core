@@ -165,7 +165,7 @@ directives:
 
 This produces a tree with Alice at the top (parent of Bob and Carol), ages displayed as labels, and integer atoms hidden.
 
-<div class="spytial-diagram" data-height="320" data-caption="The complete example above, rendered live: Alice is parent of Bob and Carol; ages appear as attributes; the disconnected Int atoms are hidden.">
+<div class="spytial-diagram" data-height="420" data-caption="The complete example above, rendered live: Alice is parent of Bob and Carol; ages appear as attributes; the disconnected Int atoms are hidden.">
 <template class="data">
 {
   "atoms": [

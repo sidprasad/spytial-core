@@ -1,22 +1,20 @@
 # The Four Subproblems
 
-> Using Claude Code? Run `/integrate-language` (see [skill.md](skill.md)) for a guided walkthrough of this recipe.
-
 > An integration is not a wrapper around a renderer. It is a translation from a language's values and annotation habits into Spytial's relational model and layout spec.
 
 Every integration has to answer the same four questions. Python, Rust, and Pyret answer them differently because their runtimes, type systems, and display surfaces differ.
 
 If you can answer these four for a host, you have the shape of a working Spytial integration.
 
-<div class="spytial-diagram" data-height="380" data-caption="The four subproblems, drawn with Spytial. Each Subproblem is a step of the Integration; `nextStep` orients them top-to-bottom; `partOf` groups them under the Integration root.">
+<div class="spytial-diagram" data-height="480" data-caption="The four subproblems, drawn with Spytial. Each Subproblem is a step of the Integration; `nextStep` orients them top-to-bottom; `partOf` groups them under the Integration root.">
 <template class="data">
 {
   "atoms": [
-    {"id": "root", "type": "Integration", "label": "A Spytial integration"},
-    {"id": "p1", "type": "Subproblem", "label": "1. Recover structure (atoms + tuples + types)"},
-    {"id": "p2", "type": "Subproblem", "label": "2. Attach specs (decorators, macros, output methods)"},
-    {"id": "p3", "type": "Subproblem", "label": "3. Present diagrams (REPL, notebook, IDE, file)"},
-    {"id": "p4", "type": "Subproblem", "label": "4. Handle gaps (ordering, derived metrics, sharing)"}
+    {"id": "root", "type": "Integration", "label": "Integration"},
+    {"id": "p1", "type": "Subproblem", "label": "1. Recover structure"},
+    {"id": "p2", "type": "Subproblem", "label": "2. Attach specs"},
+    {"id": "p3", "type": "Subproblem", "label": "3. Present diagrams"},
+    {"id": "p4", "type": "Subproblem", "label": "4. Handle gaps"}
   ],
   "relations": [
     {"id": "nextStep", "name": "nextStep", "types": ["Subproblem", "Subproblem"],
@@ -38,9 +36,10 @@ If you can answer these four for a host, you have the shape of a working Spytial
 <template class="spec">
 constraints:
   - orientation: { selector: nextStep, directions: [below] }
-  - group: { selector: Integration.partOf, name: "Integration" }
-  - size:  { selector: Subproblem, width: 360, height: 50 }
+  - group: { selector: partOf, name: "Integration" }
+  - size: { selector: Subproblem, width: 200, height: 40 }
 directives:
+  - hideField: { field: partOf }
   - atomColor: { selector: Subproblem,  value: "#dbe7f3" }
   - atomColor: { selector: Integration, value: "#f6f8fa" }
   - flag: hideDisconnectedBuiltIns
@@ -155,4 +154,4 @@ Before you publish, make sure the integration has answers for these:
 - [ ] **Present** — In the host's typical workflow (REPL, notebook, IDE, build tool), does the diagram appear where users will look for output?
 - [ ] **Gaps** — For at least one classical example (BST, linked list, AST, DAG with sharing), is there a way to express ordering and at least one derived metric?
 
-Once you can check those, read the [Case Studies](case-studies.md) — they show what the four answers look like in practice.
+Once you can check those, you have the outline of an integration. The next step is to build the smallest end-to-end path: one value, one spec, one rendered diagram.

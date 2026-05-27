@@ -65,8 +65,9 @@
 
             const id = 'spytial-graph-' + (++n);
             const tag = accessible ? 'spytial-explorer' : 'webcola-cnd-graph';
+            const sizeStyle = 'style="display:block;width:100%;height:' + height + 'px;"';
             block.innerHTML =
-              '<' + tag + ' id="' + id + '" width="' + width + '" height="' + height + '"></' + tag + '>' +
+              '<' + tag + ' id="' + id + '" width="' + width + '" height="' + height + '" ' + sizeStyle + '></' + tag + '>' +
               (caption ? '<span class="spytial-caption">' + caption + '</span>' : '');
 
             // Wait until the spytialcore bundle is available before rendering.

@@ -21,18 +21,20 @@ The most commonly used constraint. It defines the spatial relationship between p
 
 ### Available Directions
 
+Each direction describes where the **target** of a `(source, target)` pair ends up relative to the **source**.
+
 | Direction | Meaning |
 |-----------|---------|
-| `above` | Source is above target (allows horizontal offset) |
-| `below` | Source is below target (allows horizontal offset) |
-| `left` | Source is left of target (allows vertical offset) |
-| `right` | Source is right of target (allows vertical offset) |
-| `directlyAbove` | Source is directly above target (strict vertical alignment) |
-| `directlyBelow` | Source is directly below target (strict vertical alignment) |
-| `directlyLeft` | Source is directly left of target (strict horizontal alignment) |
-| `directlyRight` | Source is directly right of target (strict horizontal alignment) |
+| `above` | Target is above source (allows horizontal offset) |
+| `below` | Target is below source (allows horizontal offset) |
+| `left` | Target is left of source (allows vertical offset) |
+| `right` | Target is right of source (allows vertical offset) |
+| `directlyAbove` | Target is directly above source (strict vertical alignment) |
+| `directlyBelow` | Target is directly below source (strict vertical alignment) |
+| `directlyLeft` | Target is directly left of source (strict horizontal alignment) |
+| `directlyRight` | Target is directly right of source (strict horizontal alignment) |
 
-The **`directly*`** variants are stricter — they enforce axis alignment. For example, `directlyAbove` means the source is above the target **and** horizontally centered with it.
+The **`directly*`** variants are stricter — they enforce axis alignment. For example, `directlyAbove` means the target is above the source **and** horizontally centered with it.
 
 ### Direction Restrictions
 
@@ -44,22 +46,24 @@ The **`directly*`** variants are stricter — they enforce axis alignment. For e
 
 ```yaml
 # Parents appear above children
+# (Assumes `parent: child → parent`, so target = parent, source = child.)
 - orientation:
     selector: parent
     directions: [above]
 
 # Left-to-right flow with strict horizontal alignment
+# (Assumes `next: prev → next`, so target = next.)
 - orientation:
     selector: next
-    directions: [directlyLeft]
+    directions: [directlyRight]
 
-# Source is above AND to the left of target
+# Target ends up above AND to the left of source
 - orientation:
     selector: precedes
     directions: [above, left]
 ```
 
-<div class="spytial-diagram" data-height="260" data-caption="Live: parent selector with directions [above] — Alice ends up above Bob and Carol.">
+<div class="spytial-diagram" data-height="360" data-caption="Live: parent selector with directions [above] — Alice ends up above Bob and Carol. (Here `parent: child → parent`, so Bob's parent is Alice.)">
 <template class="data">
 {
   "atoms": [
@@ -70,8 +74,8 @@ The **`directly*`** variants are stricter — they enforce axis alignment. For e
   "relations": [
     {"id": "parent", "name": "parent", "types": ["Node", "Node"],
      "tuples": [
-       {"atoms": ["a", "b"], "types": ["Node", "Node"]},
-       {"atoms": ["a", "c"], "types": ["Node", "Node"]}
+       {"atoms": ["b", "a"], "types": ["Node", "Node"]},
+       {"atoms": ["c", "a"], "types": ["Node", "Node"]}
      ]}
   ]
 }
@@ -79,9 +83,6 @@ The **`directly*`** variants are stricter — they enforce axis alignment. For e
 <template class="spec">
 constraints:
   - orientation: { selector: parent, directions: [above] }
-directives:
-  - atomColor: { selector: Node, value: "#4a90d9" }
-  - flag: hideDisconnectedBuiltIns
 </template>
 </div>
 
@@ -118,7 +119,7 @@ Arranges nodes along the perimeter of a circle, based on the order defined by a 
     direction: counterclockwise
 ```
 
-<div class="spytial-diagram" data-height="320" data-caption="Live: four states s0→s1→s2→s3→s0 arranged in a clockwise cycle.">
+<div class="spytial-diagram" data-height="400" data-caption="Live: four states s0→s1→s2→s3→s0 arranged in a clockwise cycle.">
 <template class="data">
 {
   "atoms": [
@@ -141,9 +142,6 @@ Arranges nodes along the perimeter of a circle, based on the order defined by a 
 <template class="spec">
 constraints:
   - cyclic: { selector: nextState, direction: clockwise }
-directives:
-  - atomColor: { selector: State, value: "#7eb77f" }
-  - flag: hideDisconnectedBuiltIns
 </template>
 </div>
 
@@ -183,7 +181,7 @@ Ensures pairs of nodes share the same horizontal or vertical position.
     direction: vertical
 ```
 
-<div class="spytial-diagram" data-height="220" data-caption="Live: align horizontal forces both Persons onto the same row.">
+<div class="spytial-diagram" data-height="280" data-caption="Live: align horizontal forces both Persons onto the same row.">
 <template class="data">
 {
   "atoms": [
@@ -203,9 +201,6 @@ Ensures pairs of nodes share the same horizontal or vertical position.
 <template class="spec">
 constraints:
   - align: { selector: pair, direction: horizontal }
-directives:
-  - atomColor: { selector: Person, value: "#d98c4a" }
-  - flag: hideDisconnectedBuiltIns
 </template>
 </div>
 
@@ -243,7 +238,7 @@ Draws a visual bounding box around nodes matched by a selector.
     addEdge: true
 ```
 
-<div class="spytial-diagram" data-height="280" data-caption="Live: Team.members draws a bounding box around the three members.">
+<div class="spytial-diagram" data-height="360" data-caption="Live: Team.members draws a bounding box around the three members.">
 <template class="data">
 {
   "atoms": [
@@ -265,10 +260,6 @@ Draws a visual bounding box around nodes matched by a selector.
 <template class="spec">
 constraints:
   - group: { selector: Team.members, name: "Team Members" }
-directives:
-  - atomColor: { selector: Team,   value: "#4a90d9" }
-  - atomColor: { selector: Member, value: "#7eb77f" }
-  - flag: hideDisconnectedBuiltIns
 </template>
 </div>
 
@@ -302,7 +293,7 @@ Sets the width and height of nodes matching a selector.
     height: 80
 ```
 
-<div class="spytial-diagram" data-height="240" data-caption="Live: the ImportantNode is sized 150×80 while ordinary Nodes use the default.">
+<div class="spytial-diagram" data-height="320" data-caption="Live: the ImportantNode is sized 150×80 while ordinary Nodes use the default.">
 <template class="data">
 {
   "atoms": [
@@ -322,10 +313,6 @@ Sets the width and height of nodes matching a selector.
 <template class="spec">
 constraints:
   - size: { selector: ImportantNode, width: 150, height: 80 }
-directives:
-  - atomColor: { selector: ImportantNode, value: "#d98c4a" }
-  - atomColor: { selector: Node,          value: "#4a90d9" }
-  - flag: hideDisconnectedBuiltIns
 </template>
 </div>
 
@@ -349,7 +336,7 @@ Removes atoms from the visualization entirely. The atom and all its edges disapp
     selector: InternalNode
 ```
 
-<div class="spytial-diagram" data-height="240" data-caption="Live: the two InternalNodes (and their edges) are removed; only Node atoms remain.">
+<div class="spytial-diagram" data-height="320" data-caption="Live: the two InternalNodes (and their edges) are removed; only Node atoms remain.">
 <template class="data">
 {
   "atoms": [
@@ -374,9 +361,6 @@ Removes atoms from the visualization entirely. The atom and all its edges disapp
 <template class="spec">
 constraints:
   - hideAtom: { selector: InternalNode }
-directives:
-  - atomColor: { selector: Node, value: "#4a90d9" }
-  - flag: hideDisconnectedBuiltIns
 </template>
 </div>
 
@@ -394,17 +378,19 @@ Any constraint can be negated by adding `hold: never`. By default, all constrain
 
 ### Semantics
 
+For an `orientation` constraint with a selector returning `(source, target)` pairs:
+
 | Positive constraint | Meaning | `hold: never` meaning |
 |---|---|---|
-| `above` | A.y > B.y (A strictly above B) | A.y ≤ B.y (A at same level or below B) |
-| `below` | A.y < B.y | A.y ≥ B.y |
-| `left` | A.x < B.x | A.x ≥ B.x |
-| `right` | A.x > B.x | A.x ≤ B.x |
-| `align horizontal` | Same Y coordinate | Different Y coordinates |
+| `above` | target strictly above source | target may be at the same level or below source |
+| `below` | target strictly below source | target may be at the same level or above source |
+| `left` | target strictly left of source | target may be at the same column or right of source |
+| `right` | target strictly right of source | target may be at the same column or left of source |
+| `align horizontal` | source and target share a Y coordinate | source and target differ in Y |
 | `cyclic clockwise` | Clockwise arrangement | No valid clockwise rotation holds |
 | `group` | Clean bounding rectangle exists | No clean rectangle possible |
 
-For orientation, `hold: never` on `above` does **not** mean "below or left or right." It means the weaker claim: "A's y-coordinate is less than or equal to B's y-coordinate." This allows A and B to be at the same level (aligned) or for B to be above A.
+For orientation, `hold: never` on `above` does **not** mean "below or left or right." It means the weaker claim: "the target is **not** strictly above the source." The target may be at the same y-coordinate or below.
 
 For alignment, negation requires a disjunction — `hold: never` on horizontal means "one must be above the other."
 
@@ -415,10 +401,12 @@ For groups, `hold: never` asserts that no axis-aligned rectangle can contain exa
 ### Examples
 
 ```yaml
-# Children must NEVER appear above parents
+# Children must NEVER appear above their parents
+# (Assumes `parent: child → parent`. `[below] hold: never` says target = parent
+#  is never strictly below source = child, i.e. parent stays on top or aligned.)
 - orientation:
     selector: parent
-    directions: [above]
+    directions: [below]
     hold: never
 
 # These two nodes must NEVER be horizontally aligned
@@ -454,7 +442,7 @@ constraints:
       hold: never
 ```
 
-<div class="spytial-diagram" data-height="240" data-caption="Live: A is left of B but never above B — so A ends up at the same level or below B.">
+<div class="spytial-diagram" data-height="300" data-caption="Live: A is left of B but never above B — so A ends up at the same level or below B.">
 <template class="data">
 {
   "atoms": [
@@ -464,7 +452,7 @@ constraints:
   "relations": [
     {"id": "r", "name": "r", "types": ["Node", "Node"],
      "tuples": [
-       {"atoms": ["a", "b"], "types": ["Node", "Node"]}
+       {"atoms": ["b", "a"], "types": ["Node", "Node"]}
      ]}
   ]
 }
@@ -473,9 +461,6 @@ constraints:
 constraints:
   - orientation: { selector: r, directions: [left] }
   - orientation: { selector: r, directions: [above], hold: never }
-directives:
-  - atomColor: { selector: Node, value: "#a060d9" }
-  - flag: hideDisconnectedBuiltIns
 </template>
 </div>
 
@@ -508,7 +493,7 @@ constraints:
       height: 100
 ```
 
-<div class="spytial-diagram" data-height="380" data-caption="Live: orientation + align + group composing together. Root is above the two children, the children are aligned horizontally, and the Team contains its members.">
+<div class="spytial-diagram" data-height="480" data-caption="Live: orientation + align + group composing together. Root is above the two children, the children are aligned horizontally, and the Team contains its members.">
 <template class="data">
 {
   "atoms": [
@@ -520,10 +505,10 @@ constraints:
     {"id": "m2",   "type": "Person",   "label": "Dee"}
   ],
   "relations": [
-    {"id": "parent", "name": "parent", "types": ["RootNode", "Person"],
+    {"id": "parent", "name": "parent", "types": ["Person", "RootNode"],
      "tuples": [
-       {"atoms": ["root", "p1"], "types": ["RootNode", "Person"]},
-       {"atoms": ["root", "p2"], "types": ["RootNode", "Person"]}
+       {"atoms": ["p1", "root"], "types": ["Person", "RootNode"]},
+       {"atoms": ["p2", "root"], "types": ["Person", "RootNode"]}
      ]},
     {"id": "siblings", "name": "siblings", "types": ["Person", "Person"],
      "tuples": [
@@ -543,10 +528,5 @@ constraints:
   - align:       { selector: siblings, direction: horizontal }
   - group:       { selector: Team.members, name: "Team" }
   - size:        { selector: RootNode, width: 180, height: 80 }
-directives:
-  - atomColor: { selector: RootNode, value: "#d98c4a" }
-  - atomColor: { selector: Person,   value: "#4a90d9" }
-  - atomColor: { selector: Team,     value: "#7eb77f" }
-  - flag: hideDisconnectedBuiltIns
 </template>
 </div>

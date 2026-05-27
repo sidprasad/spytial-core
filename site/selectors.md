@@ -76,15 +76,15 @@ Here's how unary and binary selectors map to spec entries, using our binary tree
 
 ```yaml
 constraints:
-  # Binary selector: left-children appear below-right of parent
+  # Binary selector: left-child appears below-left of parent
   - orientation:
       selector: left
-      directions: [above, right]
+      directions: [below, left]
 
-  # Binary selector: right-children appear below-left of parent
+  # Binary selector: right-child appears below-right of parent
   - orientation:
       selector: right
-      directions: [above, left]
+      directions: [below, right]
 
   # Unary selector: align all leaf nodes horizontally
   - align:
@@ -111,7 +111,7 @@ directives:
   - flag: hideDisconnectedBuiltIns
 ```
 
-<div class="spytial-diagram" data-height="380" data-caption="The running binary tree, rendered live with the spec above. The dotted gray edges are the inferredEdge selector `^(left + right)` — every ancestor→descendant pair.">
+<div class="spytial-diagram" data-height="480" data-caption="The running binary tree, rendered live with the spec above. The dotted gray edges are the inferredEdge selector `^(left + right)` — every ancestor→descendant pair.">
 <template class="data">
 {
   "atoms": [
@@ -150,8 +150,8 @@ directives:
 </template>
 <template class="spec">
 constraints:
-  - orientation: { selector: left,  directions: [above, right] }
-  - orientation: { selector: right, directions: [above, left]  }
+  - orientation: { selector: left,  directions: [below, left]  }
+  - orientation: { selector: right, directions: [below, right] }
   - align:       { selector: "Node - left.Node - right.Node",  direction: horizontal }
 directives:
   - atomColor:    { selector: Node, value: "#4a90d9" }

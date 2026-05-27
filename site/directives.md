@@ -37,7 +37,7 @@ You can use hex codes, named colors, `rgb()`, `hsl()`, etc.
     value: "rgb(255, 165, 0)"
 ```
 
-<div class="spytial-diagram" data-height="240" data-caption="Live: each type gets its own atomColor — Person blue, Error red, Warning orange.">
+<div class="spytial-diagram" data-height="320" data-caption="Live: each type gets its own atomColor — Person blue, Error red, Warning orange.">
 <template class="data">
 {
   "atoms": [
@@ -62,7 +62,6 @@ directives:
   - atomColor: { selector: Person,  value: "#4a90d9" }
   - atomColor: { selector: Error,   value: "red" }
   - atomColor: { selector: Warning, value: "rgb(255, 165, 0)" }
-  - flag: hideDisconnectedBuiltIns
 </template>
 </div>
 
@@ -152,7 +151,7 @@ Use `filter` for finer control over which tuples are affected:
     showLabel: false
 ```
 
-<div class="spytial-diagram" data-height="280" data-caption="Live: parent edges are solid blue, references edges are dashed red and thicker.">
+<div class="spytial-diagram" data-height="380" data-caption="Live: parent edges are solid blue, references edges are dashed red and thicker.">
 <template class="data">
 {
   "atoms": [
@@ -163,8 +162,8 @@ Use `filter` for finer control over which tuples are affected:
   "relations": [
     {"id": "parent", "name": "parent", "types": ["Document", "Document"],
      "tuples": [
-       {"atoms": ["d1", "d2"], "types": ["Document", "Document"]},
-       {"atoms": ["d1", "d3"], "types": ["Document", "Document"]}
+       {"atoms": ["d2", "d1"], "types": ["Document", "Document"]},
+       {"atoms": ["d3", "d1"], "types": ["Document", "Document"]}
      ]},
     {"id": "references", "name": "references", "types": ["Document", "Document"],
      "tuples": [
@@ -179,8 +178,6 @@ constraints:
 directives:
   - edgeColor: { field: parent,     value: "blue" }
   - edgeColor: { field: references, value: "red", selector: Document, style: dashed, weight: 2 }
-  - atomColor: { selector: Document, value: "#f0eada" }
-  - flag: hideDisconnectedBuiltIns
 </template>
 </div>
 
@@ -284,7 +281,7 @@ Use a prefix to pull icons from popular icon libraries:
     path: "tic-o"
 ```
 
-<div class="spytial-diagram" data-height="280" data-caption="Live: bundled icons replace the default rectangles — Person uses person, Folder uses folder.">
+<div class="spytial-diagram" data-height="340" data-caption="Live: bundled icons replace the default rectangles — Person uses person, Folder uses folder.">
 <template class="data">
 {
   "atoms": [
@@ -305,7 +302,6 @@ Use a prefix to pull icons from popular icon libraries:
 directives:
   - icon: { selector: Person, path: "person", showLabels: true }
   - icon: { selector: Folder, path: "folder", showLabels: true }
-  - flag: hideDisconnectedBuiltIns
 </template>
 </div>
 
@@ -331,7 +327,7 @@ Sets node dimensions. Identical to the [size constraint](constraints.md#size) �
     height: 100
 ```
 
-<div class="spytial-diagram" data-height="240" data-caption="Live: LargeNode is sized 200×100 next to a default-sized Node.">
+<div class="spytial-diagram" data-height="300" data-caption="Live: LargeNode is sized 200×100 next to a default-sized Node.">
 <template class="data">
 {
   "atoms": [
@@ -348,10 +344,7 @@ Sets node dimensions. Identical to the [size constraint](constraints.md#size) �
 </template>
 <template class="spec">
 directives:
-  - size:      { selector: LargeNode, width: 200, height: 100 }
-  - atomColor: { selector: LargeNode, value: "#d98c4a" }
-  - atomColor: { selector: Node,      value: "#4a90d9" }
-  - flag: hideDisconnectedBuiltIns
+  - size: { selector: LargeNode, width: 200, height: 100 }
 </template>
 </div>
 
@@ -396,7 +389,7 @@ Projects over a type (signature), showing **one atom at a time** with navigation
     orderBy: "^next"
 ```
 
-<div class="spytial-diagram" data-height="320" data-caption="Live: Time is projected (orderBy: next). Use the navigation controls to step T0 → T1 → T2.">
+<div class="spytial-diagram" data-height="380" data-caption="Live: Time is projected (orderBy: next). Use the navigation controls to step T0 → T1 → T2.">
 <template class="data">
 {
   "atoms": [
@@ -422,8 +415,6 @@ Projects over a type (signature), showing **one atom at a time** with navigation
 <template class="spec">
 directives:
   - projection: { sig: Time, orderBy: "next" }
-  - atomColor:  { selector: Light, value: "#d98c4a" }
-  - flag: hideDisconnectedBuiltIns
 </template>
 </div>
 
@@ -472,7 +463,7 @@ Converts an edge relationship into a **label on the source node**. The edge is r
     filter: "status & (univ -> Active)"
 ```
 
-<div class="spytial-diagram" data-height="240" data-caption="Live: the age edge becomes an inline attribute on each Person node — no edge drawn.">
+<div class="spytial-diagram" data-height="300" data-caption="Live: the age edge becomes an inline attribute on each Person node — no edge drawn.">
 <template class="data">
 {
   "atoms": [
@@ -493,7 +484,6 @@ Converts an edge relationship into a **label on the source node**. The edge is r
 <template class="spec">
 directives:
   - attribute: { field: age }
-  - atomColor: { selector: Person, value: "#4a90d9" }
   - flag: hideDisconnectedBuiltIns
 </template>
 </div>
@@ -539,7 +529,7 @@ Adds computed labels to nodes **without** removing edges. Unlike `attribute`, th
     value: grades
 ```
 
-<div class="spytial-diagram" data-height="240" data-caption="Live: age shown as a tag on each Person — and the original age edge is still drawn.">
+<div class="spytial-diagram" data-height="320" data-caption="Live: age shown as a tag on each Person — and the original age edge is still drawn.">
 <template class="data">
 {
   "atoms": [
@@ -559,8 +549,7 @@ Adds computed labels to nodes **without** removing edges. Unlike `attribute`, th
 </template>
 <template class="spec">
 directives:
-  - tag:       { toTag: Person, name: age, value: age }
-  - atomColor: { selector: Person, value: "#4a90d9" }
+  - tag: { toTag: Person, name: age, value: age }
 </template>
 </div>
 
@@ -596,7 +585,7 @@ Hides all edges for a specific relation. The edges disappear but the data remain
     selector: Production
 ```
 
-<div class="spytial-diagram" data-height="280" data-caption="Live: the internal edges are removed from the picture; the public edges remain.">
+<div class="spytial-diagram" data-height="340" data-caption="Live: the internal edges are removed from the picture; the public edges remain.">
 <template class="data">
 {
   "atoms": [
@@ -620,8 +609,6 @@ Hides all edges for a specific relation. The edges disappear but the data remain
 <template class="spec">
 directives:
   - hideField: { field: internal }
-  - atomColor: { selector: Node, value: "#4a90d9" }
-  - flag: hideDisconnectedBuiltIns
 </template>
 </div>
 
@@ -643,7 +630,7 @@ Hides atoms matching a selector. Identical to the [hideAtom constraint](constrai
     selector: HelperNode
 ```
 
-<div class="spytial-diagram" data-height="240" data-caption="Live: HelperNode atoms (and their edges) disappear; only Nodes remain.">
+<div class="spytial-diagram" data-height="300" data-caption="Live: HelperNode atoms (and their edges) disappear; only Nodes remain.">
 <template class="data">
 {
   "atoms": [
@@ -667,9 +654,7 @@ Hides atoms matching a selector. Identical to the [hideAtom constraint](constrai
 </template>
 <template class="spec">
 directives:
-  - hideAtom:  { selector: HelperNode }
-  - atomColor: { selector: Node, value: "#4a90d9" }
-  - flag: hideDisconnectedBuiltIns
+  - hideAtom: { selector: HelperNode }
 </template>
 </div>
 
@@ -715,7 +700,7 @@ Creates edges that don't exist in your data but are **computed from a selector e
     weight: 2
 ```
 
-<div class="spytial-diagram" data-height="320" data-caption="Live: parent edges drawn normally; transitive reachable edges drawn as dotted gray.">
+<div class="spytial-diagram" data-height="440" data-caption="Live: parent edges drawn normally; transitive reachable edges drawn as dotted gray.">
 <template class="data">
 {
   "atoms": [
@@ -727,9 +712,9 @@ Creates edges that don't exist in your data but are **computed from a selector e
   "relations": [
     {"id": "parent", "name": "parent", "types": ["Node", "Node"],
      "tuples": [
-       {"atoms": ["a", "b"], "types": ["Node", "Node"]},
-       {"atoms": ["b", "c"], "types": ["Node", "Node"]},
-       {"atoms": ["c", "d"], "types": ["Node", "Node"]}
+       {"atoms": ["b", "a"], "types": ["Node", "Node"]},
+       {"atoms": ["c", "b"], "types": ["Node", "Node"]},
+       {"atoms": ["d", "c"], "types": ["Node", "Node"]}
      ]}
   ]
 }
@@ -739,8 +724,6 @@ constraints:
   - orientation: { selector: parent, directions: [above] }
 directives:
   - inferredEdge: { name: "reachable", selector: "^parent", color: gray, style: dotted }
-  - atomColor:    { selector: Node, value: "#4a90d9" }
-  - flag: hideDisconnectedBuiltIns
 </template>
 </div>
 
@@ -767,7 +750,7 @@ directives:
   - flag: hideDisconnectedBuiltIns
 ```
 
-<div class="spytial-diagram" data-height="240" data-caption="Live: only two Nodes are connected; the disconnected Node is hidden by the flag.">
+<div class="spytial-diagram" data-height="300" data-caption="Live: only two Nodes are connected; the disconnected Node is hidden by the flag.">
 <template class="data">
 {
   "atoms": [
@@ -786,7 +769,6 @@ directives:
 <template class="spec">
 directives:
   - flag: hideDisconnected
-  - atomColor: { selector: Node, value: "#4a90d9" }
 </template>
 </div>
 

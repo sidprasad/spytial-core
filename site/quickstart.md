@@ -70,7 +70,7 @@ The four numbered comments map directly to the [pipeline stages](pipeline.md). I
 - Step 2 comes from your **spec collector** (decorators, attributes, output methods, …).
 - Steps 3–4 are identical across every host.
 
-<div class="spytial-diagram" data-height="320" data-caption="What the page above actually renders — the exact same JSON + YAML, run live in this doc.">
+<div class="spytial-diagram" data-height="400" data-caption="What the page above actually renders — the exact same JSON + YAML, run live in this doc.">
 <template class="data">
 {
   "atoms": [

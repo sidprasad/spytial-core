@@ -1,134 +1,139 @@
 # The Integration Pipeline
 
-Every Spytial integration does the same five jobs. Some happen in the host; the rest happen in `spytial-core` in the browser. The diagram below is itself rendered with Spytial — `next` orients stages top-to-bottom and `runsOn` groups them by side:
+The best integration example in this repo is the JSON demo:
 
-<div class="spytial-diagram" data-height="520" data-caption="The pipeline, drawn with Spytial: five Stage atoms chained by `next` (orientation [below]) and grouped by Side via the `contains` relation.">
-<template class="data">
-{
-  "atoms": [
-    {"id": "host",    "type": "Side",  "label": "Host side (you write)"},
-    {"id": "browser", "type": "Side",  "label": "spytial-core (browser)"},
-    {"id": "s1", "type": "Stage", "label": "1. Relationalize — atoms, tuples, types"},
-    {"id": "s2", "type": "Stage", "label": "2. Collect spec — YAML CnD"},
-    {"id": "s3", "type": "Stage", "label": "3. Serialize + deliver — JSON + YAML"},
-    {"id": "s4", "type": "Stage", "label": "4. Run layout — LayoutInstance.generateLayout"},
-    {"id": "s5", "type": "Stage", "label": "5. Render — WebColaCnDGraph / AccessibleTranslator"}
-  ],
-  "relations": [
-    {"id": "next", "name": "next", "types": ["Stage", "Stage"],
-     "tuples": [
-       {"atoms": ["s1", "s2"], "types": ["Stage", "Stage"]},
-       {"atoms": ["s2", "s3"], "types": ["Stage", "Stage"]},
-       {"atoms": ["s3", "s4"], "types": ["Stage", "Stage"]},
-       {"atoms": ["s4", "s5"], "types": ["Stage", "Stage"]}
-     ]},
-    {"id": "contains", "name": "contains", "types": ["Side", "Stage"],
-     "tuples": [
-       {"atoms": ["host", "s1"],    "types": ["Side", "Stage"]},
-       {"atoms": ["host", "s2"],    "types": ["Side", "Stage"]},
-       {"atoms": ["host", "s3"],    "types": ["Side", "Stage"]},
-       {"atoms": ["browser", "s4"], "types": ["Side", "Stage"]},
-       {"atoms": ["browser", "s5"], "types": ["Side", "Stage"]}
-     ]}
-  ]
-}
-</template>
-<template class="spec">
-constraints:
-  - orientation: { selector: next, directions: [below] }
-  - group: { selector: contains, name: "Side" }
-  - size: { selector: Stage, width: 340, height: 50 }
-directives:
-  - atomColor: { selector: Stage, value: "#dbe7f3" }
-  - atomColor: { selector: Side,  value: "#f6f8fa" }
-  - flag: hideDisconnectedBuiltIns
-</template>
-</div>
+[`webcola-demo/json-demo.html`](https://github.com/sidprasad/spytial-core/blob/main/webcola-demo/json-demo.html)
 
-## Stage by stage
+It is not a toy separate from the real path. It is the path: data comes in, a layout spec comes in, `spytial-core` produces an `InstanceLayout`, and the web component renders it.
 
-### 1. Relationalize
+The sections below break that demo into the parts an integration needs.
 
-Walk your host's value graph and emit:
+## 1. Put a renderer on the page
 
-- **Atoms**: `{ id, type, label }` for every "thing" worth seeing.
-- **Tuples**: ordered atom-id sequences for every edge / field / relation. Arity is unrestricted (binary is most common, but ternary+ is fine).
-- **Types** (optional): a hierarchy if your host has subtyping. If you skip this, types are inferred from atom `type` fields.
-
-This is where host knowledge lives. Python uses `id()`-keyed reflection, Rust uses procedural macros, and Pyret uses a value-skeleton helper.
-
-→ See [Custom Data Instances](custom-data-instance.md) and the [JSON format](json-data.md).
-
-### 2. Collect the spec
-
-Your host's annotations, decorators, attributes, or DSL become a YAML CnD spec. The spec has two parts:
-
-```yaml
-constraints:
-  - orientation: { selector: parent, directions: [above] }
-directives:
-  - atomColor: { selector: Node, value: "#4a90d9" }
-```
-
-Constraints control geometry (`orientation`, `align`, `cyclic`, `group`, `size`, `hideAtom`).
-Directives control appearance (`atomColor`, `edgeColor`, `icon`, `attribute`, `tag`, `inferredEdge`, `flag`, `hideField`).
-
-→ See [YAML Reference](yaml-reference.md), [Constraints](constraints.md), [Directives](directives.md).
-
-### 3. Deliver the inputs to the browser
-
-The library is browser-side. You decide how to get JSON + YAML there:
-
-- **Local HTTP** (Caraspace): write `rust_viz_data.html` and `rust_viz_data.json` to disk, start `python -m http.server`, open the page.
-- **Jupyter widget / inline HTML** (sPyTial): `IPython.display.HTML(...)` with the bundle and JSON inlined.
-- **Editor extension** (Spyret IDE): VS Code webview talks to a language server.
-
-There is no required transport. Whatever channel you have, send two strings: the JSON instance and the YAML spec.
-
-### 4. Run the layout
-
-Inside the browser, layout setup looks like this:
-
-```typescript
-import {
-  JSONDataInstance,
-  parseLayoutSpec,
-  SGraphQueryEvaluator,
-  LayoutInstance,
-} from 'spytial-core';
-
-const instance  = new JSONDataInstance(jsonPayload);
-const spec      = parseLayoutSpec(yamlSpec);
-const evaluator = new SGraphQueryEvaluator();
-evaluator.initialize({ sourceData: instance });
-
-const layoutInstance = new LayoutInstance(spec, evaluator);
-const layout         = layoutInstance.generateLayout(instance);
-```
-
-The convenience helper `setupLayout(spec, instance, evaluator)` does the last three lines.
-
-→ See the [API Reference](api-reference.md).
-
-### 5. Render
-
-The layout is just data. Most integrations pass it to the bundled custom element:
+The demo page has a custom element where the diagram will appear:
 
 ```html
-<webcola-cnd-graph id="g" width="800" height="600"></webcola-cnd-graph>
-<script>
-  document.getElementById('g').renderLayout(layout);
-</script>
+<webcola-cnd-graph
+  id="graph-container"
+  width="800"
+  height="600"
+  layoutFormat="default">
+</webcola-cnd-graph>
 ```
 
-For accessibility, use `<spytial-explorer>` (Data Navigator overlay, screen-reader spatial REPL, must/can modal queries) or call `AccessibleTranslator` directly to produce semantic HTML, alt text, and a `SpatialNavigationMap`.
+It also loads the browser bundle:
 
-## Sequences
+```html
+<script src="../dist/browser/spytial-core-complete.global.js"></script>
+```
 
-If your host has time or state (Alloy traces, Pyret reactor states, debugger steps), do not treat each frame as an unrelated diagram. Pass a [sequence policy](sequences.md) (`stability`, `changeEmphasis`, `randomPositioning`, ...) so consecutive frames stay visually continuous.
+In a published integration, that script can come from a CDN instead of `../dist`.
+
+## 2. Build the data instance
+
+The demo reads JSON from a textarea. A language integration would usually generate the same JSON from a host value.
+
+```javascript
+const jsonText = getCurrentJsonText();
+const dataInstance = new CndCore.JSONDataInstance(jsonText);
+```
+
+Interface-wise, the important thing is that `dataInstance` is an `IDataInstance`. `JSONDataInstance` is just the usual adapter for getting there.
+
+## 3. Parse the layout spec
+
+The demo also reads a CnD spec from the UI:
+
+```javascript
+const cndSpec = getCurrentCNDSpec() || "";
+const layoutSpec = CndCore.parseLayoutSpec(cndSpec);
+```
+
+`layoutSpec` is the parsed `LayoutSpec`. In a host integration, `cndSpec` might come from decorators, attributes, macros, a method on the value, or plain YAML supplied by the user.
+
+## 4. Create an evaluator
+
+Selectors in the layout spec need to be evaluated against the data instance. The demo creates an evaluator and initializes it with the data:
+
+```javascript
+const evaluator = new CndCore.SGraphQueryEvaluator();
+evaluator.initialize({ sourceData: dataInstance });
+```
+
+Interface-wise, `evaluator` is an `IEvaluator`. The concrete evaluator can vary; the rest of the layout path only needs the interface.
+
+## 5. Generate the layout
+
+Now the data, spec, and evaluator meet:
+
+```javascript
+const layoutResult = new CndCore.LayoutInstance(layoutSpec, evaluator)
+  .generateLayout(dataInstance);
+
+const instanceLayout = layoutResult.layout;
+```
+
+`instanceLayout` is the `InstanceLayout`: nodes, edges, groups, constraints, and metadata in the form the renderer expects.
+
+## 6. Render it
+
+The demo hands the layout to the custom element:
+
+```javascript
+const graph = document.getElementById("graph-container");
+await graph.renderLayout(instanceLayout);
+```
+
+That is the browser side of the integration.
+
+## The whole browser path
+
+Stripped down, the demo's core path is:
+
+```javascript
+async function loadGraph() {
+  const jsonText = getCurrentJsonText();
+  const cndSpec = getCurrentCNDSpec() || "";
+
+  const dataInstance = new CndCore.JSONDataInstance(jsonText); // IDataInstance
+
+  const evaluator = new CndCore.SGraphQueryEvaluator();        // IEvaluator
+  evaluator.initialize({ sourceData: dataInstance });
+
+  const layoutSpec = CndCore.parseLayoutSpec(cndSpec);         // LayoutSpec
+  const layoutResult = new CndCore.LayoutInstance(layoutSpec, evaluator)
+    .generateLayout(dataInstance);
+
+  const graph = document.getElementById("graph-container");
+  await graph.renderLayout(layoutResult.layout);               // InstanceLayout
+}
+```
+
+For a new host, the main question is not how to rewrite this browser path. It is how the host produces `jsonText` and `cndSpec`.
+
+## Swapping in Alloy
+
+The Alloy demo follows the same path:
+
+[`webcola-demo/alloy-demo.html`](https://github.com/sidprasad/spytial-core/blob/main/webcola-demo/alloy-demo.html)
+
+Only the data-instance step changes. Instead of JSON:
+
+```javascript
+const parsed = CndCore.AlloyInstance.parseAlloyXML(alloyXml);
+const dataInstance = new CndCore.AlloyDataInstance(
+  parsed.instances[currentInstanceIndex]
+);
+```
+
+After that, the same interface-level path resumes:
+
+- `IDataInstance` feeds an `IEvaluator`
+- CnD text becomes a `LayoutSpec`
+- `LayoutInstance.generateLayout(...)` returns an `InstanceLayout`
+- the graph element renders that layout
 
 ## Where to go next
 
-- [The Four Subproblems](integration.md) — the main design questions for an integration.
-- [Quick Start](quickstart.md) — the smallest possible end-to-end integration.
-- [Case Studies](case-studies.md) — how Python, Rust, and Pyret each solve the four subproblems.
+- [Quick Start](quickstart.md) — a smaller browser-only page using the same calls.
+- [The Four Subproblems](integration.md) — what a host has to decide before it can produce `jsonText` and `cndSpec`.

@@ -1,15 +1,16 @@
 # Spytial
 
-> Diagrams for structured data, with layout rules written down instead of baked into drawing code.
+> The diagram is already in the value graph. Spytial just refines it.
 
-**Spytial** is for values whose shape matters: trees, graphs, ASTs, heap snapshots, trace states. It asks the host language to describe two things:
+A binary search tree is a tree. A region graph is a graph. An Alloy trace is a state machine. But the REPL prints them all the same way — nested parentheses you reconstruct in your head.
 
-- the value as atoms and relations
-- the intended layout as constraints such as `orientation`, `align`, `group`, and `cyclic`
+So why not generate a diagram every time? Because the usual route is to write drawing code. Before the picture can tell you anything you have chosen marks, computed positions, wired up updates, and bought into a small rendering project. Some of that scaffolding captures the conventions that actually matter for *this* value (BDD nodes layered by variable, AST bindings above their use sites, trace states clockwise); most of it is plumbing that does not transfer to the next value type.
 
-The result is a box-and-arrow diagram whose geometry follows those constraints. The point is not to guess a pretty drawing; the point is to make the structure visible without hand-positioning nodes.
+Here is the load-bearing observation: **the runtime already walks your value to print it.** Introspection, serialization, reflection — every REPL traversal visits records, atoms, fields, and references. Turn records into nodes and fields into edges, and you have a faithful diagram of the value, paid for by a traversal you were already doing. It will not be pretty, but it is the right shape. Everything else is refinement.
 
-<div class="spytial-diagram" data-height="320" data-caption="A binary tree, drawn with Spytial. The data: 5 Node atoms + left/right relations. The spec: orientation [above, right] for left-children, [above, left] for right-children. Nothing in this page hand-positions a node.">
+Spytial is built around that refinement. Starting from the faithful value graph, you add **rules** — *parents above children*, *same-variable nodes aligned*, *implementation atoms hidden*, *trace states cyclic* — and a constraint solver delivers any picture that satisfies them. Because the rules describe relationships rather than drawing steps, you are writing a specification of the diagram you want, not a rendering pipeline. When rules contradict, Spytial returns a minimal explanation of the conflict instead of a quietly-wrong picture.
+
+<div class="spytial-diagram" data-height="440" data-caption="Five `Node` atoms with `left`/`right` relations, plus two rules: left-children below-left, right-children below-right. No pixel positions, no drawing code — and the tree obeys both rules simultaneously.">
 <template class="data">
 {
   "atoms": [
@@ -35,13 +36,54 @@ The result is a box-and-arrow diagram whose geometry follows those constraints. 
 </template>
 <template class="spec">
 constraints:
-  - orientation: { selector: left,  directions: [above, right] }
-  - orientation: { selector: right, directions: [above, left]  }
+  - orientation: { selector: left,  directions: [below, left]  }
+  - orientation: { selector: right, directions: [below, right] }
 directives:
   - atomColor: { selector: Node, value: "#4a90d9" }
-  - flag: hideDisconnectedBuiltIns
 </template>
 </div>
+
+---
+
+## When rules conflict, you find out
+
+Drawing code can't be wrong about itself: if it draws something misleading, it draws it confidently. A specification can — the rules can contradict, and Spytial can tell you exactly which ones.
+
+Take the previous tree and add one more edge: now node `L` and node `R` both point to the same child `B`. As a graph it is well-formed (a diamond DAG). As a *tree* it isn't — and the moment you ask Spytial to lay it out with the natural tree rules (left-child below-*left* of parent, right-child below-*right*), the rules contradict at `B`. It would have to sit below-left of `L` *and* below-right of `R`, while `L` itself is constrained to be left of `R`. There is no x-coordinate that satisfies both.
+
+<div class="spytial-diagram" data-height="380" data-caption="Same two rules as the tree above, on a diamond DAG. Spytial places what it can and reports the minimal conflicting subset — the smallest set of rules that can't hold together — instead of choosing one to silently violate.">
+<template class="data">
+{
+  "atoms": [
+    {"id": "t", "type": "Node", "label": "T"},
+    {"id": "l", "type": "Node", "label": "L"},
+    {"id": "r", "type": "Node", "label": "R"},
+    {"id": "b", "type": "Node", "label": "B"}
+  ],
+  "relations": [
+    {"id": "left", "name": "left", "types": ["Node", "Node"],
+     "tuples": [
+       {"atoms": ["t", "l"], "types": ["Node", "Node"]},
+       {"atoms": ["l", "b"], "types": ["Node", "Node"]}
+     ]},
+    {"id": "right", "name": "right", "types": ["Node", "Node"],
+     "tuples": [
+       {"atoms": ["t", "r"], "types": ["Node", "Node"]},
+       {"atoms": ["r", "b"], "types": ["Node", "Node"]}
+     ]}
+  ]
+}
+</template>
+<template class="spec">
+constraints:
+  - orientation: { selector: left,  directions: [below, left]  }
+  - orientation: { selector: right, directions: [below, right] }
+directives:
+  - atomColor: { selector: Node, value: "#4a90d9" }
+</template>
+</div>
+
+This is what "spec over construction" buys you. Drawing code that hit the same contradiction would either silently pick a layout (and you'd never know which rule it violated) or just crash. Spytial returns an *actionable* failure: a short list of constraints whose conjunction is unsatisfiable, plus a degraded layout that respects everything it could. You read the report, decide which rule to drop or weaken — *the tree assumption was the lie; B has two parents* — and try again.
 
 ---
 
@@ -80,10 +122,8 @@ Start with **[The Four Subproblems](integration.md)**. It is the design checklis
 Then in order:
 
 - **[The Integration Pipeline](pipeline.md)** — where data, specs, layout, and rendering meet.
-- **[Case Studies](case-studies.md)** — how Python, Rust, and Pyret each answer the four.
 - **[Custom Data Instances](custom-data-instance.md)** — the relational view your host needs to produce.
 - **[Quick Start](quickstart.md)** — minimal end-to-end demo in the browser.
-- **[Claude Code Skill](skill.md)** — `/integrate-language` turns the four questions into a design checklist.
 
 ---
 

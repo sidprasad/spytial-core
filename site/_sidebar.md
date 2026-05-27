@@ -7,9 +7,7 @@
 
 * **Integrating Spytial Into a Language**
   * [The Four Subproblems](integration.md)
-  * [Case Studies](case-studies.md)
   * [Custom Data Instances](custom-data-instance.md)
-  * [Claude Code Skill](skill.md)
 
 * **Data**
   * [JSON Data Format](json-data.md)
@@ -28,7 +26,7 @@
   * [Exported API](api-reference.md)
 
 * **Cookbook**
-  * [Examples](examples.md)
+  * [Examples](https://github.com/sidprasad/spytial-clrs)
 
 * **Help**
   * [File an Issue](https://github.com/sidprasad/spytial-core/issues/new)
