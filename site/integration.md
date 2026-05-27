@@ -6,46 +6,6 @@ Every integration has to answer the same four questions. Python, Rust, and Pyret
 
 If you can answer these four for a host, you have the shape of a working Spytial integration.
 
-<div class="spytial-diagram" data-height="480" data-caption="The four subproblems, drawn with Spytial. Each Subproblem is a step of the Integration; `nextStep` orients them top-to-bottom; `partOf` groups them under the Integration root.">
-<template class="data">
-{
-  "atoms": [
-    {"id": "root", "type": "Integration", "label": "Integration"},
-    {"id": "p1", "type": "Subproblem", "label": "1. Recover structure"},
-    {"id": "p2", "type": "Subproblem", "label": "2. Attach specs"},
-    {"id": "p3", "type": "Subproblem", "label": "3. Present diagrams"},
-    {"id": "p4", "type": "Subproblem", "label": "4. Handle gaps"}
-  ],
-  "relations": [
-    {"id": "nextStep", "name": "nextStep", "types": ["Subproblem", "Subproblem"],
-     "tuples": [
-       {"atoms": ["p1", "p2"], "types": ["Subproblem", "Subproblem"]},
-       {"atoms": ["p2", "p3"], "types": ["Subproblem", "Subproblem"]},
-       {"atoms": ["p3", "p4"], "types": ["Subproblem", "Subproblem"]}
-     ]},
-    {"id": "partOf", "name": "partOf", "types": ["Integration", "Subproblem"],
-     "tuples": [
-       {"atoms": ["root", "p1"], "types": ["Integration", "Subproblem"]},
-       {"atoms": ["root", "p2"], "types": ["Integration", "Subproblem"]},
-       {"atoms": ["root", "p3"], "types": ["Integration", "Subproblem"]},
-       {"atoms": ["root", "p4"], "types": ["Integration", "Subproblem"]}
-     ]}
-  ]
-}
-</template>
-<template class="spec">
-constraints:
-  - orientation: { selector: nextStep, directions: [below] }
-  - group: { selector: partOf, name: "Integration" }
-  - size: { selector: Subproblem, width: 200, height: 40 }
-directives:
-  - hideField: { field: partOf }
-  - atomColor: { selector: Subproblem,  value: "#dbe7f3" }
-  - atomColor: { selector: Integration, value: "#f6f8fa" }
-  - flag: hideDisconnectedBuiltIns
-</template>
-</div>
-
 ---
 
 ## 1. Recovering structure

@@ -8,6 +8,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/docsify@4/lib/themes/vue.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/spytial-core@2.6.2/dist/components/react-component-integration.css">
   <style>
     .spytial-diagram {
       border: 1px solid #e1e4e8;
@@ -34,22 +35,11 @@
       font-size: 0.85em;
       white-space: pre-wrap;
     }
-    .spytial-diagram .spytial-conflict {
-      padding: 10px 14px;
-      background: #fff7e6;
-      border-top: 1px solid #f0c674;
-      color: #6b4f1f;
-      font-size: 0.85em;
+    .spytial-diagram .spytial-conflict-mount {
+      border-top: 1px solid #e1e4e8;
+      padding: 8px;
+      background: #fff;
     }
-    .spytial-diagram .spytial-conflict-title { font-weight: 600; }
-    .spytial-diagram .spytial-conflict-group { margin-top: 6px; }
-    .spytial-diagram .spytial-conflict-source {
-      font-family: ui-monospace, monospace;
-      font-size: 0.9em;
-      color: #6b4f1f;
-    }
-    .spytial-diagram .spytial-conflict ul { margin: 4px 0 0 18px; padding: 0; }
-    .spytial-diagram .spytial-conflict li { margin: 2px 0; }
     .repl-vs-spytial {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -102,11 +92,13 @@
             const accessible = block.hasAttribute('data-accessible');
 
             const id = 'spytial-graph-' + (++n);
+            const mountId = 'spytial-conflict-' + n;
             const tag = accessible ? 'spytial-explorer' : 'webcola-cnd-graph';
             const sizeStyle = 'style="display:block;width:100%;height:' + height + 'px;"';
             block.innerHTML =
               '<' + tag + ' id="' + id + '" width="' + width + '" height="' + height + '" ' + sizeStyle + '></' + tag + '>' +
-              (caption ? '<span class="spytial-caption">' + caption + '</span>' : '');
+              (caption ? '<span class="spytial-caption">' + caption + '</span>' : '') +
+              '<div id="' + mountId + '" class="spytial-conflict-mount" style="display:none;"></div>';
 
             // Wait until the spytialcore bundle is available before rendering.
             const render = function () {
@@ -125,30 +117,23 @@
                   el.enableAccessibility(layout, null, evaluator);
                 }
                 if (result && result.error) {
-                  const em = result.error.errorMessages;
-                  const mcc = em && em.minimalConflictingConstraints;
-                  const groups = [];
-                  if (mcc && typeof mcc.forEach === 'function') {
-                    mcc.forEach(function (descs, srcDesc) {
-                      groups.push({ src: srcDesc, items: descs || [] });
-                    });
-                  }
-                  let html = '<div class="spytial-conflict">' +
-                    '<div class="spytial-conflict-title">Spytial can\'t satisfy all the rules. Minimal conflicting subset:</div>';
-                  if (groups.length) {
-                    groups.forEach(function (g) {
-                      html += '<div class="spytial-conflict-group">';
-                      if (g.src) html += '<div class="spytial-conflict-source">' + g.src + '</div>';
-                      if (g.items.length) {
-                        html += '<ul>' + g.items.map(function (s) { return '<li>' + s + '</li>'; }).join('') + '</ul>';
-                      }
-                      html += '</div>';
-                    });
-                  } else {
-                    html += '<div>' + (result.error.message || 'Unsatisfiable spec.') + '</div>';
-                  }
-                  html += '</div>';
-                  block.insertAdjacentHTML('beforeend', html);
+                  const mount = document.getElementById(mountId);
+                  mount.style.display = '';
+                  // Mount the React ErrorMessageModal into this diagram's per-block container.
+                  const mountModal = function () {
+                    if (typeof window.mountErrorMessageModal !== 'function') {
+                      setTimeout(mountModal, 50);
+                      return;
+                    }
+                    window.mountErrorMessageModal(mountId);
+                    const em = result.error.errorMessages;
+                    if (result.error.type === 'hidden-node-conflict' && typeof window.showHiddenNodeConflict === 'function') {
+                      window.showHiddenNodeConflict(em);
+                    } else if (typeof window.showPositionalError === 'function') {
+                      window.showPositionalError(em);
+                    }
+                  };
+                  mountModal();
                 }
               } catch (err) {
                 console.error('spytial-diagram render error', err);
@@ -191,5 +176,7 @@
 
   <!-- spytial-core bundle: registers <webcola-cnd-graph> and <spytial-explorer> custom elements. -->
   <script src="https://cdn.jsdelivr.net/npm/spytial-core@2.6.2/dist/browser/spytial-core-complete.global.js"></script>
+  <!-- React component integration: exposes window.mountErrorMessageModal / showPositionalError / showHiddenNodeConflict / clearAllErrors. -->
+  <script src="https://cdn.jsdelivr.net/npm/spytial-core@2.6.2/dist/components/react-component-integration.global.js"></script>
 </body>
 </html>

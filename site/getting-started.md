@@ -71,7 +71,7 @@ This is readable because it follows the conventions BDD people already use: laye
 
 So why not draw values like this whenever we want to look at them? Because the usual route is to write drawing code — choose marks, compute positions, handle every update, own a small rendering project per value type. Some of that scaffolding captures the conventions that actually matter for *this* value; most of it does not transfer to the next.
 
-Here is the load-bearing observation: **the runtime already walks your value to print it.** Introspection, serialization, `__repr__`, `Show`, reflection — every "show me this thing" goes through a traversal that visits records, atoms, fields, and references. Turn records into nodes and fields into edges and you have a faithful diagram for free. It will not be pretty, but it is the right shape. Everything after is refinement.
+**The runtime already walks your value to print it.** Introspection, serialization, `__repr__`, `Show`, reflection — every "show me this thing" goes through a traversal that visits records, atoms, fields, and references. Turn records into nodes and fields into edges and you have a faithful diagram for free. It will not be pretty, but it is the right shape. Everything after is refinement.
 
 **Spytial** is the refinement layer. Starting from the runtime's walk of your value, you add rules — one at a time — that narrow the layout until the picture is the one you wanted. The BDD above was produced by exactly five:
 
@@ -89,9 +89,9 @@ The selector `{x, y : Node | (x != y) and (x.v) = (y.v)}` picks out a *structura
 
 ---
 
-## Counterfactual diagrams
+## Error messages
 
-The biggest reason to write layout as a specification rather than imperative drawing code: when the rules don't all fit, Spytial can tell you which ones. Drawing code can't — it picks a layout or crashes.
+Sometimes, your data doesn't match your rules. Specifications can catch that — drawing code can't, because drawing code either picks a layout and renders it or crashes; it doesn't know that any of *the rules you meant* were violated.
 
 Suppose you reach for the natural tree rules — left-child below-*left* of parent, right-child below-*right* — and apply them to a graph that isn't a tree: a diamond DAG where `L` and `R` both point to the same `B`. `B` would have to sit below-*left* of `L` *and* below-*right* of `R`, while `L` is already left of `R`. No x-coordinate satisfies both.
 
