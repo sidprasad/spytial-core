@@ -1,91 +1,215 @@
 # Spytial
 
-We have automated huge amounts of programming work over the last decade. Compilers do vectorization no one types by hand. Editors finish your sentences. Agents take a one-line prompt and edit ten files. None of that has touched the REPL: when you ask your program to *show you the value it just produced*, you still get back a string and you read the string. Here's Python on a binary decision diagram:
+<!-- Shared BDD data + cumulative stage specs. The hero diagram and the
+     refinement carousel below all reference these templates by id, so the
+     instance JSON only appears once on the page. -->
+<template id="bdd-data">
+{"atoms":[{"id":"15","type":"int","label":"15"},{"id":"\"x1\"","type":"str","label":"x1"},{"id":"14","type":"int","label":"14"},{"id":"\"x2\"","type":"str","label":"x2"},{"id":"8","type":"int","label":"8"},{"id":"\"x3\"","type":"str","label":"x3"},{"id":"1","type":"int","label":"1"},{"id":"None","type":"NoneType","label":"None"},{"id":"n3","type":"Node","label":"TRUE"},{"id":"0","type":"int","label":"0"},{"id":"n4","type":"Node","label":"FALSE"},{"id":"n2","type":"Node","label":"Node2"},{"id":"4","type":"int","label":"4"},{"id":"n5","type":"Node","label":"Node3"},{"id":"n1","type":"Node","label":"Node1"},{"id":"3","type":"int","label":"3"},{"id":"n6","type":"Node","label":"Node4"},{"id":"n0","type":"Node","label":"Node0"}],"relations":[{"id":"nid","name":"nid","types":["object","object"],"tuples":[{"atoms":["n3","1"],"types":["Node","int"]},{"atoms":["n4","0"],"types":["Node","int"]},{"atoms":["n2","8"],"types":["Node","int"]},{"atoms":["n5","4"],"types":["Node","int"]},{"atoms":["n1","14"],"types":["Node","int"]},{"atoms":["n6","3"],"types":["Node","int"]},{"atoms":["n0","15"],"types":["Node","int"]}]},{"id":"v","name":"v","types":["object","object"],"tuples":[{"atoms":["n3","None"],"types":["Node","NoneType"]},{"atoms":["n4","None"],"types":["Node","NoneType"]},{"atoms":["n2","\"x3\""],"types":["Node","str"]},{"atoms":["n5","\"x3\""],"types":["Node","str"]},{"atoms":["n1","\"x2\""],"types":["Node","str"]},{"atoms":["n6","\"x2\""],"types":["Node","str"]},{"atoms":["n0","\"x1\""],"types":["Node","str"]}]},{"id":"lo","name":"lo","types":["object","object"],"tuples":[{"atoms":["n3","None"],"types":["Node","NoneType"]},{"atoms":["n4","None"],"types":["Node","NoneType"]},{"atoms":["n2","n3"],"types":["Node","Node"]},{"atoms":["n5","n4"],"types":["Node","Node"]},{"atoms":["n1","n2"],"types":["Node","Node"]},{"atoms":["n6","n4"],"types":["Node","Node"]},{"atoms":["n0","n1"],"types":["Node","Node"]}]},{"id":"hi","name":"hi","types":["object","object"],"tuples":[{"atoms":["n3","None"],"types":["Node","NoneType"]},{"atoms":["n4","None"],"types":["Node","NoneType"]},{"atoms":["n2","n4"],"types":["Node","Node"]},{"atoms":["n5","n3"],"types":["Node","Node"]},{"atoms":["n1","n5"],"types":["Node","Node"]},{"atoms":["n6","n3"],"types":["Node","Node"]},{"atoms":["n0","n6"],"types":["Node","Node"]}]}],"types":[{"id":"int","types":["int","object"],"atoms":[{"id":"15","type":"int","label":"15"},{"id":"14","type":"int","label":"14"},{"id":"8","type":"int","label":"8"},{"id":"1","type":"int","label":"1"},{"id":"0","type":"int","label":"0"},{"id":"4","type":"int","label":"4"},{"id":"3","type":"int","label":"3"}],"isBuiltin":true},{"id":"str","types":["str","object"],"atoms":[{"id":"\"x1\"","type":"str","label":"x1"},{"id":"\"x2\"","type":"str","label":"x2"},{"id":"\"x3\"","type":"str","label":"x3"}],"isBuiltin":true},{"id":"NoneType","types":["NoneType","object"],"atoms":[{"id":"None","type":"NoneType","label":"None"}],"isBuiltin":true},{"id":"Node","types":["Node","object"],"atoms":[{"id":"n3","type":"Node","label":"TRUE"},{"id":"n4","type":"Node","label":"FALSE"},{"id":"n2","type":"Node","label":"Node2"},{"id":"n5","type":"Node","label":"Node3"},{"id":"n1","type":"Node","label":"Node1"},{"id":"n6","type":"Node","label":"Node4"},{"id":"n0","type":"Node","label":"Node0"}],"isBuiltin":false}],"rootId":"n0"}
+</template>
+<template id="bdd-spec-0">
+constraints: []
+directives: []
+</template>
+<template id="bdd-spec-1">
+constraints: []
+directives:
+- attribute: { field: nid }
+- hideAtom:  { selector: NoneType + int }
+</template>
+<template id="bdd-spec-2">
+constraints:
+- align:
+    selector: "{x, y : Node | (x != y) and (x.v) = (y.v)}"
+    direction: horizontal
+directives:
+- attribute: { field: nid }
+- hideAtom:  { selector: NoneType + int }
+</template>
+<template id="bdd-spec-3">
+constraints:
+- align:
+    selector: "{x, y : Node | (x != y) and (x.v) = (y.v)}"
+    direction: horizontal
+- orientation:
+    selector: "{x, y : Node | x->y in (lo + hi)}"
+    directions: [below]
+directives:
+- attribute: { field: nid }
+- hideAtom:  { selector: NoneType + int }
+</template>
+<template id="bdd-spec-4">
+constraints:
+- align:
+    selector: "{x, y : Node | (x != y) and (x.v) = (y.v)}"
+    direction: horizontal
+- orientation:
+    selector: "{x, y : Node | x->y in (lo + hi)}"
+    directions: [below]
+- group:
+    selector: "{vr : str, y : Node | @:(vr) = @:(y.v)}"
+    name: nodes
+directives:
+- attribute: { field: nid }
+- hideAtom:  { selector: NoneType + int }
+- hideAtom:  { selector: str }
+</template>
+<template id="bdd-spec-5">
+constraints:
+- align:
+    selector: "{x, y : Node | (x != y) and (x.v) = (y.v)}"
+    direction: horizontal
+- orientation:
+    selector: "{x, y : Node | x->y in (lo + hi)}"
+    directions: [below]
+- group:
+    selector: "{vr : str, y : Node | @:(vr) = @:(y.v)}"
+    name: nodes
+- orientation:
+    selector: "{x, y : Node | x->y in lo and (@num:(y.nid) > 1)}"
+    directions: [left]
+- orientation:
+    selector: "{x, y : Node | x->y in hi and (@num:(y.nid) > 1)}"
+    directions: [right]
+directives:
+- attribute: { field: nid }
+- hideAtom:  { selector: NoneType + int }
+- hideAtom:  { selector: str }
+- atomColor: { selector: "{x: Node | @num:(x.nid) = 0}", value: red }
+- atomColor: { selector: "{x: Node | @num:(x.nid) = 1}", value: blue }
+- atomColor: { selector: "{x: Node | (@num:(x.nid) > 1)}", value: black }
+- edgeColor: { field: hi, value: green }
+- edgeColor: { field: lo, value: orange }
+</template>
 
-```python
+Compilers can vectorize loops you never wrote. IDEs can finish functions before you do. Agents can refactor your codebase from a sentence. And yet, when you want to inspect the value your program just produced, you still use the REPL as if nothing has changed in fifty years: type a variable name, get text back, squint. Here is Python showing you a binary decision diagram:
+
+```
 Node(15, 'x1', Node(14, 'x2', Node(8, 'x3', TRUE, FALSE), Node(4, 'x3', FALSE, TRUE)), Node(3, 'x2', FALSE, TRUE))
 ```
 
-That string *is* the BDD — same information, same structure, no loss. It is also useless. The next thing anyone who has actually debugged one of these will do is pick up a pen and sketch it on the back of an envelope, because BDDs (and trees, and graphs, and traces) are spatial. The "diagram" in *binary decision diagram* is the part that matters.
+That is, technically, the value you wanted to inspect. The way it is shown is also not super *useful*. Anyone who has ever debugged a BDD knows the move that comes next: you reach for paper and pen and *draw* the thing, because we reason about these data structures spatially. (They are called binary decision **diagrams**, after all.)
 
-What you wanted on screen was this:
+What you want to see (and what you might draw by hand) is something like *this*:
 
-<div class="spytial-diagram" data-height="440" data-caption="The same BDD, drawn from rules. Same-variable nodes share a row; lo edges dashed orange, hi edges solid green; terminals colored. Drag the nodes — the constraints keep holding.">
-<template class="data">
-{
-  "atoms": [
-    {"id": "n15", "type": "Node", "label": "15"},
-    {"id": "n14", "type": "Node", "label": "14"},
-    {"id": "n8",  "type": "Node", "label": "8"},
-    {"id": "n4",  "type": "Node", "label": "4"},
-    {"id": "n3",  "type": "Node", "label": "3"},
-    {"id": "vx1", "type": "Variable", "label": "x1"},
-    {"id": "vx2", "type": "Variable", "label": "x2"},
-    {"id": "vx3", "type": "Variable", "label": "x3"},
-    {"id": "tT",  "type": "Terminal", "label": "TRUE"},
-    {"id": "tF",  "type": "Terminal", "label": "FALSE"}
-  ],
-  "relations": [
-    {"id": "v", "name": "v", "types": ["Node", "Variable"],
-     "tuples": [
-       {"atoms": ["n15", "vx1"], "types": ["Node", "Variable"]},
-       {"atoms": ["n14", "vx2"], "types": ["Node", "Variable"]},
-       {"atoms": ["n8",  "vx3"], "types": ["Node", "Variable"]},
-       {"atoms": ["n4",  "vx3"], "types": ["Node", "Variable"]},
-       {"atoms": ["n3",  "vx2"], "types": ["Node", "Variable"]}
-     ]},
-    {"id": "lo", "name": "lo", "types": ["Node", "Node"],
-     "tuples": [
-       {"atoms": ["n15", "n14"], "types": ["Node", "Node"]},
-       {"atoms": ["n14", "n8"],  "types": ["Node", "Node"]},
-       {"atoms": ["n8",  "tT"],  "types": ["Node", "Terminal"]},
-       {"atoms": ["n4",  "tF"],  "types": ["Node", "Terminal"]},
-       {"atoms": ["n3",  "tF"],  "types": ["Node", "Terminal"]}
-     ]},
-    {"id": "hi", "name": "hi", "types": ["Node", "Node"],
-     "tuples": [
-       {"atoms": ["n15", "n3"],  "types": ["Node", "Node"]},
-       {"atoms": ["n14", "n4"],  "types": ["Node", "Node"]},
-       {"atoms": ["n8",  "tF"],  "types": ["Node", "Terminal"]},
-       {"atoms": ["n4",  "tT"],  "types": ["Node", "Terminal"]},
-       {"atoms": ["n3",  "tT"],  "types": ["Node", "Terminal"]}
-     ]}
-  ]
-}
-</template>
-<template class="spec">
-constraints:
-  - orientation: { selector: "lo + hi", directions: [below] }
-  - align:       { selector: "{x, y : Node | (x != y) and (x.v) = (y.v)}", direction: horizontal }
+<div class="spytial-diagram" data-data-ref="bdd-data" data-spec-ref="bdd-spec-5" data-height="460" data-caption="The same Python value, shown diagrammatically. Spatial conventions are enforced in real time; try dragging nodes around!"></div>
+
+This diagram is useful because it embodies the spatial conventions we use when talking about BDDs: top-down variable layers, nodes grouped by variable, visually distinct high and low edges, and shared terminals. These conventions are how the data structure becomes readable.
+
+So why not generate diagrams like this whenever we need them? Because the usual way is to write drawing code. Before the picture can tell you anything, you have to choose marks, compute positions, handle updates, and own a pile of rendering details. Some of that captures the BDD conventions that matter; much of it is scaffolding.
+
+Here's the thing: the language already gives us enough structure to draw a faithful diagram of the instance. To show you a value at the REPL, the runtime has to use mechanisms like introspection, printing, or serialization: ways of walking records, atoms, fields, and references. Turn records and atoms into nodes, fields and references into edges, and you get a diagram that preserves the value's structure without asking the programmer to write drawing code. It may not be pretty, but it is faithful to the underlying value. The remaining diagramming work, then, is just of *refinement*. To abuse a line attributed to Michelangelo: David was already in the marble; the BDD was already in the value graph.
+
+**Spytial** is a language built for this kind of diagramming of program values. It starts with the faithful value graph, then lets rules add the [constraints](constraints.md) that matter: same-variable nodes align, children sit below parents, high and low edges differ, implementation details disappear. Each rule makes the picture more like the diagram you wanted. Because the rules describe relationships rather than drawing steps, you are writing a specification, not a rendering pipeline.
+
+The example below shows that process in stages: starting from the raw value structure, each stage adds more of the BDD convention until the diagram becomes recognizable. Each card shows the rule(s) added in that stage with the before/after pair below.
+
+<div class="spytial-carousel-wrap">
+<div class="spytial-carousel">
+
+<section class="step-card">
+<h3>1. Hide implementation noise</h3>
+
+```yaml
 directives:
-  - edgeColor: { field: hi, value: "#1f7a1f" }
-  - edgeColor: { field: lo, value: "#cc6600", style: dashed }
-  - atomColor: { selector: Node,     value: "#dbe7f3" }
-  - atomColor: { selector: Terminal, value: "#f6d6c5" }
-  - hideField: { field: v }
-  - hideAtom:  { selector: Variable }
-</template>
+- attribute: { field: nid }
+- hideAtom:  { selector: NoneType + int }
+```
+
+<div class="step-pair">
+<div class="spytial-diagram" data-data-ref="bdd-data" data-spec-ref="bdd-spec-0" data-height="240"></div>
+<div class="step-arrow" aria-hidden="true">→</div>
+<div class="spytial-diagram" data-data-ref="bdd-data" data-spec-ref="bdd-spec-1" data-height="240"></div>
 </div>
+</section>
 
-This is readable because it follows the conventions BDD people already use: layered top-to-bottom, same-variable nodes on the same row, lo and hi edges distinguished, terminals visually distinct from internal nodes.
-
-So why not draw values like this whenever we want to look at them? Because the usual route is to write drawing code — choose marks, compute positions, handle every update, own a small rendering project per value type. Some of that scaffolding captures the conventions that actually matter for *this* value; most of it does not transfer to the next.
-
-**The runtime already walks your value to print it.** Introspection, serialization, `__repr__`, `Show`, reflection — every "show me this thing" goes through a traversal that visits records, atoms, fields, and references. Turn records into nodes and fields into edges and you have a faithful diagram for free. It will not be pretty, but it is the right shape. Everything after is refinement.
-
-**Spytial** is the refinement layer. Starting from the runtime's walk of your value, you add rules — one at a time — that narrow the layout until the picture is the one you wanted. The BDD above was produced by exactly five:
+<section class="step-card">
+<h3>2. Align nodes that test the same variable</h3>
 
 ```yaml
 constraints:
-  - orientation: { selector: "lo + hi", directions: [below] }                                  # layers go top-down
-  - align:       { selector: "{x, y : Node | (x != y) and (x.v) = (y.v)}", direction: horizontal }  # same var, same row
-directives:
-  - edgeColor: { field: hi, value: "#1f7a1f" }                                                  # hi edges green
-  - edgeColor: { field: lo, value: "#cc6600", style: dashed }                                   # lo edges dashed orange
-  - hideAtom:  { selector: Variable }                                                            # variable atoms out of the picture
+- align:
+    selector: "{x, y : Node | (x != y) and (x.v) = (y.v)}"
+    direction: horizontal
 ```
 
-The selector `{x, y : Node | (x != y) and (x.v) = (y.v)}` picks out a *structural pattern* — every pair of distinct nodes that test the same variable. It will match on the BDD above and on every other BDD; it is a property of the data, not a hand-written list. Because each rule is a property like that and not a step in a pipeline, the rules don't have an order, can't conflict with themselves, and don't need to be re-derived when the value changes. The layout solver re-runs; the rules don't.
+<div class="step-pair">
+<div class="spytial-diagram" data-data-ref="bdd-data" data-spec-ref="bdd-spec-1" data-height="240"></div>
+<div class="step-arrow" aria-hidden="true">→</div>
+<div class="spytial-diagram" data-data-ref="bdd-data" data-spec-ref="bdd-spec-2" data-height="240"></div>
+</div>
+</section>
+
+<section class="step-card">
+<h3>3. Order layers top-to-bottom along the edges</h3>
+
+```yaml
+constraints:
+- orientation:
+    selector: "{x, y : Node | x->y in (lo + hi)}"
+    directions: [below]
+```
+
+<div class="step-pair">
+<div class="spytial-diagram" data-data-ref="bdd-data" data-spec-ref="bdd-spec-2" data-height="240"></div>
+<div class="step-arrow" aria-hidden="true">→</div>
+<div class="spytial-diagram" data-data-ref="bdd-data" data-spec-ref="bdd-spec-3" data-height="240"></div>
+</div>
+</section>
+
+<section class="step-card">
+<h3>4. Group nodes that share a variable</h3>
+
+```yaml
+constraints:
+- group:
+    selector: "{vr : str, y : Node | @:(vr) = @:(y.v)}"
+    name: nodes
+directives:
+- hideAtom: { selector: str }
+```
+
+<div class="step-pair">
+<div class="spytial-diagram" data-data-ref="bdd-data" data-spec-ref="bdd-spec-3" data-height="240"></div>
+<div class="step-arrow" aria-hidden="true">→</div>
+<div class="spytial-diagram" data-data-ref="bdd-data" data-spec-ref="bdd-spec-4" data-height="240"></div>
+</div>
+</section>
+
+<section class="step-card">
+<h3>5. Apply visual conventions</h3>
+
+```yaml
+constraints:
+- orientation: { selector: "{x, y : Node | x->y in lo and (@num:(y.nid) > 1)}", directions: [left] }
+- orientation: { selector: "{x, y : Node | x->y in hi and (@num:(y.nid) > 1)}", directions: [right] }
+directives:
+- atomColor: { selector: "{x: Node | @num:(x.nid) = 0}", value: red }
+- atomColor: { selector: "{x: Node | @num:(x.nid) = 1}", value: blue }
+- atomColor: { selector: "{x: Node | (@num:(x.nid) > 1)}", value: black }
+- edgeColor: { field: hi, value: green }
+- edgeColor: { field: lo, value: orange }
+```
+
+<div class="step-pair">
+<div class="spytial-diagram" data-data-ref="bdd-data" data-spec-ref="bdd-spec-4" data-height="240"></div>
+<div class="step-arrow" aria-hidden="true">→</div>
+<div class="spytial-diagram" data-data-ref="bdd-data" data-spec-ref="bdd-spec-5" data-height="240"></div>
+</div>
+</section>
+
+</div>
+<div class="spytial-nav">
+<button type="button" data-dir="-1" aria-label="Previous refinement step">←</button>
+<span class="spytial-nav-pos">1 / 5</span>
+<button type="button" data-dir="1" aria-label="Next refinement step">→</button>
+</div>
+</div>
+
+More precisely, a Spytial program *denotes* a set of acceptable 2D layouts, and each rule narrows that set by selecting the atoms and edges it constrains. A `selector` such as `{x, y : Node | (x != y) and (x.v) = (y.v)}` matches every pair of distinct nodes that test the same variable — on *any* BDD, not just this one. Because selectors describe structural patterns rather than rendering steps, rules are declarative and order-independent. There is no `if`, no callback, no rendering pipeline to maintain. You are writing a *specification*, not coding a visualizer.
+
+By making spatial description a programming-languages problem, Spytial can do more than draw pictures. When rules conflict, the diagnostic can itself be spatial: Spytial isolates a minimal conflicting subset of constraints, relaxes it to produce a **counterfactual diagram**, and ties the offending elements back to the rules that caused the inconsistency. And because a specification describes a *space* of acceptable pictures rather than a single one, the same specifications can also run *backward*, enabling value construction through the diagram.
+
+Spytial is designed to work across programming paradigms: we have integrated it with Python, Rust, and Pyret, and want to see it in your favorite language too. We think [this recipe is what you need to cook up an integration](integration.md), but reach out if you want help.
 
 ---
 
@@ -127,7 +251,7 @@ directives:
 </template>
 </div>
 
-Spytial isolates the minimal conflicting subset of constraints, relaxes it to produce a *counterfactual* layout, and points you at the rules that caused the inconsistency. You decide which one to weaken.
+Spytial returns the minimal conflicting subset of rules above, with each constraint linked to the diagram element that can't be placed.
 
 ---
 
@@ -137,6 +261,8 @@ This site has three audiences. Pick yours:
 
 - **You want to use Spytial.** → **[Integrations](integrations.md)** — Python, Rust, Pyret. Install, badges, docs links.
 - **You want to add Spytial to a new language.** → **[The Four Subproblems](integration.md)** — the integrator's design checklist, plus the [pipeline](pipeline.md), [data format](json-data.md), and a [quick start](quickstart.md).
-- **You want to hack on `spytial-core` itself.** → **[Contributing](contributing.md)** — build, test, code layout, how to add a constraint or directive.
+- **You want to hack on `spytial-core` itself.** → **[Contributing](contributing.md)** — build, test, code layout, how to add a [constraint](constraints.md) or [directive](directives.md).
 
-Every constraint and directive in the spec language is documented [by example](constraints.md), with a live diagram you can read off the page.
+To learn more, **[read our upcoming PLDI paper](https://www.siddharthaprasad.com/papers/ptkns-spytial.pdf)**. Spytial is related to our **Cope and Drag** system for formal-methods visualization — [read the related blog post](https://blog.brownplt.org/2025/06/09/copeanddrag.html).
+
+Every [constraint](constraints.md) and [directive](directives.md) in the spec language is documented by example, with a live diagram you can read off the page.
