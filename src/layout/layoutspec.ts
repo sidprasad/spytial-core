@@ -343,7 +343,7 @@ interface DirectivesBlock {
 
 function assertPositiveSizeDimension(value: unknown, label: string): void {
     if (value === undefined || value === null) {
-        return;
+        throw new Error(`Size ${label} is required and must be greater than 0`);
     }
 
     if (typeof value !== "number" || Number.isNaN(value) || value <= 0) {
