@@ -223,4 +223,62 @@ directives:
       expect(layoutSpec.directives.atomColors).toHaveLength(1);
     });
   });
+
+  describe('size validation rejects non-positive values', () => {
+    const invalidSizes: { label: string; height: unknown; width: unknown }[] = [
+      { label: 'zero width', height: 100, width: 0 },
+      { label: 'zero height', height: 0, width: 100 },
+      { label: 'negative width', height: 100, width: -50 },
+      { label: 'negative height', height: -25, width: 100 },
+      { label: 'both zero', height: 0, width: 0 },
+    ];
+
+    for (const { label, height, width } of invalidSizes) {
+      it(`rejects size with ${label} in directives block`, () => {
+        const yaml = `
+constraints: []
+directives:
+  - size:
+      selector: Type1
+      height: ${height}
+      width: ${width}
+`;
+        expect(() => parseLayoutSpec(yaml)).toThrow(/must be greater than 0/);
+      });
+
+      it(`rejects size with ${label} in constraints block`, () => {
+        const yaml = `
+constraints:
+  - size:
+      selector: Type1
+      height: ${height}
+      width: ${width}
+directives: []
+`;
+        expect(() => parseLayoutSpec(yaml)).toThrow(/must be greater than 0/);
+      });
+    }
+
+    it('rejects size with missing width in directives block', () => {
+      const yaml = `
+constraints: []
+directives:
+  - size:
+      selector: Type1
+      height: 100
+`;
+      expect(() => parseLayoutSpec(yaml)).toThrow(/width/);
+    });
+
+    it('rejects size with missing height in constraints block', () => {
+      const yaml = `
+constraints:
+  - size:
+      selector: Type1
+      width: 100
+directives: []
+`;
+      expect(() => parseLayoutSpec(yaml)).toThrow(/height/);
+    });
+  });
 });

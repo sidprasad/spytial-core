@@ -51,8 +51,15 @@ export const SizeSelector: React.FC<SizeSelectorProps> = ({
         <input
           type="number"
           name="width"
+          min={1}
+          step={1}
           defaultValue={width}
-          onChange={(e) => onUpdate({ params: { ...data.params, width: Number(e.target.value) } })}
+          onChange={(e) => {
+            const next = Number(e.target.value);
+            if (Number.isFinite(next) && next > 0) {
+              onUpdate({ params: { ...data.params, width: next } });
+            }
+          }}
           required
         />
       </div>
@@ -61,8 +68,15 @@ export const SizeSelector: React.FC<SizeSelectorProps> = ({
         <input
           type="number"
           name="height"
+          min={1}
+          step={1}
           defaultValue={height}
-          onChange={(e) => onUpdate({ params: { ...data.params, height: Number(e.target.value) } })}
+          onChange={(e) => {
+            const next = Number(e.target.value);
+            if (Number.isFinite(next) && next > 0) {
+              onUpdate({ params: { ...data.params, height: next } });
+            }
+          }}
           required
         />
       </div>
