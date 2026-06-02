@@ -1,6 +1,6 @@
 # Case Studies
 
-Three integrations, framed as their answers to [the four subproblems](integration.md).
+Three integrations, framed as their answers to the [new language integration questions](new-language-integration.md).
 
 ---
 

@@ -9,5 +9,5 @@
 - Hand both to the **solver, evaluator, and browser renderer**
 
 [Get Started](getting-started.md)
-[Four Subproblems](integration.md)
+[New Language Integration](new-language-integration.md)
 [API Reference](api-reference.md)

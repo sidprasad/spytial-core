@@ -209,7 +209,7 @@ More precisely, a Spytial program *denotes* a set of acceptable 2D layouts, and 
 
 By making spatial description a programming-languages problem, Spytial can do more than draw pictures. When rules conflict, the diagnostic can itself be spatial: Spytial isolates a minimal conflicting subset of constraints, relaxes it to produce a **counterfactual diagram**, and ties the offending elements back to the rules that caused the inconsistency. And because a specification describes a *space* of acceptable pictures rather than a single one, the same specifications can also run *backward*, enabling value construction through the diagram.
 
-Spytial is designed to work across programming paradigms: we have integrated it with Python, Rust, and Pyret, and want to see it in your favorite language too. We think [this recipe is what you need to cook up an integration](integration.md), but reach out if you want help.
+Spytial is designed to work across programming paradigms: we have integrated it with Python, Rust, and Pyret, and want to see it in your favorite language too. We think [this recipe is what you need to cook up an integration](new-language-integration.md), but reach out if you want help.
 
 ---
 
@@ -260,7 +260,7 @@ Spytial returns the minimal conflicting subset of rules above, with each constra
 This site has three audiences. Pick yours:
 
 - **You want to use Spytial.** → **[Integrations](integrations.md)** — Python, Rust, Pyret. Install, badges, docs links.
-- **You want to add Spytial to a new language.** → **[The Four Subproblems](integration.md)** — the integrator's design checklist, plus the [pipeline](pipeline.md), [data format](json-data.md), and a [quick start](quickstart.md).
+- **You want to add Spytial to a new language.** → **[New Language Integration](new-language-integration.md)** — the integrator's design checklist, plus the [pipeline](pipeline.md), [data format](json-data.md), and a [quick start](quickstart.md).
 - **You want to hack on `spytial-core` itself.** → **[Contributing](contributing.md)** — build, test, code layout, how to add a [constraint](constraints.md) or [directive](directives.md).
 
 To learn more, **[read our upcoming PLDI paper](https://www.siddharthaprasad.com/papers/ptkns-spytial.pdf)**. Spytial is related to our **Cope and Drag** system for formal-methods visualization — [read the related blog post](https://blog.brownplt.org/2025/06/09/copeanddrag.html).

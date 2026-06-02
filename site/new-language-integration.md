@@ -1,4 +1,4 @@
-# The Four Subproblems
+# New Language Integration
 
 > An integration is not a wrapper around a renderer. It is a translation from a language's values and annotation habits into Spytial's relational model and layout spec.
 

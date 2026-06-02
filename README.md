@@ -18,7 +18,7 @@ The full guide is published from [`site/`](./site/) and rendered with Docsify.
 The structure mirrors the integrator's job:
 
 - **Overview** — [What is spytial-core?](./site/getting-started.md) · [The Integration Pipeline](./site/pipeline.md) · [Quick Start](./site/quickstart.md)
-- **Integrating Spytial Into a Language** — [The Four Subproblems](./site/integration.md) · [Custom Data Instances](./site/custom-data-instance.md)
+- **Integrating Spytial Into a Language** — [New Language Integration](./site/new-language-integration.md) · [Custom Data Instances](./site/custom-data-instance.md)
 - **Data** — [JSON Data Format](./site/json-data.md) · [Built-in Adapters](./site/data-adapters.md)
 - **The YAML Spec Language** — [YAML Reference](./site/yaml-reference.md) · [Constraints](./site/constraints.md) · [Directives](./site/directives.md) · [Selector Syntax](./site/selectors.md)
 - **Sequences of States** — [Sequence Layouts](./site/sequences.md)
@@ -71,7 +71,7 @@ const layout = new LayoutInstance(spec, evaluator).generateLayout(instance);
 document.querySelector('webcola-cnd-graph').renderLayout(layout);
 ```
 
-That's the entire core pipeline. Where `jsonPayload` and `yamlSpec` come from is the host integrator's job — see the [Quick Start](./site/quickstart.md) for a self-contained HTML example, and [The Four Subproblems](./site/integration.md) for the principled framing.
+That's the entire core pipeline. Where `jsonPayload` and `yamlSpec` come from is the host integrator's job — see the [Quick Start](./site/quickstart.md) for a self-contained HTML example, and [New Language Integration](./site/new-language-integration.md) for the principled framing.
 
 ---
 

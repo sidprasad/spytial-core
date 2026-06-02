@@ -153,7 +153,7 @@ The CDN bundle is the same module, exposed as the global `spytialcore`. Either p
 
 ## Where to go next
 
-- [The Four Subproblems](integration.md) — the integrator's checklist.
+- [New Language Integration](new-language-integration.md) — the integrator's checklist.
 - [Custom Data Instances](custom-data-instance.md) — how to feed your host's data in.
 - [YAML Reference](yaml-reference.md) — every constraint and directive.
 - [Sequences of States](sequences.md) — when you need to step through traces.

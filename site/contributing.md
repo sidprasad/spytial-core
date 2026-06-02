@@ -2,7 +2,7 @@
 
 `spytial-core` is the browser-side engine that powers every Spytial integration. If you want to fix a bug in the layout solver, add a new constraint or directive, improve the renderer, or extend the selector language — this page is the starting point.
 
-> Working on a **host integration** (Python, Rust, Pyret, or a new language)? You probably don't need to touch `spytial-core`. See [Integrations](integrations.md) for end-user docs or [The Four Subproblems](integration.md) to add a new host.
+> Working on a **host integration** (Python, Rust, Pyret, or a new language)? You probably don't need to touch `spytial-core`. See [Integrations](integrations.md) for end-user docs or [New Language Integration](new-language-integration.md) to add a new host.
 
 ---
 

@@ -6,7 +6,7 @@
   * [Quick Start](quickstart.md)
 
 * **Add a new host integration**
-  * [The Four Subproblems](integration.md)
+  * [New Language Integration](new-language-integration.md)
   * [The Integration Pipeline](pipeline.md)
   * [Custom Data Instances](custom-data-instance.md)
 

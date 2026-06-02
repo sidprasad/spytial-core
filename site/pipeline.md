@@ -123,4 +123,4 @@ After that, `dataInstance` is still an `IDataInstance`, so the evaluator, layout
 ## Where to go next
 
 - [Quick Start](quickstart.md) — a smaller browser-only page using the same calls.
-- [The Four Subproblems](integration.md) — what a host has to decide before it can produce `jsonText` and `cndSpec`.
+- [New Language Integration](new-language-integration.md) — what a host has to decide before it can produce `jsonText` and `cndSpec`.
