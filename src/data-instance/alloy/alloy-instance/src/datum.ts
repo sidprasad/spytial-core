@@ -3,6 +3,8 @@ import { AlloyInstance } from './instance';
 
 export interface VisualizerConfig {
   script?: string
+  theme?: string
+  cnd?: string
 }
 
 export interface AlloyDatum {
