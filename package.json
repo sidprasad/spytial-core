@@ -1,17 +1,33 @@
 {
   "name": "spytial-core",
-  "version": "2.6.3",
+  "version": "2.6.4",
   "description": "A fully client-side application for SpyTial.",
   "main": "./dist/browser/spytial-core-complete.global.js",
   "types": "./dist/browser/spytial-core-complete.global.d.ts",
   "files": [
     "dist/browser",
-    "dist/components"
+    "dist/components",
+    "dist/alloy-instance.js",
+    "dist/alloy-instance.mjs",
+    "dist/alloy-instance.d.ts",
+    "dist/alloy-instance.d.mts",
+    "dist/alloy-instance.js.map",
+    "dist/alloy-instance.mjs.map"
   ],
   "exports": {
     ".": {
       "import": "./dist/browser/spytial-core-complete.global.js",
       "require": "./dist/browser/spytial-core-complete.global.js"
+    },
+    "./alloy-instance": {
+      "import": {
+        "types": "./dist/alloy-instance.d.mts",
+        "default": "./dist/alloy-instance.mjs"
+      },
+      "require": {
+        "types": "./dist/alloy-instance.d.ts",
+        "default": "./dist/alloy-instance.js"
+      }
     },
     "./components/*": {
       "import": "./dist/components/*.global.js",
@@ -21,9 +37,10 @@
   "scripts": {
     "build": "npm run build:all",
     "build:parser": "peggy --plugin ts-pegjs -o src/evaluators/layout/layout-query-parser.ts src/evaluators/layout/layout-query.pegjs",
+    "build:lib": "tsup --config tsup.alloy-instance.config.ts",
     "build:browser": "tsup --config tsup.browser.config.ts",
     "build:components": "tsup --config tsup.components.config.ts",
-    "build:all": "npm run build:parser && npm run build:browser && npm run build:components",
+    "build:all": "npm run build:parser && npm run build:browser && npm run build:components && npm run build:lib",
     "dev": "tsup --watch",
     "test": "vitest",
     "test:ui": "vitest --ui",

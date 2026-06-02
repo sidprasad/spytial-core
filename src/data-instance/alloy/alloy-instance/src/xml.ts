@@ -9,24 +9,57 @@ export function parseAlloyXML(xml: string): AlloyDatum {
   const instances = Array.from(document.querySelectorAll('instance'));
   if (!instances.length) throw new Error(`No Alloy instance in XML: ${xml}`);
   
-  const maybeVisualizer = document.querySelector('visualizer');
-  const maybeVizScriptText = maybeVisualizer === null ? 
-                               undefined : 
-                               parseStringAttribute(maybeVisualizer, 'script');
+  // A provider may attach visualizer configuration (script / theme / cnd) to the instance XML as
+  // <visualizer ...> elements. This is not part of the Alloy instance XML spec, but Sterling/Forge
+  // use it — e.g. Forge embeds the Cope and Drag spec as a `cnd` attribute.
+  const visualizerElements = document.querySelectorAll('visualizer');
+  let maybeScriptText: string | undefined;
+  let maybeThemeText: string | undefined;
+  let maybeCnDText: string | undefined;
+  for (const vis of Array.from(visualizerElements)) {
+    // The last visualizer element for a given attribute wins.
+    maybeScriptText = parseStringAttribute(vis as globalThis.Element, 'script') ?? maybeScriptText;
+    maybeThemeText = parseStringAttribute(vis as globalThis.Element, 'theme') ?? maybeThemeText;
+    maybeCnDText = parseStringAttribute(vis as globalThis.Element, 'cnd') ?? maybeCnDText;
+  }
+
   return {
     instances: instances.map((element) => instanceFromElement(element as globalThis.Element)),
     bitwidth: parseNumericAttribute(instances[0], 'bitwidth'),
     command: parseStringAttribute(instances[0], 'command'),
-    loopBack:
-      parseNumericAttribute(instances[0], 'backloop') ??
-      // TODO: Remove this hack once forge is fixed
-      parseNumericAttribute(instances[0], 'loop'),
+    loopBack: parseLoopBack(instances[0]),
     maxSeq: parseNumericAttribute(instances[0], 'maxseq'),
     maxTrace: parseNumericAttribute(instances[0], 'maxtrace'),
     minTrace: parseNumericAttribute(instances[0], 'mintrace'),
     traceLength: parseNumericAttribute(instances[0], 'tracelength'),
-    visualizerConfig: {script: deEscape(maybeVizScriptText)}
+    visualizerConfig: {
+      script: deEscape(maybeScriptText),
+      theme: deEscape(maybeThemeText),
+      cnd: deEscape(maybeCnDText)
+    }
   };
+}
+
+/**
+ * The loop-back state index of a temporal trace. Providers express the lasso differently:
+ *  - `backloop` (Alloy/Sterling) or `loop` (Forge): the loop-back index directly;
+ *  - `looplength` (Alloy's own instance XML): the *length* of the loop, so the index is
+ *    `tracelength - looplength`.
+ *
+ * The `looplength` form is only honoured when `tracelength > 1`, so a static instance — which
+ * Alloy writes as `tracelength="1" looplength="1"` — is not mistaken for a one-state trace.
+ */
+function parseLoopBack(element: globalThis.Element): number | undefined {
+  const backloop = parseNumericAttribute(element, 'backloop');
+  if (backloop !== undefined) return backloop;
+  const loop = parseNumericAttribute(element, 'loop');
+  if (loop !== undefined) return loop;
+  const tracelength = parseNumericAttribute(element, 'tracelength');
+  const looplength = parseNumericAttribute(element, 'looplength');
+  if (tracelength !== undefined && looplength !== undefined && tracelength > 1) {
+    return tracelength - looplength;
+  }
+  return undefined;
 }
 
 function parseNumericAttribute(
