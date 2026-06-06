@@ -33,6 +33,34 @@ interface ConstructorCacheEntry {
   instantiation: number;
 }
 
+/** A binding emitted by reify() for a shared or cyclic atom. */
+interface ReifyBinding {
+  /** Generated Pyret identifier the atom is bound to. */
+  name: string;
+  /** The inline expression the name is bound to. */
+  expr: string;
+  /** Whether this binding is recursive (a cycle), i.e. needs `rec`. */
+  rec: boolean;
+}
+
+/** Mutable state threaded through a single reify() traversal. */
+interface ReifyContext {
+  /** Bindings to hoist into an enclosing `block:`, in dependency order. */
+  bindings: ReifyBinding[];
+  /** atom id -> assigned binding name. */
+  names: Map<string, string>;
+  /** atom id -> binding name, once the binding has been pushed. */
+  emitted: Map<string, string>;
+  /** atom ids currently on the DFS stack (for cycle detection). */
+  onStack: Set<string>;
+  /** atom ids discovered to participate in a cycle. */
+  cyclic: Set<string>;
+  /** non-primitive atom ids referenced more than once (real sharing). */
+  shared: Set<string>;
+  /** monotonically increasing counter for generated names. */
+  counter: number;
+}
+
 export function generateEdgeId(
   relation: IRelation,
   tuple: ITuple
@@ -101,6 +129,26 @@ export class PyretDataInstance implements IInputDataInstance {
 
   /** Map to store the original Pyret objects with their dict key order */
   private originalObjects = new Map<string, PyretObject>();
+
+  /**
+   * Map of atom id -> ordered constructor field names, recorded at relationalization
+   * time. Decouples reify()'s field ordering from the live Pyret objects, so reify
+   * works on transported or interactively-edited instances.
+   */
+  private atomFieldOrder = new Map<string, string[]>();
+
+  /**
+   * Map of table atom id -> ordered column names, recorded when a Pyret table is
+   * relationalized. Tables are modeled as n-ary `row` relations whose tuples carry no
+   * source atom at position 0 (so generateGraph reads them as rows), which leaves
+   * reify() with no constructor-shaped source for the table atom. These two maps give
+   * reify() what it needs to rebuild `table: ... end` syntax, independent of the
+   * `row` relation (and its tuple de-duplication).
+   */
+  private tableColumns = new Map<string, string[]>();
+
+  /** Map of table atom id -> rows, each an ordered array of cell atom ids. */
+  private tableRows = new Map<string, string[][]>();
 
   /** Event listeners for data instance changes */
   private eventListeners = new Map<DataInstanceEventType, Set<DataInstanceEventListener>>();
@@ -384,88 +432,6 @@ export class PyretDataInstance implements IInputDataInstance {
     return String(error);
   }
 
-  /**
-   * Try to rebuild constructor arguments from relations using cached patterns
-   * Only uses patterns from previously seen constructor instances - no heuristics
-   */
-  private tryReconstructFromRelations(atom: IAtom, visited: Set<string>): string {
-    // Get all relations where this atom is the source
-    const relationMap = new Map<string, string[]>();
-    this.relations.forEach(relation => {
-      relation.tuples.forEach(tuple => {
-        if (tuple.atoms.length >= 2 && tuple.atoms[0] === atom.id) {
-          const relationName = relation.name;
-          if (!relationMap.has(relationName)) {
-            relationMap.set(relationName, []);
-          }
-          // Skip the source atom, collect target atoms
-          relationMap.get(relationName)!.push(...tuple.atoms.slice(1));
-        }
-      });
-    });
-
-    if (relationMap.size === 0) {
-      return atom.type; // No relations, just return the type name
-    }
-
-    // Try to use cached constructor pattern from previously seen instances
-    const cachedPattern = this.getCachedConstructorPattern(atom.type);
-    if (cachedPattern) {
-      const args: string[] = [];
-      for (const fieldName of cachedPattern) {
-        const targetIds = relationMap.get(fieldName) || [];
-        for (const targetId of targetIds) {
-          args.push(this.reifyAtom(targetId, visited));
-        }
-      }
-      if (args.length > 0) {
-        return `${atom.type}(${args.join(', ')})`;
-      }
-    }
-
-    // If no cached pattern, try to infer from other instances of the same type
-    // Look for other atoms of the same type that have original objects
-    const sameTypeAtoms = Array.from(this.atoms.values()).filter(a => a.type === atom.type);
-    for (const sameTypeAtom of sameTypeAtoms) {
-      const originalObj = this.originalObjects.get(sameTypeAtom.id);
-      if (originalObj && originalObj.dict) {
-        const orderedKeys = Object.keys(originalObj.dict);
-        this.cacheConstructorPattern(atom.type, orderedKeys);
-
-        // Now try again with the cached pattern
-        const args: string[] = [];
-        for (const fieldName of orderedKeys) {
-          const targetIds = relationMap.get(fieldName) || [];
-          for (const targetId of targetIds) {
-            args.push(this.reifyAtom(targetId, visited));
-          }
-        }
-        if (args.length > 0) {
-          return `${atom.type}(${args.join(', ')})`;
-        }
-        break; // Only need to check one instance since constructors are nominal
-      }
-    }
-
-    // Final fallback: use sorted field order but print an error
-    console.error(`[PyretDataInstance] Could not determine constructor pattern for type '${atom.type}'. Falling back to sorted field order.`);
-
-    const relationNames = Array.from(relationMap.keys()).sort(); // Sort for consistency
-    const args: string[] = [];
-
-    for (const relationName of relationNames) {
-      const targetIds = relationMap.get(relationName) || [];
-      for (const targetId of targetIds) {
-        args.push(this.reifyAtom(targetId, visited));
-      }
-    }
-
-    if (args.length > 0) {
-      return `${atom.type}(${args.join(', ')})`;
-    }
-
-    return atom.type; // Last resort: just the type name
-  }
   hasExternalEvaluator(): boolean {
     return this.externalEvaluator !== null;
   }
@@ -571,128 +537,323 @@ export class PyretDataInstance implements IInputDataInstance {
   }
 
   /**
-   * Converts the current data instance back to Pyret constructor notation
-   * 
-   * If an external evaluator is available, it may provide enhanced type information
-   * for more accurate reification in the future.
-   * 
-   * @returns A string representation of the data in Pyret constructor syntax
-   * 
+   * Reify the data instance back to Pyret source — the inverse of relationalizing a
+   * live value. Returns a Pyret *source string* that reconstructs the value
+   * (constructor notation, `[list: ...]` for list-like atoms). Eval-able for acyclic
+   * data; cyclic `ref` structures are emitted as best-effort `rec` bindings (see
+   * below). This is the language-level `reify` contract, the Pyret analog of sPyTial
+   * `reify` and Caraspace `from_datum`.
+   *
+   * Order, sharing, and cycles are recovered from the data instance itself, not from
+   * any live object:
+   *  - **Field order** comes from the order recorded during relationalization
+   *    (`atomFieldOrder`), so reify works on transported or edited instances too.
+   *  - **Sharing** (a non-primitive atom referenced more than once) is emitted once,
+   *    bound to a name in an enclosing `block:`, and referenced by name — faithful,
+   *    and free of the exponential blow-up of naive duplication. Primitives are
+   *    always inlined (their idempotency is a relationalization artifact, not
+   *    structural sharing), so values with no real sharing reify to a bare
+   *    expression with no `block:` wrapper.
+   *  - **Cycles** (only reachable through Pyret `ref` fields) are emitted as `rec`
+   *    bindings. Best-effort: structurally faithful and readable, though whether it
+   *    evaluates depends on the type's `ref` fields. Strictly better than the old
+   *    `/* cycle *​/` placeholder, which neither evaluated nor read clearly.
+   *
+   * @returns Pyret source reconstructing the instance.
+   *
    * @example
    * ```typescript
    * const pyretCode = instance.reify();
    * ```
    */
   reify(): string {
-    let result = '';
+    const roots = this.findReifyRoots();
+    if (roots.length === 0) {
+      return "# No root atoms found";
+    }
 
-
-    // TODO: This is still broken. Need to understand what is going on here!!
-
-    // Find referenced atoms
-    const referencedAtoms = new Set<string>();
+    // Count target-position references so we can bind genuinely shared atoms once.
+    const refCounts = new Map<string, number>();
     this.relations.forEach(relation => {
       relation.tuples.forEach(tuple => {
         for (let i = 1; i < tuple.atoms.length; i++) {
-          referencedAtoms.add(tuple.atoms[i]);
+          const id = tuple.atoms[i];
+          refCounts.set(id, (refCounts.get(id) ?? 0) + 1);
         }
       });
     });
 
-    // Identify root atoms (not referenced by others, including builtins)
-    const rootAtoms = Array.from(this.atoms.values()).filter(atom => !referencedAtoms.has(atom.id));
-
-    if (rootAtoms.length === 0) {
-      return result + "# No root atoms found";
+    const ctx: ReifyContext = {
+      bindings: [],
+      names: new Map(),
+      emitted: new Map(),
+      onStack: new Set(),
+      cyclic: new Set(),
+      shared: new Set(),
+      counter: 0,
+    };
+    // Real structural sharing = a non-primitive atom referenced more than once.
+    for (const atom of this.atoms.values()) {
+      if (!this.isBuiltinType(atom.type) && (refCounts.get(atom.id) ?? 0) > 1) {
+        ctx.shared.add(atom.id);
+      }
     }
 
-    // If multiple roots, wrap in a Pyret set
-    if (rootAtoms.length > 1) {
-      const rootExpressions = rootAtoms.map(atom => this.reifyAtom(atom.id, new Set()));
-      return result + `[list-set: ${rootExpressions.join(', ')}]`;
+    const rootExprs = roots.map(id => this.reifyEmit(id, ctx));
+    const rootExpr = rootExprs.length > 1
+      ? `[list-set: ${rootExprs.join(', ')}]`
+      : rootExprs[0];
+
+    if (ctx.bindings.length === 0) {
+      return rootExpr;
     }
 
-    // If only one root atom, reify it directly
-    return result + this.reifyAtom(rootAtoms[0].id, new Set());
+    const bindLines = ctx.bindings.map(b =>
+      `  ${b.rec ? 'rec ' : ''}${b.name} = ${b.expr}`
+    );
+    return `block:\n${bindLines.join('\n')}\n  ${rootExpr}\nend`;
   }
 
   /**
-   * Recursively reifies a single atom and its relations, preserving constructor argument order
-   * 
-   * @param atomId - The atom ID to reify
-   * @param visited - Set of visited atom IDs to prevent infinite recursion
-   * @returns Pyret constructor notation for this atom
+   * Reproduce the Pyret REPL's own rendering of the reconstructed value — the
+   * REPL-equivalent string. Mirrors sPyTial `replit` (`repr(reify(...))`) and
+   * Caraspace `replit` (`format!("{:?}", from_datum(...))`): rebuild, then let the
+   * host's own printer render it.
+   *
+   * Reifies to source, evaluates `torepr(<source>)` through the external Pyret
+   * evaluator, and returns Pyret's string. Falls back to the reified source when no
+   * evaluator is wired in or evaluation fails.
    */
-  private reifyAtom(atomId: string, visited: Set<string>): string {
+  async replit(): Promise<string> {
+    const source = this.reify();
+    const evaluator = this.externalEvaluator;
+    if (!evaluator || typeof evaluator.run !== 'function') {
+      return source;
+    }
+    try {
+      const reprResult = await PyretDataInstance.evaluateExpression(
+        `torepr(${source})`,
+        evaluator
+      );
+      if (reprResult.success && typeof reprResult.result === 'string') {
+        return reprResult.result;
+      }
+      // Evaluation reported failure without throwing (e.g. a non-evaluable cyclic
+      // `rec` source). Make the silent fallback visible.
+      console.warn('[PyretDataInstance] replit evaluation did not yield a string; returning reified source.', reprResult);
+    } catch (error) {
+      console.warn('[PyretDataInstance] replit evaluation failed; returning reified source.', error);
+    }
+    return source;
+  }
 
+  /**
+   * Root atoms to start reification from: atoms never referenced by another atom.
+   * Self-references (a `ref`-field cycle) do not disqualify an atom from being a root.
+   * Falls back to the first source atom for a pure cycle.
+   */
+  private findReifyRoots(): string[] {
+    const referenced = new Set<string>();
+    this.relations.forEach(relation => {
+      relation.tuples.forEach(tuple => {
+        const src = tuple.atoms[0];
+        for (let i = 1; i < tuple.atoms.length; i++) {
+          if (tuple.atoms[i] !== src) {
+            referenced.add(tuple.atoms[i]);
+          }
+        }
+      });
+    });
 
-    // TODO: I think this is broken -- it doesn't cache things correctly.
+    // Table cells are owned by their table atom (emitted via `table: ... end`); they
+    // sit at position 0 of some `row` tuples, so without this they could look like
+    // unreferenced roots and be emitted a second time alongside the table.
+    this.tableRows.forEach(rows => {
+      rows.forEach(row => row.forEach(cellId => referenced.add(cellId)));
+    });
 
-    if (visited.has(atomId)) {
-      return `/* cycle: ${atomId} */`;
+    const roots = Array.from(this.atoms.values())
+      .filter(atom => !referenced.has(atom.id))
+      .map(atom => atom.id);
+    if (roots.length > 0) {
+      return roots;
     }
 
+    // Pure cycle: nothing is unreferenced. Start from the first relation source so we
+    // still emit something rather than giving up.
+    for (const relation of this.relations.values()) {
+      const t = relation.tuples[0];
+      if (t && t.atoms[0]) {
+        return [t.atoms[0]];
+      }
+    }
+    const first = this.atoms.keys().next();
+    return first.done ? [] : [first.value];
+  }
+
+  /**
+   * Emit an atom, applying memoization, sharing, and cycle handling. Primitives are
+   * always inlined; shared and cyclic atoms are bound once and referenced by name.
+   */
+  private reifyEmit(atomId: string, ctx: ReifyContext): string {
     const atom = this.atoms.get(atomId);
     if (!atom) {
       return `/* missing atom: ${atomId} */`;
     }
 
-    visited.add(atomId);
-
-    // Handle primitive types
+    // Primitives are always inlined.
     if (this.isBuiltinType(atom.type)) {
-      const result = this.reifyPrimitive(atom);
-      visited.delete(atomId);
-      return result;
+      return this.reifyPrimitive(atom);
     }
 
-    // Get the original object to preserve key order
-    const originalObject = this.originalObjects.get(atomId);
-
-    if (!originalObject || !originalObject.dict) {
-      // No original object available - try to reconstruct using cached patterns or heuristics
-      visited.delete(atomId);
-      return this.tryReconstructFromRelations(atom, visited);
+    // Already bound and emitted — reference the binding.
+    const existing = ctx.emitted.get(atomId);
+    if (existing !== undefined) {
+      return existing;
     }
 
-    // Use the original dict key order to maintain constructor argument order
-    const orderedKeys = Object.keys(originalObject.dict);
-
-    // Cache this constructor pattern for future use
-    this.cacheConstructorPattern(atom.type, orderedKeys);
-
-    // Check if this looks like a list (all keys are numeric)
-    const isListLike = orderedKeys.every(key => /^\d+$/.test(key));
-
-    if (isListLike && orderedKeys.length > 0) {
-      // Sort numeric keys and extract list items
-      const sortedKeys = orderedKeys.sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
-      const listItems = sortedKeys.map(key => {
-        const targetAtomIds = this.getRelationTargets(atomId, key);
-        return targetAtomIds.map(targetId => this.reifyAtom(targetId, visited));
-      }).flat();
-
-      visited.delete(atomId);
-      return `[list: ${listItems.join(', ')}]`;
+    // Back-edge: this atom is its own ancestor. Mark it cyclic; it must be bound.
+    if (ctx.onStack.has(atomId)) {
+      ctx.cyclic.add(atomId);
+      return this.ensureReifyName(atomId, ctx);
     }
 
-    // Regular constructor notation with preserved argument order
+    const needsBinding = ctx.shared.has(atomId);
+    ctx.onStack.add(atomId);
+    const expr = this.reifyExpr(atomId, ctx);
+    ctx.onStack.delete(atomId);
+
+    const isCyclic = ctx.cyclic.has(atomId);
+    if (needsBinding || isCyclic) {
+      const name = this.ensureReifyName(atomId, ctx);
+      ctx.bindings.push({ name, expr, rec: isCyclic });
+      ctx.emitted.set(atomId, name);
+      return name;
+    }
+
+    // Single-use, acyclic — inline it.
+    return expr;
+  }
+
+  /**
+   * Build the inline Pyret expression for a (non-primitive) atom: `[list: ...]` for
+   * list-like atoms, otherwise `Type(arg1, arg2, ...)` in recorded field order.
+   */
+  private reifyExpr(atomId: string, ctx: ReifyContext): string {
+    const atom = this.atoms.get(atomId)!;
+
+    // Pyret tables: rebuild `table: <cols> ... end`. The table's rows live in the
+    // n-ary `row` relation with no source atom at position 0 (so reify cannot recover
+    // them as constructor fields); the recorded tableColumns/tableRows carry the
+    // shape instead.
+    if (this.tableColumns.has(atomId)) {
+      return this.reifyTable(atomId, ctx);
+    }
+
+    // Nested raw arrays are relationalized as intermediate `Array` atoms whose
+    // elements hang off an `element` relation (not numeric field names), so the
+    // generic list-like detection below misses them. Emit them as Pyret lists,
+    // recursing so nested arrays become nested `[list: ...]`.
+    if (atom.type === 'Array') {
+      const items = this.getRelationTargets(atomId, 'element')
+        .map(targetId => this.reifyEmit(targetId, ctx));
+      return `[list: ${items.join(', ')}]`;
+    }
+
+    const fields = this.getFieldOrder(atomId);
+
+    // List-like: every field name is numeric (a JS-array-style atom).
+    if (fields.length > 0 && fields.every(key => /^\d+$/.test(key))) {
+      const sorted = [...fields].sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+      const items = sorted.flatMap(key =>
+        this.getRelationTargets(atomId, key).map(t => this.reifyEmit(t, ctx))
+      );
+      return `[list: ${items.join(', ')}]`;
+    }
+
     const args: string[] = [];
-
-    for (const relationName of orderedKeys) {
-      const targetAtomIds = this.getRelationTargets(atomId, relationName);
-      for (const targetId of targetAtomIds) {
-        args.push(this.reifyAtom(targetId, visited));
+    for (const fieldName of fields) {
+      for (const targetId of this.getRelationTargets(atomId, fieldName)) {
+        args.push(this.reifyEmit(targetId, ctx));
       }
     }
 
-    visited.delete(atomId);
-
     if (args.length === 0) {
-      return atom.type;
+      return atom.type; // nullary constructor / singleton variant
+    }
+    return `${atom.type}(${args.join(', ')})`;
+  }
+
+  /**
+   * Rebuild a Pyret table literal (`table: col1, col2 ... row: ... end`) from the
+   * columns and row cell atoms recorded at relationalization time. Cells are reified
+   * recursively, so primitives get proper literal escaping.
+   */
+  private reifyTable(atomId: string, ctx: ReifyContext): string {
+    const columns = this.tableColumns.get(atomId) ?? [];
+    const rows = this.tableRows.get(atomId) ?? [];
+    const header = `table: ${columns.join(', ')}`;
+    if (rows.length === 0) {
+      return `${header}\nend`;
+    }
+    const rowLines = rows.map(row =>
+      `  row: ${row.map(cellId => this.reifyEmit(cellId, ctx)).join(', ')}`
+    );
+    return `${header}\n${rowLines.join('\n')}\nend`;
+  }
+
+  /**
+   * Recover the constructor field order for an atom from the data instance itself.
+   * Prefers the order recorded during relationalization, then a live original object
+   * if present, then a cached constructor pattern, and finally the order in which
+   * relations sourced from this atom were declared.
+   */
+  private getFieldOrder(atomId: string): string[] {
+    const recorded = this.atomFieldOrder.get(atomId);
+    if (recorded && recorded.length > 0) {
+      return recorded;
     }
 
-    return `${atom.type}(${args.join(', ')})`;
+    const original = this.originalObjects.get(atomId);
+    if (original && original.dict) {
+      const keys = Object.keys(original.dict);
+      const atom = this.atoms.get(atomId);
+      if (atom) {
+        this.cacheConstructorPattern(atom.type, keys);
+      }
+      return keys;
+    }
+
+    const atom = this.atoms.get(atomId);
+    if (atom) {
+      const cached = this.getCachedConstructorPattern(atom.type);
+      if (cached) {
+        const present = cached.filter(f => this.getRelationTargets(atomId, f).length > 0);
+        if (present.length > 0) {
+          return present;
+        }
+      }
+    }
+
+    // Last resort: relation names that source from this atom, in declaration order.
+    const names: string[] = [];
+    this.relations.forEach(relation => {
+      const sources = relation.tuples.some(tuple => tuple.atoms[0] === atomId);
+      if (sources && !names.includes(relation.name)) {
+        names.push(relation.name);
+      }
+    });
+    return names;
+  }
+
+  /** Assign (or reuse) a stable Pyret identifier for a bound atom. */
+  private ensureReifyName(atomId: string, ctx: ReifyContext): string {
+    let name = ctx.names.get(atomId);
+    if (name === undefined) {
+      name = `cnd-v-${++ctx.counter}`;
+      ctx.names.set(atomId, name);
+    }
+    return name;
   }
 
   /**
@@ -701,7 +862,7 @@ export class PyretDataInstance implements IInputDataInstance {
   private reifyPrimitive(atom: IAtom): string {
     switch (atom.type) {
       case 'String':
-        return `"${atom.label.replace(/"/g, '\\"')}"`;
+        return PyretDataInstance.toPyretStringLiteral(atom.label);
       case 'Number':
         return atom.label;
       case 'Boolean':
@@ -709,6 +870,22 @@ export class PyretDataInstance implements IInputDataInstance {
       default:
         return atom.label;
     }
+  }
+
+  /**
+   * Render a raw string value as a valid, eval-able Pyret double-quoted string
+   * literal. Escapes backslash, double-quote, and the control characters that would
+   * otherwise break the single-line literal (newline, carriage return, tab).
+   * Backslash must be escaped first so the other escapes are not double-escaped.
+   */
+  private static toPyretStringLiteral(value: string): string {
+    const escaped = value
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\"')
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r')
+      .replace(/\t/g, '\\t');
+    return `"${escaped}"`;
   }
 
   /**
@@ -747,6 +924,12 @@ export class PyretDataInstance implements IInputDataInstance {
 
       // Store the original object to preserve dict key order
       this.originalObjects.set(atomId, obj);
+
+      // Record the constructor field order into the instance itself, so reify()
+      // does not depend on the live object surviving.
+      if (obj.dict && typeof obj.dict === 'object') {
+        this.atomFieldOrder.set(atomId, Object.keys(obj.dict));
+      }
 
       // Cache constructor pattern for this type if it has a dict
       if (obj.dict && typeof obj.dict === 'object') {
@@ -904,28 +1087,38 @@ export class PyretDataInstance implements IInputDataInstance {
     if (columnNames.length === 0) {
       return;
     }
-    
+
+    // Record the table's columns and rows so reify() can reconstruct it as
+    // `table: ... end`. The `row` relation below models the table as an n-ary
+    // relation for generateGraph() and carries no source atom at position 0, so it is
+    // not enough to recover the table from — keep this metadata separate, and capture
+    // every valid row even when addRelationTuple de-duplicates identical ones.
+    this.tableColumns.set(tableAtomId, [...columnNames]);
+    const reifyRows: string[][] = [];
+    this.tableRows.set(tableAtomId, reifyRows);
+
     // Use "row" as the relation name to represent table rows
     const relationName = 'row';
-    
+
     // Process each row as a tuple
     rowsArray.forEach((row) => {
       if (!Array.isArray(row)) {
         return;
       }
-      
+
       // Create atoms for each cell value and collect them as a tuple
       const tupleAtomIds: string[] = [];
-      
+
       row.forEach((cellValue) => {
         if (this.isAtomicValue(cellValue)) {
           const atomId = this.createAtomFromPrimitive(cellValue);
           tupleAtomIds.push(atomId);
         }
       });
-      
+
       // Only create the tuple if we have the expected number of values
       if (tupleAtomIds.length === columnNames.length && tupleAtomIds.length > 0) {
+        reifyRows.push(tupleAtomIds);
         // Create an n-ary tuple for this row
         this.addRelationTuple(
           relationName,
@@ -1367,6 +1560,19 @@ export class PyretDataInstance implements IInputDataInstance {
     projected.relations = new Map();
     projected.types = new Map();
     projected.atomCounter = projected.atoms.size;
+    // Carry reify metadata for the projected atoms so reify() works on the result.
+    projected.originalObjects = new Map(
+      [...this.originalObjects].filter(([id]) => atomIds.includes(id))
+    );
+    projected.atomFieldOrder = new Map(
+      [...this.atomFieldOrder].filter(([id]) => atomIds.includes(id))
+    );
+    projected.tableColumns = new Map(
+      [...this.tableColumns].filter(([id]) => atomIds.includes(id))
+    );
+    projected.tableRows = new Map(
+      [...this.tableRows].filter(([id]) => atomIds.includes(id))
+    );
 
     // Filter relations to only include tuples where all atoms are in the projection
     this.relations.forEach((relation, name) => {
@@ -1472,6 +1678,26 @@ export class PyretDataInstance implements IInputDataInstance {
       if (originalObject) {
         this.originalObjects.set(newId, originalObject);
       }
+
+      // Preserve the recorded field order so reify() keeps constructor argument order.
+      const fieldOrder = pyretInstance.atomFieldOrder.get(atom.id);
+      if (fieldOrder) {
+        this.atomFieldOrder.set(newId, fieldOrder);
+      }
+    });
+
+    // Carry table reconstruction metadata, remapping table and cell atom ids to the
+    // new ids so reify() can still rebuild any merged-in tables.
+    pyretInstance.tableColumns.forEach((columns, oldTableId) => {
+      const newTableId = reIdMap.get(oldTableId) ?? oldTableId;
+      this.tableColumns.set(newTableId, [...columns]);
+    });
+    pyretInstance.tableRows.forEach((rows, oldTableId) => {
+      const newTableId = reIdMap.get(oldTableId) ?? oldTableId;
+      this.tableRows.set(
+        newTableId,
+        rows.map(row => row.map(cellId => reIdMap.get(cellId) ?? cellId))
+      );
     });
 
     // Add types
