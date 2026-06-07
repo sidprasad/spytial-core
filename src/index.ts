@@ -17,6 +17,12 @@ export { DotDataInstance } from './data-instance/dot/dot-data-instance';
 export type { DotTypeConfig, DotTypeDescriptor, DotDataInstanceOptions } from './data-instance/dot/dot-data-instance';
 export { RacketGDataInstance } from './data-instance/racket/racket-g-data-instance';
 export { PyretDataInstance } from './data-instance/pyret/pyret-data-instance';
+// Pyret structural reify / replit + data-instance canonical form (building blocks;
+// the fidelity measurement harness that exercises these lives in tests/pyret/).
+export { reifyToValue } from './data-instance/pyret/reify';
+export type { ReifiedValue } from './data-instance/pyret/reify';
+export { replit } from './data-instance/pyret/replit';
+export { canon } from './data-instance/pyret/canon';
 export { TlaDataInstance, createTlaDataInstance, isTlaDataInstance } from './data-instance/tla/tla-data-instance';
 
 // Export schema descriptor functions for generating descriptions of data instances
