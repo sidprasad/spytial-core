@@ -289,6 +289,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private computedRoutes: Map<string, Array<{ x: number; y: number }>> = new Map();
 
   /**
+   * Per-routeEdges cache of inflated obstacle rectangles (one per node, keyed by
+   * id) for the taut router. Built once at the top of routeEdges — positions are
+   * frozen by then — so each edge's buildRouterObstacles is an O(N) filter rather
+   * than recomputing getRenderedBounds for every node on every edge (O(E·N)).
+   * Null outside a routeEdges pass.
+   */
+  private routerObstacleCache: Array<{ id: string; minX: number; minY: number; maxX: number; maxY: number }> | null = null;
+
+  /**
    * Guard flag to prevent re-entrance during grid routing operations.
    * This prevents infinite loops when gridify is called while already in progress.
    */
@@ -419,12 +428,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   /**
    * When true, the consolidated taut router (obstacle-avoiding corner-visibility
    * shortest path + fillet smoothing) replaces the legacy multi-router curved
-   * path in computeSingleRoute. Gated by the `data-taut-router` attribute for
-   * A/B comparison in the gallery; default off until validated. Only affects the
-   * default/curved mode — grid mode (gridify) is untouched.
+   * path in computeSingleRoute. Selected via the "Taut" routing mode
+   * (layoutFormat === 'taut') in the Routing dropdown, alongside "Default"
+   * (legacy curved) and "Grid" (orthogonal). Only affects curved routing —
+   * grid mode (gridify) is untouched.
    */
   private get useTautRouter(): boolean {
-    return this.getAttribute('data-taut-router') === 'true';
+    return this.layoutFormat === 'taut';
   }
 
   /**
@@ -940,6 +950,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           <label for="routing-mode">Routing:</label>
           <select id="routing-mode" title="Edge routing mode">
             <option value="default">Default</option>
+            <option value="taut">Taut</option>
             <option value="grid">Grid</option>
           </select>
         </div>
@@ -1927,10 +1938,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           }
 
           // Drag-triggered ticks: render position updates normally.
-          if (this.layoutFormat === 'default' || !this.layoutFormat || this.layoutFormat === null) {
-            this.updatePositions();
-          } else if (this.layoutFormat === 'grid') {
+          // Grid mode uses the orthogonal updater; every other mode (default,
+          // taut, unset) uses the standard one.
+          if (this.layoutFormat === 'grid') {
             this.gridUpdatePositions();
+          } else {
+            this.updatePositions();
           }
         })
         .on('end', () => {
@@ -1951,10 +1964,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
             // Apply final positions to the real DOM, then hide entering
             // elements before the slide starts.
-            if (this.layoutFormat === 'default' || !this.layoutFormat) {
-              this.updatePositions();
-            } else if (this.layoutFormat === 'grid') {
+            if (this.layoutFormat === 'grid') {
               this.gridUpdatePositions();
+            } else {
+              this.updatePositions();
             }
             this.hideEnteringElements();
 
@@ -1965,12 +1978,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
             if (this.container) {
               this.container.attr('opacity', 1);
             }
-            if (this.layoutFormat === 'default' || !this.layoutFormat) {
-              this.updatePositions();
-              this.routeEdges();
-            } else if (this.layoutFormat === 'grid') {
+            if (this.layoutFormat === 'grid') {
               this.gridUpdatePositions();
               this.gridify(10, 25, 10);
+            } else {
+              this.updatePositions();
+              this.routeEdges();
             }
           }
 
@@ -2448,7 +2461,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         this.updatePositions();
 
         // Re-run advanced edge routing now that nodes are at final positions.
-        if (this.layoutFormat === 'default' || !this.layoutFormat) {
+        // Grid mode re-routes via gridify elsewhere; every other mode (default,
+        // taut) re-routes here.
+        if (this.layoutFormat !== 'grid') {
           this.routeEdges();
         }
 
@@ -4179,6 +4194,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       // Sort edge ports by angle to minimize crossings at shared nodes
       this.sortEdgePortsByAngle();
 
+      // Taut router: precompute the obstacle set once (positions are frozen now)
+      // so each edge's buildRouterObstacles is an O(N) filter, not O(N) bounds
+      // recomputation — turning per-edge obstacle work from O(E·N) into O(N)+O(E·N filter).
+      if (this.useTautRouter) this.buildRouterObstacleCache();
+
       // Compute routes for all edges (stored in computedRoutes map)
       this.computeAllRoutes();
 
@@ -4196,6 +4216,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     } catch (error) {
       console.error('Error in edge routing:', error);
       this.showError(`Edge routing failed: ${(error as Error).message}`);
+    } finally {
+      // Drop the per-pass obstacle cache so it can't go stale across renders.
+      this.routerObstacleCache = null;
     }
   }
 
@@ -6261,19 +6284,43 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
-   * Builds the obstacle set for the taut router: every node except the edge's
+   * Builds routerObstacleCache: one inflated visible-rectangle per node. Called
+   * once per routeEdges pass (taut mode), after positions are frozen, so the
+   * expensive getRenderedBounds work happens N times instead of E·N times.
+   */
+  private buildRouterObstacleCache(): void {
+    const cache: Array<{ id: string; minX: number; minY: number; maxX: number; maxY: number }> = [];
+    const c = WebColaCnDGraph.EDGE_CLEARANCE_PX;
+    for (const node of this.currentLayout?.nodes || []) {
+      const b = this.getRenderedBounds(node);
+      const w = b.width(), h = b.height();
+      if (w <= 0 && h <= 0) continue;
+      cache.push({ id: node.id, minX: b.x - c, minY: b.y - c, maxX: b.x + w + c, maxY: b.y + h + c });
+    }
+    this.routerObstacleCache = cache;
+  }
+
+  /**
+   * Returns the obstacle set for the taut router: every node except the edge's
    * own source and target, as its *visible* rectangle inflated by
    * EDGE_CLEARANCE_PX. Groups are not obstacles (inter-group edges must cross
    * boundaries — matches the legacy direct-line fast path).
+   *
+   * Reuses routerObstacleCache when inside a routeEdges pass (an O(N) filter);
+   * otherwise (e.g. unit tests calling this directly) builds the list inline.
    */
   private buildRouterObstacles(
     edgeData: any
   ): Array<{ minX: number; minY: number; maxX: number; maxY: number }> {
+    const srcId = edgeData.source.id, tgtId = edgeData.target.id;
+    if (this.routerObstacleCache) {
+      return this.routerObstacleCache.filter(o => o.id !== srcId && o.id !== tgtId);
+    }
     const obstacles: Array<{ minX: number; minY: number; maxX: number; maxY: number }> = [];
     if (!this.currentLayout?.nodes) return obstacles;
     const c = WebColaCnDGraph.EDGE_CLEARANCE_PX;
     for (const node of this.currentLayout.nodes) {
-      if (node.id === edgeData.source.id || node.id === edgeData.target.id) continue;
+      if (node.id === srcId || node.id === tgtId) continue;
       const b = this.getRenderedBounds(node);
       const w = b.width(), h = b.height();
       if (w <= 0 && h <= 0) continue;
