@@ -114,6 +114,25 @@ describe('routeTautPolyline', () => {
     expect(route[route.length - 1]).toEqual({ x: 100, y: 0 });
   });
 
+  it('avoids an off-band node on the chosen detour (GitHub Codex P1 repro)', () => {
+    // Reviewer repro: blocker straddles the y=100 line; a second node sits just
+    // above the blocker's top edge, outside the endpoint AABB band (maxY < bbMinY).
+    // The top-corner detour (y=80) would slice through it unless visibility
+    // considers obstacles outside the initial AABB.
+    const blocker = obs(130, 80, 170, 120);
+    const offBand = obs(140, 78, 160, 83);
+    const route = proto.routeTautPolyline.call(
+      routerThis(),
+      port(0, 100, 1, 0),
+      port(300, 100, -1, 0),
+      [blocker, offBand]
+    );
+    for (let i = 0; i < route.length - 1; i++) {
+      expect(proto.segmentEntersRect.call({}, route[i], route[i + 1], blocker)).toBe(false);
+      expect(proto.segmentEntersRect.call({}, route[i], route[i + 1], offBand)).toBe(false);
+    }
+  });
+
   it('falls back to a clear L-bend when the obstacle cap is exceeded', () => {
     // 25 tiny obstacles clustered near the line → over MAX_ROUTER_OBSTACLES (24),
     // but an L-bend via (T.x, S.y) is clear above them.
