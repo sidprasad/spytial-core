@@ -182,6 +182,24 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private static readonly VIEWBOX_PADDING = 10;
 
   /**
+   * Configuration constants for the consolidated "taut" curved router
+   * (corner-visibility shortest path + fillet smoothing). Gated behind
+   * useTautRouter; see computeTautRoute / routeTautPolyline.
+   */
+  // Uniform clearance (px) added around each node's *visible* rectangle to form
+  // the router's obstacle set. Also caps the corner-fillet radius so the
+  // smoothed curve never bows back onto a node.
+  private static readonly EDGE_CLEARANCE_PX = 6;
+  // Length (px) of the perpendicular exit/entry stub forced at each endpoint
+  // when the straight path is blocked, so arrows leave/enter normal to the node
+  // side (clean exit angle — the dominant readability factor).
+  private static readonly EDGE_STUB_LENGTH_PX = 10;
+  // Per-edge cap on candidate obstacles for the visibility graph. Above this the
+  // router degrades to an L-bend/straight fallback, bounding worst-case
+  // O(V²·k) cost (V ≈ 2 + 4·obstacles).
+  private static readonly MAX_ROUTER_OBSTACLES = 24;
+
+  /**
    * Configuration constants for edge crossing optimization
    */
   private static readonly MAX_CROSSING_OPTIMIZATION_PASSES = 3;
@@ -396,6 +414,17 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private get layoutFormat(): string | null {
     return this.getAttribute('layoutFormat');
+  }
+
+  /**
+   * When true, the consolidated taut router (obstacle-avoiding corner-visibility
+   * shortest path + fillet smoothing) replaces the legacy multi-router curved
+   * path in computeSingleRoute. Gated by the `data-taut-router` attribute for
+   * A/B comparison in the gallery; default off until validated. Only affects the
+   * default/curved mode — grid mode (gridify) is untouched.
+   */
+  private get useTautRouter(): boolean {
+    return this.getAttribute('data-taut-router') === 'true';
   }
 
   /**
@@ -5732,6 +5761,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr('d', (d: any) => {
         const route = this.computedRoutes.get(d.id);
         if (!route) return null;
+        // Taut router: interpolate the routed polyline exactly with bounded
+        // fillets (no curveBasis bulge). Self-loops and alignment edges keep the
+        // legacy smoothing — their routes are built for it / are straight.
+        if (this.useTautRouter && d.source.id !== d.target.id && !this.isAlignmentEdge(d)) {
+          return this.filletPath(route);
+        }
         return this.lineFunction(this.addTangentGuides(route));
       });
   }
@@ -6048,6 +6083,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       return this.createSelfLoopRoute(edgeData);
     }
 
+    // Consolidated taut router (flag-gated). When off, the legacy multi-router
+    // path below runs byte-identically.
+    if (this.useTautRouter) {
+      return this.computeTautRoute(edgeData);
+    }
+
     // Direct-line fast path: when nothing visible sits between source and target
     // and there are no parallel siblings or near-touch conditions, WebCola's
     // visibility-graph router still occasionally produces snake-shaped routes
@@ -6116,6 +6157,368 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     return route;
   }
 
+  // ── Taut edge router (consolidated curved routing) ──────────────────
+  //
+  // One obstacle model (visible rectangles + EDGE_CLEARANCE_PX), one port pass
+  // (reused from buildEdgeRoutingCaches/applyPortBasedEndpoints), one geometric
+  // router (corner-visibility shortest path), one interpolating smoother
+  // (filletPath). Replaces the legacy stack of WebCola routeEdge + direct-line
+  // fast path + perpendicular reroute + curveBasis/tangent-guides, all of which
+  // disagreed about where nodes are. Gated behind useTautRouter.
+
+  /**
+   * Entry point for the consolidated curved router. Group edges keep their
+   * boundary-snap contract (routeGroupEdge); everything else routes as a taut,
+   * obstacle-avoiding polyline between port attachment points, with parallel
+   * edges fanned as a post-step.
+   */
+  private computeTautRoute(edgeData: any): Array<{ x: number; y: number }> {
+    // Group edges: feed perimeter clip points (matching the legacy WebCola-route
+    // endpoints) so routeGroupEdge's member-snap reference is correct.
+    if (edgeData.id?.startsWith('_g_')) {
+      const sB = this.getRenderedBounds(edgeData.source);
+      const tB = this.getRenderedBounds(edgeData.target);
+      const sC = { x: sB.x + sB.width() / 2, y: sB.y + sB.height() / 2 };
+      const tC = { x: tB.x + tB.width() / 2, y: tB.y + tB.height() / 2 };
+      const seed = [
+        this.clipLineToRectExit(sC, tC, sB),
+        this.clipLineToRectExit(tC, sC, tB),
+      ];
+      return this.routeGroupEdge(edgeData, seed);
+    }
+
+    const src = this.getPortAttachment(edgeData, 'source');
+    const tgt = this.getPortAttachment(edgeData, 'target');
+    const obstacles = this.buildRouterObstacles(edgeData);
+    let route = this.routeTautPolyline(src, tgt, obstacles);
+    // Parallel edges between the same pair: fan via curvature/offset.
+    route = this.handleMultipleEdgeRouting(edgeData, route);
+    return route;
+  }
+
+  /**
+   * Derives an edge endpoint as a {point, normal} port on the node's *visible*
+   * perimeter. The point reuses the existing port-distribution machinery
+   * (applyPortBasedEndpoints) so siblings sharing a side fan out; the normal is
+   * the outward unit vector of the side the point lands on, used to force a
+   * perpendicular exit/entry in the router and to orient the arrowhead.
+   *
+   * This makes applyPortBasedEndpoints the *sole* source of endpoints — the new
+   * router never re-derives an attachment point on its own.
+   */
+  private getPortAttachment(
+    edgeData: any,
+    end: 'source' | 'target'
+  ): { point: { x: number; y: number }; normal: { x: number; y: number } } {
+    const node = end === 'source' ? edgeData.source : edgeData.target;
+    const other = end === 'source' ? edgeData.target : edgeData.source;
+    const bounds = this.getRenderedBounds(node);
+    const otherBounds = this.getRenderedBounds(other);
+    const center = { x: bounds.x + bounds.width() / 2, y: bounds.y + bounds.height() / 2 };
+    const otherCenter = { x: otherBounds.x + otherBounds.width() / 2, y: otherBounds.y + otherBounds.height() / 2 };
+
+    // Base perimeter point: where the center→other-center line exits this rect.
+    let point = this.clipLineToRectExit(center, otherCenter, bounds);
+
+    // Port distribution: spread siblings on the same side. Reuse
+    // applyPortBasedEndpoints by seeding a 2-point route and reading back the
+    // relevant end. The dominant-direction vs natural-clip side mismatch can
+    // push the distributed point inside the rect — validate and fall back to the
+    // base clip if so (mirrors applyPortBasedEndpointsToDirectRoute).
+    const portCount = end === 'source' ? edgeData._sourcePortCount : edgeData._targetPortCount;
+    if (portCount !== undefined && portCount > 1) {
+      const seed = end === 'source'
+        ? [{ ...point }, { ...otherCenter }]
+        : [{ ...otherCenter }, { ...point }];
+      const distributed = this.applyPortBasedEndpoints(edgeData, seed);
+      const candidate = end === 'source' ? distributed[0] : distributed[distributed.length - 1];
+      if (candidate && this.isPointOnRectPerimeter(candidate, bounds)) {
+        point = candidate;
+      }
+    }
+
+    return { point, normal: this.sideNormal(point, bounds) };
+  }
+
+  /**
+   * Outward unit normal of the rect side that `point` lies on (nearest side).
+   */
+  private sideNormal(
+    point: { x: number; y: number },
+    bounds: { x: number; y: number; width: () => number; height: () => number }
+  ): { x: number; y: number } {
+    const left = bounds.x, right = bounds.x + bounds.width();
+    const top = bounds.y, bottom = bounds.y + bounds.height();
+    const dL = Math.abs(point.x - left);
+    const dR = Math.abs(point.x - right);
+    const dT = Math.abs(point.y - top);
+    const dB = Math.abs(point.y - bottom);
+    const min = Math.min(dL, dR, dT, dB);
+    if (min === dL) return { x: -1, y: 0 };
+    if (min === dR) return { x: 1, y: 0 };
+    if (min === dT) return { x: 0, y: -1 };
+    return { x: 0, y: 1 };
+  }
+
+  /**
+   * Builds the obstacle set for the taut router: every node except the edge's
+   * own source and target, as its *visible* rectangle inflated by
+   * EDGE_CLEARANCE_PX. Groups are not obstacles (inter-group edges must cross
+   * boundaries — matches the legacy direct-line fast path).
+   */
+  private buildRouterObstacles(
+    edgeData: any
+  ): Array<{ minX: number; minY: number; maxX: number; maxY: number }> {
+    const obstacles: Array<{ minX: number; minY: number; maxX: number; maxY: number }> = [];
+    if (!this.currentLayout?.nodes) return obstacles;
+    const c = WebColaCnDGraph.EDGE_CLEARANCE_PX;
+    for (const node of this.currentLayout.nodes) {
+      if (node.id === edgeData.source.id || node.id === edgeData.target.id) continue;
+      const b = this.getRenderedBounds(node);
+      const w = b.width(), h = b.height();
+      if (w <= 0 && h <= 0) continue;
+      obstacles.push({ minX: b.x - c, minY: b.y - c, maxX: b.x + w + c, maxY: b.y + h + c });
+    }
+    return obstacles;
+  }
+
+  /**
+   * Routes a taut, obstacle-avoiding polyline from src to tgt.
+   *
+   *   1. If the straight src→tgt segment is clear → [src, tgt].
+   *   2. Otherwise build a corner-visibility graph over the inflated obstacle
+   *      corners (+ perpendicular exit stubs) and return the shortest path
+   *      (Dijkstra). The result hugs corners, so it never snakes and never
+   *      crosses an obstacle by construction.
+   *
+   * The edge's own source/target are NOT in `obstacles`, so their perimeters
+   * never block. Pure (reads no instance state beyond static constants) for
+   * straightforward unit testing.
+   */
+  private routeTautPolyline(
+    src: { point: { x: number; y: number }; normal: { x: number; y: number } },
+    tgt: { point: { x: number; y: number }; normal: { x: number; y: number } },
+    obstacles: Array<{ minX: number; minY: number; maxX: number; maxY: number }>
+  ): Array<{ x: number; y: number }> {
+    const S = src.point, T = tgt.point;
+
+    // (1) Straight test against all obstacles.
+    if (!this.anyObstacleBlocks(S, T, obstacles, -1, -1)) {
+      return [{ x: S.x, y: S.y }, { x: T.x, y: T.y }];
+    }
+
+    // Candidate obstacles: those intersecting the src/tgt AABB expanded by a
+    // clearance + stub pad (where any relevant blocker/detour-corner lives).
+    const stub = WebColaCnDGraph.EDGE_STUB_LENGTH_PX;
+    const pad = WebColaCnDGraph.EDGE_CLEARANCE_PX + stub;
+    const bbMinX = Math.min(S.x, T.x) - pad, bbMaxX = Math.max(S.x, T.x) + pad;
+    const bbMinY = Math.min(S.y, T.y) - pad, bbMaxY = Math.max(S.y, T.y) + pad;
+    const cand: Array<{ minX: number; minY: number; maxX: number; maxY: number }> = [];
+    for (const o of obstacles) {
+      if (o.maxX < bbMinX || o.minX > bbMaxX || o.maxY < bbMinY || o.minY > bbMaxY) continue;
+      cand.push(o);
+    }
+    if (cand.length === 0 || cand.length > WebColaCnDGraph.MAX_ROUTER_OBSTACLES) {
+      return this.lBendFallback(S, T, obstacles);
+    }
+
+    // Vertices: endpoints/stubs (owner −1) + four corners of each candidate
+    // obstacle (owner = candidate index).
+    type V = { x: number; y: number; owner: number };
+    const sStub = { x: S.x + src.normal.x * stub, y: S.y + src.normal.y * stub };
+    const tStub = { x: T.x + tgt.normal.x * stub, y: T.y + tgt.normal.y * stub };
+    const sStubOk = !this.pointInAnyObstacle(sStub, cand) && !this.anyObstacleBlocks(S, sStub, cand, -1, -1);
+    const tStubOk = !this.pointInAnyObstacle(tStub, cand) && !this.anyObstacleBlocks(T, tStub, cand, -1, -1);
+    const startV: V = sStubOk ? { ...sStub, owner: -1 } : { x: S.x, y: S.y, owner: -1 };
+    const endV: V = tStubOk ? { ...tStub, owner: -1 } : { x: T.x, y: T.y, owner: -1 };
+    const verts: V[] = [startV, endV];
+    cand.forEach((o, i) => {
+      verts.push(
+        { x: o.minX, y: o.minY, owner: i },
+        { x: o.maxX, y: o.minY, owner: i },
+        { x: o.maxX, y: o.maxY, owner: i },
+        { x: o.minX, y: o.maxY, owner: i },
+      );
+    });
+
+    const n = verts.length;
+    const START = 0, END = 1;
+
+    // A segment is visible iff it never penetrates an obstacle's OPEN interior.
+    // segmentEntersRect treats boundary contact (corner/edge grazing) as
+    // non-blocking, so corners lying on their own obstacle's perimeter — and
+    // adjacent-corner segments running along an edge — are allowed, while a
+    // diagonal through a rect, or a segment that leaves a corner and re-enters
+    // the same rect, is correctly rejected. (Owner-skipping is unsound: leaving
+    // a corner can dip back into the very obstacle that owns it.)
+    const visible = (a: V, b: V): boolean => !this.anyObstacleBlocks(a, b, cand, -1, -1);
+
+    // Dijkstra over the (dense) visibility graph.
+    const dist = new Array(n).fill(Infinity);
+    const prev = new Array(n).fill(-1);
+    const done = new Array(n).fill(false);
+    dist[START] = 0;
+    for (let iter = 0; iter < n; iter++) {
+      let u = -1, best = Infinity;
+      for (let i = 0; i < n; i++) if (!done[i] && dist[i] < best) { best = dist[i]; u = i; }
+      if (u === -1 || u === END) break;
+      done[u] = true;
+      for (let v = 0; v < n; v++) {
+        if (done[v] || v === u || !visible(verts[u], verts[v])) continue;
+        const dx = verts[u].x - verts[v].x, dy = verts[u].y - verts[v].y;
+        const w = Math.sqrt(dx * dx + dy * dy);
+        if (dist[u] + w < dist[v]) { dist[v] = dist[u] + w; prev[v] = u; }
+      }
+    }
+
+    if (!Number.isFinite(dist[END])) {
+      return this.lBendFallback(S, T, obstacles);
+    }
+
+    const path: Array<{ x: number; y: number }> = [];
+    for (let at = END; at !== -1; at = prev[at]) path.push({ x: verts[at].x, y: verts[at].y });
+    path.reverse();
+
+    // Prepend/append the true endpoints if we routed from stubs.
+    const out: Array<{ x: number; y: number }> = [];
+    if (sStubOk) out.push({ x: S.x, y: S.y });
+    out.push(...path);
+    if (tStubOk) out.push({ x: T.x, y: T.y });
+
+    return this.simplifyCollinear(out);
+  }
+
+  /**
+   * Fallback when the visibility graph is unusable (no candidates, over the cap,
+   * or disconnected): try the two axis-aligned L-bends, pick a clear one, else
+   * return the straight segment.
+   */
+  private lBendFallback(
+    S: { x: number; y: number },
+    T: { x: number; y: number },
+    obstacles: Array<{ minX: number; minY: number; maxX: number; maxY: number }>
+  ): Array<{ x: number; y: number }> {
+    for (const c of [{ x: T.x, y: S.y }, { x: S.x, y: T.y }]) {
+      if (
+        !this.pointInAnyObstacle(c, obstacles) &&
+        !this.anyObstacleBlocks(S, c, obstacles, -1, -1) &&
+        !this.anyObstacleBlocks(c, T, obstacles, -1, -1)
+      ) {
+        return this.simplifyCollinear([{ x: S.x, y: S.y }, c, { x: T.x, y: T.y }]);
+      }
+    }
+    return [{ x: S.x, y: S.y }, { x: T.x, y: T.y }];
+  }
+
+  /**
+   * True if segment a→b passes through the OPEN interior of any obstacle, except
+   * those at index `ownerA`/`ownerB` (the obstacles owning a's/b's corners —
+   * their perimeters legitimately touch the segment). Liang–Barsky clip; merely
+   * grazing an edge or corner is not a block.
+   */
+  private anyObstacleBlocks(
+    a: { x: number; y: number },
+    b: { x: number; y: number },
+    obstacles: Array<{ minX: number; minY: number; maxX: number; maxY: number }>,
+    ownerA: number,
+    ownerB: number
+  ): boolean {
+    for (let i = 0; i < obstacles.length; i++) {
+      if (i === ownerA || i === ownerB) continue;
+      if (this.segmentEntersRect(a, b, obstacles[i])) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Liang–Barsky test: true only if a→b penetrates the rect's open interior.
+   * Touching an edge or corner returns false (so corner-incident routing
+   * segments aren't spuriously blocked).
+   */
+  private segmentEntersRect(
+    a: { x: number; y: number },
+    b: { x: number; y: number },
+    r: { minX: number; minY: number; maxX: number; maxY: number }
+  ): boolean {
+    const EPS = 1e-6;
+    let t0 = 0, t1 = 1;
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const p = [-dx, dx, -dy, dy];
+    const q = [a.x - r.minX, r.maxX - a.x, a.y - r.minY, r.maxY - a.y];
+    for (let i = 0; i < 4; i++) {
+      if (Math.abs(p[i]) < EPS) {
+        if (q[i] < 0) return false; // parallel to this slab and outside it
+      } else {
+        const t = q[i] / p[i];
+        if (p[i] < 0) { if (t > t1) return false; if (t > t0) t0 = t; }
+        else { if (t < t0) return false; if (t < t1) t1 = t; }
+      }
+    }
+    if (t1 - t0 <= EPS) return false; // only touches the boundary
+    const mx = a.x + ((t0 + t1) / 2) * dx;
+    const my = a.y + ((t0 + t1) / 2) * dy;
+    return mx > r.minX + EPS && mx < r.maxX - EPS && my > r.minY + EPS && my < r.maxY - EPS;
+  }
+
+  /** True if `p` is strictly inside any obstacle. */
+  private pointInAnyObstacle(
+    p: { x: number; y: number },
+    obstacles: Array<{ minX: number; minY: number; maxX: number; maxY: number }>
+  ): boolean {
+    for (const o of obstacles) {
+      if (p.x > o.minX && p.x < o.maxX && p.y > o.minY && p.y < o.maxY) return true;
+    }
+    return false;
+  }
+
+  /** Drops duplicate and collinear interior waypoints from a polyline. */
+  private simplifyCollinear(
+    route: Array<{ x: number; y: number }>
+  ): Array<{ x: number; y: number }> {
+    if (route.length <= 2) return route;
+    const out = [route[0]];
+    for (let i = 1; i < route.length - 1; i++) {
+      const a = out[out.length - 1], b = route[i], c = route[i + 1];
+      const dup = Math.abs(b.x - a.x) < 1e-6 && Math.abs(b.y - a.y) < 1e-6;
+      const cross = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+      if (!dup && Math.abs(cross) > 1e-6) out.push(b);
+    }
+    out.push(route[route.length - 1]);
+    return out;
+  }
+
+  /**
+   * Builds an SVG path for a polyline with bounded-radius rounded corners. Each
+   * interior vertex is rounded with a quadratic Bézier whose trim radius is
+   * capped at EDGE_CLEARANCE_PX and half of each adjacent segment — so the curve
+   * never bows past the clearance band onto a node. Unlike d3.curveBasis (which
+   * approximates and can bulge inward), the polyline is interpolated exactly:
+   * endpoints and straight runs are preserved, giving clean perpendicular exits.
+   */
+  private filletPath(route: Array<{ x: number; y: number }>): string {
+    if (!route || route.length === 0) return '';
+    if (route.length === 1) return `M ${route[0].x} ${route[0].y}`;
+    if (route.length === 2) {
+      return `M ${route[0].x} ${route[0].y} L ${route[1].x} ${route[1].y}`;
+    }
+    const rMax = WebColaCnDGraph.EDGE_CLEARANCE_PX;
+    let d = `M ${route[0].x} ${route[0].y}`;
+    for (let i = 1; i < route.length - 1; i++) {
+      const p0 = route[i - 1], p1 = route[i], p2 = route[i + 1];
+      const v1x = p0.x - p1.x, v1y = p0.y - p1.y;
+      const v2x = p2.x - p1.x, v2y = p2.y - p1.y;
+      const l1 = Math.hypot(v1x, v1y), l2 = Math.hypot(v2x, v2y);
+      if (l1 < 1e-6 || l2 < 1e-6) { d += ` L ${p1.x} ${p1.y}`; continue; }
+      const rad = Math.min(rMax, l1 / 2, l2 / 2);
+      const a = { x: p1.x + (v1x / l1) * rad, y: p1.y + (v1y / l1) * rad };
+      const b = { x: p1.x + (v2x / l2) * rad, y: p1.y + (v2y / l2) * rad };
+      d += ` L ${a.x} ${a.y} Q ${p1.x} ${p1.y} ${b.x} ${b.y}`;
+    }
+    const last = route[route.length - 1];
+    d += ` L ${last.x} ${last.y}`;
+    return d;
+  }
+
   // ── Edge Crossing Optimization ──────────────────────────────────────
 
   /**
@@ -6132,6 +6535,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    *     have, e.g., very long polyline routes or many crossings.
    */
   private optimizeCrossings(): void {
+    // The taut router already minimizes crossings (shortest-path routing +
+    // port-angle ordering) and its routes are obstacle-aware. The legacy
+    // crossing resolvers (rerouteAroundEdge / tryResolveByPortSwap) rewrite a
+    // route's geometry WITHOUT re-running the obstacle-aware router, so they can
+    // push a clean route straight through a node (e.g. turning a clear diagonal
+    // into an orthogonal Z that clips an intervening rectangle). Skip them in
+    // taut mode — a residual crossing is far cheaper than an edge through a node.
+    if (this.useTautRouter) return;
+
     // Need at least 2 non-alignment edges to have a crossing
     if (this.computedRoutes.size < 2) return;
 
