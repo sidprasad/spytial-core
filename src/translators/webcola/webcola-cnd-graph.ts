@@ -6213,10 +6213,29 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     const src = this.getPortAttachment(edgeData, 'source');
     const tgt = this.getPortAttachment(edgeData, 'target');
     const obstacles = this.buildRouterObstacles(edgeData);
-    let route = this.routeTautPolyline(src, tgt, obstacles);
-    // Parallel edges between the same pair: fan via curvature/offset.
-    route = this.handleMultipleEdgeRouting(edgeData, route);
-    return route;
+    const base = this.routeTautPolyline(src, tgt, obstacles);
+    // Parallel edges between the same pair: fan via curvature/offset. That
+    // post-step is obstacle-blind — it offsets/curves every waypoint without
+    // re-checking collisions, so a fanned route can bow back into a node. Keep
+    // the fan only when it stays clear; otherwise the obstacle-aware base wins.
+    // (For non-parallel edges handleMultipleEdgeRouting is a no-op, so base wins.)
+    const fanned = this.handleMultipleEdgeRouting(edgeData, base.map(p => ({ ...p })));
+    return this.routePolylineClips(fanned, obstacles) ? base : fanned;
+  }
+
+  /**
+   * True if any segment of `route` passes through the interior of any obstacle.
+   * Used to reject obstacle-blind post-steps (e.g. parallel-edge fanning) that
+   * would push a taut route back through a node.
+   */
+  private routePolylineClips(
+    route: Array<{ x: number; y: number }>,
+    obstacles: Array<{ minX: number; minY: number; maxX: number; maxY: number }>
+  ): boolean {
+    for (let i = 0; i < route.length - 1; i++) {
+      if (this.anyObstacleBlocks(route[i], route[i + 1], obstacles, -1, -1)) return true;
+    }
+    return false;
   }
 
   /**
@@ -6391,6 +6410,23 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     const n = verts.length;
     const START = 0, END = 1;
 
+    // Visibility must be tested against every obstacle a graph segment could
+    // touch — not just `cand`. A detour corner can sit far outside the src/tgt
+    // AABB (e.g. above a tall blocker), so a segment between two vertices may
+    // cross an obstacle that the AABB pre-filter dropped from `cand`. Expand to
+    // all obstacles intersecting the bounding box of the vertices — which bounds
+    // every possible segment — so Dijkstra never routes through a node that the
+    // candidate filter ignored. (`cand` is still what seeds the graph vertices.)
+    let vbMinX = Infinity, vbMinY = Infinity, vbMaxX = -Infinity, vbMaxY = -Infinity;
+    for (const v of verts) {
+      if (v.x < vbMinX) vbMinX = v.x;
+      if (v.x > vbMaxX) vbMaxX = v.x;
+      if (v.y < vbMinY) vbMinY = v.y;
+      if (v.y > vbMaxY) vbMaxY = v.y;
+    }
+    const visObstacles = obstacles.filter(o =>
+      !(o.maxX < vbMinX || o.minX > vbMaxX || o.maxY < vbMinY || o.minY > vbMaxY));
+
     // A segment is visible iff it never penetrates an obstacle's OPEN interior.
     // segmentEntersRect treats boundary contact (corner/edge grazing) as
     // non-blocking, so corners lying on their own obstacle's perimeter — and
@@ -6398,7 +6434,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // diagonal through a rect, or a segment that leaves a corner and re-enters
     // the same rect, is correctly rejected. (Owner-skipping is unsound: leaving
     // a corner can dip back into the very obstacle that owns it.)
-    const visible = (a: V, b: V): boolean => !this.anyObstacleBlocks(a, b, cand, -1, -1);
+    const visible = (a: V, b: V): boolean => !this.anyObstacleBlocks(a, b, visObstacles, -1, -1);
 
     // Dijkstra over the (dense) visibility graph.
     const dist = new Array(n).fill(Infinity);

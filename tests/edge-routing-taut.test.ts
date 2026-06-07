@@ -93,6 +93,27 @@ describe('routeTautPolyline', () => {
     expect(route[1].y).toBeCloseTo(route[0].y, 5);
   });
 
+  it('avoids an obstacle outside the src/tgt AABB that lies on the detour', () => {
+    // Codex review repro: a tall blocker A straddles the straight line; B sits
+    // above the line — outside the src/tgt AABB — but on the natural
+    // over-the-top detour. Visibility must consider B even though the AABB
+    // pre-filter drops it, or the detour segment slices through B.
+    const A = obs(40, -100, 60, 100);
+    const B = obs(20, -70, 30, -40);
+    const route = proto.routeTautPolyline.call(
+      routerThis(),
+      port(0, 0, 1, 0),
+      port(100, 0, -1, 0),
+      [A, B]
+    );
+    for (let i = 0; i < route.length - 1; i++) {
+      expect(proto.segmentEntersRect.call({}, route[i], route[i + 1], A)).toBe(false);
+      expect(proto.segmentEntersRect.call({}, route[i], route[i + 1], B)).toBe(false);
+    }
+    expect(route[0]).toEqual({ x: 0, y: 0 });
+    expect(route[route.length - 1]).toEqual({ x: 100, y: 0 });
+  });
+
   it('falls back to a clear L-bend when the obstacle cap is exceeded', () => {
     // 25 tiny obstacles clustered near the line → over MAX_ROUTER_OBSTACLES (24),
     // but an L-bend via (T.x, S.y) is clear above them.
@@ -108,6 +129,20 @@ describe('routeTautPolyline', () => {
     expect(route.length).toBeGreaterThanOrEqual(2);
     expect(route[0]).toEqual({ x: 0, y: 100 });
     expect(route[route.length - 1]).toEqual({ x: 300, y: 50 });
+  });
+});
+
+describe('routePolylineClips', () => {
+  const ctx = { anyObstacleBlocks: proto.anyObstacleBlocks, segmentEntersRect: proto.segmentEntersRect };
+
+  it('detects a segment passing through an obstacle', () => {
+    const o = obs(40, -10, 60, 10);
+    expect(proto.routePolylineClips.call(ctx, [{ x: 0, y: 0 }, { x: 100, y: 0 }], [o])).toBe(true);
+  });
+
+  it('passes a polyline that clears all obstacles', () => {
+    const o = obs(40, 20, 60, 40); // well below the y=0 line
+    expect(proto.routePolylineClips.call(ctx, [{ x: 0, y: 0 }, { x: 100, y: 0 }], [o])).toBe(false);
   });
 });
 
