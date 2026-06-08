@@ -1,0 +1,181 @@
+<alloy builddate="2021-11-03T15:25:43.736Z">
+
+<instance bitwidth="4" maxseq="4" mintrace="-1" maxtrace="-1" command="Run Example1 for 3 TTD, 6 VSS, 3 Train" filename="" tracelength="1" backloop="0">
+
+<sig label="seq/Int" ID="0" parentID="1" builtin="yes">
+</sig>
+
+<sig label="Int" ID="1" parentID="2" builtin="yes">
+</sig>
+
+<sig label="String" ID="3" parentID="2" builtin="yes">
+</sig>
+
+<sig label="this/VSS" ID="4" parentID="2">
+   <atom label="VSS$0"/>
+   <atom label="VSS$1"/>
+   <atom label="VSS$2"/>
+   <atom label="VSS$3"/>
+   <atom label="VSS$4"/>
+   <atom label="VSS$5"/>
+</sig>
+
+<field label="ttd" ID="5" parentID="4">
+   <tuple> <atom label="VSS$0"/> <atom label="TTD$0"/> </tuple>
+   <tuple> <atom label="VSS$1"/> <atom label="TTD$0"/> </tuple>
+   <tuple> <atom label="VSS$2"/> <atom label="TTD$0"/> </tuple>
+   <tuple> <atom label="VSS$3"/> <atom label="TTD$1"/> </tuple>
+   <tuple> <atom label="VSS$4"/> <atom label="TTD$1"/> </tuple>
+   <tuple> <atom label="VSS$5"/> <atom label="TTD$2"/> </tuple>
+   <types> <type ID="4"/> <type ID="6"/> </types>
+</field>
+
+<sig label="this/TTD" ID="6" parentID="2">
+   <atom label="TTD$0"/>
+   <atom label="TTD$1"/>
+   <atom label="TTD$2"/>
+</sig>
+
+<sig label="this/Train" ID="7" parentID="2">
+   <atom label="Train$0"/>
+   <atom label="Train$1"/>
+   <atom label="Train$2"/>
+</sig>
+
+<field label="vss" ID="8" parentID="7">
+   <tuple> <atom label="Train$0"/> <atom label="VSS$4"/> </tuple>
+   <tuple> <atom label="Train$0"/> <atom label="VSS$5"/> </tuple>
+   <tuple> <atom label="Train$1"/> <atom label="VSS$4"/> </tuple>
+   <tuple> <atom label="Train$2"/> <atom label="VSS$2"/> </tuple>
+   <tuple> <atom label="Train$2"/> <atom label="VSS$3"/> </tuple>
+   <tuple> <atom label="Train$2"/> <atom label="VSS$4"/> </tuple>
+   <types> <type ID="7"/> <type ID="4"/> </types>
+</field>
+
+<sig label="V/Ord" ID="9" parentID="2" one="yes" private="yes">
+   <atom label="V/Ord$0"/>
+</sig>
+
+<field label="First" ID="10" parentID="9" private="yes">
+   <tuple> <atom label="V/Ord$0"/> <atom label="VSS$0"/> </tuple>
+   <types> <type ID="9"/> <type ID="4"/> </types>
+</field>
+
+<field label="Next" ID="11" parentID="9" private="yes">
+   <tuple> <atom label="V/Ord$0"/> <atom label="VSS$0"/> <atom label="VSS$1"/> </tuple>
+   <tuple> <atom label="V/Ord$0"/> <atom label="VSS$1"/> <atom label="VSS$2"/> </tuple>
+   <tuple> <atom label="V/Ord$0"/> <atom label="VSS$2"/> <atom label="VSS$3"/> </tuple>
+   <tuple> <atom label="V/Ord$0"/> <atom label="VSS$3"/> <atom label="VSS$4"/> </tuple>
+   <tuple> <atom label="V/Ord$0"/> <atom label="VSS$4"/> <atom label="VSS$5"/> </tuple>
+   <types> <type ID="9"/> <type ID="4"/> <type ID="4"/> </types>
+</field>
+
+<sig label="D/Ord" ID="12" parentID="2" one="yes" private="yes">
+   <atom label="D/Ord$0"/>
+</sig>
+
+<field label="First" ID="13" parentID="12" private="yes">
+   <tuple> <atom label="D/Ord$0"/> <atom label="TTD$0"/> </tuple>
+   <types> <type ID="12"/> <type ID="6"/> </types>
+</field>
+
+<field label="Next" ID="14" parentID="12" private="yes">
+   <tuple> <atom label="D/Ord$0"/> <atom label="TTD$0"/> <atom label="TTD$1"/> </tuple>
+   <tuple> <atom label="D/Ord$0"/> <atom label="TTD$1"/> <atom label="TTD$2"/> </tuple>
+   <types> <type ID="12"/> <type ID="6"/> <type ID="6"/> </types>
+</field>
+
+<sig label="univ" ID="2" builtin="yes" var="yes">
+</sig>
+
+<skolem label="$Example1_d0" ID="15">
+   <tuple> <atom label="TTD$0"/> </tuple>
+   <types> <type ID="6"/> </types>
+</skolem>
+
+<skolem label="$Example1_d1" ID="16">
+   <tuple> <atom label="TTD$1"/> </tuple>
+   <types> <type ID="6"/> </types>
+</skolem>
+
+<skolem label="$Example1_d2" ID="17">
+   <tuple> <atom label="TTD$2"/> </tuple>
+   <types> <type ID="6"/> </types>
+</skolem>
+
+<skolem label="$Example1_v0" ID="18">
+   <tuple> <atom label="VSS$0"/> </tuple>
+   <types> <type ID="4"/> </types>
+</skolem>
+
+<skolem label="$Example1_v1" ID="19">
+   <tuple> <atom label="VSS$1"/> </tuple>
+   <types> <type ID="4"/> </types>
+</skolem>
+
+<skolem label="$Example1_v2" ID="20">
+   <tuple> <atom label="VSS$2"/> </tuple>
+   <types> <type ID="4"/> </types>
+</skolem>
+
+<skolem label="$Example1_v3" ID="21">
+   <tuple> <atom label="VSS$3"/> </tuple>
+   <types> <type ID="4"/> </types>
+</skolem>
+
+<skolem label="$Example1_v4" ID="22">
+   <tuple> <atom label="VSS$4"/> </tuple>
+   <types> <type ID="4"/> </types>
+</skolem>
+
+<skolem label="$Example1_v5" ID="23">
+   <tuple> <atom label="VSS$5"/> </tuple>
+   <types> <type ID="4"/> </types>
+</skolem>
+
+<skolem label="$Example1_t0" ID="24">
+   <tuple> <atom label="Train$2"/> </tuple>
+   <types> <type ID="7"/> </types>
+</skolem>
+
+<skolem label="$Example1_t1" ID="25">
+   <tuple> <atom label="Train$1"/> </tuple>
+   <types> <type ID="7"/> </types>
+</skolem>
+
+<skolem label="$Example1_t2" ID="26">
+   <tuple> <atom label="Train$0"/> </tuple>
+   <types> <type ID="7"/> </types>
+</skolem>
+
+<skolem label="$this/start" ID="m0">
+   <tuple> <atom label="TTD$0"/> <atom label="VSS$0"/> </tuple>
+   <tuple> <atom label="TTD$1"/> <atom label="VSS$3"/> </tuple>
+   <tuple> <atom label="TTD$2"/> <atom label="VSS$5"/> </tuple>
+   <types> <type ID="6"/> <type ID="4"/> </types>
+</skolem>
+
+<skolem label="$this/end" ID="m1">
+   <tuple> <atom label="TTD$0"/> <atom label="VSS$2"/> </tuple>
+   <tuple> <atom label="TTD$1"/> <atom label="VSS$4"/> </tuple>
+   <tuple> <atom label="TTD$2"/> <atom label="VSS$5"/> </tuple>
+   <types> <type ID="6"/> <type ID="4"/> </types>
+</skolem>
+
+<skolem label="$this/front" ID="m2">
+   <tuple> <atom label="Train$0"/> <atom label="VSS$5"/> </tuple>
+   <tuple> <atom label="Train$1"/> <atom label="VSS$4"/> </tuple>
+   <tuple> <atom label="Train$2"/> <atom label="VSS$4"/> </tuple>
+   <types> <type ID="7"/> <type ID="4"/> </types>
+</skolem>
+
+<skolem label="$this/rear" ID="m3">
+   <tuple> <atom label="Train$0"/> <atom label="VSS$4"/> </tuple>
+   <tuple> <atom label="Train$1"/> <atom label="VSS$4"/> </tuple>
+   <tuple> <atom label="Train$2"/> <atom label="VSS$2"/> </tuple>
+   <types> <type ID="7"/> <type ID="4"/> </types>
+</skolem>
+
+</instance>
+
+</alloy>
