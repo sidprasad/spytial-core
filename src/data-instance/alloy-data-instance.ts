@@ -227,7 +227,15 @@ export class AlloyDataInstance implements IInputDataInstance {
 
         let relName = relation.name;
 
-        relationDecls[relName] = tupleStrings;
+        // Relation NAMES are not unique — only the qualified id (`Sig<:label`) is.
+        // Two relations sharing a name (e.g. the `Next` fields from two
+        // `util/ordering` instantiations) must not clobber each other here, or one
+        // is silently dropped from the INST. Accumulate (union) their tuples under
+        // the shared name. NOTE: bare names may still be ambiguous for Forge when a
+        // field is shared across opened modules — emitting qualified field
+        // references is the deeper fix tracked in
+        // https://github.com/sidprasad/spytial-core/issues/470
+        relationDecls[relName] = (relationDecls[relName] ?? []).concat(tupleStrings);
     }
 
     // Now we can create the inst string

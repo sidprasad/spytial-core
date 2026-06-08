@@ -159,9 +159,21 @@ export function addInstanceRelationTuple(
   instance: AlloyInstance,
   relationId: string,
   tuple: AlloyTuple): AlloyInstance {
-  // Direct key lookup, then fallback to name-based search
-  let relation = instance.relations[relationId]
-    ?? Object.values(instance.relations).find(r => r.name === relationId);
+  // Direct key lookup, then fallback to name-based search. Names are not unique
+  // (only the qualified id is), so warn when a name resolves ambiguously rather
+  // than silently appending to whichever relation comes first.
+  // https://github.com/sidprasad/spytial-core/issues/470
+  let relation = instance.relations[relationId];
+  if (!relation) {
+    const byName = Object.values(instance.relations).filter(r => r.name === relationId);
+    if (byName.length > 1) {
+      console.warn(
+        `addInstanceRelationTuple: name "${relationId}" is ambiguous (${byName.map(r => r.id).join(', ')}); ` +
+        `appending to the first. Use a qualified id (Sig<:field) to disambiguate.`
+      );
+    }
+    relation = byName[0];
+  }
   const newRelations = { ...instance.relations };
   const newSkolems = { ...instance.skolems };
 
@@ -205,9 +217,19 @@ export function getInstanceRelation(
   const rel = instance.relations[relation];
   if (rel) return rel;
 
-  // Fallback: search by name (e.g. "left" when keyed as "Tree<:left")
-  const byName = Object.values(instance.relations).find(r => r.name === relation);
-  if (byName) return byName;
+  // Fallback: search by name (e.g. "left" when keyed as "Tree<:left").
+  // Relation names are NOT unique — only the qualified id is — so a name can
+  // match several relations (e.g. two `Next` fields from `util/ordering`). Surface
+  // the ambiguity instead of silently returning whichever comes first.
+  // https://github.com/sidprasad/spytial-core/issues/470
+  const byName = Object.values(instance.relations).filter(r => r.name === relation);
+  if (byName.length > 1) {
+    console.warn(
+      `getInstanceRelation: name "${relation}" is ambiguous (${byName.map(r => r.id).join(', ')}); ` +
+      `returning the first. Use a qualified id (Sig<:field) to disambiguate.`
+    );
+  }
+  if (byName.length > 0) return byName[0];
 
   throw new Error(`Could not find relation ${relation}`);
 }
