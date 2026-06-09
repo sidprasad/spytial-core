@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator, NodePositionHint, TransformInfo, LayoutState, WebColaLayoutOptions, WebColaRenderTransitionMode } from './webcolatranslator';
-import { InstanceLayout, isAlignmentConstraint, isInstanceLayout, isLeftConstraint, isTopConstraint, LayoutNode } from '../../layout/interfaces';
+import { InstanceLayout, isAlignmentConstraint, isInstanceLayout, isLeftConstraint, isTopConstraint, LayoutNode, ColorSource } from '../../layout/interfaces';
 import type { GridRouter, Group, Layout, Node, Link } from 'webcola';
 import { IInputDataInstance, ITuple, IAtom } from '../../data-instance/interfaces';
 import { MAIN_LABEL_FONT_SIZE, SECONDARY_FONT_SIZE, LABEL_LINE_HEIGHT_RATIO } from '../../layout/text-extent';
+import { setLabLightness, type NodeColorParams } from '../../layout/colorpicker';
 
 let d3 = window.d3v4 || window.d3; // Use d3 v4 if available, otherwise fallback to the default window.d3
 let cola = window.cola;
@@ -69,6 +70,37 @@ const DEFAULT_SCALE_FACTOR = 5;
  * This ensures React components serve as the single source of truth for state
  * while the WebCola component focuses purely on visualization and user interaction.
  */
+
+/**
+ * A named display theme for {@link WebColaCnDGraph}. A theme is the single source
+ * of truth for the graph's colors and bundles the three levers:
+ *  1. the canvas background (the `--cnd-canvas-bg` slot),
+ *  2. the default edge color (the `--cnd-edge-color` slot), and
+ *  3. the default node-color palette ({@link GraphTheme.nodeColors}).
+ *
+ * `light` and `dark` are built in; register more via
+ * {@link WebColaCnDGraph.registerTheme} / {@link WebColaCnDGraph.registerThemes}
+ * and they appear in the Mode dropdown.
+ */
+export interface GraphTheme {
+  /** Unique key — used as the `theme` attribute value and the dropdown option value. */
+  name: string;
+  /** Human-readable label for the dropdown. Defaults to a title-cased `name`. */
+  label?: string;
+  /**
+   * `--cnd-*` custom-property values layered over the light baseline (the
+   * stylesheet literals). An absent/empty map IS the light theme. Slots are
+   * applied to the host element and read by the shadow stylesheet via `var()`.
+   */
+  slots?: Record<string, string>;
+  /**
+   * Tuning for the default (phyllotactic) node palette — e.g. a dark canvas
+   * passes `{ lightness: 74 }` so the algorithm-assigned type colors stay
+   * legible. Absent = leave the canonical light palette untouched.
+   */
+  nodeColors?: NodeColorParams;
+}
+
 export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'undefined' ? HTMLElement : (class {} as any)) {
   private svg!: any;
   private container!: any;
@@ -106,11 +138,346 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private static readonly DEFAULT_CANVAS_BG = '#fffff8';
 
   /**
-   * Returns the active canvas color: the host's `background` attribute if
-   * set, otherwise the default warm white.
+   * Returns the active canvas color, resolved highest-priority-first: an
+   * explicit `--cnd-canvas-bg` theme override, then the legacy `background`
+   * attribute (sugar for the canvas slot — composes with either base theme),
+   * then the base theme's canvas (dark canvas, or the warm-white default).
+   * Drives node fills, the edge-label halo, and PNG export so they stay in sync.
    */
   private getCanvasBackground(): string {
-    return this.getAttribute('background') ?? WebColaCnDGraph.DEFAULT_CANVAS_BG;
+    const override = this.themeOverrides['--cnd-canvas-bg'];
+    if (override) return override;
+    const bg = this.getAttribute('background');
+    if (bg) return bg;
+    return this.activeSlots()['--cnd-canvas-bg'] ?? WebColaCnDGraph.DEFAULT_CANVAS_BG;
+  }
+
+  /**
+   * Name of the active theme (a key into {@link themeRegistry}). `'light'`
+   * (default) preserves the historical warm-white look exactly. Switching theme
+   * sets `--cnd-*` custom properties on the host; the shadow stylesheet reads
+   * them via `var(--cnd-*, <light-literal>)`, so an unthemed graph is
+   * pixel-identical to before. Data-driven colors (`d.color`/`d.highlight`) are
+   * never overridden — only static fallbacks and algorithm defaults are themed.
+   */
+  private currentThemeName: string = 'light';
+
+  /**
+   * Registry of available themes, keyed by name. Seeded with the built-in
+   * `light` and `dark`; hosts add more via {@link registerTheme} /
+   * {@link registerThemes}, which surface in the Mode dropdown. Per-instance, so
+   * different graphs can offer different theme sets.
+   */
+  private themeRegistry: Map<string, GraphTheme> = new Map<string, GraphTheme>([
+    ['light', { name: 'light', label: 'Light', slots: {}, nodeColors: {} }],
+    ['dark', { name: 'dark', label: 'Dark', slots: WebColaCnDGraph.DARK_THEME, nodeColors: { lightness: 74 } }]
+  ]);
+
+  /**
+   * Per-slot color overrides layered on top of the active theme (e.g.
+   * `{ '--cnd-canvas-bg': '#101010' }`). Set via the second argument to
+   * {@link setTheme}. The `background` attribute is sugar for `--cnd-canvas-bg`.
+   */
+  private themeOverrides: Record<string, string> = {};
+
+  /**
+   * Per-call node-color overrides layered on top of the active theme's
+   * `nodeColors` (e.g. `{ lightness: 80 }`). Set via the third argument to
+   * {@link setTheme}.
+   */
+  private nodeColorOverrides: NodeColorParams = {};
+
+  /** The active theme object (falls back to `light` if the name is unknown). */
+  private getActiveTheme(): GraphTheme {
+    return this.themeRegistry.get(this.currentThemeName) ?? this.themeRegistry.get('light')!;
+  }
+
+  /** The active theme's `--cnd-*` slot values (empty for the light baseline). */
+  private activeSlots(): Record<string, string> {
+    return this.getActiveTheme().slots ?? {};
+  }
+
+  /**
+   * Every `--cnd-*` slot key any registered theme can set — the set to clear
+   * before applying a theme so a switch never leaves stale custom properties.
+   */
+  private allSlotKeys(): Set<string> {
+    const keys = new Set<string>(Object.keys(WebColaCnDGraph.DARK_THEME));
+    for (const theme of this.themeRegistry.values()) {
+      if (theme.slots) for (const key of Object.keys(theme.slots)) keys.add(key);
+    }
+    return keys;
+  }
+
+  /**
+   * Register one or more custom themes (or override a built-in by reusing its
+   * name). Registered themes appear in the Mode dropdown immediately. Each theme
+   * needs a unique `name`; see {@link GraphTheme}.
+   */
+  public registerThemes(themes: GraphTheme[]): void {
+    for (const theme of themes) {
+      if (!theme || !theme.name) {
+        console.warn('registerThemes: each theme needs a non-empty `name`; skipping', theme);
+        continue;
+      }
+      this.themeRegistry.set(theme.name, { ...theme });
+    }
+    this.updateThemeDropdown();
+  }
+
+  /** Register a single custom theme. See {@link registerThemes}. */
+  public registerTheme(theme: GraphTheme): void {
+    this.registerThemes([theme]);
+  }
+
+  /** Names of all registered themes, in registration order (built-ins first). */
+  public getThemeNames(): string[] {
+    return [...this.themeRegistry.keys()];
+  }
+
+  /** Title-case a theme name for display when it has no explicit `label`. */
+  private titleCaseThemeName(name: string): string {
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  }
+
+  /**
+   * Rebuild the Mode dropdown's options from the registry (only when the set of
+   * themes changed) and sync its value to the active theme. No-op before the
+   * toolbar exists. Called on init, on {@link setTheme}, and on registration.
+   */
+  private updateThemeDropdown(): void {
+    const select = this.shadowRoot?.querySelector('#theme-mode') as HTMLSelectElement | null;
+    if (!select) return;
+    const names = this.getThemeNames();
+    const signature = names.join('');
+    if (select.getAttribute('data-themes') !== signature) {
+      select.textContent = '';
+      for (const name of names) {
+        const theme = this.themeRegistry.get(name)!;
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = theme.label ?? this.titleCaseThemeName(name);
+        select.appendChild(option);
+      }
+      select.setAttribute('data-themes', signature);
+    }
+    select.value = this.currentThemeName;
+  }
+
+  /**
+   * Dark-theme custom-property values. Light mode simply removes these
+   * properties, falling back to the literals baked into the stylesheet. A few
+   * entries (canvas-bg, edge-color, node-border, label-text) are also read
+   * directly from JS for colors applied as SVG presentation attributes, where
+   * a CSS `var()` cannot reach.
+   */
+  private static readonly DARK_THEME: Record<string, string> = {
+    '--cnd-canvas-bg': '#1e1e1e',
+    '--cnd-label-text': '#e6e6e6',
+    '--cnd-edge-color': '#7d828b',
+    '--cnd-node-border': '#8b919b',
+    '--cnd-edge-highlight': '#f0f0f0',
+    '--cnd-inferred-highlight': '#9aa0a8',
+    '--cnd-group-fill': 'rgba(140, 140, 140, 0.12)',
+    '--cnd-group-stroke': '#7a7f87',
+    '--cnd-loading-bg': 'rgba(30, 32, 37, 0.95)',
+    '--cnd-loading-text': '#c9cdd4',
+    '--cnd-loading-dot': '#5dade2',
+    '--cnd-panel-bg': '#23262d',
+    '--cnd-panel-text': '#e6e6e6',
+    '--cnd-panel-text-muted': '#a7adb8',
+    '--cnd-panel-border': '#3a3f49',
+    '--cnd-toolbar-bg': 'rgba(30, 32, 37, 0.95)',
+    '--cnd-control-bg': '#2b2f37',
+    '--cnd-control-bg-hover': '#343a44',
+    '--cnd-control-border': '#3a3f49'
+  };
+
+  /**
+   * Set the graph's theme by name. `'light'` (default) and `'dark'` are built
+   * in; any name passed to {@link registerThemes} also works. An unknown name
+   * falls back to `'light'`. The theme is the single source of truth for the
+   * graph's colors and subsumes the legacy `background` attribute (just the
+   * canvas slot). Optional `overrides` layer per-slot `--cnd-*` values on top,
+   * e.g. `setTheme('dark', { '--cnd-canvas-bg': '#101010' })`; optional
+   * `nodeColors` retunes the node palette, e.g. `setTheme('dark', undefined, { lightness: 80 })`.
+   *
+   * Everything is a pure display concern: `--cnd-*` custom properties are set on
+   * the host, and data-driven node/edge colors are re-tinted in place against an
+   * already-rendered graph (no layout regeneration), so switching theme on a live
+   * graph updates it instantly without reshuffling.
+   */
+  public setTheme(
+    name: string,
+    overrides?: Record<string, string>,
+    nodeColors?: NodeColorParams
+  ): void {
+    this.currentThemeName = this.themeRegistry.has(name) ? name : 'light';
+    this.themeOverrides = overrides ? { ...overrides } : {};
+    this.nodeColorOverrides = nodeColors ? { ...nodeColors } : {};
+    this.applyTheme();
+    // Re-tint data-driven colors on the live DOM (no-op before first render).
+    this.repaintThemedColors();
+    // Keep the Mode dropdown in sync with the active theme.
+    this.updateThemeDropdown();
+    // Reflect for declarative hosts / introspection (guarded against the
+    // attributeChangedCallback re-entering setTheme).
+    if (this.getAttribute('theme') !== this.currentThemeName) {
+      this.setAttribute('theme', this.currentThemeName);
+    }
+  }
+
+  /**
+   * Apply the active theme's slots, then the `background` attribute (canvas
+   * sugar), then explicit per-slot overrides (highest priority) as `--cnd-*`
+   * custom properties on the host. Clears every known slot first so switching
+   * themes never leaves stale properties behind (and `light` reverts to the
+   * stylesheet literals).
+   */
+  private applyTheme(): void {
+    for (const key of this.allSlotKeys()) {
+      this.style.removeProperty(key);
+    }
+    for (const [key, value] of Object.entries(this.activeSlots())) {
+      this.style.setProperty(key, value);
+    }
+    const bg = this.getAttribute('background');
+    if (bg) this.style.setProperty('--cnd-canvas-bg', bg);
+    for (const [key, value] of Object.entries(this.themeOverrides)) {
+      if (value) this.style.setProperty(key, value);
+    }
+  }
+
+  /**
+   * The active theme's node-color tuning (its `nodeColors`, e.g. light `{}` /
+   * dark `{ lightness: 74 }`) with any per-call `nodeColors` override from
+   * {@link setTheme} layered on top. Consumed by {@link themedNodeColor}.
+   */
+  private resolvedNodeColorParams(): NodeColorParams {
+    return {
+      ...this.getActiveTheme().nodeColors,
+      ...this.nodeColorOverrides
+    };
+  }
+
+  /**
+   * Whether the renderer may re-tune a node's color for the active theme, based
+   * on its {@link ColorSource}. Only the default palette is themeable today;
+   * this is the single decision point, so a new ColorSource variant opts in here
+   * (and defaults to non-themeable until it does). Absent source is treated as
+   * the default palette for backward compatibility.
+   */
+  private isThemeableNodeColor(source: ColorSource | undefined): boolean {
+    return (source ?? ColorSource.DefaultPalette) === ColorSource.DefaultPalette;
+  }
+
+  /**
+   * Resolve a node's effective color for the active theme. An algorithm-assigned
+   * color (a themeable {@link ColorSource}) is re-tinted to the theme's node
+   * lightness so the canonical palette adapts to the canvas; a user `color`
+   * directive, or the implicit black fallback, is passed through to
+   * {@link themedDataColor} unchanged. With no themed lightness (light theme)
+   * this is identity — the historical look is preserved exactly.
+   */
+  private themedNodeColor(
+    d: any,
+    darkVar: keyof typeof WebColaCnDGraph.DARK_THEME,
+    lightFallback: string | null
+  ): string | null {
+    const lightness = this.resolvedNodeColorParams().lightness;
+    const isBlackish =
+      !d.color || d.color === 'black' || d.color === '#000' || d.color === '#000000';
+    const base =
+      lightness !== undefined && this.isThemeableNodeColor(d.colorSource) && !isBlackish
+        ? setLabLightness(d.color, lightness)
+        : d.color;
+    return this.themedDataColor(base, darkVar, lightFallback);
+  }
+
+  /** Node border stroke (themed). Shared by initial render and live repaint. */
+  private nodeBorderColor(d: any): string | null {
+    return this.themedNodeColor(d, '--cnd-node-border', 'black');
+  }
+
+  /** Most-specific-type label fill (themed). */
+  private nodeTypeLabelColor(d: any): string | null {
+    return this.themedNodeColor(d, '--cnd-label-text', 'black');
+  }
+
+  /**
+   * Node rectangle fill. Tufte: fill matches the canvas so only stroke + label
+   * distinguish a node. Transparent for hidden nodes and icon-only nodes.
+   */
+  private nodeFillColor(d: any): string {
+    const isHidden = this.isHiddenNode(d);
+    const hasIcon = !!d.icon;
+    const showLabels = d.showLabels;
+    return isHidden || (hasIcon && !showLabels) ? 'transparent' : this.getCanvasBackground();
+  }
+
+  /** Edge stroke (themed): preserves chosen colors, themes the implicit default. */
+  private edgeStrokeColor(d: any): string | null {
+    return this.isAlignmentEdge(d) ? 'none' : this.themedDataColor(d.color, '--cnd-edge-color', null);
+  }
+
+  /**
+   * Re-apply the data-driven themed colors (node border/fill, type-label fill,
+   * edge stroke) to the live DOM. The `--cnd-*` slots auto-update via CSS
+   * `var()`, but per-element colors are SVG presentation attributes that a host
+   * theme switch must repaint. No-op before the first render.
+   */
+  private repaintThemedColors(): void {
+    if (this.svgNodes) {
+      this.svgNodes.select('rect')
+        .attr('stroke', (d: any) => this.nodeBorderColor(d))
+        .attr('fill', (d: any) => this.nodeFillColor(d));
+      this.svgNodes.selectAll('text.mostSpecificTypeLabel')
+        .style('fill', (d: any) => this.nodeTypeLabelColor(d));
+    }
+    if (this.svgLinkGroups) {
+      this.svgLinkGroups.selectAll('path.link, path.inferredLink, path.alignmentLink')
+        .attr('stroke', (d: any) => this.edgeStrokeColor(d));
+    }
+  }
+
+  static get observedAttributes(): string[] {
+    return ['theme', 'background'];
+  }
+
+  attributeChangedCallback(name: string, _oldValue: string | null, newValue: string | null): void {
+    if (name === 'theme') {
+      const requested = newValue || 'light';
+      if (requested !== this.currentThemeName) {
+        this.setTheme(requested, this.themeOverrides, this.nodeColorOverrides);
+      }
+    } else if (name === 'background') {
+      // `background` is canvas sugar; re-apply so it composes with the base
+      // theme in either mode (and so clearing it reverts to the theme canvas).
+      this.applyTheme();
+    }
+  }
+
+  /**
+   * Resolve a data-driven stroke/fill color that may be the *implicit* black
+   * default (Alloy/Forge assign `"black"` to uncolored edges, node borders, and
+   * type labels). A genuinely chosen non-black color is preserved under every
+   * theme; the implicit black/empty default is replaced with the theme's slot
+   * value when the active theme defines that slot, so edges, arrowheads (which
+   * inherit via `context-stroke`), and borders stay legible on a themed canvas.
+   * Under the light baseline (no slot) the literal fallback is used — unchanged.
+   */
+  private themedDataColor(
+    color: string | null | undefined,
+    slotKey: keyof typeof WebColaCnDGraph.DARK_THEME,
+    lightFallback: string | null
+  ): string | null {
+    const isImplicitDefault =
+      !color || color === 'black' || color === '#000' || color === '#000000';
+    const themed = this.themeOverrides[slotKey] ?? this.activeSlots()[slotKey];
+    if (themed !== undefined) {
+      return isImplicitDefault ? themed : color!;
+    }
+    return color || lightFallback;
   }
 
   /**
@@ -954,6 +1321,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
             <option value="grid">Grid</option>
           </select>
         </div>
+        <div id="mode-control">
+          <label for="theme-mode">Mode:</label>
+          <select id="theme-mode" title="Color theme"></select>
+        </div>
         <div id="screenshot-control">
           <button id="screenshot-btn" title="Download high-res PNG screenshot" aria-label="Screenshot graph">⬇</button>
         </div>
@@ -1056,9 +1427,22 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       // Set initial value from attribute
       const currentFormat = this.layoutFormat || 'default';
       routingModeSelect.value = currentFormat;
-      
+
       routingModeSelect.addEventListener('change', () => {
         this.handleRoutingModeChange(routingModeSelect.value);
+      });
+    }
+
+    // Set up theme (Mode) dropdown — populate from the registry, sync to active.
+    const themeModeSelect = this.root.querySelector('#theme-mode') as HTMLSelectElement;
+    if (themeModeSelect) {
+      this.updateThemeDropdown();
+      themeModeSelect.addEventListener('change', () => {
+        this.setTheme(themeModeSelect.value);
+        this.dispatchEvent(new CustomEvent('theme-changed', {
+          detail: { theme: themeModeSelect.value },
+          bubbles: true
+        }));
       });
     }
 
@@ -2711,7 +3095,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         return "link";
       })
       .attr("data-link-id", (d: any) => d.id || "")
-      .attr("stroke", (d: any) => this.isAlignmentEdge(d) ? "none" : d.color)
+      // A genuinely chosen edge color is preserved; the implicit "black"/empty
+      // default is themed in dark mode so the edge and its (context-stroke)
+      // arrowhead stay visible on the dark canvas. Light mode is unchanged.
+      .attr("stroke", (d: any) => this.edgeStrokeColor(d))
       .attr("fill", "none")
       .attr("opacity", (d: any) => this.isAlignmentEdge(d) ? 0 : null)
       // Use .style() for stroke-width so inline styles override CSS class rules (.link, .inferredLink)
@@ -3450,20 +3837,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr("height", (d: any) => d.visualHeight ?? d.height)
       .attr("x", (d: any) => -((d.visualWidth ?? d.width)) / 2) // Center on node's x position
       .attr("y", (d: any) => -((d.visualHeight ?? d.height)) / 2) // Center on node's y position
-      .attr("stroke", (d: any) => d.color || "black")
+      // A chosen node color is preserved; algorithm-assigned colors are re-tinted
+      // for the themed canvas and the implicit black default is themed. See
+      // nodeBorderColor / themedNodeColor.
+      .attr("stroke", (d: any) => this.nodeBorderColor(d))
       .attr("rx", WebColaCnDGraph.NODE_BORDER_RADIUS)
       .attr("ry", WebColaCnDGraph.NODE_BORDER_RADIUS)
       .attr("stroke-width", WebColaCnDGraph.NODE_STROKE_WIDTH)
-      .attr("fill", (d: any) => {
-        const isHidden = this.isHiddenNode(d);
-        const hasIcon = !! d.icon;
-        const showLabels = d.showLabels;
-
-        // Tufte: node fill matches the canvas so only the stroke + label
-        // distinguish a node — less ink, more clarity. Transparent for
-        // hidden nodes and icon-only nodes (preserve prior behavior).
-        return isHidden || (hasIcon && !showLabels) ? "transparent" : this.getCanvasBackground();
-      });
+      .attr("fill", (d: any) => this.nodeFillColor(d));
   }
 
   /**
@@ -3524,7 +3905,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     nodeSelection
       .append("text")
       .attr("class", "mostSpecificTypeLabel")
-      .style("fill", (d: any) => d.color || "black")
+      .style("fill", (d: any) => this.nodeTypeLabelColor(d))
       .text((d: any) => d.mostSpecificType || "");
   }
 
@@ -3613,7 +3994,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
             .attr("x", 0)
             .attr("dy", `${secondaryLineHeight}px`)
             .style("font-size", `${SECONDARY_FONT_SIZE}px`)
-            .style("fill", 'black')
+            // No explicit fill: inherit the themed parent label fill (the
+            // `.label` CSS rule), so dark mode lightens skolem labels too.
             .style("font-style", "italic")
             .text(labelText);
         }
@@ -8836,7 +9218,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         height: 100%;
         border: 1px solid rgba(0, 0, 0, 0.08);
         border-radius: 8px;
-        background-color: ${this.getCanvasBackground()}; /* warm-white default; override via the background attribute */
+        background-color: var(--cnd-canvas-bg, ${this.getCanvasBackground()}); /* light: warm-white / background attr; dark: --cnd-canvas-bg */
         overflow: hidden;
       }
 
@@ -8850,11 +9232,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         gap: 8px;
         max-width: min(65%, 420px);
         padding: 6px 10px;
-        background: rgba(255, 255, 255, 0.93);
-        border: 1px solid rgba(0, 0, 0, 0.12);
+        background: var(--cnd-loading-bg, rgba(255, 255, 255, 0.93));
+        border: 1px solid var(--cnd-panel-border, rgba(0, 0, 0, 0.12));
         border-radius: 999px;
         box-shadow: 0 1px 4px rgba(0, 0, 0, 0.14);
-        color: #374151;
+        color: var(--cnd-loading-text, #374151);
         font-size: 12px;
         white-space: nowrap;
         pointer-events: none;
@@ -8875,7 +9257,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         width: 8px;
         height: 8px;
         border-radius: 50%;
-        background: #2563eb;
+        background: var(--cnd-loading-dot, #2563eb);
         flex-shrink: 0;
         animation: loading-pulse 1s ease-in-out infinite;
       }
@@ -8959,12 +9341,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
 
       .link.highlighted {
-        stroke: black; /* Change this to your desired highlight color */
+        stroke: var(--cnd-edge-highlight, black);
         stroke-width: 3px; /* Change this to your desired highlight width */
       }
 
       .inferredLink.highlighted {
-        stroke:#666666; /* Change this to your desired highlight color */
+        stroke: var(--cnd-inferred-highlight, #666666);
         stroke-width: 3px; /* Change this to your desired highlight width */
       }
 
@@ -9001,8 +9383,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       }
       
       .group {
-        fill: rgba(200, 200, 200, 0.10);
-        stroke: #666;
+        fill: var(--cnd-group-fill, rgba(200, 200, 200, 0.10));
+        stroke: var(--cnd-group-stroke, #666);
         stroke-width: 1.5px;
         stroke-opacity: 0.4;
       }
@@ -9016,6 +9398,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         dominant-baseline: middle;
         font-size: 10px;
         pointer-events: none;
+        /* Themed label color. Overrides the per-element fill="black"
+           presentation attribute (CSS beats presentation attributes), and
+           tspans without their own fill inherit it. */
+        fill: var(--cnd-label-text, #1a1a1a);
       }
 
       .linklabel {
@@ -9023,15 +9409,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         dominant-baseline: middle;
         font-size: 12px;
         font-weight: 500;
-        fill: #1a1a1a;
+        fill: var(--cnd-label-text, #1a1a1a);
         pointer-events: none;
         font-family: ${this.getFontFamily()};
-        stroke: ${this.getCanvasBackground()};
+        stroke: var(--cnd-canvas-bg, ${this.getCanvasBackground()});
         stroke-width: 3px;
         stroke-linejoin: round;
         paint-order: stroke fill;
       }
-      
+
       .mostSpecificTypeLabel {
         font-size: 9px;
         font-weight: 600;
@@ -9044,8 +9430,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         left: 50%;
         transform: translate(-50%, -50%);
         padding: 20px;
-        background: white;
-        border: 1px solid #ccc;
+        background: var(--cnd-panel-bg, white);
+        color: var(--cnd-panel-text, inherit);
+        border: 1px solid var(--cnd-panel-border, #ccc);
         border-radius: 4px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
       }
@@ -9113,8 +9500,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         justify-content: flex-start;
         align-items: center;
         padding: 8px 12px;
-        background: rgba(255, 255, 255, 0.95);
-        border: 1px solid rgba(0, 0, 0, 0.1);
+        background: var(--cnd-toolbar-bg, rgba(255, 255, 255, 0.95));
+        border: 1px solid var(--cnd-panel-border, rgba(0, 0, 0, 0.1));
         border-radius: 6px;
         margin-bottom: 8px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
@@ -9132,9 +9519,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       #zoom-controls button {
         width: 24px;
         height: 24px;
-        border: 1px solid #d1d5db;
-        background: #f9fafb;
-        color: #374151;
+        border: 1px solid var(--cnd-control-border, #d1d5db);
+        background: var(--cnd-control-bg, #f9fafb);
+        color: var(--cnd-panel-text-muted, #374151);
         border-radius: 4px;
         cursor: pointer;
         font-size: 14px;
@@ -9148,9 +9535,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       }
 
       #zoom-controls button:hover {
-        background: #f3f4f6;
+        background: var(--cnd-control-bg-hover, #f3f4f6);
         border-color: #9ca3af;
-        color: #111827;
+        color: var(--cnd-panel-text, #111827);
       }
 
       #zoom-controls button:active {
@@ -9160,14 +9547,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       }
 
       #zoom-controls button:disabled {
-        background: #f9fafb;
+        background: var(--cnd-control-bg, #f9fafb);
         border-color: #e5e7eb;
         color: #9ca3af;
         cursor: not-allowed;
       }
 
       #zoom-controls button:disabled:hover {
-        background: #f9fafb;
+        background: var(--cnd-control-bg, #f9fafb);
         border-color: #e5e7eb;
         color: #9ca3af;
         transform: none;
@@ -9192,9 +9579,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
       #routing-mode {
         padding: 4px 8px;
-        border: 1px solid #d1d5db;
-        background: #f9fafb;
-        color: #374151;
+        border: 1px solid var(--cnd-control-border, #d1d5db);
+        background: var(--cnd-control-bg, #f9fafb);
+        color: var(--cnd-panel-text-muted, #374151);
         border-radius: 4px;
         font-size: 12px;
         cursor: pointer;
@@ -9203,11 +9590,50 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       }
 
       #routing-mode:hover {
-        background: #f3f4f6;
+        background: var(--cnd-control-bg-hover, #f3f4f6);
         border-color: #9ca3af;
       }
 
       #routing-mode:focus {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+      }
+
+      /* Mode (theme) control styling — mirrors the routing control */
+      #mode-control {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-left: 16px;
+        padding-left: 16px;
+        border-left: 1px solid var(--cnd-control-border, #e5e7eb);
+      }
+
+      #mode-control label {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--cnd-panel-text-muted, #6b7280);
+        user-select: none;
+      }
+
+      #theme-mode {
+        padding: 4px 8px;
+        border: 1px solid var(--cnd-control-border, #d1d5db);
+        background: var(--cnd-control-bg, #f9fafb);
+        color: var(--cnd-panel-text-muted, #374151);
+        border-radius: 4px;
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        outline: none;
+      }
+
+      #theme-mode:hover {
+        background: var(--cnd-control-bg-hover, #f3f4f6);
+        border-color: #9ca3af;
+      }
+
+      #theme-mode:focus {
         border-color: #3b82f6;
         box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
       }
@@ -9224,9 +9650,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       #screenshot-btn {
         width: 24px;
         height: 24px;
-        border: 1px solid #d1d5db;
-        background: #f9fafb;
-        color: #374151;
+        border: 1px solid var(--cnd-control-border, #d1d5db);
+        background: var(--cnd-control-bg, #f9fafb);
+        color: var(--cnd-panel-text-muted, #374151);
         border-radius: 4px;
         cursor: pointer;
         font-size: 14px;
@@ -9240,9 +9666,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       }
 
       #screenshot-btn:hover {
-        background: #f3f4f6;
+        background: var(--cnd-control-bg-hover, #f3f4f6);
         border-color: #9ca3af;
-        color: #111827;
+        color: var(--cnd-panel-text, #111827);
       }
 
       #screenshot-btn:active {
@@ -9267,7 +9693,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       }
 
       .modal-dialog {
-        background: white;
+        background: var(--cnd-panel-bg, white);
+        color: var(--cnd-panel-text, inherit);
         border-radius: 8px;
         box-shadow: 0 4px 20px rgba(0,0,0,0.3);
         padding: 24px;
@@ -9285,7 +9712,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         margin: 0;
         font-size: 18px;
         font-weight: 600;
-        color: #333;
+        color: var(--cnd-panel-text, #333);
       }
 
       .modal-body {
@@ -9295,7 +9722,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .modal-message {
         margin: 0 0 16px 0;
         font-size: 14px;
-        color: #555;
+        color: var(--cnd-panel-text-muted, #555);
         line-height: 1.5;
       }
 

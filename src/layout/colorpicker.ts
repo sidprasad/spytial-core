@@ -1,11 +1,41 @@
 /**
- * 
+ *
  * Implementation of the Phyllotactic Color-Picking Algorithm
  * that is CIELAB informed.
- * 
+ *
  */
 
 import chroma from 'chroma-js';
+
+/**
+ * Display-time tuning for node colors. The phyllotactic picker always produces
+ * the canonical light-background palette; a *theme* may retune it for display
+ * (see {@link setLabLightness}). Kept as an interface so themes can carry the
+ * knob without the layout phase having to know about display concerns.
+ */
+export interface NodeColorParams {
+    /**
+     * Target CIELAB L* lightness for the (algorithm-assigned) node palette.
+     * Undefined means "leave the canonical palette as-is" (light theme). A dark
+     * theme passes a higher value (~74) so the same hues pop on the dark canvas.
+     */
+    lightness?: number;
+}
+
+/**
+ * Re-tint a color to a target CIELAB L* lightness, preserving its hue/chroma.
+ * Used by the renderer to adapt the canonical (light) node palette to a themed
+ * canvas without recomputing the layout. Non-parseable inputs pass through
+ * untouched.
+ */
+export function setLabLightness(color: string, lightness: number): string {
+    try {
+        const [r, g, b] = chroma(color).set('lab.l', lightness).rgb();
+        return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
+    } catch {
+        return color;
+    }
+}
 
 export class ColorPicker {
     private colors: string[];
@@ -43,6 +73,7 @@ export class ColorPicker {
 
         // Lightness raised from 50 → 62 so colors read clearly against white backgrounds
         // without being muddy. Chroma stays at full radius for distinguishability.
+        // A themed (e.g. dark) canvas retunes this at render time via setLabLightness.
         const l = 62;
         const a = x; // Position on the a* axis
         const b = y; // Position on the b* axis
@@ -53,4 +84,3 @@ export class ColorPicker {
         return `rgb(${Math.round(color[0])}, ${Math.round(color[1])}, ${Math.round(color[2])})`;
     }
 }
-

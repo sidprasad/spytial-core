@@ -10,7 +10,7 @@ import {
     LayoutNode, LayoutEdge, LayoutConstraint, InstanceLayout,
     LeftConstraint, TopConstraint, AlignmentConstraint, LayoutGroup,
     ImplicitConstraint, DisjunctiveConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint,
-    negateDisjunction
+    negateDisjunction, ColorSource
 } from './interfaces';
 
 import {
@@ -1122,7 +1122,7 @@ export class LayoutInstance {
 
         // Recompute visual maps after graph mutations (inferred edges / node removal)
         let nodeIconMap = this.getNodeIconMap(g);
-        let nodeColorMap = this.getNodeColorMap(g, ai);
+        let { colorMap: nodeColorMap, explicitlyColored } = this.getNodeColorMap(g, ai);
 
         // Compute the display strings once — single source of truth for "what's
         // drawn inside the box" so the box sizer (getNodeSizeMap) and the
@@ -1145,6 +1145,10 @@ export class LayoutInstance {
             // Otherwise, we can use the nodeId as the label.
             let label = nodeMetadata?.label || nodeId;
             let color = nodeColorMap[nodeId] || "black";
+            // Algorithm-assigned (default palette) unless an explicit color directive hit it.
+            let colorSource = explicitlyColored.has(nodeId)
+                ? ColorSource.Directive
+                : ColorSource.DefaultPalette;
             let iconDetails = nodeIconMap[nodeId];
             let iconPath = iconDetails.path;
             let showLabels = iconDetails.showLabels;
@@ -1172,6 +1176,7 @@ export class LayoutInstance {
                 label: label,
                 name: label,
                 color: color,
+                colorSource: colorSource,
                 groups: nodeGroups,
                 attributes: nodeAttributes,
                 labels: nodeLabels,
@@ -2526,8 +2531,15 @@ export class LayoutInstance {
     }
 
 
-    private getNodeColorMap(g: Graph, a: IDataInstance): Record<string, string> {
+    /**
+     * Builds the node→color map and records which nodes were colored by an
+     * explicit user `color` directive (vs. the default type palette / black
+     * fallback). The renderer uses `explicitlyColored` to decide which colors
+     * may be retuned for a themed canvas and which must be preserved as chosen.
+     */
+    private getNodeColorMap(g: Graph, a: IDataInstance): { colorMap: Record<string, string>, explicitlyColored: Set<string> } {
         let nodeColorMap: Record<string, string> = {};
+        let explicitlyColored = new Set<string>();
 
         // Start by getting the default signature colors
         let sigColors = this.getSigColors(a);
@@ -2558,6 +2570,7 @@ export class LayoutInstance {
                     }
                 }
                 nodeColorMap[nodeId] = color;
+                explicitlyColored.add(nodeId);
             });
         });
 
@@ -2570,7 +2583,7 @@ export class LayoutInstance {
             }
         });
 
-        return nodeColorMap;
+        return { colorMap: nodeColorMap, explicitlyColored };
     }
 
     private getNodeIconMap(g: Graph): Record<string, { path: string, showLabels: boolean }> {

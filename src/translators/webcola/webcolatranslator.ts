@@ -1,5 +1,5 @@
 import { Node, Group, Link, Rectangle } from 'webcola';
-import { InstanceLayout, LayoutNode, LayoutEdge, LayoutConstraint, LayoutGroup, LeftConstraint, TopConstraint, AlignmentConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, isBoundingBoxConstraint, isGroupBoundaryConstraint } from '../../layout/interfaces';
+import { InstanceLayout, LayoutNode, LayoutEdge, LayoutConstraint, LayoutGroup, LeftConstraint, TopConstraint, AlignmentConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, isBoundingBoxConstraint, isGroupBoundaryConstraint, ColorSource } from '../../layout/interfaces';
 import { EdgeStyle } from '../../layout/edge-style';
 import { LayoutInstance } from '../../layout/layoutinstance';
 import type { IDataInstance } from '../../data-instance/interfaces';
@@ -46,6 +46,8 @@ type NodeWithMetadata = Node & {
    */
   labels?: Record<string, string[]>,
   color: string,
+  /** Provenance of `color` (default palette vs. user directive). See {@link ColorSource}. */
+  colorSource?: ColorSource,
   icon: string,
   mostSpecificType: string,
   showLabels: boolean,
@@ -667,6 +669,7 @@ export class WebColaLayout {
     return {
       id: node.id,
       color: node.color,
+      colorSource: node.colorSource ?? ColorSource.DefaultPalette,
       attributes: node.attributes || {},
       labels: node.labels,
       // Inflate width/height by padding on each side so WebCola's avoidOverlaps
