@@ -2308,6 +2308,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       // Start the layout with specific iteration counts and proper event handling
       layout
         .on('tick', () => {
+          // A tick queued before clear()/dispose() can land after the
+          // selections were nulled — bail out instead of crashing.
+          if (!this.currentLayout || !this.svgNodes) return;
+
           if (isInitialSolve) {
             tickCount++;
             if (tickCount % 20 === 0) {
@@ -2331,6 +2335,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           }
         })
         .on('end', () => {
+          // Same teardown race as the tick handler above.
+          if (!this.currentLayout || !this.svgNodes) return;
+
           isInitialSolve = false;
           if (shouldShowLoadingOverlay) {
             this.updateLoadingProgress('Finalizing...');
@@ -2886,6 +2893,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       } catch (e) {
         // Ignore errors when stopping layout
       }
+      // Mirror dispose(): stop() doesn't cancel an already-queued tick, so
+      // detach the handlers or a stale tick would fire against the nulled
+      // selections below.
+      (this.colaLayout as any).on?.('tick', null);
+      (this.colaLayout as any).on?.('end', null);
     }
 
     // Clear the SVG container
@@ -4318,27 +4330,20 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Positions them at the arrow/marker positions of edges
    */
   private updateEdgeEndpointMarkers(): void {
-    if (!this.svgLinkGroups) return;
+    // Skip when detached (e.g. dispose() via disconnectedCallback): path
+    // geometry reads throw on non-rendered elements, and there is nothing
+    // visible to update anyway.
+    if (!this.svgLinkGroups || !this.isConnected) return;
 
     // Update target markers (at the arrow end)
     this.svgLinkGroups.select('.target-marker')
       .attr('cx', (d: EdgeWithMetadata) => {
-        const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${d.id}"]`) as SVGPathElement;
-        if (pathElement) {
-          const pathLength = pathElement.getTotalLength();
-          const point = pathElement.getPointAtLength(pathLength);
-          return point.x;
-        }
-        return d.target.x || 0;
+        const point = this.getEdgePathPoint(d.id, 'end');
+        return point ? point.x : (d.target.x || 0);
       })
       .attr('cy', (d: EdgeWithMetadata) => {
-        const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${d.id}"]`) as SVGPathElement;
-        if (pathElement) {
-          const pathLength = pathElement.getTotalLength();
-          const point = pathElement.getPointAtLength(pathLength);
-          return point.y;
-        }
-        return d.target.y || 0;
+        const point = this.getEdgePathPoint(d.id, 'end');
+        return point ? point.y : (d.target.y || 0);
       })
       .attr('opacity', this.isInputModeActive ? 0.8 : 0)
       .style('pointer-events', this.isInputModeActive ? 'all' : 'none')
@@ -4347,24 +4352,33 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // Update source markers (at the start)
     this.svgLinkGroups.select('.source-marker')
       .attr('cx', (d: EdgeWithMetadata) => {
-        const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${d.id}"]`) as SVGPathElement;
-        if (pathElement) {
-          const point = pathElement.getPointAtLength(0);
-          return point.x;
-        }
-        return d.source.x || 0;
+        const point = this.getEdgePathPoint(d.id, 'start');
+        return point ? point.x : (d.source.x || 0);
       })
       .attr('cy', (d: EdgeWithMetadata) => {
-        const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${d.id}"]`) as SVGPathElement;
-        if (pathElement) {
-          const point = pathElement.getPointAtLength(0);
-          return point.y;
-        }
-        return d.source.y || 0;
+        const point = this.getEdgePathPoint(d.id, 'start');
+        return point ? point.y : (d.source.y || 0);
       })
       .attr('opacity', this.isInputModeActive ? 0.8 : 0)
       .style('pointer-events', this.isInputModeActive ? 'all' : 'none')
       .raise(); // Always on top
+  }
+
+  /**
+   * Read the start or end point of a rendered edge path.
+   *
+   * Returns null when the path is missing or not rendered:
+   * getTotalLength()/getPointAtLength() throw InvalidStateError on detached
+   * or hidden paths, so callers fall back to layout coordinates.
+   */
+  private getEdgePathPoint(linkId: string, position: 'start' | 'end'): { x: number; y: number } | null {
+    const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${linkId}"]`) as SVGPathElement | null;
+    if (!pathElement) return null;
+    try {
+      return pathElement.getPointAtLength(position === 'end' ? pathElement.getTotalLength() : 0);
+    } catch {
+      return null;
+    }
   }
 
   private gridUpdatePositions() {
@@ -10276,7 +10290,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Performs cleanup to prevent memory leaks.
    */
   disconnectedCallback(): void {
-    this.dispose();
+    // Never let cleanup throw into the host's removeChild — an exception
+    // here propagates into the caller's unmount (e.g. React's commit
+    // phase) and can break the entire teardown.
+    try {
+      this.dispose();
+    } catch (e) {
+      console.warn('WebColaCnDGraph: error during disconnect cleanup', e);
+    }
   }
 
   /**
