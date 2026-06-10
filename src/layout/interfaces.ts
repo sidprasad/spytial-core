@@ -27,10 +27,35 @@ export interface LayoutGroup {
     overlapping?: boolean;
 }
 
+/**
+ * Where a node's resolved `color` came from. The renderer keys display
+ * decisions off this — e.g. it may re-tune an algorithm-assigned color for a
+ * themed canvas but must preserve a user-chosen one. Modeled as an enum (not a
+ * boolean) so new origins — inherited, highlight, a future colorscheme
+ * directive — can be added without reshaping {@link LayoutNode} or migrating
+ * call sites. New variants default to non-themeable until the renderer opts
+ * them in (see WebColaCnDGraph.isThemeableNodeColor).
+ */
+export enum ColorSource {
+    /**
+     * Assigned by the default type-palette algorithm (the phyllotactic picker)
+     * or the black fallback. Safe for the renderer to re-tint per theme.
+     */
+    DefaultPalette = 'default-palette',
+    /** Set by an explicit user `color` directive — preserved exactly as chosen. */
+    Directive = 'directive'
+}
+
 export interface LayoutNode {
     id: string;
     label: string;
     color : string;
+    /**
+     * Provenance of `color` (see {@link ColorSource}). Lets the renderer retune
+     * algorithm-assigned colors for a themed canvas while leaving user-chosen
+     * colors untouched. Absent is treated as {@link ColorSource.DefaultPalette}.
+     */
+    colorSource?: ColorSource;
     groups?: string[];
     attributes?: Record<string, string[]>;
     /**

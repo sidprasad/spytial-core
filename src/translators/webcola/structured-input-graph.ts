@@ -75,7 +75,10 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * Observed attributes for this custom element
    */
   static get observedAttributes(): string[] {
-    return ['cnd-spec', 'data-instance', 'show-export'];
+    // Include the base's color attributes (`theme`/`background`) — the static
+    // getter shadows the base's, so they'd otherwise stop being observed on the
+    // interactive element.
+    return ['cnd-spec', 'data-instance', 'show-export', 'theme', 'background'];
   }
 
   /**
@@ -92,6 +95,12 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         this.updateDataInstance(newValue);
         break;
       case 'show-export':
+        break;
+      case 'theme':
+      case 'background':
+        // Delegate to the base, whose setTheme re-tints the live graph in place
+        // (no layout regeneration needed — node colors are a render concern).
+        super.attributeChangedCallback(name, oldValue, newValue);
         break;
     }
   }
