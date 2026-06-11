@@ -2267,6 +2267,77 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         return true;
     }
 
+    /**
+     * Rank how strongly an alternative is already entailed by the current graphs:
+     *   0 = directly entailed   — every ordering it would impose already exists
+     *       as a direct edge (and every alignment already holds). The separation
+     *       is *explicitly asserted* by existing constraints, not merely derived.
+     *   1 = transitively entailed — every ordering holds via reachability, but at
+     *       least one only transitively (no direct edge).
+     *   2 = not entailed — it would introduce at least one new ordering/alignment.
+     *
+     * The maximal-feasible-subset builder prefers lower ranks so a node stays on
+     * the side it *already* sits, favouring the side asserted by direct user
+     * constraints. Without this it picks the first merely-addable side in
+     * [left, right, top, bottom] order — which both mis-renders (e.g. a BDD root
+     * shoved right of its children) and pollutes the conflict explanation: a
+     * redundant group-separation edge short-circuits the real orientation cycle
+     * during IIS path tracing, so the reported conflict names an auto-generated
+     * group constraint instead of the user's own orientation constraints.
+     *
+     * Mirrors the edge enumeration of `addEdgeToGraphsExpanded`, but inspects
+     * `hasEdge`/`isOrdered`/`areAligned` instead of mutating the graphs.
+     */
+    private static alternativeEntailmentRank(
+        alternative: LayoutConstraint[],
+        hGraph: DifferenceConstraintGraph,
+        vGraph: DifferenceConstraintGraph,
+    ): 0 | 1 | 2 {
+        // Orderings (graph, from, to) this alternative would impose.
+        const edges: { g: DifferenceConstraintGraph; from: string; to: string }[] = [];
+        for (const constraint of alternative) {
+            if (isBoundingBoxConstraint(constraint)) {
+                const bc = constraint as BoundingBoxConstraint;
+                for (const m of bc.group.nodeIds) {
+                    switch (bc.side) {
+                        case 'left':   edges.push({ g: hGraph, from: bc.node.id, to: m }); break;
+                        case 'right':  edges.push({ g: hGraph, from: m, to: bc.node.id }); break;
+                        case 'top':    edges.push({ g: vGraph, from: bc.node.id, to: m }); break;
+                        case 'bottom': edges.push({ g: vGraph, from: m, to: bc.node.id }); break;
+                    }
+                }
+            } else if (isGroupBoundaryConstraint(constraint)) {
+                const gc = constraint as GroupBoundaryConstraint;
+                for (const aId of gc.groupA.nodeIds) {
+                    for (const bId of gc.groupB.nodeIds) {
+                        switch (gc.side) {
+                            case 'left':   edges.push({ g: hGraph, from: aId, to: bId }); break;
+                            case 'right':  edges.push({ g: hGraph, from: bId, to: aId }); break;
+                            case 'top':    edges.push({ g: vGraph, from: aId, to: bId }); break;
+                            case 'bottom': edges.push({ g: vGraph, from: bId, to: aId }); break;
+                        }
+                    }
+                }
+            } else if (isLeftConstraint(constraint)) {
+                edges.push({ g: hGraph, from: constraint.left.id, to: constraint.right.id });
+            } else if (isTopConstraint(constraint)) {
+                edges.push({ g: vGraph, from: constraint.top.id, to: constraint.bottom.id });
+            } else if (isAlignmentConstraint(constraint)) {
+                const ac = constraint as AlignmentConstraint;
+                const graph = ac.axis === 'x' ? hGraph : vGraph;
+                // An alignment that doesn't already hold introduces a new constraint.
+                if (ac.node1.id !== ac.node2.id && !graph.areAligned(ac.node1.id, ac.node2.id)) return 2;
+            }
+        }
+        let allDirect = true;
+        for (const e of edges) {
+            if (e.g.hasEdge(e.from, e.to)) continue;   // directly asserted
+            allDirect = false;
+            if (!e.g.isOrdered(e.from, e.to)) return 2; // not even reachable → new
+        }
+        return allDirect ? 0 : 1;
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // Maximal feasible subset
     // ═══════════════════════════════════════════════════════════════════════════
@@ -2317,7 +2388,19 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
         for (const disj of sortedDisjunctions) {
             let added = false;
-            for (const alternative of disj.alternatives) {
+            // Prefer an alternative whose separation already holds in the current
+            // graphs (adds no new ordering) over the first merely-addable one, and
+            // among those prefer the side asserted by *direct* edges. This keeps a
+            // node on the side it already sits — e.g. a BDD root that is already
+            // above its children stays "top" instead of being shoved "right" — and
+            // matches presolve's already-separated behaviour. Picking the directly
+            // -entailed side also avoids adding a redundant separation edge that
+            // would short-circuit the real orientation cycle when the conflict is
+            // later explained. Stable sort by rank, original order within a rank.
+            const orderedAlternatives = disj.alternatives
+                .map((alt, i) => ({ alt, i, rank: QualitativeConstraintValidator.alternativeEntailmentRank(alt, freshH, freshV) }))
+                .sort((a, b) => a.rank - b.rank || a.i - b.i);
+            for (const { alt: alternative } of orderedAlternatives) {
                 const hClone = freshH.clone();
                 const vClone = freshV.clone();
                 let ok = true;
