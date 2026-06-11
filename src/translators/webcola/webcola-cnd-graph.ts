@@ -565,6 +565,31 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   // router degrades to an L-bend/straight fallback, bounding worst-case
   // O(V²·k) cost (V ≈ 2 + 4·obstacles).
   private static readonly MAX_ROUTER_OBSTACLES = 24;
+  // Extra path cost (px) charged per intermediate vertex (= per bend) in the
+  // visibility-graph shortest path. Pure Euclidean cost treats a 2-bend
+  // staircase and a 1-bend detour of equal length as ties; charging each bend
+  // makes the router prefer fewer, more deliberate corners when the length
+  // difference is small.
+  private static readonly TAUT_BEND_PENALTY_PX = 15;
+  // Corner-fillet radius cap (px) for taut routes. May exceed EDGE_CLEARANCE_PX
+  // safely: a quadratic fillet of radius r deviates from its vertex toward the
+  // wrapped obstacle corner by at most r/2, and the vertex sits a diagonal
+  // EDGE_CLEARANCE_PX·√2 ≈ 8.5px away from that corner — so r = 10 keeps the
+  // curve clear of the node while reading much softer than a 6px fillet.
+  private static readonly TAUT_FILLET_RADIUS_PX = 10;
+  // Successive curvature scales tried when fanning parallel edges between the
+  // same node pair. The fan post-step is obstacle-blind, so each scale is
+  // validated against the obstacle set and the first clear one wins; if even
+  // the smallest fan clips a node, the obstacle-aware base route is used.
+  private static readonly TAUT_FAN_SCALES = [1, 0.6, 0.35];
+  // Corridor separation (taut mode): two routes from DIFFERENT node pairs that
+  // run near-parallel closer than this for a long stretch read as one line
+  // ("tram-lining"). The separation pass bows one of them perpendicular so the
+  // pair ends up at least this far apart.
+  private static readonly TAUT_CORRIDOR_SEPARATION_PX = 10;
+  // Minimum length (px) of the near-parallel overlap before it counts as a
+  // shared corridor — short brushes are left alone.
+  private static readonly TAUT_CORRIDOR_MIN_OVERLAP_PX = 40;
 
   /**
    * Configuration constants for edge crossing optimization
@@ -793,15 +818,27 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
+   * Resolves the layoutFormat attribute to one of the three routing modes.
+   * Taut is the default: unset, 'default', and 'taut' all resolve to 'taut'.
+   * The legacy multi-router curved path is opt-in via 'legacy'.
+   */
+  private get routingMode(): 'taut' | 'legacy' | 'grid' {
+    const format = this.layoutFormat;
+    if (format === 'grid') return 'grid';
+    if (format === 'legacy') return 'legacy';
+    return 'taut';
+  }
+
+  /**
    * When true, the consolidated taut router (obstacle-avoiding corner-visibility
    * shortest path + fillet smoothing) replaces the legacy multi-router curved
-   * path in computeSingleRoute. Selected via the "Taut" routing mode
-   * (layoutFormat === 'taut') in the Routing dropdown, alongside "Default"
-   * (legacy curved) and "Grid" (orthogonal). Only affects curved routing —
-   * grid mode (gridify) is untouched.
+   * path in computeSingleRoute. Taut is the DEFAULT routing mode: an unset
+   * layoutFormat, 'default', and 'taut' all use it. The legacy multi-router
+   * curved path is opt-in via layoutFormat === 'legacy' ("Curved (legacy)" in
+   * the Routing dropdown); 'grid' selects orthogonal routing (gridify).
    */
   private get useTautRouter(): boolean {
-    return this.layoutFormat === 'taut';
+    return this.routingMode === 'taut';
   }
 
   /**
@@ -1316,8 +1353,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         <div id="routing-control">
           <label for="routing-mode">Routing:</label>
           <select id="routing-mode" title="Edge routing mode">
-            <option value="default">Default</option>
             <option value="taut">Taut</option>
+            <option value="legacy">Curved (legacy)</option>
             <option value="grid">Grid</option>
           </select>
         </div>
@@ -1424,9 +1461,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // Set up routing mode dropdown
     const routingModeSelect = this.root.querySelector('#routing-mode') as HTMLSelectElement;
     if (routingModeSelect) {
-      // Set initial value from attribute
-      const currentFormat = this.layoutFormat || 'default';
-      routingModeSelect.value = currentFormat;
+      // Set initial value from attribute (unset/'default' resolve to taut)
+      routingModeSelect.value = this.routingMode;
 
       routingModeSelect.addEventListener('change', () => {
         this.handleRoutingModeChange(routingModeSelect.value);
@@ -1488,8 +1524,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private updateRoutingModeDropdown(): void {
     const routingModeSelect = this.shadowRoot?.querySelector('#routing-mode') as HTMLSelectElement;
     if (routingModeSelect) {
-      const currentFormat = this.layoutFormat || 'default';
-      routingModeSelect.value = currentFormat;
+      routingModeSelect.value = this.routingMode;
     }
   }
 
@@ -2058,6 +2093,21 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       throw new Error('Invalid instance layout provided. Expected an InstanceLayout instance.');
     }
 
+    // Tear down any in-flight render FIRST — before any state is read or
+    // mutated for the new one. Without this, the old solver's d3 timer keeps
+    // ticking against the component while the new render replaces
+    // currentLayout/svgNodes underneath it — its stale tick and end closures
+    // then race the new render's (the wedged-overlay / never-routed-edges /
+    // never-revealed-morph failures).
+    this.teardownInflightRender();
+
+    // Claim the render generation. A superseded render can be torn down at
+    // entry only if its solver already exists — a competitor arriving while
+    // this render is still awaiting translation has nothing to stop yet, so
+    // each render also re-checks its claim after the await (and in its
+    // tick/end closures) and abandons itself once superseded.
+    const generation = ++this.renderGeneration;
+
     const transitionMode = this.resolveTransitionMode(options);
     const shouldMorph = transitionMode === 'morph';
     const shouldShowLoadingOverlay = transitionMode === 'replace';
@@ -2178,6 +2228,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       // Translate to WebCola format with actual container dimensions
       const translator = new WebColaTranslator();
       const webcolaLayout = await translator.translate(instanceLayout, containerWidth, containerHeight, translatorOptions);
+
+      // Superseded while awaiting translation? The newer render owns the
+      // element now — abandon before creating a solver it can't tear down.
+      if (generation !== this.renderGeneration) return;
 
       if (shouldShowLoadingOverlay) {
         this.updateLoadingProgress(`Computing layout for ${webcolaLayout.nodes.length} nodes...`);
@@ -2308,6 +2362,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       // Start the layout with specific iteration counts and proper event handling
       layout
         .on('tick', () => {
+          // Superseded render: a newer renderLayout owns the element. The
+          // entry teardown detaches these handlers when the solver already
+          // exists, but a solver started after the competitor's teardown ran
+          // (i.e. this render was past its await) only dies via this check.
+          if (generation !== this.renderGeneration) return;
           // A tick queued before clear()/dispose() can land after the
           // selections were nulled — bail out instead of crashing.
           if (!this.currentLayout || !this.svgNodes) return;
@@ -2326,8 +2385,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           }
 
           // Drag-triggered ticks: render position updates normally.
-          // Grid mode uses the orthogonal updater; every other mode (default,
-          // taut, unset) uses the standard one.
+          // Grid mode uses the orthogonal updater; every other mode (taut,
+          // legacy, unset) uses the standard one.
           if (this.layoutFormat === 'grid') {
             this.gridUpdatePositions();
           } else {
@@ -2335,7 +2394,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           }
         })
         .on('end', () => {
-          // Same teardown race as the tick handler above.
+          // Superseded render — same checkpoint as the tick handler above.
+          if (generation !== this.renderGeneration) return;
+          // Teardown race: bail if clear()/dispose() nulled the selections.
           if (!this.currentLayout || !this.svgNodes) return;
 
           isInitialSolve = false;
@@ -2448,6 +2509,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
   /** Active d3.timer for the slide animation — kept so `clear()` can stop it. */
   private morphSlideTimer: any = null;
+
+  /**
+   * Monotonic render claim. Each renderLayout() call takes the next value;
+   * a render whose value no longer matches has been superseded and must
+   * abandon itself at its next checkpoint (after awaits, in tick/end
+   * closures) instead of mutating state the newer render now owns.
+   */
+  private renderGeneration = 0;
 
   /**
    * Create a snapshot layer containing **only** the elements that are being
@@ -2882,35 +2951,60 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
-   * Clear the current graph visualization and reset internal state.
-   * This is useful when switching between temporal states to ensure a clean slate.
+   * Tears down everything still running from a previous render: the WebCola
+   * solve (whose d3 timer would otherwise keep firing stale tick/end closures
+   * against state the next render replaces), the morph slide timer, any
+   * lingering morph-exit snapshot layer, and the entering-element bookkeeping.
+   *
+   * Called at the top of renderLayout() — so overlapping renders can't race —
+   * and from clear()/dispose(), which add their own state nulling on top.
+   * Safe to call at any point in the component lifecycle, including before
+   * the first render (every step is guarded).
    */
-  public clear(): void {
-    // Stop any running layout
+  private teardownInflightRender(): void {
     if (this.colaLayout) {
       try {
         (this.colaLayout as any).stop?.();
-      } catch (e) {
-        // Ignore errors when stopping layout
+      } catch {
+        // Solver may already be stopped; nothing to clean up.
       }
-      // Mirror dispose(): stop() doesn't cancel an already-queued tick, so
-      // detach the handlers or a stale tick would fire against the nulled
-      // selections below.
+      // stop() doesn't cancel an already-queued tick, so detach the handlers
+      // or a stale tick/end would fire against the next render's state.
       (this.colaLayout as any).on?.('tick', null);
       (this.colaLayout as any).on?.('end', null);
-    }
-
-    // Clear the SVG container
-    if (this.container) {
-      this.container.selectAll('*').remove();
-    }
-    // Clean up any in-progress morph transitions
-    if (this.svg) {
-      this.svg.selectAll('.morph-exit-layer').interrupt().remove();
     }
     if (this.morphSlideTimer) {
       this.morphSlideTimer.stop();
       this.morphSlideTimer = null;
+    }
+    // A superseded morph can leave its old-graph snapshot fading on screen.
+    // Morph renders replace it themselves, but a 'replace' render would not —
+    // remove it here so it can't linger above the new graph.
+    if (this.svg) {
+      this.svg.selectAll('.morph-exit-layer').interrupt().remove();
+    }
+    this.morphEnteringNodeIds = new Set();
+    this.morphEnteringEdgeIds = new Set();
+
+    // Hide any loading overlay the superseded render raised. A 'replace' render
+    // shows it and relies on its own 'end' handler to hide it — but that handler
+    // was just detached (or will bail on the generation guard), and a morph
+    // render that supersedes it never touches the overlay. Without this the
+    // overlay wedges at its last message ("Finalizing…") forever.
+    this.hideLoading();
+  }
+
+  /**
+   * Clear the current graph visualization and reset internal state.
+   * This is useful when switching between temporal states to ensure a clean slate.
+   */
+  public clear(): void {
+    // Stop the solver, morph timers/layers, and stale handlers.
+    this.teardownInflightRender();
+
+    // Clear the SVG container
+    if (this.container) {
+      this.container.selectAll('*').remove();
     }
     this.morphOldPositions = null;
 
@@ -4577,8 +4671,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       // causing edges to stop short of the visual node boundary.
       this.ensureNodeBounds(true);
 
-      // Prepare edge routing with margin
-      if (typeof (this.colaLayout as any)?.prepareEdgeRouting === 'function') {
+      // Prepare edge routing with margin. Only the legacy router uses WebCola's
+      // routeEdge (which needs this visibility-graph build); the taut router
+      // has its own obstacle model, so skip the O(N²) prep when it's active.
+      if (!this.useTautRouter && typeof (this.colaLayout as any)?.prepareEdgeRouting === 'function') {
         (this.colaLayout as any).prepareEdgeRouting(
           WebColaCnDGraph.VIEWBOX_PADDING / WebColaCnDGraph.EDGE_ROUTE_MARGIN_DIVISOR
         );
@@ -4600,6 +4696,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
       // Post-routing crossing optimization
       this.optimizeCrossings();
+
+      // Taut mode: separate different-pair routes sharing a corridor
+      // (optimizeCrossings no-ops in taut mode; this is its obstacle-aware
+      // counterpart for near-parallel overlaps rather than crossings).
+      if (this.useTautRouter) this.separateTautCorridors();
 
       // Apply computed routes to SVG
       this.applyRoutesToSVG();
@@ -5302,8 +5403,18 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       // clipping so the port shift isn't overwritten.
       const portAdjusted = this.applyPortBasedEndpointsOrthogonal(edgeData, points);
 
+      // Final cleanup: the clip and port-shift steps above introduce backtrack
+      // spurs (an L-bend that doubles back along the entry axis) and small
+      // stair-steps. The gridify-time flatten pass ran BEFORE these draw-time
+      // adjustments, so it can't see them — clean the final polyline here.
+      const cleaned = this.cleanupOrthogonalRoute(
+        portAdjusted,
+        this.currentLayout?.nodes ?? [],
+        edgeData
+      );
+
       // Convert points back to SVG path using grid line function for sharp turns
-      return this.gridLineFunction(portAdjusted);
+      return this.gridLineFunction(cleaned);
     } catch (error) {
       console.warn('Error adjusting grid route for arrow positioning:', error);
       return null;
@@ -5878,24 +5989,64 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   /**
    * Drops interior points that are collinear with their immediate neighbors.
    * For an orthogonal route, "collinear" means three consecutive points share
-   * the same X (vertical line) or the same Y (horizontal line). Always safe.
+   * the same X (vertical line) or the same Y (horizontal line), to a small
+   * float tolerance. This also removes backtrack spurs (a middle point lying
+   * BEYOND its successor on the shared axis): the direct segment covers a
+   * subset of the line the two original segments covered, so the drop can
+   * never introduce a collision.
    */
   private dropCollinearGridPoints(
     points: Array<{ x: number; y: number }>
   ): Array<{ x: number; y: number }> {
     if (points.length < 3) return points;
+    const EPS = 0.01;
+    const eq = (a: number, b: number) => Math.abs(a - b) < EPS;
     const result: Array<{ x: number; y: number }> = [points[0]];
     for (let i = 1; i < points.length - 1; i++) {
       const prev = result[result.length - 1];
       const cur = points[i];
       const next = points[i + 1];
-      const collinearX = prev.x === cur.x && cur.x === next.x;
-      const collinearY = prev.y === cur.y && cur.y === next.y;
-      if (collinearX || collinearY) continue; // cur is redundant
+      const collinearX = eq(prev.x, cur.x) && eq(cur.x, next.x);
+      const collinearY = eq(prev.y, cur.y) && eq(cur.y, next.y);
+      const duplicate = eq(prev.x, cur.x) && eq(prev.y, cur.y);
+      if (collinearX || collinearY || duplicate) continue; // cur is redundant
       result.push(cur);
     }
     result.push(points[points.length - 1]);
     return result;
+  }
+
+  /**
+   * Draw-time cleanup for a fully adjusted orthogonal polyline (after endpoint
+   * clipping and port shifts). Iterates collinear/backtrack-spur removal with
+   * the Z- and U-flatten passes until stable, mirroring flattenGridRouteBends —
+   * which runs earlier, on the raw GridRouter output, and therefore can't see
+   * artifacts introduced by the draw-time adjustments.
+   *
+   * The collinear/spur pass is O(points) and always runs. The Z/U passes scan
+   * nodes per candidate segment, so they observe the same edge-count gate as
+   * the other O(E·N) polish passes (CROSSING_OPTIMIZATION_EDGE_THRESHOLD).
+   */
+  private cleanupOrthogonalRoute(
+    points: Array<{ x: number; y: number }>,
+    nodes: any[],
+    edge: any
+  ): Array<{ x: number; y: number }> {
+    if (!points || points.length < 3) return points;
+    const allowFlatten =
+      (this.currentLayout?.links?.length ?? 0) <= WebColaCnDGraph.CROSSING_OPTIMIZATION_EDGE_THRESHOLD;
+    const MAX_ITERATIONS = 6;
+    let out = points;
+    for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
+      const before = out.length;
+      out = this.dropCollinearGridPoints(out);
+      if (allowFlatten) {
+        out = this.flattenGridRouteZShapes(out, nodes, edge);
+        out = this.flattenGridRouteUBumps(out, nodes, edge);
+      }
+      if (out.length === before) break; // converged
+    }
+    return out;
   }
 
   /**
@@ -6502,8 +6653,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       return this.createSelfLoopRoute(edgeData);
     }
 
-    // Consolidated taut router (flag-gated). When off, the legacy multi-router
-    // path below runs byte-identically.
+    // Consolidated taut router (the default). The legacy multi-router path
+    // below runs only when layoutFormat === 'legacy'.
     if (this.useTautRouter) {
       return this.computeTautRoute(edgeData);
     }
@@ -6612,11 +6763,17 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     const base = this.routeTautPolyline(src, tgt, obstacles);
     // Parallel edges between the same pair: fan via curvature/offset. That
     // post-step is obstacle-blind — it offsets/curves every waypoint without
-    // re-checking collisions, so a fanned route can bow back into a node. Keep
-    // the fan only when it stays clear; otherwise the obstacle-aware base wins.
-    // (For non-parallel edges handleMultipleEdgeRouting is a no-op, so base wins.)
-    const fanned = this.handleMultipleEdgeRouting(edgeData, base.map(p => ({ ...p })));
-    return this.routePolylineClips(fanned, obstacles) ? base : fanned;
+    // re-checking collisions, so a fanned route can bow back into a node.
+    // Try the fan at successively smaller curvatures and keep the first one
+    // that stays clear; if even the smallest clips, the obstacle-aware base
+    // wins (port distribution still separates siblings at the endpoints).
+    // (For non-parallel edges handleMultipleEdgeRouting is a no-op, so the
+    // first iteration returns base unchanged and passes the clip check.)
+    for (const scale of WebColaCnDGraph.TAUT_FAN_SCALES) {
+      const fanned = this.handleMultipleEdgeRouting(edgeData, base.map(p => ({ ...p })), scale);
+      if (!this.routePolylineClips(fanned, obstacles)) return fanned;
+    }
+    return base;
   }
 
   /**
@@ -6832,7 +6989,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // a corner can dip back into the very obstacle that owns it.)
     const visible = (a: V, b: V): boolean => !this.anyObstacleBlocks(a, b, visObstacles, -1, -1);
 
-    // Dijkstra over the (dense) visibility graph.
+    // Dijkstra over the (dense) visibility graph. Every intermediate vertex on
+    // a path is an obstacle corner the route bends around, so each is charged
+    // TAUT_BEND_PENALTY_PX on top of Euclidean length — between near-equal
+    // candidates, the path with fewer corners wins (no staircase ties).
+    const bendPenalty = WebColaCnDGraph.TAUT_BEND_PENALTY_PX;
     const dist = new Array(n).fill(Infinity);
     const prev = new Array(n).fill(-1);
     const done = new Array(n).fill(false);
@@ -6845,7 +7006,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       for (let v = 0; v < n; v++) {
         if (done[v] || v === u || !visible(verts[u], verts[v])) continue;
         const dx = verts[u].x - verts[v].x, dy = verts[u].y - verts[v].y;
-        const w = Math.sqrt(dx * dx + dy * dy);
+        const w = Math.sqrt(dx * dx + dy * dy) + (v === END ? 0 : bendPenalty);
         if (dist[u] + w < dist[v]) { dist[v] = dist[u] + w; prev[v] = u; }
       }
     }
@@ -6969,10 +7130,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   /**
    * Builds an SVG path for a polyline with bounded-radius rounded corners. Each
    * interior vertex is rounded with a quadratic Bézier whose trim radius is
-   * capped at EDGE_CLEARANCE_PX and half of each adjacent segment — so the curve
-   * never bows past the clearance band onto a node. Unlike d3.curveBasis (which
-   * approximates and can bulge inward), the polyline is interpolated exactly:
-   * endpoints and straight runs are preserved, giving clean perpendicular exits.
+   * capped at TAUT_FILLET_RADIUS_PX and half of each adjacent segment — the
+   * radius constant documents why that cap can't bow the curve onto a node.
+   * Unlike d3.curveBasis (which approximates and can bulge inward), the
+   * polyline is interpolated exactly: endpoints and straight runs are
+   * preserved, giving clean perpendicular exits.
    */
   private filletPath(route: Array<{ x: number; y: number }>): string {
     if (!route || route.length === 0) return '';
@@ -6980,7 +7142,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     if (route.length === 2) {
       return `M ${route[0].x} ${route[0].y} L ${route[1].x} ${route[1].y}`;
     }
-    const rMax = WebColaCnDGraph.EDGE_CLEARANCE_PX;
+    const rMax = WebColaCnDGraph.TAUT_FILLET_RADIUS_PX;
     let d = `M ${route[0].x} ${route[0].y}`;
     for (let i = 1; i < route.length - 1; i++) {
       const p0 = route[i - 1], p1 = route[i], p2 = route[i + 1];
@@ -6996,6 +7158,257 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     const last = route[route.length - 1];
     d += ` L ${last.x} ${last.y}`;
     return d;
+  }
+
+  // ── Corridor separation (taut mode) ─────────────────────────────────
+
+  /**
+   * Separates routes from DIFFERENT node pairs that run near-parallel within
+   * TAUT_CORRIDOR_SEPARATION_PX of each other for at least
+   * TAUT_CORRIDOR_MIN_OVERLAP_PX ("tram-lining"). One route of each pair is
+   * bowed perpendicular, away from the other, by just enough to restore the
+   * separation — validated against the edge's obstacle set so the bow never
+   * clips a node. Same-pair edges are skipped (fanning owns those), as are
+   * group edges, self-loops, and routes that are already complex.
+   *
+   * Cost: O(E²·S²) pairwise segment scan, gated by the same edge-count
+   * threshold and wall-clock budget as the crossing optimizer.
+   */
+  private separateTautCorridors(): void {
+    if (this.computedRoutes.size < 2) return;
+
+    type Item = { id: string; edge: any; route: Array<{ x: number; y: number }>; len: number };
+    const items: Item[] = [];
+    for (const edge of (this.currentLayout?.links ?? []) as EdgeWithMetadata[]) {
+      if (this.isAlignmentEdge(edge)) continue;
+      if (edge.source.id === edge.target.id) continue;
+      if (edge.id?.startsWith('_g_')) continue;
+      const route = this.computedRoutes.get(edge.id);
+      if (!route || route.length < 2 || route.length > 6) continue;
+      items.push({ id: edge.id, edge, route, len: this.getRouteLength(route) });
+    }
+    if (items.length < 2 || items.length > WebColaCnDGraph.CROSSING_OPTIMIZATION_EDGE_THRESHOLD) return;
+
+    const budgetMs = WebColaCnDGraph.MAX_CROSSING_OPTIMIZATION_BUDGET_MS;
+    const now = (): number =>
+      (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now();
+    const startedAt = now();
+
+    for (let pass = 0; pass < 2; pass++) {
+      let changed = false;
+      for (let i = 0; i < items.length; i++) {
+        for (let j = i + 1; j < items.length; j++) {
+          if (now() - startedAt > budgetMs) return;
+          const a = items[i], b = items[j];
+          // Same-pair edges only ever separate via fanning/ports.
+          const samePair =
+            (a.edge.source.id === b.edge.source.id && a.edge.target.id === b.edge.target.id) ||
+            (a.edge.source.id === b.edge.target.id && a.edge.target.id === b.edge.source.id);
+          if (samePair) continue;
+
+          const overlap = this.findParallelOverlap(a.route, b.route);
+          if (!overlap) continue;
+
+          // Bow the shorter route first (less visual distortion); fall back to
+          // the longer one if the shorter can't move without hitting a node.
+          const needed = WebColaCnDGraph.TAUT_CORRIDOR_SEPARATION_PX - overlap.lateral + 2;
+          const ordered: Array<[Item, number]> = a.len <= b.len
+            ? [[a, overlap.segA], [b, overlap.segB]]
+            : [[b, overlap.segB], [a, overlap.segA]];
+          for (const [item, segIdx] of ordered) {
+            // Push away from the other route: away-side for A is -side, for B +side.
+            const sideSign = item === a ? -overlap.side : overlap.side;
+            // The window is in A's segment frame; convert for B by projecting
+            // its endpoints onto B's segment.
+            let sStart = overlap.sStart, sEnd = overlap.sEnd;
+            if (item === b) {
+              const aSeg = a.route[overlap.segA];
+              const bSeg1 = b.route[overlap.segB], bSeg2 = b.route[overlap.segB + 1];
+              const bdx = bSeg2.x - bSeg1.x, bdy = bSeg2.y - bSeg1.y;
+              const bLen = Math.hypot(bdx, bdy);
+              if (bLen < 1e-6) continue;
+              const ubx = bdx / bLen, uby = bdy / bLen;
+              const proj = (s: number) => {
+                const px = aSeg.x + overlap.dir.x * s, py = aSeg.y + overlap.dir.y * s;
+                return Math.max(0, Math.min(bLen, (px - bSeg1.x) * ubx + (py - bSeg1.y) * uby));
+              };
+              const pA = proj(overlap.sStart), pB = proj(overlap.sEnd);
+              sStart = Math.min(pA, pB);
+              sEnd = Math.max(pA, pB);
+            }
+            const nudged = this.tryBowRouteAside(item.edge, item.route, segIdx, sideSign, needed, sStart, sEnd);
+            if (nudged) {
+              this.computedRoutes.set(item.id, nudged);
+              item.route = nudged;
+              item.len = this.getRouteLength(nudged);
+              changed = true;
+              break;
+            }
+          }
+        }
+      }
+      if (!changed) break;
+    }
+  }
+
+  /**
+   * Finds the longest near-parallel close approach between two polylines: the
+   * window along one of A's segments where B's segment runs within
+   * TAUT_CORRIDOR_SEPARATION_PX on one side. Because the segments may be
+   * slightly skew, the lateral distance is linear along the window — the
+   * window is wherever it stays under the threshold (this catches both true
+   * parallel corridors and "pinches" where two routes converge).
+   *
+   * Returns the A-segment index, B-segment index, A's unit direction, the
+   * window [sStart, sEnd] in px along A's segment, the mean lateral distance
+   * inside the window, and which side of A the approach is on (+1/-1) — or
+   * null if no window of at least TAUT_CORRIDOR_MIN_OVERLAP_PX exists.
+   */
+  private findParallelOverlap(
+    routeA: Array<{ x: number; y: number }>,
+    routeB: Array<{ x: number; y: number }>
+  ): {
+    segA: number; segB: number;
+    dir: { x: number; y: number };
+    sStart: number; sEnd: number;
+    lateral: number; side: number;
+  } | null {
+    const SEP = WebColaCnDGraph.TAUT_CORRIDOR_SEPARATION_PX;
+    const MIN_OVERLAP = WebColaCnDGraph.TAUT_CORRIDOR_MIN_OVERLAP_PX;
+    const SIN_MAX_ANGLE = 0.15; // ≈ 8.6° — segments more skewed than this aren't a corridor
+    let best: NonNullable<ReturnType<WebColaCnDGraph['findParallelOverlap']>> & { windowLen: number } | null = null;
+
+    for (let i = 0; i < routeA.length - 1; i++) {
+      const a1 = routeA[i], a2 = routeA[i + 1];
+      const ax = a2.x - a1.x, ay = a2.y - a1.y;
+      const aLen = Math.hypot(ax, ay);
+      if (aLen < MIN_OVERLAP) continue;
+      const ux = ax / aLen, uy = ay / aLen;
+
+      for (let j = 0; j < routeB.length - 1; j++) {
+        const b1 = routeB[j], b2 = routeB[j + 1];
+        const bx = b2.x - b1.x, by = b2.y - b1.y;
+        const bLen = Math.hypot(bx, by);
+        if (bLen < MIN_OVERLAP) continue;
+        // Near-parallel in either direction.
+        const sinAngle = Math.abs(ux * (by / bLen) - uy * (bx / bLen));
+        if (sinAngle > SIN_MAX_ANGLE) continue;
+
+        // B's endpoints in A's frame: longitudinal t (along u), lateral (along
+        // the perpendicular n = (uy, -ux)). Lateral varies linearly with t.
+        const t1 = (b1.x - a1.x) * ux + (b1.y - a1.y) * uy;
+        const t2 = (b2.x - a1.x) * ux + (b2.y - a1.y) * uy;
+        const lat1 = (b1.x - a1.x) * uy - (b1.y - a1.y) * ux;
+        const lat2 = (b2.x - a1.x) * uy - (b2.y - a1.y) * ux;
+        if (Math.abs(t2 - t1) < 1e-6) continue;
+
+        // lat(s) = lat1 + (s - t1) * slope over s in the projected span.
+        const slope = (lat2 - lat1) / (t2 - t1);
+        const spanMin = Math.max(0, Math.min(t1, t2));
+        const spanMax = Math.min(aLen, Math.max(t1, t2));
+        if (spanMax - spanMin < MIN_OVERLAP) continue;
+        const latAt = (s: number) => lat1 + (s - t1) * slope;
+
+        // Window where |lat(s)| < SEP, intersected with the span. Since lat is
+        // linear, solve at the boundaries. Also require one consistent side
+        // (no sign flip inside the window — a flip means the routes cross;
+        // crossing is not a corridor).
+        let w1 = spanMin, w2 = spanMax;
+        if (Math.abs(slope) > 1e-9) {
+          const sAtPlus = t1 + (SEP - lat1) / slope;
+          const sAtMinus = t1 + (-SEP - lat1) / slope;
+          const lo = Math.min(sAtPlus, sAtMinus);
+          const hi = Math.max(sAtPlus, sAtMinus);
+          w1 = Math.max(w1, lo);
+          w2 = Math.min(w2, hi);
+        } else if (Math.abs(lat1) >= SEP) {
+          continue;
+        }
+        if (w2 - w1 < MIN_OVERLAP) continue;
+        const latMid = latAt((w1 + w2) / 2);
+        if (latMid === 0) continue;
+        // Trim the window to where lat keeps the mid's sign (cross-over guard).
+        if (Math.abs(slope) > 1e-9) {
+          const sZero = t1 - lat1 / slope;
+          if (sZero > w1 && sZero < w2) {
+            if (latMid > 0 === slope > 0) w1 = Math.max(w1, sZero);
+            else w2 = Math.min(w2, sZero);
+          }
+        }
+        if (w2 - w1 < MIN_OVERLAP) continue;
+
+        const windowLen = w2 - w1;
+        if (!best || windowLen > best.windowLen) {
+          best = {
+            segA: i, segB: j,
+            dir: { x: ux, y: uy },
+            sStart: w1, sEnd: w2,
+            lateral: Math.abs(latAt((w1 + w2) / 2)),
+            side: latMid > 0 ? 1 : -1,
+            windowLen,
+          };
+        }
+      }
+    }
+    if (!best) return null;
+    const { windowLen: _drop, ...result } = best;
+    return result;
+  }
+
+  /**
+   * Bows the [sStart, sEnd] window (px along the segment) of segment `segIdx`
+   * perpendicular by `amount` px on `sideSign`'s side: the window's interior
+   * is shifted sideways, joined by diagonal ramps at each end (which
+   * filletPath rounds into a gentle S). The route's endpoints — and therefore
+   * ports and arrowheads — are untouched. Returns the new route, or null if
+   * the bow would clip an obstacle or the window is degenerate.
+   */
+  private tryBowRouteAside(
+    edge: any,
+    route: Array<{ x: number; y: number }>,
+    segIdx: number,
+    sideSign: number,
+    amount: number,
+    sStart: number,
+    sEnd: number
+  ): Array<{ x: number; y: number }> | null {
+    if (segIdx < 0 || segIdx >= route.length - 1) return null;
+    const p1 = route[segIdx], p2 = route[segIdx + 1];
+    const segLen = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+    if (segLen < 1e-6) return null;
+    const ux = (p2.x - p1.x) / segLen, uy = (p2.y - p1.y) / segLen;
+
+    // Clamp the window inside the segment, keeping a small margin off the
+    // segment ends so corners with adjacent segments stay clean.
+    const MARGIN = 6;
+    const w1 = Math.max(MARGIN, sStart);
+    const w2 = Math.min(segLen - MARGIN, sEnd);
+    if (w2 - w1 < WebColaCnDGraph.TAUT_CORRIDOR_MIN_OVERLAP_PX / 2) return null;
+
+    const off = Math.min(Math.max(amount, 4), 12) * sideSign;
+    const nx = uy * off, ny = -ux * off; // perpendicular shift (n = (uy, -ux))
+    // Ramps eat into the window from each end — long enough that the
+    // entry/exit tilt stays shallow (≤ ~17° at the 12px max offset).
+    const ramp = Math.min((w2 - w1) / 4, 40);
+
+    const q1 = { x: p1.x + ux * w1, y: p1.y + uy * w1 };
+    const q2 = { x: p1.x + ux * w2, y: p1.y + uy * w2 };
+    const m1 = { x: q1.x + ux * ramp + nx, y: q1.y + uy * ramp + ny };
+    const m2 = { x: q2.x - ux * ramp + nx, y: q2.y - uy * ramp + ny };
+
+    const inserted: Array<{ x: number; y: number }> = [];
+    if (w1 > MARGIN + 1) inserted.push(q1); // skip if it collapses onto p1
+    inserted.push(m1, m2);
+    if (w2 < segLen - MARGIN - 1) inserted.push(q2);
+
+    const bowed = [
+      ...route.slice(0, segIdx + 1),
+      ...inserted,
+      ...route.slice(segIdx + 1),
+    ];
+    const obstacles = this.buildRouterObstacles(edge);
+    if (this.routePolylineClips(bowed, obstacles)) return null;
+    return this.simplifyCollinear(bowed);
   }
 
   // ── Edge Crossing Optimization ──────────────────────────────────────
@@ -7725,9 +8138,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * @param route - Initial route points
    * @returns Modified route points with curvature and offset
    */
-  private handleMultipleEdgeRouting(edgeData: any, route: Array<{ x: number; y: number }>): Array<{ x: number; y: number }> {
+  private handleMultipleEdgeRouting(
+    edgeData: any,
+    route: Array<{ x: number; y: number }>,
+    curvatureScale: number = 1
+  ): Array<{ x: number; y: number }> {
     const allEdgesBetweenNodes = this.getAllEdgesBetweenNodes(edgeData.source.id, edgeData.target.id);
-    
+
     // Early return for single edge - no curvature needed
     if (allEdgesBetweenNodes.length <= 1) {
       return route;
@@ -7750,12 +8167,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
     // Find edge index once and reuse for both offset and curvature
     const edgeIndex = allEdgesBetweenNodes.findIndex(edge => edge.id === edgeData.id);
-    
-    // Apply offset and curvature only if we found the edge
+
+    // Apply offset and curvature only if we found the edge. curvatureScale < 1
+    // shrinks the fan bulge (used by the taut router to back off a fan that
+    // would clip an obstacle) — endpoint/port offsets are not scaled because
+    // they stay on the node perimeter by construction.
     if (edgeIndex !== -1) {
       route = this.applyEdgeOffsetWithIndex(edgeData, route, allEdgesBetweenNodes, angle, edgeIndex, distance);
       const curvature = this.calculateCurvatureWithIndex(allEdgesBetweenNodes, edgeData.id, edgeIndex);
-      const cappedCurvature = this.clampCurvature(curvature);
+      const cappedCurvature = this.clampCurvature(curvature) * curvatureScale;
       route = this.applyCurvatureToRoute(route, cappedCurvature, angle, distance);
     }
 
@@ -9844,12 +10264,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * Hide loading indicator
    */
   private hideLoading(): void {
-    const loading = this.root.querySelector('#loading') as HTMLElement;
     if (this.loadingShowTimer !== null) {
       window.clearTimeout(this.loadingShowTimer);
       this.loadingShowTimer = null;
     }
-    loading.classList.remove('visible');
+    // Null-guarded: teardownInflightRender() may call this before the template
+    // is attached or after the shadow root is torn down.
+    const loading = this.root?.querySelector('#loading') as HTMLElement | null;
+    loading?.classList.remove('visible');
   }
 
   /**
@@ -10311,37 +10733,31 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * - Temporary UI elements (modals, overlays)
    */
   public dispose(): void {
+    // Stop the solver and morph timers, detach stale tick/end handlers, and
+    // remove any morph snapshot layer — before tearing down the selections
+    // those handlers would otherwise touch.
+    this.teardownInflightRender();
+
     // Remove keyboard event handlers
     this.detachInputModeListeners();
     this.deactivateInputMode();
-    
+
     // Clear D3 selections and remove event listeners
     if (this.svg) {
       this.svg.on('.zoom', null); // Remove zoom event handlers
       this.svg.selectAll('*').remove(); // Remove all child elements
     }
-    
+
     if (this.container) {
       this.container.selectAll('*').remove(); // Remove all container children
     }
-    
+
     // Clear node drag event handlers
     if (this.svgNodes) {
       this.svgNodes.on('.drag', null);
       this.svgNodes.on('.cnd', null);
     }
-    
-    // Clear WebCola layout reference
-    if (this.colaLayout) {
-      // Stop any ongoing layout computation
-      if (typeof (this.colaLayout as any).stop === 'function') {
-        (this.colaLayout as any).stop();
-      }
-      // Remove event handlers
-      (this.colaLayout as any).on('tick', null);
-      (this.colaLayout as any).on('end', null);
-    }
-    
+
     // Clear stored references to help garbage collection
     this.currentLayout = null as any;
     this.colaLayout = null as any;

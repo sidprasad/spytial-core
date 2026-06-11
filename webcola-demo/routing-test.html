@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Edge Routing Test Harness</title>
+    <style>
+        body { margin: 0; font-family: sans-serif; }
+        #bar { display: flex; gap: 8px; padding: 6px; background: #f0f0f0; align-items: center; }
+        webcola-cnd-graph { display: block; width: 100vw; height: calc(100vh - 44px); }
+        select, button { font-size: 14px; padding: 3px 8px; }
+        #status { margin-left: auto; font-size: 13px; color: #555; }
+    </style>
+</head>
+<body>
+    <div id="bar">
+        <label>Graph: <select id="graph-select"></select></label>
+        <button onclick="load()">Load</button>
+        <span id="status"></span>
+    </div>
+    <webcola-cnd-graph id="graph" width="780" height="540"></webcola-cnd-graph>
+
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="../vendor/cola.js"></script>
+    <script src="../dist/browser/spytial-core-complete.global.js"></script>
+    <script>
+        const N = (id, label, type) => ({ id, label: label ?? id, type: type ?? 'Node' });
+        const T = (...atoms) => ({ atoms, types: atoms.map(() => 'Node') });
+        const R = (name, pairs) => ({ id: name, name, types: ['Node','Node'], tuples: pairs.map(p => T(...p)) });
+
+        const GRAPHS = {
+            // Binary tree + cross/back edges + parallel pair + self loop
+            mixed: {
+                data: {
+                    atoms: ['n0','n1','n2','n3','n4','n5','n6','n7','n8'].map((id,i) => N(id, i===0?'Root':String.fromCharCode(64+i))),
+                    relations: [
+                        R('left', [['n0','n1'],['n1','n3'],['n2','n5'],['n3','n7']]),
+                        R('right', [['n0','n2'],['n1','n4'],['n2','n6']]),
+                        R('next', [['n3','n4'],['n4','n5'],['n5','n6']]),
+                        R('back', [['n6','n0'],['n7','n2']]),
+                        R('twin', [['n1','n2'],['n2','n1']]),
+                        R('self', [['n8','n8'],['n0','n8']])
+                    ]
+                },
+                spec: ''
+            },
+            // Linked list: classic chain, plus a long skip edge that must route around
+            list: {
+                data: {
+                    atoms: ['a','b','c','d','e','f'].map(id => N(id)),
+                    relations: [
+                        R('next', [['a','b'],['b','c'],['c','d'],['d','e'],['e','f']]),
+                        R('skip', [['a','f'],['b','e']])
+                    ]
+                },
+                spec: 'constraints:\n  - orientation:\n      selector: next\n      directions: [right]'
+            },
+            // Grid of nodes (4x3) with horizontal+vertical relations: stresses grid routing
+            lattice: {
+                data: {
+                    atoms: Array.from({length: 12}, (_, i) => N('g' + i)),
+                    relations: [
+                        R('row', [['g0','g1'],['g1','g2'],['g2','g3'],['g4','g5'],['g5','g6'],['g6','g7'],['g8','g9'],['g9','g10'],['g10','g11']]),
+                        R('col', [['g0','g4'],['g4','g8'],['g1','g5'],['g5','g9'],['g2','g6'],['g6','g10'],['g3','g7'],['g7','g11']]),
+                        R('diag', [['g0','g5'],['g5','g10'],['g2','g7']])
+                    ]
+                },
+                spec: 'constraints:\n  - orientation:\n      selector: row\n      directions: [right]\n  - orientation:\n      selector: col\n      directions: [below]'
+            },
+            // Hub: one node with many fan edges (port distribution stress)
+            hub: {
+                data: {
+                    atoms: [N('hub','Hub'), ...Array.from({length: 8}, (_, i) => N('s' + i))],
+                    relations: [
+                        R('spoke', [['hub','s0'],['hub','s1'],['hub','s2'],['hub','s3'],['s4','hub'],['s5','hub'],['s6','hub'],['s7','hub']]),
+                        R('ring', [['s0','s1'],['s1','s2'],['s2','s3'],['s3','s4'],['s4','s5'],['s5','s6'],['s6','s7'],['s7','s0']])
+                    ]
+                },
+                spec: ''
+            },
+            // Dense-ish DAG with unavoidable blockers between source and target
+            dag: {
+                data: {
+                    atoms: Array.from({length: 10}, (_, i) => N('d' + i)),
+                    relations: [
+                        R('e1', [['d0','d1'],['d0','d2'],['d1','d3'],['d2','d3'],['d1','d4'],['d2','d5']]),
+                        R('e2', [['d3','d6'],['d4','d6'],['d5','d7'],['d6','d8'],['d7','d8']]),
+                        R('long', [['d0','d8'],['d0','d6'],['d1','d8'],['d2','d9'],['d9','d8']])
+                    ]
+                },
+                spec: 'constraints:\n  - orientation:\n      selector: e1\n      directions: [below]\n  - orientation:\n      selector: e2\n      directions: [below]'
+            },
+            // Parallel edges: several distinct relations between the same pairs
+            // (fan/curvature stress), plus a blocker between one pair.
+            parallel: {
+                data: {
+                    atoms: [N('p0'), N('p1'), N('p2'), N('mid')],
+                    relations: [
+                        R('f', [['p0','p1']]),
+                        R('g', [['p0','p1']]),
+                        R('h', [['p0','p1']]),
+                        R('u', [['p1','p2']]),
+                        R('v', [['p1','p2']]),
+                        R('w', [['p2','p1']])
+                    ]
+                },
+                spec: 'constraints:\n  - orientation:\n      selector: f\n      directions: [right]\n  - orientation:\n      selector: u\n      directions: [right]'
+            }
+        };
+
+        function populate() {
+            const sel = document.getElementById('graph-select');
+            for (const k of Object.keys(GRAPHS)) {
+                const o = document.createElement('option');
+                o.value = k; o.textContent = k;
+                sel.appendChild(o);
+            }
+        }
+
+        // Serialized loader: queue loads and wait for the layout-complete
+        // event (or a timeout) before declaring done. The element now tears
+        // down an in-flight render when a new one arrives (renderGeneration
+        // guard), so overlapping calls no longer wedge it — this just keeps
+        // the harness's status text and screenshots deterministic.
+        let loadChain = Promise.resolve();
+        function load() {
+            loadChain = loadChain.then(() => doLoad());
+            return loadChain;
+        }
+        async function doLoad() {
+            const status = document.getElementById('status');
+            try {
+                const Core = window.CndCore || window.spytialcore;
+                const { data, spec } = GRAPHS[document.getElementById('graph-select').value];
+                status.textContent = 'loading…';
+                const instance = new Core.JSONDataInstance(JSON.stringify(data));
+                const evaluator = new Core.SGraphQueryEvaluator();
+                evaluator.initialize({ sourceData: instance });
+                const layoutSpec = Core.parseLayoutSpec(spec || '');
+                const li = new Core.LayoutInstance(layoutSpec, evaluator, 0, true);
+                const layoutResult = li.generateLayout(instance);
+                const el = document.getElementById('graph');
+                const settled = new Promise(resolve => {
+                    const onDone = () => { el.removeEventListener('layout-complete', onDone); resolve('layout-complete'); };
+                    el.addEventListener('layout-complete', onDone);
+                    setTimeout(() => { el.removeEventListener('layout-complete', onDone); resolve('timeout'); }, 8000);
+                });
+                await el.renderLayout(layoutResult.layout);
+                await settled;
+                // Allow morph/reveal animations to finish before callers proceed.
+                await new Promise(r => setTimeout(r, 600));
+                status.textContent = 'rendered: ' + document.getElementById('graph-select').value;
+            } catch (e) {
+                console.error(e);
+                status.textContent = 'ERROR: ' + e.message;
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            populate();
+            // #noauto lets debugging sessions patch the element before any render.
+            if (!location.hash.includes('noauto')) load();
+        });
+    </script>
+</body>
+</html>
