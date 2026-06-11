@@ -118,6 +118,8 @@ describe('WebColaCnDGraph teardown (#474)', () => {
         svg: null,
         morphSlideTimer: null,
         morphOldPositions: null,
+        morphEnteringNodeIds: new Set(['stale']),
+        morphEnteringEdgeIds: new Set(['stale']),
         currentLayout: {},
         svgNodes: {},
         svgLinks: {},
@@ -125,6 +127,7 @@ describe('WebColaCnDGraph teardown (#474)', () => {
         edgeRoutingCache: { edgesBetweenNodes: new Map(), alignmentEdges: new Map() },
         dragStartPositions: new Map(),
         hideLoading: vi.fn(),
+        teardownInflightRender: proto.teardownInflightRender,
       } as any;
     }
 
@@ -149,6 +152,121 @@ describe('WebColaCnDGraph teardown (#474)', () => {
       expect(() => proto.clear.call(fakeThis)).not.toThrow();
       expect(on).toHaveBeenCalledWith('tick', null);
       expect(on).toHaveBeenCalledWith('end', null);
+    });
+  });
+});
+
+/**
+ * Regression tests for the overlapping-render race: a renderLayout() call
+ * arriving while a previous render's solve or morph animation is still in
+ * flight must tear the old one down first, or the stale solver's tick/end
+ * closures keep firing against the new render's state (stuck loading overlay,
+ * frozen positions, morph-hidden elements never revealed).
+ */
+describe('WebColaCnDGraph overlapping renders', () => {
+  /** Minimal state teardownInflightRender touches, with an active fake solve. */
+  function inflightThis(overrides: Record<string, any> = {}) {
+    const stop = vi.fn();
+    const on = vi.fn();
+    const slideStop = vi.fn();
+    const exitLayerRemove = vi.fn();
+    const hideLoading = vi.fn();
+    const exitLayerSel = { interrupt: vi.fn(() => ({ remove: exitLayerRemove })) };
+    const fakeThis: any = {
+      colaLayout: { stop, on },
+      morphSlideTimer: { stop: slideStop },
+      svg: { selectAll: vi.fn(() => exitLayerSel) },
+      morphEnteringNodeIds: new Set(['n1']),
+      morphEnteringEdgeIds: new Set(['e1']),
+      teardownInflightRender: proto.teardownInflightRender,
+      hideLoading,
+      ...overrides,
+    };
+    return { fakeThis, stop, on, slideStop, exitLayerRemove, hideLoading };
+  }
+
+  describe('teardownInflightRender', () => {
+    it('stops the solver, detaches handlers, cancels the morph timer, clears morph leftovers, and hides the overlay', () => {
+      const { fakeThis, stop, on, slideStop, exitLayerRemove, hideLoading } = inflightThis();
+
+      proto.teardownInflightRender.call(fakeThis);
+
+      expect(stop).toHaveBeenCalled();
+      expect(on).toHaveBeenCalledWith('tick', null);
+      expect(on).toHaveBeenCalledWith('end', null);
+      expect(slideStop).toHaveBeenCalled();
+      expect(fakeThis.morphSlideTimer).toBeNull();
+      expect(fakeThis.svg.selectAll).toHaveBeenCalledWith('.morph-exit-layer');
+      expect(exitLayerRemove).toHaveBeenCalled();
+      expect(fakeThis.morphEnteringNodeIds.size).toBe(0);
+      expect(fakeThis.morphEnteringEdgeIds.size).toBe(0);
+      // The wedged-"Finalizing…"-overlay fix: a superseded render's overlay
+      // must be hidden by whoever supersedes it.
+      expect(hideLoading).toHaveBeenCalled();
+    });
+
+    it('still detaches handlers and hides the overlay when stop() throws', () => {
+      const on = vi.fn();
+      const { fakeThis, hideLoading } = inflightThis({
+        colaLayout: { stop: () => { throw new Error('boom'); }, on },
+      });
+
+      expect(() => proto.teardownInflightRender.call(fakeThis)).not.toThrow();
+      expect(on).toHaveBeenCalledWith('tick', null);
+      expect(on).toHaveBeenCalledWith('end', null);
+      expect(hideLoading).toHaveBeenCalled();
+    });
+
+    it('is a no-op before the first render (nothing initialized)', () => {
+      const fakeThis: any = {
+        colaLayout: null,
+        morphSlideTimer: null,
+        svg: null,
+        morphEnteringNodeIds: new Set(),
+        morphEnteringEdgeIds: new Set(),
+        hideLoading: vi.fn(),
+      };
+      expect(() => proto.teardownInflightRender.call(fakeThis)).not.toThrow();
+    });
+  });
+
+  describe('renderLayout entry', () => {
+    it('tears down the in-flight render before reading any other state', async () => {
+      const order: string[] = [];
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const fakeThis: any = {
+          renderGeneration: 0,
+          teardownInflightRender: vi.fn(() => order.push('teardown')),
+          resolveTransitionMode: vi.fn(() => { order.push('resolveTransitionMode'); return 'replace'; }),
+          hasValidTransform: () => false,
+          applyViewportRenderPolicy: vi.fn(),
+          svg: null,
+          zoomBehavior: null,
+          showError: vi.fn(),
+        };
+        const emptyLayout: any = { nodes: [], edges: [], constraints: [], groups: [] };
+
+        // Resolves (via the internal error path on missing d3) rather than
+        // hanging or throwing — and the teardown ran first.
+        await expect(proto.renderLayout.call(fakeThis, emptyLayout)).resolves.toBeUndefined();
+
+        expect(fakeThis.teardownInflightRender).toHaveBeenCalledTimes(1);
+        expect(order[0]).toBe('teardown');
+        expect(order[1]).toBe('resolveTransitionMode');
+        // The render claimed the next generation before doing any work.
+        expect(fakeThis.renderGeneration).toBe(1);
+      } finally {
+        errorSpy.mockRestore();
+      }
+    });
+
+    it('rejects invalid layouts without touching the in-flight render', async () => {
+      const fakeThis: any = {
+        teardownInflightRender: vi.fn(),
+      };
+      await expect(proto.renderLayout.call(fakeThis, { not: 'a layout' })).rejects.toThrow(/Invalid instance layout/);
+      expect(fakeThis.teardownInflightRender).not.toHaveBeenCalled();
     });
   });
 });
