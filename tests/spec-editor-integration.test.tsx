@@ -131,12 +131,13 @@ describe('SpecEditor — builder edits emit round-trippable YAML', () => {
       />,
     )
 
-    // Expand the flag row and edit its Flag text field.
+    // Expand the flag row and pick a flag from the closed-choice pills (the
+    // flag field is an enum of the engine's known flags, not free text; the
+    // off-list initial value parses but selects no pill).
     await expandRow(user, 'Flag')
-    const flagInput = (await screen.findByDisplayValue(
-      'hideEmptyRelations',
-    )) as HTMLInputElement
-    fireEvent.change(flagInput, { target: { value: 'hideDisconnectedBuiltIns' } })
+    await user.click(
+      await screen.findByRole('radio', { name: 'hideDisconnectedBuiltIns' }),
+    )
 
     const emitted = onChange.mock.calls.at(-1)![0] as string
     expect(emitted).toContain('hideDisconnectedBuiltIns')
@@ -207,15 +208,17 @@ describe('SpecEditor — a model mutation cancels a pending code-view parse (Fin
     )
 
     // 0) Make one undoable builder edit so Undo is enabled: expand the flag
-    //    row and change its value.
+    //    row and pick a known flag from the enum pills (the initial off-list
+    //    value selects no pill).
     act(() => {
       fireEvent.click(screen.getByText('Flag'))
     })
-    const flagInput = screen.getByDisplayValue('hideEmptyRelations') as HTMLInputElement
     act(() => {
-      fireEvent.change(flagInput, { target: { value: 'editedFlag' } })
+      fireEvent.click(screen.getByRole('radio', { name: 'hideDisconnectedBuiltIns' }))
     })
-    expect((onChange.mock.calls.at(-1)![0] as string)).toContain('editedFlag')
+    expect((onChange.mock.calls.at(-1)![0] as string)).toContain(
+      'hideDisconnectedBuiltIns',
+    )
 
     // 1) Switch to code view and type completely different valid YAML T (a
     //    single orientation constraint). This schedules the 300ms parse.

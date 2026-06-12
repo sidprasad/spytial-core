@@ -94,6 +94,16 @@ export const CYCLIC_DIRECTIONS = ['clockwise', 'counterclockwise'] as const;
 export const ALIGN_DIRECTIONS = ['horizontal', 'vertical'] as const;
 export const EDGE_STYLES = ['solid', 'dashed', 'dotted'] as const;
 
+/**
+ * The complete set of flags the engine recognizes (`layoutspec.ts` checks for
+ * exactly these and silently ignores anything else). A closed set, so the
+ * builder offers a choice instead of free text.
+ */
+export const FLAG_OPTIONS = [
+  'hideDisconnected',
+  'hideDisconnectedBuiltIns',
+] as const;
+
 // ---- definitions ---------------------------------------------------------
 
 /**
@@ -438,10 +448,16 @@ const flag: ItemDefinition = {
   fields: [
     {
       key: 'flag',
-      kind: 'text',
+      // Closed choice: the engine recognizes exactly FLAG_OPTIONS and ignores
+      // anything else, so the builder offers the real ones instead of free
+      // text. Unknown flags in hand-written YAML still parse and round-trip;
+      // they surface a structural error naming the allowed values.
+      kind: 'enum',
+      options: FLAG_OPTIONS,
       label: 'Flag',
       required: true,
-      placeholder: 'e.g. hideDisconnectedBuiltIns',
+      default: 'hideDisconnected',
+      help: 'hideDisconnected hides disconnected atoms; hideDisconnectedBuiltIns hides only disconnected built-in atoms.',
     },
   ],
   summary(params) {

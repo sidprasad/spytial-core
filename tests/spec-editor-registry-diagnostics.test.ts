@@ -134,10 +134,17 @@ describe('diagnostics — structural validation', () => {
   it('SpecDocument.validate aggregates over both sections', () => {
     const doc = new SpecDocument();
     doc.addItem('constraint', 'orientation'); // missing selector + directions
-    doc.addItem('directive', 'flag'); // missing flag
+    // flag defaults to a valid choice now (closed enum) — force an off-list
+    // value so the directive section also contributes a diagnostic.
+    const f = doc.addItem('directive', 'flag');
+    doc.updateItem(f.id, { params: { flag: 'notARealFlag' } });
     const diags = doc.validate();
     expect(diags.length).toBeGreaterThanOrEqual(3);
     expect(diags.every((d) => d.source === 'structure')).toBe(true);
+    // the off-list flag is called out with the allowed values
+    expect(
+      diags.some((d) => d.message.includes('notARealFlag')),
+    ).toBe(true);
   });
 
   it('a fully-specified document validates clean', () => {

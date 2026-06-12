@@ -205,12 +205,40 @@ describe('SpecDocument — round-trip property', () => {
     );
   });
 
-  it('emitted YAML is always accepted by the authoritative parseLayoutSpec', () => {
+  it('emitted YAML is always readable by the authoritative parseLayoutSpec', () => {
+    // The property is about WELL-FORMEDNESS: the codec must never emit YAML
+    // the engine cannot read (quoting/structure bugs). The engine ALSO
+    // rejects semantically contradictory specs at parse time (e.g. two
+    // cyclic constraints on one selector with different directions —
+    // "Inconsistent cyclic constraint…"); the document model deliberately
+    // permits those mid-edit and surfaces them as diagnostics instead
+    // (validateState's cyclic-consistency check). Such semantic rejections
+    // are therefore acceptable outcomes here; any OTHER throw is a real
+    // codec bug.
     fc.assert(
       fc.property(arbPlannedDoc, (plan) => {
         const doc = buildDoc(plan);
         const yaml = doc.toYaml();
-        expect(() => parseLayoutSpec(yaml)).not.toThrow();
+        try {
+          parseLayoutSpec(yaml);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          if (/^Inconsistent /.test(msg)) {
+            // semantic-consistency rejection: must be visible as a builder
+            // diagnostic so the user is warned before the engine ever throws
+            expect(
+              doc
+                .validate()
+                .some(
+                  (d) =>
+                    d.severity === 'error' &&
+                    d.message.includes('Inconsistent cyclic directions'),
+                ),
+            ).toBe(true);
+            return;
+          }
+          throw e;
+        }
       }),
       { numRuns: 200 },
     );

@@ -108,6 +108,38 @@ export function validateItem(item: SpecItem): Diagnostic[] {
 }
 
 /**
+ * Cross-item check mirroring `parseLayoutSpec`'s parse-time rejection: two
+ * cyclic constraints over the same selector with different directions make
+ * the engine THROW ("Inconsistent cyclic constraint…"). Surfacing it here
+ * turns that hard failure into an editable diagnostic on the offending rows.
+ */
+function validateCyclicConsistency(
+  constraints: SpecDocumentState['constraints'],
+): Diagnostic[] {
+  const out: Diagnostic[] = [];
+  const bySelector = new Map<string, { direction: string; itemId: string }>();
+  for (const item of constraints) {
+    if (item.type !== 'cyclic') continue;
+    const selector = String(item.params.selector ?? '');
+    const direction = String(item.params.direction ?? '');
+    if (!selector || !direction) continue; // missing-field checks cover these
+    const seen = bySelector.get(selector);
+    if (seen && seen.direction !== direction) {
+      out.push({
+        severity: 'error',
+        message: `Inconsistent cyclic directions for selector "${selector}" (${seen.direction} vs ${direction}) — the layout engine rejects this spec.`,
+        itemId: item.id,
+        fieldKey: 'direction',
+        source: 'structure',
+      });
+    } else if (!seen) {
+      bySelector.set(selector, { direction, itemId: item.id });
+    }
+  }
+  return out;
+}
+
+/**
  * Run structural validation across a whole document. When a `domain` is
  * supplied, WP2's domain warnings are appended after the structural
  * diagnostics.
@@ -123,6 +155,7 @@ export function validateState(
   for (const item of state.directives) {
     out.push(...validateItem(item));
   }
+  out.push(...validateCyclicConsistency(state.constraints));
   if (domain) {
     out.push(...validateAgainstDomain(state, domain));
   }
