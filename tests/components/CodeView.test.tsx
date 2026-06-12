@@ -33,6 +33,31 @@ describe('CodeView Component Tests', () => {
       const textarea = screen.getByRole('textbox')
       expect(textarea).toHaveValue(initialYaml)
     })
+
+    it('renders a highlight mirror whose text matches the value exactly', () => {
+      // The metrics contract behind the overlay: the mirror must contain the
+      // textarea's text verbatim (plus the trailing newline that preserves the
+      // last line's height), with spec keywords classed for highlighting.
+      const yaml = 'constraints:\n  - orientation: {selector: left}'
+      render(<CodeView {...defaultProps} value={yaml} />)
+      const mirror = document.querySelector('.spytial-ed-code-mirror')!
+      expect(mirror).toBeInTheDocument()
+      expect(mirror.textContent).toBe(`${yaml}\n`)
+      expect(
+        mirror.querySelector('.spytial-ed-syn-keyword')?.textContent,
+      ).toBe('constraints')
+    })
+
+    it('syntaxHighlighting={false} kills the mirror and shows plain text', () => {
+      // The escape hatch for hosts where the overlay misaligns.
+      render(
+        <CodeView {...defaultProps} value="constraints: []" syntaxHighlighting={false} />,
+      )
+      expect(document.querySelector('.spytial-ed-code-mirror')).toBeNull()
+      expect(screen.getByRole('textbox').className).toContain(
+        'spytial-ed-code-textarea--plain',
+      )
+    })
   })
 
   describe('Interactions', () => {

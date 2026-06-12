@@ -32,7 +32,7 @@ export interface FieldRendererOptions {
 /** Per-field selector wiring, forwarded into {@link SelectorField}. */
 export type SelectorFieldExtras = Pick<
   SelectorFieldProps,
-  'complete' | 'synthesize'
+  'complete' | 'synthesize' | 'highlight'
 >;
 
 export interface FieldRendererProps {

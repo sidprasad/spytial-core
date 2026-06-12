@@ -37,6 +37,11 @@ export interface CodeViewProps {
   hasUnappliedEdits?: boolean;
   /** render a line-number gutter (default true). */
   showLineNumbers?: boolean;
+  /**
+   * Render the YAML highlight mirror (default true). Escape hatch for hosts
+   * where the overlay misaligns: when false the textarea shows its own text.
+   */
+  syntaxHighlighting?: boolean;
   disabled?: boolean;
   'aria-label'?: string;
   className?: string;
@@ -55,6 +60,7 @@ export const CodeView: React.FC<CodeViewProps> = ({
   diagnostics,
   hasUnappliedEdits = false,
   showLineNumbers = true,
+  syntaxHighlighting = true,
   disabled = false,
   'aria-label': ariaLabel = 'Layout specification YAML',
   className,
@@ -71,7 +77,10 @@ export const CodeView: React.FC<CodeViewProps> = ({
     return Math.max(1, lines);
   }, [value]);
 
-  const highlightedLines = useMemo(() => tokenizeYaml(value), [value]);
+  const highlightedLines = useMemo(
+    () => (syntaxHighlighting ? tokenizeYaml(value) : []),
+    [value, syntaxHighlighting],
+  );
 
   // Keep the gutter and the highlight mirror scrolled in lockstep with the
   // textarea — both axes: with `wrap="off"` the text scrolls horizontally too.
@@ -136,34 +145,39 @@ export const CodeView: React.FC<CodeViewProps> = ({
         ) : null}
 
         <div className="spytial-ed-code-input-wrap">
-          {/* Highlight mirror, behind the textarea (presentation only). */}
-          <pre
-            ref={mirrorRef}
-            className="spytial-ed-code-mirror"
-            aria-hidden="true"
-          >
-            {highlightedLines.map((tokens, lineIdx) => (
-              <React.Fragment key={lineIdx}>
-                {lineIdx > 0 ? '\n' : null}
-                {tokens.map((t, i) => {
-                  const cls = yamlTokenClassName(t.kind);
-                  return cls ? (
-                    <span key={i} className={cls}>
-                      {t.text}
-                    </span>
-                  ) : (
-                    t.text
-                  );
-                })}
-              </React.Fragment>
-            ))}
-            {/* trailing newline keeps the last line's height in the mirror */}
-            {'\n'}
-          </pre>
+          {/* Highlight mirror, behind the textarea (presentation only;
+              omitted entirely when highlighting is disabled). */}
+          {syntaxHighlighting ? (
+            <pre
+              ref={mirrorRef}
+              className="spytial-ed-code-mirror"
+              aria-hidden="true"
+            >
+              {highlightedLines.map((tokens, lineIdx) => (
+                <React.Fragment key={lineIdx}>
+                  {lineIdx > 0 ? '\n' : null}
+                  {tokens.map((t, i) => {
+                    const cls = yamlTokenClassName(t.kind);
+                    return cls ? (
+                      <span key={i} className={cls}>
+                        {t.text}
+                      </span>
+                    ) : (
+                      t.text
+                    );
+                  })}
+                </React.Fragment>
+              ))}
+              {/* trailing newline keeps the last line's height in the mirror */}
+              {'\n'}
+            </pre>
+          ) : null}
 
           <textarea
             ref={textareaRef}
-            className="spytial-ed-code-textarea"
+            className={`spytial-ed-code-textarea${
+              syntaxHighlighting ? '' : ' spytial-ed-code-textarea--plain'
+            }`}
             value={value}
             onChange={handleChange}
             onScroll={syncScroll}

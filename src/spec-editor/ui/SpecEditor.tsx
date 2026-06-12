@@ -68,6 +68,14 @@ export interface SpecEditorProps {
   selectorAssistant?: SelectorAssistant;
   /** appearance */
   density?: 'compact' | 'comfortable';
+  /**
+   * Syntax highlighting in the code view and selector fields (default true).
+   * Both use a mirror-overlay technique (highlighted <pre> behind a
+   * transparent-text textarea); this is the escape hatch if a host's fonts or
+   * zoom ever misalign the overlay — flipping it off renders plain visible
+   * text with no mirror.
+   */
+  syntaxHighlighting?: boolean;
   defaultView?: 'builder' | 'code';
   /**
    * Optional controlled view. When provided, the editor renders this view and
@@ -95,6 +103,7 @@ export const SpecEditor: React.FC<SpecEditorProps> = ({
   theme,
   selectorAssistant,
   density = 'compact',
+  syntaxHighlighting = true,
   defaultView = 'builder',
   view: controlledView,
   onViewChange,
@@ -449,7 +458,10 @@ export const SpecEditor: React.FC<SpecEditorProps> = ({
           .catch(() => builtinResults);
       };
 
-      const extras: SelectorFieldExtras = { complete };
+      const extras: SelectorFieldExtras = {
+        complete,
+        highlight: syntaxHighlighting,
+      };
 
       if (selectorAssistant?.synthesize) {
         const synthFn = selectorAssistant.synthesize;
@@ -464,7 +476,7 @@ export const SpecEditor: React.FC<SpecEditorProps> = ({
 
       return extras;
     },
-    [domain, builtinComplete, selectorAssistant],
+    [domain, builtinComplete, selectorAssistant, syntaxHighlighting],
   );
 
   // ── Assistant review (debounced over the whole model) ───────────────────
@@ -642,6 +654,7 @@ export const SpecEditor: React.FC<SpecEditorProps> = ({
             onChange={handleCodeChange}
             diagnostics={codeDiagnostics}
             hasUnappliedEdits={hasUnappliedEdits}
+            syntaxHighlighting={syntaxHighlighting}
             disabled={disabled}
           />
         )}

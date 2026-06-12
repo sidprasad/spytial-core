@@ -60,6 +60,12 @@ export interface SelectorFieldProps {
   synthesize?: (request: string) => Promise<SynthesisResult>;
   /** field-scoped diagnostics (already filtered by the caller). */
   diagnostics?: Diagnostic[];
+  /**
+   * Render the syntax-highlight mirror overlay (default true). The escape
+   * hatch for hosts where the overlay misaligns (exotic fonts/zoom): when
+   * false the textarea renders its own visible text and no mirror exists.
+   */
+  highlight?: boolean;
   /** extra class on the root, for callers that need to hook styles. */
   className?: string;
 }
@@ -124,6 +130,7 @@ export const SelectorField: React.FC<SelectorFieldProps> = ({
   complete,
   synthesize,
   diagnostics,
+  highlight = true,
   className,
   'aria-label': ariaLabel,
   'aria-labelledby': ariaLabelledBy,
@@ -379,15 +386,22 @@ export const SelectorField: React.FC<SelectorFieldProps> = ({
         severity ? ` spytial-ed-selector--${severity}` : ''
       }${className ? ` ${className}` : ''}`}
     >
-      <div className="spytial-ed-selector-input-wrap">
-        {/* Highlight mirror, behind the textarea. */}
-        <pre
-          ref={mirrorRef}
-          className="spytial-ed-selector-mirror"
-          aria-hidden="true"
-        >
-          <HighlightedMirror value={value} />
-        </pre>
+      <div
+        className={`spytial-ed-selector-input-wrap${
+          synthesize ? ' spytial-ed-selector-input-wrap--with-synth' : ''
+        }`}
+      >
+        {/* Highlight mirror, behind the textarea (omitted when the host has
+            disabled highlighting — the escape hatch for overlay misalignment). */}
+        {highlight ? (
+          <pre
+            ref={mirrorRef}
+            className="spytial-ed-selector-mirror"
+            aria-hidden="true"
+          >
+            <HighlightedMirror value={value} />
+          </pre>
+        ) : null}
 
         {/*
           ARIA editable combobox (APG 1.2). The combobox role lives on the
@@ -398,7 +412,9 @@ export const SelectorField: React.FC<SelectorFieldProps> = ({
         */}
         <textarea
           ref={textareaRef}
-          className="spytial-ed-selector-textarea"
+          className={`spytial-ed-selector-textarea${
+            highlight ? '' : ' spytial-ed-selector-textarea--plain'
+          }`}
           value={value}
           onChange={handleInput}
           onScroll={syncScroll}

@@ -59,6 +59,8 @@ export interface CndLayoutInterfaceProps {
   selectorAssistant?: SelectorAssistant;
   /** Row density. */
   density?: 'compact' | 'comfortable';
+  /** Syntax highlighting in code view + selector fields (default true). */
+  syntaxHighlighting?: boolean;
   /** Notified whenever validation state changes. */
   onDiagnostics?: (diagnostics: Diagnostic[]) => void;
 
@@ -104,6 +106,7 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
   theme,
   selectorAssistant,
   density,
+  syntaxHighlighting,
   onDiagnostics,
   className,
   disabled = false,
@@ -162,6 +165,8 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
     if (theme !== undefined) props.theme = theme;
     if (selectorAssistant !== undefined) props.selectorAssistant = selectorAssistant;
     if (density !== undefined) props.density = density;
+    if (syntaxHighlighting !== undefined)
+      props.syntaxHighlighting = syntaxHighlighting;
     if (onDiagnostics !== undefined) props.onDiagnostics = onDiagnostics;
     if (className !== undefined) props.className = className;
     return props;
@@ -175,6 +180,7 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
     theme,
     selectorAssistant,
     density,
+    syntaxHighlighting,
     onDiagnostics,
     className,
     disabled,

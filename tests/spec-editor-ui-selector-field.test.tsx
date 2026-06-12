@@ -62,6 +62,19 @@ describe('SelectorField — typing & overlay', () => {
       'univ'
     );
   });
+
+  it('highlight={false} kills the mirror and shows plain visible text', () => {
+    // The escape hatch for hosts where the overlay misaligns: no mirror in the
+    // DOM at all, and the textarea carries the --plain modifier (own text).
+    render(
+      <SelectorField value="left + right" onChange={() => {}} highlight={false} />
+    );
+    expect(
+      document.querySelector('.spytial-ed-selector-mirror')
+    ).toBeNull();
+    const ta = screen.getByRole('combobox');
+    expect(ta.className).toContain('spytial-ed-selector-textarea--plain');
+  });
 });
 
 describe('SelectorField — autocomplete', () => {

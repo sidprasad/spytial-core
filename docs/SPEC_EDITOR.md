@@ -85,6 +85,7 @@ Defined in `src/spec-editor/ui/SpecEditor.tsx`.
 | `theme` | `SpecEditorTheme` | `undefined` | Partial token override; only the keys you set are applied as inline CSS variables on the editor root. See [Theming](#theming-guide-hook-1). |
 | `selectorAssistant` | `SelectorAssistant` | `undefined` | Pluggable completion / synthesis / review hook for selector fields. See [Selector assistance](#selector-assistance-guide-hook-2). |
 | `density` | `'compact' \| 'comfortable'` | `'compact'` | Row padding / font sizing. `compact` is noticeably tighter than the old cards. |
+| `syntaxHighlighting` | `boolean` | `true` | Syntax highlighting in the code view and selector fields. Both use a mirror overlay (highlighted `<pre>` behind a transparent-text textarea, scroll-synced, with ligatures/kerning normalized on both elements). If a host's fonts or zoom ever misalign the overlay, set this to `false` to render plain visible text with no mirror — the escape hatch that the old, removed highlighter never had. |
 | `defaultView` | `'builder' \| 'code'` | `'builder'` | The view shown initially when the editor owns its own view state (i.e. `view` is not passed). |
 | `view` | `'builder' \| 'code'` | `undefined` | Optional **controlled** view. When set, the editor renders this view and reports changes via `onViewChange` instead of owning view state. |
 | `onViewChange` | `(view: 'builder' \| 'code') => void` | `undefined` | Called when the user clicks a view tab. Required to make a controlled `view` interactive. |

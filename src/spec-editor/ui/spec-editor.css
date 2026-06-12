@@ -336,6 +336,15 @@
   font-size: 0.95em;
   line-height: 1.5;
   letter-spacing: normal;
+  word-spacing: normal;
+  /* Normalize text shaping: browsers apply ligatures/kerning differently in
+     <textarea> vs <pre> (and the mono stack includes ligature fonts), which
+     would drift the overlay out from under the caret. Force both off. */
+  font-variant-ligatures: none;
+  font-feature-settings: normal;
+  font-kerning: none;
+  hyphens: none;
+  text-rendering: auto;
   tab-size: 2;
   padding: 0.4em 0.55em;
   border: 1px solid transparent;
@@ -348,6 +357,15 @@
 .spytial-ed--compact .spytial-ed-selector-textarea,
 .spytial-ed--compact .spytial-ed-selector-mirror {
   padding: 0.3em 0.45em;
+}
+
+/* Reserve identical room for the ✨ button on BOTH elements, so the text
+   never runs under the button and wrapping stays mirrored. MUST come after
+   the compact rule above: that one sets the `padding` shorthand at equal
+   specificity and would silently reset padding-right (source order wins). */
+.spytial-ed-selector-input-wrap--with-synth .spytial-ed-selector-textarea,
+.spytial-ed-selector-input-wrap--with-synth .spytial-ed-selector-mirror {
+  padding-right: 2.3em;
 }
 
 /* The mirror sits behind; it is purely presentational. */
@@ -403,6 +421,11 @@
 .spytial-ed-selector-textarea:disabled {
   background: var(--spytial-ed-surface-raised, #f1ecdf);
   cursor: not-allowed;
+}
+
+/* highlighting disabled (escape hatch): the textarea shows its own text */
+.spytial-ed-selector-textarea--plain {
+  color: var(--spytial-ed-text, #221d14);
 }
 
 /* severity borders on the wrapper's textarea */
@@ -1304,6 +1327,14 @@
   font-size: 0.85em;
   line-height: 1.5;
   letter-spacing: normal;
+  word-spacing: normal;
+  /* same shaping normalization as the selector overlay (ligature fonts in
+     the mono stack would otherwise drift textarea vs pre) */
+  font-variant-ligatures: none;
+  font-feature-settings: normal;
+  font-kerning: none;
+  hyphens: none;
+  text-rendering: auto;
   padding: 0.5em 0.6em;
   border: none;
   white-space: pre;
@@ -1345,6 +1376,11 @@
 
 .spytial-ed-code-textarea:disabled {
   opacity: 0.6;
+}
+
+/* highlighting disabled (escape hatch): the textarea shows its own text */
+.spytial-ed-code-textarea--plain {
+  color: var(--spytial-ed-text, #221d14);
 }
 
 .spytial-ed-code-textarea:disabled + .spytial-ed-code-mirror,
