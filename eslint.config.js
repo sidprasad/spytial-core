@@ -1,6 +1,7 @@
 import js from '@eslint/js'
 import tseslint from '@typescript-eslint/eslint-plugin'
 import tsparser from '@typescript-eslint/parser'
+import globals from 'globals'
 
 export default [
   js.configs.recommended,
@@ -48,6 +49,18 @@ export default [
     files: ['src/vendor/**/*.{ts,js}'],
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
+  {
+    // Spec-editor UI primitives (WP3): React components that touch the DOM.
+    // Provide the browser + ES2021 globals so DOM/timer types resolve under
+    // the flat-config `no-undef` rule.
+    files: ['src/spec-editor/ui/**/*.{ts,tsx}'],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ...globals.es2021,
+      },
     },
   },
   {

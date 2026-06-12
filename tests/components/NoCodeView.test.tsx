@@ -1,187 +1,234 @@
 import { describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import { ConstraintData, DirectiveData } from '../../src/components/NoCodeView/interfaces'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { NoCodeView } from '../../src/components/NoCodeView/NoCodeView'
-import { useCallback, useState } from 'react'
+import '@testing-library/jest-dom'
+import { useState } from 'react'
 
-describe('NoCodeView Component Tests', () => {
+/*
+ * The legacy `NoCodeView` React component (the 27 per-type selector cards) was
+ * removed in the spec-editor redesign and replaced by the schema-driven
+ * `BuilderView`. This file is rewritten to exercise `BuilderView` directly,
+ * preserving the original test intent at the component level:
+ *
+ *   - the structured builder renders Constraints and Directives sections with
+ *     "Add constraint" / "Add directive" buttons,
+ *   - parsed constraints/directives are displayed by their type label,
+ *   - the directive add menu does NOT offer size / hideAtom (those are now
+ *     constraints in the registry),
+ *   - items can be removed and the section ends up empty.
+ *
+ * The OLD component's prop surface (setConstraints/setDirectives functional
+ * setters, per-card "Clockwise" selects, etc.) is gone; the equivalent editing
+ * behaviour is covered here against `BuilderView`'s real callbacks and in
+ * tests/spec-editor-integration.test.tsx.
+ */
 
-  const defaultProps = {
-    constraints: [],
-    setConstraints: vi.fn(),
-    directives: [],
-    setDirectives: vi.fn(),
-  };
+import { BuilderView } from '../../src/spec-editor/ui/BuilderView'
+import type { SpecItem } from '../../src/spec-editor'
+import { newId } from '../../src/spec-editor'
 
+/** No-op callback bundle for the non-mutation paths under test. */
+function noopCallbacks() {
+  return {
+    onAddItem: vi.fn(),
+    onUpdateParam: vi.fn(),
+    onUpdateComment: vi.fn(),
+    onToggleNegate: vi.fn(),
+    onDuplicate: vi.fn(),
+    onRemove: vi.fn(),
+    onMove: vi.fn(),
+  }
+}
+
+function constraint(type: string, params: Record<string, unknown>): SpecItem {
+  return { id: newId(), kind: 'constraint', type, params }
+}
+function directive(type: string, params: Record<string, unknown>): SpecItem {
+  return { id: newId(), kind: 'directive', type, params }
+}
+
+describe('Structured Builder (BuilderView) Component Tests', () => {
   describe('Rendering', () => {
+    it('should render constraints and directives sections with add buttons', () => {
+      render(
+        <BuilderView constraints={[]} directives={[]} {...noopCallbacks()} />,
+      )
 
-    it('should render constraints and directives sections with buttons', () => {
-      render(<NoCodeView {...defaultProps} />)
-
-      expect(screen.getByText(/constraints/i)).toBeInTheDocument()
-      expect(screen.getByText(/directives/i)).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /add constraint/i })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /add directive/i })).toBeInTheDocument()
+      expect(screen.getByRole('region', { name: 'Constraints' })).toBeInTheDocument()
+      expect(screen.getByRole('region', { name: 'Directives' })).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: /add constraint/i }),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: /add directive/i }),
+      ).toBeInTheDocument()
     })
 
-    it('should display constraints in No Code view', () => {
-      const constraints: ConstraintData[] = [
-        { id: '1', type: 'orientation', params: { directions: ['right'] } }
-      ]
-      
-      render(<NoCodeView {...defaultProps} constraints={constraints} />)
-      
-      expect(screen.getByText(/constraints/i)).toBeInTheDocument()
-      expect(screen.getByText(/orientation/i)).toBeInTheDocument()
+    it('should display constraints in the builder', () => {
+      render(
+        <BuilderView
+          constraints={[constraint('orientation', { directions: ['right'], selector: 'right' })]}
+          directives={[]}
+          {...noopCallbacks()}
+        />,
+      )
+
+      const list = screen.getByRole('list', { name: 'Constraints List' })
+      expect(within(list).getByText('Orientation')).toBeInTheDocument()
     })
 
-    it('should display directives in No Code view', () => {
-      const directives: DirectiveData[] = [
-        { id: '1', type: 'attribute', params: { field: 'id' } }
-      ]
-      
-      render(<NoCodeView {...defaultProps} directives={directives} />)
-      
-      expect(screen.getByText(/directives/i)).toBeInTheDocument()
-      expect(screen.getByText(/attribute/i)).toBeInTheDocument()
+    it('should display directives in the builder', () => {
+      render(
+        <BuilderView
+          constraints={[]}
+          directives={[directive('attribute', { field: 'id' })]}
+          {...noopCallbacks()}
+        />,
+      )
+
+      const list = screen.getByRole('list', { name: 'Directives List' })
+      expect(within(list).getByText('Attribute')).toBeInTheDocument()
     })
 
-    it('should not offer size or hide atom in directive type dropdown', () => {
-      const directives: DirectiveData[] = [
-        { id: '1', type: 'attribute', params: { field: 'id' } }
-      ];
+    it('should not offer size or hideAtom in the directive add menu', async () => {
+      const user = userEvent.setup()
+      render(
+        <BuilderView constraints={[]} directives={[]} {...noopCallbacks()} />,
+      )
 
-      render(<NoCodeView {...defaultProps} directives={directives} />);
-
-      expect(screen.queryByRole('option', { name: 'Size' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('option', { name: 'Hide Atom' })).not.toBeInTheDocument();
+      // Open the "Add directive" menu and confirm size/hideAtom are absent
+      // (they are constraints in the registry, not directives).
+      await user.click(screen.getByRole('button', { name: /add directive/i }))
+      const menu = screen.getByRole('menu', { name: 'Add directive' })
+      expect(within(menu).queryByText('Size')).not.toBeInTheDocument()
+      expect(within(menu).queryByText('Hide atom')).not.toBeInTheDocument()
+      // Sanity: a real directive type IS offered.
+      expect(within(menu).getByText('Attribute')).toBeInTheDocument()
     })
 
-    it('should not render legacy size/hideAtom directive cards', () => {
-      const directives: DirectiveData[] = [
-        { id: '1', type: 'size', params: { selector: 'Node', width: 100, height: 50 } },
-        { id: '2', type: 'hideAtom', params: { selector: 'Node' } },
-      ];
-
-      render(<NoCodeView {...defaultProps} directives={directives} />);
-
-      expect(screen.queryAllByRole('button', { name: /Remove directive/i })).toHaveLength(0);
+    it('should render size / hideAtom items wherever they appear, with no crash', () => {
+      // These types are valid (now constraints); rendering them as directives
+      // is tolerated — they show as known rows, not legacy cards.
+      render(
+        <BuilderView
+          constraints={[]}
+          directives={[
+            directive('size', { selector: 'Node', width: 100, height: 50 }),
+            directive('hideAtom', { selector: 'Node' }),
+          ]}
+          {...noopCallbacks()}
+        />,
+      )
+      const list = screen.getByRole('list', { name: 'Directives List' })
+      expect(within(list).getByText('Size')).toBeInTheDocument()
+      expect(within(list).getByText('Hide atom')).toBeInTheDocument()
     })
   })
-
-  interface TestWrapperProps {
-    initialDirectives?: DirectiveData[];
-  }
-
-  const TestWrapper = ({initialDirectives = []}: TestWrapperProps) => {
-    const [directives, setDirectives] = useState<DirectiveData[]>(initialDirectives)
-
-    const handleSetDirectives = useCallback((updater: (prev: DirectiveData[]) => DirectiveData[]) => {
-      setDirectives(updater)
-    }, [setDirectives])
-
-    return <NoCodeView {...defaultProps} directives={directives} setDirectives={handleSetDirectives} />
-  }
 
   describe('Interactions', () => {
-    it('should call setConstraints when constraints are updated', async () => {
+    it('should call onAddItem when adding a constraint', async () => {
       const user = userEvent.setup()
-      
-      render(<NoCodeView {...defaultProps} />)
-      
-      // Simulate adding a constraint (this depends on the actual NoCodeView implementation)
-      const addButton = screen.queryByRole('button', { name: /add constraint/i })
-      if (addButton) {
-        await user.click(addButton)
-        expect(defaultProps.setConstraints).toHaveBeenCalled()
-      }
+      const cbs = noopCallbacks()
+      render(<BuilderView constraints={[]} directives={[]} {...cbs} />)
+
+      await user.click(screen.getByRole('button', { name: /add constraint/i }))
+      const menu = screen.getByRole('menu', { name: 'Add constraint' })
+      // Match the visible type label (menuitem names also include descriptions).
+      await user.click(within(menu).getByText('Orientation'))
+
+      expect(cbs.onAddItem).toHaveBeenCalledWith('constraint', 'orientation')
     })
 
-    it('should call setDirectives when directives are updated', async () => {
+    it('should call onAddItem when adding a directive', async () => {
       const user = userEvent.setup()
-      
-      render(<NoCodeView {...defaultProps} />)
-      
-      // Simulate adding a directive (this depends on the actual NoCodeView implementation)
-      const addButton = screen.queryByRole('button', { name: /add directive/i })
-      if (addButton) {
-        await user.click(addButton)
-        expect(defaultProps.setDirectives).toHaveBeenCalled()
-      }
+      const cbs = noopCallbacks()
+      render(<BuilderView constraints={[]} directives={[]} {...cbs} />)
+
+      await user.click(screen.getByRole('button', { name: /add directive/i }))
+      const menu = screen.getByRole('menu', { name: 'Add directive' })
+      await user.click(within(menu).getByText('Attribute'))
+
+      expect(cbs.onAddItem).toHaveBeenCalledWith('directive', 'attribute')
     })
 
-    it('should handle when directives are removed to empty gracefully', async () => {
+    it('should remove a directive via its overflow menu, emptying the section', async () => {
       const user = userEvent.setup()
-      const directives: DirectiveData[] = [{ id: '1', type: 'attribute', params: { field: 'key' } }]
 
-      // Render the NoCodeView with one directive
-      render(<TestWrapper initialDirectives={directives}/>)
-      const removeButtons = screen.getAllByRole('button', { name: /Remove directive/i })
-      expect(removeButtons.length).toBe(1)
+      // A controlled host that removes the item from the rendered list.
+      const Host = () => {
+        const [directives, setDirectives] = useState<SpecItem[]>([
+          directive('attribute', { field: 'key' }),
+        ])
+        const cbs = noopCallbacks()
+        return (
+          <BuilderView
+            constraints={[]}
+            directives={directives}
+            {...cbs}
+            onRemove={(id) =>
+              setDirectives((prev) => prev.filter((d) => d.id !== id))
+            }
+          />
+        )
+      }
+      render(<Host />)
 
+      const list = screen.getByRole('list', { name: 'Directives List' })
+      expect(within(list).getByText('Attribute')).toBeInTheDocument()
 
-      // Remove the only directive
-      await user.click(removeButtons[0])
+      // Open the overflow menu and delete.
+      await user.click(
+        within(list).getByRole('button', { name: /Actions for Attribute/i }),
+      )
+      await user.click(
+        await screen.findByRole('menuitem', { name: /Remove Attribute directive/i }),
+      )
 
-      // Check that there are no directive cards showing
-      const newRemoveButtons = screen.queryAllByRole('button', { name: /Remove directive/i })
-      expect(newRemoveButtons.length).toBe(0)
+      expect(within(list).queryByText('Attribute')).not.toBeInTheDocument()
+      expect(list).toBeEmptyDOMElement()
     })
   })
 
-  describe('Cyclic Constraints Display Values', () => {
-    it('should display current values for cyclic constraints (fixes issue #97)', () => {
-      const constraints: ConstraintData[] = [
-        { 
-          id: '1', 
-          type: 'cyclic', 
-          params: { 
-            selector: 'right', 
-            direction: 'clockwise' 
-          } 
-        },
-        { 
-          id: '2', 
-          type: 'cyclic', 
-          params: { 
-            selector: 'left', 
-            direction: 'clockwise' 
-          } 
-        }
-      ]
-      
-      render(<NoCodeView {...defaultProps} constraints={constraints} />)
-      
-      // Check that both selector values are displayed
-      expect(screen.getByDisplayValue('right')).toBeInTheDocument()
-      expect(screen.getByDisplayValue('left')).toBeInTheDocument()
-      
-      // Check that both direction values are displayed as "Clockwise"
-      const directionSelects = screen.getAllByDisplayValue('Clockwise')
-      expect(directionSelects).toHaveLength(2)
+  describe('Cyclic constraints display values', () => {
+    it('should display selector and direction for cyclic constraints (fixes issue #97)', async () => {
+      const user = userEvent.setup()
+      render(
+        <BuilderView
+          constraints={[
+            constraint('cyclic', { selector: 'right', direction: 'clockwise' }),
+          ]}
+          directives={[]}
+          {...noopCallbacks()}
+        />,
+      )
+
+      // The collapsed row summary surfaces the direction + selector.
+      const list = screen.getByRole('list', { name: 'Constraints List' })
+      expect(within(list).getByText(/clockwise · right/)).toBeInTheDocument()
+
+      // Expanding the row reveals the selector value and the active direction pill.
+      await user.click(within(list).getByText('Cyclic'))
+      expect(await screen.findByDisplayValue('right')).toBeInTheDocument()
+      const clockwisePill = screen.getByRole('radio', { name: 'clockwise' })
+      expect(clockwisePill).toHaveAttribute('aria-checked', 'true')
     })
 
-    it('should handle empty cyclic constraint params gracefully', () => {
-      const constraints: ConstraintData[] = [
-        { 
-          id: '1', 
-          type: 'cyclic', 
-          params: {} 
-        }
-      ]
-      
-      render(<NoCodeView {...defaultProps} constraints={constraints} />)
-      
-      // Should have a textbox (selector input) that's empty
-      const selectorInputs = screen.getAllByRole('textbox')
-      const selectorInput = selectorInputs.find(input => 
-        input.getAttribute('name') === 'selector'
+    it('should handle empty cyclic constraint params gracefully', async () => {
+      const user = userEvent.setup()
+      render(
+        <BuilderView
+          constraints={[constraint('cyclic', {})]}
+          directives={[]}
+          {...noopCallbacks()}
+        />,
       )
-      expect(selectorInput).toHaveValue('')
-      
-      // Should default to clockwise direction
-      expect(screen.getByDisplayValue('Clockwise')).toBeInTheDocument()
+
+      const list = screen.getByRole('list', { name: 'Constraints List' })
+      await user.click(within(list).getByText('Cyclic'))
+
+      // The selector field renders empty.
+      const selector = (await screen.findByRole('combobox')) as HTMLTextAreaElement
+      expect(selector.value).toBe('')
     })
   })
 })

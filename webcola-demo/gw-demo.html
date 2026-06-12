@@ -153,6 +153,8 @@
 
         async function generateLayoutForCurrentInstance() {
             const alloyDataInstance = new CndCore.AlloyDataInstance(alloyInstances[currentInstanceIndex]);
+            // Feed the spec editor so it gets domain-aware completions/dropdowns
+            window.updateInstanceFromReact?.(alloyDataInstance);
 
             if (cachedEvaluator) {
                 // Re-create evaluator for new instance index

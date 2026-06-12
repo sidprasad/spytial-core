@@ -367,6 +367,8 @@
 
                 updateStatus('Parsing JSON data...', 'info');
                 cachedInstance = new CndCore.JSONDataInstance(jsonText);
+                // Feed the spec editor so it gets domain-aware completions/dropdowns
+                window.updateInstanceFromReact?.(cachedInstance);
 
                 if (evaluatorType === 'forge') {
                     updateStatus('Creating ForgeEvaluator...', 'info');
