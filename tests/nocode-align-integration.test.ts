@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { generateLayoutSpecYaml } from '../src/components/NoCodeView/CodeView';
+// `generateLayoutSpecYaml` moved from the removed `NoCodeView/CodeView` module
+// to the back-compat shim re-exported from the `NoCodeView` barrel.
+import { generateLayoutSpecYaml } from '../src/components/NoCodeView';
 import { parseLayoutSpec } from '../src/layout/layoutspec';
 import type { ConstraintData } from '../src/components/NoCodeView/interfaces';
 

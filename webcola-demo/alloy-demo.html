@@ -526,6 +526,8 @@
             window._projectedInstance = null;
 
             const alloyDataInstance = new CndCore.AlloyDataInstance(alloyInstances[currentInstanceIndex]);
+            // Feed the spec editor so it gets domain-aware completions/dropdowns
+            window.updateInstanceFromReact?.(alloyDataInstance);
             console.log(`Generating layout for instance ${currentInstanceIndex + 1}/${alloyInstances.length}`);
             console.log('Using Alloy Data Instance:', alloyDataInstance);
 

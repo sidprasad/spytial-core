@@ -498,6 +498,8 @@
                     options.typeConfig = typeConfig;
                 }
                 cachedInstance = new CndCore.DotDataInstance(dotText, options);
+                // Feed the spec editor so it gets domain-aware completions/dropdowns
+                window.updateInstanceFromReact?.(cachedInstance);
 
                 console.log('Atoms:', cachedInstance.getAtoms());
                 console.log('Types:', cachedInstance.getTypes());

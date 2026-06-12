@@ -72,13 +72,19 @@ const ConnectedInstanceBuilder: React.FC = () => {
 };
 
 /**
- * CndLayoutInterface wrapper that connects to the global demo state
+ * CndLayoutInterface wrapper that connects to the global demo state.
+ *
+ * Tracks the current data instance (updated by the builder via the global
+ * `updateBuilderInstance`/`currentInstance` bridge) and passes it through to
+ * `CndLayoutInterface` so the spec editor gets domain-aware dropdowns and
+ * completions.
  */
 const ConnectedLayoutInterface: React.FC = () => {
   const [cndSpec, setCndSpec] = useState('');
-  const [isNoCodeView, setIsNoCodeView] = useState(false);
-  const [constraints, setConstraints] = useState<any[]>([]);
-  const [directives, setDirectives] = useState<any[]>([]);
+  const [isNoCodeView, setIsNoCodeView] = useState(true);
+  const [instance, setInstance] = useState<IInputDataInstance>(
+    () => createEmptyAlloyDataInstance()
+  );
 
   // Expose CND spec getter to global scope
   useEffect(() => {
@@ -87,9 +93,29 @@ const ConnectedLayoutInterface: React.FC = () => {
     }
   }, [cndSpec]);
 
+  // Track the live instance so the editor can offer domain completions. The
+  // builder publishes it on window.currentInstance + a setter hook.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const win = window as any;
+    if (win.currentInstance) {
+      setInstance(win.currentInstance);
+    }
+    const prevSetter = win.updateLayoutInterfaceInstance;
+    win.updateLayoutInterfaceInstance = (newInstance: IInputDataInstance) => {
+      setInstance(newInstance);
+      prevSetter?.(newInstance);
+    };
+    // Restore the previous hook on unmount so remounts (HMR, multiple demos)
+    // don't chain stale wrappers that call setInstance on a dead component.
+    return () => {
+      win.updateLayoutInterfaceInstance = prevSetter;
+    };
+  }, []);
+
   const handleCndSpecChange = (newSpec: string) => {
     setCndSpec(newSpec);
-    
+
     // Trigger update in the HTML demo when CND spec changes
     if (typeof window !== 'undefined' && (window as any).updateFromCnDSpec) {
       (window as any).updateFromCnDSpec();
@@ -99,14 +125,11 @@ const ConnectedLayoutInterface: React.FC = () => {
   return (
     <div style={{ height: '100%', overflow: 'auto' }}>
       <CndLayoutInterface
-        yamlValue={cndSpec}
+        value={cndSpec}
         onChange={handleCndSpecChange}
+        instance={instance}
         isNoCodeView={isNoCodeView}
         onViewChange={setIsNoCodeView}
-        constraints={constraints}
-        setConstraints={setConstraints}
-        directives={directives}
-        setDirectives={setDirectives}
       />
     </div>
   );
@@ -220,14 +243,9 @@ export const FullIntegratedDemo: React.FC = () => {
           <div style={{ flex: 1 }}>
             <h3>Layout Configuration</h3>
             <CndLayoutInterface
-              yamlValue={cndSpec}
+              value={cndSpec}
               onChange={setCndSpec}
-              isNoCodeView={false}
-              onViewChange={() => {}}
-              constraints={[]}
-              setConstraints={() => {}}
-              directives={[]}
-              setDirectives={() => {}}
+              instance={instance}
             />
           </div>
         )}

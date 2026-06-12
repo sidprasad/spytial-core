@@ -1,279 +1,293 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import '@testing-library/jest-dom'
-import { render, within, screen, act, waitFor, fireEvent } from '@testing-library/react'
-import { mountCndLayoutInterface } from '../webcola-demo/react-component-integration'
+import { render, within, screen, act, waitFor, fireEvent, cleanup } from '@testing-library/react'
+import {
+  mountCndLayoutInterface,
+  CndLayoutStateManager,
+  InstanceStateManager,
+} from '../webcola-demo/react-component-integration'
 import userEvent, { UserEvent } from '@testing-library/user-event'
-import React from 'react'
+import { createRoot, Root } from 'react-dom/client'
+import { buildSampleBstInstance } from './helpers/bst-instance-fixture'
+import { createEmptyAlloyDataInstance } from '../src/data-instance/alloy-data-instance'
 
-vi.mock(import('../src/components/NoCodeView/CodeView'), async (importOriginal) => {
-  const original = await importOriginal();
-
-  return {
-    ...original,
-    CodeView: vi.fn((props) => (
-        <div data-testid="mock-code-view">
-          <textarea 
-            value={props.yamlValue} 
-            onChange={props.handleTextareaChange}
-            disabled={props.disabled}
-            role="textbox"
-            aria-label="CND Layout Specification YAML"
-          />
-        </div>
-      ))
-  }
-})
-
-vi.mock(import('../src/components/NoCodeView/NoCodeView'), async (importOriginal) => {
-  const original = await importOriginal();
-
-  return {
-    ...original,
-    NoCodeView: vi.fn((props) => {
-      // Parse YAML when component mounts (simulating the real component's useEffect)
-      const [parsedConstraints, setParsedConstraints] = React.useState(props.constraints);
-      const [parsedDirectives, setParsedDirectives] = React.useState(props.directives);
-      
-      React.useEffect(() => {
-        if (props.yamlValue) {
-          try {
-            const parsed = original.parseLayoutSpecToData(props.yamlValue);
-            setParsedConstraints(parsed.constraints);
-            setParsedDirectives(parsed.directives);
-          } catch (error) {
-            console.error("Failed to parse YAML in mock", error);
-          }
-        }
-      }, [props.yamlValue]);
-      
-      // Handle constraint removal - follows pattern from real component
-      const handleRemoveConstraint = React.useCallback((constraintId: string) => {
-        // Update local state
-        setParsedConstraints(prevConstraints => 
-          prevConstraints.filter(c => c.id !== constraintId)
-        );
-        
-        // Update parent state through functional update pattern
-        props.setConstraints((prev) => prev.filter((c) => c.id !== constraintId));
-      }, [props.setConstraints]);
-      
-      return (
-        <div data-testid="mock-no-code-view" role="region" aria-label="Structured Builder Container">
-          <div data-testid="no-code-view-constraints">
-            <h2>Constraints</h2>
-            {parsedConstraints.map((constraint) => (
-              <div key={constraint.id} data-testid={`constraint-${constraint.id}`} className="constraint-card">
-                <span>{constraint.type}</span>
-                <span>{JSON.stringify(constraint.params)}</span>
-                <button 
-                  data-testid={`remove-constraint-${constraint.id}`}
-                  aria-label={`Remove ${constraint.type} constraint`}
-                  onClick={() => handleRemoveConstraint(constraint.id)}
-                  type="button"
-                  className="btn-remove"
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
-          </div>
-          <div data-testid="no-code-view-directives">
-            <h2>Directives</h2>
-            {parsedDirectives.map((directive) => (
-              <div key={directive.id} data-testid={`directive-${directive.id}`}>
-                <span>{directive.type}</span>
-                <span>{JSON.stringify(directive.params)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      );
-    })
-  };
-})
-
+/*
+ * Integration tests for the demo mounting path (`mountCndLayoutInterface`),
+ * which renders the back-compat `CndLayoutInterface` wrapper inside the demo's
+ * `CndLayoutInterfaceWrapper` and keeps the `CndLayoutStateManager` singleton in
+ * sync.
+ *
+ * The redesign replaced the old `NoCodeView`/`CodeView` React surfaces (which
+ * these tests used to mock) with the schema-driven `SpecEditor`. Those modules
+ * no longer exist, so the `vi.mock` calls are gone — there is one live model and
+ * nothing to stub. Assertions are updated to the new DOM (a tablist with
+ * Builder/Code tabs, the YAML textarea, the Constraints/Directives sections)
+ * while preserving each test's original intent: that mounting works, that the
+ * code view round-trips YAML, that the view toggles, and that
+ * `DataAPI.getCurrentCndSpec()` reflects the current spec in both views.
+ *
+ * The original "React root cleanup issue causes duplicate elements" that forced
+ * three skips is fixed here by tearing down the root and removing the container
+ * in `afterEach`, so the previously-skipped tests are now un-skipped.
+ */
 
 describe('CnD Layout Interface Integration Tests', () => {
-
   /** Testing Constants */
-  
-  const testYaml = 
-`constraints:
-- orientation:
-    selector: right
-    directions:
-      - right
-      - below
-- orientation:
-    selector: left
-    directions:
-      - left
-      - below
+
+  const testYaml = `constraints:
+  - orientation:
+      selector: right
+      directions:
+        - right
+        - below
+  - orientation:
+      selector: left
+      directions:
+        - left
+        - below
 directives:
-- attribute:
-    field: key
-- flag: hideDisconnectedBuiltIns
+  - attribute:
+      field: key
+  - flag: hideDisconnectedBuiltIns
 `
 
-  const testConstraints = [
-    { id: '1', type: 'orientation', params: { selector: 'right', directions: ['right', 'below'] } },
-    { id: '2', type: 'orientation', params: { selector: 'left', directions: ['left', 'below'] } },
-  ]
-
-  const testDirectives = [
-    { id: '1', type: 'attribute', params: { field: 'key' } },
-    { id: '2', type: 'flag', params: { flag: 'hideDisconnectedBuiltIns' } }
-  ]
-
   /** Test Helpers */
+
+  let container: HTMLElement
+  let extraRoots: Root[] = []
+
   function mountComponent() {
-    // Create the test container element
-    const container = document.createElement('div');
-    container.setAttribute('id', 'test-cnd-layout-interface');
-    container.setAttribute('data-testid', 'test-cnd-layout-interface');
-    document.body.appendChild(container);
+    // Create the test container element.
+    container = document.createElement('div')
+    container.setAttribute('id', 'test-cnd-layout-interface')
+    container.setAttribute('data-testid', 'test-cnd-layout-interface')
+    document.body.appendChild(container)
 
     act(() => {
       mountCndLayoutInterface('test-cnd-layout-interface')
     })
 
-    // Confirm that the CnD Layout Interface is mounted
-    const cndLayoutInterface = document.getElementById('test-cnd-layout-interface') as HTMLElement;
-    expect(cndLayoutInterface).toBeInTheDocument();
-    expect(cndLayoutInterface).toHaveAttribute('data-testid', 'test-cnd-layout-interface');
+    // Confirm that the CnD Layout Interface is mounted.
+    const cndLayoutInterface = document.getElementById(
+      'test-cnd-layout-interface',
+    ) as HTMLElement
+    expect(cndLayoutInterface).toBeInTheDocument()
+    expect(cndLayoutInterface).toHaveAttribute(
+      'data-testid',
+      'test-cnd-layout-interface',
+    )
+  }
+
+  function getTextarea(): HTMLTextAreaElement {
+    const testContainer = screen.getByTestId(
+      'test-cnd-layout-interface',
+    ) as HTMLElement
+    return within(testContainer).getByRole('textbox') as HTMLTextAreaElement
   }
 
   async function typeYaml(yaml: string) {
-    // Type the YAML into the Code View
-      const testContainer = screen.getByTestId('test-cnd-layout-interface') as HTMLTextAreaElement;
-      const textarea = within(testContainer).getByRole('textbox') as HTMLTextAreaElement;
-  
-      await waitFor(async () => {
-        fireEvent.change(textarea, { target: { value: yaml } })
-      })
+    // Type the YAML into the Code View (the textarea is controlled, so the host
+    // state must echo it back — fireEvent.change drives the controlled input).
+    const textarea = getTextarea()
+    await waitFor(() => {
+      fireEvent.change(textarea, { target: { value: yaml } })
       expect(textarea.value).toBe(yaml)
+    })
   }
 
-  async function switchToNoCodeView(user: UserEvent) {
-    // Switch to No Code view
-      const testContainer = screen.getByTestId('test-cnd-layout-interface') as HTMLElement;
-      const toggle = within(testContainer).getByRole('switch');
-      await user.click(toggle);
+  async function switchToBuilderView(user: UserEvent) {
+    const testContainer = screen.getByTestId(
+      'test-cnd-layout-interface',
+    ) as HTMLElement
+    const builderTab = within(testContainer).getByRole('tab', { name: 'Builder' })
+    await user.click(builderTab)
 
-      // Verify No Code View is displayed
-      expect(screen.getByTestId('mock-no-code-view')).toBeInTheDocument()
-      expect(screen.queryByTestId('mock-code-view')).not.toBeInTheDocument();
+    // Verify the builder view is displayed (no textarea; sections present).
+    expect(within(testContainer).queryByRole('textbox')).not.toBeInTheDocument()
+    expect(
+      within(testContainer).getByRole('region', { name: 'Constraints' }),
+    ).toBeInTheDocument()
   }
 
   /** Setup and Teardown */
 
   beforeEach(() => {
-    vi.clearAllMocks();
-    mountComponent();
+    vi.clearAllMocks()
+    extraRoots = []
+    // The demo wrapper seeds its initial view/spec from the shared
+    // `CndLayoutStateManager` singleton, so reset it between tests to avoid
+    // order-dependent pollution (e.g. a prior test leaving the builder view on).
+    CndLayoutStateManager.getInstance().initializeWithConfig({
+      initialYamlValue: '',
+      initialIsNoCodeView: false,
+      initialConstraints: [],
+      initialDirectives: [],
+    })
+    // Reset the shared instance state too, so a test that pushes a domain
+    // instance can't leak dropdown options into later tests.
+    InstanceStateManager.getInstance().setCurrentInstance(
+      createEmptyAlloyDataInstance(),
+    )
+    mountComponent()
   })
 
   afterEach(() => {
-    // TODO: Clean up the test container
+    // Tear down the React root and remove the container so each test starts
+    // clean (this is the fix for the duplicate-element issue that forced skips).
+    cleanup()
+    for (const root of extraRoots) {
+      act(() => root.unmount())
+    }
+    extraRoots = []
+    if (container && container.parentNode) {
+      container.parentNode.removeChild(container)
+    }
   })
 
   /** Test Suites */
-  
+
   describe('Rendering', () => {
-  
     it('should render CnD Layout Interface correctly', () => {
-      // The component is rendered correctly
-      const cndLayoutInterface = document.getElementById('test-cnd-layout-interface') as HTMLElement;
-      expect(cndLayoutInterface).toBeInTheDocument();
-      const toggle = within(cndLayoutInterface).getByRole('switch');
-      expect(toggle).toBeInTheDocument();
-      expect(within(cndLayoutInterface).getByTestId('mock-code-view')).toBeInTheDocument();
-      expect(within(cndLayoutInterface).getByRole('textbox')).toBeInTheDocument();
+      const cndLayoutInterface = document.getElementById(
+        'test-cnd-layout-interface',
+      ) as HTMLElement
+      expect(cndLayoutInterface).toBeInTheDocument()
+
+      // The view toggle (tablist) and the code-view textarea are present.
+      expect(
+        within(cndLayoutInterface).getByRole('tablist', { name: 'Editor view' }),
+      ).toBeInTheDocument()
+      expect(
+        within(cndLayoutInterface).getByRole('tab', { name: 'Builder' }),
+      ).toBeInTheDocument()
+      expect(
+        within(cndLayoutInterface).getByRole('textbox'),
+      ).toBeInTheDocument()
     })
-  
   })
 
   describe('Interactions', () => {
+    it('injecting a default CnD spec renders the parsed constraints/directives', async () => {
+      // Type the test YAML into the Code View.
+      await typeYaml(testYaml)
 
-    // TODO: Fix test infrastructure - React root cleanup issue causes duplicate elements
-    it.skip('injecting some default CnD spec should render correctly', async () => {
-      // Type the test YAML into the Code View
-      await typeYaml(testYaml);
-      
-      // Switch to No Code view
-      const testContainer = screen.getByTestId('test-cnd-layout-interface') as HTMLTextAreaElement;
-      const toggle = within(testContainer).getByRole('switch');
-      const user = userEvent.setup();
-      await user.click(toggle);
-  
-      // Verify No Code View is displayed
-      expect(screen.getByTestId('mock-no-code-view')).toBeInTheDocument()
-      expect(screen.queryByTestId('mock-code-view')).not.toBeInTheDocument();
-  
-      // Verify the correct constraints and directives are displayed
-      const constraintsSection = screen.getByTestId('no-code-view-constraints');
-      const directivesSection = screen.getByTestId('no-code-view-directives');
-  
-      const constraintElements = within(constraintsSection).getAllByTestId(/^constraint-/);
-      expect(constraintElements).toHaveLength(2);
-  
-      expect(screen.getByText(/"selector":"right"/)).toBeInTheDocument();
-      expect(screen.getByText(/"selector":"left"/)).toBeInTheDocument();
-  
-      const directiveElements = within(directivesSection).getAllByTestId(/^directive-/);
-      expect(directiveElements).toHaveLength(2);
-      expect(screen.getByText(/"field":"key"/)).toBeInTheDocument();
-      expect(screen.getByText(/"flag":"hideDisconnectedBuiltIns"/)).toBeInTheDocument();
+      // Switch to the builder view.
+      const user = userEvent.setup()
+      await switchToBuilderView(user)
+
+      // The builder reflects the parsed items live: two orientation constraints,
+      // an attribute directive and a flag directive.
+      const testContainer = screen.getByTestId(
+        'test-cnd-layout-interface',
+      ) as HTMLElement
+      const constraintsList = within(testContainer).getByRole('list', {
+        name: 'Constraints List',
+      })
+      const directivesList = within(testContainer).getByRole('list', {
+        name: 'Directives List',
+      })
+
+      await waitFor(() => {
+        expect(within(constraintsList).getAllByText('Orientation')).toHaveLength(2)
+      })
+      expect(within(directivesList).getByText('Attribute')).toBeInTheDocument()
+      expect(within(directivesList).getByText('Flag')).toBeInTheDocument()
     })
 
+    it('pushing an instance via DataAPI.updateInstance gives the editor domain-aware options', async () => {
+      // Push a BST instance into the shared state, the way the alloy/json/dot/gw
+      // demo pages do via window.updateInstanceFromReact after parsing data.
+      const m = await import('../webcola-demo/react-component-integration')
+      act(() => {
+        m.DataAPI.updateInstance(buildSampleBstInstance())
+      })
+
+      await typeYaml(testYaml)
+      const user = userEvent.setup()
+      await switchToBuilderView(user)
+
+      const testContainer = screen.getByTestId(
+        'test-cnd-layout-interface',
+      ) as HTMLElement
+
+      // Expand the Attribute directive row; its `field` input is a relationName
+      // field, which renders a datalist populated from the instance's relations.
+      const directivesList = within(testContainer).getByRole('list', {
+        name: 'Directives List',
+      })
+      const attributeRow = await within(directivesList).findByText('Attribute')
+      await user.click(attributeRow)
+
+      await waitFor(() => {
+        const options = [
+          ...testContainer.querySelectorAll('datalist option'),
+        ].map((o) => (o as HTMLOptionElement).value)
+        expect(options).toEqual(
+          expect.arrayContaining(['left', 'right', 'key']),
+        )
+      })
+    })
   })
 
   describe('CnD Spec Retrieval', () => {
+    it('should retrieve the current CnD spec from the React component in both Code and Builder views', async () => {
+      // Type the test YAML into the Code View.
+      await typeYaml(testYaml)
 
-    // TODO: Fix test infrastructure - React root cleanup issue causes duplicate elements
-    it.skip('should retrieve the current CnD spec from React component in both Code and No Code View', async () => {
-      // Type the test YAML into the Code View
-      await typeYaml(testYaml);
+      const m = await import('../webcola-demo/react-component-integration')
 
-      // Call the function to get the current CND spec in Code View
-      let currentSpec = await import('../webcola-demo/react-component-integration').then(m => m.DataAPI.getCurrentCndSpec());
-      expect(currentSpec?.trim()).toBe(testYaml.trim());
+      // In Code View, getCurrentCndSpec returns the typed YAML (trimmed).
+      let currentSpec = m.DataAPI.getCurrentCndSpec()
+      expect(currentSpec?.trim()).toBe(testYaml.trim())
 
-      // Switch to No Code view
-      const user = userEvent.setup();
-      await switchToNoCodeView(user);
-  
-      // Call the function to get the current CND spec in No Code View
-      currentSpec = await import('../webcola-demo/react-component-integration').then(m => m.DataAPI.getCurrentCndSpec());
-      expect(currentSpec).toBe(testYaml);
+      // Switch to the builder view; the spec is regenerated from the model and
+      // still semantically describes the same constraints/directives.
+      const user = userEvent.setup()
+      await switchToBuilderView(user)
+
+      currentSpec = m.DataAPI.getCurrentCndSpec()
+      expect(currentSpec).toBeTruthy()
+      expect(currentSpec).toContain('orientation')
+      expect(currentSpec).toContain('attribute')
+      expect(currentSpec).toContain('flag')
     })
 
-    // TODO: Fix test infrastructure - React root cleanup issue causes duplicate elements
-    it.skip('should retrieve the current CnD spec from React component while in No Code View after changes have been made', async () => {
-      // TYpe the test YAML into the Code View
-      await typeYaml(testYaml);
+    it('should reflect builder edits when retrieving the spec after a change', async () => {
+      // Type the test YAML into the Code View, then switch to the builder.
+      await typeYaml(testYaml)
+      const user = userEvent.setup()
+      await switchToBuilderView(user)
 
-      // Switch to No Code view
-      const user = userEvent.setup();
-      await switchToNoCodeView(user);
-
-      // Modify the constraints and directives in No Code View
-      const constraintsSection = screen.getByTestId('no-code-view-constraints');
-
-      const constraintElements = within(constraintsSection).getAllByTestId(/^constraint-/);
-      expect(constraintElements).toHaveLength(2);
-      await act(async () => {
-        const removeButton = within(constraintElements[0]).getByRole('button', { name: /Remove orientation constraint/ })
-        expect(removeButton).toBeInTheDocument();
-        await user.click(removeButton);
+      const testContainer = screen.getByTestId(
+        'test-cnd-layout-interface',
+      ) as HTMLElement
+      const constraintsList = within(testContainer).getByRole('list', {
+        name: 'Constraints List',
       })
-      const newConstraintElements = within(constraintsSection).getAllByTestId(/^constraint-/);
-      expect(newConstraintElements).toHaveLength(1);
 
-      // Call the function to get the current CND spec in No Code View
-      const currentSpec = await import('../webcola-demo/react-component-integration').then(m => m.DataAPI.getCurrentCndSpec());
-      expect(currentSpec).not.toBe(testYaml);
+      await waitFor(() => {
+        expect(within(constraintsList).getAllByText('Orientation')).toHaveLength(2)
+      })
+
+      // Remove the first orientation constraint via its overflow menu.
+      const firstActions = within(constraintsList).getAllByRole('button', {
+        name: /Actions for Orientation/i,
+      })[0]
+      await user.click(firstActions)
+      const removeButton = await screen.findByRole('menuitem', {
+        name: /Remove Orientation constraint/i,
+      })
+      await user.click(removeButton)
+
+      await waitFor(() => {
+        expect(within(constraintsList).getAllByText('Orientation')).toHaveLength(1)
+      })
+
+      // The retrieved spec no longer equals the original (one constraint gone).
+      const m = await import('../webcola-demo/react-component-integration')
+      const currentSpec = m.DataAPI.getCurrentCndSpec()
+      expect(currentSpec).not.toBe(testYaml)
+      expect(currentSpec).toContain('orientation')
     })
-
   })
-
 })

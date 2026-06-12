@@ -9,8 +9,15 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { generateLayoutSpecYaml, validateYaml, validateSpytialSpec } from '../src/components/NoCodeView/CodeView';
-import { parseLayoutSpecToData } from '../src/components/NoCodeView/NoCodeView';
+// The old `NoCodeView/CodeView` and `NoCodeView/NoCodeView` modules were removed
+// in the spec-editor redesign; their data/validation functions live on as thin
+// shims re-exported from the `NoCodeView` barrel (see src/components/NoCodeView/shims.ts).
+import {
+  generateLayoutSpecYaml,
+  validateYaml,
+  validateSpytialSpec,
+  parseLayoutSpecToData,
+} from '../src/components/NoCodeView';
 import { ConstraintData, DirectiveData } from '../src/components/NoCodeView/interfaces';
 
 describe('generateLayoutSpecYaml', () => {
@@ -139,17 +146,22 @@ constraints:
     expect(result.constraints[0].params.direction).toBe('horizontal');
   });
 
-  it('should map size directives into constraints for structured builder', () => {
+  // CONTRACT CHANGE (spec-editor redesign): the shim's `parseLayoutSpecToData`
+  // no longer migrates `size`/`hideAtom` from the directives section into the
+  // constraints section — items keep the section the YAML places them in (see
+  // src/components/NoCodeView/shims.ts). A `size` under `directives:` therefore
+  // stays a directive. The size params are still preserved.
+  it('keeps a size under directives as a directive (no migration to constraints)', () => {
     const yaml = `
 directives:
   - size: {selector: Node, width: 100, height: 50}
 `;
     const result = parseLayoutSpecToData(yaml);
-    expect(result.constraints).toHaveLength(1);
-    expect(result.constraints[0].type).toBe('size');
-    expect(result.constraints[0].params.width).toBe(100);
-    expect(result.constraints[0].params.height).toBe(50);
-    expect(result.directives).toHaveLength(0);
+    expect(result.constraints).toHaveLength(0);
+    expect(result.directives).toHaveLength(1);
+    expect(result.directives[0].type).toBe('size');
+    expect(result.directives[0].params.width).toBe(100);
+    expect(result.directives[0].params.height).toBe(50);
   });
 
   it('should parse flag directive', () => {
@@ -189,7 +201,7 @@ directives:
     expect(result.directives[0].params.value).toBe('age');
   });
 
-  it('should parse multiple constraints and directives', () => {
+  it('should parse multiple constraints and directives (items stay in their section)', () => {
     const yaml = `
 constraints:
   - orientation: {directions: [below], selector: below}
@@ -199,8 +211,11 @@ directives:
   - flag: hideDisconnectedBuiltIns
 `;
     const result = parseLayoutSpecToData(yaml);
-    expect(result.constraints).toHaveLength(3);
-    expect(result.directives).toHaveLength(1);
+    // CONTRACT CHANGE: no directive→constraint migration. The two constraints
+    // stay constraints; the `size` directive is NOT promoted, so there are two
+    // directives (size + flag).
+    expect(result.constraints).toHaveLength(2);
+    expect(result.directives).toHaveLength(2);
   });
 
   it('should support object-form sections for unexpected YAML formats', () => {
@@ -301,15 +316,19 @@ directives:
 `;
     
     const parsed = parseLayoutSpecToData(yaml);
-    expect(parsed.constraints).toHaveLength(6);
-    expect(parsed.directives).toHaveLength(2);
-    
+    // CONTRACT CHANGE: items keep their YAML section (no size/hideAtom migration
+    // into constraints). The 3 written constraints stay constraints; all 5
+    // written directives (two size, hideField, flag, hideAtom) stay directives.
+    expect(parsed.constraints).toHaveLength(3);
+    expect(parsed.directives).toHaveLength(5);
+
     const regenerated = generateLayoutSpecYaml(parsed.constraints, parsed.directives);
     expect(regenerated).toContain('align:');
     expect(regenerated).toContain('orientation:');
     expect(regenerated).toContain('group:');
     expect(regenerated).toContain('size:');
     expect(regenerated).toContain('hideField:');
+    expect(regenerated).toContain('hideAtom:');
     expect(regenerated).toContain('flag: hideDisconnectedBuiltIns');
   });
 });

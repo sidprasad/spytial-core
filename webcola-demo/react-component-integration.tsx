@@ -10,7 +10,7 @@ import { createRoot } from 'react-dom/client';
 import { CndLayoutInterface } from '../src/components/CndLayoutInterface';
 import { InstanceBuilder } from '../src/components/InstanceBuilder/InstanceBuilder';
 import { ConstraintData, DirectiveData } from '../src/components/NoCodeView/interfaces';
-import { generateLayoutSpecYaml } from '../src/components/NoCodeView/CodeView';
+import { generateLayoutSpecYaml } from '../src/components/NoCodeView';
 import { createEmptyAlloyDataInstance } from '../src/data-instance/alloy-data-instance';
 import { IInputDataInstance } from '../src/data-instance/interfaces';
 import { ErrorMessageContainer, ErrorStateManager, SelectorErrorDetail } from '../src/components/ErrorMessageModal/index'
@@ -278,10 +278,16 @@ export class InstanceStateManager {
   /**
    * Register callback for instance changes
    * @param callback - Function to call when instance changes
+   * @returns Unsubscribe function that removes the callback
    * @public
    */
-  public onInstanceChange(callback: (instance: IInputDataInstance) => void): void {
+  public onInstanceChange(callback: (instance: IInputDataInstance) => void): () => void {
     this.instanceChangeCallbacks.push(callback);
+    return () => {
+      this.instanceChangeCallbacks = this.instanceChangeCallbacks.filter(
+        (cb) => cb !== callback,
+      );
+    };
   }
 
   /**
@@ -465,6 +471,17 @@ const CndLayoutInterfaceWrapper: React.FC<{ config?: CndLayoutMountConfig }> = (
     return stateManager.getDirectives();
   });
 
+  // Track the shared data instance so the editor gets domain awareness
+  // (type/relation dropdowns, selector completions, soft warnings). Demos
+  // push instances via DataAPI.updateInstance / window.updateInstanceFromReact.
+  const [instance, setInstance] = useState<IInputDataInstance>(() =>
+    InstanceStateManager.getInstance().getCurrentInstance(),
+  );
+  useEffect(
+    () => InstanceStateManager.getInstance().onInstanceChange(setInstance),
+    [],
+  );
+
   // Initialize state manager with config on mount
   useEffect(() => {
     if (config) {
@@ -532,6 +549,7 @@ const CndLayoutInterfaceWrapper: React.FC<{ config?: CndLayoutMountConfig }> = (
       setConstraints={handleSetConstraints}
       directives={directives}
       setDirectives={handleSetDirectives}
+      instance={instance}
       aria-label="CND Layout Specification Editor"
     />
   );
@@ -1877,6 +1895,9 @@ if (typeof window !== 'undefined') {
   // Expose data functions for legacy compatibility
   globalWindow.getCurrentCNDSpecFromReact = DataAPI.getCurrentCndSpec;
   globalWindow.getCurrentInstanceFromReact = DataAPI.getCurrentInstance;
+  // Push a freshly parsed data instance to the shared state so the spec
+  // editor picks up domain awareness (dropdowns, completions, warnings).
+  globalWindow.updateInstanceFromReact = DataAPI.updateInstance;
   
   // Pyret-specific data functions for legacy compatibility
   globalWindow.getCurrentPyretInstanceFromReact = DataAPI.getCurrentPyretInstance;
