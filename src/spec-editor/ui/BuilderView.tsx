@@ -44,6 +44,7 @@ import type {
   FieldRendererOptions,
   SelectorFieldExtras,
 } from './FieldRenderer';
+import { useAnchoredPopup } from './use-anchored-popup';
 
 /** Types that round-trip a `hold: never` negation toggle. */
 const NEGATABLE_TYPES: ReadonlySet<string> = new Set([
@@ -397,7 +398,12 @@ const Row: React.FC<RowProps> = ({
           </span>
           <span className="spytial-ed-row-type">{def.label}</span>
           {negated ? (
-            <span className="spytial-ed-row-negated" title="negated (hold: never)">
+            <span
+              className="spytial-ed-row-negated"
+              role="img"
+              aria-label="should not hold"
+              title="should not hold (hold: never)"
+            >
               ¬
             </span>
           ) : null}
@@ -453,22 +459,41 @@ const Row: React.FC<RowProps> = ({
           />
 
           {negatable ? (
-            <div className="spytial-ed-field spytial-ed-field--boolean">
-              <label className="spytial-ed-field-label" title="Apply the constraint as a negation (hold: never).">
-                Negate
-              </label>
+            <div className="spytial-ed-field spytial-ed-field--hold">
+              <span
+                className="spytial-ed-field-label"
+                id={`${baseId}-hold-label`}
+                title="Whether this constraint must hold, or must NOT hold (hold: never), in the layout."
+              >
+                Condition
+              </span>
               <div className="spytial-ed-field-control">
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={negated}
-                  className={`spytial-ed-switch${negated ? ' spytial-ed-switch--on' : ''}`}
-                  disabled={disabled}
-                  aria-label="Negate constraint"
-                  onClick={() => onToggleNegate(item.id, !negated)}
+                <div
+                  className="spytial-ed-pills"
+                  role="radiogroup"
+                  aria-labelledby={`${baseId}-hold-label`}
                 >
-                  <span className="spytial-ed-switch-thumb" aria-hidden="true" />
-                </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={!negated}
+                    className={`spytial-ed-pill${!negated ? ' spytial-ed-pill--active' : ''}`}
+                    disabled={disabled}
+                    onClick={() => onToggleNegate(item.id, false)}
+                  >
+                    Should hold
+                  </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={negated}
+                    className={`spytial-ed-pill${negated ? ' spytial-ed-pill--active spytial-ed-pill--negated' : ''}`}
+                    disabled={disabled}
+                    onClick={() => onToggleNegate(item.id, true)}
+                  >
+                    Should not hold
+                  </button>
+                </div>
               </div>
             </div>
           ) : null}
@@ -523,6 +548,13 @@ const OverflowMenu: React.FC<OverflowMenuProps> = ({
 }) => {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  // Fixed positioning so host containers with overflow clipping (demo
+  // sidebars) can't cut the menu off; flips above the button when cramped.
+  const menuStyle = useAnchoredPopup(open, btnRef, {
+    align: 'end',
+    estimatedHeight: 220,
+  });
   const label = getDefinition(item.type)?.label ?? item.type;
 
   useEffect(() => {
@@ -549,6 +581,7 @@ const OverflowMenu: React.FC<OverflowMenuProps> = ({
   return (
     <div className="spytial-ed-overflow" ref={wrapRef}>
       <button
+        ref={btnRef}
         type="button"
         className="spytial-ed-overflow-btn"
         aria-haspopup="menu"
@@ -563,6 +596,7 @@ const OverflowMenu: React.FC<OverflowMenuProps> = ({
       {open ? (
         <ul
           className="spytial-ed-overflow-menu"
+          style={menuStyle}
           role="menu"
           aria-label={`Actions for ${label}`}
           onKeyDown={(e) => {
@@ -647,6 +681,28 @@ const AddMenu: React.FC<AddMenuProps> = ({ kind, onAdd, disabled, triggerRef }) 
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
+  // Local trigger ref for popup anchoring, merged with the external ref the
+  // section uses for focus management.
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const setTriggerRef = useCallback(
+    (el: HTMLButtonElement | null): void => {
+      btnRef.current = el;
+      if (typeof triggerRef === 'function') {
+        triggerRef(el);
+      } else if (triggerRef && typeof triggerRef === 'object') {
+        (triggerRef as React.MutableRefObject<HTMLButtonElement | null>).current = el;
+      }
+    },
+    [triggerRef],
+  );
+
+  // Fixed positioning so the menu can't be clipped by host containers (the
+  // original absolute menu rendered BELOW a short sidebar and was invisible).
+  const menuStyle = useAnchoredPopup(open, btnRef, {
+    align: 'end',
+    estimatedHeight: 320,
+  });
+
   // Deprecated types are hidden from the add menu (getDefinitions default).
   const defs = useMemo(() => getDefinitions(kind), [kind]);
 
@@ -691,7 +747,7 @@ const AddMenu: React.FC<AddMenuProps> = ({ kind, onAdd, disabled, triggerRef }) 
   return (
     <div className="spytial-ed-add" ref={wrapRef}>
       <button
-        ref={triggerRef}
+        ref={setTriggerRef}
         type="button"
         className="spytial-ed-add-btn"
         aria-haspopup="menu"
@@ -705,6 +761,7 @@ const AddMenu: React.FC<AddMenuProps> = ({ kind, onAdd, disabled, triggerRef }) 
       {open ? (
         <div
           className="spytial-ed-add-menu"
+          style={menuStyle}
           role="menu"
           aria-label={label}
           onKeyDown={(e) => {

@@ -27,6 +27,7 @@ import React, {
 import type { Completion } from '../domain/assistant';
 import type { Diagnostic } from '../core/types';
 import { tokenizeSelector, tokenClassName } from './highlight';
+import { useAnchoredPopup } from './use-anchored-popup';
 
 /** Result shape of the synthesis hook. */
 export interface SynthesisResult {
@@ -365,6 +366,13 @@ export const SelectorField: React.FC<SelectorFieldProps> = ({
 
   const describedBy = diagnostics && diagnostics.length > 0 ? diagId : undefined;
 
+  // Viewport-fixed listbox position (spans the textarea's width, flips up when
+  // cramped) so host containers with overflow clipping can't cut it off.
+  const autocompleteStyle = useAnchoredPopup(open && items.length > 0, textareaRef, {
+    align: 'stretch',
+    estimatedHeight: 224,
+  });
+
   return (
     <div
       className={`spytial-ed-selector${
@@ -435,6 +443,7 @@ export const SelectorField: React.FC<SelectorFieldProps> = ({
         {open && items.length > 0 ? (
           <ul
             className="spytial-ed-autocomplete"
+            style={autocompleteStyle}
             id={listboxId}
             role="listbox"
             aria-label="Selector completions"

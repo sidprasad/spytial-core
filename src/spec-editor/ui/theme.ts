@@ -40,68 +40,70 @@ export interface SpecEditorTheme {
 }
 
 /**
- * Default light palette. Restrained, modern neutral look; the accent is a calm
- * indigo used sparingly (focus rings, active pills, the ✨ affordance). Syntax
- * colors are tuned for readability on the light surface.
+ * Default light palette — "drafting table": warm paper surfaces, near-black
+ * ink, and a single vermillion accent used the way a draftsman uses a red
+ * pencil (focus, active states, the ✨ affordance). Section labels and
+ * summaries lean on the mono stack, giving the editor the feel of a technical
+ * instrument rather than a generic web form.
  *
  * These exact string values are the CSS fallbacks baked into `spec-editor.css`,
  * so changing one here means changing the matching `var(..., <fallback>)` there.
  */
 export const lightTheme: Required<SpecEditorTheme> = {
-  accent: '#4f46e5',
-  accentText: '#ffffff',
-  surface: '#ffffff',
-  surfaceRaised: '#f7f7f9',
-  border: '#e2e2e7',
-  text: '#1c1c1f',
-  textMuted: '#6b6b75',
-  danger: '#d4374a',
-  warning: '#b7791f',
-  success: '#1f9d57',
+  accent: '#b5431a',
+  accentText: '#fdf6ec',
+  surface: '#faf8f2',
+  surfaceRaised: '#f1ecdf',
+  border: '#d9d2c0',
+  text: '#221d14',
+  textMuted: '#6e6553',
+  danger: '#a32014',
+  warning: '#8a6200',
+  success: '#2f6c43',
   fontFamily:
-    "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+    "'Avenir Next', 'Avenir', 'Seravek', 'Segoe UI Variable', 'Segoe UI', 'Trebuchet MS', sans-serif",
   monoFontFamily:
-    "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace",
+    "ui-monospace, 'Cascadia Code', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace",
   fontSize: '14px',
-  radius: '6px',
+  radius: '2px',
   spacing: '8px',
-  synKeyword: '#7c3aed',
-  synType: '#0e7490',
-  synRelation: '#1d4ed8',
-  synOperator: '#9333ea',
-  synString: '#b45309',
-  synComment: '#6b6b75',
+  synKeyword: '#6d28a8',
+  synType: '#0e6b6b',
+  synRelation: '#1f4f9e',
+  synOperator: '#b5431a',
+  synString: '#7a5901',
+  synComment: '#8a8170',
 };
 
 /**
- * Default dark palette. Same token shape; neutral slate surfaces with the same
- * indigo accent lightened for contrast, and syntax colors lifted for dark
- * backgrounds.
+ * Default dark palette — "instrument panel": deep blue-black slate with warm
+ * chalk text and an oscilloscope-amber accent. Same token shape as
+ * {@link lightTheme}; syntax colors are lifted for dark backgrounds.
  */
 export const darkTheme: Required<SpecEditorTheme> = {
-  accent: '#818cf8',
-  accentText: '#0c0c10',
-  surface: '#1b1b20',
-  surfaceRaised: '#26262d',
-  border: '#3a3a44',
-  text: '#e9e9ee',
-  textMuted: '#9a9aa6',
-  danger: '#f0697a',
-  warning: '#e0b25a',
-  success: '#56cf8d',
+  accent: '#e08a3c',
+  accentText: '#16100a',
+  surface: '#12161e',
+  surfaceRaised: '#1a202b',
+  border: '#2d3645',
+  text: '#e7e2d3',
+  textMuted: '#94865f',
+  danger: '#e06c5d',
+  warning: '#d4a843',
+  success: '#5fb98a',
   fontFamily:
-    "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+    "'Avenir Next', 'Avenir', 'Seravek', 'Segoe UI Variable', 'Segoe UI', 'Trebuchet MS', sans-serif",
   monoFontFamily:
-    "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace",
+    "ui-monospace, 'Cascadia Code', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace",
   fontSize: '14px',
-  radius: '6px',
+  radius: '2px',
   spacing: '8px',
-  synKeyword: '#c4b5fd',
-  synType: '#67e8f9',
-  synRelation: '#93c5fd',
-  synOperator: '#d8b4fe',
-  synString: '#fcd34d',
-  synComment: '#9a9aa6',
+  synKeyword: '#b48ee0',
+  synType: '#5fb3a1',
+  synRelation: '#7ba3e8',
+  synOperator: '#e08a3c',
+  synString: '#cfa75e',
+  synComment: '#6e7889',
 };
 
 /**
