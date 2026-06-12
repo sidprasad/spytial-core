@@ -50,7 +50,11 @@ import {
 } from '../domain/completions';
 import type { Completion, SelectorAssistant, SelectorAssistContext } from '../domain/assistant';
 import type { IInputDataInstance } from '../../data-instance/interfaces';
-import { SpecEditorTheme, themeToCssVars } from './theme';
+import {
+  SpecEditorThemeInput,
+  resolveSpecEditorTheme,
+  themeToCssVars,
+} from './theme';
 import { BuilderView } from './BuilderView';
 import { CodeView } from './CodeView';
 import type { SelectorFieldExtras } from './FieldRenderer';
@@ -63,8 +67,13 @@ export interface SpecEditorProps {
   instance?: IInputDataInstance;
   /** wins over instance if both given */
   domain?: DomainSchema;
-  /** hooks */
-  theme?: SpecEditorTheme;
+  /**
+   * Hooks. `theme` accepts either a token object or the NAME of a registered
+   * theme (`'light'`, `'dark'`, or anything added via
+   * `registerSpecEditorThemes`) — the same by-name convention as
+   * `webcola-cnd-graph`'s `theme` attribute.
+   */
+  theme?: SpecEditorThemeInput;
   selectorAssistant?: SelectorAssistant;
   /** appearance */
   density?: 'compact' | 'comfortable';
@@ -309,9 +318,11 @@ export const SpecEditor: React.FC<SpecEditorProps> = ({
   // ── Builder mutations ───────────────────────────────────────────────────
   const handleAddItem = useCallback(
     (kind: ItemKind, type: string) => {
-      if (disabled) return;
-      doc.addItem(kind, type);
+      if (disabled) return undefined;
+      const item = doc.addItem(kind, type);
       emit();
+      // Returned so the builder can auto-expand the freshly added row.
+      return item;
     },
     [disabled, doc, emit],
   );
@@ -559,10 +570,12 @@ export const SpecEditor: React.FC<SpecEditorProps> = ({
     return ds;
   }, [parseError, structuralDomain]);
 
+  const resolvedTheme = resolveSpecEditorTheme(theme);
+
   return (
     <section
       className={rootClass}
-      style={theme ? themeToCssVars(theme) : undefined}
+      style={resolvedTheme ? themeToCssVars(resolvedTheme) : undefined}
       aria-label={ariaLabel}
       onKeyDown={handleKeyDown}
     >

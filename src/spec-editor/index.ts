@@ -80,7 +80,8 @@ export {
 
 // ---- UI foundation primitives (WP3) ----
 export type { SpecEditorTheme } from './ui/theme';
-export { lightTheme, darkTheme, themeToCssVars } from './ui/theme';
+export { lightTheme, darkTheme, themeToCssVars, registerSpecEditorThemes, resolveSpecEditorTheme } from './ui/theme';
+export type { SpecEditorThemeInput } from './ui/theme';
 
 export type { Token, TokenKind } from './ui/highlight';
 export { tokenizeSelector, tokenClassName, isPunctuation } from './ui/highlight';

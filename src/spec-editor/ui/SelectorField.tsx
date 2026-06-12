@@ -174,9 +174,31 @@ export const SelectorField: React.FC<SelectorFieldProps> = ({
   }, []);
 
   // Auto-grow the textarea to fit its content (single-expression, grows down).
+  //
+  // Measurement safety: right at mount (e.g. a freshly added row that opens
+  // expanded) the textarea can be measured before its container has laid out,
+  // with a near-zero content width — the value/placeholder then wraps into a
+  // 1-2px column and scrollHeight reports hundreds of px, which would stick as
+  // a giant inline height. Two guards: an empty value never sets an inline
+  // height at all (CSS min-height rules one line), and a degenerate width
+  // defers the measurement to the next frame (bounded retries).
+  const growRetries = useRef(0);
   const autoGrow = useCallback(() => {
     const ta = textareaRef.current;
     if (!ta) return;
+    if (ta.value === '') {
+      ta.style.height = '';
+      growRetries.current = 0;
+      return;
+    }
+    if (ta.clientWidth < 60) {
+      if (growRetries.current < 10) {
+        growRetries.current += 1;
+        requestAnimationFrame(autoGrow);
+      }
+      return;
+    }
+    growRetries.current = 0;
     ta.style.height = 'auto';
     ta.style.height = `${ta.scrollHeight}px`;
   }, []);

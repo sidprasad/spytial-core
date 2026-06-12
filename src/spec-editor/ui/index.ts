@@ -15,7 +15,8 @@ import './spec-editor.css';
 
 // ---- theme (HOOK 1) ----
 export type { SpecEditorTheme } from './theme';
-export { lightTheme, darkTheme, themeToCssVars } from './theme';
+export { lightTheme, darkTheme, themeToCssVars, registerSpecEditorThemes, resolveSpecEditorTheme } from './theme';
+export type { SpecEditorThemeInput } from './theme';
 
 // ---- selector syntax tokenizer ----
 export type { Token, TokenKind } from './highlight';

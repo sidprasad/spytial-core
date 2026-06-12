@@ -154,3 +154,49 @@ export function themeToCssVars(theme: SpecEditorTheme): Record<string, string> {
   );
   return vars;
 }
+
+// ─── Named theme registry (mirrors `webcola-cnd-graph`'s theme model) ──────
+
+/**
+ * A theme input: either a token object, or the NAME of a registered theme —
+ * the same convention as `webcola-cnd-graph`'s `theme` attribute, so hosts
+ * that already theme the graph by name can theme the editor the same way.
+ */
+export type SpecEditorThemeInput = SpecEditorTheme | string;
+
+/**
+ * Registry of named themes, seeded with the built-ins. Like
+ * `webcola-cnd-graph`'s registry: hosts add their own with
+ * {@link registerSpecEditorThemes} (reusing a built-in name overrides it).
+ */
+const themeRegistry = new Map<string, SpecEditorTheme>([
+  ['light', lightTheme],
+  ['dark', darkTheme],
+]);
+
+/**
+ * Register one or more custom named themes (or override a built-in by reusing
+ * its name). Module-level, so registration applies to every editor instance —
+ * matching `WebColaCnDGraph.registerThemes` semantics.
+ */
+export function registerSpecEditorThemes(
+  themes: Record<string, SpecEditorTheme>,
+): void {
+  for (const [name, theme] of Object.entries(themes)) {
+    themeRegistry.set(name, theme);
+  }
+}
+
+/**
+ * Resolves a theme input to a token object: objects pass through, names are
+ * looked up in the registry. Unknown names and `undefined` resolve to
+ * `undefined` — i.e. the CSS fallbacks, which ARE the light theme (the same
+ * "absence means light" rule the graph uses).
+ */
+export function resolveSpecEditorTheme(
+  input: SpecEditorThemeInput | undefined,
+): SpecEditorTheme | undefined {
+  if (input === undefined) return undefined;
+  if (typeof input === 'string') return themeRegistry.get(input);
+  return input;
+}

@@ -92,3 +92,25 @@ describe('themeToCssVars', () => {
     expect(vars['--spytial-ed-surface']).toBeUndefined();
   });
 });
+
+describe('named theme registry (webcola-cnd-graph convention)', () => {
+  it('resolves built-in names; objects pass through; unknown/undefined → undefined (light fallbacks)', async () => {
+    const { resolveSpecEditorTheme, darkTheme } = await import(
+      '../src/spec-editor/ui/theme'
+    );
+    expect(resolveSpecEditorTheme('dark')).toBe(darkTheme);
+    const custom = { accent: '#222222' };
+    expect(resolveSpecEditorTheme(custom)).toBe(custom);
+    expect(resolveSpecEditorTheme('no-such-theme')).toBeUndefined();
+    expect(resolveSpecEditorTheme(undefined)).toBeUndefined();
+  });
+
+  it('registerSpecEditorThemes adds custom names (and can override built-ins)', async () => {
+    const { registerSpecEditorThemes, resolveSpecEditorTheme } = await import(
+      '../src/spec-editor/ui/theme'
+    );
+    const blueprint: SpecEditorTheme = { accent: '#53b9d1', surface: '#0d1b2a' };
+    registerSpecEditorThemes({ blueprint });
+    expect(resolveSpecEditorTheme('blueprint')).toBe(blueprint);
+  });
+});

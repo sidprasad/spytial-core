@@ -82,7 +82,7 @@ Defined in `src/spec-editor/ui/SpecEditor.tsx`.
 | `onChange` | `(value: string) => void` | — (required) | Called with new YAML on every builder edit (synchronously) and on every code-view keystroke (immediately, before the debounced re-parse). |
 | `instance` | `IInputDataInstance` | `undefined` | Live data instance. Used to derive a `DomainSchema` (autocomplete, dropdowns, soft warnings). See [Domain awareness](#domain-awareness). |
 | `domain` | `DomainSchema` | `undefined` | Precomputed domain schema. **Wins over `instance`** if both are given. |
-| `theme` | `SpecEditorTheme` | `undefined` | Partial token override; only the keys you set are applied as inline CSS variables on the editor root. See [Theming](#theming-guide-hook-1). |
+| `theme` | `SpecEditorTheme \| string` | `undefined` | Either a partial token object (only the keys you set are applied as inline CSS variables on the editor root), or the **name** of a registered theme — `'light'`, `'dark'`, or anything added via `registerSpecEditorThemes` — mirroring `webcola-cnd-graph`'s by-name `theme` attribute. See [Theming](#theming-guide-hook-1). |
 | `selectorAssistant` | `SelectorAssistant` | `undefined` | Pluggable completion / synthesis / review hook for selector fields. See [Selector assistance](#selector-assistance-guide-hook-2). |
 | `density` | `'compact' \| 'comfortable'` | `'compact'` | Row padding / font sizing. `compact` is noticeably tighter than the old cards. |
 | `syntaxHighlighting` | `boolean` | `true` | Syntax highlighting in the code view and selector fields. Both use a mirror overlay (highlighted `<pre>` behind a transparent-text textarea, scroll-synced, with ligatures/kerning normalized on both elements). If a host's fonts or zoom ever misalign the overlay, set this to `false` to render plain visible text with no mirror — the escape hatch that the old, removed highlighter never had. |
@@ -222,9 +222,11 @@ kebab-case CSS variable names.
 
 ### Three override routes
 
-1. **The `theme` prop.** Pass a (possibly partial) `SpecEditorTheme`. Only the
-   keys you set are emitted as inline custom properties on the editor root via
-   `themeToCssVars`; the rest fall back to the baked-in `lightTheme` values.
+1. **The `theme` prop.** Pass a (possibly partial) `SpecEditorTheme` object, or
+   a registered theme **name** (`'light'`, `'dark'`, or your own). For objects,
+   only the keys you set are emitted as inline custom properties on the editor
+   root via `themeToCssVars`; the rest fall back to the baked-in `lightTheme`
+   values.
 2. **Host CSS variables.** Set any `--spytial-ed-*` variable on an ancestor (or
    the editor's own `className`). The CSS reads `var(--spytial-ed-*, <fallback>)`,
    so host-set variables win over the fallbacks without any prop.
@@ -234,6 +236,28 @@ kebab-case CSS variable names.
 
 Routes 1 and 2 compose; an inline `theme` token overrides an inherited variable
 for the same knob.
+
+### Named themes (the `webcola-cnd-graph` convention)
+
+The editor mirrors the graph component's theme model: a module-level registry
+of named themes, seeded with `light` and `dark`, that `theme` can reference by
+name. An unknown or absent name resolves to the CSS fallbacks — which ARE the
+light theme, the same "absence means light" rule the graph uses.
+
+```ts
+import { registerSpecEditorThemes, SpecEditor } from 'spytial-core';
+
+registerSpecEditorThemes({
+  blueprint: { accent: '#53b9d1', surface: '#0d1b2a', text: '#dce6f2' },
+});
+
+<SpecEditor value={yaml} onChange={setYaml} theme="blueprint" />
+// or simply: theme="dark"
+```
+
+Registration is module-level (like `WebColaCnDGraph.registerThemes`), so hosts
+that theme both components can register matching palettes once and pass the
+same name to each.
 
 ### Presets and density
 

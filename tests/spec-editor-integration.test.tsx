@@ -111,8 +111,13 @@ describe('SpecEditor — builder edits emit round-trippable YAML', () => {
     expect(state.directives).toHaveLength(1)
     expect(state.directives[0].type).toBe('flag')
 
-    // And the new flag row is present in the builder.
-    expect(screen.getByText('Flag')).toBeInTheDocument()
+    // And the new flag row is present in the builder — auto-expanded, ready
+    // to edit (so 'Flag' appears both as the row type and as the form label).
+    const toggle = screen
+      .getAllByRole('button', { name: /Flag/ })
+      .find((b) => b.className.includes('spytial-ed-row-toggle'))!
+    expect(toggle).toBeTruthy()
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
   })
 
   it('editing a field via the builder regenerates YAML synchronously', async () => {
@@ -319,10 +324,11 @@ describe('SpecEditor — undo / redo across a builder mutation', () => {
     expect(undo).toBeDisabled()
     expect(redo).toBeDisabled()
 
-    // Add a Flag directive.
+    // Add a Flag directive (it opens expanded, so 'Flag' may appear as both
+    // the row type and the form label — count rows, not text occurrences).
     await user.click(screen.getByRole('button', { name: '+ Add directive' }))
     await user.click(await screen.findByRole('menuitem', { name: /Flag/i }))
-    expect(screen.getByText('Flag')).toBeInTheDocument()
+    expect(screen.getAllByText('Flag').length).toBeGreaterThan(0)
     expect(undo).not.toBeDisabled()
 
     // Undo removes it.
@@ -332,7 +338,7 @@ describe('SpecEditor — undo / redo across a builder mutation', () => {
 
     // Redo restores it.
     await user.click(redo)
-    expect(screen.getByText('Flag')).toBeInTheDocument()
+    expect(screen.getAllByText('Flag').length).toBeGreaterThan(0)
   })
 })
 

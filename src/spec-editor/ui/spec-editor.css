@@ -4,7 +4,7 @@
  * Light: warm paper, near-black ink, a single vermillion accent (the red
  * pencil). Dark preset: blue-black instrument panel with amber. Chrome text
  * (section titles, type labels, summaries, tabs) leans on the mono stack;
- * corners are sharp (2px); the body carries a faint graph-paper grid.
+ * corners are sharp (2px); surfaces are flat (no background patterns).
  *
  * Every class is prefixed `spytial-ed-`. Every color / size / font reads from a
  * `--spytial-ed-*` custom property with a fallback equal to the `lightTheme`
@@ -892,21 +892,8 @@
   cursor: not-allowed;
 }
 
-/* faint graph-paper grid behind the working area */
 .spytial-ed-body {
   padding: var(--spytial-ed-gap, 8px);
-  background-image: linear-gradient(
-      color-mix(in srgb, var(--spytial-ed-border, #d9d2c0) 32%, transparent)
-        1px,
-      transparent 1px
-    ),
-    linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--spytial-ed-border, #d9d2c0) 32%, transparent)
-        1px,
-      transparent 1px
-    );
-  background-size: 16px 16px;
 }
 
 /* ─── BuilderView ───────────────────────────────────────────────────────── */

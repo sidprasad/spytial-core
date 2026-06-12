@@ -19,7 +19,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { SpecEditor, darkTheme } from '../src/spec-editor';
+import { SpecEditor, registerSpecEditorThemes } from '../src/spec-editor';
 import type {
   Diagnostic,
   SelectorAssistant,
@@ -188,13 +188,12 @@ const funkyTheme: SpecEditorTheme = {
   synComment: '#9d6fb8',
 };
 
+// 'light' and 'dark' resolve by NAME from the built-in registry (the same
+// convention as webcola-cnd-graph's theme attribute); 'funky' is registered
+// here as a custom named theme to demonstrate registerSpecEditorThemes.
 type ThemeChoice = 'light' | 'dark' | 'funky';
 
-const THEME_FOR: Record<ThemeChoice, SpecEditorTheme | undefined> = {
-  light: undefined, // CSS fallbacks = light preset
-  dark: darkTheme,
-  funky: funkyTheme,
-};
+registerSpecEditorThemes({ funky: funkyTheme });
 
 // ── Demo app ─────────────────────────────────────────────────────────────────
 
@@ -244,7 +243,7 @@ const SpecEditorDemoApp: React.FC = () => {
           onChange={setValue}
           instance={instance}
           selectorAssistant={mockAssistant}
-          theme={THEME_FOR[themeChoice]}
+          theme={themeChoice === 'light' ? undefined : themeChoice}
           onDiagnostics={setDiagnostics}
           aria-label="Spytial spec editor demo"
         />

@@ -64,7 +64,12 @@ export interface BuilderViewProps {
   options?: FieldRendererOptions;
   /** per (item, field) selector wiring (completion/synthesis). */
   selectorProps?: (item: SpecItem, field: FieldSpec) => SelectorFieldExtras | undefined;
-  onAddItem(kind: ItemKind, type: string): void;
+  /**
+   * Add an item. Return the created {@link SpecItem} and the builder
+   * auto-expands its row (a fresh constraint/directive opens ready to edit,
+   * not minimized); return nothing and the row starts collapsed.
+   */
+  onAddItem(kind: ItemKind, type: string): SpecItem | void;
   onUpdateParam(id: string, key: string, value: unknown): void;
   onUpdateComment(id: string, comment: string): void;
   /** toggle the `hold: never` negation for a negatable item. */
@@ -103,6 +108,19 @@ export const BuilderView: React.FC<BuilderViewProps> = ({
   // which row collapsed (focus return is handled in the Row itself).
   const collapse = useCallback((_id?: string) => setExpandedId(null), []);
 
+  // Adding opens the new row's form immediately (not minimized): the parent
+  // returns the created item and we expand it.
+  const handleAddItem = useCallback(
+    (kind: ItemKind, type: string) => {
+      const created = onAddItem(kind, type);
+      if (created && typeof created === 'object' && 'id' in created) {
+        setExpandedId(created.id);
+      }
+      return created;
+    },
+    [onAddItem],
+  );
+
   const empty = constraints.length === 0 && directives.length === 0;
 
   return (
@@ -117,7 +135,7 @@ export const BuilderView: React.FC<BuilderViewProps> = ({
         expandedId={expandedId}
         onToggleExpand={toggleExpand}
         onCollapse={collapse}
-        onAddItem={onAddItem}
+        onAddItem={handleAddItem}
         onUpdateParam={onUpdateParam}
         onUpdateComment={onUpdateComment}
         onToggleNegate={onToggleNegate}
@@ -137,7 +155,7 @@ export const BuilderView: React.FC<BuilderViewProps> = ({
         expandedId={expandedId}
         onToggleExpand={toggleExpand}
         onCollapse={collapse}
-        onAddItem={onAddItem}
+        onAddItem={handleAddItem}
         onUpdateParam={onUpdateParam}
         onUpdateComment={onUpdateComment}
         onToggleNegate={onToggleNegate}

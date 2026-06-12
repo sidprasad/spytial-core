@@ -5,7 +5,7 @@ import type {
   Diagnostic,
   DomainSchema,
   SelectorAssistant,
-  SpecEditorTheme,
+  SpecEditorThemeInput,
 } from '../spec-editor';
 import { parseLayoutSpecToData } from './NoCodeView/shims';
 import type { ConstraintData, DirectiveData } from './NoCodeView/interfaces';
@@ -53,8 +53,8 @@ export interface CndLayoutInterfaceProps {
   instance?: IInputDataInstance;
   /** Domain awareness: a precomputed schema (wins over `instance`). */
   domain?: DomainSchema;
-  /** Theme override tokens. */
-  theme?: SpecEditorTheme;
+  /** Theme: token object or a registered theme name (e.g. 'dark'). */
+  theme?: SpecEditorThemeInput;
   /** Selector-writing assistant hook. */
   selectorAssistant?: SelectorAssistant;
   /** Row density. */
