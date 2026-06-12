@@ -21,6 +21,9 @@ export { lightTheme, darkTheme, themeToCssVars } from './theme';
 export type { Token, TokenKind } from './highlight';
 export { tokenizeSelector, tokenClassName, isPunctuation } from './highlight';
 
+export type { YamlToken, YamlTokenKind } from './highlight-yaml';
+export { tokenizeYaml, tokenizeYamlLine, yamlTokenClassName } from './highlight-yaml';
+
 // ---- SelectorField ----
 export type { SelectorFieldProps, SynthesisResult } from './SelectorField';
 export { SelectorField } from './SelectorField';

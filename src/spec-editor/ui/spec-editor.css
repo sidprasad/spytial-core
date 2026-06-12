@@ -1283,24 +1283,73 @@
   min-inline-size: 1.6em;
 }
 
-.spytial-ed-code-textarea {
+/* wrapper hosting the highlight mirror + the transparent-text textarea; its
+   height is driven by the textarea (which keeps `resize: vertical`) */
+.spytial-ed-code-input-wrap {
+  position: relative;
   flex: 1 1 auto;
-  resize: vertical;
-  min-block-size: 12rem;
+  min-width: 0;
+  display: flex;
+}
+
+/*
+ * Mirror and textarea MUST share identical metrics (font, size, line-height,
+ * padding, tab-size, `white-space: pre`) so the highlight sits exactly under
+ * the caret — same contract as the selector field's overlay.
+ */
+.spytial-ed-code-textarea,
+.spytial-ed-code-mirror {
+  margin: 0;
   font-family: var(--spytial-ed-mono-font-family, ui-monospace, monospace);
   font-size: 0.85em;
   line-height: 1.5;
-  color: var(--spytial-ed-text, #221d14);
-  background: transparent;
-  border: none;
-  outline: none;
+  letter-spacing: normal;
   padding: 0.5em 0.6em;
+  border: none;
   white-space: pre;
   overflow-wrap: normal;
   tab-size: 2;
 }
 
+.spytial-ed-code-mirror {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  color: var(--spytial-ed-text, #221d14);
+  background: transparent;
+}
+
+.spytial-ed-code-textarea {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  width: 100%;
+  resize: vertical;
+  min-block-size: 12rem;
+  color: transparent;
+  caret-color: var(--spytial-ed-accent, #b5431a);
+  background: transparent;
+  outline: none;
+}
+
+.spytial-ed-code-textarea::selection {
+  /* keep selection visible even though the text itself is transparent */
+  background: color-mix(
+    in srgb,
+    var(--spytial-ed-accent, #b5431a) 26%,
+    transparent
+  );
+}
+
 .spytial-ed-code-textarea:disabled {
+  opacity: 0.6;
+}
+
+.spytial-ed-code-textarea:disabled + .spytial-ed-code-mirror,
+.spytial-ed-code-input-wrap:has(.spytial-ed-code-textarea:disabled)
+  .spytial-ed-code-mirror {
   opacity: 0.6;
 }
 

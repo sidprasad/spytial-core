@@ -10,14 +10,18 @@
  * ("unapplied edits"). A parse error never clobbers the model — the parent keeps
  * the last good state and surfaces the diagnostic here.
  *
- * Optional line numbers are rendered in a gutter that scroll-syncs with the
- * textarea (the same mirror technique the SelectorField uses). YAML is NOT
- * syntax-highlighted (per the WP3 handoff note: a plain textarea with
- * diagnostics is acceptable, and full YAML highlighting is out of scope).
+ * The YAML is syntax-highlighted with the same mirror-overlay technique the
+ * SelectorField uses: a highlighted `<pre>` sits behind a transparent-text
+ * textarea with identical metrics, scroll-synced on both axes (the text never
+ * wraps, so horizontal sync matters here). Tokenization is the lossless
+ * line tokenizer in `highlight-yaml.ts` (comments, strings, numbers, keys,
+ * and the spec's known constraint/directive keywords). Optional line numbers
+ * render in a gutter that shares the same scroll sync.
  */
 
-import React, { useCallback, useId, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef } from 'react';
 import type { Diagnostic } from '../core/types';
+import { tokenizeYaml, yamlTokenClassName } from './highlight-yaml';
 
 export interface CodeViewProps {
   /** controlled YAML text */
@@ -57,6 +61,7 @@ export const CodeView: React.FC<CodeViewProps> = ({
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const gutterRef = useRef<HTMLDivElement | null>(null);
+  const mirrorRef = useRef<HTMLPreElement | null>(null);
   const baseId = useId();
   const diagId = `${baseId}-diag`;
 
@@ -66,13 +71,27 @@ export const CodeView: React.FC<CodeViewProps> = ({
     return Math.max(1, lines);
   }, [value]);
 
-  // Keep the gutter scrolled in lockstep with the textarea.
+  const highlightedLines = useMemo(() => tokenizeYaml(value), [value]);
+
+  // Keep the gutter and the highlight mirror scrolled in lockstep with the
+  // textarea — both axes: with `wrap="off"` the text scrolls horizontally too.
   const syncScroll = useCallback(() => {
     const ta = textareaRef.current;
+    if (!ta) return;
     const gutter = gutterRef.current;
-    if (!ta || !gutter) return;
-    gutter.scrollTop = ta.scrollTop;
+    if (gutter) gutter.scrollTop = ta.scrollTop;
+    const mirror = mirrorRef.current;
+    if (mirror) {
+      mirror.scrollTop = ta.scrollTop;
+      mirror.scrollLeft = ta.scrollLeft;
+    }
   }, []);
+
+  // Re-sync after every value change as well (typing can scroll the textarea
+  // without firing a scroll event in all engines).
+  useEffect(() => {
+    syncScroll();
+  }, [value, syncScroll]);
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -116,21 +135,48 @@ export const CodeView: React.FC<CodeViewProps> = ({
           </div>
         ) : null}
 
-        <textarea
-          ref={textareaRef}
-          className="spytial-ed-code-textarea"
-          value={value}
-          onChange={handleChange}
-          onScroll={syncScroll}
-          disabled={disabled}
-          spellCheck={false}
-          autoCapitalize="off"
-          autoCorrect="off"
-          wrap="off"
-          aria-label={ariaLabel}
-          aria-describedby={describedBy}
-          aria-invalid={hasError || undefined}
-        />
+        <div className="spytial-ed-code-input-wrap">
+          {/* Highlight mirror, behind the textarea (presentation only). */}
+          <pre
+            ref={mirrorRef}
+            className="spytial-ed-code-mirror"
+            aria-hidden="true"
+          >
+            {highlightedLines.map((tokens, lineIdx) => (
+              <React.Fragment key={lineIdx}>
+                {lineIdx > 0 ? '\n' : null}
+                {tokens.map((t, i) => {
+                  const cls = yamlTokenClassName(t.kind);
+                  return cls ? (
+                    <span key={i} className={cls}>
+                      {t.text}
+                    </span>
+                  ) : (
+                    t.text
+                  );
+                })}
+              </React.Fragment>
+            ))}
+            {/* trailing newline keeps the last line's height in the mirror */}
+            {'\n'}
+          </pre>
+
+          <textarea
+            ref={textareaRef}
+            className="spytial-ed-code-textarea"
+            value={value}
+            onChange={handleChange}
+            onScroll={syncScroll}
+            disabled={disabled}
+            spellCheck={false}
+            autoCapitalize="off"
+            autoCorrect="off"
+            wrap="off"
+            aria-label={ariaLabel}
+            aria-describedby={describedBy}
+            aria-invalid={hasError || undefined}
+          />
+        </div>
       </div>
 
       {sorted.length > 0 ? (

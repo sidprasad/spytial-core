@@ -85,6 +85,9 @@ export { lightTheme, darkTheme, themeToCssVars } from './ui/theme';
 export type { Token, TokenKind } from './ui/highlight';
 export { tokenizeSelector, tokenClassName, isPunctuation } from './ui/highlight';
 
+export type { YamlToken, YamlTokenKind } from './ui/highlight-yaml';
+export { tokenizeYaml, tokenizeYamlLine, yamlTokenClassName } from './ui/highlight-yaml';
+
 export type { SelectorFieldProps, SynthesisResult } from './ui/SelectorField';
 export { SelectorField } from './ui/SelectorField';
 
