@@ -53,6 +53,7 @@ function Host(props: {
   onChangeSpy?: (v: string) => void
   onDiagnosticsSpy?: (d: Diagnostic[]) => void
   defaultView?: 'builder' | 'code'
+  syntaxHighlighting?: boolean
 }) {
   const [value, setValue] = useState(props.initial ?? '')
   return (
@@ -67,6 +68,7 @@ function Host(props: {
       selectorAssistant={props.selectorAssistant}
       onDiagnostics={props.onDiagnosticsSpy}
       defaultView={props.defaultView ?? 'builder'}
+      syntaxHighlighting={props.syntaxHighlighting}
       aria-label="Spec editor under test"
     />
   )
@@ -590,5 +592,73 @@ describe('CndLayoutInterface — back-compat with the legacy prop surface', () =
     await user.click(screen.getByRole('tab', { name: 'Builder' }))
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Directives' })).toBeInTheDocument()
+  })
+})
+
+describe('SpecEditor — PR review regressions', () => {
+  // Finding: extras.highlight was dropped by FieldRenderer, so the kill
+  // switch only disabled the code view's mirror, not the selector fields'.
+  it('syntaxHighlighting={false} reaches selector fields through the full stack', async () => {
+    const user = userEvent.setup()
+    render(
+      <Host
+        initial={'constraints:\n  - orientation: {selector: left, directions: [below]}\n'}
+        defaultView="builder"
+        syntaxHighlighting={false}
+      />,
+    )
+    await expandRow(user, 'Orientation')
+    const selectorTa = document.querySelector('.spytial-ed-selector-textarea')!
+    expect(selectorTa).toBeTruthy()
+    expect(document.querySelector('.spytial-ed-selector-mirror')).toBeNull()
+    expect(selectorTa.className).toContain('spytial-ed-selector-textarea--plain')
+
+    // and the code view's mirror is off too
+    await user.click(screen.getByRole('tab', { name: 'Code' }))
+    expect(document.querySelector('.spytial-ed-code-mirror')).toBeNull()
+  })
+
+  // Finding: an unparseable INITIAL value fell back to an empty document with
+  // no diagnostic — an empty builder with no explanation.
+  it('surfaces a parse diagnostic for an invalid initial value', () => {
+    render(
+      <Host
+        initial={'constraints: [unclosed\n  - bad'}
+        defaultView="code"
+      />,
+    )
+    // the "unapplied edits" notice and the parse diagnostic are visible
+    expect(screen.getByRole('status')).toBeInTheDocument()
+    expect(
+      document.querySelector('.spytial-ed-diagnostic--error'),
+    ).toBeTruthy()
+    // the badge also shows on the Builder tab from first render
+    expect(
+      screen.getByLabelText('Text has unapplied edits'),
+    ).toBeInTheDocument()
+  })
+
+  // Finding: Duplicate recorded three undo steps (add + update + move), so a
+  // single Undo left a half-reverted duplicate. Now one document mutation.
+  it('Duplicate is undone by a single Undo', async () => {
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+    render(
+      <Host
+        initial={'constraints:\n  - cyclic: {selector: ring, direction: clockwise}\n'}
+        onChangeSpy={onChange}
+        defaultView="builder"
+      />,
+    )
+    await user.click(
+      screen.getByRole('button', { name: /actions for cyclic/i }),
+    )
+    await user.click(screen.getByRole('menuitem', { name: 'Duplicate' }))
+    const afterDup = parseYamlToState(onChange.mock.calls.at(-1)![0] as string)
+    expect(afterDup.constraints).toHaveLength(2)
+
+    await user.click(screen.getByRole('button', { name: /undo/i }))
+    const afterUndo = parseYamlToState(onChange.mock.calls.at(-1)![0] as string)
+    expect(afterUndo.constraints).toHaveLength(1)
   })
 })

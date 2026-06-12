@@ -210,6 +210,27 @@ export class SpecDocument {
     this.commit();
   }
 
+  /**
+   * Duplicate an item in place: a deep params/comment copy with a fresh id,
+   * inserted directly after the original. ONE undo step — composing
+   * addItem + updateItem + moveItem at the UI layer recorded three, so a
+   * single Undo after Duplicate left a half-reverted copy behind (PR review
+   * finding). Returns the clone, or null if the id is unknown.
+   */
+  duplicateItem(id: string): SpecItem | null {
+    const found = this.find(id);
+    if (!found) {
+      return null;
+    }
+    this.pushUndo();
+    const copy: SpecItem = { ...cloneItem(found.item), id: newId() };
+    const list =
+      found.kind === 'constraint' ? this.state.constraints : this.state.directives;
+    list.splice(found.index + 1, 0, copy);
+    this.commit();
+    return cloneItem(copy);
+  }
+
   /** Remove an item by id. No-op if not found. */
   removeItem(id: string): void {
     const found = this.find(id);

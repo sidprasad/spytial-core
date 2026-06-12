@@ -199,3 +199,46 @@ describe('SpecDocument.fromYaml', () => {
     expect(doc.toYaml()).toBe('');
   });
 });
+
+describe('SpecDocument — duplicateItem (PR review regression)', () => {
+  it('duplicates params/comment with a fresh id, adjacent to the original', () => {
+    const doc = new SpecDocument();
+    const a = doc.addItem('constraint', 'cyclic');
+    doc.updateItem(a.id, {
+      params: { selector: 'ring', direction: 'clockwise' },
+      comment: 'a note',
+    });
+    const b = doc.addItem('constraint', 'align');
+
+    const copy = doc.duplicateItem(a.id)!;
+    expect(copy).not.toBeNull();
+    expect(copy.id).not.toBe(a.id);
+    expect(copy.params).toEqual({ selector: 'ring', direction: 'clockwise' });
+    expect(copy.comment).toBe('a note');
+
+    // placed directly after the original, before unrelated items
+    const ids = doc.getState().constraints.map((i) => i.id);
+    expect(ids).toEqual([a.id, copy.id, b.id]);
+  });
+
+  it('is undone by a SINGLE undo step (was three: add + update + move)', () => {
+    const doc = new SpecDocument();
+    const a = doc.addItem('constraint', 'cyclic');
+    doc.updateItem(a.id, { params: { selector: 'ring', direction: 'clockwise' } });
+    const before = doc.toYaml();
+
+    doc.duplicateItem(a.id);
+    expect(doc.getState().constraints).toHaveLength(2);
+
+    doc.undo();
+    expect(doc.getState().constraints).toHaveLength(1);
+    expect(doc.toYaml()).toBe(before);
+  });
+
+  it('returns null for an unknown id without recording history', () => {
+    const doc = new SpecDocument();
+    const canUndoBefore = doc.canUndo();
+    expect(doc.duplicateItem('nope')).toBeNull();
+    expect(doc.canUndo()).toBe(canUndoBefore);
+  });
+});

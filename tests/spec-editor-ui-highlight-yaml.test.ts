@@ -104,3 +104,30 @@ describe('tokenizeYaml / yamlTokenClassName', () => {
     expect(yamlTokenClassName('text')).toBe('');
   });
 });
+
+describe('tokenizeYamlLine — quote escapes (PR review regression)', () => {
+  it('does not end a double-quoted scalar at an escaped quote', () => {
+    const line = '  - tag: {name: "say \\"hi\\" twice", value: x}';
+    expect(rejoin(line)).toBe(line);
+    const strings = tokenizeYamlLine(line).filter((t) => t.kind === 'string');
+    expect(strings).toHaveLength(1);
+    expect(strings[0].text).toBe('"say \\"hi\\" twice"');
+  });
+
+  it("treats doubled '' inside a single-quoted scalar as an escape, not a terminator", () => {
+    const line = "  - attribute: {field: 'it''s', selector: y}";
+    expect(rejoin(line)).toBe(line);
+    const strings = tokenizeYamlLine(line).filter((t) => t.kind === 'string');
+    expect(strings).toHaveLength(1);
+    expect(strings[0].text).toBe("'it''s'");
+  });
+
+  it('an unterminated quoted scalar runs to end of line, losslessly', () => {
+    const line = "  - flag: 'oops";
+    expect(rejoin(line)).toBe(line);
+    expect(tokenizeYamlLine(line).at(-1)).toMatchObject({
+      kind: 'string',
+      text: "'oops",
+    });
+  });
+});

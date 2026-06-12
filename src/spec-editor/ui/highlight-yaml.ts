@@ -71,9 +71,22 @@ export function tokenizeYamlLine(line: string): YamlToken[] {
     }
 
     if (ch === "'" || ch === '"') {
-      // quoted scalar: scan to the closing quote (or end of line)
+      // Quoted scalar: scan to the closing quote (or end of line), honoring
+      // YAML escapes — `\"` inside double quotes, doubled `''` inside single
+      // quotes — so an escaped quote doesn't end the token early.
       let end = pos + 1;
-      while (end < line.length && line[end] !== ch) {
+      while (end < line.length) {
+        if (ch === '"' && line[end] === '\\') {
+          end += 2; // skip the escaped character
+          continue;
+        }
+        if (line[end] === ch) {
+          if (ch === "'" && line[end + 1] === "'") {
+            end += 2; // '' is an escaped single quote, not a terminator
+            continue;
+          }
+          break;
+        }
         end += 1;
       }
       end = Math.min(end + 1, line.length);

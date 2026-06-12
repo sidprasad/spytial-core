@@ -213,6 +213,7 @@ function renderControl(
           diagnostics={diagnostics}
           complete={extras.complete}
           synthesize={extras.synthesize}
+          highlight={extras.highlight}
         />
       );
     }

@@ -122,12 +122,19 @@ export const SpecEditor: React.FC<SpecEditorProps> = ({
   onDiagnostics,
 }) => {
   // ── Document (source of truth) ────────────────────────────────────────
-  // Created once from the initial value; never recreated on re-render.
-  const docRef = useRef<SpecDocument | null>(null);
-  if (docRef.current === null) {
-    docRef.current = safeDocFromYaml(value);
+  // Created once from the initial value; never recreated on re-render. If the
+  // INITIAL value is unparseable we keep an empty document but carry the parse
+  // diagnostic forward (PR review finding: silently rendering an empty builder
+  // for a broken initial spec left the user with no explanation), seeding the
+  // parseError state below so the diagnostic + "unapplied edits" badge show
+  // from the first render.
+  const initRef = useRef<{ doc: SpecDocument; error: Diagnostic | null } | null>(
+    null,
+  );
+  if (initRef.current === null) {
+    initRef.current = initDocFromYaml(value);
   }
-  const doc = docRef.current;
+  const doc = initRef.current.doc;
 
   // Bump to force re-render on any document change (builder/undo/redo/parse).
   const [, forceRender] = useReducer((n: number) => n + 1, 0);
@@ -166,8 +173,11 @@ export const SpecEditor: React.FC<SpecEditorProps> = ({
     },
     [controlledView, onViewChange],
   );
-  // The parse diagnostic + "unapplied edits" state for the code view.
-  const [parseError, setParseError] = useState<Diagnostic | null>(null);
+  // The parse diagnostic + "unapplied edits" state for the code view. Seeded
+  // with the initial value's parse error, if any (see initRef above).
+  const [parseError, setParseError] = useState<Diagnostic | null>(
+    () => initRef.current?.error ?? null,
+  );
 
   // ── Domain ─────────────────────────────────────────────────────────────
   const domain = useMemo<DomainSchema | undefined>(() => {
@@ -359,26 +369,10 @@ export const SpecEditor: React.FC<SpecEditorProps> = ({
   const handleDuplicate = useCallback(
     (id: string) => {
       if (disabled) return;
-      const state = doc.getState();
-      const found =
-        state.constraints.find((i) => i.id === id) ??
-        state.directives.find((i) => i.id === id);
-      if (!found) return;
-      const created = doc.addItem(found.kind, found.type);
-      // Copy params + comment onto the new item.
-      doc.updateItem(created.id, {
-        params: { ...found.params },
-        ...(found.comment !== undefined ? { comment: found.comment } : {}),
-      });
-      // Place the duplicate right after the original.
-      const list =
-        found.kind === 'constraint'
-          ? doc.getState().constraints
-          : doc.getState().directives;
-      const origIndex = list.findIndex((i) => i.id === id);
-      if (origIndex !== -1) {
-        doc.moveItem(created.id, origIndex + 1);
-      }
+      // Single document-level mutation = single undo step (the previous
+      // addItem + updateItem + moveItem composition recorded three).
+      const created = doc.duplicateItem(id);
+      if (!created) return;
       emit();
     },
     [disabled, doc, emit],
@@ -678,12 +672,19 @@ export const SpecEditor: React.FC<SpecEditorProps> = ({
 
 // ---- helpers --------------------------------------------------------------
 
-/** Build a document from YAML, falling back to an empty doc on parse error. */
-function safeDocFromYaml(yaml: string): SpecDocument {
+/**
+ * Build a document from YAML. On parse error, falls back to an empty document
+ * but RETURNS the diagnostic so the editor can surface it from first render
+ * instead of silently showing an empty builder.
+ */
+function initDocFromYaml(yaml: string): {
+  doc: SpecDocument;
+  error: Diagnostic | null;
+} {
   try {
-    return SpecDocument.fromYaml(yaml);
-  } catch {
-    return new SpecDocument();
+    return { doc: SpecDocument.fromYaml(yaml), error: null };
+  } catch (err) {
+    return { doc: new SpecDocument(), error: toParseDiagnostic(err) };
   }
 }
 

@@ -106,6 +106,11 @@ const ConnectedLayoutInterface: React.FC = () => {
       setInstance(newInstance);
       prevSetter?.(newInstance);
     };
+    // Restore the previous hook on unmount so remounts (HMR, multiple demos)
+    // don't chain stale wrappers that call setInstance on a dead component.
+    return () => {
+      win.updateLayoutInterfaceInstance = prevSetter;
+    };
   }, []);
 
   const handleCndSpecChange = (newSpec: string) => {
