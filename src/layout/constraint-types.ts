@@ -55,10 +55,19 @@ export interface HiddenNodeConflictError extends ConstraintError {
     type: 'hidden-node-conflict';
     /** Map of hidden node ID → the hideAtom selector that hid it */
     hiddenNodes: Map<string, string>;
-    /** Map of source constraint → list of pairwise descriptions that were dropped */
+    /** Map of source constraint → list of pairwise descriptions that conflicted with the hide */
     droppedConstraints: Map<string, string[]>;
     /** Structured error messages for UI rendering (same format as positional errors) */
     errorMessages: ErrorMessages;
+    /**
+     * How the conflict was resolved:
+     * - 'reintroduced' (default): the hidden atoms were shown anyway because constraints
+     *   reference them; no constraints were dropped.
+     * - 'dropped': fallback — the conflicting constraints were dropped and the atoms stayed hidden.
+     */
+    resolution: 'reintroduced' | 'dropped';
+    /** Node IDs that were re-introduced into the diagram (only when resolution is 'reintroduced'). */
+    reintroducedNodeIds?: string[];
 }
 
 export function isHiddenNodeConflictError(error: unknown): error is HiddenNodeConflictError {
