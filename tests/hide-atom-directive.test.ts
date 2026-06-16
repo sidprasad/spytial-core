@@ -149,7 +149,7 @@ directives:
     }).not.toThrow();
   });
 
-  it('surfaces constraints that reference hidden atoms as hidden-node-conflict errors', () => {
+  it('re-introduces hidden atoms that a constraint references (hidden-node-conflict)', () => {
     const layoutSpecYaml = `
 constraints:
   - orientation:
@@ -172,7 +172,10 @@ directives:
     expect(error?.type).toBe('hidden-node-conflict');
     expect(error?.message).toContain('B');
 
+    // B is referenced by the orientation constraint, so it is re-introduced rather than hidden.
     const nodeIds = layout.nodes.map(node => node.id);
-    expect(nodeIds).not.toContain('B');
+    expect(nodeIds).toContain('B');
+    const reintroduced = (layout.reintroducedNodes ?? []).map(n => n.id);
+    expect(reintroduced).toContain('B');
   });
 });
