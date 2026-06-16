@@ -266,6 +266,8 @@ export class WebColaLayout {
   readonly groupDefinitions: any;
   readonly conflictingConstraints: LayoutConstraint[];
   readonly overlappingNodesData: LayoutNode[];
+  readonly hiddenConflictNodesData: LayoutNode[];
+  readonly reintroducedNodesData: LayoutNode[];
 
   private readonly DEFAULT_X: number;
   private readonly DEFAULT_Y: number;
@@ -356,6 +358,8 @@ export class WebColaLayout {
 
     this.conflictingConstraints = instanceLayout.conflictingConstraints || [];
     this.overlappingNodesData = instanceLayout.overlappingNodes || [];
+    this.hiddenConflictNodesData = instanceLayout.hiddenConflictNodes || [];
+    this.reintroducedNodesData = instanceLayout.reintroducedNodes || [];
     this.colaConstraints = instanceLayout.constraints.map(constraint => this.toColaConstraint(constraint));
 
     // Decide which constraint endpoints stay locked (fixed=1) and which
@@ -1177,6 +1181,14 @@ export class WebColaLayout {
 
   get overlappingNodes(): LayoutNode[] {
     return this.overlappingNodesData;
+  }
+
+  get hiddenConflictNodes(): LayoutNode[] {
+    return this.hiddenConflictNodesData;
+  }
+
+  get reintroducedNodes(): LayoutNode[] {
+    return this.reintroducedNodesData;
   }
 
   get overlappingGroups(): LayoutGroup[] {

@@ -151,7 +151,7 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
   const descriptionText = useMemo(() => {
     if (isSelectorError) return 'One or more selectors in your layout specification could not be evaluated.';
     if (isOtherError) return 'An error occurred while processing your data.';
-    if (isHiddenNodeError) return 'Some constraints reference nodes that are hidden by a hideAtom directive. The conflicting constraints have been dropped from the layout.';
+    if (isHiddenNodeError) return 'Some layout constraints reference atoms hidden by a hideAtom directive. Those atoms have been re-introduced into the diagram (shown despite the hide) so the relationships can be drawn. Re-introduced atoms are outlined with a dashed border.';
     return 'Your data causes the following visualization constraints to conflict.';
   }, [isSelectorError, isOtherError, isHiddenNodeError]);
 
@@ -178,7 +178,7 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
       {/* (Positional) Constraint Error Cards */}
       { isPositionalError && (
         <>
-          <p id="hover-instructions">Hover over the conflicting constraints to see the corresponding diagram elements that cannot be visualized. </p>
+          <p id="hover-instructions">Hover over the {isHiddenNodeError ? 'constraints' : 'conflicting constraints'} to see the corresponding diagram elements{isHiddenNodeError ? ' that were affected' : ' that cannot be visualized'}. </p>
           <div className="constraint-relationship-table">
             <table className="table table-bordered">
               <thead>

@@ -218,8 +218,8 @@ directives:
     });
   });
 
-  describe('Counterfactual layout (dropped constraints)', () => {
-    it('produces a valid layout with the hidden node removed', () => {
+  describe('Counterfactual layout (re-introduced atoms)', () => {
+    it('re-introduces the hidden node into the layout rather than removing it', () => {
       const result = createLayout(`
 constraints:
   - orientation:
@@ -230,11 +230,33 @@ directives:
       selector: B
 `);
 
+      // B is referenced by the orientation constraint, so it is re-introduced (shown).
       const nodeIds = result.layout.nodes.map(n => n.id);
-      expect(nodeIds).not.toContain('B');
+      expect(nodeIds).toContain('B');
       expect(nodeIds).toContain('A');
       expect(nodeIds).toContain('C');
       expect(nodeIds).toContain('D');
+    });
+
+    it('keeps constraints that reference the re-introduced node', () => {
+      const result = createLayout(`
+constraints:
+  - orientation:
+      selector: edge
+      directions: [right]
+directives:
+  - hideAtom:
+      selector: B
+`);
+
+      // Constraints involving B are no longer dropped — at least one should reference B.
+      const referencesB = result.layout.constraints.some(c => {
+        if ('left' in c && 'right' in c) return c.left.id === 'B' || c.right.id === 'B';
+        if ('top' in c && 'bottom' in c) return c.top.id === 'B' || c.bottom.id === 'B';
+        if ('node1' in c && 'node2' in c) return c.node1.id === 'B' || c.node2.id === 'B';
+        return false;
+      });
+      expect(referencesB).toBe(true);
     });
 
     it('retains constraints that do not reference hidden nodes', () => {
@@ -248,10 +270,7 @@ directives:
       selector: B
 `);
 
-      // A->B and B->C produce constraints involving B, so they are dropped.
-      // C->D does NOT involve B, so it should remain.
-      expect(result.layout.constraints.length).toBeGreaterThan(0);
-      // The C->D constraint should still be present
+      // The C->D constraint (which never involved a hidden node) should still be present
       const hasCD = result.layout.constraints.some(c => {
         if ('left' in c && 'right' in c) {
           return (c.left.id === 'C' && c.right.id === 'D') || (c.left.id === 'D' && c.right.id === 'C');
@@ -260,8 +279,10 @@ directives:
       });
       expect(hasCD).toBe(true);
     });
+  });
 
-    it('drops all constraints referencing hidden nodes', () => {
+  describe('Re-introduction of conflicting hidden atoms', () => {
+    it('marks the re-introduced atom in layout.reintroducedNodes', () => {
       const result = createLayout(`
 constraints:
   - orientation:
@@ -272,21 +293,80 @@ directives:
       selector: B
 `);
 
-      // No constraint should reference B
-      for (const c of result.layout.constraints) {
-        if ('left' in c && 'right' in c) {
-          expect(c.left.id).not.toBe('B');
-          expect(c.right.id).not.toBe('B');
-        }
-        if ('top' in c && 'bottom' in c) {
-          expect(c.top.id).not.toBe('B');
-          expect(c.bottom.id).not.toBe('B');
-        }
-        if ('node1' in c && 'node2' in c) {
-          expect(c.node1.id).not.toBe('B');
-          expect(c.node2.id).not.toBe('B');
-        }
-      }
+      const ids = (result.layout.reintroducedNodes ?? []).map(n => n.id);
+      expect(ids).toContain('B');
+      // Atoms that were never hidden should not be marked as re-introduced.
+      expect(ids).not.toContain('A');
+      expect(ids).not.toContain('D');
+    });
+
+    it('reports the resolution as "reintroduced" on the error', () => {
+      const result = createLayout(`
+constraints:
+  - align:
+      selector: edge
+      direction: horizontal
+directives:
+  - hideAtom:
+      selector: B
+`);
+
+      const error = result.error as HiddenNodeConflictError;
+      expect(error.resolution).toBe('reintroduced');
+      expect(error.reintroducedNodeIds).toContain('B');
+      expect(error.message.toLowerCase()).toContain('re-introduced');
+    });
+
+    it('produces a satisfiable layout (no further conflicts) once atoms are re-introduced', () => {
+      const result = createLayout(`
+constraints:
+  - orientation:
+      selector: edge
+      directions: [right]
+directives:
+  - hideAtom:
+      selector: B
+`);
+
+      // The conflict is resolved by re-introduction, not by an unsatisfiable counterfactual.
+      const error = result.error as HiddenNodeConflictError;
+      expect(error.resolution).toBe('reintroduced');
+      // All edge tuples are kept as constraints (A->B, B->C, C->D = 3 orientation constraints).
+      expect(result.layout.constraints.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('re-introduces both ends when every atom of a relationship is hidden', () => {
+      const twoNodeData = {
+        atoms: [
+          { id: 'X', type: 'Node', label: 'X' },
+          { id: 'Y', type: 'Node', label: 'Y' },
+        ],
+        relations: [
+          {
+            id: 'rel',
+            name: 'rel',
+            types: ['Node', 'Node'],
+            tuples: [{ atoms: ['X', 'Y'], types: ['Node', 'Node'] }]
+          }
+        ]
+      };
+
+      const result = createLayout(`
+constraints:
+  - orientation:
+      selector: rel
+      directions: [right]
+directives:
+  - hideAtom:
+      selector: Node
+`, twoNodeData);
+
+      const nodeIds = result.layout.nodes.map(n => n.id);
+      expect(nodeIds).toContain('X');
+      expect(nodeIds).toContain('Y');
+      const reintroduced = (result.layout.reintroducedNodes ?? []).map(n => n.id);
+      expect(reintroduced).toContain('X');
+      expect(reintroduced).toContain('Y');
     });
   });
 
@@ -308,16 +388,19 @@ directives:
       expect(result.error!.type).toBe('hidden-node-conflict');
 
       const error = result.error as HiddenNodeConflictError;
-      // Both B and C should be reported as hidden
+      // Both B and C should be reported as re-introduced
       expect(error.message).toContain('B');
       expect(error.message).toContain('C');
 
-      // Layout should not contain B or C
+      // Layout should re-introduce both B and C
       const nodeIds = result.layout.nodes.map(n => n.id);
-      expect(nodeIds).not.toContain('B');
-      expect(nodeIds).not.toContain('C');
+      expect(nodeIds).toContain('B');
+      expect(nodeIds).toContain('C');
       expect(nodeIds).toContain('A');
       expect(nodeIds).toContain('D');
+      const reintroduced = (result.layout.reintroducedNodes ?? []).map(n => n.id);
+      expect(reintroduced).toContain('B');
+      expect(reintroduced).toContain('C');
     });
 
     it('handles hidden node referenced by both orientation and alignment constraints', () => {
@@ -380,10 +463,9 @@ directives:
       expect(result.error).not.toBeNull();
       expect(result.error!.type).toBe('hidden-node-conflict');
 
-      // All constraints should be dropped
-      expect(result.layout.constraints.length).toBe(0);
-      // No nodes should remain
-      expect(result.layout.nodes.length).toBe(0);
+      // Both atoms are re-introduced and the constraint is kept (rather than everything dropped).
+      expect(result.layout.nodes.length).toBe(2);
+      expect(result.layout.constraints.length).toBeGreaterThan(0);
     });
 
     it('produces valid layout when constraint and hide have disjoint selectors', () => {

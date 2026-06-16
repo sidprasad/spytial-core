@@ -272,6 +272,29 @@ export class LayoutInstance {
     private conflictedHiddenNodes: Set<string> = new Set();
 
     /**
+     * Set of still-visible node IDs that were the other end of a relationship dropped
+     * because its partner was hidden. Used to highlight the visible atoms a hidden-node
+     * conflict affects in the counterfactual diagram.
+     * Reset at the start of each generateLayout() call.
+     */
+    private conflictedVisibleNodes: Set<string> = new Set();
+
+    /**
+     * Atom IDs that a hideAtom directive would hide but which must NOT be hidden because a
+     * layout constraint references them. Honored by ensureNoExtraNodes to re-introduce them.
+     * Carried across the internal re-generation pass, so it is reset only by the public
+     * generateLayout() entry point, never by an individual pass.
+     */
+    private exemptFromHiding: Set<string> = new Set();
+
+    /**
+     * Atom IDs that were re-introduced (kept visible) this pass despite matching a hideAtom
+     * directive, because a constraint references them. Repopulated by ensureNoExtraNodes on
+     * each pass.
+     */
+    private reintroducedNodes: Set<string> = new Set();
+
+    /**
      * Records a selector evaluation error for later reporting.
      * @param selector - The selector expression that failed
      * @param context - Description of where/why the selector was being evaluated
@@ -339,17 +362,38 @@ export class LayoutInstance {
      * The constraint is dropped from the layout, and the conflict is tracked for error reporting.
      * @param sourceConstraint - The source constraint that references the hidden node
      * @param pairwiseDescription - A human-readable description of the dropped pairwise constraint
-     * @param hiddenNodeId - The ID of the hidden node
+     * @param sourceNodeId - The source node of the dropped relationship
+     * @param targetNodeId - The target node of the dropped relationship
+     * @param sourceHidden - Whether the source node is hidden by a directive
+     * @param targetHidden - Whether the target node is hidden by a directive
      */
-    private recordHiddenNodeConflict(sourceConstraint: ConstraintSource, pairwiseDescription: string, hiddenNodeId: string): void {
+    private recordHiddenNodeConflict(
+        sourceConstraint: ConstraintSource,
+        pairwiseDescription: string,
+        sourceNodeId: string,
+        targetNodeId: string,
+        sourceHidden: boolean,
+        targetHidden: boolean
+    ): void {
         const sourceHTML = sourceConstraint.toHTML();
         if (!this.hiddenNodeConflicts.has(sourceHTML)) {
             this.hiddenNodeConflicts.set(sourceHTML, []);
         }
         this.hiddenNodeConflicts.get(sourceHTML)!.push(pairwiseDescription);
 
-        // Track which hidden nodes are involved in conflicts (for building hideAtom table entries)
-        this.conflictedHiddenNodes.add(hiddenNodeId);
+        // Track which hidden nodes are involved in conflicts (for building hideAtom table
+        // entries), and which still-visible nodes were the other end of the dropped
+        // relationship (so the counterfactual diagram can highlight them).
+        if (sourceHidden) {
+            this.conflictedHiddenNodes.add(sourceNodeId);
+        } else {
+            this.conflictedVisibleNodes.add(sourceNodeId);
+        }
+        if (targetHidden) {
+            this.conflictedHiddenNodes.add(targetNodeId);
+        } else {
+            this.conflictedVisibleNodes.add(targetNodeId);
+        }
     }
 
 
@@ -1036,6 +1080,14 @@ export class LayoutInstance {
 
                 const hideNode = hideLegacy || hideBySelector;
 
+                // A hideAtom-selected node that a layout constraint references is re-introduced
+                // (kept visible) rather than removed. The exemption set is populated on a prior
+                // pass when the hide conflicted with a constraint (see generateLayout).
+                if (hideBySelector && this.exemptFromHiding.has(node)) {
+                    this.reintroducedNodes.add(node);
+                    return; // keep the node; do not record it as hidden
+                }
+
                 if (hideNode) {
                     g.removeNode(node);
                     // Track selector-hidden nodes so constraint generation can report conflicts
@@ -1087,6 +1139,14 @@ export class LayoutInstance {
      * Generates the layout for the given data instance.
      * Projections should be applied to the data instance before calling this method
      * using `applyProjectionTransform()` from the data-instance module.
+     *
+     * When a hideAtom directive hides an atom that a layout constraint references, the
+     * conflict is resolved by re-introducing those atoms (showing them despite the hide)
+     * and keeping the constraints, rather than silently dropping the relationship. This is
+     * implemented as a second generation pass with the conflicting atoms exempted from
+     * hiding; the re-introduced atoms are marked on the layout and explained via the
+     * returned (informational) HiddenNodeConflictError.
+     *
      * @param a - The data instance to generate the layout for.
      * @returns An object containing the layout, constraint error (if any), and any selector errors encountered.
      * @throws {ConstraintError} If the layout cannot be generated due to unsatisfiable constraints and error isn't caught to be surfaced to the user.
@@ -1094,12 +1154,52 @@ export class LayoutInstance {
     public generateLayout(
         a: IDataInstance
     ): CounterfactualLayoutResult {
+        // Fresh exemption set per public call; it is the only state that must survive the
+        // internal re-generation pass below.
+        this.exemptFromHiding = new Set();
+
+        let result = this.generateLayoutPass(a);
+
+        // If any hidden atoms conflicted with constraints, re-introduce them and re-run.
+        const toReintroduce = [...this.conflictedHiddenNodes].filter(id => !this.exemptFromHiding.has(id));
+        if (toReintroduce.length > 0) {
+            // Capture the conflict explanation before the next pass resets the tracking maps.
+            const conflictInfo = this.buildHiddenNodeConflictInfo('reintroduced');
+            toReintroduce.forEach(id => this.exemptFromHiding.add(id));
+
+            result = this.generateLayoutPass(a);
+
+            // Mark the re-introduced atoms on the layout and attach the explanation, unless
+            // the re-run surfaced a genuine (e.g. positional) conflict that takes precedence.
+            const reintroduced = result.layout.nodes.filter(n => this.reintroducedNodes.has(n.id));
+            if (reintroduced.length > 0) {
+                result.layout.reintroducedNodes = reintroduced;
+            }
+            if (result.error === null) {
+                conflictInfo.reintroducedNodeIds = reintroduced.map(n => n.id);
+                result = { ...result, error: conflictInfo };
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Runs a single layout-generation pass. Honors `this.exemptFromHiding` so callers can
+     * re-introduce previously-hidden atoms. Not for direct use — call generateLayout().
+     */
+    private generateLayoutPass(
+        a: IDataInstance
+    ): CounterfactualLayoutResult {
         // Reset selector errors at the start of each layout generation
         this.selectorErrors = [];
         // Reset hidden-node tracking at the start of each layout generation
+        // (exemptFromHiding is intentionally preserved across passes)
         this.hiddenNodeSelectors = new Map();
         this.hiddenNodeConflicts = new Map();
         this.conflictedHiddenNodes = new Set();
+        this.conflictedVisibleNodes = new Set();
+        this.reintroducedNodes = new Set();
 
         let ai = a;
 
@@ -1333,15 +1433,17 @@ export class LayoutInstance {
     }
 
     /**
-     * Handles conflicts where hideAtom directives hide nodes referenced by layout
-     * constraints. Reports the conflict in IIS-like table format and returns a
-     * counterfactual layout with the conflicting constraints already dropped.
+     * Builds the structured explanation for a hideAtom-vs-constraint conflict (IIS-like
+     * table + summary message), worded for how the conflict was resolved. Reads the
+     * hidden-node tracking maps populated during the conflicting pass, so it must be called
+     * before those maps are reset by a subsequent pass.
+     *
+     * @param resolution - 'reintroduced' when the atoms were shown anyway (default behavior),
+     *   'dropped' when the conflicting constraints were dropped (fallback).
      */
-    private handleHiddenNodeConflictError(
-        layout: InstanceLayout
-    ): CounterfactualLayoutResult {
+    private buildHiddenNodeConflictInfo(resolution: 'reintroduced' | 'dropped'): HiddenNodeConflictError {
         // Build the IIS-like error messages map:
-        //   Source Constraint HTML → list of dropped pairwise constraint descriptions
+        //   Source Constraint HTML → list of conflicting pairwise constraint descriptions
         // Also add a synthetic entry for each hideAtom directive involved
         const sourceConstraintHTMLToLayoutConstraintsHTML = new Map<string, string[]>();
 
@@ -1360,14 +1462,17 @@ export class LayoutInstance {
             }
         }
 
-        // Add hideAtom directives as source constraints in the table
+        // Add hideAtom directives as source constraints in the table. Only the atoms
+        // actually involved in a conflict are listed (they are tracked in
+        // conflictedHiddenNodes and were recorded in hiddenNodeSelectors when hidden).
+        const conflictedIds = [...this.conflictedHiddenNodes];
+        const hiddenState = resolution === 'reintroduced' ? 'hidden, but re-introduced' : 'hidden';
         for (const hideSelector of involvedHideSelectors) {
             const hideHTML = `hideAtom with selector <code>${hideSelector}</code>`;
-            // Collect which nodes this selector hid that are involved in conflicts
             const hiddenNodeDescriptions: string[] = [];
-            for (const [nodeId, selector] of this.hiddenNodeSelectors.entries()) {
-                if (selector === hideSelector) {
-                    hiddenNodeDescriptions.push(`${nodeId} is hidden`);
+            for (const nodeId of conflictedIds) {
+                if (this.hiddenNodeSelectors.get(nodeId) === hideSelector) {
+                    hiddenNodeDescriptions.push(`${nodeId} is ${hiddenState}`);
                 }
             }
             if (hiddenNodeDescriptions.length > 0) {
@@ -1376,7 +1481,6 @@ export class LayoutInstance {
         }
 
         // Build a summary message
-        const hiddenNodeIds = [...this.hiddenNodeSelectors.keys()];
         const firstConflictSourceHTML = [...this.hiddenNodeConflicts.keys()][0];
         const firstConflictDescription = this.hiddenNodeConflicts.get(firstConflictSourceHTML)?.[0] || '';
 
@@ -1386,21 +1490,42 @@ export class LayoutInstance {
             minimalConflictingConstraints: sourceConstraintHTMLToLayoutConstraintsHTML
         };
 
-        const error: HiddenNodeConflictError = {
+        const message = resolution === 'reintroduced'
+            ? `Atoms [${conflictedIds.join(', ')}] are hidden by a hideAtom directive but referenced by layout constraints, so they have been re-introduced into the diagram.`
+            : `Constraints reference hidden nodes [${conflictedIds.join(', ')}]. These constraints have been dropped from the layout.`;
+
+        return {
             name: 'HiddenNodeConflictError',
             type: 'hidden-node-conflict',
-            message: `Constraints reference hidden nodes [${hiddenNodeIds.join(', ')}]. These constraints have been dropped from the layout.`,
+            message,
             hiddenNodes: this.hiddenNodeSelectors,
             droppedConstraints: this.hiddenNodeConflicts,
-            errorMessages
+            errorMessages,
+            resolution
         };
+    }
+
+    /**
+     * Handles conflicts where hideAtom directives hide nodes referenced by layout
+     * constraints. Fallback path used only when re-introduction did not resolve the
+     * conflict; drops the conflicting constraints and highlights the still-visible partners.
+     */
+    private handleHiddenNodeConflictError(
+        layout: InstanceLayout
+    ): CounterfactualLayoutResult {
+        const error = this.buildHiddenNodeConflictInfo('dropped');
 
         // The layout already has the conflicting constraints dropped (they were skipped
         // during generation), so it serves as the counterfactual diagram.
         // Apply the same edge-visibility post-processing that the normal path performs.
+        // Surface the still-visible atoms that were the other end of a dropped relationship
+        // so the renderer can highlight them — the hidden atom itself is gone from the
+        // diagram, but its visible partners are the ones whose constraints were lost.
+        const hiddenConflictNodes = layout.nodes.filter(n => this.conflictedVisibleNodes.has(n.id));
         const counterfactualLayout: InstanceLayout = {
             ...layout,
-            edges: this.filterHiddenEdges(layout.edges)
+            edges: this.filterHiddenEdges(layout.edges),
+            hiddenConflictNodes: hiddenConflictNodes.length > 0 ? hiddenConflictNodes : undefined
         };
 
         return {
@@ -1764,11 +1889,10 @@ export class LayoutInstance {
                 const sourceHidden = this.isNodeHiddenByDirective(sourceNodeId);
                 const targetHidden = this.isNodeHiddenByDirective(targetNodeId);
                 if (sourceHidden || targetHidden) {
-                    const hiddenId = sourceHidden ? sourceNodeId : targetNodeId;
                     // Record one description per direction in natural language
                     for (const dir of directions) {
                         const description = describeDroppedOrientationConstraint(sourceNodeId, targetNodeId, dir);
-                        this.recordHiddenNodeConflict(c, description, hiddenId);
+                        this.recordHiddenNodeConflict(c, description, sourceNodeId, targetNodeId, sourceHidden, targetHidden);
                     }
                     return; // Skip this tuple
                 }
@@ -2101,10 +2225,9 @@ export class LayoutInstance {
                 const sourceHidden = this.isNodeHiddenByDirective(sourceNodeId);
                 const targetHidden = this.isNodeHiddenByDirective(targetNodeId);
                 if (sourceHidden || targetHidden) {
-                    const hiddenId = sourceHidden ? sourceNodeId : targetNodeId;
                     const alignDir = direction === 'horizontal' ? 'horizontally' : 'vertically';
                     const description = `${sourceNodeId} is ${alignDir} aligned with ${targetNodeId}`;
-                    this.recordHiddenNodeConflict(c, description, hiddenId);
+                    this.recordHiddenNodeConflict(c, description, sourceNodeId, targetNodeId, sourceHidden, targetHidden);
                     return; // Skip this tuple
                 }
 

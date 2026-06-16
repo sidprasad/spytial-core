@@ -205,6 +205,20 @@ export interface InstanceLayout {
     conflictingConstraints?: LayoutConstraint[];
     overlappingNodes?: LayoutNode[]; // IDs of overlapping nodes
     /**
+     * Still-visible nodes that were the other end of a relationship dropped because the
+     * relationship's other end was hidden by a hideAtom directive. Surfaced so the
+     * counterfactual diagram can highlight the atoms a hidden-node conflict actually affects.
+     * Only populated by the drop-the-constraint fallback (see `reintroducedNodes` for the
+     * default re-introduction behavior).
+     */
+    hiddenConflictNodes?: LayoutNode[];
+    /**
+     * Atoms hidden by a hideAtom directive that were re-introduced into the diagram because
+     * a layout constraint references them. Surfaced so the renderer can mark them distinctly
+     * ("shown because a constraint needs it") rather than dropping the relationship.
+     */
+    reintroducedNodes?: LayoutNode[];
+    /**
      * Disjunctive constraints, where at least one alternative in each disjunction must be satisfiable.
      * These are separate from conjunctive constraints for clearer solver integration.
      */
