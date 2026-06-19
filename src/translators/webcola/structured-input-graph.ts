@@ -967,17 +967,17 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * Generate a unique atom ID
    */
   private generateAtomId(type: string): string {
-    if (!this.dataInstance) return `${type}-1`;
+    if (!this.dataInstance) return `${type}1`;
     
     const existingAtoms = this.dataInstance.getAtoms();
     const existingIds = new Set(existingAtoms.map(atom => atom.id));
     
     let counter = 1;
-    let candidateId = `${type}-${counter}`;
+    let candidateId = `${type}${counter}`;
     
     while (existingIds.has(candidateId)) {
       counter++;
-      candidateId = `${type}-${counter}`;
+      candidateId = `${type}${counter}`;
     }
     
     return candidateId;

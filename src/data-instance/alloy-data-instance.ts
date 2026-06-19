@@ -22,7 +22,37 @@ export class AlloyDataInstance implements IInputDataInstance {
   /** Event listeners for data instance changes */
   private eventListeners = new Map<DataInstanceEventType, Set<DataInstanceEventListener>>();
 
-  constructor(private alloyInstance: AlloyInstance) {}
+  private alloyInstance: AlloyInstance;
+  private readonly declaredTypeIds: Set<string>;
+  private readonly declaredRelationNames: Set<string>;
+
+  constructor(alloyInstance: AlloyInstance) {
+    this.alloyInstance = alloyInstance;
+    this.declaredTypeIds = new Set(Object.keys(alloyInstance.types));
+    this.declaredRelationNames = new Set(Object.values(alloyInstance.relations).map((relation) => relation.name));
+  }
+
+  private isValidForgeIdentifier(identifier: string): boolean {
+    return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(identifier);
+  }
+
+  private sanitizeForgeIdentifier(identifier: string, usedIdentifiers: Set<string>): string {
+    let base = identifier.replace(/[^A-Za-z0-9_$]/g, '_');
+    if (!base) {
+      base = '_';
+    }
+    if (!/^[A-Za-z_$]/.test(base)) {
+      base = `_${base}`;
+    }
+    let candidate = base;
+    let suffix = 1;
+    while (usedIdentifiers.has(candidate)) {
+      candidate = `${base}_${suffix}`;
+      suffix++;
+    }
+    usedIdentifiers.add(candidate);
+    return candidate;
+  }
 
   /**
    * Add an event listener for data instance changes
@@ -199,15 +229,25 @@ export class AlloyDataInstance implements IInputDataInstance {
 
     // First declare all the ATOMS (I think in order?)
     let instanceTypes = this.alloyInstance.types;
+    const emittedAtomIdentifiers = new Set<string>();
+    const atomIdentifierMap = new Map<string, string>();
+    const getAtomIdentifier = (atomId: string): string => {
+      const existing = atomIdentifierMap.get(atomId);
+      if (existing) return existing;
+      const sanitized = this.sanitizeForgeIdentifier(atomId, emittedAtomIdentifiers);
+      atomIdentifierMap.set(atomId, sanitized);
+      return sanitized;
+    };
     
     // Create a dict where the key is the type id and the value is the atoms
     let typeAtoms : Record<string, string[]> = {};
     for (let typeId in instanceTypes) {
         let type = instanceTypes[typeId];
+        if (!this.declaredTypeIds.has(typeId) || isBuiltin(type)) {
+            continue;
+        }
         let atoms = type.atoms;
-        typeAtoms[typeId] = isBuiltin(type)
-            ? atoms.map(atom => atom.id)
-            : atoms.map(atom => `\`${atom.id}`);
+        typeAtoms[typeId] = atoms.map(atom => `\`${getAtomIdentifier(atom.id)}`);
     }
 
     // Then declare all the relations
@@ -216,11 +256,14 @@ export class AlloyDataInstance implements IInputDataInstance {
 
     for (let relationId in instanceRelations) {
         let relation = instanceRelations[relationId];
+        if (!this.declaredRelationNames.has(relation.name) || !this.isValidForgeIdentifier(relation.name)) {
+            continue;
+        }
         let tuples = relation.tuples;
         let tupleStrings = tuples.map(tuple => {
             let tupleString = tuple.atoms.map((a, i) => {
                 const atomType = instanceTypes[tuple.types[i]];
-                return atomType && isBuiltin(atomType) ? a : `\`${a}`;
+                return atomType && isBuiltin(atomType) ? a : `\`${getAtomIdentifier(a)}`;
             }).join("->");
             return `(${tupleString})`;
         });
