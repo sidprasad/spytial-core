@@ -245,6 +245,11 @@ export class AlloyDataInstance implements IInputDataInstance {
     const sanitizedAtomRenames: string[] = [];
     const droppedTypeIds: string[] = [];
     const droppedRelationNames = new Set<string>();
+    const droppedTupleFields = new Set<string>();
+    // Atom ids that actually get bound under a declared, non-builtin sig. A tuple
+    // referencing an atom NOT in here (and not a builtin literal) would be a
+    // dangling reference in the inst — e.g. an atom of a sig that was dropped above.
+    const boundAtomIds = new Set<string>();
     const getAtomIdentifier = (atomId: string): string => {
       const existing = atomIdentifierMap.get(atomId);
       if (existing) return existing;
@@ -275,7 +280,10 @@ export class AlloyDataInstance implements IInputDataInstance {
             continue;
         }
         let atoms = type.atoms;
-        typeAtoms[typeId] = atoms.map(atom => `\`${getAtomIdentifier(atom.id)}`);
+        typeAtoms[typeId] = atoms.map(atom => {
+            boundAtomIds.add(atom.id);
+            return `\`${getAtomIdentifier(atom.id)}`;
+        });
     }
 
     // Then declare all the relations
@@ -293,7 +301,20 @@ export class AlloyDataInstance implements IInputDataInstance {
             }
             continue;
         }
-        let tuples = relation.tuples;
+        // A declared field can still carry a tuple that points at an atom which was
+        // NOT bound — e.g. the user wired a declared relation to an atom of a sig
+        // that got dropped above. Emitting it would dangle (`...->`Frog_9` with no
+        // `Frog = ...`), so drop the offending tuple rather than the whole field.
+        let tuples = relation.tuples.filter(tuple => {
+            const allBound = tuple.atoms.every((a, i) => {
+                const atomType = instanceTypes[tuple.types[i]];
+                return (atomType && isBuiltin(atomType)) || boundAtomIds.has(a);
+            });
+            if (!allBound) {
+                droppedTupleFields.add(relation.name);
+            }
+            return allBound;
+        });
         let tupleStrings = tuples.map(tuple => {
             let tupleString = tuple.atoms.map((a, i) => {
                 const atomType = instanceTypes[tuple.types[i]];
@@ -347,6 +368,13 @@ export class AlloyDataInstance implements IInputDataInstance {
         console.warn(
             `AlloyDataInstance.reify: dropped ${droppedRelationNames.size} field(s) not declared in the parsed spec ` +
             `or not a valid Forge identifier (${[...droppedRelationNames].join(', ')}); their tuples were omitted from the inst.`
+        );
+    }
+    if (droppedTupleFields.size > 0) {
+        console.warn(
+            `AlloyDataInstance.reify: dropped tuple(s) from declared field(s) ` +
+            `(${[...droppedTupleFields].join(', ')}) that referenced unbound atoms ` +
+            `(atoms of a dropped/undeclared sig); they were omitted to avoid a dangling reference.`
         );
     }
     if (sanitizedAtomRenames.length > 0) {
