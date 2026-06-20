@@ -23,6 +23,15 @@ export class AlloyDataInstance implements IInputDataInstance {
   private eventListeners = new Map<DataInstanceEventType, Set<DataInstanceEventListener>>();
 
   private alloyInstance: AlloyInstance;
+  /**
+   * Sig ids / relation names present in the ORIGINAL parsed instance, snapshotted
+   * at construction. `reify()` only binds these. Editing (`addAtom` /
+   * `addRelationTuple`) can fabricate sigs and fields the spec never declared, and
+   * binding those produces an `inst` that fails to compile on paste-back (issue
+   * #480). These sets are intentionally NOT updated on edit — so an
+   * `AlloyDataInstance` must be constructed from a pristine parsed instance for the
+   * snapshot to mean "what the spec declares."
+   */
   private readonly declaredTypeIds: Set<string>;
   private readonly declaredRelationNames: Set<string>;
 
@@ -231,19 +240,38 @@ export class AlloyDataInstance implements IInputDataInstance {
     let instanceTypes = this.alloyInstance.types;
     const emittedAtomIdentifiers = new Set<string>();
     const atomIdentifierMap = new Map<string, string>();
+    // Diagnostics: track what the serializer had to drop or rewrite so the lossy
+    // export of an edited instance isn't silent (issue #480).
+    const sanitizedAtomRenames: string[] = [];
+    const droppedTypeIds: string[] = [];
+    const droppedRelationNames = new Set<string>();
     const getAtomIdentifier = (atomId: string): string => {
       const existing = atomIdentifierMap.get(atomId);
       if (existing) return existing;
       const sanitized = this.sanitizeForgeIdentifier(atomId, emittedAtomIdentifiers);
       atomIdentifierMap.set(atomId, sanitized);
+      if (sanitized !== atomId) {
+        sanitizedAtomRenames.push(`${atomId} -> ${sanitized}`);
+      }
       return sanitized;
     };
-    
+
     // Create a dict where the key is the type id and the value is the atoms
     let typeAtoms : Record<string, string[]> = {};
     for (let typeId in instanceTypes) {
         let type = instanceTypes[typeId];
-        if (!this.declaredTypeIds.has(typeId) || isBuiltin(type)) {
+        // Builtins (Int/String/seq/Int) are implicit in every spec — binding them is
+        // redundant and usually rejected. Skipped silently; that's expected.
+        if (isBuiltin(type)) {
+            continue;
+        }
+        // A sig the parsed spec never declared (e.g. fabricated by addAtom on an
+        // unknown type) cannot be bound without a compile error, so drop it — but
+        // report it below, since the user's edit is being discarded.
+        if (!this.declaredTypeIds.has(typeId)) {
+            if (type.atoms.length > 0) {
+                droppedTypeIds.push(typeId);
+            }
             continue;
         }
         let atoms = type.atoms;
@@ -256,7 +284,13 @@ export class AlloyDataInstance implements IInputDataInstance {
 
     for (let relationId in instanceRelations) {
         let relation = instanceRelations[relationId];
+        // A field/relation the parsed spec never declared, or whose name isn't a
+        // valid Forge identifier, can't be bound — drop it, but report it if it
+        // carried tuples that are now being discarded.
         if (!this.declaredRelationNames.has(relation.name) || !this.isValidForgeIdentifier(relation.name)) {
+            if (relation.tuples.length > 0) {
+                droppedRelationNames.add(relation.name);
+            }
             continue;
         }
         let tuples = relation.tuples;
@@ -300,6 +334,28 @@ export class AlloyDataInstance implements IInputDataInstance {
             inst += `no ${relationId}\n`;
         }
     }
+
+    // Surface anything the export had to discard or rewrite, so a lossy round-trip
+    // of an edited instance is visible rather than silent (issue #480).
+    if (droppedTypeIds.length > 0) {
+        console.warn(
+            `AlloyDataInstance.reify: dropped ${droppedTypeIds.length} sig(s) not declared in the parsed spec ` +
+            `(${droppedTypeIds.join(', ')}); their atoms were omitted from the inst.`
+        );
+    }
+    if (droppedRelationNames.size > 0) {
+        console.warn(
+            `AlloyDataInstance.reify: dropped ${droppedRelationNames.size} field(s) not declared in the parsed spec ` +
+            `or not a valid Forge identifier (${[...droppedRelationNames].join(', ')}); their tuples were omitted from the inst.`
+        );
+    }
+    if (sanitizedAtomRenames.length > 0) {
+        console.warn(
+            `AlloyDataInstance.reify: rewrote ${sanitizedAtomRenames.length} atom id(s) to valid Forge identifiers ` +
+            `(${sanitizedAtomRenames.join(', ')}).`
+        );
+    }
+
     return `${PREFIX}\n${inst}\n${POSTFIX}`;
   }
 
