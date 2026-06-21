@@ -317,6 +317,12 @@
 .spytial-ed-selector-input-wrap {
   position: relative;
   width: 100%;
+  /* The field's surface fill lives HERE (behind the highlight mirror), not on
+     the textarea: the textarea sits on top with a transparent background so the
+     mirror's syntax-highlighted text shows through. An opaque textarea would
+     paint over the mirror and the field would look empty (all-surface). */
+  background: var(--spytial-ed-surface, #faf8f2);
+  border-radius: var(--spytial-ed-radius-sm, 2px);
 }
 
 /*
@@ -389,7 +395,9 @@
   min-height: 2.2em;
   resize: none;
   overflow: hidden; /* height is driven by JS auto-grow */
-  background: var(--spytial-ed-surface, #faf8f2);
+  /* transparent so the highlight mirror behind shows through; the field fill is
+     on `.spytial-ed-selector-input-wrap` (matches the code-view overlay). */
+  background: transparent;
   border-color: var(--spytial-ed-border, #d9d2c0);
   color: transparent;
   caret-color: var(--spytial-ed-accent, #b5431a);
@@ -419,8 +427,13 @@
 }
 
 .spytial-ed-selector-textarea:disabled {
-  background: var(--spytial-ed-surface-raised, #f1ecdf);
   cursor: not-allowed;
+}
+
+/* Disabled fill goes on the wrapper (the textarea is transparent), so the
+   highlight mirror stays visible. Mirrors the code view's :has pattern. */
+.spytial-ed-selector-input-wrap:has(.spytial-ed-selector-textarea:disabled) {
+  background: var(--spytial-ed-surface-raised, #f1ecdf);
 }
 
 /* highlighting disabled (escape hatch): the textarea shows its own text */
