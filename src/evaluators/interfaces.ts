@@ -57,6 +57,13 @@ export interface EvaluatorConfig {
   maxResults?: number;
   /** Instance index to evaluate against (for multi-instance contexts) */
   instanceIndex?: number;
+  /**
+   * When true, log a warning if the expression references a name that the
+   * underlying evaluator cannot resolve. The policy is still to return an
+   * empty result (so consumers like a binary-tree node with no `right`
+   * children don't break), but the warning helps authors catch typos.
+   */
+  warnOnMissingName?: boolean;
 }
 
 /**
