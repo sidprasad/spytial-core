@@ -19,7 +19,9 @@ import { ConstraintError } from '../../layout/constraint-validator';
  * - Full CnD pipeline integration (data instance, evaluator, layout instance)
  * - Constraint enforcement on data changes
  * - Data export using the data instance's reify() method (supports JSON, Pyret, Alloy, etc.)
- * - Enhanced edge endpoint markers (amber square for source, red triangle for target)
+ * - Draggable edge endpoint handles in input mode: hollow ring at the source,
+ *   filled diamond at the target (both diamonds for symmetric edges), tinted to
+ *   the edge color
  * 
  * Attributes:
  * - cnd-spec: CnD specification string (YAML/JSON)
@@ -1079,6 +1081,16 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    */
   setDataInstance(instance: IInputDataInstance): void {
     this.dataInstance = instance;
+  }
+
+  /**
+   * De-collapse symmetric edges in the editable graph: a relation backed by
+   * both (a,b) and (b,a) renders as two independent arrows — each mapping 1:1
+   * to a tuple — so delete/reconnect act on exactly one direction instead of an
+   * ambiguous collapsed edge. The read-only base keeps the tidy double-header.
+   */
+  protected shouldCollapseSymmetricEdges(): boolean {
+    return false;
   }
 
 

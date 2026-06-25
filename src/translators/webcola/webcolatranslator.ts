@@ -201,6 +201,15 @@ export interface WebColaLayoutOptions {
   transitionMode?: WebColaRenderTransitionMode;
 
   /**
+   * When false, opposite-direction tuples with the same label (A→B and B→A)
+   * are NOT merged into a single double-headed edge. The editable
+   * StructuredInputGraph turns collapse OFF so each tuple stays an independent,
+   * individually-editable arrow; the read-only base leaves it ON for a tidy
+   * double-header. Defaults to true.
+   */
+  collapseSymmetricEdges?: boolean;
+
+  /**
    * When true (stability mode), nodes with prior positions are locked
    * at those positions (fixed=1) wherever it does not violate a
    * constraint:
@@ -290,6 +299,7 @@ export class WebColaLayout {
 
   /** When true, lock unconstrained nodes with prior positions via fixed=1. */
   private lockUnconstrainedNodes: boolean;
+  private collapseSymmetric: boolean;
 
   constructor(instanceLayout: InstanceLayout, fig_height: number = 800, fig_width: number = 800, options?: WebColaLayoutOptions) {
 
@@ -313,6 +323,7 @@ export class WebColaLayout {
     }
 
     this.lockUnconstrainedNodes = options?.lockUnconstrainedNodes ?? false;
+    this.collapseSymmetric = options?.collapseSymmetricEdges ?? true;
 
     // Can I create a DAGRE graph here.
     try {
@@ -347,8 +358,12 @@ export class WebColaLayout {
     }
     this.colaEdges = instanceLayout.edges.map(edge => this.toColaEdge(edge));
 
-    // Collapse symmetric edges with the same label
-    this.colaEdges = this.collapseSymmetricEdges(this.colaEdges);
+    // Collapse symmetric edges with the same label into one double-headed edge.
+    // Editable graphs disable this so each direction stays an independent,
+    // individually-editable arrow (see collapseSymmetricEdges option).
+    if (this.collapseSymmetric) {
+      this.colaEdges = this.collapseSymmetricEdges(this.colaEdges);
+    }
 
     // Collapse identical nested groups to reduce jitter and constraint conflicts
     const deduplicatedGroups = this.collapseIdenticalGroups(instanceLayout.groups);
@@ -732,15 +747,25 @@ export class WebColaLayout {
         continue;
       }
 
+      // A self-loop (source === target) is NOT symmetric: it has a single
+      // direction and would otherwise match itself as its own reverse below,
+      // spuriously rendering a second arrowhead. Keep it as-is.
+      if (edge.source === edge.target) {
+        edgeMap.set(edge.id, edge);
+        processed.add(edge.id);
+        continue;
+      }
+
       // Create a key for the edge pair (always use lower source/target index first for consistency)
       const minIndex = Math.min(edge.source, edge.target);
       const maxIndex = Math.max(edge.source, edge.target);
       const pairKey = `${minIndex}-${maxIndex}-${edge.label}`;
 
-      // Look for the reverse edge with the same label
-      const reverseEdge = edges.find(e => 
-        e.source === edge.target && 
-        e.target === edge.source && 
+      // Look for the reverse edge with the same label (never the edge itself)
+      const reverseEdge = edges.find(e =>
+        e.id !== edge.id &&
+        e.source === edge.target &&
+        e.target === edge.source &&
         e.label === edge.label &&
         !processed.has(e.id)
       );

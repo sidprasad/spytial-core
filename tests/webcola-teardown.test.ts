@@ -62,10 +62,10 @@ describe('WebColaCnDGraph teardown (#474)', () => {
       };
 
       expect(() => proto.updateEdgeEndpointMarkers.call(fakeThis)).not.toThrow();
-      expect(target.applied.cx).toBe(30);
-      expect(target.applied.cy).toBe(40);
-      expect(source.applied.cx).toBe(1);
-      expect(source.applied.cy).toBe(2);
+      // Handles are positioned via a translate transform on the group, falling
+      // back to the edge's layout coordinates when the path geometry is unreadable.
+      expect(target.applied.transform).toBe('translate(30, 40)');
+      expect(source.applied.transform).toBe('translate(1, 2)');
     });
   });
 
@@ -241,6 +241,7 @@ describe('WebColaCnDGraph overlapping renders', () => {
           resolveTransitionMode: vi.fn(() => { order.push('resolveTransitionMode'); return 'replace'; }),
           hasValidTransform: () => false,
           applyViewportRenderPolicy: vi.fn(),
+          shouldCollapseSymmetricEdges: () => true,
           svg: null,
           zoomBehavior: null,
           showError: vi.fn(),
