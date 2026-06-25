@@ -1911,6 +1911,16 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
+   * Whether opposite-direction tuples with the same label collapse into one
+   * double-headed edge. True for the read-only base; the editable
+   * StructuredInputGraph overrides this to false so each direction stays an
+   * independent, individually-editable arrow.
+   */
+  protected shouldCollapseSymmetricEdges(): boolean {
+    return true;
+  }
+
+  /**
    * Re-render the graph with current layout data.
    *
    * Applies current node positions immediately without restarting the
@@ -2160,9 +2170,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // Build the options the translator will see.
     // lockUnconstrainedNodes is gated on useReducedIterations so that only
     // stability-mode layouts lock nodes; morph transitions keep nodes free.
-    const translatorOptions: WebColaLayoutOptions | undefined = hasPriorPositions
-      ? { priorPositions: resolvedState, lockUnconstrainedNodes: useReducedIterations }
-      : undefined;
+    const translatorOptions: WebColaLayoutOptions = hasPriorPositions
+      ? {
+          priorPositions: resolvedState,
+          lockUnconstrainedNodes: useReducedIterations,
+          collapseSymmetricEdges: this.shouldCollapseSymmetricEdges()
+        }
+      : { collapseSymmetricEdges: this.shouldCollapseSymmetricEdges() };
 
     this.applyViewportRenderPolicy(hasPriorPositions, hasPriorTransform);
     
@@ -3299,43 +3313,82 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private setupEdgeEndpointMarkers(
     linkGroups: d3.Selection<SVGGElement, any, any, unknown>
   ): void {
-    // Add target endpoint marker (at the arrow end)
-    linkGroups
-      .filter((d: any) => !this.isAlignmentEdge(d))
-      .append("circle")
-      .attr("class", "edge-endpoint-marker target-marker")
-      .attr("r", 8)
-      .attr("fill", "#007bff")
-      .attr("stroke", "white")
-      .attr("stroke-width", 2)
-      .attr("opacity", 0) // Hidden by default
-      .attr("cursor", "move")
-      .style("pointer-events", "none") // Will be enabled in input mode
-      .call(
-        d3.drag()
-          .on('start', (d: EdgeWithMetadata) => this.startEdgeEndpointDrag(d, 'target'))
-          .on('drag', (d: EdgeWithMetadata) => this.dragEdgeEndpoint(d, 'target'))
-          .on('end', (d: EdgeWithMetadata) => this.endEdgeEndpointDrag(d, 'target'))
-      );
+    const self = this;
 
-    // Add source endpoint marker (at the start, for bidirectional edges or moving the source)
-    linkGroups
-      .filter((d: any) => !this.isAlignmentEdge(d))
-      .append("circle")
-      .attr("class", "edge-endpoint-marker source-marker")
-      .attr("r", 8)
-      .attr("fill", "#28a745")
-      .attr("stroke", "white")
-      .attr("stroke-width", 2)
-      .attr("opacity", 0) // Hidden by default
-      .attr("cursor", "move")
-      .style("pointer-events", "none") // Will be enabled in input mode
-      .call(
+    // Build one draggable endpoint handle. The handle's SHAPE — not just its
+    // color — encodes the endpoint's role, so it reads under color-vision
+    // deficiency and never collides with the app's primary-action blue:
+    //   • directed edge  → hollow ring at the source (origin), filled diamond
+    //                       at the target (matches the arrowhead it sits on);
+    //   • symmetric edge → both ends are filled diamonds, because a
+    //                       bidirectional edge has no privileged direction.
+    // Each handle is tinted with its own edge's rendered color so it's obvious
+    // which edge a knob belongs to in a dense graph.
+    const addHandle = (role: 'source' | 'target'): void => {
+      const handles = linkGroups
+        .filter((d: any) => !this.isAlignmentEdge(d))
+        .append('g')
+        .attr('class', `edge-endpoint-marker ${role}-marker`)
+        .attr('opacity', 0)              // hidden until input mode
+        .style('pointer-events', 'none');
+
+      handles.each(function (d: any) {
+        const g = d3.select(this);
+
+        // Source of truth for the tint: the already-rendered edge path. Falls
+        // back to the computed color, then a neutral slate.
+        let color = self.edgeStrokeColor(d) || '#475569';
+        const path = (this.parentNode as Element | null)
+          ?.querySelector('path[data-link-id]') as SVGPathElement | null;
+        if (path) {
+          const stroke = path.getAttribute('stroke');
+          if (stroke && stroke !== 'none') color = stroke;
+        }
+
+        // A bidirectional edge's two ends are interchangeable → both are heads.
+        const isHead = !!d.bidirectional || role === 'target';
+        if (isHead) {
+          // Filled diamond (rotated square) centered on the origin; the parent
+          // <g>'s translate does the positioning.
+          g.append('rect')
+            .attr('class', 'endpoint-shape')
+            .attr('x', -6).attr('y', -6)
+            .attr('width', 12).attr('height', 12)
+            .attr('rx', 2)
+            .attr('transform', 'rotate(45)')
+            .attr('fill', color)
+            .attr('stroke', 'white')
+            .attr('stroke-width', 2);
+        } else {
+          // Hollow ring = the source/origin end of a directed edge.
+          g.append('circle')
+            .attr('class', 'endpoint-shape')
+            .attr('r', 6)
+            .attr('fill', 'white')
+            .attr('stroke', color)
+            .attr('stroke-width', 2.5);
+        }
+
+        // Native hover tooltip — the cheapest path to making the gesture
+        // discoverable instead of tribal knowledge.
+        const tip = d.bidirectional
+          ? 'Symmetric edge — drag either end to move it · drop on empty space to delete'
+          : role === 'source'
+            ? 'Source end — drag to reconnect · drop on empty space to delete'
+            : 'Target end — drag to reconnect · drop on empty space to delete';
+        g.append('title').text(tip);
+      });
+
+      handles.call(
         d3.drag()
-          .on('start', (d: EdgeWithMetadata) => this.startEdgeEndpointDrag(d, 'source'))
-          .on('drag', (d: EdgeWithMetadata) => this.dragEdgeEndpoint(d, 'source'))
-          .on('end', (d: EdgeWithMetadata) => this.endEdgeEndpointDrag(d, 'source'))
+          .on('start', (d: EdgeWithMetadata) => this.startEdgeEndpointDrag(d, role))
+          .on('drag', (d: EdgeWithMetadata) => this.dragEdgeEndpoint(d, role))
+          .on('end', (d: EdgeWithMetadata) => this.endEdgeEndpointDrag(d, role))
       );
+    };
+
+    addHandle('target');
+    addHandle('source');
   }
 
   /**
@@ -3358,15 +3411,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     if (!this.edgeDragState.isDragging) return;
 
     const [mouseX, mouseY] = d3.mouse(this.container.node());
-    
-    // Update the marker position
+
+    // Move the dragged handle group to follow the cursor.
     const markerClass = endpoint === 'target' ? '.target-marker' : '.source-marker';
     this.container
       .selectAll('.link-group')
       .filter((d: any) => d.id === edgeData.id)
       .select(markerClass)
-      .attr('cx', mouseX)
-      .attr('cy', mouseY);
+      .attr('transform', `translate(${mouseX}, ${mouseY})`);
   }
 
   /**
@@ -4429,33 +4481,27 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // visible to update anyway.
     if (!this.svgLinkGroups || !this.isConnected) return;
 
-    // Update target markers (at the arrow end)
-    this.svgLinkGroups.select('.target-marker')
-      .attr('cx', (d: EdgeWithMetadata) => {
-        const point = this.getEdgePathPoint(d.id, 'end');
-        return point ? point.x : (d.target.x || 0);
-      })
-      .attr('cy', (d: EdgeWithMetadata) => {
-        const point = this.getEdgePathPoint(d.id, 'end');
-        return point ? point.y : (d.target.y || 0);
-      })
-      .attr('opacity', this.isInputModeActive ? 0.8 : 0)
-      .style('pointer-events', this.isInputModeActive ? 'all' : 'none')
-      .raise(); // Always on top
+    const place = (
+      sel: d3.Selection<any, any, any, unknown>,
+      position: 'start' | 'end'
+    ): void => {
+      sel
+        .attr('transform', (d: EdgeWithMetadata) => {
+          const point = this.getEdgePathPoint(d.id, position);
+          const fallback = (position === 'end' ? d.target : d.source) as any;
+          const x = point ? point.x : (fallback?.x || 0);
+          const y = point ? point.y : (fallback?.y || 0);
+          return `translate(${x}, ${y})`;
+        })
+        .attr('opacity', this.isInputModeActive ? 0.95 : 0)
+        .style('pointer-events', this.isInputModeActive ? 'all' : 'none')
+        .style('cursor', 'move')
+        .raise(); // keep handles above the edge paths
+    };
 
-    // Update source markers (at the start)
-    this.svgLinkGroups.select('.source-marker')
-      .attr('cx', (d: EdgeWithMetadata) => {
-        const point = this.getEdgePathPoint(d.id, 'start');
-        return point ? point.x : (d.source.x || 0);
-      })
-      .attr('cy', (d: EdgeWithMetadata) => {
-        const point = this.getEdgePathPoint(d.id, 'start');
-        return point ? point.y : (d.source.y || 0);
-      })
-      .attr('opacity', this.isInputModeActive ? 0.8 : 0)
-      .style('pointer-events', this.isInputModeActive ? 'all' : 'none')
-      .raise(); // Always on top
+    // Target markers sit at the arrow end; source markers at the path start.
+    place(this.svgLinkGroups.select('.target-marker'), 'end');
+    place(this.svgLinkGroups.select('.source-marker'), 'start');
   }
 
   /**
@@ -9882,6 +9928,16 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
       svg.input-mode:active {
         cursor: crosshair !important;
+      }
+
+      /* Draggable edge endpoint handles (shown only in input mode) */
+      .edge-endpoint-marker { transition: opacity 0.12s ease; }
+      .edge-endpoint-marker .endpoint-shape {
+        transition: stroke-width 0.1s ease, filter 0.1s ease;
+      }
+      .edge-endpoint-marker:hover .endpoint-shape {
+        stroke-width: 3.5;
+        filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.35));
       }
 
       .temporary-edge {
