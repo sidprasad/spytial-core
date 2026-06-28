@@ -12,7 +12,13 @@
     "dist/alloy-instance.d.ts",
     "dist/alloy-instance.d.mts",
     "dist/alloy-instance.js.map",
-    "dist/alloy-instance.mjs.map"
+    "dist/alloy-instance.mjs.map",
+    "dist/evaluator.js",
+    "dist/evaluator.mjs",
+    "dist/evaluator.d.ts",
+    "dist/evaluator.d.mts",
+    "dist/evaluator.js.map",
+    "dist/evaluator.mjs.map"
   ],
   "exports": {
     ".": {
@@ -29,6 +35,16 @@
         "default": "./dist/alloy-instance.js"
       }
     },
+    "./evaluator": {
+      "import": {
+        "types": "./dist/evaluator.d.mts",
+        "default": "./dist/evaluator.mjs"
+      },
+      "require": {
+        "types": "./dist/evaluator.d.ts",
+        "default": "./dist/evaluator.js"
+      }
+    },
     "./components/*": {
       "import": "./dist/components/*.global.js",
       "require": "./dist/components/*.global.js"
@@ -38,9 +54,10 @@
     "build": "npm run build:all",
     "build:parser": "peggy --plugin ts-pegjs -o src/evaluators/layout/layout-query-parser.ts src/evaluators/layout/layout-query.pegjs",
     "build:lib": "tsup --config tsup.alloy-instance.config.ts",
+    "build:evaluator": "tsup --config tsup.evaluator.config.ts",
     "build:browser": "tsup --config tsup.browser.config.ts",
     "build:components": "tsup --config tsup.components.config.ts",
-    "build:all": "npm run build:parser && npm run build:browser && npm run build:components && npm run build:lib",
+    "build:all": "npm run build:parser && npm run build:browser && npm run build:components && npm run build:lib && npm run build:evaluator",
     "dev": "tsup --watch",
     "test": "vitest",
     "test:ui": "vitest --ui",

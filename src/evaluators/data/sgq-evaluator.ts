@@ -1,5 +1,6 @@
 import IEvaluator, {EvaluatorResult} from "../interfaces";
 import {SimpleGraphQueryEvaluator, EvaluationResult, ErrorResult} from "simple-graph-query";
+export { JSONDataInstance } from "../../data-instance/json-data-instance";
 
 import {EvaluationContext, EvaluatorConfig, IEvaluatorResult } from "../interfaces";
 import { IDataInstance } from "../../data-instance/interfaces";
