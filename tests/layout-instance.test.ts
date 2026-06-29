@@ -202,6 +202,34 @@ constraints:
       expect(groupEdge!.target.id).toBe('B');
       expect(groupEdge!.keyNodeId).toBe('A');
     });
+
+    it('edge directives still match a fromgroup group edge by canonical (key, member) order', () => {
+      // The group edge is drawn member→key (B→A) for fromgroup, but the directive
+      // is written against the original selector-tuple order (key→member, A→B). The
+      // directive must still apply — directive lookup is canonicalised to (key, member).
+      const spec = parseLayoutSpec(`
+constraints:
+  - group:
+      selector: nodes
+      name: nodes
+      addEdge: fromgroup
+directives:
+  - edgeColor:
+      field: nodes
+      value: '#FF0000'
+      filter: 'A -> B'
+`);
+      const instance = new JSONDataInstance(groupEdgeData);
+      const evaluator = createEvaluator(instance);
+      const li = new LayoutInstance(spec, evaluator, 0, true);
+      const { layout } = li.generateLayout(instance);
+
+      const groupEdge = layout.edges.find(e => e.groupId?.startsWith('nodes['));
+      expect(groupEdge).toBeDefined();
+      expect(groupEdge!.source.id).toBe('B'); // arrow drawn group → key
+      expect(groupEdge!.target.id).toBe('A');
+      expect(groupEdge!.color).toBe('#FF0000'); // directive for A->B still applies
+    });
   });
 
   it('adds alignment edges for disconnected nodes with orientation constraints', () => {

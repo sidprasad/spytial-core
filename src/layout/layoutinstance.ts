@@ -2353,11 +2353,24 @@ export class LayoutInstance {
             let source = layoutNodes.find((node) => node.id === edge.v);
             let target = layoutNodes.find((node) => node.id === edge.w);
             let relName = this.getRelationName(g, edge);
-            let color = this.getEdgeColor(relName, edge.v, edge.w, edgeId);
-            let style = this.getEdgeStyle(relName, edge.v, edge.w, edgeId);
-            let weight = this.getEdgeWeight(relName, edge.v, edge.w, edgeId);
-            let showLabel = this.getEdgeShowLabel(relName, edge.v, edge.w, edgeId);
-            let highlight = this.getEdgeHighlight(relName, edge.v, edge.w, edgeId);
+
+            // For a group edge, the key (anchor) node is looked up from the group rather
+            // than assumed to be edge.v: a 'fromgroup' edge is created member→key, so its
+            // graph source is the member. Edge directives are written against the original
+            // selector-tuple order (key, member), so canonicalise the (source, target) atoms
+            // back to that order for directive lookup — directives then apply regardless of
+            // which way the arrow is drawn. The drawn arrow still follows the graph edge
+            // (source/target below), and keyNodeId records the true anchor for the renderer.
+            const isGroupEdge = !!edgeId && edgeId.startsWith('_g_');
+            const groupKey = isGroupEdge ? (keyNodeByGroupName.get(edgeLabel) ?? edge.v) : undefined;
+            const dirSource = groupKey !== undefined ? groupKey : edge.v;
+            const dirTarget = groupKey !== undefined ? (groupKey === edge.v ? edge.w : edge.v) : edge.w;
+
+            let color = this.getEdgeColor(relName, dirSource, dirTarget, edgeId);
+            let style = this.getEdgeStyle(relName, dirSource, dirTarget, edgeId);
+            let weight = this.getEdgeWeight(relName, dirSource, dirTarget, edgeId);
+            let showLabel = this.getEdgeShowLabel(relName, dirSource, dirTarget, edgeId);
+            let highlight = this.getEdgeHighlight(relName, dirSource, dirTarget, edgeId);
 
             // Skip edges with missing source or target nodes
             if (!source || !target || !edgeId) {
@@ -2378,14 +2391,11 @@ export class LayoutInstance {
                 // For group edges the graphlib edge label IS the group name (see constructGroupEdgeID).
                 // Carry it forward so the renderer can look up the group directly by ID
                 // without re-parsing the edge ID string or matching fragile leaf indices.
-                groupId: edgeId.startsWith('_g_') ? edgeLabel : undefined,
-                // Stamp the group's key (anchor) node so the renderer knows definitively
-                // which end is the anchor vs. the group member. We look it up by group name
-                // rather than assuming edge.v, because 'fromgroup' edges are created with the
-                // member as the source. Falls back to edge.v if the group isn't found.
-                keyNodeId: edgeId.startsWith('_g_')
-                    ? (keyNodeByGroupName.get(edgeLabel) ?? edge.v)
-                    : undefined,
+                groupId: isGroupEdge ? edgeLabel : undefined,
+                // The group's key (anchor) node (computed above), so the renderer knows
+                // definitively which end is the anchor vs. the group member regardless of
+                // the drawn direction. Undefined for non-group edges.
+                keyNodeId: groupKey,
             };
             return e;
         }).filter((edge): edge is LayoutEdge => edge !== null);
