@@ -52,7 +52,7 @@ describe('registry — definitions and defaults', () => {
   it('seeds defaults from FieldSpec defaults only', () => {
     expect(defaultParamsFor('cyclic')).toEqual({ direction: 'clockwise' });
     expect(defaultParamsFor('size')).toEqual({ width: 100, height: 60 });
-    expect(defaultParamsFor('groupselector')).toEqual({ addEdge: false });
+    expect(defaultParamsFor('groupselector')).toEqual({ addEdge: 'none' });
     // orientation has no defaultable fields
     expect(defaultParamsFor('orientation')).toEqual({});
   });

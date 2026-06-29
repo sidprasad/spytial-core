@@ -184,14 +184,14 @@ Draws a visual bounding box around nodes matched by a selector.
 - group:
     selector: <n-ary-selector>   # Required
     name: <group-name>           # Required
-    addEdge: <boolean>           # Optional (default: false)
+    addEdge: <direction>         # Optional: none | togroup | fromgroup (default: none)
 ```
 
 | Field | Required | Type | Default | Description |
 |-------|----------|------|---------|-------------|
 | `selector` | Yes | string | — | Selector returning atoms to include in the group. This could be a unary or binary selector. If a binary selector, the first element is a group key, while the second element is added to groups associated with that key. |
 | `name` | Yes | string | — | Display name shown on the group box |
-| `addEdge` | No | boolean | `false` | Whether to add visual edges between group members and the group key |
+| `addEdge` | No | `none` \| `togroup` \| `fromgroup` | `none` | Draw an edge between the group key and the group. For a binary selector with tuples `(a, b), (a, c), (a, d)` the group is keyed by `a` and contains `{b, c, d}`: `togroup` draws an edge from `a` into the group, `fromgroup` draws it from the group back to `a`, and `none` draws nothing. (Legacy `true` is accepted and treated as `togroup`.) |
 
 ### Examples
 

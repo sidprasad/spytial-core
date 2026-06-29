@@ -156,7 +156,7 @@ Groups elements based on a selector expression.
 - group:
     selector: <n-ary-selector>   # Required: Selector returning elements to group
     name: <group-name>           # Required: Display name for the group
-    addEdge: <boolean>           # Optional: Add visual edge to group members
+    addEdge: <direction>         # Optional: none | togroup | fromgroup (default none)
 ```
 
 **Fields:**
@@ -165,7 +165,9 @@ Groups elements based on a selector expression.
 |-------|----------|------|---------|-------------|
 | `selector` | ✅ Yes | string | - | Selector returning atoms to include in group |
 | `name` | ✅ Yes | string | - | Display name shown on the group box |
-| `addEdge` | ❌ No | boolean | `false` | Whether to add visual edges between group members |
+| `addEdge` | ❌ No | `none` \| `togroup` \| `fromgroup` | `none` | Draw an edge between the group key and the group. `togroup` points key → group; `fromgroup` points group → key; `none` draws nothing. (Legacy `true` is accepted and treated as `togroup`.) |
+
+For a binary selector with tuples `(a, b), (a, c), (a, d)`, the group is keyed by `a` and contains `{b, c, d}`. `addEdge: togroup` draws an edge from `a` into that group; `addEdge: fromgroup` draws it from the group back to `a`.
 
 **Examples:**
 
@@ -175,11 +177,11 @@ Groups elements based on a selector expression.
     selector: Team.members
     name: "Team Members"
 
-# Group with connecting edges
+# Group with an edge pointing from the key into the group
 - group:
     selector: Department.employees
     name: "Department"
-    addEdge: true
+    addEdge: togroup
 ```
 
 ---

@@ -15,7 +15,7 @@
  *     - orientation: { selector, directions: [...], hold? }
  *     - cyclic:      { selector, direction, hold? }
  *     - align:       { selector, direction, hold? }
- *     - group:       { selector, name, addEdge?, hold? }      (groupselector)
+ *     - group:       { selector, name, addEdge?: none|togroup|fromgroup, hold? }  (groupselector)
  *     - group:       { field, groupOn, addToGroup, selector?, hold? }  (groupfield, deprecated)
  *     - size:        { selector, width, height }
  *     - hideAtom:    { selector }
@@ -93,6 +93,23 @@ export const ORIENTATION_DIRECTIONS = [
 export const CYCLIC_DIRECTIONS = ['clockwise', 'counterclockwise'] as const;
 export const ALIGN_DIRECTIONS = ['horizontal', 'vertical'] as const;
 export const EDGE_STYLES = ['solid', 'dashed', 'dotted'] as const;
+
+/**
+ * Direction of the optional edge a group-by-selector draws between the group
+ * key and the group. `none` draws nothing; `togroup` points key → group;
+ * `fromgroup` points group → key. (Mirrors GroupEdgeDirection in layoutspec.ts.)
+ */
+export const GROUP_EDGE_DIRECTIONS = ['none', 'togroup', 'fromgroup'] as const;
+
+/**
+ * Normalise an `addEdge` value into a GROUP_EDGE_DIRECTIONS member. Tolerates
+ * the legacy boolean flag (`true` → 'togroup') so older specs keep working.
+ */
+function normGroupEdge(value: unknown): (typeof GROUP_EDGE_DIRECTIONS)[number] {
+  if (value === true || value === 'togroup') return 'togroup';
+  if (value === 'fromgroup') return 'fromgroup';
+  return 'none';
+}
 
 /**
  * The complete set of flags the engine recognizes (`layoutspec.ts` checks for
@@ -240,10 +257,11 @@ const groupselector: ItemDefinition = {
     },
     {
       key: 'addEdge',
-      kind: 'boolean',
+      kind: 'enum',
       label: 'Add edge',
-      default: false,
-      help: 'Draw an edge between grouped members.',
+      options: GROUP_EDGE_DIRECTIONS,
+      default: 'none',
+      help: 'Draw an edge between the group key and the group: "togroup" points key → group, "fromgroup" points group → key, "none" draws nothing.',
     },
   ],
   summary(params) {
@@ -257,8 +275,9 @@ const groupselector: ItemDefinition = {
     if (!missing(params.name)) {
       node.name = asString(params.name);
     }
-    if (params.addEdge === true) {
-      node.addEdge = true;
+    const edge = normGroupEdge(params.addEdge);
+    if (edge !== 'none') {
+      node.addEdge = edge;
     }
     if (params.hold !== undefined) {
       node.hold = params.hold;
@@ -275,7 +294,7 @@ const groupselector: ItemDefinition = {
     }
     const params: Record<string, unknown> = {
       selector: asString(group.selector),
-      addEdge: group.addEdge === true,
+      addEdge: normGroupEdge(group.addEdge),
     };
     if (group.name !== undefined) {
       params.name = asString(group.name);

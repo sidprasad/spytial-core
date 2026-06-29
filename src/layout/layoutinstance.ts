@@ -667,11 +667,18 @@ export class LayoutInstance {
                         };
                         groups.push(newGroup);
 
-                        // NOW if we have the GroupBySelector addEdge flag set, we should add an edge between the keyNode and the new node.
-                        if(gc.addEdge) {
-
-                            const edgeId = constructGroupEdgeID(groupName, groupOn, addToGroup);
-                            g.setEdge(groupOn, addToGroup, groupName, edgeId);
+                        // NOW if the GroupBySelector requests an edge, draw it between the key
+                        // node (groupOn) and the group, in the requested direction:
+                        //   'togroup'   → key → group   (edge source = key)
+                        //   'fromgroup' → group → key   (edge source = member)
+                        // The member end is later snapped to the group hull by the renderer,
+                        // which identifies the key end via the edge's stamped keyNodeId.
+                        if (gc.addEdge !== 'none') {
+                            const [edgeSrc, edgeTgt] = gc.addEdge === 'fromgroup'
+                                ? [addToGroup, groupOn]
+                                : [groupOn, addToGroup];
+                            const edgeId = constructGroupEdgeID(groupName, edgeSrc, edgeTgt);
+                            g.setEdge(edgeSrc, edgeTgt, groupName, edgeId);
                         }
 
                     }
@@ -1226,7 +1233,7 @@ export class LayoutInstance {
             cyclicDisjunctions = this.buildCyclicDisjunctions(layoutNodes, g);
             allDisjunctions.push(...cyclicDisjunctions);
 
-            layoutEdges = this.buildLayoutEdges(g, layoutNodes);
+            layoutEdges = this.buildLayoutEdges(g, layoutNodes, groups);
         } catch (error) {
             if (isMissingNodeConstraintError(error)) {
                 return this.handleMissingNodeConstraintError(
@@ -1313,7 +1320,7 @@ export class LayoutInstance {
         }
     ): CounterfactualLayoutResult {
         const layoutEdges = this.filterHiddenEdges(
-            this.buildLayoutEdges(context.graph, context.layoutNodes)
+            this.buildLayoutEdges(context.graph, context.layoutNodes, context.groups)
         );
         const layoutGroups = context.groups;
 
@@ -2329,7 +2336,16 @@ export class LayoutInstance {
         return disconnectedNodes;
     }
 
-    private buildLayoutEdges(g: Graph, layoutNodes: LayoutNode[]): LayoutEdge[] {
+    private buildLayoutEdges(g: Graph, layoutNodes: LayoutNode[], groups: LayoutGroup[] = []): LayoutEdge[] {
+        // Map each group's name → its key node. Group edges are labelled with the
+        // group name, so this lets us stamp the true key (anchor) end regardless
+        // of which way round the underlying graphlib edge was created (the key is
+        // the source for 'togroup', the target for 'fromgroup').
+        const keyNodeByGroupName = new Map<string, string>();
+        for (const grp of groups) {
+            if (grp.keyNodeId != null) keyNodeByGroupName.set(grp.name, grp.keyNodeId);
+        }
+
         return g.edges().map((edge) => {
 
             const edgeId = edge.name;
@@ -2337,11 +2353,24 @@ export class LayoutInstance {
             let source = layoutNodes.find((node) => node.id === edge.v);
             let target = layoutNodes.find((node) => node.id === edge.w);
             let relName = this.getRelationName(g, edge);
-            let color = this.getEdgeColor(relName, edge.v, edge.w, edgeId);
-            let style = this.getEdgeStyle(relName, edge.v, edge.w, edgeId);
-            let weight = this.getEdgeWeight(relName, edge.v, edge.w, edgeId);
-            let showLabel = this.getEdgeShowLabel(relName, edge.v, edge.w, edgeId);
-            let highlight = this.getEdgeHighlight(relName, edge.v, edge.w, edgeId);
+
+            // For a group edge, the key (anchor) node is looked up from the group rather
+            // than assumed to be edge.v: a 'fromgroup' edge is created member→key, so its
+            // graph source is the member. Edge directives are written against the original
+            // selector-tuple order (key, member), so canonicalise the (source, target) atoms
+            // back to that order for directive lookup — directives then apply regardless of
+            // which way the arrow is drawn. The drawn arrow still follows the graph edge
+            // (source/target below), and keyNodeId records the true anchor for the renderer.
+            const isGroupEdge = !!edgeId && edgeId.startsWith('_g_');
+            const groupKey = isGroupEdge ? (keyNodeByGroupName.get(edgeLabel) ?? edge.v) : undefined;
+            const dirSource = groupKey !== undefined ? groupKey : edge.v;
+            const dirTarget = groupKey !== undefined ? (groupKey === edge.v ? edge.w : edge.v) : edge.w;
+
+            let color = this.getEdgeColor(relName, dirSource, dirTarget, edgeId);
+            let style = this.getEdgeStyle(relName, dirSource, dirTarget, edgeId);
+            let weight = this.getEdgeWeight(relName, dirSource, dirTarget, edgeId);
+            let showLabel = this.getEdgeShowLabel(relName, dirSource, dirTarget, edgeId);
+            let highlight = this.getEdgeHighlight(relName, dirSource, dirTarget, edgeId);
 
             // Skip edges with missing source or target nodes
             if (!source || !target || !edgeId) {
@@ -2362,10 +2391,11 @@ export class LayoutInstance {
                 // For group edges the graphlib edge label IS the group name (see constructGroupEdgeID).
                 // Carry it forward so the renderer can look up the group directly by ID
                 // without re-parsing the edge ID string or matching fragile leaf indices.
-                groupId: edgeId.startsWith('_g_') ? edgeLabel : undefined,
-                // edge.v is always the groupOn (key/anchor) node — stamp it so the renderer
-                // knows definitively which end is the anchor vs. the group member.
-                keyNodeId: edgeId.startsWith('_g_') ? edge.v : undefined,
+                groupId: isGroupEdge ? edgeLabel : undefined,
+                // The group's key (anchor) node (computed above), so the renderer knows
+                // definitively which end is the anchor vs. the group member regardless of
+                // the drawn direction. Undefined for non-group edges.
+                keyNodeId: groupKey,
             };
             return e;
         }).filter((edge): edge is LayoutEdge => edge !== null);

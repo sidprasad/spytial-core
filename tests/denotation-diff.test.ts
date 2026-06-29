@@ -84,11 +84,11 @@ describe('flipConstraint', () => {
     });
 
     it('flips GroupBySelector', () => {
-        const c = new GroupBySelector('r', 'grp', true, false);
+        const c = new GroupBySelector('r', 'grp', 'fromgroup', false);
         const f = flipConstraint(c) as GroupBySelector;
         expect(f.negated).toBe(true);
         expect(f.name).toBe('grp');
-        expect(f.addEdge).toBe(true);
+        expect(f.addEdge).toBe('fromgroup');
     });
 
     it('flips GroupByField', () => {
