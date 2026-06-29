@@ -126,12 +126,25 @@ describe('yaml-codec — real-world round trips', () => {
     expect(spec.directives.tags[0].value).toBe('Person.status');
   });
 
-  it('round-trips group-by-selector (selector/name/addEdge)', () => {
+  it('round-trips group-by-selector (selector/name/addEdge); legacy addEdge:true → togroup', () => {
     const out = assertRoundTrips(GROUP_SELECTOR_SPEC);
     const spec = parseLayoutSpec(out);
     expect(spec.constraints.grouping.byselector).toHaveLength(1);
     expect(spec.constraints.grouping.byselector[0].name).toBe('team');
-    expect(spec.constraints.grouping.byselector[0].addEdge).toBe(true);
+    // The legacy boolean `addEdge: true` normalises to the 'togroup' direction.
+    expect(spec.constraints.grouping.byselector[0].addEdge).toBe('togroup');
+  });
+
+  it('round-trips group-by-selector with addEdge: fromgroup', () => {
+    const yaml = `constraints:
+  - group:
+      selector: sameTeam
+      name: team
+      addEdge: fromgroup
+`;
+    const out = assertRoundTrips(yaml);
+    const spec = parseLayoutSpec(out);
+    expect(spec.constraints.grouping.byselector[0].addEdge).toBe('fromgroup');
   });
 });
 

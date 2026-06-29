@@ -133,22 +133,52 @@ export class AlignConstraint extends ConstraintOperation {
 
 
 
+/**
+ * Direction of the optional edge a {@link GroupBySelector} draws between the
+ * group key and the group. For binary selector tuples (a, b), (a, c), … the
+ * group is keyed by `a` and contains {b, c, …}; the edge connects `a` to that
+ * group.
+ *   - `'none'`      → draw no edge (default)
+ *   - `'togroup'`   → draw an edge a → group
+ *   - `'fromgroup'` → draw an edge group → a
+ */
+export type GroupEdgeDirection = 'none' | 'togroup' | 'fromgroup';
+
+/** The closed set of values accepted in the `addEdge` field. */
+export const GROUP_EDGE_DIRECTIONS: readonly GroupEdgeDirection[] = ['none', 'togroup', 'fromgroup'];
+
+/**
+ * Normalise a raw `addEdge` value into a {@link GroupEdgeDirection}. Accepts the
+ * three string values, and — for backwards compatibility with specs written
+ * against the old boolean flag — maps `true` to `'togroup'` (the historical
+ * behaviour: an edge from the key node into the group). Anything else is `'none'`.
+ */
+export function normalizeGroupEdgeDirection(value: unknown): GroupEdgeDirection {
+    if (value === true || value === 'togroup') return 'togroup';
+    if (value === 'fromgroup') return 'fromgroup';
+    return 'none';
+}
+
 export class GroupBySelector extends ConstraintOperation{
     name: string;
-    addEdge: boolean;
+    addEdge: GroupEdgeDirection;
 
-    constructor(selector : string, name: string, addEdge: boolean = false, negated: boolean = false) {
+    constructor(selector : string, name: string, addEdge: GroupEdgeDirection | boolean = 'none', negated: boolean = false) {
         super(selector, negated);
         this.name = name;
-        this.addEdge = addEdge;
+        this.addEdge = normalizeGroupEdgeDirection(addEdge);
     }
 
     override toHTML(): string {
         if (this.negated) {
             return `Members selected by <code>${this.selector}</code> cannot form a group`;
         }
+        const edgeNote =
+            this.addEdge === 'togroup' ? ` An edge is drawn from the key to the group.`
+            : this.addEdge === 'fromgroup' ? ` An edge is drawn from the group to the key.`
+            : '';
         return `GroupBySelector with selector <code>${this.selector}</code>
-        and name <code>${this.name}</code>.`;
+        and name <code>${this.name}</code>.${edgeNote}`;
     }
 }
 

@@ -140,6 +140,70 @@ constraints:
     expect(selectorGroup?.name).toBe('nodes[node-x1:x1]');
   });
 
+  describe('group-by-selector addEdge direction', () => {
+    // Binary selector (A, B): group keyed by A, containing {B}.
+    const groupEdgeData: IJsonDataInstance = {
+      atoms: [
+        { id: 'A', type: 'Node', label: 'A' },
+        { id: 'B', type: 'Node', label: 'B' }
+      ],
+      relations: [
+        {
+          id: 'nodes',
+          name: 'nodes',
+          types: ['Node', 'Node'],
+          tuples: [{ atoms: ['A', 'B'], types: ['Node', 'Node'] }]
+        }
+      ]
+    };
+
+    function groupEdgeFor(addEdge: string) {
+      const spec = parseLayoutSpec(`
+constraints:
+  - group:
+      selector: nodes
+      name: nodes
+      addEdge: ${addEdge}
+`);
+      const instance = new JSONDataInstance(groupEdgeData);
+      const evaluator = createEvaluator(instance);
+      const li = new LayoutInstance(spec, evaluator, 0, true);
+      const { layout } = li.generateLayout(instance);
+      const groupEdge = layout.edges.find(e => e.groupId?.startsWith('nodes['));
+      return { layout, groupEdge };
+    }
+
+    it('draws no group edge by default (addEdge: none)', () => {
+      const { groupEdge } = groupEdgeFor('none');
+      expect(groupEdge).toBeUndefined();
+    });
+
+    it('togroup draws key → group (source = key A, target = member B)', () => {
+      const { groupEdge } = groupEdgeFor('togroup');
+      expect(groupEdge).toBeDefined();
+      expect(groupEdge!.source.id).toBe('A');
+      expect(groupEdge!.target.id).toBe('B');
+      expect(groupEdge!.keyNodeId).toBe('A');
+    });
+
+    it('fromgroup draws group → key (source = member B, target = key A); keyNodeId still A', () => {
+      const { groupEdge } = groupEdgeFor('fromgroup');
+      expect(groupEdge).toBeDefined();
+      expect(groupEdge!.source.id).toBe('B');
+      expect(groupEdge!.target.id).toBe('A');
+      // keyNodeId must remain the real key even though it's the graph edge's target.
+      expect(groupEdge!.keyNodeId).toBe('A');
+    });
+
+    it('legacy addEdge: true behaves as togroup', () => {
+      const { groupEdge } = groupEdgeFor('true');
+      expect(groupEdge).toBeDefined();
+      expect(groupEdge!.source.id).toBe('A');
+      expect(groupEdge!.target.id).toBe('B');
+      expect(groupEdge!.keyNodeId).toBe('A');
+    });
+  });
+
   it('adds alignment edges for disconnected nodes with orientation constraints', () => {
     const instance = new JSONDataInstance(jsonDataDisconnected);
     const evaluator = createEvaluator(instance);
