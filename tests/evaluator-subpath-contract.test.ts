@@ -27,6 +27,24 @@ describe('evaluator subpath packaging contract', () => {
 
     expect(configText).toContain("entry: { evaluator: 'src/evaluators/data/sgq-evaluator.ts' }");
     expect(configText).toContain("platform: 'node'");
-    expect(configText).toContain("'simple-graph-query'");
+  });
+
+  it('inlines runtime deps so ./evaluator is a self-contained single file', () => {
+    // The evaluator entry must bundle its runtime deps (graphlib + lodash,
+    // simple-graph-query) rather than externalize them, so downstream consumers
+    // (e.g. spytial-py's headless suggest evaluator) can vendor one .js/.mjs with
+    // no sibling node_modules. Read the source config, not the gitignored dist.
+    const configText = readFileSync(join(process.cwd(), 'tsup.evaluator.config.ts'), 'utf8');
+
+    const noExternal = configText.match(/noExternal:\s*\[([^\]]*)\]/)?.[1] ?? '';
+    expect(noExternal).toContain("'graphlib'");
+    expect(noExternal).toContain("'simple-graph-query'");
+    expect(noExternal).toContain("'lodash'");
+
+    // ...and none of those may be re-externalized (which would undo the bundling).
+    const external = configText.match(/(?<!no)external:\s*\[([^\]]*)\]/)?.[1] ?? '';
+    expect(external).not.toContain("'simple-graph-query'");
+    expect(external).not.toContain("'graphlib'");
+    expect(external).not.toContain("'lodash'");
   });
 });
