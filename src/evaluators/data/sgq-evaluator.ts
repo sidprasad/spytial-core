@@ -2,6 +2,19 @@ import IEvaluator, {EvaluatorResult} from "../interfaces";
 import {SimpleGraphQueryEvaluator, EvaluationResult, ErrorResult} from "simple-graph-query";
 export { JSONDataInstance } from "../../data-instance/json-data-instance";
 
+// Also surface SQG's static analyzer and by-example (FOIL-style) synthesizers on the
+// ./evaluator entry, so headless consumers — e.g. spytial.suggest's tier-2 bridge —
+// can reach the cheap static gate and the selector synthesizer through the same
+// windowless module they already require for evaluation, with no second import and no
+// browser globals. Runtime values only; the types ride along in the generated .d.ts.
+export {
+    analyzeForgeExpression,
+    synthesizeSelector,
+    synthesizeBinaryRelation,
+    synthesizeBinaryRelationWithWhy,
+    synthesizeSelectorWithWhy,
+} from "simple-graph-query";
+
 import {EvaluationContext, EvaluatorConfig, IEvaluatorResult } from "../interfaces";
 import { IDataInstance } from "../../data-instance/interfaces";
 import {SingleValue, Tuple} from "../interfaces";
