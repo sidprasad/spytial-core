@@ -285,4 +285,63 @@ describe('ErrorMessageModal Component', () => {
       expect(screen.getByText('An error occurred while processing your data.')).toBeInTheDocument()
     })
   })
+
+  describe('Diagram node highlighting', () => {
+    // Conflict text whose node references carry data-node-id (as formatNodeLabel emits)
+    const nodeRefHtml = '<span data-node-id="p2">Bob</span> is above <span data-node-id="p1">Alice</span>'
+    const positionalErrorWithNodeIds: SystemError = {
+      type: 'positional-error',
+      messages: {
+        conflictingConstraint: nodeRefHtml,
+        conflictingSourceConstraint: 'OrientationConstraint with directions [below]',
+        minimalConflictingConstraints: new Map([
+          ['OrientationConstraint with directions [below]', [nodeRefHtml]]
+        ])
+      }
+    }
+
+    function mountMockGraph(id: string) {
+      const el = document.createElement('div') as HTMLElement & {
+        highlightNodes: ReturnType<typeof vi.fn>
+        clearNodeHighlights: ReturnType<typeof vi.fn>
+      }
+      el.id = id
+      el.highlightNodes = vi.fn(() => true)
+      el.clearNodeHighlights = vi.fn(() => true)
+      document.body.appendChild(el)
+      return el
+    }
+
+    const diagramItem = () =>
+      document.querySelector('.constraint-item[data-constraint-id^="diagram-"]') as HTMLElement
+
+    it('highlights referenced diagram nodes on hover and clears them on leave', async () => {
+      const user = userEvent.setup()
+      const graph = mountMockGraph('mock-graph-highlight')
+      try {
+        render(<ErrorMessageModal systemError={positionalErrorWithNodeIds} graphElementId="mock-graph-highlight" />)
+
+        await user.hover(diagramItem())
+        expect(graph.highlightNodes).toHaveBeenCalledTimes(1)
+        expect(graph.highlightNodes).toHaveBeenCalledWith(expect.arrayContaining(['p1', 'p2']))
+
+        await user.unhover(diagramItem())
+        expect(graph.clearNodeHighlights).toHaveBeenCalled()
+      } finally {
+        graph.remove()
+      }
+    })
+
+    it('does not touch the graph when graphElementId is omitted', async () => {
+      const user = userEvent.setup()
+      const graph = mountMockGraph('mock-graph-unused')
+      try {
+        render(<ErrorMessageModal systemError={positionalErrorWithNodeIds} />)
+        await user.hover(diagramItem())
+        expect(graph.highlightNodes).not.toHaveBeenCalled()
+      } finally {
+        graph.remove()
+      }
+    })
+  })
 })

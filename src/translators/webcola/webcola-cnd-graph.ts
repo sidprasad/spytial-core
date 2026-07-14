@@ -9817,22 +9817,33 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         stroke-width: 3px; /* Change this to your desired highlight width */
       }
 
-      /* Node highlighting styles */
-      .node.highlighted rect {
+      /* Node highlighting styles. Also applies to .error-node so hovering a
+         conflicting constraint in the error modal highlights the unsat nodes;
+         the solid orange stroke + glow overrides the dashed red error style. */
+      .node.highlighted rect,
+      .error-node.highlighted rect {
         stroke: #ff9500;
         stroke-width: 3px;
+        stroke-dasharray: none;
+        animation: none;
         filter: drop-shadow(0 0 6px rgba(255, 149, 0, 0.6));
       }
 
-      .node.highlighted-first rect {
+      .node.highlighted-first rect,
+      .error-node.highlighted-first rect {
         stroke: #007aff;
         stroke-width: 3px;
+        stroke-dasharray: none;
+        animation: none;
         filter: drop-shadow(0 0 6px rgba(0, 122, 255, 0.6));
       }
 
-      .node.highlighted-second rect {
+      .node.highlighted-second rect,
+      .error-node.highlighted-second rect {
         stroke: #ff3b30;
         stroke-width: 3px;
+        stroke-dasharray: none;
+        animation: none;
         filter: drop-shadow(0 0 6px rgba(255, 59, 48, 0.6));
       }
 

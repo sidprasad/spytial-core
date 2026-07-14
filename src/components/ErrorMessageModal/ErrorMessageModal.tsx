@@ -9,6 +9,12 @@ import { ErrorMessages, SystemError, SelectorErrorDetail } from './index';
 export interface ErrorMessageModalProps {
   /** Error object containing  */
   systemError?: SystemError;
+  /**
+   * Optional id of a `webcola-cnd-graph` element. When provided, hovering a
+   * conflicting constraint highlights the referenced nodes in that diagram
+   * (via the graph's public `highlightNodes` / `clearNodeHighlights` API).
+   */
+  graphElementId?: string;
 }
 
 /** Constraint node with bidirectional relationships */
@@ -29,19 +35,51 @@ type HighlightState = {
  * Supports both constraint conflicts and parse errors
  * @public
  */
-export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemError }: ErrorMessageModalProps) => {
+export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemError, graphElementId }: ErrorMessageModalProps) => {
   const [highlightState, setHighlightState] = useState<HighlightState>({ ids: [], source: null });
   const [collapsed, setCollapsed] = useState(false);
 
-  /** Handle mouse enter for constraint highlighting */
-  const handleMouseEnter = (node: ConstraintNode, source: 'source' | 'diagram') => {
-    setHighlightState({ ids: [node.id, ...node.relatedIds], source });
+  /** Minimal shape of the graph element's node-highlighting API */
+  type GraphHighlightElement = HTMLElement & {
+    highlightNodes?: (nodeIds: string[]) => boolean;
+    clearNodeHighlights?: () => boolean;
   };
 
-  /** 
-   * Clear highlighting on mouse leave 
+  /**
+   * Highlight the diagram nodes referenced inside a hovered constraint item.
+   * Node references carry a `data-node-id` attribute (see formatNodeLabel), so
+   * we read them straight from the rendered DOM rather than parsing text.
+   */
+  const highlightGraphNodesFrom = (el: HTMLElement) => {
+    if (!graphElementId) return;
+    const graph = document.getElementById(graphElementId) as GraphHighlightElement | null;
+    if (!graph || typeof graph.highlightNodes !== 'function') return;
+    const ids = Array.from(el.querySelectorAll('[data-node-id]'))
+      .map(n => n.getAttribute('data-node-id'))
+      .filter((id): id is string => !!id);
+    if (ids.length > 0) graph.highlightNodes(Array.from(new Set(ids)));
+  };
+
+  /** Clear any diagram node highlights this modal applied */
+  const clearGraphNodeHighlights = () => {
+    if (!graphElementId) return;
+    const graph = document.getElementById(graphElementId) as GraphHighlightElement | null;
+    if (graph && typeof graph.clearNodeHighlights === 'function') graph.clearNodeHighlights();
+  };
+
+  /** Handle mouse enter for constraint highlighting */
+  const handleMouseEnter = (e: React.MouseEvent<HTMLElement>, node: ConstraintNode, source: 'source' | 'diagram') => {
+    setHighlightState({ ids: [node.id, ...node.relatedIds], source });
+    highlightGraphNodesFrom(e.currentTarget);
+  };
+
+  /**
+   * Clear highlighting on mouse leave
   */
-  const handleMouseLeave = () => setHighlightState({ ids: [], source: null });
+  const handleMouseLeave = () => {
+    setHighlightState({ ids: [], source: null });
+    clearGraphNodeHighlights();
+  };
 
   /** 
    * Get CSS class for constraint highlighting 
@@ -210,7 +248,7 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
                         key={node.id}
                         data-constraint-id={node.id}
                         className={`constraint-item ${getHighlightClass(node.id)}`}
-                        onMouseEnter={() => handleMouseEnter(node, 'source')}
+                        onMouseEnter={(e) => handleMouseEnter(e, node, 'source')}
                         onMouseLeave={handleMouseLeave}
                       >
                         <code dangerouslySetInnerHTML={{ __html: node.content }}></code>
@@ -224,7 +262,7 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
                           key={node.id}
                           data-constraint-id={node.id}
                           className={`constraint-item ${getHighlightClass(node.id)}`}
-                          onMouseEnter={() => handleMouseEnter(node, 'diagram')}
+                          onMouseEnter={(e) => handleMouseEnter(e, node, 'diagram')}
                           onMouseLeave={handleMouseLeave}
                         >
                           <code dangerouslySetInnerHTML={{ __html: node.content }}></code>

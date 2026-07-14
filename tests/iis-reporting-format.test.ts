@@ -53,9 +53,12 @@ describe('IIS Reporting Format', () => {
         // Should include attributes in the display
         expect(errorMessage).toContain('Person');
         expect(errorMessage).toContain('name: Alice');
-        // Should not show bare IDs when attributes are present
-        expect(errorMessage).not.toContain('atom1');
-        expect(errorMessage).not.toContain('atom2');
+        // Should not show bare IDs when attributes are present.
+        // The id is still carried as a non-visible data-node-id attribute (used to
+        // highlight the diagram node on hover), so strip those before asserting.
+        const visibleText = errorMessage.replace(/\sdata-node-id="[^"]*"/g, '');
+        expect(visibleText).not.toContain('atom1');
+        expect(visibleText).not.toContain('atom2');
     });
 
     it('should truncate long attribute values', () => {

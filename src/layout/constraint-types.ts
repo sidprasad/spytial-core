@@ -125,21 +125,24 @@ export function formatNodeLabel(node: LayoutNode): string {
         }
 
         if (attributeParts.length > 0) {
-            // Escape label to prevent XSS
-            return `${escapeHtml(node.label)} (${attributeParts.join(', ')})`;
+            // Escape label to prevent XSS. The id is carried as a non-visible
+            // data-node-id attribute so hovering can highlight the diagram node,
+            // without showing the bare id as display text.
+            return `<span data-node-id="${escapeHtml(node.id)}">${escapeHtml(node.label)} (${attributeParts.join(', ')})</span>`;
         }
     }
 
     // No attributes present - show label with ID explanation
     // Use HTML title attribute for hover tooltip explaining what the ID is
+    // data-node-id lets consumers (e.g. the error modal) highlight the node.
     // Escape all user-provided values to prevent XSS
     if (node.label && node.label !== node.id) {
         // Format: label (id = X) where hovering explains the ID
-        return `<span title="${ID_TOOLTIP_TEXT}">${escapeHtml(node.label)} (id = ${escapeHtml(node.id)})</span>`;
+        return `<span data-node-id="${escapeHtml(node.id)}" title="${ID_TOOLTIP_TEXT}">${escapeHtml(node.label)} (id = ${escapeHtml(node.id)})</span>`;
     }
 
     // Only ID available (label same as ID or no label)
-    return `<span title="${ID_TOOLTIP_TEXT}">${escapeHtml(node.id)}</span>`;
+    return `<span data-node-id="${escapeHtml(node.id)}" title="${ID_TOOLTIP_TEXT}">${escapeHtml(node.id)}</span>`;
 }
 
 // TODO:
