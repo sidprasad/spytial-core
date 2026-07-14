@@ -842,13 +842,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
-   * Access whether this graph is a graph visualizing an unsat core.
-   */
-  private get isUnsatCore(): boolean {
-    return this.hasAttribute('unsat');
-  }
-
-  /**
    * Access transition mode for layout swaps.
    * Supported values:
    * - "morph": exiting elements fade out, entering fade in, continuing slide
@@ -1367,7 +1360,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         </div>
       </div>
       <div id="svg-container">
-      <span id="error-icon" title="This graph is depicting an error state">⚠️</span>
       <div id="loading" role="status" aria-live="polite" aria-atomic="true">
         <span class="loading-dot" aria-hidden="true"></span>
         <span id="loading-progress">Computing layout...</span>
@@ -2451,11 +2443,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
               this.updatePositions();
               this.routeEdges();
             }
-          }
-
-          // Check if it's an unsat core layout
-          if (this.isUnsatCore) {
-            this.showErrorIcon();
           }
 
           // Dispatch relations-available event after layout is complete
@@ -9868,22 +9855,33 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         stroke-width: 3px; /* Change this to your desired highlight width */
       }
 
-      /* Node highlighting styles */
-      .node.highlighted rect {
+      /* Node highlighting styles. Also applies to .error-node so hovering a
+         conflicting constraint in the error modal highlights the unsat nodes;
+         the solid orange stroke + glow overrides the dashed red error style. */
+      .node.highlighted rect,
+      .error-node.highlighted rect {
         stroke: #ff9500;
         stroke-width: 3px;
+        stroke-dasharray: none;
+        animation: none;
         filter: drop-shadow(0 0 6px rgba(255, 149, 0, 0.6));
       }
 
-      .node.highlighted-first rect {
+      .node.highlighted-first rect,
+      .error-node.highlighted-first rect {
         stroke: #007aff;
         stroke-width: 3px;
+        stroke-dasharray: none;
+        animation: none;
         filter: drop-shadow(0 0 6px rgba(0, 122, 255, 0.6));
       }
 
-      .node.highlighted-second rect {
+      .node.highlighted-second rect,
+      .error-node.highlighted-second rect {
         stroke: #ff3b30;
         stroke-width: 3px;
+        stroke-dasharray: none;
+        animation: none;
         filter: drop-shadow(0 0 6px rgba(255, 59, 48, 0.6));
       }
 
@@ -9989,37 +9987,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
       svg.input-mode .link:hover {
         opacity: 0.8;
-      }
-
-      /* Error icon positioning - bottom area to avoid header overlap */
-      #error-icon {
-        margin: 5px;
-        padding: 8px 12px;
-        font-size: 16px;
-        position: absolute;
-        bottom: 10px; /* Position at bottom instead of top */
-        left: 10px;
-        z-index: 1000;
-        cursor: help;
-        background-color: rgba(220, 53, 69, 0.95);
-        color: white;
-        border-radius: 6px;
-        border: none;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-        font-weight: 500;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        visibility: hidden; /* Use visibility instead of display */
-      }
-      
-      #error-icon.visible {
-        visibility: visible;
-      }
-
-      #error-icon::before {
-        content: "⚠️";
-        font-size: 18px;
       }
 
       /* Graph toolbar styling */
@@ -10376,22 +10343,6 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     this.hideLoading();
     error.style.display = 'block';
     error.textContent = message;
-  }
-
-  /**
-   * Show error icon
-   */
-  private showErrorIcon(): void {
-    const errorIcon = this.root.querySelector('#error-icon') as HTMLElement;
-    errorIcon.classList.add('visible');
-  }
-
-  /**
-   * Hide error icon
-   */
-  private hideErrorIcon(): void {
-    const errorIcon = this.root.querySelector('#error-icon') as HTMLElement;
-    errorIcon.classList.remove('visible');
   }
 
   // =========================================

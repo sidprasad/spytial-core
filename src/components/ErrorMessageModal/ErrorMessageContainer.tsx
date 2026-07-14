@@ -10,6 +10,11 @@ export interface ErrorMessageContainerProps {
   errorManager: ErrorStateManager;
   /** Additional CSS classes */
   className?: string;
+  /**
+   * Optional id of a `webcola-cnd-graph` element. When set, hovering a
+   * conflicting constraint highlights the referenced nodes in that diagram.
+   */
+  graphElementId?: string;
 }
 
 /**
@@ -18,7 +23,8 @@ export interface ErrorMessageContainerProps {
  */
 export const ErrorMessageContainer: React.FC<ErrorMessageContainerProps> = ({
   errorManager,
-  className = ''
+  className = '',
+  graphElementId
 }) => {
   const [currentError, setCurrentError] = useState<SystemError | null>(
     errorManager.getCurrentError()
@@ -45,8 +51,9 @@ export const ErrorMessageContainer: React.FC<ErrorMessageContainerProps> = ({
   
   return (
     <div className={containerClassName}>
-      <ErrorMessageModal 
+      <ErrorMessageModal
         systemError={currentError}
+        graphElementId={graphElementId}
       />
     </div>
   );

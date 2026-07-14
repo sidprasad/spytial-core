@@ -1061,9 +1061,12 @@ export function mountReplWithVisualization(
  * 
  * @public
  */
-export function mountErrorMessageModal(containerId: string = 'error-messages'): boolean {
+export function mountErrorMessageModal(
+  containerId: string = 'error-messages',
+  graphElementId: string = 'graph-container'
+): boolean {
   const container = document.getElementById(containerId);
-  
+
   if (!container) {
     console.error(`Error Modal: Container '${containerId}' not found`);
     return false;
@@ -1071,7 +1074,7 @@ export function mountErrorMessageModal(containerId: string = 'error-messages'): 
 
   try {
     const root = createRoot(container);
-    root.render(<ErrorMessageContainer errorManager={globalErrorManager} />);
+    root.render(<ErrorMessageContainer errorManager={globalErrorManager} graphElementId={graphElementId} />);
     console.log(`Error Modal mounted to #${containerId}`);
     return true;
   } catch (error) {
