@@ -58,6 +58,17 @@ function arbValueForField(field: FieldSpec): fc.Arbitrary<unknown> {
       return fc.boolean();
     case 'color':
       return fc.constantFrom('#ff0000', '#00ff00', '#123abc', 'red', 'blue');
+    case 'group': {
+      // A nested block (lineStyle/textStyle/fillStyle/borderStyle): recurse over
+      // the children so we generate a real nested object, not a bare string.
+      // Custom codecs (e.g. groupselector.textStyle) expect an object and drop
+      // scalars — generating a string here masked that path.
+      const children = field.children ?? [];
+      const entries = children.map(
+        (c) => fc.tuple(fc.constant(c.key), arbValueForField(c)) as fc.Arbitrary<[string, unknown]>,
+      );
+      return fc.tuple(...entries).map((pairs) => Object.fromEntries(pairs));
+    }
     case 'selector':
     case 'relationName':
     case 'typeName':

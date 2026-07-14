@@ -1,6 +1,11 @@
 import * as yaml from 'js-yaml';
 import { EdgeStyle } from './edge-style';
 import { AttrTextSize } from './text-extent';
+import { EdgeStyleRule, parseEdgeStyleSpec, edgeColorToEdgeStyleRule } from './style/edge-style-spec';
+import type { LineStyle } from './style/edge-style-spec';
+import { AtomStyleRule, parseAtomStyleSpec, atomColorToAtomStyleRule } from './style/atom-style-spec';
+import { parseTextStyle } from './style/text-style';
+import type { TextStyle } from './style/text-style';
 
 export type RelativeDirection = "above" | "below" | "left" | "right" | "directlyAbove" | "directlyBelow" | "directlyLeft" | "directlyRight";
 export type RotationDirection = "clockwise" | "counterclockwise";
@@ -155,6 +160,11 @@ export const GROUP_EDGE_DIRECTIONS: readonly GroupEdgeDirection[] = ['none', 'to
  * behaviour: an edge from the key node into the group). Anything else is `'none'`.
  */
 export function normalizeGroupEdgeDirection(value: unknown): GroupEdgeDirection {
+    // Block form — `addEdge: { points, lineStyle, textStyle }` — carries the
+    // direction in `points`; the bare string/bool form is the direction itself.
+    if (value && typeof value === 'object') {
+        value = (value as Record<string, unknown>).points;
+    }
     if (value === true || value === 'togroup') return 'togroup';
     if (value === 'fromgroup') return 'fromgroup';
     return 'none';
@@ -163,6 +173,17 @@ export function normalizeGroupEdgeDirection(value: unknown): GroupEdgeDirection 
 export class GroupBySelector extends ConstraintOperation{
     name: string;
     addEdge: GroupEdgeDirection;
+    /**
+     * Line styling for the `addEdge` connector (the edge drawn between the key
+     * and the group). Present only when `addEdge` is given in block form
+     * (`addEdge: { points, lineStyle, textStyle }`). The connector is an edge, so
+     * this reuses the shared {@link LineStyle}. Absent = the default edge look.
+     */
+    connectorLineStyle?: LineStyle;
+    /** Label styling for the `addEdge` connector's label (shared {@link TextStyle}). */
+    connectorTextStyle?: TextStyle;
+    /** Styling for the group's own label, from the group's top-level `textStyle`. */
+    labelTextStyle?: TextStyle;
 
     constructor(selector : string, name: string, addEdge: GroupEdgeDirection | boolean = 'none', negated: boolean = false) {
         super(selector, negated);
@@ -272,11 +293,16 @@ export interface AtomIconDirective extends VisualManipulation {
 
 export interface InferredEdgeDirective extends VisualManipulation {
     name : string;
+    /** Line color. Parsed from `lineStyle.color` (legacy inline `color` still accepted). */
     color?: string;
+    /** Line dash pattern. Parsed from `lineStyle.pattern` (legacy inline `style` still accepted). */
     style?: EdgeStyle;
+    /** Line weight. Parsed from `lineStyle.weight` (legacy inline `weight` still accepted). */
     weight?: number;
     /** Optional highlight color drawn as a wider underlay beneath the edge. */
     highlight?: string;
+    /** Optional label styling. Parsed from the `textStyle` block. */
+    textStyle?: TextStyle;
 }
 
 export interface AtomHidingDirective extends VisualManipulation {
@@ -365,9 +391,11 @@ interface ConstraintsBlock
 
 interface DirectivesBlock {
     atomColors: AtomColorDirective[];
+    atomStyles: AtomStyleRule[];
     sizes: AtomSizeDirective[];
     icons: AtomIconDirective[];
     edgeColors: EdgeColorDirective[];
+    edgeStyles: EdgeStyleRule[];
     attributes: AttributeDirective[];
     tags: TagDirective[];
     hiddenFields: FieldHidingDirective[];
@@ -426,9 +454,11 @@ function DEFAULT_LAYOUT() : LayoutSpec
         },
         directives: {
             atomColors: [],
+            atomStyles: [],
             sizes: [],
             icons: [],
             edgeColors: [],
+            edgeStyles: [],
             attributes: [],
             tags: [],
             hiddenFields: [],
@@ -768,7 +798,19 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
             }
             // Auto-generate name for negated groups without one
             const name = c.group.name || `_not_group_${c.group.selector}`;
-            return new GroupBySelector(c.group.selector, name, c.group.addEdge, c._negated);
+            const gbs = new GroupBySelector(c.group.selector, name, c.group.addEdge, c._negated);
+            // Block-form `addEdge: { points, lineStyle, textStyle }` styles the
+            // connector — which is an edge — so parse it as an edge spec (the
+            // `points` key is ignored by parseEdgeStyleSpec). A bare string/bool
+            // addEdge stays unstyled (its direction was read above).
+            if (c.group.addEdge && typeof c.group.addEdge === 'object') {
+                const connSpec = parseEdgeStyleSpec(c.group.addEdge);
+                gbs.connectorLineStyle = connSpec.lineStyle;
+                gbs.connectorTextStyle = connSpec.textStyle;
+            }
+            // The group's own label styling (top-level `textStyle`).
+            gbs.labelTextStyle = parseTextStyle(c.group.textStyle);
+            return gbs;
         });
 
     // Remove duplicate group by selector constraints
@@ -835,13 +877,27 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
                         showLabels: d.icon.showLabels || false 
                     }
                 });
-    let atomColors : AtomColorDirective[] = typedDirectives.filter(d => d.atomColor)
-                .map(d => {
-                    return {
-                        color: d.atomColor.value,
-                        selector: d.atomColor.selector
-                    }
-                });
+    // atomColor is the deprecated flat form of atomStyle. Desugar each into an
+    // AtomStyleRule (border-preserving: value→borderStyle.color, so existing
+    // diagrams stay outlined exactly as before) and resolve through the one
+    // atomStyle path (compose / collide together). Emit one deprecation warning.
+    // `atomColors` is kept empty only to satisfy the DirectivesBlock shape; its
+    // sole consumer (getNodeColorMap) now reads the resolved atomStyle instead,
+    // and atom styling flows via `atomStyles`.
+    const rawAtomColors = typedDirectives.filter(d => d.atomColor);
+    if (rawAtomColors.length > 0) {
+        console.warn(
+            "[spytial] 'atomColor' is deprecated and will be removed in a future major; " +
+            "use 'atomStyle' with a 'borderStyle' block (value→borderStyle.color), " +
+            "or a 'fillStyle' block for a real interior fill."
+        );
+    }
+    // A selectorless (malformed) atomColor desugars to null and is dropped — it
+    // was a no-op before, and must not become a global recolor of every atom.
+    const desugaredAtomColors: AtomStyleRule[] = rawAtomColors
+        .map(d => atomColorToAtomStyleRule(d.atomColor))
+        .filter((rule): rule is AtomStyleRule => rule !== null);
+    let atomColors : AtomColorDirective[] = [];
 
     let sizes : AtomSizeDirective[] = typedDirectives.filter(d => d.size)
                 .map(d => {
@@ -853,20 +909,21 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
                     };
                 });
     
-    let edgeColors : EdgeColorDirective[] = typedDirectives.filter(d => d.edgeColor)
-                .map(d => {
-                    return {
-                        color: d.edgeColor.value,
-                        field: d.edgeColor.field,
-                        selector: d.edgeColor.selector,
-                        filter: d.edgeColor.filter,
-                        style: d.edgeColor.style,
-                        weight: d.edgeColor.weight,
-                        showLabel: d.edgeColor.showLabel,
-                        hidden: d.edgeColor.hidden,
-                        highlight: d.edgeColor.highlight
-                    }
-                });
+    // edgeColor is the deprecated flat form of edgeStyle. Desugar each into an
+    // EdgeStyleRule so both forms resolve through the one edgeStyle path (and
+    // compose / collide together). Emit one deprecation warning. `edgeColors` is
+    // kept empty only to satisfy the DirectivesBlock shape; its sole consumer
+    // (findEdgeDirective) then no-ops, and edge styling flows via `edgeStyles`.
+    const rawEdgeColors = typedDirectives.filter(d => d.edgeColor);
+    if (rawEdgeColors.length > 0) {
+        console.warn(
+            "[spytial] 'edgeColor' is deprecated and will be removed in a future major; " +
+            "use 'edgeStyle' with a 'lineStyle' block " +
+            "(value→lineStyle.color, style→lineStyle.pattern, weight→lineStyle.weight, highlight→lineStyle.highlight)."
+        );
+    }
+    const desugaredEdgeColors: EdgeStyleRule[] = rawEdgeColors.map(d => edgeColorToEdgeStyleRule(d.edgeColor));
+    let edgeColors : EdgeColorDirective[] = [];
 
     let attributes : AttributeDirective[]  = typedDirectives.filter(d => d.attribute).map(d => {
         return {
@@ -889,16 +946,32 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
     let hideDisconnected = flags.includes("hideDisconnected");
     let hideDisconnectedBuiltIns = flags.includes("hideDisconnectedBuiltIns");
 
+    // inferredEdge keeps its structural identity (name/selector) but adopts the
+    // shared lineStyle/textStyle blocks. Legacy inline color/style/weight/highlight
+    // still parse (mapped onto the flat fields) but are deprecated.
+    let usedLegacyInferredInline = false;
     let inferredEdges : InferredEdgeDirective[] = typedDirectives.filter(d => d.inferredEdge).map(d => {
-        return {
-            name: d.inferredEdge.name,
-            selector: d.inferredEdge.selector,
-            color: d.inferredEdge.color,
-            style: d.inferredEdge.style,
-            weight: d.inferredEdge.weight,
-            highlight: d.inferredEdge.highlight
+        const ie = d.inferredEdge;
+        const spec = parseEdgeStyleSpec(ie); // extracts lineStyle / textStyle blocks
+        if (ie.color !== undefined || ie.style !== undefined || ie.weight !== undefined || ie.highlight !== undefined) {
+            usedLegacyInferredInline = true;
         }
+        return {
+            name: ie.name,
+            selector: ie.selector,
+            color: spec.lineStyle?.color ?? ie.color,
+            style: spec.lineStyle?.pattern ?? ie.style,
+            weight: spec.lineStyle?.weight ?? ie.weight,
+            highlight: spec.lineStyle?.highlight ?? ie.highlight,
+            textStyle: spec.textStyle,
+        };
     });
+    if (usedLegacyInferredInline) {
+        console.warn(
+            "[spytial] inferredEdge's inline 'color'/'style'/'weight'/'highlight' are deprecated; " +
+            "use a 'lineStyle' block (color, pattern, weight, highlight) instead."
+        );
+    }
 
     let hiddenAtoms : AtomHidingDirective[] = typedDirectives.filter(d => d.hideAtom).map(d => {
         return {
@@ -915,11 +988,35 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
         }
     });
 
+    let edgeStyles : EdgeStyleRule[] = typedDirectives.filter(d => d.edgeStyle).map(d => {
+        return {
+            field: d.edgeStyle.field,
+            selector: d.edgeStyle.selector,
+            filter: d.edgeStyle.filter,
+            style: parseEdgeStyleSpec(d.edgeStyle)
+        }
+    });
+    // Desugared legacy edgeColor rules join the native ones — one resolution path.
+    edgeStyles = [...edgeStyles, ...desugaredEdgeColors];
+
+    // atomStyle (composite: fillStyle + borderStyle + textStyle), keyed by an
+    // optional unary selector. Native rules plus desugared legacy atomColor rules
+    // resolve through the one atomStyle path.
+    let atomStyles : AtomStyleRule[] = typedDirectives.filter(d => d.atomStyle).map(d => {
+        return {
+            selector: d.atomStyle.selector,
+            style: parseAtomStyleSpec(d.atomStyle)
+        }
+    });
+    atomStyles = [...atomStyles, ...desugaredAtomColors];
+
     return {
         atomColors,
+        atomStyles,
         sizes,
         icons,
         edgeColors,
+        edgeStyles,
         attributes,
         tags,
         hiddenFields,

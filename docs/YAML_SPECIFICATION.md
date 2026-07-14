@@ -157,6 +157,21 @@ Groups elements based on a selector expression.
     selector: <n-ary-selector>   # Required: Selector returning elements to group
     name: <group-name>           # Required: Display name for the group
     addEdge: <direction>         # Optional: none | togroup | fromgroup (default none)
+    textStyle:                   # Optional: style the group's own label
+      color: <color>
+```
+
+A group has two style surfaces: its **own label** (top-level `textStyle`) and — when `addEdge` draws a connector — that **connector**, which is an edge and so takes the shared `lineStyle` / `textStyle` blocks. To style the connector, give `addEdge` in block form:
+
+```yaml
+- group:
+    selector: <n-ary-selector>
+    name: <group-name>
+    addEdge:                     # Block form styles the connector edge
+      points: <none|togroup|fromgroup>
+      lineStyle: { color: <color>, pattern: <solid|dashed|dotted>, weight: <number>, highlight: <color> }
+      textStyle: { size: <small|normal|large>, color: <color> }   # the connector's label
+    textStyle: { color: <color> }                                 # the group's own label
 ```
 
 **Fields:**
@@ -165,7 +180,9 @@ Groups elements based on a selector expression.
 |-------|----------|------|---------|-------------|
 | `selector` | ✅ Yes | string | - | Selector returning atoms to include in group |
 | `name` | ✅ Yes | string | - | Display name shown on the group box |
-| `addEdge` | ❌ No | `none` \| `togroup` \| `fromgroup` | `none` | Draw an edge between the group key and the group. `togroup` points key → group; `fromgroup` points group → key; `none` draws nothing. (Legacy `true` is accepted and treated as `togroup`.) |
+| `addEdge` | ❌ No | direction *or* block | `none` | The connector between the group key and the group. As a bare string it is just the direction (`none` / `togroup` / `fromgroup`; legacy `true` = `togroup`). As a **block** it also styles the connector: `points` (the direction) plus `lineStyle` and `textStyle` (same blocks as `edgeStyle`). `togroup` points key → group; `fromgroup` points group → key. |
+| `textStyle.color` | ❌ No | string | - | Color of the group's own label |
+| `textStyle.size` | ❌ No | enum | - | `small` / `normal` / `large` — *reserved; group labels currently auto-fit their box* |
 
 For a binary selector with tuples `(a, b), (a, c), (a, d)`, the group is keyed by `a` and contains `{b, c, d}`. `addEdge: togroup` draws an edge from `a` into that group; `addEdge: fromgroup` draws it from the group back to `a`.
 
@@ -182,6 +199,16 @@ For a binary selector with tuples `(a, b), (a, c), (a, d)`, the group is keyed b
     selector: Department.employees
     name: "Department"
     addEdge: togroup
+
+# Styled: a dashed teal connector with a red label, and a purple group label
+- group:
+    selector: Department.employees
+    name: "Department"
+    addEdge:
+      points: togroup
+      lineStyle: { color: "#0aa", pattern: dashed, weight: 3 }
+      textStyle: { color: "#a00" }
+    textStyle: { color: "#7c3aed" }
 ```
 
 ---
@@ -363,7 +390,64 @@ Hides atoms matching a selector from the visualization. (Can also be used as a d
 
 Directives control visual styling and presentation without affecting layout structure.
 
-### Atom Color Directive
+### Atom Style Directive (atomStyle)
+
+Styles the atoms (nodes) matching a selector. An atom is a composite of an interior **fill**, an outline **border**, and its **label**, so styling uses the shared `fillStyle`, `borderStyle`, and `textStyle` blocks (the same block vocabulary as `edgeStyle`'s `lineStyle`/`textStyle`).
+
+```yaml
+- atomStyle:
+    selector: <unary-selector>   # Optional: which atoms to style (absent = all atoms)
+    fillStyle:                   # Optional: the interior fill (opt-in)
+      color: <color>
+    borderStyle:                 # Optional: the outline
+      color: <color>
+      width: <number>
+    textStyle:                   # Optional: the atom's own (name) label
+      size: <small|normal|large>
+      color: <color>
+```
+
+**Fields:**
+
+| Field | Required | Type | Description |
+|-------|----------|------|-------------|
+| `selector` | ❌ No | string | Unary selector for target atoms; absent styles every atom |
+| `fillStyle.color` | ❌ No | string | CSS color of the node's interior fill (opt-in; the default is an unfilled Tufte look where only stroke + label mark the node) |
+| `borderStyle.color` | ❌ No | string | CSS color of the node's outline |
+| `borderStyle.width` | ❌ No | number | Outline thickness in pixels (must be > 0) |
+| `textStyle.size` | ❌ No | enum | `small`, `normal`, or `large` — *reserved; not yet applied to the node's own label* |
+| `textStyle.color` | ❌ No | string | CSS color of the atom's label |
+
+**Inheritance & conflicts:** rules match atoms through their selector, and a supertype selector already returns subtype atoms — so a `Node` rule and a `RedNode` rule both apply to a `RedNode` atom, their set properties **composing** (gap-fill inheritance up the type hierarchy). Two rules that set the *same* property to *different* values is an error: styles never silently override.
+
+**Examples:**
+
+```yaml
+# Filled, thick-bordered Person nodes with dark-red labels
+- atomStyle:
+    selector: Person
+    fillStyle: { color: '#e0f2ff' }
+    borderStyle: { color: '#0369a1', width: 4 }
+    textStyle: { color: '#b91c1c' }
+
+# Just recolor the outline of error atoms (border-preserving, like atomColor)
+- atomStyle:
+    selector: Error
+    borderStyle: { color: red }
+```
+
+**Migrating from `atomColor`:** `atomColor` (below) is the legacy flat form and still works; its `value` maps onto `borderStyle.color` (so existing diagrams keep their outlines exactly), and you can add a `fillStyle` for a real interior fill:
+
+| `atomColor` | `atomStyle` |
+|---|---|
+| `value` | `borderStyle.color` |
+| `selector` | `selector` |
+
+---
+
+### Atom Color Directive (atomColor) — *legacy*
+
+> **Deprecated:** prefer [`atomStyle`](#atom-style-directive-atomstyle) above. `atomColor` still works and will desugar onto `atomStyle` (`value` → `borderStyle.color`) with a deprecation warning.
 
 Sets the color of atoms matching a selector.
 
@@ -394,7 +478,81 @@ Sets the color of atoms matching a selector.
 
 ---
 
-### Edge Style Directive (edgeColor)
+### Edge Style Directive (edgeStyle)
+
+Styles the edges of a field/relation. An edge is a composite of a drawn **line**, a **label**, and behavior flags, so styling is expressed with the shared `lineStyle` and `textStyle` blocks — the same block vocabulary reused by `inferredEdge` and group connectors.
+
+```yaml
+- edgeStyle:
+    field: <field-name>          # Required: relation/field whose edges this styles
+    selector: <unary-selector>   # Optional: match only edges from these source atoms
+    filter: <n-ary-selector>     # Optional: match only these (source, target) tuples
+    lineStyle:                   # Optional: the drawn line
+      color: <color>
+      pattern: <solid|dashed|dotted>
+      weight: <number>
+      highlight: <color>
+    textStyle:                   # Optional: the edge label
+      size: <small|normal|large>
+      color: <color>
+    showLabel: <boolean>         # Optional: show the edge label
+    hidden: <boolean>            # Optional: hide the edge entirely
+```
+
+**Fields:**
+
+| Field | Required | Type | Description |
+|-------|----------|------|-------------|
+| `field` | ✅ Yes | string | Name of the relation |
+| `selector` | ❌ No | string | Unary selector — match only edges whose source atom is selected |
+| `filter` | ❌ No | string | N-ary selector — match only specific (source, target) tuples |
+| `lineStyle.color` | ❌ No | string | CSS color of the line |
+| `lineStyle.pattern` | ❌ No | enum | `solid`, `dashed`, or `dotted` |
+| `lineStyle.weight` | ❌ No | number | Line thickness in pixels (must be > 0) |
+| `lineStyle.highlight` | ❌ No | string | CSS color drawn as a wider, translucent underlay beneath the line |
+| `textStyle.size` | ❌ No | enum | `small`, `normal`, or `large` (relative to the node label) |
+| `textStyle.color` | ❌ No | string | CSS color of the edge label |
+| `showLabel` | ❌ No | boolean | Whether to display the edge label (default `true`) |
+| `hidden` | ❌ No | boolean | Hide the edge entirely (default `false`) |
+
+**Composition & conflicts:** when several `edgeStyle` rules match the same edge, their set properties **compose** — a `lineStyle.color` from one rule and a `textStyle.size` from another combine. Two rules that set the *same* property to *different* values is an error: styles never silently override.
+
+**Examples:**
+
+```yaml
+# Dashed blue 'parent' edges
+- edgeStyle:
+    field: parent
+    lineStyle: { color: blue, pattern: dashed }
+
+# Thicker red edges from Document sources, with small grey labels
+- edgeStyle:
+    field: references
+    selector: Document
+    lineStyle: { color: red, weight: 2 }
+    textStyle: { size: small, color: '#666' }
+
+# Yellow highlight glow under black edges
+- edgeStyle:
+    field: critical_path
+    lineStyle: { color: black, highlight: "#ffeb3b" }
+```
+
+**Migrating from `edgeColor`:** `edgeColor` (below) is the legacy flat form and still works; it maps onto `edgeStyle` field-for-field:
+
+| `edgeColor` | `edgeStyle` |
+|---|---|
+| `value` | `lineStyle.color` |
+| `style` | `lineStyle.pattern` |
+| `weight` | `lineStyle.weight` |
+| `highlight` | `lineStyle.highlight` |
+| `showLabel` / `hidden` | `showLabel` / `hidden` |
+
+---
+
+### Edge Color Directive (edgeColor) — *legacy*
+
+> **Deprecated:** prefer [`edgeStyle`](#edge-style-directive-edgestyle) above. `edgeColor` still works and will desugar onto `edgeStyle` with a deprecation warning.
 
 Customizes the appearance of edges for a specific field/relation.
 
@@ -690,28 +848,36 @@ Hides atoms matching a selector from the visualization.
 
 ### Inferred Edge Directive
 
-Creates visual edges based on a selector expression (edges that don't exist in the data).
+Creates visual edges based on a selector expression (edges that don't exist in the data). The structural `name` + `selector` say *which* edge to draw; its appearance uses the shared `lineStyle` / `textStyle` blocks (the same vocabulary as `edgeStyle`).
 
 ```yaml
 - inferredEdge:
-    name: <edge-label>           # Required: Label for the inferred edge
-    selector: <binary-selector>  # Required: Selector returning pairs to connect
-    color: <color>               # Optional: Edge color
-    style: <line-style>          # Optional: Line style
-    weight: <number>             # Optional: Line thickness
-    highlight: <color>           # Optional: Highlight color (underlay)
+    name: <edge-label>           # Required: label for the inferred edge
+    selector: <binary-selector>  # Required: selector returning pairs to connect
+    lineStyle:                   # Optional: the drawn line
+      color: <color>
+      pattern: <solid|dashed|dotted>
+      weight: <number>
+      highlight: <color>
+    textStyle:                   # Optional: the edge label
+      size: <small|normal|large>
+      color: <color>
 ```
 
 **Fields:**
 
-| Field | Required | Type | Default | Description |
-|-------|----------|------|---------|-------------|
-| `name` | ✅ Yes | string | - | Label displayed on the edge |
-| `selector` | ✅ Yes | string | - | Binary selector returning (source, target) pairs |
-| `color` | ❌ No | string | `#000000` | CSS color value |
-| `style` | ❌ No | string | `solid` | `solid`, `dashed`, or `dotted` |
-| `weight` | ❌ No | number | - | Line thickness in pixels |
-| `highlight` | ❌ No | string | - | CSS color drawn as a wider, translucent underlay beneath the edge. Omit for no highlight. |
+| Field | Required | Type | Description |
+|-------|----------|------|-------------|
+| `name` | ✅ Yes | string | Label displayed on the edge |
+| `selector` | ✅ Yes | string | Binary selector returning (source, target) pairs |
+| `lineStyle.color` | ❌ No | string | Line color (default `#000000`) |
+| `lineStyle.pattern` | ❌ No | enum | `solid`, `dashed`, or `dotted` |
+| `lineStyle.weight` | ❌ No | number | Line thickness in pixels |
+| `lineStyle.highlight` | ❌ No | string | CSS color drawn as a wider, translucent underlay beneath the line |
+| `textStyle.size` | ❌ No | enum | `small`, `normal`, or `large` |
+| `textStyle.color` | ❌ No | string | Edge-label color |
+
+> **Legacy:** the flat inline `color` / `style` / `weight` / `highlight` keys still parse (`style`→`pattern`) but are deprecated — use the `lineStyle` block. Mixing forms emits a warning.
 
 **Examples:**
 

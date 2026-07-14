@@ -33,7 +33,8 @@ export type FieldKind =
   | 'number'
   | 'color'
   | 'text'
-  | 'boolean';
+  | 'boolean'
+  | 'group'; // a nested block (lineStyle / textStyle / …); renders its `children` recursively
 
 export interface FieldSpec {
   /** params key */
@@ -51,6 +52,8 @@ export interface FieldSpec {
   help?: string;
   /** for 'selector' fields */
   selectorArity?: 'unary' | 'binary';
+  /** for 'group' fields: the nested block's child fields (rendered recursively). */
+  children?: readonly FieldSpec[];
 }
 
 // ---- diagnostics ----

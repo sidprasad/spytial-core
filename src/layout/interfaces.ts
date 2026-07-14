@@ -2,6 +2,7 @@ import { Group } from "webcola";
 import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint, GroupByField, GroupBySelector, RelativeDirection } from "./layoutspec";
 import { EdgeStyle } from "./edge-style";
 import { AttrTextSize } from "./text-extent";
+import type { TextStyle } from "./style/text-style";
 
 export interface LayoutGroup {
     // The name of the group
@@ -15,6 +16,10 @@ export interface LayoutGroup {
 
     // Show label
     showLabel : boolean;
+
+    // Styling for the group's own label, from the group directive's `textStyle`.
+    // Only `color` is consumed today; `size` is deferred (group labels auto-fit).
+    labelTextStyle?: TextStyle;
 
     // The source constraint that created this group (GroupByField or GroupBySelector)
     sourceConstraint?: GroupByField | GroupBySelector;
@@ -50,6 +55,11 @@ export enum ColorSource {
 export interface LayoutNode {
     id: string;
     label: string;
+    /**
+     * The node's border/outline color. Historically the node's single "color"
+     * (from `atomColor`/`color`), which the renderer draws as the rectangle
+     * stroke; `atomStyle.borderStyle.color` now feeds it too.
+     */
     color : string;
     /**
      * Provenance of `color` (see {@link ColorSource}). Lets the renderer retune
@@ -57,6 +67,24 @@ export interface LayoutNode {
      * colors untouched. Absent is treated as {@link ColorSource.DefaultPalette}.
      */
     colorSource?: ColorSource;
+    /**
+     * Interior fill of the node's rectangle, from `atomStyle.fillStyle.color`.
+     * Absent = the renderer's default (a Tufte canvas-matched fill, so only the
+     * stroke + label mark the node). A real fill is opt-in.
+     */
+    fillColor?: string;
+    /**
+     * Border/stroke width in px, from `atomStyle.borderStyle.width`. Absent = the
+     * renderer's default node stroke width.
+     */
+    borderWidth?: number;
+    /**
+     * Styling for the node's main (name) label, from `atomStyle.textStyle`.
+     * Absent = default. NOTE: only `color` is consumed today; `size` is deferred
+     * because the box sizer (estimateLabelBox) fixes the main label at
+     * MAIN_LABEL_FONT_SIZE — changing it must also re-flow the box.
+     */
+    textStyle?: TextStyle;
     groups?: string[];
     attributes?: Record<string, string[]>;
     /**
@@ -96,6 +124,8 @@ export interface LayoutEdge {
     hidden?: boolean;
     /** Highlight color rendered as a wider underlay beneath the edge. Undefined = no highlight. */
     highlight?: string;
+    /** Optional label styling (size / color), applied to the edge's label text. */
+    textStyle?: TextStyle;
     /**
      * For group edges (_g_ prefix), the name of the group this edge was created for.
      * Matches `group.id` in the WebCola translator so routing can look up the group

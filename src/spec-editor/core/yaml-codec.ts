@@ -360,9 +360,29 @@ export function parseYamlToState(yamlStr: string): SpecDocumentState {
 
 // ---- emission ------------------------------------------------------------
 
-/** Sanitize params: drop undefined values so emission stays clean. */
+/** A plain object (a nested block) — not an array or primitive. */
+function isPlainRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+/**
+ * Sanitize params for emission: drop `undefined`, and recursively drop empty
+ * nested blocks. Recursion keeps nested style blocks (lineStyle / textStyle / …)
+ * sparse — an added-but-empty block, or one whose only leaves were cleared, is
+ * omitted rather than emitted as `{}` or `key: null`.
+ */
 function sanitizeParams(params: Record<string, unknown>): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(params).filter(([, value]) => value !== undefined));
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined) continue;
+    if (isPlainRecord(value)) {
+      const nested = sanitizeParams(value);
+      if (Object.keys(nested).length > 0) out[key] = nested;
+    } else {
+      out[key] = value;
+    }
+  }
+  return out;
 }
 
 /** Build the YAML node for a single item (used for both serialize and diffing). */

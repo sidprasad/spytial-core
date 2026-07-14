@@ -4,40 +4,50 @@ Directives control the **visual presentation** of your graph — colors, icons, 
 
 ---
 
-## Atom Color
+## Atom Styling
 
-Sets the background color of nodes matching a selector.
+Styles the atoms (nodes) matching a selector. An atom has an interior **fill**, an outline **border**, and a **label**, styled with the shared `fillStyle`, `borderStyle`, and `textStyle` blocks — the same block vocabulary `edgeStyle` uses for lines and labels. Use `atomStyle` in the directives section.
 
 ```yaml
-- atomColor:
-    selector: <unary-selector>   # Required
-    value: <color>               # Required
+- atomStyle:
+    selector: <unary-selector>                        # Optional (absent = all atoms)
+    fillStyle:   { color: <color> }                   # the interior fill (opt-in)
+    borderStyle: { color: <color>, width: <number> }  # the outline
+    textStyle:   { size: <small|normal|large>, color: <color> }  # the atom's label
 ```
 
 | Field | Required | Type | Description |
 |-------|----------|------|-------------|
-| `selector` | Yes | string | Unary selector for target atoms |
-| `value` | Yes | string | Any CSS color value |
+| `selector` | No | string | Unary selector for target atoms; absent styles every atom |
+| `fillStyle.color` | No | string | Interior fill color (opt-in; the default is unfilled) |
+| `borderStyle.color` | No | string | Outline color |
+| `borderStyle.width` | No | number | Outline thickness in px (must be > 0) |
+| `textStyle.color` | No | string | Label color |
+| `textStyle.size` | No | enum | `small`/`normal`/`large` — *reserved; not yet applied to the node's own label* |
 
 You can use hex codes, named colors, `rgb()`, `hsl()`, etc.
+
+When several `atomStyle` rules match one atom their set properties **compose**; because a supertype selector already returns subtype atoms, a rule on a supertype and a rule on a subtype both apply (inheritance up the type hierarchy). Setting the *same* property two different ways is an error — no silent override.
+
+> **`atomColor` is the legacy form** and still works: `value`→`borderStyle.color`, so a node keeps its outline exactly as before. It desugars to `atomStyle` with a deprecation warning. Add a `fillStyle` to give a node a real interior fill.
 
 ### Examples
 
 ```yaml
-- atomColor:
+# Filled, thick-bordered Person nodes with dark-red labels
+- atomStyle:
     selector: Person
-    value: "#4a90d9"
+    fillStyle:   { color: "#e0f2ff" }
+    borderStyle: { color: "#0369a1", width: 4 }
+    textStyle:   { color: "#b91c1c" }
 
-- atomColor:
+# Recolor just the outline (border-preserving, like atomColor)
+- atomStyle:
     selector: Error
-    value: red
-
-- atomColor:
-    selector: Warning
-    value: "rgb(255, 165, 0)"
+    borderStyle: { color: red }
 ```
 
-<div class="spytial-diagram" data-height="320" data-caption="Live: each type gets its own atomColor — Person blue, Error red, Warning orange.">
+<div class="spytial-diagram" data-height="320" data-caption="Live: each type gets its own atomStyle — Person filled blue, Error red-bordered, Warning amber fill.">
 <template class="data">
 {
   "atoms": [
@@ -59,9 +69,9 @@ You can use hex codes, named colors, `rgb()`, `hsl()`, etc.
 </template>
 <template class="spec">
 directives:
-  - atomColor: { selector: Person,  value: "#4a90d9" }
-  - atomColor: { selector: Error,   value: "red" }
-  - atomColor: { selector: Warning, value: "rgb(255, 165, 0)" }
+  - atomStyle: { selector: Person,  fillStyle: { color: "#e0f2ff" }, borderStyle: { color: "#4a90d9", width: 3 } }
+  - atomStyle: { selector: Error,   borderStyle: { color: "red", width: 3 } }
+  - atomStyle: { selector: Warning, fillStyle: { color: "rgb(255, 236, 179)" } }
 </template>
 </div>
 
@@ -69,16 +79,21 @@ directives:
 
 ## Edge Styling
 
-Customizes the appearance of edges for a specific field (relation). Use `edgeColor` in the directives section.
+Customizes the appearance of edges for a specific field (relation). Use `edgeStyle` in the directives section. An edge has a **line** and a **label**, styled with the shared `lineStyle` and `textStyle` blocks — the same blocks `inferredEdge` and group connectors reuse.
 
 ```yaml
-- edgeColor:
+- edgeStyle:
     field: <field-name>          # Required
-    value: <color>               # Required
-    selector: <unary-selector>   # Optional
-    filter: <n-ary-selector>     # Optional
-    style: <line-style>          # Optional (default: solid)
-    weight: <number>             # Optional
+    selector: <unary-selector>   # Optional: match edges from these source atoms
+    filter: <n-ary-selector>     # Optional: match specific tuples
+    lineStyle:                   # Optional: the drawn line
+      color: <color>
+      pattern: <solid|dashed|dotted>
+      weight: <number>
+      highlight: <color>
+    textStyle:                   # Optional: the edge label
+      size: <small|normal|large>
+      color: <color>
     showLabel: <boolean>         # Optional (default: true)
     hidden: <boolean>            # Optional (default: false)
 ```
@@ -86,13 +101,20 @@ Customizes the appearance of edges for a specific field (relation). Use `edgeCol
 | Field | Required | Type | Default | Description |
 |-------|----------|------|---------|-------------|
 | `field` | Yes | string | — | Name of the relation |
-| `value` | Yes | string | — | CSS color value |
-| `selector` | No | string | — | Filter by source atom type |
-| `filter` | No | string | — | Filter specific tuples |
-| `style` | No | string | `solid` | `solid`, `dashed`, or `dotted` |
-| `weight` | No | number | — | Line thickness in pixels |
+| `selector` | No | string | — | Match by source atom |
+| `filter` | No | string | — | Match specific tuples |
+| `lineStyle.color` | No | string | — | Line color |
+| `lineStyle.pattern` | No | enum | `solid` | `solid`, `dashed`, or `dotted` |
+| `lineStyle.weight` | No | number | — | Line thickness in pixels (> 0) |
+| `lineStyle.highlight` | No | string | — | Translucent underlay color |
+| `textStyle.size` | No | enum | `normal` | `small`, `normal`, or `large` |
+| `textStyle.color` | No | string | — | Edge-label color |
 | `showLabel` | No | boolean | `true` | Whether to display the edge label |
 | `hidden` | No | boolean | `false` | Hide the edge entirely |
+
+When several `edgeStyle` rules match one edge their set properties **compose**; setting the *same* property two different ways is an error — no silent override.
+
+> **`edgeColor` is the legacy form** and still works: `value`→`lineStyle.color`, `style`→`lineStyle.pattern`, `weight`→`lineStyle.weight`, `highlight`→`lineStyle.highlight`. It will desugar to `edgeStyle` with a deprecation warning. The scoping and example snippets below use `edgeColor`; swap the flat keys for the blocks above to get the `edgeStyle` form.
 
 ### Scoping with `selector` and `filter`
 

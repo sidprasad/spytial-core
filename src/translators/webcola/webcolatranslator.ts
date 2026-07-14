@@ -1,6 +1,7 @@
 import { Node, Group, Link, Rectangle } from 'webcola';
 import { InstanceLayout, LayoutNode, LayoutEdge, LayoutConstraint, LayoutGroup, LeftConstraint, TopConstraint, AlignmentConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, isBoundingBoxConstraint, isGroupBoundaryConstraint, ColorSource } from '../../layout/interfaces';
 import { EdgeStyle } from '../../layout/edge-style';
+import type { TextStyle } from '../../layout/style/text-style';
 import type { AttrTextSize } from '../../layout/text-extent';
 import { LayoutInstance } from '../../layout/layoutinstance';
 import type { IDataInstance } from '../../data-instance/interfaces';
@@ -51,6 +52,12 @@ type NodeWithMetadata = Node & {
   color: string,
   /** Provenance of `color` (default palette vs. user directive). See {@link ColorSource}. */
   colorSource?: ColorSource,
+  /** Interior fill from `atomStyle.fillStyle.color`; absent = renderer's canvas-matched default. */
+  fillColor?: string,
+  /** Border/stroke width in px from `atomStyle.borderStyle.width`; absent = renderer default. */
+  borderWidth?: number,
+  /** Main-label styling from `atomStyle.textStyle` (only `color` consumed today; see LayoutNode). */
+  textStyle?: TextStyle,
   icon: string,
   mostSpecificType: string,
   showLabels: boolean,
@@ -72,6 +79,8 @@ type EdgeWithMetadata = Link<NodeWithMetadata> & {
   /** Highlight color rendered as a wider underlay beneath the edge. Undefined = no highlight. */
   highlight?: string,
   showLabel?: boolean, // Whether to show the edge label (default: true)
+  /** Optional label styling (size / color) for the edge's label text. */
+  textStyle?: TextStyle,
   bidirectional?: boolean, // Flag to indicate if this edge represents a bidirectional relationship
   /**
    * For group edges (id starts with `_g_`), the name of the group this edge
@@ -688,6 +697,9 @@ export class WebColaLayout {
       id: node.id,
       color: node.color,
       colorSource: node.colorSource ?? ColorSource.DefaultPalette,
+      fillColor: node.fillColor,
+      borderWidth: node.borderWidth,
+      textStyle: node.textStyle,
       attributes: node.attributes || {},
       attributeSizes: node.attributeSizes || {},
       labels: node.labels,
@@ -727,6 +739,7 @@ export class WebColaLayout {
       weight: edge.weight,
       highlight: edge.highlight,
       showLabel: edge.showLabel,
+      textStyle: edge.textStyle,
       groupId: edge.groupId,
       keyNodeId: edge.keyNodeId,
     }
@@ -1047,13 +1060,17 @@ export class WebColaLayout {
 
       let groupsAndSubgroups = this.determineGroupsAndSubgroups(groupsAsRecord);
 
-      groupsAndSubgroups.forEach((group) => {
+      // `group` gets dynamic layout fields (keyNode/id/showLabel/labelTextStyle)
+      // stamped onto it below, so it's typed loosely here.
+      groupsAndSubgroups.forEach((group: any) => {
         let grp: LayoutGroup = groups.find(g => g.name === group.name);
         let keyNode = grp.keyNodeId;
         let keyIndex = this.getNodeIndex(keyNode);
         group['keyNode'] = keyIndex;
         group['id'] = grp.name;
         group['showLabel'] = grp.showLabel;
+        // Group's own label styling (only color consumed today; size auto-fits).
+        group['labelTextStyle'] = grp.labelTextStyle;
       });
 
       return groupsAndSubgroups;

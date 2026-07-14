@@ -21,6 +21,11 @@ import {
     EdgeColorDirective, InferredEdgeDirective, TagDirective,
     AtomHidingDirective
 } from './layoutspec';
+import { resolveEdgeStyle } from './style/edge-style-spec';
+import type { EdgeStyleSpec, LineStyle } from './style/edge-style-spec';
+import { resolveAtomStyle } from './style/atom-style-spec';
+import type { AtomStyleRule, AtomStyleSpec } from './style/atom-style-spec';
+import type { TextStyle } from './style/text-style';
 
 
 import IEvaluator from '../evaluators/interfaces';
@@ -545,10 +550,10 @@ export class LayoutInstance {
             }
         }
         
-        // Also check EdgeStyle directives with hidden: true
+        // Also check edgeStyle rules (including desugared edgeColor) with hidden: true
         if (sourceAtom && targetAtom) {
-            const edgeDirective = this.findEdgeDirective(fieldId, sourceAtom, targetAtom);
-            if (edgeDirective?.hidden === true) {
+            const styled = this.resolveEdgeStyleForEdge(fieldId, sourceAtom, targetAtom);
+            if (styled.hidden === true) {
                 return true;
             }
         }
@@ -664,6 +669,7 @@ export class LayoutInstance {
                             nodeIds: [addToGroup],
                             keyNodeId: groupOn,
                             showLabel: !gc.negated,
+                            labelTextStyle: gc.labelTextStyle,
                             sourceConstraint: gc,
                             negated: gc.negated
                         };
@@ -707,6 +713,7 @@ export class LayoutInstance {
                     nodeIds: selectedElements,
                     keyNodeId: keyNode, //// TODO: I think introducing this random keynode could be a problem. Not sure why or when though.
                     showLabel: !gc.negated,
+                    labelTextStyle: gc.labelTextStyle,
                     sourceConstraint: gc,
                     negated: gc.negated
                 };
@@ -1194,7 +1201,10 @@ export class LayoutInstance {
 
         // Recompute visual maps after graph mutations (inferred edges / node removal)
         let nodeIconMap = this.getNodeIconMap(g);
-        let { colorMap: nodeColorMap, explicitlyColored } = this.getNodeColorMap(g, ai);
+        // Resolve atomStyle once: it feeds both the border color (via the color
+        // map) and the node's fill / border-width / label styling below.
+        let atomStyleMap = this.getAtomStyleMap(g, ai);
+        let { colorMap: nodeColorMap, explicitlyColored } = this.getNodeColorMap(g, ai, atomStyleMap);
 
         // Compute the display strings once — single source of truth for "what's
         // drawn inside the box" so the box sizer (getNodeSizeMap) and the
@@ -1244,12 +1254,19 @@ export class LayoutInstance {
                 nodeLabels = atom.labels;
             }
 
+            // Fill / border-width / label styling from the resolved atomStyle
+            // (border *color* already flowed through nodeColorMap → color above).
+            const atomStyle = atomStyleMap[nodeId];
+
             return {
                 id: nodeId,
                 label: label,
                 name: label,
                 color: color,
                 colorSource: colorSource,
+                fillColor: atomStyle?.fillStyle?.color,
+                borderWidth: atomStyle?.borderStyle?.width,
+                textStyle: atomStyle?.textStyle,
                 groups: nodeGroups,
                 attributes: nodeAttributes,
                 attributeSizes: nodeAttributeSizes,
@@ -2409,8 +2426,19 @@ export class LayoutInstance {
         // of which way round the underlying graphlib edge was created (the key is
         // the source for 'togroup', the target for 'fromgroup').
         const keyNodeByGroupName = new Map<string, string>();
+        // Map each group's name → the connector styling authored on its
+        // `addEdge` block (the connector is an edge, so it carries a lineStyle +
+        // textStyle). Sourced from the GroupBySelector that created the group.
+        const connectorStyleByGroupName = new Map<string, { lineStyle?: LineStyle, textStyle?: TextStyle }>();
         for (const grp of groups) {
             if (grp.keyNodeId != null) keyNodeByGroupName.set(grp.name, grp.keyNodeId);
+            const src = grp.sourceConstraint;
+            if (src instanceof GroupBySelector && (src.connectorLineStyle || src.connectorTextStyle)) {
+                connectorStyleByGroupName.set(grp.name, {
+                    lineStyle: src.connectorLineStyle,
+                    textStyle: src.connectorTextStyle,
+                });
+            }
         }
 
         return g.edges().map((edge) => {
@@ -2433,11 +2461,22 @@ export class LayoutInstance {
             const dirSource = groupKey !== undefined ? groupKey : edge.v;
             const dirTarget = groupKey !== undefined ? (groupKey === edge.v ? edge.w : edge.v) : edge.w;
 
-            let color = this.getEdgeColor(relName, dirSource, dirTarget, edgeId);
-            let style = this.getEdgeStyle(relName, dirSource, dirTarget, edgeId);
-            let weight = this.getEdgeWeight(relName, dirSource, dirTarget, edgeId);
-            let showLabel = this.getEdgeShowLabel(relName, dirSource, dirTarget, edgeId);
-            let highlight = this.getEdgeHighlight(relName, dirSource, dirTarget, edgeId);
+            // A group connector edge (`_g_`) is styled by its group's `addEdge`
+            // block; that authored style wins over any incidental edgeStyle match.
+            const connStyle = isGroupEdge ? connectorStyleByGroupName.get(edgeLabel) : undefined;
+            const connLine = connStyle?.lineStyle;
+
+            // edgeStyle (resolver-based) takes precedence per-property; whatever it
+            // leaves unset falls back to the legacy inferredEdge/edgeColor path.
+            const styled = this.resolveEdgeStyleForEdge(relName, dirSource, dirTarget);
+            let color = connLine?.color ?? styled.lineStyle?.color ?? this.getEdgeColor(relName, dirSource, dirTarget, edgeId);
+            let style = connLine?.pattern ?? styled.lineStyle?.pattern ?? this.getEdgeStyle(relName, dirSource, dirTarget, edgeId);
+            let weight = connLine?.weight ?? styled.lineStyle?.weight ?? this.getEdgeWeight(relName, dirSource, dirTarget, edgeId);
+            let showLabel = styled.showLabel ?? this.getEdgeShowLabel(relName, dirSource, dirTarget, edgeId);
+            let highlight = connLine?.highlight ?? styled.lineStyle?.highlight ?? this.getEdgeHighlight(relName, dirSource, dirTarget, edgeId);
+            // Edge-label styling: a group connector's own textStyle wins, then an
+            // inferred edge's, then the resolved edgeStyle (edgeColor has none).
+            let textStyle = connStyle?.textStyle ?? this.getInferredEdgeDirective(edgeId)?.textStyle ?? styled.textStyle;
 
             // Skip edges with missing source or target nodes
             if (!source || !target || !edgeId) {
@@ -2455,6 +2494,7 @@ export class LayoutInstance {
                 weight: weight,
                 showLabel: showLabel,
                 highlight: highlight,
+                textStyle: textStyle,
                 // For group edges the graphlib edge label IS the group name (see constructGroupEdgeID).
                 // Carry it forward so the renderer can look up the group directly by ID
                 // without re-parsing the edge ID string or matching fragile leaf indices.
@@ -2640,50 +2680,91 @@ export class LayoutInstance {
 
 
     /**
-     * Builds the node→color map and records which nodes were colored by an
-     * explicit user `color` directive (vs. the default type palette / black
-     * fallback). The renderer uses `explicitlyColored` to decide which colors
-     * may be retuned for a themed canvas and which must be preserved as chosen.
+     * Resolve every atom's `atomStyle` into one concrete style. Each rule's
+     * selector is evaluated to the atoms it matches (absent selector = all
+     * atoms), inverting to a per-atom list of contributing rules; each atom's
+     * rules are then folded through the shared resolver. Because a supertype
+     * selector already returns subtype atoms, gap-fill inheritance up the type
+     * ancestry and the no-silent-override collision both fall out of that fold —
+     * a genuine leaf disagreement throws {@link StyleCollisionError} (the 3.0
+     * contract, surfaced like the old color conflict). Only atoms with at least
+     * one matching rule appear in the map. Legacy `atomColor` desugars into these
+     * rules upstream (border-preserving: value→borderStyle.color).
      */
-    private getNodeColorMap(g: Graph, a: IDataInstance): { colorMap: Record<string, string>, explicitlyColored: Set<string> } {
+    private getAtomStyleMap(g: Graph, a: IDataInstance): Record<string, AtomStyleSpec> {
+        const rules = this._layoutSpec.directives.atomStyles;
+        const styleMap: Record<string, AtomStyleSpec> = {};
+        if (rules.length === 0) return styleMap;
+
+        const allNodeIds = [...g.nodes()];
+        const allNodeIdSet = new Set(allNodeIds);
+        const rulesByNode: Record<string, AtomStyleRule[]> = {};
+
+        rules.forEach((rule) => {
+            let matched: string[];
+            if (!rule.selector) {
+                matched = allNodeIds; // no selector → applies to every atom
+            } else {
+                try {
+                    const selectorRes = this.evaluator.evaluate(rule.selector, { instanceIndex: this.instanceNum });
+                    if (!this.checkSelectorArity(selectorRes, rule.selector, 'unary', 'atomStyle selector')) {
+                        return; // Skip — binary selector in unary position
+                    }
+                    matched = selectorRes.selectedAtoms();
+                } catch (error) {
+                    this.recordSelectorError(rule.selector, 'atomStyle selector', error);
+                    return; // Skip this rule
+                }
+            }
+            matched.forEach((nodeId) => {
+                // Selectors can name atoms that aren't graph nodes (e.g. hidden);
+                // only style atoms actually being laid out.
+                if (!allNodeIdSet.has(nodeId)) return;
+                if (!rulesByNode[nodeId]) rulesByNode[nodeId] = [];
+                rulesByNode[nodeId].push(rule);
+            });
+        });
+
+        for (const nodeId of allNodeIds) {
+            const nodeRules = rulesByNode[nodeId];
+            if (!nodeRules || nodeRules.length === 0) continue;
+            // Throws StyleCollisionError on a genuine leaf disagreement.
+            styleMap[nodeId] = resolveAtomStyle(nodeRules, `atom "${nodeId}"`);
+        }
+
+        return styleMap;
+    }
+
+    /**
+     * Builds the node→color map (the border/outline color) and records which
+     * nodes were colored by an explicit directive (vs. the default type palette /
+     * black fallback). The renderer uses `explicitlyColored` to decide which
+     * colors may be retuned for a themed canvas and which must be preserved.
+     *
+     * The border color comes from the resolved `atomStyle` (`borderStyle.color`)
+     * — which legacy `atomColor` desugars into — so this reads `atomStyleMap`
+     * rather than re-walking directives. Collision detection lives in the
+     * resolver (a leaf disagreement already threw in {@link getAtomStyleMap}).
+     */
+    private getNodeColorMap(g: Graph, a: IDataInstance, atomStyleMap: Record<string, AtomStyleSpec>): { colorMap: Record<string, string>, explicitlyColored: Set<string> } {
         let nodeColorMap: Record<string, string> = {};
         let explicitlyColored = new Set<string>();
 
         // Start by getting the default signature colors
         let sigColors = this.getSigColors(a);
 
-        // Apply color directives first
-        let colorDirectives = this._layoutSpec.directives.atomColors;
-        colorDirectives.forEach((colorDirective) => {
-            let selected: string[];
-            try {
-                const selectorRes = this.evaluator.evaluate(colorDirective.selector, { instanceIndex: this.instanceNum });
-                if (!this.checkSelectorArity(selectorRes, colorDirective.selector, 'unary', 'color selector')) {
-                    return; // Skip — binary selector in unary position
-                }
-                selected = selectorRes.selectedAtoms();
-            } catch (error) {
-                this.recordSelectorError(colorDirective.selector, 'color selector', error);
-                return; // Skip this color directive
-            }
-            let color = colorDirective.color;
+        let graphNodes = [...g.nodes()];
 
-            selected.forEach((nodeId) => {
-                if (nodeColorMap[nodeId]) {
-                    const existingColor = nodeColorMap[nodeId];
-                    if (existingColor !== color) {
-                        throw new Error(
-                            `Color Conflict: "${nodeId}" cannot have multiple colors: ${existingColor}, ${color}.`
-                        );
-                    }
-                }
-                nodeColorMap[nodeId] = color;
+        // A resolved borderStyle.color is the node's explicit outline color.
+        graphNodes.forEach((nodeId) => {
+            const borderColor = atomStyleMap[nodeId]?.borderStyle?.color;
+            if (borderColor) {
+                nodeColorMap[nodeId] = borderColor;
                 explicitlyColored.add(nodeId);
-            });
+            }
         });
 
         // Set default colors for nodes that do not have a color set
-        let graphNodes = [...g.nodes()];
         graphNodes.forEach((nodeId) => {
             if (!nodeColorMap[nodeId]) {
                 let mostSpecificType = this.getMostSpecificType(nodeId, a);
@@ -2817,6 +2898,67 @@ export class LayoutInstance {
 
         const inferredEdges = this._layoutSpec.directives.inferredEdges;
         return inferredEdges.find((directive) => edgeId.includes(`${inferredEdgePrefix}<:${directive.name}`));
+    }
+
+    /**
+     * Whether an edge directive (edgeColor or edgeStyle — anything keyed by
+     * field + optional selector/filter) applies to the edge (relName, source→target).
+     * Selector matches on the source atom; filter matches on the (source, target) tuple.
+     *
+     * `findEdgeDirective` below still inlines this same logic for edgeColor; that
+     * duplication goes away when edgeColor is shimmed onto edgeStyle.
+     */
+    private edgeDirectiveMatches(
+        directive: { field: string; selector?: string; filter?: string },
+        relName: string,
+        sourceAtom: string,
+        targetAtom?: string,
+    ): boolean {
+        if (directive.field !== relName) {
+            return false;
+        }
+        if (directive.selector) {
+            try {
+                const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
+                if (!selectorResult.selectedAtoms().includes(sourceAtom)) {
+                    return false;
+                }
+            } catch (error) {
+                this.recordSelectorError(directive.selector, 'edge selector', error);
+                return false;
+            }
+        }
+        if (directive.filter && targetAtom) {
+            try {
+                const filterResult = this.evaluator.evaluate(directive.filter, { instanceIndex: this.instanceNum });
+                const matched = filterResult.selectedTwoples().some(
+                    tuple => tuple[0] === sourceAtom && tuple[1] === targetAtom
+                );
+                if (!matched) {
+                    return false;
+                }
+            } catch (error) {
+                this.recordSelectorError(directive.filter, 'edge filter', error);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Resolve the edgeStyle directives matching an edge into one concrete style.
+     * Overlapping edgeStyle rules compose leaf-wise; a genuine disagreement throws
+     * StyleCollisionError (no silent override). Empty when nothing matches, so callers
+     * fall back to the legacy inferredEdge/edgeColor path.
+     */
+    private resolveEdgeStyleForEdge(relName: string, sourceAtom: string, targetAtom: string): EdgeStyleSpec {
+        const rules = this._layoutSpec.directives.edgeStyles.filter(
+            rule => this.edgeDirectiveMatches(rule, relName, sourceAtom, targetAtom)
+        );
+        if (rules.length === 0) {
+            return {};
+        }
+        return resolveEdgeStyle(rules, `edge ${relName} (${sourceAtom} → ${targetAtom})`);
     }
 
     private findEdgeDirective(relName: string, sourceAtom: string, targetAtom?: string): EdgeColorDirective | undefined {

@@ -1420,3 +1420,47 @@
     transition: none !important;
   }
 }
+
+/* ---- nested style blocks (lineStyle / textStyle / …) ---- */
+.spytial-ed-group {
+  border: 1px solid var(--spytial-ed-border, #d0d7de);
+  border-radius: 6px;
+  padding: 0.25rem 0.6rem 0.4rem;
+  margin: 0.25rem 0;
+  min-inline-size: 0;
+}
+.spytial-ed-group-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding-inline: 0.3rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--spytial-ed-muted, #656d76);
+}
+.spytial-ed-group-remove {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0 0.15rem;
+  color: var(--spytial-ed-muted, #656d76);
+}
+.spytial-ed-group-remove:hover {
+  color: var(--spytial-ed-danger, #cf222e);
+}
+.spytial-ed-group-add {
+  align-self: flex-start;
+  border: 1px dashed var(--spytial-ed-border, #d0d7de);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  padding: 0.3rem 0.6rem;
+  margin: 0.15rem 0;
+  font-size: 0.78rem;
+  color: var(--spytial-ed-accent, #0969da);
+}
+.spytial-ed-group-add:hover {
+  background: var(--spytial-ed-hover, #f6f8fa);
+}

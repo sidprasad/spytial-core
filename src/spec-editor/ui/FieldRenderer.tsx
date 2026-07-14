@@ -62,6 +62,11 @@ function asStringArray(value: unknown): string[] {
   return [String(value)];
 }
 
+/** Whether a value is a plain object (a nested block). */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 const fieldDiagnostics = (
   diagnostics: readonly Diagnostic[] | undefined,
   key: string
@@ -111,6 +116,22 @@ export const FieldRenderer: React.FC<FieldRendererProps> = ({
   return (
     <div className={`spytial-ed-fields${className ? ` ${className}` : ''}`}>
       {fields.map((field) => {
+        // Nested blocks render as their own sub-fieldset (or an "add" chip),
+        // outside the standard label+control row.
+        if (field.kind === 'group') {
+          return (
+            <GroupField
+              key={field.key}
+              field={field}
+              value={values[field.key]}
+              onChange={onChange}
+              options={options}
+              selectorProps={selectorProps}
+              diagnostics={diagnostics}
+              disabled={disabled}
+            />
+          );
+        }
         const fieldId = `${groupId}-${field.key}`;
         const labelId = `${fieldId}-label`;
         const diagId = `${fieldId}-diag`;
@@ -168,6 +189,88 @@ export const FieldRenderer: React.FC<FieldRendererProps> = ({
     </div>
   );
 };
+
+/**
+ * A `group` field — a nested style block (lineStyle / textStyle / …). When the
+ * block is absent and optional, renders a progressive-disclosure "+ Label" chip;
+ * when present, a labeled sub-fieldset of the block's children (recursing through
+ * {@link FieldRenderer}) with a remove control. Children are kept sparse: a
+ * cleared leaf is dropped, and an emptied block is removed on emit by the codec.
+ */
+function GroupField({
+  field,
+  value,
+  onChange,
+  options,
+  selectorProps,
+  diagnostics,
+  disabled,
+}: {
+  field: FieldSpec;
+  value: unknown;
+  onChange: (key: string, value: unknown) => void;
+  options?: FieldRendererOptions;
+  selectorProps?: (field: FieldSpec) => SelectorFieldExtras | undefined;
+  diagnostics?: readonly Diagnostic[];
+  disabled: boolean;
+}): React.ReactElement {
+  const groupValue = isRecord(value) ? value : undefined;
+  const removable = !field.required;
+
+  if (groupValue === undefined) {
+    return (
+      <button
+        type="button"
+        className="spytial-ed-group-add"
+        onClick={() => onChange(field.key, {})}
+        disabled={disabled}
+        title={field.help}
+      >
+        + {field.label}
+      </button>
+    );
+  }
+
+  const setChild = (childKey: string, childVal: unknown) => {
+    const next: Record<string, unknown> = { ...groupValue };
+    const empty =
+      childVal === undefined ||
+      childVal === '' ||
+      (Array.isArray(childVal) && childVal.length === 0);
+    if (empty) delete next[childKey];
+    else next[childKey] = childVal;
+    onChange(field.key, next);
+  };
+
+  return (
+    <fieldset className="spytial-ed-group">
+      <legend className="spytial-ed-group-legend">
+        <span>{field.label}</span>
+        {removable ? (
+          <button
+            type="button"
+            className="spytial-ed-group-remove"
+            onClick={() => onChange(field.key, undefined)}
+            disabled={disabled}
+            aria-label={`Remove ${field.label}`}
+            title={`Remove ${field.label}`}
+          >
+            ×
+          </button>
+        ) : null}
+      </legend>
+      <FieldRenderer
+        fields={field.children ?? []}
+        values={groupValue}
+        onChange={setChild}
+        options={options}
+        selectorProps={selectorProps}
+        diagnostics={diagnostics}
+        disabled={disabled}
+      />
+    </fieldset>
+  );
+}
 
 interface ControlCtx {
   fieldId: string;

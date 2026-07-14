@@ -15,7 +15,7 @@
  *     - orientation: { selector, directions: [...], hold? }
  *     - cyclic:      { selector, direction, hold? }
  *     - align:       { selector, direction, hold? }
- *     - group:       { selector, name, addEdge?: none|togroup|fromgroup, hold? }  (groupselector)
+ *     - group:       { selector, name, addEdge?: none|togroup|fromgroup | {points,lineStyle,textStyle}, textStyle?:{color}, hold? }  (groupselector)
  *     - group:       { field, groupOn, addToGroup, selector?, hold? }  (groupfield, deprecated)
  *     - size:        { selector, width, height }
  *     - hideAtom:    { selector }
@@ -24,9 +24,11 @@
  *     - attribute:    { field, selector?, filter? }
  *     - hideField:    { field, selector?, filter? }
  *     - icon:         { path, selector?, showLabels? }
- *     - atomColor:    { value, selector? }
- *     - edgeColor:    { value, field, selector?, filter?, style?, weight?, showLabel?, hidden?, highlight? }
- *     - inferredEdge: { name, selector?, color?, style?, weight?, highlight? }
+ *     - atomStyle:    { selector?, fillStyle?:{color}, borderStyle?:{color,width}, textStyle?:{size,color} }
+ *     - atomColor:    { value, selector? }  (deprecated → atomStyle)
+ *     - edgeStyle:    { field, selector?, filter?, lineStyle?:{color,pattern,weight,highlight}, textStyle?:{size,color}, showLabel?, hidden? }
+ *     - edgeColor:    { value, field, selector?, filter?, style?, weight?, showLabel?, hidden?, highlight? }  (deprecated → edgeStyle)
+ *     - inferredEdge: { name, selector?, lineStyle?:{color,pattern,weight,highlight}, textStyle?:{size,color} }
  *     - tag:          { toTag, name, value }
  *
  * This module is framework-agnostic — no React.
@@ -112,9 +114,12 @@ export const GROUP_EDGE_DIRECTIONS = ['none', 'togroup', 'fromgroup'] as const;
 
 /**
  * Normalise an `addEdge` value into a GROUP_EDGE_DIRECTIONS member. Tolerates
- * the legacy boolean flag (`true` → 'togroup') so older specs keep working.
+ * the legacy boolean flag (`true` → 'togroup') and the block form
+ * (`{ points, lineStyle, textStyle }` → its `points`), so a hand-authored
+ * styled connector keeps its direction when round-tripped through the Builder.
  */
 function normGroupEdge(value: unknown): (typeof GROUP_EDGE_DIRECTIONS)[number] {
+  if (value && typeof value === 'object') value = (value as Record<string, unknown>).points;
   if (value === true || value === 'togroup') return 'togroup';
   if (value === 'fromgroup') return 'fromgroup';
   return 'none';
@@ -270,7 +275,14 @@ const groupselector: ItemDefinition = {
       label: 'Add edge',
       options: GROUP_EDGE_DIRECTIONS,
       default: 'none',
-      help: 'Draw an edge between the group key and the group: "togroup" points key → group, "fromgroup" points group → key, "none" draws nothing.',
+      help: 'Draw an edge between the group key and the group: "togroup" points key → group, "fromgroup" points group → key, "none" draws nothing. (To style that connector, author addEdge as a block — { points, lineStyle, textStyle } — in YAML.)',
+    },
+    {
+      key: 'textStyle',
+      kind: 'group',
+      label: 'Label text style',
+      // Only `color` today — group labels auto-fit their box, so `size` is reserved.
+      children: [{ key: 'color', kind: 'color', label: 'Color' }],
     },
   ],
   summary(params) {
@@ -287,6 +299,14 @@ const groupselector: ItemDefinition = {
     const edge = normGroupEdge(params.addEdge);
     if (edge !== 'none') {
       node.addEdge = edge;
+    }
+    // The group's own label styling (sparse — drop empty leaves).
+    if (isRecord(params.textStyle)) {
+      const ts: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(params.textStyle)) {
+        if (v !== undefined && v !== null && v !== '') ts[k] = v;
+      }
+      if (Object.keys(ts).length > 0) node.textStyle = ts;
     }
     if (params.hold !== undefined) {
       node.hold = params.hold;
@@ -307,6 +327,10 @@ const groupselector: ItemDefinition = {
     };
     if (group.name !== undefined) {
       params.name = asString(group.name);
+    }
+    // Preserve the group's own label styling (whatever leaves were authored).
+    if (isRecord(group.textStyle)) {
+      params.textStyle = { ...group.textStyle };
     }
     if (group.hold !== undefined) {
       params.hold = group.hold;
@@ -610,7 +634,8 @@ const atomColor: ItemDefinition = {
   kind: 'directive',
   type: 'atomColor',
   label: 'Atom color',
-  description: 'Color matching atoms.',
+  description: 'Deprecated — use Atom style (atomStyle). Still parsed/rendered for back-compat (value → border color).',
+  deprecated: true,
   fields: [
     {
       key: 'value',
@@ -634,11 +659,87 @@ const atomColor: ItemDefinition = {
   },
 };
 
+/**
+ * Shared `lineStyle` block children — reused by edgeStyle, inferredEdge, and a
+ * group's connector. No `default`s: style blocks must stay sparse (a seeded
+ * default would emit as an authored value and break the resolver's compose /
+ * collision rules).
+ */
+const LINE_STYLE_FIELDS: readonly FieldSpec[] = [
+  { key: 'color', kind: 'color', label: 'Color' },
+  { key: 'pattern', kind: 'enum', options: EDGE_STYLES, label: 'Pattern' },
+  { key: 'weight', kind: 'number', label: 'Weight' },
+  { key: 'highlight', kind: 'color', label: 'Highlight' },
+];
+
+/** Shared `textStyle` block children — reused wherever a label is styled. No defaults. */
+const TEXT_STYLE_FIELDS: readonly FieldSpec[] = [
+  { key: 'size', kind: 'enum', options: TEXT_SIZE_OPTIONS, label: 'Size' },
+  { key: 'color', kind: 'color', label: 'Color' },
+];
+
+/** Shared `fillStyle` block children — an atom's interior fill. No defaults (sparse). */
+const FILL_STYLE_FIELDS: readonly FieldSpec[] = [
+  { key: 'color', kind: 'color', label: 'Color' },
+];
+
+/** Shared `borderStyle` block children — an atom's outline color + width. No defaults (sparse). */
+const BORDER_STYLE_FIELDS: readonly FieldSpec[] = [
+  { key: 'color', kind: 'color', label: 'Color' },
+  { key: 'width', kind: 'number', label: 'Width' },
+];
+
+const edgeStyle: ItemDefinition = {
+  kind: 'directive',
+  type: 'edgeStyle',
+  label: 'Edge style',
+  description: 'Style the edges of a field/relation — line and label.',
+  fields: [
+    { key: 'field', kind: 'relationName', label: 'Field', required: true },
+    { key: 'selector', kind: 'selector', label: 'Selector', selectorArity: 'unary' },
+    { key: 'filter', kind: 'selector', label: 'Filter', selectorArity: 'binary' },
+    { key: 'lineStyle', kind: 'group', label: 'Line style', children: LINE_STYLE_FIELDS },
+    { key: 'textStyle', kind: 'group', label: 'Text style', children: TEXT_STYLE_FIELDS },
+    { key: 'showLabel', kind: 'boolean', label: 'Show label' },
+    { key: 'hidden', kind: 'boolean', label: 'Hidden' },
+  ],
+  summary(params) {
+    const field = asString(params.field);
+    const line = (params.lineStyle ?? {}) as Record<string, unknown>;
+    const color = asString(line.color);
+    const base = field ? (color ? `${field}: ${color}` : field) : color || 'edge';
+    const selector = asString(params.selector);
+    return selector ? `${base} · ${selector}` : base;
+  },
+};
+
+const atomStyle: ItemDefinition = {
+  kind: 'directive',
+  type: 'atomStyle',
+  label: 'Atom style',
+  description: 'Style matching atoms — fill, border, and label.',
+  fields: [
+    { key: 'selector', kind: 'selector', label: 'Selector', selectorArity: 'unary' },
+    { key: 'fillStyle', kind: 'group', label: 'Fill style', children: FILL_STYLE_FIELDS },
+    { key: 'borderStyle', kind: 'group', label: 'Border style', children: BORDER_STYLE_FIELDS },
+    { key: 'textStyle', kind: 'group', label: 'Text style', children: TEXT_STYLE_FIELDS },
+  ],
+  summary(params) {
+    const fill = (params.fillStyle ?? {}) as Record<string, unknown>;
+    const border = (params.borderStyle ?? {}) as Record<string, unknown>;
+    const color = asString(fill.color) || asString(border.color);
+    const selector = asString(params.selector);
+    const base = color || 'atom';
+    return selector ? `${base} · ${selector}` : base;
+  },
+};
+
 const edgeColor: ItemDefinition = {
   kind: 'directive',
   type: 'edgeColor',
   label: 'Edge color',
-  description: 'Style edges of a field/relation.',
+  description: 'Deprecated — use Edge style (edgeStyle). Still parsed/rendered for back-compat.',
+  deprecated: true,
   fields: [
     {
       key: 'field',
@@ -684,7 +785,7 @@ const inferredEdge: ItemDefinition = {
   kind: 'directive',
   type: 'inferredEdge',
   label: 'Inferred edge',
-  description: 'Draw an inferred edge from a selector.',
+  description: 'Draw an inferred edge from a selector — line and label.',
   fields: [
     {
       key: 'name',
@@ -698,29 +799,19 @@ const inferredEdge: ItemDefinition = {
       label: 'Selector',
       selectorArity: 'binary',
     },
-    {
-      key: 'color',
-      kind: 'color',
-      label: 'Color',
-      default: DEFAULT_COLOR,
-    },
-    {
-      key: 'style',
-      kind: 'enum',
-      label: 'Style',
-      options: EDGE_STYLES,
-    },
-    {
-      key: 'weight',
-      kind: 'number',
-      label: 'Weight',
-    },
+    // Same shared blocks as edgeStyle. The engine still accepts the legacy flat
+    // color/style/weight (deprecated + warned), so old specs keep working.
+    { key: 'lineStyle', kind: 'group', label: 'Line style', children: LINE_STYLE_FIELDS },
+    { key: 'textStyle', kind: 'group', label: 'Text style', children: TEXT_STYLE_FIELDS },
   ],
   summary(params) {
     const name = asString(params.name);
     const selector = asString(params.selector);
+    const line = (params.lineStyle ?? {}) as Record<string, unknown>;
+    const color = asString(line.color);
     const base = name || '(no name)';
-    return selector ? `${base} · ${selector}` : base;
+    const withColor = color ? `${base}: ${color}` : base;
+    return selector ? `${withColor} · ${selector}` : withColor;
   },
 };
 
@@ -784,7 +875,9 @@ const DEFINITIONS: readonly ItemDefinition[] = [
   attribute,
   hideField,
   icon,
+  atomStyle,
   atomColor,
+  edgeStyle,
   edgeColor,
   inferredEdge,
   tag,
