@@ -785,7 +785,7 @@ const inferredEdge: ItemDefinition = {
   kind: 'directive',
   type: 'inferredEdge',
   label: 'Inferred edge',
-  description: 'Draw an inferred edge from a selector.',
+  description: 'Draw an inferred edge from a selector — line and label.',
   fields: [
     {
       key: 'name',
@@ -799,29 +799,19 @@ const inferredEdge: ItemDefinition = {
       label: 'Selector',
       selectorArity: 'binary',
     },
-    {
-      key: 'color',
-      kind: 'color',
-      label: 'Color',
-      default: DEFAULT_COLOR,
-    },
-    {
-      key: 'style',
-      kind: 'enum',
-      label: 'Style',
-      options: EDGE_STYLES,
-    },
-    {
-      key: 'weight',
-      kind: 'number',
-      label: 'Weight',
-    },
+    // Same shared blocks as edgeStyle. The engine still accepts the legacy flat
+    // color/style/weight (deprecated + warned), so old specs keep working.
+    { key: 'lineStyle', kind: 'group', label: 'Line style', children: LINE_STYLE_FIELDS },
+    { key: 'textStyle', kind: 'group', label: 'Text style', children: TEXT_STYLE_FIELDS },
   ],
   summary(params) {
     const name = asString(params.name);
     const selector = asString(params.selector);
+    const line = (params.lineStyle ?? {}) as Record<string, unknown>;
+    const color = asString(line.color);
     const base = name || '(no name)';
-    return selector ? `${base} · ${selector}` : base;
+    const withColor = color ? `${base}: ${color}` : base;
+    return selector ? `${withColor} · ${selector}` : withColor;
   },
 };
 
