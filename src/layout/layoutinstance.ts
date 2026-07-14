@@ -34,7 +34,7 @@ import type { IEvaluatorResult } from '../evaluators/interfaces';
 import { ColorPicker } from './colorpicker';
 import { type ConstraintError, type ErrorMessages, ConstraintValidator, orientationConstraintToString } from './constraint-validator';
 import { QualitativeConstraintValidator } from './qualitative-constraint-validator';
-import { estimateLabelBox, resolveAttrFontSize, AttrTextSize, SecondaryLine } from './text-extent';
+import { estimateLabelBox, resolveAttrFontSize, SecondaryLine } from './text-extent';
 
 /** The strings the renderer will draw inside a node's box. Used to size the box. */
 type NodeDisplayContent = {
@@ -820,12 +820,12 @@ export class LayoutInstance {
      */
     private generateAttributesAndRemoveEdges(g: Graph): {
         attributes: Record<string, Record<string, string[]>>;
-        sizes: Record<string, Record<string, AttrTextSize>>;
+        textStyles: Record<string, Record<string, TextStyle>>;
     } {
         // Node : [] of attributes
         let attributes: Record<string, Record<string, string[]>> = {};
-        // Node : attrKey -> text-size tier (parallel to `attributes`).
-        let sizes: Record<string, Record<string, AttrTextSize>> = {};
+        // Node : attrKey -> shared TextStyle (size + color), parallel to `attributes`.
+        let textStyles: Record<string, Record<string, TextStyle>> = {};
 
         let graphEdges = [...g.edges()];
         // Go through all edge labels in the graph
@@ -868,24 +868,29 @@ export class LayoutInstance {
                 }
                 nodeAttributes[attributeKey].push(targetLabel);
 
-                // Record the text-size tier from the matching attribute directive.
-                const nodeSizes = sizes[source] || (sizes[source] = {});
-                nodeSizes[attributeKey] = this.getAttributeTextSize(relName, sourceAtom, targetAtom);
+                // Record the text style (size + color) from the matching attribute directive.
+                const style = this.getAttributeTextStyle(relName, sourceAtom, targetAtom);
+                if (style) {
+                    const nodeStyles = textStyles[source] || (textStyles[source] = {});
+                    nodeStyles[attributeKey] = style;
+                }
 
                 // Now remove the edge from the graph
                 g.removeEdge(edge.v, edge.w, edgeId);
             }
         });
 
-        return { attributes, sizes };
+        return { attributes, textStyles };
     }
 
     /**
-     * Text-size tier for an attribute field, taken from the first matching
-     * `attribute` directive (mirroring {@link isAttributeField}'s selector/filter
-     * matching). Defaults to `normal` when no matching directive sets `textSize`.
+     * Text style (the shared `textStyle` block: size + color) for an attribute
+     * field, taken from the first matching `attribute` directive (mirroring
+     * {@link isAttributeField}'s selector/filter matching). Returns `undefined`
+     * when no matching directive sets a `textStyle`, so the line falls back to
+     * the default secondary size and inherited label color.
      */
-    private getAttributeTextSize(fieldId: string, sourceAtom: string, targetAtom: string): AttrTextSize {
+    private getAttributeTextStyle(fieldId: string, sourceAtom: string, targetAtom: string): TextStyle | undefined {
         const matchingDirectives = this._layoutSpec.directives.attributes.filter((ad) => ad.field === fieldId);
 
         for (const directive of matchingDirectives) {
@@ -913,10 +918,10 @@ export class LayoutInstance {
             }
             if (!filterMatches) continue;
 
-            return directive.textSize ?? 'normal';
+            return directive.textStyle;
         }
 
-        return 'normal';
+        return undefined;
     }
 
     /**
@@ -938,29 +943,30 @@ export class LayoutInstance {
     private generateTagsForNodes(
         g: Graph,
         existingAttributes: Record<string, Record<string, string[]>>,
-        existingSizes: Record<string, Record<string, AttrTextSize>>
+        existingTextStyles: Record<string, Record<string, TextStyle>>
     ): {
         attributes: Record<string, Record<string, string[]>>;
-        sizes: Record<string, Record<string, AttrTextSize>>;
+        textStyles: Record<string, Record<string, TextStyle>>;
     } {
         const tagDirectives = this._layoutSpec.directives.tags;
 
         if (!tagDirectives || tagDirectives.length === 0) {
-            return { attributes: existingAttributes, sizes: existingSizes };
+            return { attributes: existingAttributes, textStyles: existingTextStyles };
         }
 
         const attributes = { ...existingAttributes };
-        const sizes = { ...existingSizes };
+        const textStyles = { ...existingTextStyles };
         const graphNodes = new Set(g.nodes());
 
-        // Stamp the tag's text-size tier onto its attribute key (parallel to `attributes`).
-        const recordSize = (atomId: string, attrKey: string, size: AttrTextSize) => {
-            const nodeSizes = sizes[atomId] || (sizes[atomId] = {});
-            nodeSizes[attrKey] = size;
+        // Stamp the tag's TextStyle (size + color) onto its attribute key (parallel to `attributes`).
+        const recordStyle = (atomId: string, attrKey: string, style: TextStyle | undefined) => {
+            if (!style) return;
+            const nodeStyles = textStyles[atomId] || (textStyles[atomId] = {});
+            nodeStyles[attrKey] = style;
         };
 
         for (const directive of tagDirectives) {
-            const tagSize: AttrTextSize = directive.textSize ?? 'normal';
+            const tagStyle: TextStyle | undefined = directive.textStyle;
             try {
                 // First, evaluate the toTag selector to get which nodes receive this tag
                 const toTagResult = this.evaluator.evaluate(directive.toTag, { instanceIndex: this.instanceNum });
@@ -1000,7 +1006,7 @@ export class LayoutInstance {
                             // For unary, the value is the atom label itself
                             const nodeLabel = g.node(atomId)?.label || atomId;
                             attributes[atomId][attrKey].push(String(nodeLabel));
-                            recordSize(atomId, attrKey, tagSize);
+                            recordStyle(atomId, attrKey, tagStyle);
                         } else if (tuple.length === 2) {
                             // Binary tuple: name: lastValue
                             const attrKey = directive.name;
@@ -1013,7 +1019,7 @@ export class LayoutInstance {
                                 ? (g.node(String(lastValue))?.label || String(lastValue))
                                 : String(lastValue);
                             attributes[atomId][attrKey].push(valueLabel);
-                            recordSize(atomId, attrKey, tagSize);
+                            recordStyle(atomId, attrKey, tagStyle);
                         } else {
                             // N-ary tuple (n > 2): name[mid1][mid2]...: lastValue
                             // The key includes all middle elements
@@ -1042,7 +1048,7 @@ export class LayoutInstance {
                                 ? (g.node(String(lastValue))?.label || String(lastValue))
                                 : String(lastValue);
                             attributes[atomId][attrKey].push(valueLabel);
-                            recordSize(atomId, attrKey, tagSize);
+                            recordStyle(atomId, attrKey, tagStyle);
                         }
                     }
                 }
@@ -1055,7 +1061,7 @@ export class LayoutInstance {
             }
         }
 
-        return { attributes, sizes };
+        return { attributes, textStyles };
     }
 
     /**
@@ -1186,10 +1192,10 @@ export class LayoutInstance {
         // We apply built-in hiding afterwards in `ensureNoExtraNodes` so inferred edges can reconnect them.
         let g: Graph = ai.generateGraph(this.hideDisconnected, false);
 
-        let { attributes, sizes: attributeSizes } = this.generateAttributesAndRemoveEdges(g);
+        let { attributes, textStyles: attributeTextStyles } = this.generateAttributesAndRemoveEdges(g);
 
-        // Generate and merge tags into attributes (carrying per-key text sizes alongside)
-        ({ attributes, sizes: attributeSizes } = this.generateTagsForNodes(g, attributes, attributeSizes));
+        // Generate and merge tags into attributes (carrying per-key text styles alongside)
+        ({ attributes, textStyles: attributeTextStyles } = this.generateTagsForNodes(g, attributes, attributeTextStyles));
 
         // This is where we add the inferred edges to the graph.
         this.addinferredEdges(g);
@@ -1209,7 +1215,7 @@ export class LayoutInstance {
         // Compute the display strings once — single source of truth for "what's
         // drawn inside the box" so the box sizer (getNodeSizeMap) and the
         // LayoutNode mapping below see the same content.
-        let contentByNode = this.getNodeDisplayContent(g, ai, attributes, attributeSizes);
+        let contentByNode = this.getNodeDisplayContent(g, ai, attributes, attributeTextStyles);
         let nodeSizeMap = this.getNodeSizeMap(g, contentByNode);
 
         let dcN = this.getDisconnectedNodes(g);
@@ -1244,7 +1250,7 @@ export class LayoutInstance {
                 .filter((group) => group.nodeIds.includes(nodeId))
                 .map((group) => group.name);
             let nodeAttributes = attributes[nodeId] || {};
-            let nodeAttributeSizes = attributeSizes[nodeId] || {};
+            let nodeAttributeTextStyles = attributeTextStyles[nodeId] || {};
 
             // Get labels from the data instance (e.g., Skolems in Alloy)
             let nodeLabels: Record<string, string[]> | undefined = undefined;
@@ -1269,7 +1275,7 @@ export class LayoutInstance {
                 textStyle: atomStyle?.textStyle,
                 groups: nodeGroups,
                 attributes: nodeAttributes,
-                attributeSizes: nodeAttributeSizes,
+                attributeTextStyles: nodeAttributeTextStyles,
                 labels: nodeLabels,
                 icon: iconPath,
                 height: height,
@@ -2583,7 +2589,7 @@ export class LayoutInstance {
         g: Graph,
         ai: IDataInstance,
         attributes: Record<string, Record<string, string[]>>,
-        attributeSizes: Record<string, Record<string, AttrTextSize>>
+        attributeTextStyles: Record<string, Record<string, TextStyle>>
     ): Record<string, NodeDisplayContent> {
         const result: Record<string, NodeDisplayContent> = {};
         const atoms = ai.getAtoms();
@@ -2593,12 +2599,12 @@ export class LayoutInstance {
             const label = nodeMetadata?.label || nodeId;
 
             const nodeAttrs = attributes[nodeId] || {};
-            const nodeSizes = attributeSizes[nodeId] || {};
+            const nodeStyles = attributeTextStyles[nodeId] || {};
             // Sort once so line text and its font size stay index-aligned.
             const sortedAttrEntries = Object.entries(nodeAttrs)
                 .sort(([a], [b]) => a.localeCompare(b));
             const attributeLines = sortedAttrEntries.map(([key, values]) => `${key}: ${values.join(', ')}`);
-            const attributeFontSizes = sortedAttrEntries.map(([key]) => resolveAttrFontSize(nodeSizes[key]));
+            const attributeFontSizes = sortedAttrEntries.map(([key]) => resolveAttrFontSize(nodeStyles[key]?.size));
 
             const atom = atoms.find((x) => x.id === nodeId);
             const skolemLines: string[] = [];

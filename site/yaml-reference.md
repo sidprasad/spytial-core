@@ -108,11 +108,13 @@ directives:
   - attribute:
       field: age
       selector: Person
+      textStyle: { size: large, color: "#c0392b" }  # optional: shared size + color block
 
   - tag:
       toTag: Student
       name: grade
       value: currentGrade
+      textStyle: { size: small, color: "#2980b9" }
 
   - icon:
       selector: File

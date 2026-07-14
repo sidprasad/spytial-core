@@ -1,6 +1,5 @@
 import * as yaml from 'js-yaml';
 import { EdgeStyle } from './edge-style';
-import { AttrTextSize } from './text-extent';
 import { EdgeStyleRule, parseEdgeStyleSpec, edgeColorToEdgeStyleRule } from './style/edge-style-spec';
 import type { LineStyle } from './style/edge-style-spec';
 import { AtomStyleRule, parseAtomStyleSpec, atomColorToAtomStyleRule } from './style/atom-style-spec';
@@ -325,8 +324,12 @@ export interface FieldDirective extends Operation {
 
 
 export interface AttributeDirective extends FieldDirective {
-    /** Text-size tier for this attribute's line on the node. Defaults to `normal`. */
-    textSize?: AttrTextSize;
+    /**
+     * Styling for this attribute's line on the node, from the shared `textStyle`
+     * block (`size` tier + `color`). Absent leaves fall back to the defaults
+     * (normal size, inherited label color).
+     */
+    textStyle?: TextStyle;
 }
 
 /**
@@ -347,8 +350,12 @@ export interface TagDirective extends Operation {
     name: string;
     /** N-ary selector whose result becomes the attribute value */
     value: string;
-    /** Text-size tier for this tag's line on the node. Defaults to `normal`. */
-    textSize?: AttrTextSize;
+    /**
+     * Styling for this tag's line on the node, from the shared `textStyle`
+     * block (`size` tier + `color`). Absent leaves fall back to the defaults
+     * (normal size, inherited label color).
+     */
+    textStyle?: TextStyle;
 }
 
 export interface FieldHidingDirective extends FieldDirective {}
@@ -403,15 +410,6 @@ interface DirectivesBlock {
     hiddenAtoms: AtomHidingDirective[];
     hideDisconnected : boolean;
     hideDisconnectedBuiltIns : boolean;
-}
-
-/**
- * Coerce a raw `textSize` value from YAML into a valid {@link AttrTextSize}.
- * Missing or unrecognized values fall back to `normal`, so an authoring typo
- * degrades to the historical default rather than throwing.
- */
-function normalizeAttrTextSize(value: unknown): AttrTextSize {
-    return value === 'small' || value === 'large' ? value : 'normal';
 }
 
 function assertPositiveSizeDimension(value: unknown, label: string): void {
@@ -930,7 +928,7 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
             field: d.attribute.field,
             selector: d.attribute.selector,
             filter: d.attribute.filter,
-            textSize: normalizeAttrTextSize(d.attribute.textSize)
+            textStyle: parseTextStyle(d.attribute.textStyle)
         }
     });
 
@@ -984,7 +982,7 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
             toTag: d.tag.toTag,
             name: d.tag.name,
             value: d.tag.value,
-            textSize: normalizeAttrTextSize(d.tag.textSize)
+            textStyle: parseTextStyle(d.tag.textStyle)
         }
     });
 
