@@ -242,4 +242,47 @@ describe('ErrorMessageModal Component', () => {
       expect(diagramConstraint).not.toHaveClass('highlight-diagram')
     })
   })
+
+  describe('Collapse/minimize', () => {
+    const parseError: SystemError = {
+      type: 'parse-error',
+      message: 'Orientation constraint must have selector field',
+      source: 'spec.yaml'
+    }
+
+    it('should render expanded by default with body content visible', () => {
+      render(<ErrorMessageModal systemError={parseError} />)
+
+      const toggle = screen.getByRole('button', { name: /collapse error details/i })
+      expect(toggle).toHaveAttribute('aria-expanded', 'true')
+      expect(screen.getByText('An error occurred while processing your data.')).toBeInTheDocument()
+      expect(screen.getByText('Orientation constraint must have selector field')).toBeInTheDocument()
+    })
+
+    it('should hide body content when the toggle is clicked', async () => {
+      const user = userEvent.setup()
+      render(<ErrorMessageModal systemError={parseError} />)
+
+      await user.click(screen.getByRole('button', { name: /collapse error details/i }))
+
+      // Modal container and header remain; body content is gone
+      expect(document.getElementById('error-message-modal')).toBeInTheDocument()
+      expect(screen.queryByText('An error occurred while processing your data.')).not.toBeInTheDocument()
+      expect(screen.queryByText('Orientation constraint must have selector field')).not.toBeInTheDocument()
+
+      // Toggle now advertises expand and reports collapsed state
+      expect(screen.getByRole('button', { name: /expand error details/i })).toHaveAttribute('aria-expanded', 'false')
+    })
+
+    it('should restore body content when toggled again', async () => {
+      const user = userEvent.setup()
+      render(<ErrorMessageModal systemError={parseError} />)
+
+      await user.click(screen.getByRole('button', { name: /collapse error details/i }))
+      expect(screen.queryByText('An error occurred while processing your data.')).not.toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: /expand error details/i }))
+      expect(screen.getByText('An error occurred while processing your data.')).toBeInTheDocument()
+    })
+  })
 })

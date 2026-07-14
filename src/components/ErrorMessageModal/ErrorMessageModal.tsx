@@ -31,6 +31,7 @@ type HighlightState = {
  */
 export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemError }: ErrorMessageModalProps) => {
   const [highlightState, setHighlightState] = useState<HighlightState>({ ids: [], source: null });
+  const [collapsed, setCollapsed] = useState(false);
 
   /** Handle mouse enter for constraint highlighting */
   const handleMouseEnter = (node: ConstraintNode, source: 'source' | 'diagram') => {
@@ -157,7 +158,21 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
 
   return (
     <div id="error-message-modal" className="mt-3 d-flex flex-column overflow-x-auto p-3 rounded border border-danger border-2">
-      <h4 style={{color: 'var(--bs-danger)'}}>{headerText}</h4>
+      <div className="error-modal-header d-flex justify-content-between align-items-center">
+        <h4 className="mb-0" style={{color: 'var(--bs-danger)'}}>{headerText}</h4>
+        <button
+          type="button"
+          className="error-modal-toggle"
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? 'Expand error details' : 'Collapse error details'}
+          title={collapsed ? 'Expand error details' : 'Collapse error details'}
+          onClick={() => setCollapsed(c => !c)}
+        >
+          {collapsed ? '▸' : '▾'}
+        </button>
+      </div>
+      {!collapsed && (
+        <>
       <p>{descriptionText}</p>
       {/* Parse/Generic/Group Error Card */}
       {isOtherError && (
@@ -244,6 +259,8 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
               </ul>
             </div>
           </div>
+        </>
+      )}
         </>
       )}
   </div>
