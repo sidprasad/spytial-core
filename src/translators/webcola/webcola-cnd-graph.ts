@@ -4140,9 +4140,23 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         const verticalOffset = secondaryHeights.length > 0 ? -secondaryBlockHeight * 0.5 : 0;
 
         // Per-tspan dy advances (index 0 = main label, then one per secondary
-        // line at its own line-height). Cached so the post-layout reposition
-        // passes can re-apply the exact same offsets without recomputing.
-        d._labelTspanDys = [verticalOffset, ...secondaryHeights];
+        // line). SVG `dy` is relative to the previous baseline, and tspans are
+        // center-aligned (dominant-baseline: middle), so the gap between two
+        // adjacent secondary lines must be the average of their line-heights —
+        // otherwise a `large` line followed by a smaller one advances by only
+        // the small height and the glyphs crowd/overlap. The main→first-secondary
+        // advance stays the first line's own height, which keeps the all-normal
+        // case identical (uniform heights make the average a no-op) and matches
+        // the summed-height box sizing (adjacent averages telescope to Σ heights).
+        const tspanDys = [verticalOffset];
+        for (let s = 0; s < secondaryHeights.length; s++) {
+          tspanDys.push(
+            s === 0 ? secondaryHeights[0] : (secondaryHeights[s - 1] + secondaryHeights[s]) / 2
+          );
+        }
+        // Cached so the post-layout reposition passes re-apply identical offsets;
+        // also the single source of truth for the dy set on each tspan below.
+        d._labelTspanDys = tspanDys;
         d._labelVerticalOffset = verticalOffset;
         d._labelLineHeight = secondaryLineHeight;
 
@@ -4157,27 +4171,29 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           .style("font-size", `${MAIN_LABEL_FONT_SIZE}px`)
           .text(displayLabel);
 
-        // Skolem-style labels: italic, comma-separated values per key.
-        for (const [, values] of labelEntries) {
+        // Skolem-style labels: italic, comma-separated values per key. These are
+        // the first secondary lines (DOM order), so tspanDys indices 1..N.
+        labelEntries.forEach(([, values], idx) => {
           const labelText = Array.isArray(values) ? values.join(', ') : String(values);
           textElement
             .append("tspan")
             .attr("x", 0)
-            .attr("dy", `${secondaryLineHeight}px`)
+            .attr("dy", `${tspanDys[1 + idx]}px`)
             .style("font-size", `${SECONDARY_FONT_SIZE}px`)
             // No explicit fill: inherit the themed parent label fill (the
             // `.label` CSS rule), so dark mode lightens skolem labels too.
             .style("font-style", "italic")
             .text(labelText);
-        }
+        });
 
         // Attribute lines: "key: value, value, ..." each at its own tier size.
+        // These follow the Skolem lines, so tspanDys indices are offset by them.
         attributeEntries.forEach(([key, value], idx) => {
           const fontSize = attributeFontSizes[idx];
           textElement
             .append("tspan")
             .attr("x", 0)
-            .attr("dy", `${fontSize * LABEL_LINE_HEIGHT_RATIO}px`)
+            .attr("dy", `${tspanDys[1 + labelEntries.length + idx]}px`)
             .style("font-size", `${fontSize}px`)
             .text(`${key}: ${value}`);
         });
