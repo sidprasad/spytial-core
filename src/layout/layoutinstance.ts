@@ -23,6 +23,8 @@ import {
 } from './layoutspec';
 import { resolveEdgeStyle } from './style/edge-style-spec';
 import type { EdgeStyleSpec } from './style/edge-style-spec';
+import { resolveAtomStyle } from './style/atom-style-spec';
+import type { AtomStyleRule, AtomStyleSpec } from './style/atom-style-spec';
 
 
 import IEvaluator from '../evaluators/interfaces';
@@ -1196,7 +1198,10 @@ export class LayoutInstance {
 
         // Recompute visual maps after graph mutations (inferred edges / node removal)
         let nodeIconMap = this.getNodeIconMap(g);
-        let { colorMap: nodeColorMap, explicitlyColored } = this.getNodeColorMap(g, ai);
+        // Resolve atomStyle once: it feeds both the border color (via the color
+        // map) and the node's fill / border-width / label styling below.
+        let atomStyleMap = this.getAtomStyleMap(g, ai);
+        let { colorMap: nodeColorMap, explicitlyColored } = this.getNodeColorMap(g, ai, atomStyleMap);
 
         // Compute the display strings once — single source of truth for "what's
         // drawn inside the box" so the box sizer (getNodeSizeMap) and the
@@ -1246,12 +1251,19 @@ export class LayoutInstance {
                 nodeLabels = atom.labels;
             }
 
+            // Fill / border-width / label styling from the resolved atomStyle
+            // (border *color* already flowed through nodeColorMap → color above).
+            const atomStyle = atomStyleMap[nodeId];
+
             return {
                 id: nodeId,
                 label: label,
                 name: label,
                 color: color,
                 colorSource: colorSource,
+                fillColor: atomStyle?.fillStyle?.color,
+                borderWidth: atomStyle?.borderStyle?.width,
+                textStyle: atomStyle?.textStyle,
                 groups: nodeGroups,
                 attributes: nodeAttributes,
                 attributeSizes: nodeAttributeSizes,
@@ -2649,50 +2661,91 @@ export class LayoutInstance {
 
 
     /**
-     * Builds the node→color map and records which nodes were colored by an
-     * explicit user `color` directive (vs. the default type palette / black
-     * fallback). The renderer uses `explicitlyColored` to decide which colors
-     * may be retuned for a themed canvas and which must be preserved as chosen.
+     * Resolve every atom's `atomStyle` into one concrete style. Each rule's
+     * selector is evaluated to the atoms it matches (absent selector = all
+     * atoms), inverting to a per-atom list of contributing rules; each atom's
+     * rules are then folded through the shared resolver. Because a supertype
+     * selector already returns subtype atoms, gap-fill inheritance up the type
+     * ancestry and the no-silent-override collision both fall out of that fold —
+     * a genuine leaf disagreement throws {@link StyleCollisionError} (the 3.0
+     * contract, surfaced like the old color conflict). Only atoms with at least
+     * one matching rule appear in the map. Legacy `atomColor` desugars into these
+     * rules upstream (border-preserving: value→borderStyle.color).
      */
-    private getNodeColorMap(g: Graph, a: IDataInstance): { colorMap: Record<string, string>, explicitlyColored: Set<string> } {
+    private getAtomStyleMap(g: Graph, a: IDataInstance): Record<string, AtomStyleSpec> {
+        const rules = this._layoutSpec.directives.atomStyles;
+        const styleMap: Record<string, AtomStyleSpec> = {};
+        if (rules.length === 0) return styleMap;
+
+        const allNodeIds = [...g.nodes()];
+        const allNodeIdSet = new Set(allNodeIds);
+        const rulesByNode: Record<string, AtomStyleRule[]> = {};
+
+        rules.forEach((rule) => {
+            let matched: string[];
+            if (!rule.selector) {
+                matched = allNodeIds; // no selector → applies to every atom
+            } else {
+                try {
+                    const selectorRes = this.evaluator.evaluate(rule.selector, { instanceIndex: this.instanceNum });
+                    if (!this.checkSelectorArity(selectorRes, rule.selector, 'unary', 'atomStyle selector')) {
+                        return; // Skip — binary selector in unary position
+                    }
+                    matched = selectorRes.selectedAtoms();
+                } catch (error) {
+                    this.recordSelectorError(rule.selector, 'atomStyle selector', error);
+                    return; // Skip this rule
+                }
+            }
+            matched.forEach((nodeId) => {
+                // Selectors can name atoms that aren't graph nodes (e.g. hidden);
+                // only style atoms actually being laid out.
+                if (!allNodeIdSet.has(nodeId)) return;
+                if (!rulesByNode[nodeId]) rulesByNode[nodeId] = [];
+                rulesByNode[nodeId].push(rule);
+            });
+        });
+
+        for (const nodeId of allNodeIds) {
+            const nodeRules = rulesByNode[nodeId];
+            if (!nodeRules || nodeRules.length === 0) continue;
+            // Throws StyleCollisionError on a genuine leaf disagreement.
+            styleMap[nodeId] = resolveAtomStyle(nodeRules, `atom "${nodeId}"`);
+        }
+
+        return styleMap;
+    }
+
+    /**
+     * Builds the node→color map (the border/outline color) and records which
+     * nodes were colored by an explicit directive (vs. the default type palette /
+     * black fallback). The renderer uses `explicitlyColored` to decide which
+     * colors may be retuned for a themed canvas and which must be preserved.
+     *
+     * The border color comes from the resolved `atomStyle` (`borderStyle.color`)
+     * — which legacy `atomColor` desugars into — so this reads `atomStyleMap`
+     * rather than re-walking directives. Collision detection lives in the
+     * resolver (a leaf disagreement already threw in {@link getAtomStyleMap}).
+     */
+    private getNodeColorMap(g: Graph, a: IDataInstance, atomStyleMap: Record<string, AtomStyleSpec>): { colorMap: Record<string, string>, explicitlyColored: Set<string> } {
         let nodeColorMap: Record<string, string> = {};
         let explicitlyColored = new Set<string>();
 
         // Start by getting the default signature colors
         let sigColors = this.getSigColors(a);
 
-        // Apply color directives first
-        let colorDirectives = this._layoutSpec.directives.atomColors;
-        colorDirectives.forEach((colorDirective) => {
-            let selected: string[];
-            try {
-                const selectorRes = this.evaluator.evaluate(colorDirective.selector, { instanceIndex: this.instanceNum });
-                if (!this.checkSelectorArity(selectorRes, colorDirective.selector, 'unary', 'color selector')) {
-                    return; // Skip — binary selector in unary position
-                }
-                selected = selectorRes.selectedAtoms();
-            } catch (error) {
-                this.recordSelectorError(colorDirective.selector, 'color selector', error);
-                return; // Skip this color directive
-            }
-            let color = colorDirective.color;
+        let graphNodes = [...g.nodes()];
 
-            selected.forEach((nodeId) => {
-                if (nodeColorMap[nodeId]) {
-                    const existingColor = nodeColorMap[nodeId];
-                    if (existingColor !== color) {
-                        throw new Error(
-                            `Color Conflict: "${nodeId}" cannot have multiple colors: ${existingColor}, ${color}.`
-                        );
-                    }
-                }
-                nodeColorMap[nodeId] = color;
+        // A resolved borderStyle.color is the node's explicit outline color.
+        graphNodes.forEach((nodeId) => {
+            const borderColor = atomStyleMap[nodeId]?.borderStyle?.color;
+            if (borderColor) {
+                nodeColorMap[nodeId] = borderColor;
                 explicitlyColored.add(nodeId);
-            });
+            }
         });
 
         // Set default colors for nodes that do not have a color set
-        let graphNodes = [...g.nodes()];
         graphNodes.forEach((nodeId) => {
             if (!nodeColorMap[nodeId]) {
                 let mostSpecificType = this.getMostSpecificType(nodeId, a);

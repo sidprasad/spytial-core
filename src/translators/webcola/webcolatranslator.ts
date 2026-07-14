@@ -52,6 +52,12 @@ type NodeWithMetadata = Node & {
   color: string,
   /** Provenance of `color` (default palette vs. user directive). See {@link ColorSource}. */
   colorSource?: ColorSource,
+  /** Interior fill from `atomStyle.fillStyle.color`; absent = renderer's canvas-matched default. */
+  fillColor?: string,
+  /** Border/stroke width in px from `atomStyle.borderStyle.width`; absent = renderer default. */
+  borderWidth?: number,
+  /** Main-label styling from `atomStyle.textStyle` (only `color` consumed today; see LayoutNode). */
+  textStyle?: TextStyle,
   icon: string,
   mostSpecificType: string,
   showLabels: boolean,
@@ -691,6 +697,9 @@ export class WebColaLayout {
       id: node.id,
       color: node.color,
       colorSource: node.colorSource ?? ColorSource.DefaultPalette,
+      fillColor: node.fillColor,
+      borderWidth: node.borderWidth,
+      textStyle: node.textStyle,
       attributes: node.attributes || {},
       attributeSizes: node.attributeSizes || {},
       labels: node.labels,

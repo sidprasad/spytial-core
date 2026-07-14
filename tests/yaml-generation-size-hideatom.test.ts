@@ -192,7 +192,10 @@ describe('YAML Generation for Size and HideAtom', () => {
     const parsed = parseLayoutSpec(yaml);
     expect(parsed.constraints.orientation.relative).toHaveLength(1);
     expect(parsed.directives.sizes).toHaveLength(1);
-    expect(parsed.directives.atomColors).toHaveLength(1);
+    // atomColor now desugars into a border-preserving atomStyle rule (atomColors emptied).
+    expect(parsed.directives.atomColors).toHaveLength(0);
+    expect(parsed.directives.atomStyles).toHaveLength(1);
+    expect(parsed.directives.atomStyles[0].style.borderStyle?.color).toBe('#FF0000');
     expect(parsed.directives.hiddenAtoms).toHaveLength(1);
   });
 

@@ -220,7 +220,10 @@ directives:
       // Check directives (including size and hideAtom from constraints)
       expect(layoutSpec.directives.sizes).toHaveLength(1);
       expect(layoutSpec.directives.hiddenAtoms).toHaveLength(1);
-      expect(layoutSpec.directives.atomColors).toHaveLength(1);
+      // atomColor now desugars into a border-preserving atomStyle rule (atomColors emptied).
+      expect(layoutSpec.directives.atomColors).toHaveLength(0);
+      expect(layoutSpec.directives.atomStyles).toHaveLength(1);
+      expect(layoutSpec.directives.atomStyles[0].style.borderStyle?.color).toBe('#FF0000');
     });
   });
 

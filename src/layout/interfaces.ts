@@ -51,6 +51,11 @@ export enum ColorSource {
 export interface LayoutNode {
     id: string;
     label: string;
+    /**
+     * The node's border/outline color. Historically the node's single "color"
+     * (from `atomColor`/`color`), which the renderer draws as the rectangle
+     * stroke; `atomStyle.borderStyle.color` now feeds it too.
+     */
     color : string;
     /**
      * Provenance of `color` (see {@link ColorSource}). Lets the renderer retune
@@ -58,6 +63,24 @@ export interface LayoutNode {
      * colors untouched. Absent is treated as {@link ColorSource.DefaultPalette}.
      */
     colorSource?: ColorSource;
+    /**
+     * Interior fill of the node's rectangle, from `atomStyle.fillStyle.color`.
+     * Absent = the renderer's default (a Tufte canvas-matched fill, so only the
+     * stroke + label mark the node). A real fill is opt-in.
+     */
+    fillColor?: string;
+    /**
+     * Border/stroke width in px, from `atomStyle.borderStyle.width`. Absent = the
+     * renderer's default node stroke width.
+     */
+    borderWidth?: number;
+    /**
+     * Styling for the node's main (name) label, from `atomStyle.textStyle`.
+     * Absent = default. NOTE: only `color` is consumed today; `size` is deferred
+     * because the box sizer (estimateLabelBox) fixes the main label at
+     * MAIN_LABEL_FONT_SIZE — changing it must also re-flow the box.
+     */
+    textStyle?: TextStyle;
     groups?: string[];
     attributes?: Record<string, string[]>;
     /**

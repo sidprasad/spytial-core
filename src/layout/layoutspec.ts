@@ -2,6 +2,7 @@ import * as yaml from 'js-yaml';
 import { EdgeStyle } from './edge-style';
 import { AttrTextSize } from './text-extent';
 import { EdgeStyleRule, parseEdgeStyleSpec, edgeColorToEdgeStyleRule } from './style/edge-style-spec';
+import { AtomStyleRule, parseAtomStyleSpec, atomColorToAtomStyleRule } from './style/atom-style-spec';
 import type { TextStyle } from './style/text-style';
 
 export type RelativeDirection = "above" | "below" | "left" | "right" | "directlyAbove" | "directlyBelow" | "directlyLeft" | "directlyRight";
@@ -372,6 +373,7 @@ interface ConstraintsBlock
 
 interface DirectivesBlock {
     atomColors: AtomColorDirective[];
+    atomStyles: AtomStyleRule[];
     sizes: AtomSizeDirective[];
     icons: AtomIconDirective[];
     edgeColors: EdgeColorDirective[];
@@ -434,6 +436,7 @@ function DEFAULT_LAYOUT() : LayoutSpec
         },
         directives: {
             atomColors: [],
+            atomStyles: [],
             sizes: [],
             icons: [],
             edgeColors: [],
@@ -844,13 +847,23 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
                         showLabels: d.icon.showLabels || false 
                     }
                 });
-    let atomColors : AtomColorDirective[] = typedDirectives.filter(d => d.atomColor)
-                .map(d => {
-                    return {
-                        color: d.atomColor.value,
-                        selector: d.atomColor.selector
-                    }
-                });
+    // atomColor is the deprecated flat form of atomStyle. Desugar each into an
+    // AtomStyleRule (border-preserving: value→borderStyle.color, so existing
+    // diagrams stay outlined exactly as before) and resolve through the one
+    // atomStyle path (compose / collide together). Emit one deprecation warning.
+    // `atomColors` is kept empty only to satisfy the DirectivesBlock shape; its
+    // sole consumer (getNodeColorMap) now reads the resolved atomStyle instead,
+    // and atom styling flows via `atomStyles`.
+    const rawAtomColors = typedDirectives.filter(d => d.atomColor);
+    if (rawAtomColors.length > 0) {
+        console.warn(
+            "[spytial] 'atomColor' is deprecated and will be removed in a future major; " +
+            "use 'atomStyle' with a 'borderStyle' block (value→borderStyle.color), " +
+            "or a 'fillStyle' block for a real interior fill."
+        );
+    }
+    const desugaredAtomColors: AtomStyleRule[] = rawAtomColors.map(d => atomColorToAtomStyleRule(d.atomColor));
+    let atomColors : AtomColorDirective[] = [];
 
     let sizes : AtomSizeDirective[] = typedDirectives.filter(d => d.size)
                 .map(d => {
@@ -952,8 +965,20 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
     // Desugared legacy edgeColor rules join the native ones — one resolution path.
     edgeStyles = [...edgeStyles, ...desugaredEdgeColors];
 
+    // atomStyle (composite: fillStyle + borderStyle + textStyle), keyed by an
+    // optional unary selector. Native rules plus desugared legacy atomColor rules
+    // resolve through the one atomStyle path.
+    let atomStyles : AtomStyleRule[] = typedDirectives.filter(d => d.atomStyle).map(d => {
+        return {
+            selector: d.atomStyle.selector,
+            style: parseAtomStyleSpec(d.atomStyle)
+        }
+    });
+    atomStyles = [...atomStyles, ...desugaredAtomColors];
+
     return {
         atomColors,
+        atomStyles,
         sizes,
         icons,
         edgeColors,

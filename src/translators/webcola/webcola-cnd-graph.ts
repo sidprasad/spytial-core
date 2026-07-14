@@ -405,19 +405,37 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
-   * Node rectangle fill. Tufte: fill matches the canvas so only stroke + label
-   * distinguish a node. Transparent for hidden nodes and icon-only nodes.
+   * Node rectangle fill. Hidden and icon-only nodes stay transparent. An
+   * explicit `atomStyle.fillStyle.color` (d.fillColor) is an opt-in real fill,
+   * preserved exactly as chosen. Otherwise Tufte: the fill matches the canvas so
+   * only stroke + label distinguish a node.
    */
   private nodeFillColor(d: any): string {
     const isHidden = this.isHiddenNode(d);
     const hasIcon = !!d.icon;
     const showLabels = d.showLabels;
-    return isHidden || (hasIcon && !showLabels) ? 'transparent' : this.getCanvasBackground();
+    if (isHidden || (hasIcon && !showLabels)) return 'transparent';
+    return d.fillColor ?? this.getCanvasBackground();
   }
 
   /** Edge stroke (themed): preserves chosen colors, themes the implicit default. */
   private edgeStrokeColor(d: any): string | null {
     return this.isAlignmentEdge(d) ? 'none' : this.themedDataColor(d.color, '--cnd-edge-color', null);
+  }
+
+  /**
+   * Node border stroke width. An explicit `atomStyle.borderStyle.width`
+   * (d.borderWidth) wins; otherwise null so the constant default (NODE_STROKE_WIDTH)
+   * applies. Consumed via `.style()` (not `.attr()`) so it beats any node-rect
+   * CSS class rule — the same reason edge stroke-width uses `.style()`.
+   */
+  private nodeStrokeWidth(d: any): string | null {
+    return d.borderWidth != null ? `${d.borderWidth}px` : null;
+  }
+
+  /** Node main-label fill from `atomStyle.textStyle.color`; null = inherit the default label color. */
+  private nodeLabelColor(d: any): string | null {
+    return d.textStyle?.color ?? null;
   }
 
   /**
@@ -4004,6 +4022,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr("rx", WebColaCnDGraph.NODE_BORDER_RADIUS)
       .attr("ry", WebColaCnDGraph.NODE_BORDER_RADIUS)
       .attr("stroke-width", WebColaCnDGraph.NODE_STROKE_WIDTH)
+      // atomStyle.borderStyle.width override via .style() so it beats CSS rules; null = keep the default above.
+      .style("stroke-width", (d: any) => this.nodeStrokeWidth(d))
       .attr("fill", (d: any) => this.nodeFillColor(d));
   }
 
@@ -4171,6 +4191,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           .attr("class", "main-label-tspan")
           .style("font-weight", "bold")
           .style("font-size", `${MAIN_LABEL_FONT_SIZE}px`)
+          // atomStyle.textStyle.color for the node's own label; null = inherit the default black.
+          .style("fill", this.nodeLabelColor(d))
           .text(displayLabel);
 
         // Skolem-style labels: italic, comma-separated values per key. These are

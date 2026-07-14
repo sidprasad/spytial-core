@@ -194,7 +194,8 @@ directives:
             const { selectorErrors } = layoutInstance.generateLayout(instance);
 
             expect(selectorErrors.length).toBeGreaterThan(0);
-            const arityError = selectorErrors.find(e => e.selector === 'next' && e.context === 'color selector');
+            // atomColor desugars to atomStyle, so the arity check runs under that context now.
+            const arityError = selectorErrors.find(e => e.selector === 'next' && e.context === 'atomStyle selector');
             expect(arityError).toBeDefined();
             expect(arityError!.errorMessage).toContain('unary');
         });
