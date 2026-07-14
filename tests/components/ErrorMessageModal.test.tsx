@@ -344,4 +344,44 @@ describe('ErrorMessageModal Component', () => {
       }
     })
   })
+
+  describe('Scroll correspondence into view', () => {
+    const errorMessages: ErrorMessages = {
+      conflictingConstraint: 'Node2 is above Node1',
+      conflictingSourceConstraint: 'OrientationConstraint with directions [below] and selector Node2-&gt;Node1',
+      minimalConflictingConstraints: new Map([
+        ['OrientationConstraint with directions [below] and selector Node2-&gt;Node1', ['Node2 is above Node1']],
+        ['OrientationConstraint with directions [directlyRight] and selector ~v', ['Node1 is horizontally aligned with Variable3', 'Node2 is horizontally aligned with Variable3']]
+      ])
+    }
+    const positionalError: SystemError = {
+      type: 'positional-error',
+      messages: errorMessages
+    }
+
+    it('scrolls the related diagram element into view when hovering a source constraint', async () => {
+      const user = userEvent.setup()
+      // jsdom does not implement scrollIntoView; record the element it is called on
+      const scrolledInto: Element[] = []
+      const original = Element.prototype.scrollIntoView
+      Element.prototype.scrollIntoView = function (this: Element) {
+        scrolledInto.push(this)
+      } as typeof Element.prototype.scrollIntoView
+      try {
+        render(<ErrorMessageModal systemError={positionalError} />)
+
+        // source-0 corresponds to diagram-0-0 ("Node2 is above Node1")
+        const sourceConstraint = screen
+          .getByText('OrientationConstraint with directions [below] and selector Node2->Node1')
+          .parentElement!
+        await user.hover(sourceConstraint)
+
+        const relatedDiagram = document.querySelector('[data-constraint-id="diagram-0-0"]')
+        expect(relatedDiagram).not.toBeNull()
+        expect(scrolledInto).toContain(relatedDiagram)
+      } finally {
+        Element.prototype.scrollIntoView = original
+      }
+    })
+  })
 })
