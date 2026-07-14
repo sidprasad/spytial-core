@@ -363,7 +363,64 @@ Hides atoms matching a selector from the visualization. (Can also be used as a d
 
 Directives control visual styling and presentation without affecting layout structure.
 
-### Atom Color Directive
+### Atom Style Directive (atomStyle)
+
+Styles the atoms (nodes) matching a selector. An atom is a composite of an interior **fill**, an outline **border**, and its **label**, so styling uses the shared `fillStyle`, `borderStyle`, and `textStyle` blocks (the same block vocabulary as `edgeStyle`'s `lineStyle`/`textStyle`).
+
+```yaml
+- atomStyle:
+    selector: <unary-selector>   # Optional: which atoms to style (absent = all atoms)
+    fillStyle:                   # Optional: the interior fill (opt-in)
+      color: <color>
+    borderStyle:                 # Optional: the outline
+      color: <color>
+      width: <number>
+    textStyle:                   # Optional: the atom's own (name) label
+      size: <small|normal|large>
+      color: <color>
+```
+
+**Fields:**
+
+| Field | Required | Type | Description |
+|-------|----------|------|-------------|
+| `selector` | ❌ No | string | Unary selector for target atoms; absent styles every atom |
+| `fillStyle.color` | ❌ No | string | CSS color of the node's interior fill (opt-in; the default is an unfilled Tufte look where only stroke + label mark the node) |
+| `borderStyle.color` | ❌ No | string | CSS color of the node's outline |
+| `borderStyle.width` | ❌ No | number | Outline thickness in pixels (must be > 0) |
+| `textStyle.size` | ❌ No | enum | `small`, `normal`, or `large` — *reserved; not yet applied to the node's own label* |
+| `textStyle.color` | ❌ No | string | CSS color of the atom's label |
+
+**Inheritance & conflicts:** rules match atoms through their selector, and a supertype selector already returns subtype atoms — so a `Node` rule and a `RedNode` rule both apply to a `RedNode` atom, their set properties **composing** (gap-fill inheritance up the type hierarchy). Two rules that set the *same* property to *different* values is an error: styles never silently override.
+
+**Examples:**
+
+```yaml
+# Filled, thick-bordered Person nodes with dark-red labels
+- atomStyle:
+    selector: Person
+    fillStyle: { color: '#e0f2ff' }
+    borderStyle: { color: '#0369a1', width: 4 }
+    textStyle: { color: '#b91c1c' }
+
+# Just recolor the outline of error atoms (border-preserving, like atomColor)
+- atomStyle:
+    selector: Error
+    borderStyle: { color: red }
+```
+
+**Migrating from `atomColor`:** `atomColor` (below) is the legacy flat form and still works; its `value` maps onto `borderStyle.color` (so existing diagrams keep their outlines exactly), and you can add a `fillStyle` for a real interior fill:
+
+| `atomColor` | `atomStyle` |
+|---|---|
+| `value` | `borderStyle.color` |
+| `selector` | `selector` |
+
+---
+
+### Atom Color Directive (atomColor) — *legacy*
+
+> **Deprecated:** prefer [`atomStyle`](#atom-style-directive-atomstyle) above. `atomColor` still works and will desugar onto `atomStyle` (`value` → `borderStyle.color`) with a deprecation warning.
 
 Sets the color of atoms matching a selector.
 

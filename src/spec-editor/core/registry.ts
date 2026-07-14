@@ -24,9 +24,11 @@
  *     - attribute:    { field, selector?, filter? }
  *     - hideField:    { field, selector?, filter? }
  *     - icon:         { path, selector?, showLabels? }
- *     - atomColor:    { value, selector? }
- *     - edgeColor:    { value, field, selector?, filter?, style?, weight?, showLabel?, hidden?, highlight? }
- *     - inferredEdge: { name, selector?, color?, style?, weight?, highlight? }
+ *     - atomStyle:    { selector?, fillStyle?:{color}, borderStyle?:{color,width}, textStyle?:{size,color} }
+ *     - atomColor:    { value, selector? }  (deprecated → atomStyle)
+ *     - edgeStyle:    { field, selector?, filter?, lineStyle?:{color,pattern,weight,highlight}, textStyle?:{size,color}, showLabel?, hidden? }
+ *     - edgeColor:    { value, field, selector?, filter?, style?, weight?, showLabel?, hidden?, highlight? }  (deprecated → edgeStyle)
+ *     - inferredEdge: { name, selector?, lineStyle?:{color,pattern,weight,highlight}, textStyle?:{size,color} }
  *     - tag:          { toTag, name, value }
  *
  * This module is framework-agnostic — no React.
@@ -610,7 +612,8 @@ const atomColor: ItemDefinition = {
   kind: 'directive',
   type: 'atomColor',
   label: 'Atom color',
-  description: 'Color matching atoms.',
+  description: 'Deprecated — use Atom style (atomStyle). Still parsed/rendered for back-compat (value → border color).',
+  deprecated: true,
   fields: [
     {
       key: 'value',
@@ -653,6 +656,17 @@ const TEXT_STYLE_FIELDS: readonly FieldSpec[] = [
   { key: 'color', kind: 'color', label: 'Color' },
 ];
 
+/** Shared `fillStyle` block children — an atom's interior fill. No defaults (sparse). */
+const FILL_STYLE_FIELDS: readonly FieldSpec[] = [
+  { key: 'color', kind: 'color', label: 'Color' },
+];
+
+/** Shared `borderStyle` block children — an atom's outline color + width. No defaults (sparse). */
+const BORDER_STYLE_FIELDS: readonly FieldSpec[] = [
+  { key: 'color', kind: 'color', label: 'Color' },
+  { key: 'width', kind: 'number', label: 'Width' },
+];
+
 const edgeStyle: ItemDefinition = {
   kind: 'directive',
   type: 'edgeStyle',
@@ -673,6 +687,27 @@ const edgeStyle: ItemDefinition = {
     const color = asString(line.color);
     const base = field ? (color ? `${field}: ${color}` : field) : color || 'edge';
     const selector = asString(params.selector);
+    return selector ? `${base} · ${selector}` : base;
+  },
+};
+
+const atomStyle: ItemDefinition = {
+  kind: 'directive',
+  type: 'atomStyle',
+  label: 'Atom style',
+  description: 'Style matching atoms — fill, border, and label.',
+  fields: [
+    { key: 'selector', kind: 'selector', label: 'Selector', selectorArity: 'unary' },
+    { key: 'fillStyle', kind: 'group', label: 'Fill style', children: FILL_STYLE_FIELDS },
+    { key: 'borderStyle', kind: 'group', label: 'Border style', children: BORDER_STYLE_FIELDS },
+    { key: 'textStyle', kind: 'group', label: 'Text style', children: TEXT_STYLE_FIELDS },
+  ],
+  summary(params) {
+    const fill = (params.fillStyle ?? {}) as Record<string, unknown>;
+    const border = (params.borderStyle ?? {}) as Record<string, unknown>;
+    const color = asString(fill.color) || asString(border.color);
+    const selector = asString(params.selector);
+    const base = color || 'atom';
     return selector ? `${base} · ${selector}` : base;
   },
 };
@@ -828,6 +863,7 @@ const DEFINITIONS: readonly ItemDefinition[] = [
   attribute,
   hideField,
   icon,
+  atomStyle,
   atomColor,
   edgeStyle,
   edgeColor,
