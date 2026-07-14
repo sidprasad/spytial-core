@@ -21,7 +21,7 @@
  *     - hideAtom:    { selector }
  *   directives:
  *     - flag: <scalar string>
- *     - attribute:    { field, selector?, filter? }
+ *     - attribute:    { field, selector?, filter?, textStyle?:{size,color} }
  *     - hideField:    { field, selector?, filter? }
  *     - icon:         { path, selector?, showLabels? }
  *     - atomStyle:    { selector?, fillStyle?:{color}, borderStyle?:{color,width}, textStyle?:{size,color} }
@@ -29,7 +29,7 @@
  *     - edgeStyle:    { field, selector?, filter?, lineStyle?:{color,pattern,weight,highlight}, textStyle?:{size,color}, showLabel?, hidden? }
  *     - edgeColor:    { value, field, selector?, filter?, style?, weight?, showLabel?, hidden?, highlight? }  (deprecated → edgeStyle)
  *     - inferredEdge: { name, selector?, lineStyle?:{color,pattern,weight,highlight}, textStyle?:{size,color} }
- *     - tag:          { toTag, name, value }
+ *     - tag:          { toTag, name, value, textStyle?:{size,color} }
  *
  * This module is framework-agnostic — no React.
  */
@@ -97,13 +97,24 @@ export const ALIGN_DIRECTIONS = ['horizontal', 'vertical'] as const;
 export const EDGE_STYLES = ['solid', 'dashed', 'dotted'] as const;
 
 /**
- * Text-size tiers for an `attribute` / `tag` line, relative to the node label.
- * `large` renders bigger than the label, `normal` (the engine default) smaller,
- * `small` smaller still. (Mirrors AttrTextSize in text-extent.ts.) No field
- * `default` is set on these — an unset value is omitted from YAML and the engine
- * treats it as `normal`, so specs stay clean.
+ * Text-size tiers for a label line, relative to the node label. `large` renders
+ * bigger than the label, `normal` (the engine default) smaller, `small` smaller
+ * still. (Mirrors AttrTextSize in text-extent.ts.) Used as the `size` option in
+ * the shared `textStyle` block ({@link TEXT_STYLE_FIELDS}). No field `default` is
+ * set — an unset value is omitted from YAML and the engine treats it as `normal`,
+ * so specs stay clean.
  */
 export const TEXT_SIZE_OPTIONS = ['small', 'normal', 'large'] as const;
+
+/**
+ * Shared `textStyle` block children — reused wherever a label is styled
+ * (attribute, tag, edgeStyle, atomStyle, group). No defaults (sparse). Declared
+ * here, ahead of the directive definitions, so every consumer can reference it.
+ */
+const TEXT_STYLE_FIELDS: readonly FieldSpec[] = [
+  { key: 'size', kind: 'enum', options: TEXT_SIZE_OPTIONS, label: 'Size' },
+  { key: 'color', kind: 'color', label: 'Color' },
+];
 
 /**
  * Direction of the optional edge a group-by-selector draws between the group
@@ -553,13 +564,8 @@ const attribute: ItemDefinition = {
       label: 'Selector',
       selectorArity: 'unary',
     },
-    {
-      key: 'textSize',
-      kind: 'enum',
-      options: TEXT_SIZE_OPTIONS,
-      label: 'Text size',
-      help: 'Font size of this attribute line: large is bigger than the node label, normal (default) is smaller, small is smaller still.',
-    },
+    // Shared text-style block (size + color), same shape edgeStyle/atomStyle use.
+    { key: 'textStyle', kind: 'group', label: 'Text style', children: TEXT_STYLE_FIELDS },
   ],
   summary(params) {
     const field = asString(params.field);
@@ -670,12 +676,6 @@ const LINE_STYLE_FIELDS: readonly FieldSpec[] = [
   { key: 'pattern', kind: 'enum', options: EDGE_STYLES, label: 'Pattern' },
   { key: 'weight', kind: 'number', label: 'Weight' },
   { key: 'highlight', kind: 'color', label: 'Highlight' },
-];
-
-/** Shared `textStyle` block children — reused wherever a label is styled. No defaults. */
-const TEXT_STYLE_FIELDS: readonly FieldSpec[] = [
-  { key: 'size', kind: 'enum', options: TEXT_SIZE_OPTIONS, label: 'Size' },
-  { key: 'color', kind: 'color', label: 'Color' },
 ];
 
 /** Shared `fillStyle` block children — an atom's interior fill. No defaults (sparse). */
@@ -843,13 +843,8 @@ const tag: ItemDefinition = {
       required: true,
       help: 'Selector whose result becomes the attribute value.',
     },
-    {
-      key: 'textSize',
-      kind: 'enum',
-      options: TEXT_SIZE_OPTIONS,
-      label: 'Text size',
-      help: 'Font size of this tag line: large is bigger than the node label, normal (default) is smaller, small is smaller still.',
-    },
+    // Shared text-style block (size + color), same shape edgeStyle/atomStyle use.
+    { key: 'textStyle', kind: 'group', label: 'Text style', children: TEXT_STYLE_FIELDS },
   ],
   summary(params) {
     const name = asString(params.name);

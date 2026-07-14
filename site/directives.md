@@ -453,7 +453,9 @@ Converts an edge relationship into a **label on the source node**. The edge is r
     field: <field-name>          # Required
     selector: <unary-selector>   # Optional
     filter: <n-ary-selector>     # Optional
-    textSize: <size>             # Optional: small | normal | large
+    textStyle:                   # Optional: shared text-style block
+      size: <small|normal|large> #   font size relative to the node label
+      color: <color>             #   text color (any CSS color)
 ```
 
 | Field | Required | Type | Description |
@@ -461,14 +463,15 @@ Converts an edge relationship into a **label on the source node**. The edge is r
 | `field` | Yes | string | Relation to display as an attribute |
 | `selector` | No | string | Filter by source atom type |
 | `filter` | No | string | Filter specific tuples |
-| `textSize` | No | `small` \| `normal` \| `large` | Size of the attribute text relative to the node label (default `normal`) |
+| `textStyle.size` | No | `small` \| `normal` \| `large` | Size of the attribute text relative to the node label (default `normal`) |
+| `textStyle.color` | No | string | Text color of the attribute line (default inherits the node label color) |
 
 ### What Happens
 
 - The edge for this field is **removed** from the graph
 - The target value appears as `field: value` on the source node
 - Multiple targets become a comma-separated list
-- `textSize` scales the line's font: `large` is bigger than the node label, `normal` (default) is smaller, `small` smaller still; the node box resizes to fit
+- `textStyle` is the same shared block edges and atoms use. `size` scales the line's font (`large` bigger than the node label, `normal` default, `small` smaller still; the node box resizes to fit); `color` sets its text color (unset = inherit the node label color)
 
 ### Examples
 
@@ -524,7 +527,9 @@ Adds computed labels to nodes **without** removing edges. Unlike `attribute`, th
     toTag: <unary-selector>      # Required
     name: <attribute-name>       # Required
     value: <n-ary-selector>      # Required
-    textSize: <size>             # Optional: small | normal | large
+    textStyle:                   # Optional: shared text-style block
+      size: <small|normal|large> #   font size relative to the node label
+      color: <color>             #   text color (any CSS color)
 ```
 
 | Field | Required | Type | Description |
@@ -532,14 +537,15 @@ Adds computed labels to nodes **without** removing edges. Unlike `attribute`, th
 | `toTag` | Yes | string | Selector for atoms that receive the tag |
 | `name` | Yes | string | Label name to display |
 | `value` | Yes | string | Selector whose result becomes the value |
-| `textSize` | No | `small` \| `normal` \| `large` | Size of the tag text relative to the node label (default `normal`) |
+| `textStyle.size` | No | `small` \| `normal` \| `large` | Size of the tag text relative to the node label (default `normal`) |
+| `textStyle.color` | No | string | Text color of the tag line (default inherits the node label color) |
 
 ### Behavior
 
 - Does **NOT** remove edges (unlike `attribute`)
 - For binary results: displays as `name: value`
 - For higher-arity results: displays as `name[key1][key2]: value`
-- `textSize` scales the line's font: `large` is bigger than the node label, `normal` (default) is smaller, `small` smaller still
+- `textStyle` is the same shared block edges and atoms use. `size` scales the line's font (`large` bigger than the node label, `normal` default, `small` smaller still); `color` sets its text color (unset = inherit the node label color)
 
 ### Examples
 

@@ -4151,11 +4151,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           .sort(([a], [b]) => a.localeCompare(b));
         const labelEntries = Object.entries(d.labels || {});
 
-        // Per-attribute text size (small/normal/large tiers → px). Each line
-        // gets its own line-height, so the secondary block is no longer a
-        // uniform grid; we track heights per line to place baselines.
+        // Per-attribute text style (the shared `textStyle` block: size + color).
+        // Size (small/normal/large tiers → px) drives each line's own line-height,
+        // so the secondary block is no longer a uniform grid; we track heights per
+        // line to place baselines. Color is applied as the tspan fill below.
+        const attributeStyles = d.attributeTextStyles || {};
         const attributeFontSizes = attributeEntries.map(
-          ([key]) => resolveAttrFontSize((d.attributeSizes || {})[key])
+          ([key]) => resolveAttrFontSize(attributeStyles[key]?.size)
         );
         // Secondary line-heights in DOM order: Skolem labels first, then attributes.
         const secondaryHeights = [
@@ -4226,6 +4228,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
             .attr("x", 0)
             .attr("dy", `${tspanDys[1 + labelEntries.length + idx]}px`)
             .style("font-size", `${fontSize}px`)
+            // textStyle.color for this attribute/tag line; null = inherit the
+            // themed parent `.label` fill (so dark mode still lightens it).
+            .style("fill", attributeStyles[key]?.color ?? null)
             .text(`${key}: ${value}`);
         });
       });

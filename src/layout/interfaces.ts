@@ -1,7 +1,6 @@
 import { Group } from "webcola";
 import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint, GroupByField, GroupBySelector, RelativeDirection } from "./layoutspec";
 import { EdgeStyle } from "./edge-style";
-import { AttrTextSize } from "./text-extent";
 import type { TextStyle } from "./style/text-style";
 
 export interface LayoutGroup {
@@ -88,11 +87,12 @@ export interface LayoutNode {
     groups?: string[];
     attributes?: Record<string, string[]>;
     /**
-     * Per-attribute-key text-size tier (from the `textSize` field of an
-     * `attribute` or `tag` directive). Keyed by the same attribute key as
-     * {@link attributes}. Absent keys render at the normal secondary size.
+     * Per-attribute-key text style (the shared `textStyle` block: size + color)
+     * from an `attribute` or `tag` directive. Keyed by the same attribute key as
+     * {@link attributes}. Absent keys render at the normal secondary size with
+     * the inherited label color.
      */
-    attributeSizes?: Record<string, AttrTextSize>;
+    attributeTextStyles?: Record<string, TextStyle>;
     /**
      * Labels associated with this node from the data instance (e.g., Skolems).
      * These are displayed prominently on nodes, typically styled in the node's color.

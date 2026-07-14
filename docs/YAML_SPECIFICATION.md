@@ -693,7 +693,9 @@ Converts edge relationships into node attributes (displayed as key-value pairs o
     field: <field-name>          # Required: Relation to convert to attribute
     selector: <unary-selector>   # Optional: Filter which source atoms apply
     filter: <n-ary-selector>     # Optional: Filter which tuples to include
-    textSize: <size>             # Optional: small | normal | large (default: normal)
+    textStyle:                   # Optional: style the attribute line (shared block)
+      size: <small|normal|large> #   font size relative to the node label (default: normal)
+      color: <color>             #   text color (any CSS color)
 ```
 
 **Fields:**
@@ -703,13 +705,14 @@ Converts edge relationships into node attributes (displayed as key-value pairs o
 | `field` | ✅ Yes | string | Name of the relation to display as attribute |
 | `selector` | ❌ No | string | Unary selector to filter source atoms |
 | `filter` | ❌ No | string | N-ary selector to filter specific tuples |
-| `textSize` | ❌ No | `small` \| `normal` \| `large` | Size of this attribute's text, relative to the node label. Default `normal`. |
+| `textStyle.size` | ❌ No | `small` \| `normal` \| `large` | Size of this attribute's text, relative to the node label. Default `normal`. |
+| `textStyle.color` | ❌ No | string | Text color of this attribute's line (any CSS color). Default inherits the node label color. |
 
 **Behavior:**
 - Removes the edge from the graph
 - Displays the target value as an attribute on the source node
 - Multiple targets become a list
-- `textSize` controls the line's font size: `large` renders **bigger** than the node's label, `normal` is the default (smaller than the label), and `small` is smaller still. The node box grows/shrinks to fit.
+- `textStyle` is the same shared block edges and atoms use. `size` controls the line's font size: `large` renders **bigger** than the node's label, `normal` is the default (smaller than the label), and `small` is smaller still — the node box grows/shrinks to fit. `color` sets the line's text color (unset = inherit the node's label color, so dark mode still adapts).
 
 **Examples:**
 
@@ -728,10 +731,10 @@ Converts edge relationships into node attributes (displayed as key-value pairs o
     field: status
     filter: 'status & (univ -> Active)'
 
-# Emphasize a key attribute — rendered larger than the node label
+# Emphasize a key attribute — larger than the node label, in red
 - attribute:
     field: balance
-    textSize: large
+    textStyle: { size: large, color: "#c0392b" }
 ```
 
 ---
@@ -745,7 +748,9 @@ Adds computed attributes to nodes based on selector evaluation. Unlike `attribut
     toTag: <unary-selector>      # Required: Selector for atoms to receive the tag
     name: <attribute-name>       # Required: Name of the attribute to display
     value: <n-ary-selector>      # Required: Selector whose result becomes the value
-    textSize: <size>             # Optional: small | normal | large (default: normal)
+    textStyle:                   # Optional: style the tag line (shared block)
+      size: <small|normal|large> #   font size relative to the node label (default: normal)
+      color: <color>             #   text color (any CSS color)
 ```
 
 **Fields:**
@@ -755,13 +760,14 @@ Adds computed attributes to nodes based on selector evaluation. Unlike `attribut
 | `toTag` | ✅ Yes | string | Unary selector for atoms that receive this tag |
 | `name` | ✅ Yes | string | Attribute name to display |
 | `value` | ✅ Yes | string | N-ary selector returning the attribute values |
-| `textSize` | ❌ No | `small` \| `normal` \| `large` | Size of this tag's text, relative to the node label. Default `normal`. |
+| `textStyle.size` | ❌ No | `small` \| `normal` \| `large` | Size of this tag's text, relative to the node label. Default `normal`. |
+| `textStyle.color` | ❌ No | string | Text color of this tag's line (any CSS color). Default inherits the node label color. |
 
 **Behavior:**
 - Does NOT remove edges (unlike `attribute`)
 - For binary results: displays as `name: value`
 - For n-ary results: displays as `name[key1][key2]: value`
-- `textSize` controls the line's font size: `large` renders **bigger** than the node's label, `normal` is the default (smaller than the label), and `small` is smaller still.
+- `textStyle` is the same shared block edges and atoms use. `size` controls the line's font size: `large` renders **bigger** than the node's label, `normal` is the default (smaller than the label), and `small` is smaller still. `color` sets the line's text color (unset = inherit the node's label color).
 
 **Examples:**
 
@@ -778,12 +784,12 @@ Adds computed attributes to nodes based on selector evaluation. Unlike `attribut
     name: score
     value: grades
 
-# De-emphasize a secondary tag — rendered smaller than the default
+# De-emphasize a secondary tag — smaller than the default, muted gray
 - tag:
     toTag: Person
     name: id
     value: internalId
-    textSize: small
+    textStyle: { size: small, color: "#888" }
 ```
 
 ---
