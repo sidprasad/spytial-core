@@ -21,7 +21,7 @@
  *     - hideAtom:    { selector }
  *   directives:
  *     - flag: <scalar string>
- *     - attribute:    { field, selector?, filter? }
+ *     - attribute:    { field, selector?, filter?, textStyle?:{size,color} }
  *     - hideField:    { field, selector?, filter? }
  *     - icon:         { path, selector?, showLabels? }
  *     - atomStyle:    { selector?, fillStyle?:{color}, borderStyle?:{color,width}, textStyle?:{size,color} }
@@ -29,7 +29,7 @@
  *     - edgeStyle:    { field, selector?, filter?, lineStyle?:{color,pattern,weight,highlight}, textStyle?:{size,color}, showLabel?, hidden? }
  *     - edgeColor:    { value, field, selector?, filter?, style?, weight?, showLabel?, hidden?, highlight? }  (deprecated → edgeStyle)
  *     - inferredEdge: { name, selector?, lineStyle?:{color,pattern,weight,highlight}, textStyle?:{size,color} }
- *     - tag:          { toTag, name, value }
+ *     - tag:          { toTag, name, value, textStyle?:{size,color} }
  *
  * This module is framework-agnostic — no React.
  */
