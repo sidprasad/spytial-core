@@ -3252,6 +3252,16 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .style("pointer-events", "none");
   }
 
+  /** Edge-label font size from its textStyle tier, or null → CSS default (.linklabel). */
+  private edgeLabelFontSize(d: any): string | null {
+    return d?.textStyle?.size ? `${resolveAttrFontSize(d.textStyle.size)}px` : null;
+  }
+
+  /** Edge-label fill from its textStyle color, or null → CSS default (.linklabel). */
+  private edgeLabelFill(d: any): string | null {
+    return d?.textStyle?.color ?? null;
+  }
+
   private getEdgeDasharray(style?: string): string | null {
     if (!style) {
       return null;
@@ -3287,6 +3297,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr("text-anchor", "middle")
       .attr("dominant-baseline", "middle")
       .attr("font-family", this.getFontFamily())
+      // Edge-label styling from the edge's textStyle block. Use .style() (not
+      // .attr) so the inline value overrides the .linklabel CSS rule — a
+      // presentation attribute would lose to it. null → the CSS default applies.
+      .style("font-size", (d: any) => this.edgeLabelFontSize(d))
+      .style("fill", (d: any) => this.edgeLabelFill(d))
       .attr("pointer-events", "none")
       .text((d: any) => d.label || d.relName || "");
   }

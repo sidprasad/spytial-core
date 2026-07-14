@@ -52,7 +52,7 @@ describe('webcola translator — LayoutEdge style reaches the render datum', () 
     const toColaEdge = (edge: any) =>
         (WebColaLayout.prototype as any).toColaEdge.call({ getNodeIndex: (_id: string) => 0 }, edge);
 
-    it('carries color, pattern (style), weight, highlight, showLabel onto the datum', () => {
+    it('carries color, pattern (style), weight, highlight, showLabel, textStyle onto the datum', () => {
         const datum = toColaEdge({
             source: { id: 'A' },
             target: { id: 'B' },
@@ -64,6 +64,7 @@ describe('webcola translator — LayoutEdge style reaches the render datum', () 
             weight: 4,
             highlight: '#fc0',
             showLabel: true,
+            textStyle: { size: 'large', color: '#a00' },
         });
         expect(datum).toMatchObject({
             color: '#e63946',
@@ -71,6 +72,29 @@ describe('webcola translator — LayoutEdge style reaches the render datum', () 
             weight: 4,
             highlight: '#fc0',
             showLabel: true,
+            textStyle: { size: 'large', color: '#a00' },
         });
+    });
+});
+
+describe('webcola-cnd-graph — edge label textStyle → font-size / fill', () => {
+    const fontSize = (d: unknown) => proto.edgeLabelFontSize.call({}, d);
+    const fill = (d: unknown) => proto.edgeLabelFill.call({}, d);
+
+    it('maps a textStyle size tier to a px font size', () => {
+        expect(fontSize({ textStyle: { size: 'small' } })).toBe('9px');
+        expect(fontSize({ textStyle: { size: 'normal' } })).toBe('11px');
+        expect(fontSize({ textStyle: { size: 'large' } })).toBe('16px');
+    });
+
+    it('returns null font-size when no size tier is set (→ CSS default)', () => {
+        expect(fontSize({ textStyle: {} })).toBeNull();
+        expect(fontSize({})).toBeNull();
+    });
+
+    it('passes a textStyle color to the label fill, else null', () => {
+        expect(fill({ textStyle: { color: '#a00' } })).toBe('#a00');
+        expect(fill({ textStyle: {} })).toBeNull();
+        expect(fill({})).toBeNull();
     });
 });

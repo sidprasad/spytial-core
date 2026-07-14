@@ -70,6 +70,19 @@ directives:
         expect(right[0].style).toBeUndefined();
     });
 
+    it('carries textStyle (edge-label styling) onto the LayoutEdge', () => {
+        const { layout } = layoutFor(`
+directives:
+  - edgeStyle:
+      field: left
+      textStyle:
+        size: large
+        color: '#a00'
+`)();
+        const e = layout.edges.find((edge) => edge.relationName === 'left');
+        expect(e?.textStyle).toEqual({ size: 'large', color: '#a00' });
+    });
+
     it('honors the selector, styling only edges from matching sources', () => {
         const { layout } = layoutFor(`
 directives:

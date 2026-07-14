@@ -1,6 +1,7 @@
 import { Node, Group, Link, Rectangle } from 'webcola';
 import { InstanceLayout, LayoutNode, LayoutEdge, LayoutConstraint, LayoutGroup, LeftConstraint, TopConstraint, AlignmentConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, isBoundingBoxConstraint, isGroupBoundaryConstraint, ColorSource } from '../../layout/interfaces';
 import { EdgeStyle } from '../../layout/edge-style';
+import type { TextStyle } from '../../layout/style/text-style';
 import type { AttrTextSize } from '../../layout/text-extent';
 import { LayoutInstance } from '../../layout/layoutinstance';
 import type { IDataInstance } from '../../data-instance/interfaces';
@@ -72,6 +73,8 @@ type EdgeWithMetadata = Link<NodeWithMetadata> & {
   /** Highlight color rendered as a wider underlay beneath the edge. Undefined = no highlight. */
   highlight?: string,
   showLabel?: boolean, // Whether to show the edge label (default: true)
+  /** Optional label styling (size / color) for the edge's label text. */
+  textStyle?: TextStyle,
   bidirectional?: boolean, // Flag to indicate if this edge represents a bidirectional relationship
   /**
    * For group edges (id starts with `_g_`), the name of the group this edge
@@ -727,6 +730,7 @@ export class WebColaLayout {
       weight: edge.weight,
       highlight: edge.highlight,
       showLabel: edge.showLabel,
+      textStyle: edge.textStyle,
       groupId: edge.groupId,
       keyNodeId: edge.keyNodeId,
     }

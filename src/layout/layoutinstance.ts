@@ -2443,6 +2443,9 @@ export class LayoutInstance {
             let weight = styled.lineStyle?.weight ?? this.getEdgeWeight(relName, dirSource, dirTarget, edgeId);
             let showLabel = styled.showLabel ?? this.getEdgeShowLabel(relName, dirSource, dirTarget, edgeId);
             let highlight = styled.lineStyle?.highlight ?? this.getEdgeHighlight(relName, dirSource, dirTarget, edgeId);
+            // Edge-label styling: inferred edges carry their own textStyle; otherwise
+            // it comes from the resolved edgeStyle (edgeColor has no label styling).
+            let textStyle = this.getInferredEdgeDirective(edgeId)?.textStyle ?? styled.textStyle;
 
             // Skip edges with missing source or target nodes
             if (!source || !target || !edgeId) {
@@ -2460,6 +2463,7 @@ export class LayoutInstance {
                 weight: weight,
                 showLabel: showLabel,
                 highlight: highlight,
+                textStyle: textStyle,
                 // For group edges the graphlib edge label IS the group name (see constructGroupEdgeID).
                 // Carry it forward so the renderer can look up the group directly by ID
                 // without re-parsing the edge ID string or matching fragile leaf indices.

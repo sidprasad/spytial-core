@@ -2,6 +2,7 @@ import { Group } from "webcola";
 import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint, GroupByField, GroupBySelector, RelativeDirection } from "./layoutspec";
 import { EdgeStyle } from "./edge-style";
 import { AttrTextSize } from "./text-extent";
+import type { TextStyle } from "./style/text-style";
 
 export interface LayoutGroup {
     // The name of the group
@@ -96,6 +97,8 @@ export interface LayoutEdge {
     hidden?: boolean;
     /** Highlight color rendered as a wider underlay beneath the edge. Undefined = no highlight. */
     highlight?: string;
+    /** Optional label styling (size / color), applied to the edge's label text. */
+    textStyle?: TextStyle;
     /**
      * For group edges (_g_ prefix), the name of the group this edge was created for.
      * Matches `group.id` in the WebCola translator so routing can look up the group
