@@ -29,13 +29,15 @@ import type { IEvaluatorResult } from '../evaluators/interfaces';
 import { ColorPicker } from './colorpicker';
 import { type ConstraintError, type ErrorMessages, ConstraintValidator, orientationConstraintToString } from './constraint-validator';
 import { QualitativeConstraintValidator } from './qualitative-constraint-validator';
-import { estimateLabelBox } from './text-extent';
+import { estimateLabelBox, resolveAttrFontSize, AttrTextSize, SecondaryLine } from './text-extent';
 
 /** The strings the renderer will draw inside a node's box. Used to size the box. */
 type NodeDisplayContent = {
     label: string;
     /** One per attribute key, formatted "key: v1, v2, ..." to match the renderer. */
     attributeLines: string[];
+    /** Pixel font size for each entry in {@link attributeLines} (same order/length). */
+    attributeFontSizes: number[];
     /** One per Skolem-label key, formatted as "v1, v2, ..." (key not shown by renderer). */
     skolemLines: string[];
 };
@@ -809,9 +811,14 @@ export class LayoutInstance {
      * @param g - The graph, which will be modified to remove the edges that are used to determine attributes.
      * @returns A record of attributes
      */
-    private generateAttributesAndRemoveEdges(g: Graph): Record<string, Record<string, string[]>> {
+    private generateAttributesAndRemoveEdges(g: Graph): {
+        attributes: Record<string, Record<string, string[]>>;
+        sizes: Record<string, Record<string, AttrTextSize>>;
+    } {
         // Node : [] of attributes
         let attributes: Record<string, Record<string, string[]>> = {};
+        // Node : attrKey -> text-size tier (parallel to `attributes`).
+        let sizes: Record<string, Record<string, AttrTextSize>> = {};
 
         let graphEdges = [...g.edges()];
         // Go through all edge labels in the graph
@@ -854,12 +861,55 @@ export class LayoutInstance {
                 }
                 nodeAttributes[attributeKey].push(targetLabel);
 
+                // Record the text-size tier from the matching attribute directive.
+                const nodeSizes = sizes[source] || (sizes[source] = {});
+                nodeSizes[attributeKey] = this.getAttributeTextSize(relName, sourceAtom, targetAtom);
+
                 // Now remove the edge from the graph
                 g.removeEdge(edge.v, edge.w, edgeId);
             }
         });
 
-        return attributes;
+        return { attributes, sizes };
+    }
+
+    /**
+     * Text-size tier for an attribute field, taken from the first matching
+     * `attribute` directive (mirroring {@link isAttributeField}'s selector/filter
+     * matching). Defaults to `normal` when no matching directive sets `textSize`.
+     */
+    private getAttributeTextSize(fieldId: string, sourceAtom: string, targetAtom: string): AttrTextSize {
+        const matchingDirectives = this._layoutSpec.directives.attributes.filter((ad) => ad.field === fieldId);
+
+        for (const directive of matchingDirectives) {
+            let selectorMatches = true;
+            if (directive.selector) {
+                try {
+                    const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
+                    selectorMatches = selectorResult.selectedAtoms().includes(sourceAtom);
+                } catch {
+                    selectorMatches = false;
+                }
+            }
+            if (!selectorMatches) continue;
+
+            let filterMatches = true;
+            if (directive.filter) {
+                try {
+                    const filterResult = this.evaluator.evaluate(directive.filter, { instanceIndex: this.instanceNum });
+                    filterMatches = filterResult.selectedTwoples().some(
+                        tuple => tuple[0] === sourceAtom && tuple[1] === targetAtom
+                    );
+                } catch {
+                    filterMatches = false;
+                }
+            }
+            if (!filterMatches) continue;
+
+            return directive.textSize ?? 'normal';
+        }
+
+        return 'normal';
     }
 
     /**
@@ -880,18 +930,30 @@ export class LayoutInstance {
      */
     private generateTagsForNodes(
         g: Graph,
-        existingAttributes: Record<string, Record<string, string[]>>
-    ): Record<string, Record<string, string[]>> {
+        existingAttributes: Record<string, Record<string, string[]>>,
+        existingSizes: Record<string, Record<string, AttrTextSize>>
+    ): {
+        attributes: Record<string, Record<string, string[]>>;
+        sizes: Record<string, Record<string, AttrTextSize>>;
+    } {
         const tagDirectives = this._layoutSpec.directives.tags;
-        
+
         if (!tagDirectives || tagDirectives.length === 0) {
-            return existingAttributes;
+            return { attributes: existingAttributes, sizes: existingSizes };
         }
 
         const attributes = { ...existingAttributes };
+        const sizes = { ...existingSizes };
         const graphNodes = new Set(g.nodes());
 
+        // Stamp the tag's text-size tier onto its attribute key (parallel to `attributes`).
+        const recordSize = (atomId: string, attrKey: string, size: AttrTextSize) => {
+            const nodeSizes = sizes[atomId] || (sizes[atomId] = {});
+            nodeSizes[attrKey] = size;
+        };
+
         for (const directive of tagDirectives) {
+            const tagSize: AttrTextSize = directive.textSize ?? 'normal';
             try {
                 // First, evaluate the toTag selector to get which nodes receive this tag
                 const toTagResult = this.evaluator.evaluate(directive.toTag, { instanceIndex: this.instanceNum });
@@ -931,6 +993,7 @@ export class LayoutInstance {
                             // For unary, the value is the atom label itself
                             const nodeLabel = g.node(atomId)?.label || atomId;
                             attributes[atomId][attrKey].push(String(nodeLabel));
+                            recordSize(atomId, attrKey, tagSize);
                         } else if (tuple.length === 2) {
                             // Binary tuple: name: lastValue
                             const attrKey = directive.name;
@@ -939,10 +1002,11 @@ export class LayoutInstance {
                             }
                             const lastValue = tuple[tuple.length - 1];
                             // Get the label for the last element if it's a node
-                            const valueLabel = graphNodes.has(String(lastValue)) 
+                            const valueLabel = graphNodes.has(String(lastValue))
                                 ? (g.node(String(lastValue))?.label || String(lastValue))
                                 : String(lastValue);
                             attributes[atomId][attrKey].push(valueLabel);
+                            recordSize(atomId, attrKey, tagSize);
                         } else {
                             // N-ary tuple (n > 2): name[mid1][mid2]...: lastValue
                             // The key includes all middle elements
@@ -971,6 +1035,7 @@ export class LayoutInstance {
                                 ? (g.node(String(lastValue))?.label || String(lastValue))
                                 : String(lastValue);
                             attributes[atomId][attrKey].push(valueLabel);
+                            recordSize(atomId, attrKey, tagSize);
                         }
                     }
                 }
@@ -983,7 +1048,7 @@ export class LayoutInstance {
             }
         }
 
-        return attributes;
+        return { attributes, sizes };
     }
 
     /**
@@ -1114,10 +1179,10 @@ export class LayoutInstance {
         // We apply built-in hiding afterwards in `ensureNoExtraNodes` so inferred edges can reconnect them.
         let g: Graph = ai.generateGraph(this.hideDisconnected, false);
 
-        let attributes = this.generateAttributesAndRemoveEdges(g);
-        
-        // Generate and merge tags into attributes
-        attributes = this.generateTagsForNodes(g, attributes);
+        let { attributes, sizes: attributeSizes } = this.generateAttributesAndRemoveEdges(g);
+
+        // Generate and merge tags into attributes (carrying per-key text sizes alongside)
+        ({ attributes, sizes: attributeSizes } = this.generateTagsForNodes(g, attributes, attributeSizes));
 
         // This is where we add the inferred edges to the graph.
         this.addinferredEdges(g);
@@ -1134,7 +1199,7 @@ export class LayoutInstance {
         // Compute the display strings once — single source of truth for "what's
         // drawn inside the box" so the box sizer (getNodeSizeMap) and the
         // LayoutNode mapping below see the same content.
-        let contentByNode = this.getNodeDisplayContent(g, ai, attributes);
+        let contentByNode = this.getNodeDisplayContent(g, ai, attributes, attributeSizes);
         let nodeSizeMap = this.getNodeSizeMap(g, contentByNode);
 
         let dcN = this.getDisconnectedNodes(g);
@@ -1169,6 +1234,7 @@ export class LayoutInstance {
                 .filter((group) => group.nodeIds.includes(nodeId))
                 .map((group) => group.name);
             let nodeAttributes = attributes[nodeId] || {};
+            let nodeAttributeSizes = attributeSizes[nodeId] || {};
 
             // Get labels from the data instance (e.g., Skolems in Alloy)
             let nodeLabels: Record<string, string[]> | undefined = undefined;
@@ -1186,6 +1252,7 @@ export class LayoutInstance {
                 colorSource: colorSource,
                 groups: nodeGroups,
                 attributes: nodeAttributes,
+                attributeSizes: nodeAttributeSizes,
                 labels: nodeLabels,
                 icon: iconPath,
                 height: height,
@@ -2475,7 +2542,8 @@ export class LayoutInstance {
     private getNodeDisplayContent(
         g: Graph,
         ai: IDataInstance,
-        attributes: Record<string, Record<string, string[]>>
+        attributes: Record<string, Record<string, string[]>>,
+        attributeSizes: Record<string, Record<string, AttrTextSize>>
     ): Record<string, NodeDisplayContent> {
         const result: Record<string, NodeDisplayContent> = {};
         const atoms = ai.getAtoms();
@@ -2485,9 +2553,12 @@ export class LayoutInstance {
             const label = nodeMetadata?.label || nodeId;
 
             const nodeAttrs = attributes[nodeId] || {};
-            const attributeLines = Object.entries(nodeAttrs)
-                .sort(([a], [b]) => a.localeCompare(b))
-                .map(([key, values]) => `${key}: ${values.join(', ')}`);
+            const nodeSizes = attributeSizes[nodeId] || {};
+            // Sort once so line text and its font size stay index-aligned.
+            const sortedAttrEntries = Object.entries(nodeAttrs)
+                .sort(([a], [b]) => a.localeCompare(b));
+            const attributeLines = sortedAttrEntries.map(([key, values]) => `${key}: ${values.join(', ')}`);
+            const attributeFontSizes = sortedAttrEntries.map(([key]) => resolveAttrFontSize(nodeSizes[key]));
 
             const atom = atoms.find((x) => x.id === nodeId);
             const skolemLines: string[] = [];
@@ -2497,7 +2568,7 @@ export class LayoutInstance {
                 }
             }
 
-            result[nodeId] = { label, attributeLines, skolemLines };
+            result[nodeId] = { label, attributeLines, attributeFontSizes, skolemLines };
         }
         return result;
     }
@@ -2553,7 +2624,14 @@ export class LayoutInstance {
             if (nodeSizeMap[nodeId]) continue;
             const c = contentByNode[nodeId];
             const main = c?.label ?? '';
-            const secondary = c ? [...c.attributeLines, ...c.skolemLines] : [];
+            // Attribute lines carry their own tier so the box fits large/small
+            // text; Skolem lines default to the normal secondary size.
+            const secondary: SecondaryLine[] = c
+                ? [
+                    ...c.attributeLines.map((text, i) => ({ text, fontSize: c.attributeFontSizes[i] })),
+                    ...c.skolemLines,
+                ]
+                : [];
             nodeSizeMap[nodeId] = estimateLabelBox(main, secondary, { min: floor });
         }
 
