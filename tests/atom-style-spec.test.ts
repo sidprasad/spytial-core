@@ -43,6 +43,12 @@ describe('atomColorToAtomStyleRule — border-preserving desugar', () => {
             style: { borderStyle: { color: '#eef' } },
         });
     });
+
+    it('returns null for a missing/blank selector (atomColor requires one — never a global recolor)', () => {
+        expect(atomColorToAtomStyleRule({ value: '#eef' })).toBeNull();
+        expect(atomColorToAtomStyleRule({ value: '#eef', selector: '' })).toBeNull();
+        expect(atomColorToAtomStyleRule({ value: '#eef', selector: '   ' })).toBeNull();
+    });
 });
 
 describe('resolveAtomStyle — compose + collide', () => {

@@ -184,6 +184,19 @@ directives:
         expect(warn).toHaveBeenCalledWith(expect.stringContaining("'edgeColor' is deprecated"));
         warn.mockRestore();
     });
+
+    it('preserves a capitalized legacy style (Dashed → dashed) through to the LayoutEdge', () => {
+        // The old edgeColor path lowercased via normalizeEdgeStyle; the desugar must too.
+        const { layout } = layoutFor(`
+directives:
+  - edgeColor:
+      field: left
+      value: '#111111'
+      style: Dashed
+`)();
+        const e = layout.edges.find((edge) => edge.relationName === 'left');
+        expect(e?.style).toBe('dashed');
+    });
 });
 
 describe('inferredEdge — lineStyle/textStyle block adoption', () => {

@@ -1,8 +1,19 @@
 import { describe, it, expect } from 'vitest';
-import { parseEdgeStyleSpec, resolveEdgeStyle } from '../src/layout/style/edge-style-spec';
+import { parseEdgeStyleSpec, resolveEdgeStyle, edgeColorToEdgeStyleRule } from '../src/layout/style/edge-style-spec';
 import type { EdgeStyleRule } from '../src/layout/style/edge-style-spec';
 import { StyleCollisionError } from '../src/layout/style/style-resolver';
 import { parseLayoutSpec } from '../src/layout/layoutspec';
+
+describe('edgeColorToEdgeStyleRule — legacy style normalization', () => {
+    it('normalizes a capitalized/padded legacy style like normalizeEdgeStyle did', () => {
+        expect(edgeColorToEdgeStyleRule({ field: 'r', value: 'red', style: 'Dashed' }).style.lineStyle?.pattern).toBe('dashed');
+        expect(edgeColorToEdgeStyleRule({ field: 'r', value: 'red', style: '  dotted  ' }).style.lineStyle?.pattern).toBe('dotted');
+    });
+
+    it('drops an unrecognized legacy style (no pattern) rather than inventing one', () => {
+        expect(edgeColorToEdgeStyleRule({ field: 'r', value: 'red', style: 'zigzag' }).style.lineStyle?.pattern).toBeUndefined();
+    });
+});
 
 describe('parseEdgeStyleSpec', () => {
     it('extracts the nested lineStyle block', () => {

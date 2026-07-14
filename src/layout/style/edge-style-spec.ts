@@ -14,6 +14,7 @@
  * onto `edgeStyle` behind a deprecation warning.
  */
 import type { EdgeStyle } from '../edge-style';
+import { normalizeEdgeStyle } from '../edge-style';
 import { isTextSize } from './text-style';
 import type { TextStyle } from './text-style';
 import { resolveStyle } from './style-resolver';
@@ -113,7 +114,11 @@ export function edgeColorToEdgeStyleRule(raw: unknown): EdgeStyleRule {
 
     const lineStyle: LineStyle = {};
     if (typeof r.value === 'string') lineStyle.color = r.value;
-    if (isLinePattern(r.style)) lineStyle.pattern = r.style;
+    // Legacy `edgeColor.style` went through normalizeEdgeStyle (trim + lowercase),
+    // so `style: Dashed` / ` dashed ` rendered dashed. Normalize here too rather
+    // than strict-matching, or those specs would silently fall back to solid.
+    const pattern = normalizeEdgeStyle(r.style);
+    if (pattern) lineStyle.pattern = pattern;
     if (typeof r.weight === 'number' && Number.isFinite(r.weight) && r.weight > 0) lineStyle.weight = r.weight;
     if (typeof r.highlight === 'string') lineStyle.highlight = r.highlight;
 

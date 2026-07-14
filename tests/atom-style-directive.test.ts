@@ -202,4 +202,17 @@ directives:
         expect(warn).toHaveBeenCalledWith(expect.stringContaining("'atomColor' is deprecated"));
         warn.mockRestore();
     });
+
+    it('drops a selectorless atomColor instead of desugaring it into a global rule', () => {
+        // atomColor's selector is required; a missing one was a no-op, so it must
+        // NOT become an atomStyle that recolors every atom.
+        const spec = parseLayoutSpec("directives:\n  - atomColor: { value: '#f00' }");
+        expect(spec.directives.atomStyles).toEqual([]);
+    });
+
+    it('a selectorless atomColor does not recolor every node (end to end)', () => {
+        const { layout } = layoutFor("directives:\n  - atomColor: { value: '#f00' }")();
+        expect(nodeById(layout, 'n1').color).not.toBe('#f00');
+        expect(nodeById(layout, 'r1').color).not.toBe('#f00');
+    });
 });

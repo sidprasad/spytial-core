@@ -86,15 +86,21 @@ export function parseAtomStyleSpec(raw: unknown): AtomStyleSpec {
  * Desugar a legacy `atomColor` directive into an {@link AtomStyleRule}. Per the
  * border-preserving mapping, `value` → `borderStyle.color` (the node's outline —
  * what atomColor drives today), so existing diagrams are unchanged.
+ *
+ * `atomColor`'s selector is REQUIRED: a missing/blank one was always an
+ * error/no-op, never a global recolor. The atomStyle model treats an absent
+ * selector as "every atom", so a selectorless atomColor must NOT desugar into a
+ * rule that would repaint the whole graph — return `null` and let the caller
+ * drop it (matching the legacy no-op).
  */
-export function atomColorToAtomStyleRule(raw: unknown): AtomStyleRule {
+export function atomColorToAtomStyleRule(raw: unknown): AtomStyleRule | null {
     const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+    const selector = typeof r.selector === 'string' ? r.selector : '';
+    if (selector.trim().length === 0) return null;
+
     const style: AtomStyleSpec = {};
     if (typeof r.value === 'string') style.borderStyle = { color: r.value };
-    return {
-        selector: typeof r.selector === 'string' ? r.selector : undefined,
-        style,
-    };
+    return { selector, style };
 }
 
 function atomRuleSource(rule: AtomStyleRule): string {

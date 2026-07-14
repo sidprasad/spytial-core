@@ -892,7 +892,11 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
             "or a 'fillStyle' block for a real interior fill."
         );
     }
-    const desugaredAtomColors: AtomStyleRule[] = rawAtomColors.map(d => atomColorToAtomStyleRule(d.atomColor));
+    // A selectorless (malformed) atomColor desugars to null and is dropped — it
+    // was a no-op before, and must not become a global recolor of every atom.
+    const desugaredAtomColors: AtomStyleRule[] = rawAtomColors
+        .map(d => atomColorToAtomStyleRule(d.atomColor))
+        .filter((rule): rule is AtomStyleRule => rule !== null);
     let atomColors : AtomColorDirective[] = [];
 
     let sizes : AtomSizeDirective[] = typedDirectives.filter(d => d.size)
