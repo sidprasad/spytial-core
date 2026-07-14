@@ -69,16 +69,21 @@ directives:
 
 ## Edge Styling
 
-Customizes the appearance of edges for a specific field (relation). Use `edgeColor` in the directives section.
+Customizes the appearance of edges for a specific field (relation). Use `edgeStyle` in the directives section. An edge has a **line** and a **label**, styled with the shared `lineStyle` and `textStyle` blocks — the same blocks `inferredEdge` and group connectors reuse.
 
 ```yaml
-- edgeColor:
+- edgeStyle:
     field: <field-name>          # Required
-    value: <color>               # Required
-    selector: <unary-selector>   # Optional
-    filter: <n-ary-selector>     # Optional
-    style: <line-style>          # Optional (default: solid)
-    weight: <number>             # Optional
+    selector: <unary-selector>   # Optional: match edges from these source atoms
+    filter: <n-ary-selector>     # Optional: match specific tuples
+    lineStyle:                   # Optional: the drawn line
+      color: <color>
+      pattern: <solid|dashed|dotted>
+      weight: <number>
+      highlight: <color>
+    textStyle:                   # Optional: the edge label
+      size: <small|normal|large>
+      color: <color>
     showLabel: <boolean>         # Optional (default: true)
     hidden: <boolean>            # Optional (default: false)
 ```
@@ -86,13 +91,20 @@ Customizes the appearance of edges for a specific field (relation). Use `edgeCol
 | Field | Required | Type | Default | Description |
 |-------|----------|------|---------|-------------|
 | `field` | Yes | string | — | Name of the relation |
-| `value` | Yes | string | — | CSS color value |
-| `selector` | No | string | — | Filter by source atom type |
-| `filter` | No | string | — | Filter specific tuples |
-| `style` | No | string | `solid` | `solid`, `dashed`, or `dotted` |
-| `weight` | No | number | — | Line thickness in pixels |
+| `selector` | No | string | — | Match by source atom |
+| `filter` | No | string | — | Match specific tuples |
+| `lineStyle.color` | No | string | — | Line color |
+| `lineStyle.pattern` | No | enum | `solid` | `solid`, `dashed`, or `dotted` |
+| `lineStyle.weight` | No | number | — | Line thickness in pixels (> 0) |
+| `lineStyle.highlight` | No | string | — | Translucent underlay color |
+| `textStyle.size` | No | enum | `normal` | `small`, `normal`, or `large` |
+| `textStyle.color` | No | string | — | Edge-label color |
 | `showLabel` | No | boolean | `true` | Whether to display the edge label |
 | `hidden` | No | boolean | `false` | Hide the edge entirely |
+
+When several `edgeStyle` rules match one edge their set properties **compose**; setting the *same* property two different ways is an error — no silent override.
+
+> **`edgeColor` is the legacy form** and still works: `value`→`lineStyle.color`, `style`→`lineStyle.pattern`, `weight`→`lineStyle.weight`, `highlight`→`lineStyle.highlight`. It will desugar to `edgeStyle` with a deprecation warning. The scoping and example snippets below use `edgeColor`; swap the flat keys for the blocks above to get the `edgeStyle` form.
 
 ### Scoping with `selector` and `filter`
 

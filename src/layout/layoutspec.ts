@@ -1,6 +1,8 @@
 import * as yaml from 'js-yaml';
 import { EdgeStyle } from './edge-style';
 import { AttrTextSize } from './text-extent';
+import { EdgeStyleRule, parseEdgeStyleSpec, edgeColorToEdgeStyleRule } from './style/edge-style-spec';
+import type { TextStyle } from './style/text-style';
 
 export type RelativeDirection = "above" | "below" | "left" | "right" | "directlyAbove" | "directlyBelow" | "directlyLeft" | "directlyRight";
 export type RotationDirection = "clockwise" | "counterclockwise";
@@ -272,11 +274,16 @@ export interface AtomIconDirective extends VisualManipulation {
 
 export interface InferredEdgeDirective extends VisualManipulation {
     name : string;
+    /** Line color. Parsed from `lineStyle.color` (legacy inline `color` still accepted). */
     color?: string;
+    /** Line dash pattern. Parsed from `lineStyle.pattern` (legacy inline `style` still accepted). */
     style?: EdgeStyle;
+    /** Line weight. Parsed from `lineStyle.weight` (legacy inline `weight` still accepted). */
     weight?: number;
     /** Optional highlight color drawn as a wider underlay beneath the edge. */
     highlight?: string;
+    /** Optional label styling. Parsed from the `textStyle` block. */
+    textStyle?: TextStyle;
 }
 
 export interface AtomHidingDirective extends VisualManipulation {
@@ -368,6 +375,7 @@ interface DirectivesBlock {
     sizes: AtomSizeDirective[];
     icons: AtomIconDirective[];
     edgeColors: EdgeColorDirective[];
+    edgeStyles: EdgeStyleRule[];
     attributes: AttributeDirective[];
     tags: TagDirective[];
     hiddenFields: FieldHidingDirective[];
@@ -429,6 +437,7 @@ function DEFAULT_LAYOUT() : LayoutSpec
             sizes: [],
             icons: [],
             edgeColors: [],
+            edgeStyles: [],
             attributes: [],
             tags: [],
             hiddenFields: [],
@@ -853,20 +862,21 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
                     };
                 });
     
-    let edgeColors : EdgeColorDirective[] = typedDirectives.filter(d => d.edgeColor)
-                .map(d => {
-                    return {
-                        color: d.edgeColor.value,
-                        field: d.edgeColor.field,
-                        selector: d.edgeColor.selector,
-                        filter: d.edgeColor.filter,
-                        style: d.edgeColor.style,
-                        weight: d.edgeColor.weight,
-                        showLabel: d.edgeColor.showLabel,
-                        hidden: d.edgeColor.hidden,
-                        highlight: d.edgeColor.highlight
-                    }
-                });
+    // edgeColor is the deprecated flat form of edgeStyle. Desugar each into an
+    // EdgeStyleRule so both forms resolve through the one edgeStyle path (and
+    // compose / collide together). Emit one deprecation warning. `edgeColors` is
+    // kept empty only to satisfy the DirectivesBlock shape; its sole consumer
+    // (findEdgeDirective) then no-ops, and edge styling flows via `edgeStyles`.
+    const rawEdgeColors = typedDirectives.filter(d => d.edgeColor);
+    if (rawEdgeColors.length > 0) {
+        console.warn(
+            "[spytial] 'edgeColor' is deprecated and will be removed in a future major; " +
+            "use 'edgeStyle' with a 'lineStyle' block " +
+            "(value→lineStyle.color, style→lineStyle.pattern, weight→lineStyle.weight, highlight→lineStyle.highlight)."
+        );
+    }
+    const desugaredEdgeColors: EdgeStyleRule[] = rawEdgeColors.map(d => edgeColorToEdgeStyleRule(d.edgeColor));
+    let edgeColors : EdgeColorDirective[] = [];
 
     let attributes : AttributeDirective[]  = typedDirectives.filter(d => d.attribute).map(d => {
         return {
@@ -889,16 +899,32 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
     let hideDisconnected = flags.includes("hideDisconnected");
     let hideDisconnectedBuiltIns = flags.includes("hideDisconnectedBuiltIns");
 
+    // inferredEdge keeps its structural identity (name/selector) but adopts the
+    // shared lineStyle/textStyle blocks. Legacy inline color/style/weight/highlight
+    // still parse (mapped onto the flat fields) but are deprecated.
+    let usedLegacyInferredInline = false;
     let inferredEdges : InferredEdgeDirective[] = typedDirectives.filter(d => d.inferredEdge).map(d => {
-        return {
-            name: d.inferredEdge.name,
-            selector: d.inferredEdge.selector,
-            color: d.inferredEdge.color,
-            style: d.inferredEdge.style,
-            weight: d.inferredEdge.weight,
-            highlight: d.inferredEdge.highlight
+        const ie = d.inferredEdge;
+        const spec = parseEdgeStyleSpec(ie); // extracts lineStyle / textStyle blocks
+        if (ie.color !== undefined || ie.style !== undefined || ie.weight !== undefined || ie.highlight !== undefined) {
+            usedLegacyInferredInline = true;
         }
+        return {
+            name: ie.name,
+            selector: ie.selector,
+            color: spec.lineStyle?.color ?? ie.color,
+            style: spec.lineStyle?.pattern ?? ie.style,
+            weight: spec.lineStyle?.weight ?? ie.weight,
+            highlight: spec.lineStyle?.highlight ?? ie.highlight,
+            textStyle: spec.textStyle,
+        };
     });
+    if (usedLegacyInferredInline) {
+        console.warn(
+            "[spytial] inferredEdge's inline 'color'/'style'/'weight'/'highlight' are deprecated; " +
+            "use a 'lineStyle' block (color, pattern, weight, highlight) instead."
+        );
+    }
 
     let hiddenAtoms : AtomHidingDirective[] = typedDirectives.filter(d => d.hideAtom).map(d => {
         return {
@@ -915,11 +941,23 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
         }
     });
 
+    let edgeStyles : EdgeStyleRule[] = typedDirectives.filter(d => d.edgeStyle).map(d => {
+        return {
+            field: d.edgeStyle.field,
+            selector: d.edgeStyle.selector,
+            filter: d.edgeStyle.filter,
+            style: parseEdgeStyleSpec(d.edgeStyle)
+        }
+    });
+    // Desugared legacy edgeColor rules join the native ones — one resolution path.
+    edgeStyles = [...edgeStyles, ...desugaredEdgeColors];
+
     return {
         atomColors,
         sizes,
         icons,
         edgeColors,
+        edgeStyles,
         attributes,
         tags,
         hiddenFields,

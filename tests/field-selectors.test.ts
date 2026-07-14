@@ -33,13 +33,14 @@ constraints:
 
     const layoutSpec = parseLayoutSpec(layoutSpecStr);
     
-    // Test edge color directive with selector
-    expect(layoutSpec.directives.edgeColors).toHaveLength(1);
-    expect(layoutSpec.directives.edgeColors[0].field).toBe('name');
-    expect(layoutSpec.directives.edgeColors[0].color).toBe('red');
-    expect(layoutSpec.directives.edgeColors[0].selector).toBe('Person');
-    expect(layoutSpec.directives.edgeColors[0].style).toBe('dashed');
-    expect(layoutSpec.directives.edgeColors[0].weight).toBe(2);
+    // edgeColor desugars into an edgeStyle rule (edgeColors is left empty)
+    expect(layoutSpec.directives.edgeColors).toEqual([]);
+    expect(layoutSpec.directives.edgeStyles).toHaveLength(1);
+    expect(layoutSpec.directives.edgeStyles[0].field).toBe('name');
+    expect(layoutSpec.directives.edgeStyles[0].selector).toBe('Person');
+    expect(layoutSpec.directives.edgeStyles[0].style).toEqual({
+      lineStyle: { color: 'red', pattern: 'dashed', weight: 2 },
+    });
 
     expect(layoutSpec.directives.inferredEdges).toHaveLength(1);
     expect(layoutSpec.directives.inferredEdges[0].name).toBe('transitive');
@@ -75,11 +76,12 @@ directives:
 
     const layoutSpec = parseLayoutSpec(layoutSpecStr);
     
-    // Test legacy directives work
-    expect(layoutSpec.directives.edgeColors).toHaveLength(1);
-    expect(layoutSpec.directives.edgeColors[0].field).toBe('name');
-    expect(layoutSpec.directives.edgeColors[0].color).toBe('blue');
-    expect(layoutSpec.directives.edgeColors[0].selector).toBeUndefined();
+    // Legacy edgeColor still works — it desugars into an edgeStyle rule
+    expect(layoutSpec.directives.edgeColors).toEqual([]);
+    expect(layoutSpec.directives.edgeStyles).toHaveLength(1);
+    expect(layoutSpec.directives.edgeStyles[0].field).toBe('name');
+    expect(layoutSpec.directives.edgeStyles[0].selector).toBeUndefined();
+    expect(layoutSpec.directives.edgeStyles[0].style).toEqual({ lineStyle: { color: 'blue' } });
     
     expect(layoutSpec.directives.attributes).toHaveLength(1);
     expect(layoutSpec.directives.attributes[0].field).toBe('age');

@@ -21,6 +21,8 @@ import {
     EdgeColorDirective, InferredEdgeDirective, TagDirective,
     AtomHidingDirective
 } from './layoutspec';
+import { resolveEdgeStyle } from './style/edge-style-spec';
+import type { EdgeStyleSpec } from './style/edge-style-spec';
 
 
 import IEvaluator from '../evaluators/interfaces';
@@ -545,10 +547,10 @@ export class LayoutInstance {
             }
         }
         
-        // Also check EdgeStyle directives with hidden: true
+        // Also check edgeStyle rules (including desugared edgeColor) with hidden: true
         if (sourceAtom && targetAtom) {
-            const edgeDirective = this.findEdgeDirective(fieldId, sourceAtom, targetAtom);
-            if (edgeDirective?.hidden === true) {
+            const styled = this.resolveEdgeStyleForEdge(fieldId, sourceAtom, targetAtom);
+            if (styled.hidden === true) {
                 return true;
             }
         }
@@ -2433,11 +2435,14 @@ export class LayoutInstance {
             const dirSource = groupKey !== undefined ? groupKey : edge.v;
             const dirTarget = groupKey !== undefined ? (groupKey === edge.v ? edge.w : edge.v) : edge.w;
 
-            let color = this.getEdgeColor(relName, dirSource, dirTarget, edgeId);
-            let style = this.getEdgeStyle(relName, dirSource, dirTarget, edgeId);
-            let weight = this.getEdgeWeight(relName, dirSource, dirTarget, edgeId);
-            let showLabel = this.getEdgeShowLabel(relName, dirSource, dirTarget, edgeId);
-            let highlight = this.getEdgeHighlight(relName, dirSource, dirTarget, edgeId);
+            // edgeStyle (resolver-based) takes precedence per-property; whatever it
+            // leaves unset falls back to the legacy inferredEdge/edgeColor path.
+            const styled = this.resolveEdgeStyleForEdge(relName, dirSource, dirTarget);
+            let color = styled.lineStyle?.color ?? this.getEdgeColor(relName, dirSource, dirTarget, edgeId);
+            let style = styled.lineStyle?.pattern ?? this.getEdgeStyle(relName, dirSource, dirTarget, edgeId);
+            let weight = styled.lineStyle?.weight ?? this.getEdgeWeight(relName, dirSource, dirTarget, edgeId);
+            let showLabel = styled.showLabel ?? this.getEdgeShowLabel(relName, dirSource, dirTarget, edgeId);
+            let highlight = styled.lineStyle?.highlight ?? this.getEdgeHighlight(relName, dirSource, dirTarget, edgeId);
 
             // Skip edges with missing source or target nodes
             if (!source || !target || !edgeId) {
@@ -2817,6 +2822,67 @@ export class LayoutInstance {
 
         const inferredEdges = this._layoutSpec.directives.inferredEdges;
         return inferredEdges.find((directive) => edgeId.includes(`${inferredEdgePrefix}<:${directive.name}`));
+    }
+
+    /**
+     * Whether an edge directive (edgeColor or edgeStyle — anything keyed by
+     * field + optional selector/filter) applies to the edge (relName, source→target).
+     * Selector matches on the source atom; filter matches on the (source, target) tuple.
+     *
+     * `findEdgeDirective` below still inlines this same logic for edgeColor; that
+     * duplication goes away when edgeColor is shimmed onto edgeStyle.
+     */
+    private edgeDirectiveMatches(
+        directive: { field: string; selector?: string; filter?: string },
+        relName: string,
+        sourceAtom: string,
+        targetAtom?: string,
+    ): boolean {
+        if (directive.field !== relName) {
+            return false;
+        }
+        if (directive.selector) {
+            try {
+                const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
+                if (!selectorResult.selectedAtoms().includes(sourceAtom)) {
+                    return false;
+                }
+            } catch (error) {
+                this.recordSelectorError(directive.selector, 'edge selector', error);
+                return false;
+            }
+        }
+        if (directive.filter && targetAtom) {
+            try {
+                const filterResult = this.evaluator.evaluate(directive.filter, { instanceIndex: this.instanceNum });
+                const matched = filterResult.selectedTwoples().some(
+                    tuple => tuple[0] === sourceAtom && tuple[1] === targetAtom
+                );
+                if (!matched) {
+                    return false;
+                }
+            } catch (error) {
+                this.recordSelectorError(directive.filter, 'edge filter', error);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Resolve the edgeStyle directives matching an edge into one concrete style.
+     * Overlapping edgeStyle rules compose leaf-wise; a genuine disagreement throws
+     * StyleCollisionError (no silent override). Empty when nothing matches, so callers
+     * fall back to the legacy inferredEdge/edgeColor path.
+     */
+    private resolveEdgeStyleForEdge(relName: string, sourceAtom: string, targetAtom: string): EdgeStyleSpec {
+        const rules = this._layoutSpec.directives.edgeStyles.filter(
+            rule => this.edgeDirectiveMatches(rule, relName, sourceAtom, targetAtom)
+        );
+        if (rules.length === 0) {
+            return {};
+        }
+        return resolveEdgeStyle(rules, `edge ${relName} (${sourceAtom} → ${targetAtom})`);
     }
 
     private findEdgeDirective(relName: string, sourceAtom: string, targetAtom?: string): EdgeColorDirective | undefined {

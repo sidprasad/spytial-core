@@ -109,8 +109,10 @@ describe('yaml-codec — real-world round trips', () => {
   it('round-trips field-selector directives + deprecated group-by-field', () => {
     const out = assertRoundTrips(FIELD_SELECTORS_SPEC);
     const spec = parseLayoutSpec(out);
-    expect(spec.directives.edgeColors).toHaveLength(1);
-    expect(spec.directives.edgeColors[0].color).toBe('red');
+    // edgeColor round-trips through the codec, then desugars to edgeStyle on parse.
+    expect(spec.directives.edgeColors).toEqual([]);
+    expect(spec.directives.edgeStyles).toHaveLength(1);
+    expect(spec.directives.edgeStyles[0].style.lineStyle?.color).toBe('red');
     expect(spec.directives.inferredEdges).toHaveLength(1);
     expect(spec.directives.attributes).toHaveLength(1);
     expect(spec.directives.hiddenFields).toHaveLength(1);

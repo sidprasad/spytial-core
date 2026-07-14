@@ -394,7 +394,81 @@ Sets the color of atoms matching a selector.
 
 ---
 
-### Edge Style Directive (edgeColor)
+### Edge Style Directive (edgeStyle)
+
+Styles the edges of a field/relation. An edge is a composite of a drawn **line**, a **label**, and behavior flags, so styling is expressed with the shared `lineStyle` and `textStyle` blocks — the same block vocabulary reused by `inferredEdge` and group connectors.
+
+```yaml
+- edgeStyle:
+    field: <field-name>          # Required: relation/field whose edges this styles
+    selector: <unary-selector>   # Optional: match only edges from these source atoms
+    filter: <n-ary-selector>     # Optional: match only these (source, target) tuples
+    lineStyle:                   # Optional: the drawn line
+      color: <color>
+      pattern: <solid|dashed|dotted>
+      weight: <number>
+      highlight: <color>
+    textStyle:                   # Optional: the edge label
+      size: <small|normal|large>
+      color: <color>
+    showLabel: <boolean>         # Optional: show the edge label
+    hidden: <boolean>            # Optional: hide the edge entirely
+```
+
+**Fields:**
+
+| Field | Required | Type | Description |
+|-------|----------|------|-------------|
+| `field` | ✅ Yes | string | Name of the relation |
+| `selector` | ❌ No | string | Unary selector — match only edges whose source atom is selected |
+| `filter` | ❌ No | string | N-ary selector — match only specific (source, target) tuples |
+| `lineStyle.color` | ❌ No | string | CSS color of the line |
+| `lineStyle.pattern` | ❌ No | enum | `solid`, `dashed`, or `dotted` |
+| `lineStyle.weight` | ❌ No | number | Line thickness in pixels (must be > 0) |
+| `lineStyle.highlight` | ❌ No | string | CSS color drawn as a wider, translucent underlay beneath the line |
+| `textStyle.size` | ❌ No | enum | `small`, `normal`, or `large` (relative to the node label) |
+| `textStyle.color` | ❌ No | string | CSS color of the edge label |
+| `showLabel` | ❌ No | boolean | Whether to display the edge label (default `true`) |
+| `hidden` | ❌ No | boolean | Hide the edge entirely (default `false`) |
+
+**Composition & conflicts:** when several `edgeStyle` rules match the same edge, their set properties **compose** — a `lineStyle.color` from one rule and a `textStyle.size` from another combine. Two rules that set the *same* property to *different* values is an error: styles never silently override.
+
+**Examples:**
+
+```yaml
+# Dashed blue 'parent' edges
+- edgeStyle:
+    field: parent
+    lineStyle: { color: blue, pattern: dashed }
+
+# Thicker red edges from Document sources, with small grey labels
+- edgeStyle:
+    field: references
+    selector: Document
+    lineStyle: { color: red, weight: 2 }
+    textStyle: { size: small, color: '#666' }
+
+# Yellow highlight glow under black edges
+- edgeStyle:
+    field: critical_path
+    lineStyle: { color: black, highlight: "#ffeb3b" }
+```
+
+**Migrating from `edgeColor`:** `edgeColor` (below) is the legacy flat form and still works; it maps onto `edgeStyle` field-for-field:
+
+| `edgeColor` | `edgeStyle` |
+|---|---|
+| `value` | `lineStyle.color` |
+| `style` | `lineStyle.pattern` |
+| `weight` | `lineStyle.weight` |
+| `highlight` | `lineStyle.highlight` |
+| `showLabel` / `hidden` | `showLabel` / `hidden` |
+
+---
+
+### Edge Color Directive (edgeColor) — *legacy*
+
+> **Deprecated:** prefer [`edgeStyle`](#edge-style-directive-edgestyle) above. `edgeColor` still works and will desugar onto `edgeStyle` with a deprecation warning.
 
 Customizes the appearance of edges for a specific field/relation.
 
@@ -690,28 +764,36 @@ Hides atoms matching a selector from the visualization.
 
 ### Inferred Edge Directive
 
-Creates visual edges based on a selector expression (edges that don't exist in the data).
+Creates visual edges based on a selector expression (edges that don't exist in the data). The structural `name` + `selector` say *which* edge to draw; its appearance uses the shared `lineStyle` / `textStyle` blocks (the same vocabulary as `edgeStyle`).
 
 ```yaml
 - inferredEdge:
-    name: <edge-label>           # Required: Label for the inferred edge
-    selector: <binary-selector>  # Required: Selector returning pairs to connect
-    color: <color>               # Optional: Edge color
-    style: <line-style>          # Optional: Line style
-    weight: <number>             # Optional: Line thickness
-    highlight: <color>           # Optional: Highlight color (underlay)
+    name: <edge-label>           # Required: label for the inferred edge
+    selector: <binary-selector>  # Required: selector returning pairs to connect
+    lineStyle:                   # Optional: the drawn line
+      color: <color>
+      pattern: <solid|dashed|dotted>
+      weight: <number>
+      highlight: <color>
+    textStyle:                   # Optional: the edge label
+      size: <small|normal|large>
+      color: <color>
 ```
 
 **Fields:**
 
-| Field | Required | Type | Default | Description |
-|-------|----------|------|---------|-------------|
-| `name` | ✅ Yes | string | - | Label displayed on the edge |
-| `selector` | ✅ Yes | string | - | Binary selector returning (source, target) pairs |
-| `color` | ❌ No | string | `#000000` | CSS color value |
-| `style` | ❌ No | string | `solid` | `solid`, `dashed`, or `dotted` |
-| `weight` | ❌ No | number | - | Line thickness in pixels |
-| `highlight` | ❌ No | string | - | CSS color drawn as a wider, translucent underlay beneath the edge. Omit for no highlight. |
+| Field | Required | Type | Description |
+|-------|----------|------|-------------|
+| `name` | ✅ Yes | string | Label displayed on the edge |
+| `selector` | ✅ Yes | string | Binary selector returning (source, target) pairs |
+| `lineStyle.color` | ❌ No | string | Line color (default `#000000`) |
+| `lineStyle.pattern` | ❌ No | enum | `solid`, `dashed`, or `dotted` |
+| `lineStyle.weight` | ❌ No | number | Line thickness in pixels |
+| `lineStyle.highlight` | ❌ No | string | CSS color drawn as a wider, translucent underlay beneath the line |
+| `textStyle.size` | ❌ No | enum | `small`, `normal`, or `large` |
+| `textStyle.color` | ❌ No | string | Edge-label color |
+
+> **Legacy:** the flat inline `color` / `style` / `weight` / `highlight` keys still parse (`style`→`pattern`) but are deprecated — use the `lineStyle` block. Mixing forms emits a warning.
 
 **Examples:**
 
