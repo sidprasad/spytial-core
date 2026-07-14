@@ -67,10 +67,27 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
     if (graph && typeof graph.clearNodeHighlights === 'function') graph.clearNodeHighlights();
   };
 
+  /**
+   * Scroll a hovered item's correspondence into view in the *other* column.
+   * The two columns scroll independently, so this reveals the related item
+   * without disturbing the column the cursor is over — hover a source
+   * constraint and the diagram column scrolls to its correspondence.
+   */
+  const scrollRelatedIntoView = (el: HTMLElement, relatedIds: string[]) => {
+    if (relatedIds.length === 0) return;
+    const container = el.closest('.constraint-columns');
+    const target = container?.querySelector(`[data-constraint-id="${relatedIds[0]}"]`) as HTMLElement | null;
+    // Feature-detect: scrollIntoView is absent in jsdom (tests) and some hosts
+    if (target && typeof target.scrollIntoView === 'function') {
+      target.scrollIntoView({ block: 'nearest' });
+    }
+  };
+
   /** Handle mouse enter for constraint highlighting */
   const handleMouseEnter = (e: React.MouseEvent<HTMLElement>, node: ConstraintNode, source: 'source' | 'diagram') => {
     setHighlightState({ ids: [node.id, ...node.relatedIds], source });
     highlightGraphNodesFrom(e.currentTarget);
+    scrollRelatedIntoView(e.currentTarget, node.relatedIds);
   };
 
   /**
@@ -233,46 +250,40 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
         <>
           <p id="hover-instructions">Hover over the conflicting constraints to see the corresponding diagram elements that cannot be visualized. </p>
           <div className="constraint-relationship-table">
-            <table className="table table-bordered">
-              <thead>
-                <tr>
-                  <th>Source Constraints</th>
-                  <th>Diagram Elements</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td className="source-constraints-cell p-0">
-                    {sourceConstraints.map(node => (
-                      <div 
-                        key={node.id}
-                        data-constraint-id={node.id}
-                        className={`constraint-item ${getHighlightClass(node.id)}`}
-                        onMouseEnter={(e) => handleMouseEnter(e, node, 'source')}
-                        onMouseLeave={handleMouseLeave}
-                      >
-                        <code dangerouslySetInnerHTML={{ __html: node.content }}></code>
-                      </div>
-                    ))}
-                  </td>
-                  <td className="diagram-constraints-cell p-0">
-                    <div className="d-flex flex-column h-100">
-                      {diagramConstraints.map(node => (
-                        <div 
-                          key={node.id}
-                          data-constraint-id={node.id}
-                          className={`constraint-item ${getHighlightClass(node.id)}`}
-                          onMouseEnter={(e) => handleMouseEnter(e, node, 'diagram')}
-                          onMouseLeave={handleMouseLeave}
-                        >
-                          <code dangerouslySetInnerHTML={{ __html: node.content }}></code>
-                        </div>
-                      ))}
+            <div className="constraint-columns">
+              <div className="constraint-column">
+                <div className="constraint-column-header">Source Constraints</div>
+                <div className="constraint-column-body source-constraints-cell">
+                  {sourceConstraints.map(node => (
+                    <div
+                      key={node.id}
+                      data-constraint-id={node.id}
+                      className={`constraint-item ${getHighlightClass(node.id)}`}
+                      onMouseEnter={(e) => handleMouseEnter(e, node, 'source')}
+                      onMouseLeave={handleMouseLeave}
+                    >
+                      <code dangerouslySetInnerHTML={{ __html: node.content }}></code>
                     </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                  ))}
+                </div>
+              </div>
+              <div className="constraint-column">
+                <div className="constraint-column-header">Diagram Elements</div>
+                <div className="constraint-column-body diagram-constraints-cell">
+                  {diagramConstraints.map(node => (
+                    <div
+                      key={node.id}
+                      data-constraint-id={node.id}
+                      className={`constraint-item ${getHighlightClass(node.id)}`}
+                      onMouseEnter={(e) => handleMouseEnter(e, node, 'diagram')}
+                      onMouseLeave={handleMouseLeave}
+                    >
+                      <code dangerouslySetInnerHTML={{ __html: node.content }}></code>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
         </>
       )}
