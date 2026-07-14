@@ -3,7 +3,7 @@ import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator, N
 import { InstanceLayout, isAlignmentConstraint, isInstanceLayout, isLeftConstraint, isTopConstraint, LayoutNode, ColorSource } from '../../layout/interfaces';
 import type { GridRouter, Group, Layout, Node, Link } from 'webcola';
 import { IInputDataInstance, ITuple, IAtom } from '../../data-instance/interfaces';
-import { MAIN_LABEL_FONT_SIZE, SECONDARY_FONT_SIZE, LABEL_LINE_HEIGHT_RATIO } from '../../layout/text-extent';
+import { MAIN_LABEL_FONT_SIZE, SECONDARY_FONT_SIZE, LABEL_LINE_HEIGHT_RATIO, resolveAttrFontSize } from '../../layout/text-extent';
 import { setLabLightness, type NodeColorParams } from '../../layout/colorpicker';
 
 let d3 = window.d3v4 || window.d3; // Use d3 v4 if available, otherwise fallback to the default window.d3
@@ -4121,15 +4121,42 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         const attributeEntries = Object.entries(d.attributes || {})
           .sort(([a], [b]) => a.localeCompare(b));
         const labelEntries = Object.entries(d.labels || {});
-        const totalSecondaryEntries = labelEntries.length + attributeEntries.length;
 
-        // Center the entire label block on the node: shift the main label up
-        // by half the secondary block's height so the visual centroid sits at d.y.
-        const verticalOffset = totalSecondaryEntries > 0
-          ? -totalSecondaryEntries * secondaryLineHeight * 0.5
-          : 0;
+        // Per-attribute text size (small/normal/large tiers → px). Each line
+        // gets its own line-height, so the secondary block is no longer a
+        // uniform grid; we track heights per line to place baselines.
+        const attributeFontSizes = attributeEntries.map(
+          ([key]) => resolveAttrFontSize((d.attributeSizes || {})[key])
+        );
+        // Secondary line-heights in DOM order: Skolem labels first, then attributes.
+        const secondaryHeights = [
+          ...labelEntries.map(() => secondaryLineHeight),
+          ...attributeFontSizes.map((fs) => fs * LABEL_LINE_HEIGHT_RATIO),
+        ];
+        const secondaryBlockHeight = secondaryHeights.reduce((a, b) => a + b, 0);
 
-        // Cached for updatePositions, which re-applies dy to each tspan after layout.
+        // Center the whole block on the node: shift the main label up by half
+        // the secondary block's height so the visual centroid sits at d.y.
+        const verticalOffset = secondaryHeights.length > 0 ? -secondaryBlockHeight * 0.5 : 0;
+
+        // Per-tspan dy advances (index 0 = main label, then one per secondary
+        // line). SVG `dy` is relative to the previous baseline, and tspans are
+        // center-aligned (dominant-baseline: middle), so the gap between two
+        // adjacent secondary lines must be the average of their line-heights —
+        // otherwise a `large` line followed by a smaller one advances by only
+        // the small height and the glyphs crowd/overlap. The main→first-secondary
+        // advance stays the first line's own height, which keeps the all-normal
+        // case identical (uniform heights make the average a no-op) and matches
+        // the summed-height box sizing (adjacent averages telescope to Σ heights).
+        const tspanDys = [verticalOffset];
+        for (let s = 0; s < secondaryHeights.length; s++) {
+          tspanDys.push(
+            s === 0 ? secondaryHeights[0] : (secondaryHeights[s - 1] + secondaryHeights[s]) / 2
+          );
+        }
+        // Cached so the post-layout reposition passes re-apply identical offsets;
+        // also the single source of truth for the dy set on each tspan below.
+        d._labelTspanDys = tspanDys;
         d._labelVerticalOffset = verticalOffset;
         d._labelLineHeight = secondaryLineHeight;
 
@@ -4144,29 +4171,32 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           .style("font-size", `${MAIN_LABEL_FONT_SIZE}px`)
           .text(displayLabel);
 
-        // Skolem-style labels: italic, comma-separated values per key.
-        for (const [, values] of labelEntries) {
+        // Skolem-style labels: italic, comma-separated values per key. These are
+        // the first secondary lines (DOM order), so tspanDys indices 1..N.
+        labelEntries.forEach(([, values], idx) => {
           const labelText = Array.isArray(values) ? values.join(', ') : String(values);
           textElement
             .append("tspan")
             .attr("x", 0)
-            .attr("dy", `${secondaryLineHeight}px`)
+            .attr("dy", `${tspanDys[1 + idx]}px`)
             .style("font-size", `${SECONDARY_FONT_SIZE}px`)
             // No explicit fill: inherit the themed parent label fill (the
             // `.label` CSS rule), so dark mode lightens skolem labels too.
             .style("font-style", "italic")
             .text(labelText);
-        }
+        });
 
-        // Attribute lines: "key: value, value, ..."
-        for (const [key, value] of attributeEntries) {
+        // Attribute lines: "key: value, value, ..." each at its own tier size.
+        // These follow the Skolem lines, so tspanDys indices are offset by them.
+        attributeEntries.forEach(([key, value], idx) => {
+          const fontSize = attributeFontSizes[idx];
           textElement
             .append("tspan")
             .attr("x", 0)
-            .attr("dy", `${secondaryLineHeight}px`)
-            .style("font-size", `${SECONDARY_FONT_SIZE}px`)
+            .attr("dy", `${tspanDys[1 + labelEntries.length + idx]}px`)
+            .style("font-size", `${fontSize}px`)
             .text(`${key}: ${value}`);
-        }
+        });
       });
   }
 
@@ -4294,10 +4324,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         if (d.x == null) return;
         const verticalOffset = d._labelVerticalOffset || 0;
         const lineHeight = d._labelLineHeight || 12;
+        const tspanDys: number[] | undefined = d._labelTspanDys;
         d3.select(nodes[i])
           .selectAll('tspan')
           .attr('x', d.x)
-          .attr('dy', (_: any, tspanIdx: number) => tspanIdx === 0 ? `${verticalOffset}px` : `${lineHeight}px`);
+          .attr('dy', (_: any, tspanIdx: number) =>
+            tspanDys
+              ? `${tspanDys[tspanIdx] ?? lineHeight}px`
+              : (tspanIdx === 0 ? `${verticalOffset}px` : `${lineHeight}px`));
       });
   }
 
@@ -4361,10 +4395,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .each((d: any, i: number, nodes: Array<any>) => {
         const verticalOffset = d._labelVerticalOffset || 0;
         const lineHeight = d._labelLineHeight || 12;
+        const tspanDys: number[] | undefined = d._labelTspanDys;
         d3.select(nodes[i])
           .selectAll('tspan')
           .attr('x', d.x)
           .attr('dy', (tspanData: any, tspanIdx: number) => {
+            if (tspanDys) {
+              return `${tspanDys[tspanIdx] ?? lineHeight}px`;
+            }
             if (tspanIdx === 0) {
               return `${verticalOffset}px`;
             }

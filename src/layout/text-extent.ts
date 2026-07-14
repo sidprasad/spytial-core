@@ -22,10 +22,44 @@
 
 /** Main node label, rendered bold. */
 export const MAIN_LABEL_FONT_SIZE = 14;
-/** Secondary lines (attribute key:value, Skolem labels), rendered smaller. */
+/** Secondary lines (attribute key:value, Skolem labels), rendered smaller. This is the "normal" tier. */
 export const SECONDARY_FONT_SIZE = 11;
 /** Line height as a multiple of font size — used by both estimator and renderer. */
 export const LABEL_LINE_HEIGHT_RATIO = 1.35;
+
+/**
+ * Per-attribute / per-tag text-size tier, chosen relative to the main label:
+ *   - `large`  → bigger than the label ({@link SECONDARY_FONT_SIZE_LARGE})
+ *   - `normal` → the default secondary size, smaller than the label ({@link SECONDARY_FONT_SIZE})
+ *   - `small`  → smaller still ({@link SECONDARY_FONT_SIZE_SMALL})
+ */
+export type AttrTextSize = 'small' | 'normal' | 'large';
+
+/** "small" tier — below the normal secondary size. */
+export const SECONDARY_FONT_SIZE_SMALL = 9;
+/** "large" tier — above {@link MAIN_LABEL_FONT_SIZE} so the line reads as bigger than the node's own label. */
+export const SECONDARY_FONT_SIZE_LARGE = 16;
+
+/** Resolve an attribute/tag text-size tier to its pixel font size. Missing/unknown → the normal secondary size. */
+export function resolveAttrFontSize(size?: AttrTextSize): number {
+    switch (size) {
+        case 'small': return SECONDARY_FONT_SIZE_SMALL;
+        case 'large': return SECONDARY_FONT_SIZE_LARGE;
+        case 'normal':
+        default: return SECONDARY_FONT_SIZE;
+    }
+}
+
+/**
+ * A secondary (below-the-label) line for box estimation. A bare string is
+ * treated as a {@link SECONDARY_FONT_SIZE} line; pass `{ text, fontSize }` to
+ * size a line at one of the {@link AttrTextSize} tiers.
+ */
+export type SecondaryLine = string | { text: string; fontSize: number };
+
+function normalizeSecondaryLine(line: SecondaryLine): { text: string; fontSize: number } {
+    return typeof line === 'string' ? { text: line, fontSize: SECONDARY_FONT_SIZE } : line;
+}
 
 export interface EstimateLabelBoxOptions {
     /** Average glyph-width / font-size ratio for sans-serif text. */
@@ -97,26 +131,31 @@ export function estimateTextWidth(text: string, fontSize: number, avgGlyphRatio:
  */
 export function estimateLabelBox(
     mainLabel: string,
-    secondaryLines: string[] = [],
+    secondaryLines: SecondaryLine[] = [],
     options: EstimateLabelBoxOptions = {}
 ): { width: number; height: number } {
     const opts: Required<EstimateLabelBoxOptions> = { ...DEFAULT_OPTIONS, ...options };
 
-    const cleanedSecondary = secondaryLines.filter((s) => s && s.length > 0);
+    // Bare strings size at SECONDARY_FONT_SIZE; `{text, fontSize}` lines carry
+    // their own tier so the box grows/shrinks to fit larger/smaller attributes.
+    const cleanedSecondary = secondaryLines
+        .map(normalizeSecondaryLine)
+        .filter((s) => s.text && s.text.length > 0);
 
     const mainWidth = estimateTextWidth(mainLabel || '', MAIN_LABEL_FONT_SIZE, opts.avgGlyphRatio);
     let maxSecondaryWidth = 0;
+    let secondaryHeight = 0;
     for (const line of cleanedSecondary) {
-        const w = estimateTextWidth(line, SECONDARY_FONT_SIZE, opts.avgGlyphRatio);
+        const w = estimateTextWidth(line.text, line.fontSize, opts.avgGlyphRatio);
         if (w > maxSecondaryWidth) maxSecondaryWidth = w;
+        secondaryHeight += line.fontSize * LABEL_LINE_HEIGHT_RATIO;
     }
 
     const maxLineWidth = Math.max(mainWidth, maxSecondaryWidth);
     const rawWidth = maxLineWidth + opts.paddingX;
 
     const mainLineHeight = MAIN_LABEL_FONT_SIZE * LABEL_LINE_HEIGHT_RATIO;
-    const secondaryLineHeight = SECONDARY_FONT_SIZE * LABEL_LINE_HEIGHT_RATIO;
-    const rawHeight = mainLineHeight + cleanedSecondary.length * secondaryLineHeight + opts.paddingY;
+    const rawHeight = mainLineHeight + secondaryHeight + opts.paddingY;
 
     return {
         width: Math.round(clamp(rawWidth, opts.min.w, opts.max.w)),

@@ -95,6 +95,15 @@ export const ALIGN_DIRECTIONS = ['horizontal', 'vertical'] as const;
 export const EDGE_STYLES = ['solid', 'dashed', 'dotted'] as const;
 
 /**
+ * Text-size tiers for an `attribute` / `tag` line, relative to the node label.
+ * `large` renders bigger than the label, `normal` (the engine default) smaller,
+ * `small` smaller still. (Mirrors AttrTextSize in text-extent.ts.) No field
+ * `default` is set on these — an unset value is omitted from YAML and the engine
+ * treats it as `normal`, so specs stay clean.
+ */
+export const TEXT_SIZE_OPTIONS = ['small', 'normal', 'large'] as const;
+
+/**
  * Direction of the optional edge a group-by-selector draws between the group
  * key and the group. `none` draws nothing; `togroup` points key → group;
  * `fromgroup` points group → key. (Mirrors GroupEdgeDirection in layoutspec.ts.)
@@ -520,6 +529,13 @@ const attribute: ItemDefinition = {
       label: 'Selector',
       selectorArity: 'unary',
     },
+    {
+      key: 'textSize',
+      kind: 'enum',
+      options: TEXT_SIZE_OPTIONS,
+      label: 'Text size',
+      help: 'Font size of this attribute line: large is bigger than the node label, normal (default) is smaller, small is smaller still.',
+    },
   ],
   summary(params) {
     const field = asString(params.field);
@@ -735,6 +751,13 @@ const tag: ItemDefinition = {
       label: 'Value (selector)',
       required: true,
       help: 'Selector whose result becomes the attribute value.',
+    },
+    {
+      key: 'textSize',
+      kind: 'enum',
+      options: TEXT_SIZE_OPTIONS,
+      label: 'Text size',
+      help: 'Font size of this tag line: large is bigger than the node label, normal (default) is smaller, small is smaller still.',
     },
   ],
   summary(params) {

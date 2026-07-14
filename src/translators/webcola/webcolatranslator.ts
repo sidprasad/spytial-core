@@ -1,6 +1,7 @@
 import { Node, Group, Link, Rectangle } from 'webcola';
 import { InstanceLayout, LayoutNode, LayoutEdge, LayoutConstraint, LayoutGroup, LeftConstraint, TopConstraint, AlignmentConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, isBoundingBoxConstraint, isGroupBoundaryConstraint, ColorSource } from '../../layout/interfaces';
 import { EdgeStyle } from '../../layout/edge-style';
+import type { AttrTextSize } from '../../layout/text-extent';
 import { LayoutInstance } from '../../layout/layoutinstance';
 import type { IDataInstance } from '../../data-instance/interfaces';
 import type { SequencePolicy } from './sequence-policy';
@@ -40,6 +41,8 @@ type NodeWithMetadata = Node & {
   label: string, // This is the label that will be displayed on the node
   id: string,
   attributes: Record<string, string[]>,
+  /** Per-attribute-key text-size tier; drives the rendered font size of each attribute line. */
+  attributeSizes?: Record<string, AttrTextSize>,
   /**
    * Labels from the data instance (e.g., Skolems in Alloy).
    * These are displayed prominently on nodes, styled in the node's color.
@@ -686,6 +689,7 @@ export class WebColaLayout {
       color: node.color,
       colorSource: node.colorSource ?? ColorSource.DefaultPalette,
       attributes: node.attributes || {},
+      attributeSizes: node.attributeSizes || {},
       labels: node.labels,
       // Inflate width/height by padding on each side so WebCola's avoidOverlaps
       // engine keeps a visible gap between nodes. Disconnected nodes get larger
