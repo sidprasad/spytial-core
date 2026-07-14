@@ -22,9 +22,10 @@ import {
     AtomHidingDirective
 } from './layoutspec';
 import { resolveEdgeStyle } from './style/edge-style-spec';
-import type { EdgeStyleSpec } from './style/edge-style-spec';
+import type { EdgeStyleSpec, LineStyle } from './style/edge-style-spec';
 import { resolveAtomStyle } from './style/atom-style-spec';
 import type { AtomStyleRule, AtomStyleSpec } from './style/atom-style-spec';
+import type { TextStyle } from './style/text-style';
 
 
 import IEvaluator from '../evaluators/interfaces';
@@ -668,6 +669,7 @@ export class LayoutInstance {
                             nodeIds: [addToGroup],
                             keyNodeId: groupOn,
                             showLabel: !gc.negated,
+                            labelTextStyle: gc.labelTextStyle,
                             sourceConstraint: gc,
                             negated: gc.negated
                         };
@@ -711,6 +713,7 @@ export class LayoutInstance {
                     nodeIds: selectedElements,
                     keyNodeId: keyNode, //// TODO: I think introducing this random keynode could be a problem. Not sure why or when though.
                     showLabel: !gc.negated,
+                    labelTextStyle: gc.labelTextStyle,
                     sourceConstraint: gc,
                     negated: gc.negated
                 };
@@ -2423,8 +2426,19 @@ export class LayoutInstance {
         // of which way round the underlying graphlib edge was created (the key is
         // the source for 'togroup', the target for 'fromgroup').
         const keyNodeByGroupName = new Map<string, string>();
+        // Map each group's name → the connector styling authored on its
+        // `addEdge` block (the connector is an edge, so it carries a lineStyle +
+        // textStyle). Sourced from the GroupBySelector that created the group.
+        const connectorStyleByGroupName = new Map<string, { lineStyle?: LineStyle, textStyle?: TextStyle }>();
         for (const grp of groups) {
             if (grp.keyNodeId != null) keyNodeByGroupName.set(grp.name, grp.keyNodeId);
+            const src = grp.sourceConstraint;
+            if (src instanceof GroupBySelector && (src.connectorLineStyle || src.connectorTextStyle)) {
+                connectorStyleByGroupName.set(grp.name, {
+                    lineStyle: src.connectorLineStyle,
+                    textStyle: src.connectorTextStyle,
+                });
+            }
         }
 
         return g.edges().map((edge) => {
@@ -2447,17 +2461,22 @@ export class LayoutInstance {
             const dirSource = groupKey !== undefined ? groupKey : edge.v;
             const dirTarget = groupKey !== undefined ? (groupKey === edge.v ? edge.w : edge.v) : edge.w;
 
+            // A group connector edge (`_g_`) is styled by its group's `addEdge`
+            // block; that authored style wins over any incidental edgeStyle match.
+            const connStyle = isGroupEdge ? connectorStyleByGroupName.get(edgeLabel) : undefined;
+            const connLine = connStyle?.lineStyle;
+
             // edgeStyle (resolver-based) takes precedence per-property; whatever it
             // leaves unset falls back to the legacy inferredEdge/edgeColor path.
             const styled = this.resolveEdgeStyleForEdge(relName, dirSource, dirTarget);
-            let color = styled.lineStyle?.color ?? this.getEdgeColor(relName, dirSource, dirTarget, edgeId);
-            let style = styled.lineStyle?.pattern ?? this.getEdgeStyle(relName, dirSource, dirTarget, edgeId);
-            let weight = styled.lineStyle?.weight ?? this.getEdgeWeight(relName, dirSource, dirTarget, edgeId);
+            let color = connLine?.color ?? styled.lineStyle?.color ?? this.getEdgeColor(relName, dirSource, dirTarget, edgeId);
+            let style = connLine?.pattern ?? styled.lineStyle?.pattern ?? this.getEdgeStyle(relName, dirSource, dirTarget, edgeId);
+            let weight = connLine?.weight ?? styled.lineStyle?.weight ?? this.getEdgeWeight(relName, dirSource, dirTarget, edgeId);
             let showLabel = styled.showLabel ?? this.getEdgeShowLabel(relName, dirSource, dirTarget, edgeId);
-            let highlight = styled.lineStyle?.highlight ?? this.getEdgeHighlight(relName, dirSource, dirTarget, edgeId);
-            // Edge-label styling: inferred edges carry their own textStyle; otherwise
-            // it comes from the resolved edgeStyle (edgeColor has no label styling).
-            let textStyle = this.getInferredEdgeDirective(edgeId)?.textStyle ?? styled.textStyle;
+            let highlight = connLine?.highlight ?? styled.lineStyle?.highlight ?? this.getEdgeHighlight(relName, dirSource, dirTarget, edgeId);
+            // Edge-label styling: a group connector's own textStyle wins, then an
+            // inferred edge's, then the resolved edgeStyle (edgeColor has none).
+            let textStyle = connStyle?.textStyle ?? this.getInferredEdgeDirective(edgeId)?.textStyle ?? styled.textStyle;
 
             // Skip edges with missing source or target nodes
             if (!source || !target || !edgeId) {

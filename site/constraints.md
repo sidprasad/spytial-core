@@ -185,13 +185,28 @@ Draws a visual bounding box around nodes matched by a selector.
     selector: <n-ary-selector>   # Required
     name: <group-name>           # Required
     addEdge: <direction>         # Optional: none | togroup | fromgroup (default: none)
+    textStyle: { color: <color> }  # Optional: style the group's own label
+```
+
+A group has two style surfaces: its **own label** (top-level `textStyle`) and — when `addEdge` draws a connector — that **connector**, which is an edge and takes the shared `lineStyle` / `textStyle` blocks. Give `addEdge` in block form to style the connector:
+
+```yaml
+- group:
+    selector: <n-ary-selector>
+    name: <group-name>
+    addEdge:
+      points: togroup
+      lineStyle: { color: <color>, pattern: <solid|dashed|dotted>, weight: <number> }
+      textStyle: { color: <color> }   # the connector's label
+    textStyle: { color: <color> }      # the group's own label
 ```
 
 | Field | Required | Type | Default | Description |
 |-------|----------|------|---------|-------------|
 | `selector` | Yes | string | — | Selector returning atoms to include in the group. This could be a unary or binary selector. If a binary selector, the first element is a group key, while the second element is added to groups associated with that key. |
 | `name` | Yes | string | — | Display name shown on the group box |
-| `addEdge` | No | `none` \| `togroup` \| `fromgroup` | `none` | Draw an edge between the group key and the group. For a binary selector with tuples `(a, b), (a, c), (a, d)` the group is keyed by `a` and contains `{b, c, d}`: `togroup` draws an edge from `a` into the group, `fromgroup` draws it from the group back to `a`, and `none` draws nothing. (Legacy `true` is accepted and treated as `togroup`.) |
+| `addEdge` | No | direction *or* block | `none` | The connector between the group key and the group. As a bare string, just the direction (`none` / `togroup` / `fromgroup`; legacy `true` = `togroup`). As a block, also styles the connector (`points` + `lineStyle` + `textStyle`). For tuples `(a, b), (a, c), (a, d)` the group is keyed by `a`: `togroup` draws `a` → group, `fromgroup` draws group → `a`. |
+| `textStyle.color` | No | string | — | Color of the group's own label (`size` is reserved — group labels auto-fit) |
 
 ### Examples
 
@@ -200,6 +215,16 @@ Draws a visual bounding box around nodes matched by a selector.
 - group:
     selector: Team.members
     name: "Team Members"
+
+# Styled: dashed teal connector with a red label, purple group label
+- group:
+    selector: Team.members
+    name: "Team Members"
+    addEdge:
+      points: togroup
+      lineStyle: { color: "#0aa", pattern: dashed, weight: 3 }
+      textStyle: { color: "#a00" }
+    textStyle: { color: "#7c3aed" }
 ```
 
 <div class="spytial-diagram" data-height="360" data-caption="Live: Team.members draws a bounding box around the three members.">

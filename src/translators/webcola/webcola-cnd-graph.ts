@@ -438,6 +438,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     return d.textStyle?.color ?? null;
   }
 
+  /** Group label fill from the group directive's `textStyle.color`; null = keep the default (#333). */
+  private groupLabelColor(d: any): string | null {
+    return d.labelTextStyle?.color ?? null;
+  }
+
   /**
    * Re-apply the data-driven themed colors (node border/fill, type-label fill,
    * edge stroke) to the live DOM. The `--cnd-*` slots auto-update via CSS
@@ -3905,6 +3910,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       })
       .attr("font-weight", "bold")
       .attr("fill", "#333")
+      // Group directive's textStyle.color override via .style() (beats the attr default); null = keep #333.
+      .style("fill", (d: any) => this.groupLabelColor(d))
       .attr("pointer-events", "none")
       .text((d: any) => {
         const shouldShowGroupLabel = d.showLabel || false;

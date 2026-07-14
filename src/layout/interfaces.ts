@@ -17,6 +17,10 @@ export interface LayoutGroup {
     // Show label
     showLabel : boolean;
 
+    // Styling for the group's own label, from the group directive's `textStyle`.
+    // Only `color` is consumed today; `size` is deferred (group labels auto-fit).
+    labelTextStyle?: TextStyle;
+
     // The source constraint that created this group (GroupByField or GroupBySelector)
     sourceConstraint?: GroupByField | GroupBySelector;
 

@@ -2,7 +2,9 @@ import * as yaml from 'js-yaml';
 import { EdgeStyle } from './edge-style';
 import { AttrTextSize } from './text-extent';
 import { EdgeStyleRule, parseEdgeStyleSpec, edgeColorToEdgeStyleRule } from './style/edge-style-spec';
+import type { LineStyle } from './style/edge-style-spec';
 import { AtomStyleRule, parseAtomStyleSpec, atomColorToAtomStyleRule } from './style/atom-style-spec';
+import { parseTextStyle } from './style/text-style';
 import type { TextStyle } from './style/text-style';
 
 export type RelativeDirection = "above" | "below" | "left" | "right" | "directlyAbove" | "directlyBelow" | "directlyLeft" | "directlyRight";
@@ -158,6 +160,11 @@ export const GROUP_EDGE_DIRECTIONS: readonly GroupEdgeDirection[] = ['none', 'to
  * behaviour: an edge from the key node into the group). Anything else is `'none'`.
  */
 export function normalizeGroupEdgeDirection(value: unknown): GroupEdgeDirection {
+    // Block form — `addEdge: { points, lineStyle, textStyle }` — carries the
+    // direction in `points`; the bare string/bool form is the direction itself.
+    if (value && typeof value === 'object') {
+        value = (value as Record<string, unknown>).points;
+    }
     if (value === true || value === 'togroup') return 'togroup';
     if (value === 'fromgroup') return 'fromgroup';
     return 'none';
@@ -166,6 +173,17 @@ export function normalizeGroupEdgeDirection(value: unknown): GroupEdgeDirection 
 export class GroupBySelector extends ConstraintOperation{
     name: string;
     addEdge: GroupEdgeDirection;
+    /**
+     * Line styling for the `addEdge` connector (the edge drawn between the key
+     * and the group). Present only when `addEdge` is given in block form
+     * (`addEdge: { points, lineStyle, textStyle }`). The connector is an edge, so
+     * this reuses the shared {@link LineStyle}. Absent = the default edge look.
+     */
+    connectorLineStyle?: LineStyle;
+    /** Label styling for the `addEdge` connector's label (shared {@link TextStyle}). */
+    connectorTextStyle?: TextStyle;
+    /** Styling for the group's own label, from the group's top-level `textStyle`. */
+    labelTextStyle?: TextStyle;
 
     constructor(selector : string, name: string, addEdge: GroupEdgeDirection | boolean = 'none', negated: boolean = false) {
         super(selector, negated);
@@ -780,7 +798,19 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
             }
             // Auto-generate name for negated groups without one
             const name = c.group.name || `_not_group_${c.group.selector}`;
-            return new GroupBySelector(c.group.selector, name, c.group.addEdge, c._negated);
+            const gbs = new GroupBySelector(c.group.selector, name, c.group.addEdge, c._negated);
+            // Block-form `addEdge: { points, lineStyle, textStyle }` styles the
+            // connector — which is an edge — so parse it as an edge spec (the
+            // `points` key is ignored by parseEdgeStyleSpec). A bare string/bool
+            // addEdge stays unstyled (its direction was read above).
+            if (c.group.addEdge && typeof c.group.addEdge === 'object') {
+                const connSpec = parseEdgeStyleSpec(c.group.addEdge);
+                gbs.connectorLineStyle = connSpec.lineStyle;
+                gbs.connectorTextStyle = connSpec.textStyle;
+            }
+            // The group's own label styling (top-level `textStyle`).
+            gbs.labelTextStyle = parseTextStyle(c.group.textStyle);
+            return gbs;
         });
 
     // Remove duplicate group by selector constraints

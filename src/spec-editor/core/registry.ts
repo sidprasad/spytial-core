@@ -15,7 +15,7 @@
  *     - orientation: { selector, directions: [...], hold? }
  *     - cyclic:      { selector, direction, hold? }
  *     - align:       { selector, direction, hold? }
- *     - group:       { selector, name, addEdge?: none|togroup|fromgroup, hold? }  (groupselector)
+ *     - group:       { selector, name, addEdge?: none|togroup|fromgroup | {points,lineStyle,textStyle}, textStyle?:{color}, hold? }  (groupselector)
  *     - group:       { field, groupOn, addToGroup, selector?, hold? }  (groupfield, deprecated)
  *     - size:        { selector, width, height }
  *     - hideAtom:    { selector }
@@ -114,9 +114,12 @@ export const GROUP_EDGE_DIRECTIONS = ['none', 'togroup', 'fromgroup'] as const;
 
 /**
  * Normalise an `addEdge` value into a GROUP_EDGE_DIRECTIONS member. Tolerates
- * the legacy boolean flag (`true` → 'togroup') so older specs keep working.
+ * the legacy boolean flag (`true` → 'togroup') and the block form
+ * (`{ points, lineStyle, textStyle }` → its `points`), so a hand-authored
+ * styled connector keeps its direction when round-tripped through the Builder.
  */
 function normGroupEdge(value: unknown): (typeof GROUP_EDGE_DIRECTIONS)[number] {
+  if (value && typeof value === 'object') value = (value as Record<string, unknown>).points;
   if (value === true || value === 'togroup') return 'togroup';
   if (value === 'fromgroup') return 'fromgroup';
   return 'none';
@@ -272,7 +275,14 @@ const groupselector: ItemDefinition = {
       label: 'Add edge',
       options: GROUP_EDGE_DIRECTIONS,
       default: 'none',
-      help: 'Draw an edge between the group key and the group: "togroup" points key → group, "fromgroup" points group → key, "none" draws nothing.',
+      help: 'Draw an edge between the group key and the group: "togroup" points key → group, "fromgroup" points group → key, "none" draws nothing. (To style that connector, author addEdge as a block — { points, lineStyle, textStyle } — in YAML.)',
+    },
+    {
+      key: 'textStyle',
+      kind: 'group',
+      label: 'Label text style',
+      // Only `color` today — group labels auto-fit their box, so `size` is reserved.
+      children: [{ key: 'color', kind: 'color', label: 'Color' }],
     },
   ],
   summary(params) {
@@ -289,6 +299,14 @@ const groupselector: ItemDefinition = {
     const edge = normGroupEdge(params.addEdge);
     if (edge !== 'none') {
       node.addEdge = edge;
+    }
+    // The group's own label styling (sparse — drop empty leaves).
+    if (isRecord(params.textStyle)) {
+      const ts: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(params.textStyle)) {
+        if (v !== undefined && v !== null && v !== '') ts[k] = v;
+      }
+      if (Object.keys(ts).length > 0) node.textStyle = ts;
     }
     if (params.hold !== undefined) {
       node.hold = params.hold;
@@ -309,6 +327,10 @@ const groupselector: ItemDefinition = {
     };
     if (group.name !== undefined) {
       params.name = asString(group.name);
+    }
+    // Preserve the group's own label styling (whatever leaves were authored).
+    if (isRecord(group.textStyle)) {
+      params.textStyle = { ...group.textStyle };
     }
     if (group.hold !== undefined) {
       params.hold = group.hold;

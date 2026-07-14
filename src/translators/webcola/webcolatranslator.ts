@@ -1060,13 +1060,17 @@ export class WebColaLayout {
 
       let groupsAndSubgroups = this.determineGroupsAndSubgroups(groupsAsRecord);
 
-      groupsAndSubgroups.forEach((group) => {
+      // `group` gets dynamic layout fields (keyNode/id/showLabel/labelTextStyle)
+      // stamped onto it below, so it's typed loosely here.
+      groupsAndSubgroups.forEach((group: any) => {
         let grp: LayoutGroup = groups.find(g => g.name === group.name);
         let keyNode = grp.keyNodeId;
         let keyIndex = this.getNodeIndex(keyNode);
         group['keyNode'] = keyIndex;
         group['id'] = grp.name;
         group['showLabel'] = grp.showLabel;
+        // Group's own label styling (only color consumed today; size auto-fits).
+        group['labelTextStyle'] = grp.labelTextStyle;
       });
 
       return groupsAndSubgroups;

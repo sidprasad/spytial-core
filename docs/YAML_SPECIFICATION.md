@@ -157,6 +157,21 @@ Groups elements based on a selector expression.
     selector: <n-ary-selector>   # Required: Selector returning elements to group
     name: <group-name>           # Required: Display name for the group
     addEdge: <direction>         # Optional: none | togroup | fromgroup (default none)
+    textStyle:                   # Optional: style the group's own label
+      color: <color>
+```
+
+A group has two style surfaces: its **own label** (top-level `textStyle`) and — when `addEdge` draws a connector — that **connector**, which is an edge and so takes the shared `lineStyle` / `textStyle` blocks. To style the connector, give `addEdge` in block form:
+
+```yaml
+- group:
+    selector: <n-ary-selector>
+    name: <group-name>
+    addEdge:                     # Block form styles the connector edge
+      points: <none|togroup|fromgroup>
+      lineStyle: { color: <color>, pattern: <solid|dashed|dotted>, weight: <number>, highlight: <color> }
+      textStyle: { size: <small|normal|large>, color: <color> }   # the connector's label
+    textStyle: { color: <color> }                                 # the group's own label
 ```
 
 **Fields:**
@@ -165,7 +180,9 @@ Groups elements based on a selector expression.
 |-------|----------|------|---------|-------------|
 | `selector` | ✅ Yes | string | - | Selector returning atoms to include in group |
 | `name` | ✅ Yes | string | - | Display name shown on the group box |
-| `addEdge` | ❌ No | `none` \| `togroup` \| `fromgroup` | `none` | Draw an edge between the group key and the group. `togroup` points key → group; `fromgroup` points group → key; `none` draws nothing. (Legacy `true` is accepted and treated as `togroup`.) |
+| `addEdge` | ❌ No | direction *or* block | `none` | The connector between the group key and the group. As a bare string it is just the direction (`none` / `togroup` / `fromgroup`; legacy `true` = `togroup`). As a **block** it also styles the connector: `points` (the direction) plus `lineStyle` and `textStyle` (same blocks as `edgeStyle`). `togroup` points key → group; `fromgroup` points group → key. |
+| `textStyle.color` | ❌ No | string | - | Color of the group's own label |
+| `textStyle.size` | ❌ No | enum | - | `small` / `normal` / `large` — *reserved; group labels currently auto-fit their box* |
 
 For a binary selector with tuples `(a, b), (a, c), (a, d)`, the group is keyed by `a` and contains `{b, c, d}`. `addEdge: togroup` draws an edge from `a` into that group; `addEdge: fromgroup` draws it from the group back to `a`.
 
@@ -182,6 +199,16 @@ For a binary selector with tuples `(a, b), (a, c), (a, d)`, the group is keyed b
     selector: Department.employees
     name: "Department"
     addEdge: togroup
+
+# Styled: a dashed teal connector with a red label, and a purple group label
+- group:
+    selector: Department.employees
+    name: "Department"
+    addEdge:
+      points: togroup
+      lineStyle: { color: "#0aa", pattern: dashed, weight: 3 }
+      textStyle: { color: "#a00" }
+    textStyle: { color: "#7c3aed" }
 ```
 
 ---
