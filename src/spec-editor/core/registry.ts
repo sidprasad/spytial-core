@@ -634,11 +634,55 @@ const atomColor: ItemDefinition = {
   },
 };
 
+/**
+ * Shared `lineStyle` block children — reused by edgeStyle, inferredEdge, and a
+ * group's connector. No `default`s: style blocks must stay sparse (a seeded
+ * default would emit as an authored value and break the resolver's compose /
+ * collision rules).
+ */
+const LINE_STYLE_FIELDS: readonly FieldSpec[] = [
+  { key: 'color', kind: 'color', label: 'Color' },
+  { key: 'pattern', kind: 'enum', options: EDGE_STYLES, label: 'Pattern' },
+  { key: 'weight', kind: 'number', label: 'Weight' },
+  { key: 'highlight', kind: 'color', label: 'Highlight' },
+];
+
+/** Shared `textStyle` block children — reused wherever a label is styled. No defaults. */
+const TEXT_STYLE_FIELDS: readonly FieldSpec[] = [
+  { key: 'size', kind: 'enum', options: TEXT_SIZE_OPTIONS, label: 'Size' },
+  { key: 'color', kind: 'color', label: 'Color' },
+];
+
+const edgeStyle: ItemDefinition = {
+  kind: 'directive',
+  type: 'edgeStyle',
+  label: 'Edge style',
+  description: 'Style the edges of a field/relation — line and label.',
+  fields: [
+    { key: 'field', kind: 'relationName', label: 'Field', required: true },
+    { key: 'selector', kind: 'selector', label: 'Selector', selectorArity: 'unary' },
+    { key: 'filter', kind: 'selector', label: 'Filter', selectorArity: 'binary' },
+    { key: 'lineStyle', kind: 'group', label: 'Line style', children: LINE_STYLE_FIELDS },
+    { key: 'textStyle', kind: 'group', label: 'Text style', children: TEXT_STYLE_FIELDS },
+    { key: 'showLabel', kind: 'boolean', label: 'Show label' },
+    { key: 'hidden', kind: 'boolean', label: 'Hidden' },
+  ],
+  summary(params) {
+    const field = asString(params.field);
+    const line = (params.lineStyle ?? {}) as Record<string, unknown>;
+    const color = asString(line.color);
+    const base = field ? (color ? `${field}: ${color}` : field) : color || 'edge';
+    const selector = asString(params.selector);
+    return selector ? `${base} · ${selector}` : base;
+  },
+};
+
 const edgeColor: ItemDefinition = {
   kind: 'directive',
   type: 'edgeColor',
   label: 'Edge color',
-  description: 'Style edges of a field/relation.',
+  description: 'Deprecated — use Edge style (edgeStyle). Still parsed/rendered for back-compat.',
+  deprecated: true,
   fields: [
     {
       key: 'field',
@@ -785,6 +829,7 @@ const DEFINITIONS: readonly ItemDefinition[] = [
   hideField,
   icon,
   atomColor,
+  edgeStyle,
   edgeColor,
   inferredEdge,
   tag,
