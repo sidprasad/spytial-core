@@ -1,6 +1,6 @@
 {
   "name": "spytial-core",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "A fully client-side application for SpyTial.",
   "main": "./dist/browser/spytial-core-complete.global.js",
   "types": "./dist/browser/spytial-core-complete.global.d.ts",
@@ -147,7 +147,7 @@
     "lodash": "^4.17.21",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "simple-graph-query": "^2.7.2",
+    "simple-graph-query": "^2.8.2",
     "webcola": "^3.4.0"
   }
 }
