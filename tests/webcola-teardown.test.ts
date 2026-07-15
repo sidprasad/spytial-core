@@ -13,12 +13,16 @@ import { WebColaCnDGraph } from '../src/translators/webcola/webcola-cnd-graph';
 
 const proto = WebColaCnDGraph.prototype as any;
 
-/** Chainable d3-selection stub that records resolved attr values. */
-function markerSelection(datum: any) {
+/**
+ * Chainable d3-selection stub that records resolved attr values. Accessors are
+ * invoked with d3's (d, i, nodes) contract so code that reaches for its own
+ * element finds one.
+ */
+function markerSelection(datum: any, element: any = {}) {
   const applied: Record<string, any> = {};
   const sel: any = {
     attr(name: string, value: any) {
-      applied[name] = typeof value === 'function' ? value(datum) : value;
+      applied[name] = typeof value === 'function' ? value(datum, 0, [element]) : value;
       return sel;
     },
     style() { return sel; },
@@ -57,7 +61,7 @@ describe('WebColaCnDGraph teardown (#474)', () => {
           select: (selector: string) =>
             selector === '.target-marker' ? target.sel : source.sel,
         },
-        shadowRoot: { querySelector: () => throwingPath },
+        getLinkPathElement: () => throwingPath,
         getEdgePathPoint: proto.getEdgePathPoint,
       };
 
@@ -70,27 +74,28 @@ describe('WebColaCnDGraph teardown (#474)', () => {
   });
 
   describe('getEdgePathPoint', () => {
+    // The path lookup is stubbed per-test, so the element is just a handle to pass through.
+    const marker = {} as any;
+
     it('returns the path point when the path is rendered', () => {
       const fakeThis: any = {
-        shadowRoot: {
-          querySelector: () => ({
-            getTotalLength: () => 10,
-            getPointAtLength: (length: number) => ({ x: length, y: 5 }),
-          }),
-        },
+        getLinkPathElement: () => ({
+          getTotalLength: () => 10,
+          getPointAtLength: (length: number) => ({ x: length, y: 5 }),
+        }),
       };
 
-      expect(proto.getEdgePathPoint.call(fakeThis, 'e1', 'end')).toEqual({ x: 10, y: 5 });
-      expect(proto.getEdgePathPoint.call(fakeThis, 'e1', 'start')).toEqual({ x: 0, y: 5 });
+      expect(proto.getEdgePathPoint.call(fakeThis, marker, 'end')).toEqual({ x: 10, y: 5 });
+      expect(proto.getEdgePathPoint.call(fakeThis, marker, 'start')).toEqual({ x: 0, y: 5 });
     });
 
     it('returns null when the path is missing or not rendered', () => {
-      const missing: any = { shadowRoot: { querySelector: () => null } };
-      expect(proto.getEdgePathPoint.call(missing, 'e1', 'end')).toBeNull();
+      const missing: any = { getLinkPathElement: () => null };
+      expect(proto.getEdgePathPoint.call(missing, marker, 'end')).toBeNull();
 
-      const detached: any = { shadowRoot: { querySelector: () => throwingPath } };
-      expect(proto.getEdgePathPoint.call(detached, 'e1', 'end')).toBeNull();
-      expect(proto.getEdgePathPoint.call(detached, 'e1', 'start')).toBeNull();
+      const detached: any = { getLinkPathElement: () => throwingPath };
+      expect(proto.getEdgePathPoint.call(detached, marker, 'end')).toBeNull();
+      expect(proto.getEdgePathPoint.call(detached, marker, 'start')).toBeNull();
     });
   });
 

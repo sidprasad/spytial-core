@@ -4483,12 +4483,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
     // Update link labels using path midpoint calculation
     this.svgLinkGroups.select('.linklabel')
-      .attr('x', (d: EdgeWithMetadata) => {
-        const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${d.id}"]`) as SVGPathElement;
+      .attr('x', (d: EdgeWithMetadata, i: number, nodes: any) => {
+        const pathElement = this.getLinkPathElement(nodes[i]);
         return pathElement ? this.calculateNewPosition(pathElement, 'x') : (d.source.x + d.target.x) / 2;
       })
-      .attr('y', (d: EdgeWithMetadata) => {
-        const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${d.id}"]`) as SVGPathElement;
+      .attr('y', (d: EdgeWithMetadata, i: number, nodes: any) => {
+        const pathElement = this.getLinkPathElement(nodes[i]);
         return pathElement ? this.calculateNewPosition(pathElement, 'y') : (d.source.y + d.target.y) / 2;
       })
       .style('font-size', () => {
@@ -4560,8 +4560,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       position: 'start' | 'end'
     ): void => {
       sel
-        .attr('transform', (d: EdgeWithMetadata) => {
-          const point = this.getEdgePathPoint(d.id, position);
+        .attr('transform', (d: EdgeWithMetadata, i: number, nodes: any) => {
+          const point = this.getEdgePathPoint(nodes[i], position);
           const fallback = (position === 'end' ? d.target : d.source) as any;
           const x = point ? point.x : (fallback?.x || 0);
           const y = point ? point.y : (fallback?.y || 0);
@@ -4579,14 +4579,33 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
-   * Read the start or end point of a rendered edge path.
+   * Find the main edge path belonging to the same link-group as `el` — the
+   * label, marker, or other sibling that needs the path's geometry.
+   *
+   * Scoped to the group rather than looked up by id across the shadow root:
+   * edge ids are data and routinely contain selector syntax (`_inferred_<:
+   * <:"k4"->n3` is a real one), so splicing an id into a selector made
+   * querySelector throw SyntaxError and took the whole layout down with it.
+   * Matching on the group also keeps this off the per-tick cost of scanning
+   * the entire shadow root once per label.
+   *
+   * `data-link-id` marks the main path, so the optional highlight underlay
+   * sibling is never picked up here.
+   */
+  private getLinkPathElement(el: Element | null | undefined): SVGPathElement | null {
+    const group = el?.closest('.link-group');
+    return (group?.querySelector('path[data-link-id]') ?? null) as SVGPathElement | null;
+  }
+
+  /**
+   * Read the start or end point of the edge path `el` belongs to.
    *
    * Returns null when the path is missing or not rendered:
    * getTotalLength()/getPointAtLength() throw InvalidStateError on detached
    * or hidden paths, so callers fall back to layout coordinates.
    */
-  private getEdgePathPoint(linkId: string, position: 'start' | 'end'): { x: number; y: number } | null {
-    const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${linkId}"]`) as SVGPathElement | null;
+  private getEdgePathPoint(el: Element | null | undefined, position: 'start' | 'end'): { x: number; y: number } | null {
+    const pathElement = this.getLinkPathElement(el);
     if (!pathElement) return null;
     try {
       return pathElement.getPointAtLength(position === 'end' ? pathElement.getTotalLength() : 0);
@@ -4750,8 +4769,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     
     // Update link labels to follow edges using path midpoint
     linkGroups.select("text.linklabel")
-        .attr("x", (d: any) => {
-            const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${d.id}"]`) as SVGPathElement;
+        .attr("x", (d: any, i: number, nodes: any) => {
+            const pathElement = this.getLinkPathElement(nodes[i]);
             if (pathElement) {
                 const pathLength = pathElement.getTotalLength();
                 const midpoint = pathElement.getPointAtLength(pathLength / 2);
@@ -4762,8 +4781,8 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
             const targetX = d.target?.x ?? d.target?.bounds?.cx() ?? 0;
             return (sourceX + targetX) / 2;
         })
-        .attr("y", (d: any) => {
-            const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${d.id}"]`) as SVGPathElement;
+        .attr("y", (d: any, i: number, nodes: any) => {
+            const pathElement = this.getLinkPathElement(nodes[i]);
             if (pathElement) {
                 const pathLength = pathElement.getTotalLength();
                 const midpoint = pathElement.getPointAtLength(pathLength / 2);
@@ -5344,9 +5363,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     linkGroups
       .filter((d: any) => !this.isAlignmentEdge(d))
       .select("text.linklabel")
-      .attr("x", (edgeData: any) => {
+      .attr("x", (edgeData: any, i: number, nodes: any) => {
         // Use the actual rendered path element to find the true midpoint
-        const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${edgeData.id}"]`) as SVGPathElement;
+        const pathElement = this.getLinkPathElement(nodes[i]);
         if (pathElement) {
           try {
             const pathLength = pathElement.getTotalLength();
@@ -5360,9 +5379,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         // Use node.x/y as primary source (same as default mode)
         return midpoint?.x ?? (edgeData.source?.x ?? edgeData.source?.bounds?.cx() ?? 0);
       })
-      .attr("y", (edgeData: any) => {
+      .attr("y", (edgeData: any, i: number, nodes: any) => {
         // Use the actual rendered path element to find the true midpoint
-        const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${edgeData.id}"]`) as SVGPathElement;
+        const pathElement = this.getLinkPathElement(nodes[i]);
         if (pathElement) {
           try {
             const pathLength = pathElement.getTotalLength();
@@ -9115,16 +9134,16 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private updateLinkLabelsAfterRouting(): void {
     this.container.selectAll('.link-group .linklabel')
-      .attr('x', (d: any) => {
-        const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${d.id}"]`) as SVGPathElement;
+      .attr('x', (d: any, i: number, nodes: any) => {
+        const pathElement = this.getLinkPathElement(nodes[i]);
         if (!pathElement) return 0;
 
         const pathLength = pathElement.getTotalLength();
         const midpoint = pathElement.getPointAtLength(pathLength / 2);
         return midpoint.x;
       })
-      .attr('y', (d: any) => {
-        const pathElement = this.shadowRoot?.querySelector(`path[data-link-id="${d.id}"]`) as SVGPathElement;
+      .attr('y', (d: any, i: number, nodes: any) => {
+        const pathElement = this.getLinkPathElement(nodes[i]);
         if (!pathElement) return 0;
 
         const pathLength = pathElement.getTotalLength();
