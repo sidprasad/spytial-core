@@ -113,22 +113,6 @@ directives:
 
                 graph.addEventListener('constraint-error', (e) => log('constraint-error: ' + e.detail.error.message));
 
-                // Watchdog for a pre-existing initial-solve paint race (this
-                // data+groups combo can converge without the end-handler paint
-                // ever applying; reproduces with a draw-free spec too). If no
-                // edge has a path after 4s, apply the converged layout manually.
-                setTimeout(() => {
-                    const painted = graph.shadowRoot?.querySelector('path[data-link-id][d]');
-                    if (!painted && graph.colaLayout) {
-                        log('Watchdog: applying converged layout manually (known initial-paint race)');
-                        try {
-                            graph.colaLayout.resume();
-                            graph.updatePositions?.();
-                            graph.routeEdges?.();
-                        } catch (e) { log('watchdog failed: ' + e.message); }
-                    }
-                }, 4000);
-
                 log('Ready — regions[West], regions[East], connected: hull->hull, manages: node->hull');
             }, 500);
         });

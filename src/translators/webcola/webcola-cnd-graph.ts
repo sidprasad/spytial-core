@@ -667,6 +667,15 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private static readonly INITIAL_USER_CONSTRAINT_ITERATIONS = 50;
   private static readonly INITIAL_ALL_CONSTRAINTS_ITERATIONS = 200;
   private static readonly GRID_SNAP_ITERATIONS = 1; // Reduced from 5 for performance, but kept at 1 for alignment
+  /**
+   * Cap on the synchronous alpha-decay ticks driven after layout.start()
+   * returns (see renderLayout). start() has already run every constraint
+   * phase; the decay ticks only polish stress below the convergence
+   * threshold, which normally takes a handful of iterations. A stress
+   * plateau that never crosses the threshold hits this cap and is forced
+   * to a clean 'end' instead of iterating forever.
+   */
+  private static readonly MAX_SYNC_DECAY_TICKS = 500;
   private static readonly LOADING_INDICATOR_DELAY_MS = 180;
 
   /**
@@ -2487,23 +2496,47 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
           }
         });
 
-      // Start the layout with error handling for D3/WebCola compatibility issues
+      // Start the layout with error handling for D3/WebCola compatibility issues.
+      // keepRunning=false: start() runs every constraint phase synchronously and
+      // would then hand the remaining alpha-decay ticks — and the 'end' dispatch
+      // that triggers the ONLY paint of the initial solve — to a d3.timer.
+      // d3.timer is requestAnimationFrame-driven, and rAF never fires in a
+      // hidden/occluded tab or embedded pane, so the solve converges without
+      // ever painting. We drive those remaining ticks synchronously below
+      // instead; interaction-driven solves (drag → resume()) still use cola's
+      // own timer, which is fine because the user is present for those.
       try {
         layout.start(
           unconstrainedIters,
           userConstraintIters,
           allConstraintIters,
-          WebColaCnDGraph.GRID_SNAP_ITERATIONS
+          WebColaCnDGraph.GRID_SNAP_ITERATIONS,
+          false
         );
       } catch (layoutError) {
         console.warn('WebCola layout start encountered an error, trying alternative approach:', layoutError);
         // Try starting with default parameters as fallback
         try {
-          layout.start();
+          layout.start(0, 0, 0, 0, false);
         } catch (fallbackError) {
           console.error('Both WebCola start methods failed:', fallbackError);
           throw new Error(`WebCola layout failed to start: ${(fallbackError as Error).message}`);
         }
+      }
+
+      // Drive the remaining ticks to convergence synchronously. Each tick()
+      // dispatches through the handlers above (progress only, while
+      // isInitialSolve suppresses DOM updates) and the converging tick
+      // dispatches 'end', which performs the initial paint — so the paint can
+      // never be starved of animation frames. tick() is typed protected,
+      // hence the cast.
+      let syncTicks = 0;
+      while (!(layout as any).tick() && ++syncTicks < WebColaCnDGraph.MAX_SYNC_DECAY_TICKS);
+      if (syncTicks >= WebColaCnDGraph.MAX_SYNC_DECAY_TICKS) {
+        // Stress plateaued above the convergence threshold — force alpha to 0
+        // so this last tick takes the convergence branch and dispatches 'end'.
+        layout.stop();
+        (layout as any).tick();
       }
 
     } catch (error) {
