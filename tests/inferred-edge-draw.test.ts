@@ -246,7 +246,7 @@ directives:
   });
 });
 
-describe('inferredEdge draw — groups without keys', () => {
+describe('inferredEdge draw — single (unary) groups', () => {
   // A relation that exists but has no tuples in this instance: the group
   // constraint over it builds no groups, which must NOT be treated as a spec bug.
   const withEmptyRelation: IJsonDataInstance = {
@@ -257,7 +257,7 @@ describe('inferredEdge draw — groups without keys', () => {
     ]
   };
 
-  it('errors at layout time when a draw end names a group with no keys (unary selector)', () => {
+  it('attaches to the single group when the named constraint is unary', () => {
     const spec = `
 constraints:
   - group:
@@ -269,10 +269,79 @@ directives:
       selector: connected
       draw: _ -> cities
 `;
-    // The name exists, so parsing succeeds — whether the group has keys is
-    // only knowable per instance (it depends on the selector's arity).
-    expect(() => parseLayoutSpec(spec)).not.toThrow();
-    expect(() => generate(spec)).toThrow(/group with no keys/);
+    const layout = generate(spec);
+
+    const edge = layout.edges.find(e => e.id.includes('_inferred_') && e.id.includes('connected'));
+    expect(edge).toBeDefined();
+    expect(edge?.source.id).toBe('r1');
+    // A unary constraint builds one group named after the constraint — no [key].
+    expect(edge?.targetGroupId).toBe('cities');
+    // Anchored on a member of the single group.
+    expect(['c1', 'c2', 'c3']).toContain(edge?.target.id);
+  });
+
+  it('ignores the atom for a single-group end: every tuple attaches to the same group', () => {
+    const spec = `
+constraints:
+  - group:
+      name: cities
+      selector: City
+directives:
+  - inferredEdge:
+      name: connected
+      selector: Region
+      draw: _ -> cities
+`;
+    // Regions are not members of cities — the atom plays no part in a
+    // single-group end, it only anchors the '_' side.
+    const layout = generate(spec);
+
+    const edges = layout.edges.filter(e => e.id.includes('_inferred_') && e.id.includes('connected'));
+    expect(edges).toHaveLength(2);
+    expect(edges.map(e => e.source.id).sort()).toEqual(['r1', 'r2']);
+    expect(edges.every(e => e.targetGroupId === 'cities')).toBe(true);
+  });
+
+  it('warns once and skips when both ends are the same single group', () => {
+    const spec = `
+constraints:
+  - group:
+      name: cities
+      selector: City
+directives:
+  - inferredEdge:
+      name: connected
+      selector: connected
+      draw: cities -> cities
+`;
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const layout = generate(spec);
+      const edges = layout.edges.filter(e => e.id.includes('_inferred_') && e.id.includes('connected'));
+      expect(edges).toHaveLength(0);
+      const skips = warn.mock.calls.filter(c => String(c[0]).includes("both ends are the single group 'cities'"));
+      expect(skips).toHaveLength(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('errors when a name means both a keyed group and a single group', () => {
+    const spec = `
+constraints:
+  - group:
+      name: cities
+      selector: contains
+  - group:
+      name: cities
+      selector: City
+directives:
+  - inferredEdge:
+      name: connected
+      selector: connected
+      draw: _ -> cities
+`;
+    expect(() => generate(spec)).toThrow(/ambiguous/);
   });
 
   it('warns once and skips (no error) when the named group built no groups in this instance', () => {
@@ -297,26 +366,6 @@ directives:
     } finally {
       warn.mockRestore();
     }
-  });
-
-  it('surfaces the no-keys error even when the other end would skip', () => {
-    const spec = `
-constraints:
-  - group:
-      name: owners
-      selector: owns
-  - group:
-      name: cities
-      selector: City
-directives:
-  - inferredEdge:
-      name: connected
-      selector: connected
-      draw: owners -> cities
-`;
-    // 'owners' built no groups (would skip), but 'cities' having no keys is a
-    // spec bug and must not be masked by the skip.
-    expect(() => generate(spec, withEmptyRelation)).toThrow(/group with no keys/);
   });
 });
 

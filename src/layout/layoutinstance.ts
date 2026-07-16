@@ -3180,25 +3180,31 @@ export class LayoutInstance {
 
             // Check the named group ends against the groups that were actually
             // built, once per directive. Parsing already checked the names exist;
-            // whether a group constraint's groups have keys is only knowable per
-            // instance (it depends on the selector's arity in the data).
+            // what kind of groups a constraint builds (one per key, or a single
+            // unkeyed group) is only knowable per instance.
             const namedEnds = [...new Set([draw.source, draw.target])]
                 .filter((end): end is string => end !== null);
+            const builtFor = (endName: string) => groups.filter(grp =>
+                grp.sourceConstraint !== undefined
+                && (grp.sourceConstraint as GroupBySelector).name === endName);
             for (const endName of namedEnds) {
-                const built = groups.filter(grp =>
-                    grp.sourceConstraint !== undefined
-                    && (grp.sourceConstraint as GroupBySelector).name === endName);
-                // Groups exist but none have keys: the constraint uses a unary
-                // selector, so no edge can ever attach. A spec bug — fail loudly
-                // rather than warning per tuple. (Checked for both ends before
-                // any data-dependent skip below, so it always surfaces.)
-                if (built.length > 0 && !built.some(grp => grp.keyed === true)) {
+                const built = builtFor(endName);
+                const single = built.filter(grp => grp.keyed !== true);
+                // A name may mean "one group per key" (binary selector) or "the
+                // single group" (unary selector) — but not both at once, and not
+                // two single groups: with no key in play there is no way to pick.
+                if (single.length > 1) {
                     throw new Error(
-                        `inferredEdge '${he.name}': draw endpoint '${endName}' is a group with no keys. `
-                        + `'${endName}' uses a unary selector, which makes a single group of atoms. `
-                        + `draw attaches an edge end to the group keyed by that end's atom, so it needs `
-                        + `a group constraint with a binary selector (one group per key). `
-                        + `Use '_' to keep this end on the atom itself.`
+                        `inferredEdge '${he.name}': draw endpoint '${endName}' is ambiguous — `
+                        + `${single.length} group constraints named '${endName}' each build a single (unkeyed) group. `
+                        + `Rename one of them.`
+                    );
+                }
+                if (single.length === 1 && built.length > 1) {
+                    throw new Error(
+                        `inferredEdge '${he.name}': draw endpoint '${endName}' is ambiguous — '${endName}' names `
+                        + `both a keyed group constraint (one group per key) and a single-group (unary) constraint. `
+                        + `Rename one of them.`
                     );
                 }
             }
@@ -3206,12 +3212,17 @@ export class LayoutInstance {
                 // No groups at all. Indistinguishable from an empty relation in
                 // this instance (which also builds no groups), so this is a data
                 // fact, not a spec bug: warn once and skip the directive.
-                if (!groups.some(grp =>
-                    grp.sourceConstraint !== undefined
-                    && (grp.sourceConstraint as GroupBySelector).name === endName)) {
+                if (builtFor(endName).length === 0) {
                     console.warn(`[spytial] inferredEdge '${he.name}': skipping — no '${endName}' groups exist in this instance.`);
                     return;
                 }
+            }
+            // Both ends naming the same single group can never draw anything —
+            // every edge would connect the group to itself. Warn once, not per tuple.
+            if (draw.source !== null && draw.source === draw.target
+                && builtFor(draw.source).some(grp => grp.keyed !== true)) {
+                console.warn(`[spytial] inferredEdge '${he.name}': skipping — both ends are the single group '${draw.source}'.`);
+                return;
             }
 
             let res;
@@ -3296,12 +3307,25 @@ export class LayoutInstance {
             return { anchor: atom };
         }
 
-        const matches = groups.filter(grp =>
-            grp.keyed === true
-            && grp.keyNodeId === atom
-            && grp.sourceConstraint !== undefined
+        const named = groups.filter(grp =>
+            grp.sourceConstraint !== undefined
             && (grp.sourceConstraint as GroupBySelector).name === family
         );
+
+        // A unary group constraint builds a single group with no keys: the end
+        // attaches to that group, whatever the atom. (addDrawInferredEdges has
+        // already rejected names that mean both a keyed and a single group.)
+        const single = named.find(grp => grp.keyed !== true);
+        if (single) {
+            const singleAnchor = single.nodeIds.find(id => g.hasNode(id));
+            if (!singleAnchor) {
+                console.warn(`[spytial] inferredEdge '${directiveName}': skipping edge — group '${single.name}' has no members present in the graph to anchor on.`);
+                return null;
+            }
+            return { anchor: singleAnchor, groupId: single.name };
+        }
+
+        const matches = named.filter(grp => grp.keyed === true && grp.keyNodeId === atom);
 
         if (matches.length === 0) {
             console.warn(`[spytial] inferredEdge '${directiveName}': skipping edge — atom '${atom}' does not key any '${family}' group in this instance.`);

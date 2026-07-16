@@ -897,14 +897,14 @@ end   ::=  _  |  <group-constraint-name>
 ```
 
 - `_` — this end attaches to the atom itself (the default behavior).
-- A group name — this end attaches to the **hull of that group constraint's group keyed by this end's atom**. A keyed group constraint (binary selector) produces one group per key, named `name[key]`; `draw` names the constraint, and the tuple's atom picks which of its groups.
+- A group name — this end attaches to the **hull of that group constraint's group**. A keyed group constraint (binary selector) builds one group per key, named `name[key]`: `draw` names the constraint, and this end's atom picks which of its groups. A unary group constraint builds a **single group**: naming it attaches the end to that group directly (the atom plays no part).
 
 The left end applies to each tuple's first atom, the right end to its last. `draw` never reorders — to flip an edge, transpose the selector (`~connected`). With `draw`, the selector may also be **unary**: the single atom feeds both ends (e.g. `draw: _ -> regions` connects each key to its own group).
 
 Resolution notes:
 
 - The group name must belong to some `group` constraint (checked when the spec is parsed).
-- The named group constraint must be **keyed** (binary selector). Naming a group with no keys (unary selector — one group of atoms) is an error at layout time: `draw` attaches by key, so there is nothing to attach to.
+- A name that means both a keyed group and a single group at once (two group constraints sharing the name — one binary, one unary — or two unary ones) is ambiguous and errors at layout time. Rename one of the constraints.
 - Keys may be hidden (`hideAtom`) — group ends attach to the hull and don't need the key node drawn.
 - If an end's atom doesn't key a group of that name **in this instance**, the edge is skipped with a console warning (data-dependent, not a spec error). Same when both ends resolve to the same group, or when the constraint built no groups at all (e.g. its relation is empty in this instance).
 
