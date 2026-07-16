@@ -12,6 +12,11 @@ import { WebColaCnDGraph } from '../src/translators/webcola/webcola-cnd-graph';
  * the loading overlay wedged at "Finalizing...". The lookup now scopes to the
  * label's own link-group and never puts an id in a selector, so no id can
  * break it.
+ *
+ * These cases build their own markup, so they pin the lookup's behaviour but
+ * cannot notice if the renderer stops producing that markup. The companion
+ * webcola-link-render-contract.test.ts drives the real creation code and
+ * covers that half.
  */
 
 const proto = WebColaCnDGraph.prototype as any;
