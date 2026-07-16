@@ -84,7 +84,7 @@ describe('webcola-cnd-graph — edge label textStyle → font-size / fill', () =
     it('maps a textStyle size tier to a px font size', () => {
         expect(fontSize({ textStyle: { size: 'small' } })).toBe('9px');
         expect(fontSize({ textStyle: { size: 'normal' } })).toBe('11px');
-        expect(fontSize({ textStyle: { size: 'large' } })).toBe('16px');
+        expect(fontSize({ textStyle: { size: 'large' } })).toBe('20px');
     });
 
     it('returns null font-size when no size tier is set (→ CSS default)', () => {

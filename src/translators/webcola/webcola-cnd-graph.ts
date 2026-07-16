@@ -4565,14 +4565,19 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         const pathElement = this.getLinkPathElement(nodes[i]);
         return pathElement ? this.calculateNewPosition(pathElement, 'y') : (d.source.y + d.target.y) / 2;
       })
-      .style('font-size', () => {
-        // Zoom-aware font sizing: scale up slightly when zoomed out
+      .style('font-size', (d: EdgeWithMetadata) => {
+        // Zoom-aware font sizing: scale up slightly when zoomed out. Base off the
+        // edge's own textStyle tier when it set one — this runs on every tick and
+        // would otherwise clobber the size setupLinkLabels applied, collapsing
+        // every tier back to the 12px default.
+        const baseFontSize = d?.textStyle?.size ? resolveAttrFontSize(d.textStyle.size) : 12;
         const zoomScale = this.getCurrentZoomScale();
-        const baseFontSize = 12;
         // When zoomed out (scale < 1), increase font size slightly to maintain readability
         // When zoomed in (scale > 1), keep base size
         const adjustedSize = zoomScale < 1 ? baseFontSize / Math.sqrt(zoomScale) : baseFontSize;
-        return `${Math.min(adjustedSize, 16)}px`; // Cap at 16px
+        // Cap the zoom-out boost at a third above the base rather than a fixed
+        // ceiling, so a `large` tier isn't shrunk back below its authored size.
+        return `${Math.min(adjustedSize, baseFontSize * 4 / 3)}px`;
       })
       .raise();
 
