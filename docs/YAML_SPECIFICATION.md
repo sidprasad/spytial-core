@@ -906,7 +906,8 @@ Resolution notes:
 - The group name must belong to some `group` constraint (checked when the spec is parsed).
 - A name that means both a keyed group and a single group at once (two group constraints sharing the name — one binary, one unary — or two unary ones) is ambiguous and errors at layout time. Rename one of the constraints.
 - Keys may be hidden (`hideAtom`) — group ends attach to the hull and don't need the key node drawn.
-- If an end's atom doesn't key a group of that name **in this instance**, the edge is skipped with a console warning (data-dependent, not a spec error). Same when both ends resolve to the same group, or when the constraint built no groups at all (e.g. its relation is empty in this instance).
+- If an end's atom doesn't key a group of that name **in this instance**, the edge is skipped with a console warning (data-dependent, not a spec error). Same when the constraint built no groups at all (e.g. its relation is empty in this instance).
+- Both ends resolving to the **same group** draw a self-loop on that group's hull, just like a node self-loop.
 
 **Examples:**
 

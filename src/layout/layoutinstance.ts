@@ -3217,14 +3217,6 @@ export class LayoutInstance {
                     return;
                 }
             }
-            // Both ends naming the same single group can never draw anything —
-            // every edge would connect the group to itself. Warn once, not per tuple.
-            if (draw.source !== null && draw.source === draw.target
-                && builtFor(draw.source).some(grp => grp.keyed !== true)) {
-                console.warn(`[spytial] inferredEdge '${he.name}': skipping — both ends are the single group '${draw.source}'.`);
-                return;
-            }
-
             let res;
             try {
                 res = this.evaluator.evaluate(he.selector, { instanceIndex: this.instanceNum });
@@ -3256,10 +3248,9 @@ export class LayoutInstance {
                     return; // Skipped; resolveDrawEnd already warned.
                 }
 
-                if (source.groupId && source.groupId === target.groupId) {
-                    console.warn(`[spytial] inferredEdge '${he.name}': skipping edge for (${tuple.join(', ')}) — both ends resolve to the same group '${source.groupId}'.`);
-                    return;
-                }
+                // Both ends resolving to the same group is fine: the anchors
+                // coincide on one member and the renderer draws a self-loop on
+                // the hull, just like a node self-loop.
 
                 let edgeLabel = he.name;
                 if (n > 2) {

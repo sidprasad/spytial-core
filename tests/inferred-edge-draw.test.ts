@@ -176,7 +176,7 @@ directives:
     expect(edges.some(e => e.id.includes('r3'))).toBe(false);
   });
 
-  it('skips edges whose ends resolve to the same group', () => {
+  it('keeps edges whose ends resolve to the same group: a self-loop on that group', () => {
     const withSelfLoop: IJsonDataInstance = {
       ...regionsData,
       relations: regionsData.relations.map(r =>
@@ -194,9 +194,17 @@ directives:
     const layout = generate(groupedSpec('regions -> regions'), withSelfLoop);
 
     const edges = layout.edges.filter(e => e.id.includes('_inferred_') && e.id.includes('connected'));
-    expect(edges).toHaveLength(1);
-    expect(edges[0].sourceGroupId).toBe('regions[r1]');
-    expect(edges[0].targetGroupId).toBe('regions[r2]');
+    expect(edges).toHaveLength(2);
+
+    const loop = edges.find(e => e.sourceGroupId === e.targetGroupId);
+    expect(loop).toBeDefined();
+    expect(loop?.sourceGroupId).toBe('regions[r1]');
+    // Both anchors coincide on one member — the renderer's self-loop shape.
+    expect(loop?.source.id).toBe(loop?.target.id);
+
+    const plain = edges.find(e => e.sourceGroupId !== e.targetGroupId);
+    expect(plain?.sourceGroupId).toBe('regions[r1]');
+    expect(plain?.targetGroupId).toBe('regions[r2]');
   });
 
   it('survives hidden group keys: group ends anchor on members, not keys', () => {
@@ -302,7 +310,7 @@ directives:
     expect(edges.every(e => e.targetGroupId === 'cities')).toBe(true);
   });
 
-  it('warns once and skips when both ends are the same single group', () => {
+  it('draws a self-loop on the single group when both ends name it', () => {
     const spec = `
 constraints:
   - group:
@@ -314,16 +322,13 @@ directives:
       selector: connected
       draw: cities -> cities
 `;
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      const layout = generate(spec);
-      const edges = layout.edges.filter(e => e.id.includes('_inferred_') && e.id.includes('connected'));
-      expect(edges).toHaveLength(0);
-      const skips = warn.mock.calls.filter(c => String(c[0]).includes("both ends are the single group 'cities'"));
-      expect(skips).toHaveLength(1);
-    } finally {
-      warn.mockRestore();
-    }
+    const layout = generate(spec);
+    const edges = layout.edges.filter(e => e.id.includes('_inferred_') && e.id.includes('connected'));
+    expect(edges).toHaveLength(1);
+    expect(edges[0].sourceGroupId).toBe('cities');
+    expect(edges[0].targetGroupId).toBe('cities');
+    // Both anchors coincide on one member — the renderer's self-loop shape.
+    expect(edges[0].source.id).toBe(edges[0].target.id);
   });
 
   it('errors when a name means both a keyed group and a single group', () => {
