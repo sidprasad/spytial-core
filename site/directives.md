@@ -702,6 +702,7 @@ Creates edges that don't exist in your data but are **computed from a selector e
 - inferredEdge:
     name: <edge-label>           # Required
     selector: <binary-selector>  # Required
+    draw: <end> -> <end>         # Optional: what each end attaches to
     color: <color>               # Optional (default: #000000)
     style: <line-style>          # Optional (default: solid)
     weight: <number>             # Optional
@@ -710,10 +711,21 @@ Creates edges that don't exist in your data but are **computed from a selector e
 | Field | Required | Type | Default | Description |
 |-------|----------|------|---------|-------------|
 | `name` | Yes | string | — | Label displayed on the edge |
-| `selector` | Yes | string | — | Binary selector returning (source, target) pairs |
+| `selector` | Yes | string | — | Binary selector returning (source, target) pairs (unary allowed with `draw`) |
+| `draw` | No | string | — | `<end> -> <end>`, each end `_` (the atom, the default) or a group-constraint name (attach to the hull of that constraint's group keyed by this end's atom) |
 | `color` | No | string | `#000000` | CSS color |
 | `style` | No | string | `solid` | `solid`, `dashed`, or `dotted` |
 | `weight` | No | number | — | Line thickness in pixels |
+
+### Group endpoints (`draw`)
+
+By default each selected pair gets an arrow between its two **atoms**. `draw` reinterprets the ends — it never changes which pairs get arrows or their direction (transpose the selector, e.g. `~connected`, to flip):
+
+- `draw: regions -> regions` — hull to hull: each end attaches to the `regions` group keyed by that end's atom.
+- `draw: _ -> regions` — atom to hull.
+- With `draw`, a **unary** selector is allowed: the single atom feeds both ends, so `draw: _ -> regions` connects each key to its own group.
+
+The group name must match a `group` constraint (checked at parse time). If an atom doesn't key a group of that name in the current instance, that edge is skipped with a console warning. Keys hidden with `hideAtom` are fine — group ends attach to the hull, not the key node.
 
 ### Examples
 
@@ -732,6 +744,14 @@ Creates edges that don't exist in your data but are **computed from a selector e
     color: purple
     style: dashed
     weight: 2
+
+# Group-to-group: one dashed edge per `connected` pair, drawn hull to hull
+# (assumes a group constraint named regions keyed by Region atoms)
+- inferredEdge:
+    name: "connected"
+    selector: connected
+    draw: regions -> regions
+    lineStyle: { color: steelblue, pattern: dashed }
 ```
 
 <div class="spytial-diagram" data-height="440" data-caption="Live: parent edges drawn normally; transitive reachable edges drawn as dotted gray.">

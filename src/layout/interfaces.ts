@@ -30,6 +30,15 @@ export interface LayoutGroup {
     // If true, this group overlaps (shares nodes with) another group without subsumption.
     // Shared nodes appear as leaves in both groups; WebCola handles bounds via its VPSC solver.
     overlapping?: boolean;
+
+    /**
+     * True when the group came from a binary group-by-selector, i.e. keyNodeId
+     * is a real key that identifies this group within its constraint's family.
+     * Unary-selector groups set keyNodeId to an arbitrary member, so they are
+     * not addressable by (name, key) — inferredEdge `draw` endpoints resolve
+     * only against keyed groups.
+     */
+    keyed?: boolean;
 }
 
 /**
@@ -127,18 +136,33 @@ export interface LayoutEdge {
     /** Optional label styling (size / color), applied to the edge's label text. */
     textStyle?: TextStyle;
     /**
-     * For group edges (_g_ prefix), the name of the group this edge was created for.
-     * Matches `group.id` in the WebCola translator so routing can look up the group
-     * directly without re-parsing edge IDs or matching fragile leaf indices.
+     * For group edges (_g_ prefix), the name of the group this edge was created
+     * for (matches `group.id` in the WebCola translator). INFORMATIONAL since
+     * the per-end stamp unification — the renderer routes exclusively off
+     * {@link sourceGroupId}/{@link targetGroupId}; consumers (e.g. the explorer)
+     * still use this to identify connector edges.
      */
     groupId?: string;
     /**
-     * For group edges (_g_ prefix), the node ID of the key (groupOn) node — i.e.
-     * the external anchor node that is NOT inside the group.  Stamped at edge
-     * construction time (= graphlib edge.v) so the renderer knows definitively
-     * which end is the anchor and which end should be snapped to the group boundary.
+     * For group edges (_g_ prefix), the node ID of the key (groupOn) node — the
+     * external anchor. INFORMATIONAL since the per-end stamp unification: the
+     * renderer no longer derives the snap side from it.
      */
     keyNodeId?: string;
+    /**
+     * The group (by name, = `group.id` in the WebCola translator) whose hull the
+     * SOURCE end attaches to. The renderer's single group-edge contract: set by
+     * inferredEdge `draw` endpoints and by the `addEdge` connector desugar
+     * ('fromgroup' connectors stamp this side). The edge's `source` node is then
+     * just the anchor (a member of that group), not the visual endpoint.
+     * Undefined = the source end renders at the node itself.
+     */
+    sourceGroupId?: string;
+    /**
+     * Same as {@link sourceGroupId}, for the TARGET end ('togroup' connectors
+     * stamp this side).
+     */
+    targetGroupId?: string;
 }
 
 export class ImplicitConstraint {
