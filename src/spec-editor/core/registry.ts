@@ -803,7 +803,7 @@ const inferredEdge: ItemDefinition = {
       key: 'draw',
       kind: 'text',
       label: 'Draw',
-      help: "Endpoint interpretation: '<end> -> <end>', each end '_' (the atom itself) or a group constraint name (attach to that group's hull, keyed by the end's atom). E.g. 'regions -> regions' or '_ -> regions'.",
+      help: "Endpoint interpretation: '<end> -> <end>', each end '_' (the atom itself) or a keyed group constraint name (attach to that group's hull, keyed by the end's atom; the group needs a binary selector). E.g. 'regions -> regions' or '_ -> regions'.",
     },
     // Same shared blocks as edgeStyle. The engine still accepts the legacy flat
     // color/style/weight (deprecated + warned), so old specs keep working.

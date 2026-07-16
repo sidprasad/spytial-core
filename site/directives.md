@@ -725,7 +725,7 @@ By default each selected pair gets an arrow between its two **atoms**. `draw` re
 - `draw: _ -> regions` — atom to hull.
 - With `draw`, a **unary** selector is allowed: the single atom feeds both ends, so `draw: _ -> regions` connects each key to its own group.
 
-The group name must match a `group` constraint (checked at parse time). If an atom doesn't key a group of that name in the current instance, that edge is skipped with a console warning. Keys hidden with `hideAtom` are fine — group ends attach to the hull, not the key node.
+The group name must match a `group` constraint (checked at parse time), and that constraint must be **keyed** — a binary selector, one group per key. Naming a group with no keys (unary selector) is an error at layout time, since `draw` attaches by key. If an atom doesn't key a group of that name in the current instance, that edge is skipped with a console warning. Keys hidden with `hideAtom` are fine — group ends attach to the hull, not the key node.
 
 ### Examples
 

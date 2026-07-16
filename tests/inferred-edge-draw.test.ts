@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { JSONDataInstance, IJsonDataInstance } from '../src/data-instance/json-data-instance';
 import { parseLayoutSpec, parseInferredEdgeDraw } from '../src/layout/layoutspec';
 import { LayoutInstance } from '../src/layout/layoutinstance';
@@ -243,6 +243,80 @@ directives:
     expect(edge?.target.id).toBe('r2');
     expect(edge?.sourceGroupId).toBeUndefined();
     expect(edge?.targetGroupId).toBeUndefined();
+  });
+});
+
+describe('inferredEdge draw — groups without keys', () => {
+  // A relation that exists but has no tuples in this instance: the group
+  // constraint over it builds no groups, which must NOT be treated as a spec bug.
+  const withEmptyRelation: IJsonDataInstance = {
+    ...regionsData,
+    relations: [
+      ...regionsData.relations,
+      { id: 'owns', name: 'owns', types: ['Region', 'City'], tuples: [] }
+    ]
+  };
+
+  it('errors at layout time when a draw end names a group with no keys (unary selector)', () => {
+    const spec = `
+constraints:
+  - group:
+      name: cities
+      selector: City
+directives:
+  - inferredEdge:
+      name: connected
+      selector: connected
+      draw: _ -> cities
+`;
+    // The name exists, so parsing succeeds — whether the group has keys is
+    // only knowable per instance (it depends on the selector's arity).
+    expect(() => parseLayoutSpec(spec)).not.toThrow();
+    expect(() => generate(spec)).toThrow(/group with no keys/);
+  });
+
+  it('warns once and skips (no error) when the named group built no groups in this instance', () => {
+    const spec = `
+constraints:
+  - group:
+      name: owners
+      selector: owns
+directives:
+  - inferredEdge:
+      name: connected
+      selector: connected
+      draw: _ -> owners
+`;
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const layout = generate(spec, withEmptyRelation);
+      const edges = layout.edges.filter(e => e.id.includes('_inferred_') && e.id.includes('connected'));
+      expect(edges).toHaveLength(0);
+      const skips = warn.mock.calls.filter(c => String(c[0]).includes("no 'owners' groups exist"));
+      expect(skips).toHaveLength(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('surfaces the no-keys error even when the other end would skip', () => {
+    const spec = `
+constraints:
+  - group:
+      name: owners
+      selector: owns
+  - group:
+      name: cities
+      selector: City
+directives:
+  - inferredEdge:
+      name: connected
+      selector: connected
+      draw: owners -> cities
+`;
+    // 'owners' built no groups (would skip), but 'cities' having no keys is a
+    // spec bug and must not be masked by the skip.
+    expect(() => generate(spec, withEmptyRelation)).toThrow(/group with no keys/);
   });
 });
 

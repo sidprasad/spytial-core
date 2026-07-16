@@ -904,8 +904,9 @@ The left end applies to each tuple's first atom, the right end to its last. `dra
 Resolution notes:
 
 - The group name must belong to some `group` constraint (checked when the spec is parsed).
+- The named group constraint must be **keyed** (binary selector). Naming a group with no keys (unary selector — one group of atoms) is an error at layout time: `draw` attaches by key, so there is nothing to attach to.
 - Keys may be hidden (`hideAtom`) — group ends attach to the hull and don't need the key node drawn.
-- If an end's atom doesn't key a group of that name **in this instance**, the edge is skipped with a console warning (data-dependent, not a spec error). Same when both ends resolve to the same group.
+- If an end's atom doesn't key a group of that name **in this instance**, the edge is skipped with a console warning (data-dependent, not a spec error). Same when both ends resolve to the same group, or when the constraint built no groups at all (e.g. its relation is empty in this instance).
 
 **Examples:**
 

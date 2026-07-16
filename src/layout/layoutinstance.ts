@@ -3176,6 +3176,44 @@ export class LayoutInstance {
         const drawDirectives = this._layoutSpec.directives.inferredEdges.filter(he => he.draw);
         drawDirectives.forEach((he) => {
 
+            const draw = he.draw!;
+
+            // Check the named group ends against the groups that were actually
+            // built, once per directive. Parsing already checked the names exist;
+            // whether a group constraint's groups have keys is only knowable per
+            // instance (it depends on the selector's arity in the data).
+            const namedEnds = [...new Set([draw.source, draw.target])]
+                .filter((end): end is string => end !== null);
+            for (const endName of namedEnds) {
+                const built = groups.filter(grp =>
+                    grp.sourceConstraint !== undefined
+                    && (grp.sourceConstraint as GroupBySelector).name === endName);
+                // Groups exist but none have keys: the constraint uses a unary
+                // selector, so no edge can ever attach. A spec bug — fail loudly
+                // rather than warning per tuple. (Checked for both ends before
+                // any data-dependent skip below, so it always surfaces.)
+                if (built.length > 0 && !built.some(grp => grp.keyed === true)) {
+                    throw new Error(
+                        `inferredEdge '${he.name}': draw endpoint '${endName}' is a group with no keys. `
+                        + `'${endName}' uses a unary selector, which makes a single group of atoms. `
+                        + `draw attaches an edge end to the group keyed by that end's atom, so it needs `
+                        + `a group constraint with a binary selector (one group per key). `
+                        + `Use '_' to keep this end on the atom itself.`
+                    );
+                }
+            }
+            for (const endName of namedEnds) {
+                // No groups at all. Indistinguishable from an empty relation in
+                // this instance (which also builds no groups), so this is a data
+                // fact, not a spec bug: warn once and skip the directive.
+                if (!groups.some(grp =>
+                    grp.sourceConstraint !== undefined
+                    && (grp.sourceConstraint as GroupBySelector).name === endName)) {
+                    console.warn(`[spytial] inferredEdge '${he.name}': skipping — no '${endName}' groups exist in this instance.`);
+                    return;
+                }
+            }
+
             let res;
             try {
                 res = this.evaluator.evaluate(he.selector, { instanceIndex: this.instanceNum });
@@ -3193,7 +3231,6 @@ export class LayoutInstance {
                 selectedTuples = res.selectedAtoms().map((atom: string) => [atom]);
             }
 
-            const draw = he.draw!;
             let edgeIdPrefix = `${inferredEdgePrefix}<:${he.name}`;
 
             selectedTuples.forEach((tuple) => {
