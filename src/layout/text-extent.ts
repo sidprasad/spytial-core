@@ -37,8 +37,12 @@ export type AttrTextSize = 'small' | 'normal' | 'large';
 
 /** "small" tier — below the normal secondary size. */
 export const SECONDARY_FONT_SIZE_SMALL = 9;
-/** "large" tier — above {@link MAIN_LABEL_FONT_SIZE} so the line reads as bigger than the node's own label. */
-export const SECONDARY_FONT_SIZE_LARGE = 16;
+/**
+ * "large" tier — must read as bigger than the node's own label at a glance. The
+ * main label is bold, which reads ~1-2px larger than its nominal size, so the
+ * gap has to clear that before it's perceptible: 20px against a bold 14px label.
+ */
+export const SECONDARY_FONT_SIZE_LARGE = 20;
 
 /** Resolve an attribute/tag text-size tier to its pixel font size. Missing/unknown → the normal secondary size. */
 export function resolveAttrFontSize(size?: AttrTextSize): number {
