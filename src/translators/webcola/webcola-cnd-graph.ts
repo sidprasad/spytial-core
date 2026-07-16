@@ -4315,6 +4315,49 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * @param d - Edge data object.
    * @returns { source, target } with group-attached ends replaced by group objects.
    */
+  /**
+   * True when both ends are stamped with the SAME group: `draw: g -> g` on a
+   * tuple whose two atoms pick the same group, or a single (unary) group named
+   * at both ends. Rendered as a self-loop on the hull — the group analogue of
+   * a node self-loop. (Both anchors sit on the same member node, so the rest
+   * of the pipeline already treats these as self-loops.)
+   */
+  private isGroupSelfLoop(d: any): boolean {
+    return !!(d?.sourceGroupId && d.sourceGroupId === d.targetGroupId);
+  }
+
+  /**
+   * Route for a group self-loop: the node self-loop petal, drawn on the group
+   * hull instead of the node rect. Loops on the same hull distribute around
+   * its sides/rings independently of any node self-loops. Falls back to the
+   * member-node petal when the group (or its bounds) is missing.
+   */
+  private createGroupSelfLoopRoute(edgeData: any, grid: boolean = false): Array<{ x: number; y: number }> {
+    const groups = this.currentLayout?.groups || [];
+    const grp = groups.find((g: any) => g.id === edgeData.sourceGroupId);
+    if (grp) this.ensureGroupBounds(grp, edgeData.source);
+    const bounds = grp?.bounds ?? undefined;
+    const index = bounds ? this.getGroupSelfLoopIndex(edgeData) : undefined;
+    return grid
+      ? this.createGridSelfLoopRoute(edgeData, bounds, index)
+      : this.createSelfLoopRoute(edgeData, bounds, index);
+  }
+
+  /**
+   * 0-based index of this self-loop among all self-loops on its GROUP, so
+   * multiple loops on one hull spread around its sides like node loops do.
+   */
+  private getGroupSelfLoopIndex(edgeData: any): number {
+    let idx = 0;
+    for (const e of ((this.currentLayout?.links as any[]) ?? [])) {
+      if (this.isGroupSelfLoop(e) && e.sourceGroupId === edgeData.sourceGroupId) {
+        if (e.id === edgeData.id) return idx;
+        idx++;
+      }
+    }
+    return 0;
+  }
+
   private resolveGroupEdgeEndpoints(d: any): { source: any; target: any } {
     if (!(d.sourceGroupId || d.targetGroupId)) {
       return { source: d.source, target: d.target };
@@ -4476,6 +4519,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // is not picked up here — markers and .raise() apply only to the main edge.
     this.svgLinkGroups.select('path[data-link-id]')
       .attr('d', (d: EdgeWithMetadata) => {
+        // Same group at both ends: a self-loop petal on the hull. (Resolving
+        // endpoints would hand getStableEdgePath the same rect twice and
+        // collapse the path to a point.)
+        if (this.isGroupSelfLoop(d)) {
+          return this.lineFunction(this.createGroupSelfLoopRoute(d));
+        }
+
         // Resolve group-edge endpoints (group boundary instead of member node center).
         const { source, target } = this.resolveGroupEdgeEndpoints(d);
 
@@ -4743,6 +4793,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
             // draw-stamped edges are exempt (coinciding anchors can still have
             // distinct hull endpoints); `_g_` connectors keep their historical
             // self-loop rendering (see createEdgeRoute).
+            if (this.isGroupSelfLoop(d)) {
+                return this.gridLineFunction(this.createGroupSelfLoopRoute(d, true));
+            }
             if (d.source?.id === d.target?.id
                 && (d.id?.startsWith('_g_') || !(d.sourceGroupId || d.targetGroupId))) {
                 const route = this.createGridSelfLoopRoute(d);
@@ -5269,11 +5322,14 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         .attr("d", (edgeData: any) => {
           // Handle self-loops specially - GridRouter can't route these
           if (edgeData.source?.id === edgeData.target?.id) {
+            if (this.isGroupSelfLoop(edgeData)) {
+              return this.gridLineFunction(this.createGroupSelfLoopRoute(edgeData, true));
+            }
             // Orthogonal "out and back" hook to match grid mode's rectilinear style
             const route = this.createGridSelfLoopRoute(edgeData);
             return this.gridLineFunction(route);
           }
-          
+
           const route = routesByEdgeId.get(edgeData.id);
           if (!route) {
             // Create orthogonal fallback path for unroutable edges
@@ -5349,10 +5405,13 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr("d", (edgeData: any) => {
         // Handle self-loops specially
         if (edgeData.source?.id === edgeData.target?.id) {
+          if (this.isGroupSelfLoop(edgeData)) {
+            return this.gridLineFunction(this.createGroupSelfLoopRoute(edgeData, true));
+          }
           const route = this.createGridSelfLoopRoute(edgeData);
           return this.gridLineFunction(route);
         }
-        
+
         // Create orthogonal fallback path
         const sourceX = edgeData.source?.x ?? edgeData.source?.bounds?.cx() ?? 0;
         const sourceY = edgeData.source?.y ?? edgeData.source?.bounds?.cy() ?? 0;
@@ -6821,6 +6880,10 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     // hulls — differ. `_g_` connectors are NOT exempt: a key-is-its-own-anchor
     // connector kept its historical self-loop rendering through the stamp
     // unification, so desugared connectors stay on this path.
+    if (this.isGroupSelfLoop(edgeData)) {
+      // Both ends are the same group: a self-loop petal on the hull.
+      return this.createGroupSelfLoopRoute(edgeData);
+    }
     if (edgeData.source.id === edgeData.target.id
         && (edgeData.id?.startsWith('_g_')
             || !(edgeData.sourceGroupId || edgeData.targetGroupId))) {
@@ -8055,9 +8118,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    * @param edgeData - The edge data object
    * @returns Array of route points for the self-loop
    */
-  private createSelfLoopRoute(edgeData: any): Array<{ x: number; y: number }> {
+  private createSelfLoopRoute(edgeData: any, boundsOverride?: any, indexOverride?: number): Array<{ x: number; y: number }> {
     const source = edgeData.source;
-    const bounds = source.bounds;
+    const bounds = boundsOverride ?? source.bounds;
 
     if (!bounds) {
       // Fallback for missing bounds — minimal upward petal.
@@ -8075,7 +8138,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     const cx = bounds.x + width / 2;
     const cy = bounds.y + height / 2;
 
-    const selfLoopIndex = this.getSelfLoopIndex(edgeData);
+    const selfLoopIndex = indexOverride ?? this.getSelfLoopIndex(edgeData);
     const sideIdx = selfLoopIndex % 4;
     const ring = Math.floor(selfLoopIndex / 4);
     const ringScale = 1 + ring * WebColaCnDGraph.SELF_LOOP_CURVATURE_SCALE;
@@ -8156,9 +8219,9 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    *   p3 = (cx + spread/2, top)   ← end
    * Drawn with the rectilinear gridLineFunction → three right-angle bends.
    */
-  private createGridSelfLoopRoute(edgeData: any): Array<{ x: number; y: number }> {
+  private createGridSelfLoopRoute(edgeData: any, boundsOverride?: any, indexOverride?: number): Array<{ x: number; y: number }> {
     const source = edgeData.source;
-    const bounds = source.bounds;
+    const bounds = boundsOverride ?? source.bounds;
 
     if (!bounds) {
       return [
@@ -8174,7 +8237,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     const cx = bounds.x + width / 2;
     const cy = bounds.y + height / 2;
 
-    const selfLoopIndex = this.getSelfLoopIndex(edgeData);
+    const selfLoopIndex = indexOverride ?? this.getSelfLoopIndex(edgeData);
     const sideIdx = selfLoopIndex % 4;
     const ring = Math.floor(selfLoopIndex / 4);
     const ringScale = 1 + ring * WebColaCnDGraph.SELF_LOOP_CURVATURE_SCALE;
@@ -8230,14 +8293,17 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     const key = this.getNodePairKey(nodeId, nodeId);
     const selfLoops = this.edgeRoutingCache.edgesBetweenNodes.get(key);
     if (selfLoops) {
-      const idx = selfLoops.findIndex((e: any) => e.id === edgeData.id);
+      // Group self-loops share the node-pair key (both anchors on one member)
+      // but render on the hull — don't let them consume node-petal sides.
+      const nodeLoops = selfLoops.filter((e: any) => !this.isGroupSelfLoop(e));
+      const idx = nodeLoops.findIndex((e: any) => e.id === edgeData.id);
       return idx >= 0 ? idx : 0;
     }
     // Fallback: scan all links
     if (this.currentLayout?.links) {
       let idx = 0;
       for (const edge of this.currentLayout.links as any[]) {
-        if (edge.source.id === nodeId && edge.target.id === nodeId) {
+        if (edge.source.id === nodeId && edge.target.id === nodeId && !this.isGroupSelfLoop(edge)) {
           if (edge.id === edgeData.id) return idx;
           idx++;
         }

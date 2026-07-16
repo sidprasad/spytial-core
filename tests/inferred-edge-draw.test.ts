@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { JSONDataInstance, IJsonDataInstance } from '../src/data-instance/json-data-instance';
 import { parseLayoutSpec, parseInferredEdgeDraw } from '../src/layout/layoutspec';
 import { LayoutInstance } from '../src/layout/layoutinstance';
@@ -176,7 +176,7 @@ directives:
     expect(edges.some(e => e.id.includes('r3'))).toBe(false);
   });
 
-  it('skips edges whose ends resolve to the same group', () => {
+  it('keeps edges whose ends resolve to the same group: a self-loop on that group', () => {
     const withSelfLoop: IJsonDataInstance = {
       ...regionsData,
       relations: regionsData.relations.map(r =>
@@ -194,9 +194,17 @@ directives:
     const layout = generate(groupedSpec('regions -> regions'), withSelfLoop);
 
     const edges = layout.edges.filter(e => e.id.includes('_inferred_') && e.id.includes('connected'));
-    expect(edges).toHaveLength(1);
-    expect(edges[0].sourceGroupId).toBe('regions[r1]');
-    expect(edges[0].targetGroupId).toBe('regions[r2]');
+    expect(edges).toHaveLength(2);
+
+    const loop = edges.find(e => e.sourceGroupId === e.targetGroupId);
+    expect(loop).toBeDefined();
+    expect(loop?.sourceGroupId).toBe('regions[r1]');
+    // Both anchors coincide on one member — the renderer's self-loop shape.
+    expect(loop?.source.id).toBe(loop?.target.id);
+
+    const plain = edges.find(e => e.sourceGroupId !== e.targetGroupId);
+    expect(plain?.sourceGroupId).toBe('regions[r1]');
+    expect(plain?.targetGroupId).toBe('regions[r2]');
   });
 
   it('survives hidden group keys: group ends anchor on members, not keys', () => {
@@ -243,6 +251,126 @@ directives:
     expect(edge?.target.id).toBe('r2');
     expect(edge?.sourceGroupId).toBeUndefined();
     expect(edge?.targetGroupId).toBeUndefined();
+  });
+});
+
+describe('inferredEdge draw — single (unary) groups', () => {
+  // A relation that exists but has no tuples in this instance: the group
+  // constraint over it builds no groups, which must NOT be treated as a spec bug.
+  const withEmptyRelation: IJsonDataInstance = {
+    ...regionsData,
+    relations: [
+      ...regionsData.relations,
+      { id: 'owns', name: 'owns', types: ['Region', 'City'], tuples: [] }
+    ]
+  };
+
+  it('attaches to the single group when the named constraint is unary', () => {
+    const spec = `
+constraints:
+  - group:
+      name: cities
+      selector: City
+directives:
+  - inferredEdge:
+      name: connected
+      selector: connected
+      draw: _ -> cities
+`;
+    const layout = generate(spec);
+
+    const edge = layout.edges.find(e => e.id.includes('_inferred_') && e.id.includes('connected'));
+    expect(edge).toBeDefined();
+    expect(edge?.source.id).toBe('r1');
+    // A unary constraint builds one group named after the constraint — no [key].
+    expect(edge?.targetGroupId).toBe('cities');
+    // Anchored on a member of the single group.
+    expect(['c1', 'c2', 'c3']).toContain(edge?.target.id);
+  });
+
+  it('ignores the atom for a single-group end: every tuple attaches to the same group', () => {
+    const spec = `
+constraints:
+  - group:
+      name: cities
+      selector: City
+directives:
+  - inferredEdge:
+      name: connected
+      selector: Region
+      draw: _ -> cities
+`;
+    // Regions are not members of cities — the atom plays no part in a
+    // single-group end, it only anchors the '_' side.
+    const layout = generate(spec);
+
+    const edges = layout.edges.filter(e => e.id.includes('_inferred_') && e.id.includes('connected'));
+    expect(edges).toHaveLength(2);
+    expect(edges.map(e => e.source.id).sort()).toEqual(['r1', 'r2']);
+    expect(edges.every(e => e.targetGroupId === 'cities')).toBe(true);
+  });
+
+  it('draws a self-loop on the single group when both ends name it', () => {
+    const spec = `
+constraints:
+  - group:
+      name: cities
+      selector: City
+directives:
+  - inferredEdge:
+      name: connected
+      selector: connected
+      draw: cities -> cities
+`;
+    const layout = generate(spec);
+    const edges = layout.edges.filter(e => e.id.includes('_inferred_') && e.id.includes('connected'));
+    expect(edges).toHaveLength(1);
+    expect(edges[0].sourceGroupId).toBe('cities');
+    expect(edges[0].targetGroupId).toBe('cities');
+    // Both anchors coincide on one member — the renderer's self-loop shape.
+    expect(edges[0].source.id).toBe(edges[0].target.id);
+  });
+
+  it('errors when a name means both a keyed group and a single group', () => {
+    const spec = `
+constraints:
+  - group:
+      name: cities
+      selector: contains
+  - group:
+      name: cities
+      selector: City
+directives:
+  - inferredEdge:
+      name: connected
+      selector: connected
+      draw: _ -> cities
+`;
+    expect(() => generate(spec)).toThrow(/ambiguous/);
+  });
+
+  it('warns once and skips (no error) when the named group built no groups in this instance', () => {
+    const spec = `
+constraints:
+  - group:
+      name: owners
+      selector: owns
+directives:
+  - inferredEdge:
+      name: connected
+      selector: connected
+      draw: _ -> owners
+`;
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const layout = generate(spec, withEmptyRelation);
+      const edges = layout.edges.filter(e => e.id.includes('_inferred_') && e.id.includes('connected'));
+      expect(edges).toHaveLength(0);
+      const skips = warn.mock.calls.filter(c => String(c[0]).includes("no 'owners' groups exist"));
+      expect(skips).toHaveLength(1);
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 
