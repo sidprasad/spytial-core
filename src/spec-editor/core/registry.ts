@@ -28,7 +28,7 @@
  *     - atomColor:    { value, selector? }  (deprecated → atomStyle)
  *     - edgeStyle:    { field, selector?, filter?, lineStyle?:{color,pattern,weight,highlight}, textStyle?:{size,color}, showLabel?, hidden? }
  *     - edgeColor:    { value, field, selector?, filter?, style?, weight?, showLabel?, hidden?, highlight? }  (deprecated → edgeStyle)
- *     - inferredEdge: { name, selector?, lineStyle?:{color,pattern,weight,highlight}, textStyle?:{size,color} }
+ *     - inferredEdge: { name, selector?, draw?, lineStyle?:{color,pattern,weight,highlight}, textStyle?:{size,color} }
  *     - tag:          { toTag, name, value, textStyle?:{size,color} }
  *
  * This module is framework-agnostic — no React.
@@ -798,6 +798,12 @@ const inferredEdge: ItemDefinition = {
       kind: 'selector',
       label: 'Selector',
       selectorArity: 'binary',
+    },
+    {
+      key: 'draw',
+      kind: 'text',
+      label: 'Draw',
+      help: "Endpoint interpretation: '<end> -> <end>', each end '_' (the atom itself) or a group constraint name (attach to that group's hull, keyed by the end's atom). E.g. 'regions -> regions' or '_ -> regions'.",
     },
     // Same shared blocks as edgeStyle. The engine still accepts the legacy flat
     // color/style/weight (deprecated + warned), so old specs keep working.

@@ -302,6 +302,41 @@ export interface InferredEdgeDirective extends VisualManipulation {
     highlight?: string;
     /** Optional label styling. Parsed from the `textStyle` block. */
     textStyle?: TextStyle;
+    /**
+     * Optional endpoint interpretation, parsed from `draw: <end> -> <end>`.
+     * Each end is `null` (written `_`: the atom itself, the default) or the
+     * name of a group constraint (the end attaches to the hull of that
+     * constraint's group keyed by the end's atom). Absent when no `draw`
+     * was given — a plain node-to-node inferred edge.
+     */
+    draw?: { source: string | null, target: string | null };
+}
+
+/**
+ * Parse an inferredEdge `draw` value: `<end> -> <end>`, each end `_` or a
+ * group-constraint name. Returns undefined for absent input and for the
+ * redundant `_ -> _` (identical to no `draw` at all).
+ */
+export function parseInferredEdgeDraw(raw: unknown): { source: string | null, target: string | null } | undefined {
+    if (raw === undefined || raw === null) return undefined;
+    if (typeof raw !== 'string') {
+        throw new Error(`inferredEdge 'draw' must be a string of the form '<end> -> <end>' (each end '_' or a group name). Got: ${JSON.stringify(raw)}`);
+    }
+    const parts = raw.split('->');
+    if (parts.length !== 2) {
+        throw new Error(`inferredEdge 'draw' must contain exactly one '->' (e.g. 'regions -> regions' or '_ -> regions'). Got: '${raw}'`);
+    }
+    const parseEnd = (end: string): string | null => {
+        const trimmed = end.trim();
+        if (!trimmed) {
+            throw new Error(`inferredEdge 'draw' has an empty endpoint in '${raw}'. Each end must be '_' or a group name.`);
+        }
+        return trimmed === '_' ? null : trimmed;
+    };
+    const source = parseEnd(parts[0]);
+    const target = parseEnd(parts[1]);
+    if (source === null && target === null) return undefined;
+    return { source, target };
 }
 
 export interface AtomHidingDirective extends VisualManipulation {
@@ -560,7 +595,31 @@ export function parseLayoutSpec(s: string): LayoutSpec {
         layoutSpec.directives.sizes = sizesFromConstraints;
         layoutSpec.directives.hiddenAtoms = hiddenAtomsFromConstraints;
     }
+    validateInferredEdgeDrawReferences(layoutSpec);
     return layoutSpec;
+}
+
+/**
+ * Statically validate inferredEdge `draw` references: every group name an
+ * endpoint mentions must belong to some group (by-selector) constraint.
+ * Which group of that constraint an endpoint attaches to is data-dependent
+ * (keyed by the endpoint's atom), so only the name is checkable here.
+ */
+function validateInferredEdgeDrawReferences(spec: LayoutSpec): void {
+    const groupNames = new Set(spec.constraints.grouping.byselector.map(gc => gc.name));
+    for (const ie of spec.directives.inferredEdges) {
+        if (!ie.draw) continue;
+        for (const end of [ie.draw.source, ie.draw.target]) {
+            if (end !== null && !groupNames.has(end)) {
+                const known = groupNames.size > 0
+                    ? ` Known group names: ${[...groupNames].join(', ')}.`
+                    : ` No group constraints are defined.`;
+                throw new Error(
+                    `inferredEdge '${ie.name}': draw references group '${end}', but no group constraint with that name exists.${known}`
+                );
+            }
+        }
+    }
 }
 
 /**
@@ -962,6 +1021,7 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
             weight: spec.lineStyle?.weight ?? ie.weight,
             highlight: spec.lineStyle?.highlight ?? ie.highlight,
             textStyle: spec.textStyle,
+            draw: parseInferredEdgeDraw(ie.draw),
         };
     });
     if (usedLegacyInferredInline) {

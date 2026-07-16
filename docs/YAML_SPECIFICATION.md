@@ -860,6 +860,7 @@ Creates visual edges based on a selector expression (edges that don't exist in t
 - inferredEdge:
     name: <edge-label>           # Required: label for the inferred edge
     selector: <binary-selector>  # Required: selector returning pairs to connect
+    draw: <end> -> <end>         # Optional: what each end attaches to (see below)
     lineStyle:                   # Optional: the drawn line
       color: <color>
       pattern: <solid|dashed|dotted>
@@ -875,7 +876,8 @@ Creates visual edges based on a selector expression (edges that don't exist in t
 | Field | Required | Type | Description |
 |-------|----------|------|-------------|
 | `name` | ✅ Yes | string | Label displayed on the edge |
-| `selector` | ✅ Yes | string | Binary selector returning (source, target) pairs |
+| `selector` | ✅ Yes | string | Binary selector returning (source, target) pairs (unary allowed when `draw` is given — see below) |
+| `draw` | ❌ No | string | Endpoint interpretation: `<end> -> <end>`, each end `_` or a group name (see **Group endpoints**) |
 | `lineStyle.color` | ❌ No | string | Line color (default `#000000`) |
 | `lineStyle.pattern` | ❌ No | enum | `solid`, `dashed`, or `dotted` |
 | `lineStyle.weight` | ❌ No | number | Line thickness in pixels |
@@ -884,6 +886,26 @@ Creates visual edges based on a selector expression (edges that don't exist in t
 | `textStyle.color` | ❌ No | string | Edge-label color |
 
 > **Legacy:** the flat inline `color` / `style` / `weight` / `highlight` keys still parse (`style`→`pattern`) but are deprecated — use the `lineStyle` block. Mixing forms emits a warning.
+
+#### Group endpoints (`draw`)
+
+By default each edge runs between the tuple's first and last **atoms**. The optional `draw` line reinterprets where each end attaches, without changing which pairs get edges or which way they point:
+
+```
+draw  ::=  <end> -> <end>
+end   ::=  _  |  <group-constraint-name>
+```
+
+- `_` — this end attaches to the atom itself (the default behavior).
+- A group name — this end attaches to the **hull of that group constraint's group keyed by this end's atom**. A keyed group constraint (binary selector) produces one group per key, named `name[key]`; `draw` names the constraint, and the tuple's atom picks which of its groups.
+
+The left end applies to each tuple's first atom, the right end to its last. `draw` never reorders — to flip an edge, transpose the selector (`~connected`). With `draw`, the selector may also be **unary**: the single atom feeds both ends (e.g. `draw: _ -> regions` connects each key to its own group).
+
+Resolution notes:
+
+- The group name must belong to some `group` constraint (checked when the spec is parsed).
+- Keys may be hidden (`hideAtom`) — group ends attach to the hull and don't need the key node drawn.
+- If an end's atom doesn't key a group of that name **in this instance**, the edge is skipped with a console warning (data-dependent, not a spec error). Same when both ends resolve to the same group.
 
 **Examples:**
 
@@ -902,6 +924,20 @@ Creates visual edges based on a selector expression (edges that don't exist in t
     color: purple
     style: dashed
     weight: 2
+
+# Group-to-group: one edge per `connected` pair, drawn hull to hull.
+# (Assumes a group constraint named `regions` keyed by Region atoms.)
+- inferredEdge:
+    name: "connected"
+    selector: connected
+    draw: regions -> regions
+    lineStyle: { color: steelblue, pattern: dashed }
+
+# Node-to-group: person -> the hull of the region-group they manage
+- inferredEdge:
+    name: "manages"
+    selector: manages
+    draw: _ -> regions
 ```
 
 ---

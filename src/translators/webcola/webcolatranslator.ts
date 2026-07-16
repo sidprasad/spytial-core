@@ -83,16 +83,26 @@ type EdgeWithMetadata = Link<NodeWithMetadata> & {
   bidirectional?: boolean, // Flag to indicate if this edge represents a bidirectional relationship
   /**
    * For group edges (id starts with `_g_`), the name of the group this edge
-   * was created for. Matches `group.id` so routing can look up the group
-   * directly without string-parsing the edge ID or matching leaf indices.
+   * was created for (matches `group.id`). INFORMATIONAL since the per-end
+   * stamp unification — routing reads only sourceGroupId/targetGroupId.
    */
   groupId?: string,
   /**
    * For group edges, the node ID of the key (groupOn) node — the external
-   * anchor that is NOT inside the group.  Stamped at edge-construction time
-   * so the renderer knows which side to snap to the group boundary.
+   * anchor. INFORMATIONAL since the per-end stamp unification: the renderer
+   * no longer derives the snap side from it.
    */
   keyNodeId?: string,
+  /**
+   * The group (matches `group.id`) whose hull the SOURCE end attaches to —
+   * the renderer's single group-edge contract, set by inferredEdge `draw`
+   * and by the `addEdge` connector desugar ('fromgroup' stamps this side);
+   * the source node is only the anchor. Undefined = the source end renders
+   * at the node itself.
+   */
+  sourceGroupId?: string,
+  /** Same as {@link sourceGroupId}, for the TARGET end ('togroup' stamps it). */
+  targetGroupId?: string,
 };
 
 // Export the types for use in other modules
@@ -379,6 +389,17 @@ export class WebColaLayout {
     // Collapse identical nested groups to reduce jitter and constraint conflicts
     const deduplicatedGroups = this.collapseIdenticalGroups(instanceLayout.groups);
     this.groupDefinitions = this.determineGroups(deduplicatedGroups);
+
+    // The collapse renames merged groups, which would orphan edge fields
+    // stamped with pre-merge group names. Remap them to the merged names
+    // (merged groups have identical members, hence identical hulls).
+    if (this.collapsedGroupAliases.size > 0) {
+      for (const e of this.colaEdges) {
+        if (e.groupId) e.groupId = this.collapsedGroupAliases.get(e.groupId) ?? e.groupId;
+        if (e.sourceGroupId) e.sourceGroupId = this.collapsedGroupAliases.get(e.sourceGroupId) ?? e.sourceGroupId;
+        if (e.targetGroupId) e.targetGroupId = this.collapsedGroupAliases.get(e.targetGroupId) ?? e.targetGroupId;
+      }
+    }
 
     this.conflictingConstraints = instanceLayout.conflictingConstraints || [];
     this.overlappingNodesData = instanceLayout.overlappingNodes || [];
@@ -741,6 +762,8 @@ export class WebColaLayout {
       textStyle: edge.textStyle,
       groupId: edge.groupId,
       keyNodeId: edge.keyNodeId,
+      sourceGroupId: edge.sourceGroupId,
+      targetGroupId: edge.targetGroupId,
     }
   }
 
@@ -1003,6 +1026,15 @@ export class WebColaLayout {
    * @param groups - Array of layout groups to deduplicate
    * @returns Array of groups with duplicates collapsed
    */
+  /**
+   * Maps each pre-collapse group name to its post-collapse (merged) name.
+   * Merging joins ALL participant names with ' / ', so every member of a
+   * merged set — including the first — is renamed. Edge fields stamped with
+   * group names before the collapse (groupId, sourceGroupId, targetGroupId)
+   * are remapped through this in the constructor.
+   */
+  private collapsedGroupAliases: Map<string, string> = new Map();
+
   private collapseIdenticalGroups(groups: LayoutGroup[]): LayoutGroup[] {
     if (groups.length === 0) return groups;
 
@@ -1037,7 +1069,13 @@ export class WebColaLayout {
           // Show label if ANY of the duplicate groups wanted to show it
           showLabel: duplicateGroups.some(g => g.showLabel)
         };
-        
+
+        // Every participant is renamed by the merge; record aliases so
+        // edge stamps that reference pre-merge names can be remapped.
+        for (const dup of duplicateGroups) {
+          this.collapsedGroupAliases.set(dup.name, mergedGroup.name);
+        }
+
         collapsed.push(mergedGroup);
       }
     }

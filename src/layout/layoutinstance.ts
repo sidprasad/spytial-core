@@ -279,6 +279,14 @@ export class LayoutInstance {
     private conflictedHiddenNodes: Set<string> = new Set();
 
     /**
+     * Per-end group attachments for inferredEdge `draw` edges, keyed by edge ID.
+     * The graphlib edge anchors on member nodes; these stamps tell the renderer
+     * which end(s) attach to a group hull instead of the anchor node.
+     * Reset at the start of each generateLayout() call.
+     */
+    private inferredEdgeGroupStamps: Map<string, { sourceGroupId?: string; targetGroupId?: string }> = new Map();
+
+    /**
      * Records a selector evaluation error for later reporting.
      * @param selector - The selector expression that failed
      * @param context - Description of where/why the selector was being evaluated
@@ -671,7 +679,8 @@ export class LayoutInstance {
                             showLabel: !gc.negated,
                             labelTextStyle: gc.labelTextStyle,
                             sourceConstraint: gc,
-                            negated: gc.negated
+                            negated: gc.negated,
+                            keyed: true
                         };
                         groups.push(newGroup);
 
@@ -715,7 +724,8 @@ export class LayoutInstance {
                     showLabel: !gc.negated,
                     labelTextStyle: gc.labelTextStyle,
                     sourceConstraint: gc,
-                    negated: gc.negated
+                    negated: gc.negated,
+                    keyed: false
                 };
                 groups.push(newGroup);
             }
@@ -1185,6 +1195,7 @@ export class LayoutInstance {
         this.hiddenNodeSelectors = new Map();
         this.hiddenNodeConflicts = new Map();
         this.conflictedHiddenNodes = new Set();
+        this.inferredEdgeGroupStamps = new Map();
 
         let ai = a;
 
@@ -1203,6 +1214,12 @@ export class LayoutInstance {
 
         /// Groups have to happen here ///
         let groups = this.generateGroups(g, a);
+
+        // Draw-qualified inferred edges resolve their endpoints against the
+        // generated groups, so they join the graph only now (before hiding,
+        // like plain inferred edges — so they can reconnect built-in atoms).
+        this.addDrawInferredEdges(g, groups);
+
         this.ensureNoExtraNodes(g, a);
 
         // Recompute visual maps after graph mutations (inferred edges / node removal)
@@ -2502,13 +2519,28 @@ export class LayoutInstance {
                 highlight: highlight,
                 textStyle: textStyle,
                 // For group edges the graphlib edge label IS the group name (see constructGroupEdgeID).
-                // Carry it forward so the renderer can look up the group directly by ID
-                // without re-parsing the edge ID string or matching fragile leaf indices.
+                // Informational only since the per-end stamp unification: the renderer
+                // routes off sourceGroupId/targetGroupId; consumers (e.g. the explorer)
+                // still use groupId to identify connector edges.
                 groupId: isGroupEdge ? edgeLabel : undefined,
-                // The group's key (anchor) node (computed above), so the renderer knows
-                // definitively which end is the anchor vs. the group member regardless of
-                // the drawn direction. Undefined for non-group edges.
+                // The group's key (anchor) node (computed above). Informational only:
+                // the renderer no longer derives the snap side from it (the per-end
+                // stamps below carry that), but the field is kept for consumers.
                 keyNodeId: groupKey,
+                // Per-end group attachments — the renderer's single group-edge contract.
+                // A stamped end renders at that group's hull; unstamped ends render at
+                // their node. `addEdge` connectors (_g_) desugar here: the key side is
+                // the plain anchor, so the OTHER side is the group end ('togroup' runs
+                // key→member ⇒ target stamped; 'fromgroup' member→key ⇒ source stamped).
+                // A group-by-field connector whose key is a middle atom of an n-ary
+                // tuple matches neither side and stays unstamped — it renders
+                // node-to-node, exactly as the legacy path left it.
+                sourceGroupId: isGroupEdge
+                    ? (groupKey === edge.v ? undefined : groupKey === edge.w ? edgeLabel : undefined)
+                    : this.inferredEdgeGroupStamps.get(edgeId)?.sourceGroupId,
+                targetGroupId: isGroupEdge
+                    ? (groupKey === edge.v ? edgeLabel : undefined)
+                    : this.inferredEdgeGroupStamps.get(edgeId)?.targetGroupId,
             };
             return e;
         }).filter((edge): edge is LayoutEdge => edge !== null);
@@ -3081,7 +3113,10 @@ export class LayoutInstance {
     private addinferredEdges(g: Graph) {
 
         const inferredEdgePrefix = "_inferred_";
-        let inferredEdges = this._layoutSpec.directives.inferredEdges;
+        // Draw-qualified directives need groups to resolve their endpoints, and
+        // groups don't exist yet at this point — they run in a second pass
+        // (addDrawInferredEdges) after generateGroups().
+        let inferredEdges = this._layoutSpec.directives.inferredEdges.filter(he => !he.draw);
         inferredEdges.forEach((he) => {
 
             let res;
@@ -3121,5 +3156,134 @@ export class LayoutInstance {
                 g.setEdge(sourceNodeId, targetNodeId, edgeLabel, edgeId);
             });
         });
+    }
+
+    /**
+     * Second inferred-edge pass, for directives with a `draw` field. Runs after
+     * generateGroups() because group endpoints resolve against the generated
+     * groups: a `draw` end naming group family `F` attaches to the group
+     * `F[<end's atom>]` — matched structurally as (constraint name, keyNodeId),
+     * never by parsing display names.
+     *
+     * The graphlib edge anchors on real nodes (a group member for group ends —
+     * NOT the key, which is commonly hidden); the group attachment itself is
+     * recorded in inferredEdgeGroupStamps and stamped onto the LayoutEdge, and
+     * the renderer snaps stamped ends to the group hull.
+     */
+    private addDrawInferredEdges(g: Graph, groups: LayoutGroup[]) {
+
+        const inferredEdgePrefix = "_inferred_";
+        const drawDirectives = this._layoutSpec.directives.inferredEdges.filter(he => he.draw);
+        drawDirectives.forEach((he) => {
+
+            let res;
+            try {
+                res = this.evaluator.evaluate(he.selector, { instanceIndex: this.instanceNum });
+            } catch (error) {
+                this.recordSelectorError(he.selector, 'inferredEdge selector', error);
+                return; // Skip this inferred edge
+            }
+
+            // `draw` also supports unary selectors: the single atom feeds both
+            // ends (e.g. `draw: _ -> regions` connects each key to its own group).
+            let selectedTuples: string[][];
+            if (res.maxArity() > 1) {
+                selectedTuples = res.selectedTuplesAll();
+            } else {
+                selectedTuples = res.selectedAtoms().map((atom: string) => [atom]);
+            }
+
+            const draw = he.draw!;
+            let edgeIdPrefix = `${inferredEdgePrefix}<:${he.name}`;
+
+            selectedTuples.forEach((tuple) => {
+
+                let n = tuple.length;
+                const sourceAtom = tuple[0];
+                const targetAtom = tuple[n - 1];
+
+                const source = this.resolveDrawEnd(g, groups, draw.source, sourceAtom, he.name);
+                const target = this.resolveDrawEnd(g, groups, draw.target, targetAtom, he.name);
+                if (!source || !target) {
+                    return; // Skipped; resolveDrawEnd already warned.
+                }
+
+                if (source.groupId && source.groupId === target.groupId) {
+                    console.warn(`[spytial] inferredEdge '${he.name}': skipping edge for (${tuple.join(', ')}) — both ends resolve to the same group '${source.groupId}'.`);
+                    return;
+                }
+
+                let edgeLabel = he.name;
+                if (n > 2) {
+                    let middleNodeLabels = tuple.slice(1, n - 1).map(nodeId => {
+                        const nodeMetadata = g.node(nodeId);
+                        return nodeMetadata?.label || nodeId;
+                    }).join(",");
+                    edgeLabel = `${edgeLabel}[${middleNodeLabels}]`;
+                }
+
+                let fullTuple = tuple.join("->");
+                let edgeId = `${edgeIdPrefix}<:${fullTuple}`;
+                g.setEdge(source.anchor, target.anchor, edgeLabel, edgeId);
+
+                if (source.groupId || target.groupId) {
+                    this.inferredEdgeGroupStamps.set(edgeId, {
+                        sourceGroupId: source.groupId,
+                        targetGroupId: target.groupId
+                    });
+                }
+            });
+        });
+    }
+
+    /**
+     * Resolves one `draw` endpoint to an anchor node (and, for group ends, the
+     * group to attach to). Returns null when the endpoint can't be resolved in
+     * this instance — a data-dependent skip, reported via console.warn.
+     */
+    private resolveDrawEnd(
+        g: Graph,
+        groups: LayoutGroup[],
+        family: string | null,
+        atom: string,
+        directiveName: string
+    ): { anchor: string; groupId?: string } | null {
+
+        if (family === null) {
+            // Plain atom end. Unlike plain inferred edges (where graphlib would
+            // silently materialise a phantom node), check presence explicitly.
+            if (!g.hasNode(atom)) {
+                console.warn(`[spytial] inferredEdge '${directiveName}': skipping edge — endpoint atom '${atom}' is not in the graph (hidden or projected away).`);
+                return null;
+            }
+            return { anchor: atom };
+        }
+
+        const matches = groups.filter(grp =>
+            grp.keyed === true
+            && grp.keyNodeId === atom
+            && grp.sourceConstraint !== undefined
+            && (grp.sourceConstraint as GroupBySelector).name === family
+        );
+
+        if (matches.length === 0) {
+            console.warn(`[spytial] inferredEdge '${directiveName}': skipping edge — atom '${atom}' does not key any '${family}' group in this instance.`);
+            return null;
+        }
+        if (matches.length > 1) {
+            // A true (family, key) collision: two group constraints with the same
+            // name produced groups keyed by the same atom. Genuinely ambiguous.
+            throw new Error(`inferredEdge '${directiveName}': ambiguous draw endpoint — atom '${atom}' keys ${matches.length} groups named '${family}[…]'. Rename one of the group constraints.`);
+        }
+
+        const group = matches[0];
+        // Anchor on a member that is actually in the graph. Members are what the
+        // hull is drawn around, so (unlike the key) one is normally present.
+        const memberAnchor = group.nodeIds.find(id => g.hasNode(id));
+        if (!memberAnchor) {
+            console.warn(`[spytial] inferredEdge '${directiveName}': skipping edge — group '${group.name}' has no members present in the graph to anchor on.`);
+            return null;
+        }
+        return { anchor: memberAnchor, groupId: group.name };
     }
 }

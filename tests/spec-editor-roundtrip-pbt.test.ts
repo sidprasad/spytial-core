@@ -74,6 +74,14 @@ function arbValueForField(field: FieldSpec): fc.Arbitrary<unknown> {
     case 'typeName':
     case 'text':
     default:
+      // inferredEdge `draw` has a strict grammar ('<end> -> <end>') and its
+      // group names are validated against the doc's group constraints, so
+      // arbitrary text is engine-invalid — and any group reference depends on
+      // what else the doc contains. `_ -> _` is the one context-free valid
+      // form; real grammar coverage lives in tests/inferred-edge-draw.test.ts.
+      if (field.key === 'draw') {
+        return fc.constant('_ -> _');
+      }
       // Free-text/selector tokens. We deliberately mix plain identifiers with
       // YAML-hostile strings (`:`, `#`, newlines, quotes, leading `- `) so the
       // codec's quoting is exercised, not just the bare-scalar fast path — this
