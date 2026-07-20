@@ -104,6 +104,31 @@
         .status.info { background: #e3f2fd; color: #1976d2; }
         .status.success { background: #e8f5e8; color: #2e7d32; }
         .status.error { background: #ffebee; color: #c62828; }
+        .status.warning { background: #fff8e1; color: #8a6d00; }
+
+        /* Advisory (non-fatal) parse warnings surfaced from spec.warnings.
+           Amber, distinct from the red error styling, and shown alongside a
+           rendered diagram — warnings never block. */
+        #spec-warnings { margin: 10px 0; display: none; }
+        #spec-warnings .swarn-head {
+            font-weight: bold; color: #8a6d00;
+            display: flex; align-items: center; gap: 6px; margin-bottom: 6px;
+        }
+        #spec-warnings ul { list-style: none; margin: 0; padding: 0; }
+        #spec-warnings li {
+            background: #fff8e1; border: 1px solid #ffe082; border-left: 4px solid #ffb300;
+            border-radius: 4px; padding: 8px 10px; margin-bottom: 6px;
+            font-size: 13px; color: #5f4b00; display: flex; gap: 8px; align-items: baseline;
+        }
+        #spec-warnings .swarn-code {
+            flex: 0 0 auto; font-family: 'Courier New', monospace; font-size: 11px;
+            text-transform: uppercase; letter-spacing: .02em;
+            background: #ffb300; color: #3b2f00; padding: 1px 6px; border-radius: 10px;
+        }
+        #spec-warnings .swarn-msg { flex: 1 1 auto; }
+        #spec-warnings .swarn-foot {
+            font-size: 12px; color: #8a6d00; font-style: italic; margin-top: 2px;
+        }
 
         /** TODO: Add support for smaller screen sizes */
         /**
@@ -165,6 +190,10 @@
             </div>
             <div id="status" class="status info">Ready to load Alloy graph...</div>
             <div id="error-messages"></div>
+            <!-- Advisory, non-fatal warnings read off parseLayoutSpec's result
+                 (spec.warnings). Populated by renderSpecWarnings after a
+                 successful parse; the graph renders regardless. -->
+            <div id="spec-warnings" role="status" aria-live="polite"></div>
             <div id="relation-highlighter-mount"></div>
             <div id="graph-container-wrapper">
                 <!-- Use the webcola-cnd-graph custom element -->
@@ -346,6 +375,46 @@
             statusElement.className = `status ${type}`;
         }
 
+        function escapeWarningText(s) {
+            return String(s).replace(/[&<>"']/g, (c) => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[c]));
+        }
+
+        /**
+         * Demo consumer for parse warnings.
+         *
+         * `parseLayoutSpec` returns advisory, non-fatal warnings on the spec it
+         * already returns (`spec.warnings: ParseWarning[]`). Reading them is
+         * opt-in — ignore the field and nothing changes — and non-breaking: the
+         * diagram is drawn regardless. Here we surface each one, badged by its
+         * machine-readable `code` (e.g. `deprecated`) so a consumer can style or
+         * filter by category instead of scraping the message text.
+         *
+         * @param {Array<{code?: string, message?: string}>} warnings
+         */
+        function renderSpecWarnings(warnings) {
+            const panel = document.getElementById('spec-warnings');
+            if (!panel) return;
+            const list = Array.isArray(warnings) ? warnings : [];
+            if (list.length === 0) {
+                panel.style.display = 'none';
+                panel.innerHTML = '';
+                return;
+            }
+            const items = list.map((w) => {
+                const code = w && w.code ? String(w.code) : 'warning';
+                const msg = w && w.message ? String(w.message) : String(w);
+                return `<li><span class="swarn-code">${escapeWarningText(code)}</span>` +
+                       `<span class="swarn-msg">${escapeWarningText(msg)}</span></li>`;
+            }).join('');
+            panel.innerHTML =
+                `<div class="swarn-head">⚠ Spec warnings (${list.length})</div>` +
+                `<ul>${items}</ul>` +
+                `<div class="swarn-foot">Advisory only — the diagram still rendered.</div>`;
+            panel.style.display = 'block';
+        }
+
         function getSelectedEvaluatorType() {
             return document.getElementById('evaluator-select')?.value || 'sgq';
         }
@@ -489,8 +558,12 @@
                     if (window.clearAllErrors) {
                         window.clearAllErrors();
                     }
+                    // Consume the advisory warnings the parser returned (opt-in;
+                    // does not affect whether the layout below renders).
+                    renderSpecWarnings(cachedLayoutSpec.warnings);
                 } catch (error) {
                     console.error('Layout spec parse error:', error);
+                    renderSpecWarnings([]);
                     if (window.showParseError) {
                         window.showParseError(error.message, 'Layout Specification');
                     } else {
@@ -821,6 +894,7 @@
             cachedEvaluatorType = getSelectedEvaluatorType();
             cachedEvaluatorInstanceIndex = null;
             updateSequenceExplorer();
+            renderSpecWarnings([]);
             updateStatus('All state reset.', 'info');
         }
 
