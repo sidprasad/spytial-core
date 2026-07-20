@@ -154,3 +154,89 @@ describe('diagnostics — structural validation', () => {
     expect(doc.validate()).toHaveLength(0);
   });
 });
+
+describe('diagnostics — unknown keys (typo detection)', () => {
+  it('warns on an unknown top-level key with a did-you-mean', () => {
+    // `showLabel` is a near-miss for the icon field `showLabels`.
+    const diags = validateItem(item('icon', { path: 'a.svg', showLabel: true }, 'directive'));
+    const warn = diags.find((d) => d.message.includes('showLabel'));
+    expect(warn).toBeDefined();
+    expect(warn!.severity).toBe('warning');
+    expect(warn!.source).toBe('structure');
+    expect(warn!.message).toContain('Did you mean "showLabels"');
+  });
+
+  it('warns on an unknown key inside a nested style block', () => {
+    const diags = validateItem(
+      item('edgeStyle', { field: 'next', lineStyle: { colour: 'red' } }, 'directive'),
+    );
+    const warn = diags.find((d) => d.message.includes('colour'));
+    expect(warn).toBeDefined();
+    expect(warn!.severity).toBe('warning');
+    expect(warn!.message).toContain('Line style');
+    expect(warn!.message).toContain('Did you mean "color"');
+  });
+
+  it('lists valid fields when the unknown key has no near-miss', () => {
+    const diags = validateItem(item('atomStyle', { wibble: 1 }, 'directive'));
+    const warn = diags.find((d) => d.message.includes('wibble'));
+    expect(warn).toBeDefined();
+    expect(warn!.severity).toBe('warning');
+    expect(warn!.message).not.toContain('Did you mean');
+    expect(warn!.message).toContain('Known fields:');
+  });
+
+  it('a typo of a required field is reported both ways', () => {
+    // `directon` for `directions`: the field is still missing (error) AND the
+    // stray key is flagged with the fix (warning) — the warning is the clue.
+    const diags = validateItem(
+      item('orientation', { selector: 'p', directon: ['left'] }, 'constraint'),
+    );
+    expect(diags.some((d) => d.severity === 'error' && /Directions/.test(d.message))).toBe(true);
+    const warn = diags.find((d) => d.message.includes('directon'));
+    expect(warn!.severity).toBe('warning');
+    expect(warn!.message).toContain('Did you mean "directions"');
+  });
+
+  it('does not flag `hold` on a constraint (negation marker, not a field)', () => {
+    const diags = validateItem(
+      item('orientation', { selector: 'p', directions: ['left'], hold: 'never' }, 'constraint'),
+    );
+    expect(diags).toHaveLength(0);
+  });
+
+  it('does not flag inferredEdge deprecated inline line keys', () => {
+    // color/style/weight/highlight are still parsed (deprecation-warned
+    // elsewhere), so they are not "unknown".
+    const diags = validateItem(
+      item(
+        'inferredEdge',
+        { name: 'e', selector: 'r', color: '#f00', style: 'dashed', weight: 2 },
+        'directive',
+      ),
+    );
+    expect(diags.filter((d) => /Unknown field/.test(d.message))).toHaveLength(0);
+  });
+
+  it('does not flag `filter` on attribute/hideField (engine-accepted, not yet a field)', () => {
+    const attr = validateItem(
+      item('attribute', { field: 'age', filter: 'x.isAdult' }, 'directive'),
+    );
+    expect(attr.filter((d) => /Unknown field/.test(d.message))).toHaveLength(0);
+    const hide = validateItem(
+      item('hideField', { field: 'age', filter: 'x.isAdult' }, 'directive'),
+    );
+    expect(hide.filter((d) => /Unknown field/.test(d.message))).toHaveLength(0);
+  });
+
+  it('leaves valid items (including nested blocks) clean', () => {
+    const diags = validateItem(
+      item(
+        'edgeStyle',
+        { field: 'next', lineStyle: { color: 'red', pattern: 'dashed' }, showLabel: true },
+        'directive',
+      ),
+    );
+    expect(diags).toHaveLength(0);
+  });
+});
