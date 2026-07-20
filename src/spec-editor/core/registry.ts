@@ -24,7 +24,7 @@
  *     - attribute:    { field, selector?, filter?, textStyle?:{size,color} }
  *     - hideField:    { field, selector?, filter? }
  *     - icon:         { path, selector?, showLabels? }
- *     - atomStyle:    { selector?, fillStyle?:{color}, borderStyle?:{color,width}, textStyle?:{size,color} }
+ *     - atomStyle:    { selector?, shape?, fillStyle?:{color}, borderStyle?:{color,width}, textStyle?:{size,color} }
  *     - atomColor:    { value, selector? }  (deprecated → atomStyle)
  *     - edgeStyle:    { field, selector?, filter?, lineStyle?:{color,pattern,weight,highlight}, textStyle?:{size,color}, showLabel?, hidden? }
  *     - edgeColor:    { value, field, selector?, filter?, style?, weight?, showLabel?, hidden?, highlight? }  (deprecated → edgeStyle)
@@ -95,6 +95,14 @@ export const ORIENTATION_DIRECTIONS = [
 export const CYCLIC_DIRECTIONS = ['clockwise', 'counterclockwise'] as const;
 export const ALIGN_DIRECTIONS = ['horizontal', 'vertical'] as const;
 export const EDGE_STYLES = ['solid', 'dashed', 'dotted'] as const;
+
+/**
+ * Node outline shapes for `atomStyle.shape`, drawn inscribed in the node's
+ * box. (Mirrors NODE_SHAPES in layout/style/node-shape.ts.) No field `default`
+ * is set — an unset value is omitted from YAML and the engine draws the
+ * rectangle, so specs stay clean.
+ */
+export const NODE_SHAPE_OPTIONS = ['rectangle', 'ellipse', 'circle', 'diamond', 'hexagon', 'pill'] as const;
 
 /**
  * Text-size tiers for a label line, relative to the node label. `large` renders
@@ -360,6 +368,7 @@ const groupfield: ItemDefinition = {
   label: 'Group (by field)',
   description: 'Group elements based on a field. Deprecated — prefer Group (by selector).',
   deprecated: true,
+  deprecatedInFavorOf: 'groupselector',
   fields: [
     {
       key: 'field',
@@ -564,6 +573,13 @@ const attribute: ItemDefinition = {
       label: 'Selector',
       selectorArity: 'unary',
     },
+    {
+      key: 'filter',
+      kind: 'selector',
+      label: 'Filter',
+      selectorArity: 'binary',
+      help: 'Optional n-ary selector — apply only to matching (source, target) tuples.',
+    },
     // Shared text-style block (size + color), same shape edgeStyle/atomStyle use.
     { key: 'textStyle', kind: 'group', label: 'Text style', children: TEXT_STYLE_FIELDS },
   ],
@@ -592,6 +608,13 @@ const hideField: ItemDefinition = {
       kind: 'selector',
       label: 'Selector',
       selectorArity: 'unary',
+    },
+    {
+      key: 'filter',
+      kind: 'selector',
+      label: 'Filter',
+      selectorArity: 'binary',
+      help: 'Optional n-ary selector — hide only matching (source, target) tuples.',
     },
   ],
   summary(params) {
@@ -642,6 +665,7 @@ const atomColor: ItemDefinition = {
   label: 'Atom color',
   description: 'Deprecated — use Atom style (atomStyle). Still parsed/rendered for back-compat (value → border color).',
   deprecated: true,
+  deprecatedInFavorOf: 'atomStyle',
   fields: [
     {
       key: 'value',
@@ -717,9 +741,10 @@ const atomStyle: ItemDefinition = {
   kind: 'directive',
   type: 'atomStyle',
   label: 'Atom style',
-  description: 'Style matching atoms — fill, border, and label.',
+  description: 'Style matching atoms — shape, fill, border, and label.',
   fields: [
     { key: 'selector', kind: 'selector', label: 'Selector', selectorArity: 'unary' },
+    { key: 'shape', kind: 'enum', options: NODE_SHAPE_OPTIONS, label: 'Shape' },
     { key: 'fillStyle', kind: 'group', label: 'Fill style', children: FILL_STYLE_FIELDS },
     { key: 'borderStyle', kind: 'group', label: 'Border style', children: BORDER_STYLE_FIELDS },
     { key: 'textStyle', kind: 'group', label: 'Text style', children: TEXT_STYLE_FIELDS },
@@ -740,6 +765,7 @@ const edgeColor: ItemDefinition = {
   label: 'Edge color',
   description: 'Deprecated — use Edge style (edgeStyle). Still parsed/rendered for back-compat.',
   deprecated: true,
+  deprecatedInFavorOf: 'edgeStyle',
   fields: [
     {
       key: 'field',
@@ -928,6 +954,16 @@ export function getDefinitionsForYamlKey(yamlKey: string): readonly ItemDefiniti
 /** True iff some registry definition emits under this YAML key. */
 export function isKnownYamlKey(yamlKey: string): boolean {
   return CANDIDATES_BY_YAML_KEY.has(yamlKey);
+}
+
+/**
+ * Every YAML key some definition emits under (constraints + directives),
+ * deduplicated. The registry-derived source of truth for "which top-level
+ * constraint/directive keys are recognized" — use this instead of hand-listing
+ * types, which drifts as the registry grows.
+ */
+export function getKnownYamlKeys(): string[] {
+  return [...CANDIDATES_BY_YAML_KEY.keys()];
 }
 
 /** Look up an item definition by registry type key. */

@@ -141,6 +141,22 @@ directives:
             const result = validateSpytialSpec(validDirectives);
             expect(result.warnings.filter(w => w.includes('Unrecognized directive'))).toHaveLength(0);
         });
+
+        it('recognizes the current atomStyle/edgeStyle directives (registry-derived, no drift)', () => {
+            // Regression: a hand-maintained known-types list omitted these and
+            // false-warned on the recommended style directives.
+            const currentStyleDirectives = `
+directives:
+  - atomStyle:
+      selector: Node
+      fillStyle: { color: "#ff0000" }
+  - edgeStyle:
+      field: edges
+      lineStyle: { color: "#00ff00" }
+`;
+            const result = validateSpytialSpec(currentStyleDirectives);
+            expect(result.warnings.filter(w => w.includes('Unrecognized directive'))).toHaveLength(0);
+        });
     });
 });
 

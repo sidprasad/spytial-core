@@ -61,8 +61,6 @@ const CONSTRAINT_STRUCTURAL_KEYS: readonly string[] = ['hold'];
  * fields, so the unknown-key check must not report them as typos:
  *  - `inferredEdge` still parses the deprecated flat `color`/`style`/`weight`/
  *    `highlight` (its own deprecation warning covers them).
- *  - `attribute` / `hideField` accept `filter` (a `FieldDirective` tuple filter,
- *    read by `parseDirectives`) — supported by the engine, just not yet a field.
  *  - `edgeColor` is the deprecated flat form; `edgeColorToEdgeStyleRule` reads
  *    these extras beyond the fields the registry lists.
  *
@@ -72,8 +70,6 @@ const CONSTRAINT_STRUCTURAL_KEYS: readonly string[] = ['hold'];
  */
 const EXTRA_ACCEPTED_KEYS_BY_TYPE: Readonly<Record<string, readonly string[]>> = {
   inferredEdge: ['color', 'style', 'weight', 'highlight'],
-  attribute: ['filter'],
-  hideField: ['filter'],
   edgeColor: ['highlight', 'showLabel', 'hidden', 'filter'],
 };
 
@@ -135,6 +131,7 @@ function unknownKeyDiagnostic(
       : '';
   return {
     severity: 'warning',
+    code: 'unknown-key',
     message: `Unknown field "${key}" in ${context}.${hint}`,
     itemId,
     fieldKey: key,
@@ -186,6 +183,7 @@ export function validateItem(item: SpecItem): Diagnostic[] {
   if (item.raw !== undefined && getDefinition(item.type) === undefined) {
     out.push({
       severity: 'warning',
+      code: 'unknown-type',
       message: `Unknown ${item.kind} type "${item.type}". It is preserved as-is but the builder cannot edit it.`,
       itemId: item.id,
       source: 'structure',
@@ -197,11 +195,27 @@ export function validateItem(item: SpecItem): Diagnostic[] {
   if (!def) {
     out.push({
       severity: 'warning',
+      code: 'unknown-type',
       message: `Unknown ${item.kind} type "${item.type}".`,
       itemId: item.id,
       source: 'structure',
     });
     return out;
+  }
+
+  // Deprecated type: still parses and renders, but nudge toward its replacement.
+  // A distinct `code` so consumers can treat it apart from typo-style warnings.
+  if (def.deprecated) {
+    const replacement = def.deprecatedInFavorOf
+      ? ` Use "${def.deprecatedInFavorOf}" instead.`
+      : '';
+    out.push({
+      severity: 'warning',
+      code: 'deprecated',
+      message: `"${def.label}" is deprecated.${replacement}`,
+      itemId: item.id,
+      source: 'structure',
+    });
   }
 
   for (const field of def.fields) {
@@ -210,6 +224,7 @@ export function validateItem(item: SpecItem): Diagnostic[] {
     if (field.required && isEmpty(value)) {
       out.push({
         severity: 'error',
+        code: 'missing-required',
         message: `Missing required field "${field.label}".`,
         itemId: item.id,
         fieldKey: field.key,
@@ -229,6 +244,7 @@ export function validateItem(item: SpecItem): Diagnostic[] {
         if (!allowed.has(v)) {
           out.push({
             severity: 'error',
+            code: 'invalid-value',
             message: `Invalid value "${v}" for "${field.label}". Allowed: ${field.options.join(', ')}.`,
             itemId: item.id,
             fieldKey: field.key,

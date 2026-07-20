@@ -218,7 +218,7 @@ describe('diagnostics — unknown keys (typo detection)', () => {
     expect(diags.filter((d) => /Unknown field/.test(d.message))).toHaveLength(0);
   });
 
-  it('does not flag `filter` on attribute/hideField (engine-accepted, not yet a field)', () => {
+  it('does not flag `filter` on attribute/hideField (a real field)', () => {
     const attr = validateItem(
       item('attribute', { field: 'age', filter: 'x.isAdult' }, 'directive'),
     );
@@ -238,5 +238,32 @@ describe('diagnostics — unknown keys (typo detection)', () => {
       ),
     );
     expect(diags).toHaveLength(0);
+  });
+});
+
+describe('diagnostics — warning taxonomy (code discriminator)', () => {
+  it('tags unknown-key warnings with code "unknown-key"', () => {
+    const diags = validateItem(item('icon', { path: 'a.svg', showLabel: true }, 'directive'));
+    const warn = diags.find((d) => d.message.includes('showLabel'));
+    expect(warn!.code).toBe('unknown-key');
+  });
+
+  it('emits a distinct "deprecated" diagnostic naming the replacement', () => {
+    const diags = validateItem(
+      item('atomColor', { value: '#f00', selector: 'Node' }, 'directive'),
+    );
+    const dep = diags.find((d) => d.code === 'deprecated');
+    expect(dep).toBeDefined();
+    expect(dep!.severity).toBe('warning');
+    expect(dep!.message).toContain('atomStyle');
+    // the deprecation notice is separate from any typo/unknown-key warning
+    expect(dep!.code).not.toBe('unknown-key');
+  });
+
+  it('does not deprecation-warn a current (non-deprecated) type', () => {
+    const diags = validateItem(
+      item('atomStyle', { selector: 'Node', fillStyle: { color: '#f00' } }, 'directive'),
+    );
+    expect(diags.some((d) => d.code === 'deprecated')).toBe(false);
   });
 });

@@ -34,6 +34,7 @@ export {
   getDefinitions,
   getAllDefinitions,
   getDefinitionsForYamlKey,
+  getKnownYamlKeys,
   isKnownType,
   isKnownYamlKey,
   defaultParamsFor,
