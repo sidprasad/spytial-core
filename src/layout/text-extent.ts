@@ -78,7 +78,12 @@ export interface EstimateLabelBoxOptions {
     max?: { w: number; h: number };
 }
 
-const DEFAULT_OPTIONS: Required<EstimateLabelBoxOptions> = {
+/**
+ * The estimator's resolved defaults. Exported so shape-aware sizing
+ * (node-shape.ts) can derive its containment math from the same padding,
+ * floor, and cap the rectangle estimate uses.
+ */
+export const LABEL_BOX_DEFAULTS: Required<EstimateLabelBoxOptions> = {
     // Slightly above measured canvas-width to cushion heuristic-vs-canvas drift.
     avgGlyphRatio: 0.65,
     // Padding gives the rendered text visible breathing room from the rect stroke,
@@ -138,7 +143,7 @@ export function estimateLabelBox(
     secondaryLines: SecondaryLine[] = [],
     options: EstimateLabelBoxOptions = {}
 ): { width: number; height: number } {
-    const opts: Required<EstimateLabelBoxOptions> = { ...DEFAULT_OPTIONS, ...options };
+    const opts: Required<EstimateLabelBoxOptions> = { ...LABEL_BOX_DEFAULTS, ...options };
 
     // Bare strings size at SECONDARY_FONT_SIZE; `{text, fontSize}` lines carry
     // their own tier so the box grows/shrinks to fit larger/smaller attributes.

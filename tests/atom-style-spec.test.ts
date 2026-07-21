@@ -34,6 +34,20 @@ describe('parseAtomStyleSpec', () => {
             borderStyle: { color: '#000' },
         });
     });
+
+    it('extracts a shape (case-insensitive) alongside the blocks', () => {
+        expect(parseAtomStyleSpec({ shape: 'ellipse' })).toEqual({ shape: 'ellipse' });
+        expect(parseAtomStyleSpec({ shape: ' Diamond ' })).toEqual({ shape: 'diamond' });
+        expect(parseAtomStyleSpec({ shape: 'pill', fillStyle: { color: '#eef' } })).toEqual({
+            shape: 'pill',
+            fillStyle: { color: '#eef' },
+        });
+    });
+
+    it('drops an unknown or non-string shape (mirrors the other leaf parsers)', () => {
+        expect(parseAtomStyleSpec({ shape: 'blob' })).toEqual({});
+        expect(parseAtomStyleSpec({ shape: 7 })).toEqual({});
+    });
 });
 
 describe('atomColorToAtomStyleRule — border-preserving desugar', () => {
@@ -69,5 +83,21 @@ describe('resolveAtomStyle — compose + collide', () => {
             { selector: 'RedNode', style: { borderStyle: { color: 'red' } } },
         ];
         expect(() => resolveAtomStyle(rules)).toThrow(StyleCollisionError);
+    });
+
+    it('shape is a leaf like any other: composes when disjoint, collides when contradicted', () => {
+        expect(
+            resolveAtomStyle([
+                { selector: 'Node', style: { shape: 'hexagon' } },
+                { selector: 'RedNode', style: { borderStyle: { color: 'red' } } },
+            ]),
+        ).toEqual({ shape: 'hexagon', borderStyle: { color: 'red' } });
+
+        expect(() =>
+            resolveAtomStyle([
+                { selector: 'Node', style: { shape: 'hexagon' } },
+                { selector: 'RedNode', style: { shape: 'circle' } },
+            ]),
+        ).toThrow(StyleCollisionError);
     });
 });

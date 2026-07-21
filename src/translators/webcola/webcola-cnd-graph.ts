@@ -5,6 +5,7 @@ import type { GridRouter, Group, Layout, Node, Link } from 'webcola';
 import { IInputDataInstance, ITuple, IAtom } from '../../data-instance/interfaces';
 import { MAIN_LABEL_FONT_SIZE, SECONDARY_FONT_SIZE, LABEL_LINE_HEIGHT_RATIO, resolveAttrFontSize } from '../../layout/text-extent';
 import { setLabLightness, type NodeColorParams } from '../../layout/colorpicker';
+import { svgTagForShape, shapePolygonPoints, type NodeShape } from '../../layout/style/node-shape';
 
 let d3 = window.d3v4 || window.d3; // Use d3 v4 if available, otherwise fallback to the default window.d3
 let cola = window.cola;
@@ -451,7 +452,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
    */
   private repaintThemedColors(): void {
     if (this.svgNodes) {
-      this.svgNodes.select('rect')
+      this.svgNodes.select('.node-box')
         .attr('stroke', (d: any) => this.nodeBorderColor(d))
         .attr('fill', (d: any) => this.nodeFillColor(d));
       this.svgNodes.selectAll('text.mostSpecificTypeLabel')
@@ -4043,28 +4044,76 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   }
 
   /**
-   * Creates rectangle backgrounds for nodes with proper centering and styling.
+   * Creates shape backgrounds (`.node-box`) for nodes with proper centering and
+   * styling. The element per node follows `atomStyle.shape`: `rect` for
+   * rectangle/pill, `ellipse` for ellipse/circle, `polygon` for
+   * diamond/hexagon — all inscribed in the node's visual box, which is what
+   * layout and edge routing continue to see.
    * Handles hidden nodes and icon-only nodes with transparent fills.
-   * 
+   *
    * @param nodeSelection - D3 selection of node groups
    */
   private setupNodeRectangles(nodeSelection: d3.Selection<SVGGElement, any, any, unknown>): void {
     nodeSelection
-      .append("rect")
-      .attr("width", (d: any) => d.visualWidth ?? d.width)
-      .attr("height", (d: any) => d.visualHeight ?? d.height)
-      .attr("x", (d: any) => -((d.visualWidth ?? d.width)) / 2) // Center on node's x position
-      .attr("y", (d: any) => -((d.visualHeight ?? d.height)) / 2) // Center on node's y position
+      .append((d: any) =>
+        document.createElementNS('http://www.w3.org/2000/svg', svgTagForShape(d.shape)))
+      .attr('class', 'node-box')
       // A chosen node color is preserved; algorithm-assigned colors are re-tinted
       // for the themed canvas and the implicit black default is themed. See
       // nodeBorderColor / themedNodeColor.
       .attr("stroke", (d: any) => this.nodeBorderColor(d))
-      .attr("rx", WebColaCnDGraph.NODE_BORDER_RADIUS)
-      .attr("ry", WebColaCnDGraph.NODE_BORDER_RADIUS)
+      // Plain rectangles keep their rounded corners; pill overrides rx/ry in
+      // applyNodeShapeGeometry, and ellipse/polygon ignore these attributes.
+      .attr("rx", (d: any) =>
+        (d.shape ?? 'rectangle') === 'rectangle' ? WebColaCnDGraph.NODE_BORDER_RADIUS : null)
+      .attr("ry", (d: any) =>
+        (d.shape ?? 'rectangle') === 'rectangle' ? WebColaCnDGraph.NODE_BORDER_RADIUS : null)
       .attr("stroke-width", WebColaCnDGraph.NODE_STROKE_WIDTH)
       // atomStyle.borderStyle.width override via .style() so it beats CSS rules; null = keep the default above.
       .style("stroke-width", (d: any) => this.nodeStrokeWidth(d))
       .attr("fill", (d: any) => this.nodeFillColor(d));
+
+    // Initial geometry, centered on the origin until the first tick positions nodes.
+    this.applyNodeShapeGeometry(nodeSelection.select('.node-box'), (d: any) => ({
+      cx: 0,
+      cy: 0,
+      w: d.visualWidth ?? d.width,
+      h: d.visualHeight ?? d.height,
+    }));
+  }
+
+  /**
+   * Apply positional geometry to `.node-box` elements, per shape: x/y/w/h for
+   * rects (pill also gets full-height corner radii), cx/cy/rx/ry for ellipses
+   * (circle uses the min half-dimension so an explicitly-sized non-square box
+   * still draws a true circle), recomputed `points` for polygons. The one
+   * place shape geometry is written, shared by initial render and every
+   * update path.
+   */
+  private applyNodeShapeGeometry(
+    selection: d3.Selection<any, any, any, unknown>,
+    box: (d: any) => { cx: number; cy: number; w: number; h: number }
+  ): void {
+    selection.each(function (this: SVGElement, d: any) {
+      const { cx, cy, w, h } = box(d);
+      const el = d3.select(this);
+      const shape: NodeShape = d.shape ?? 'rectangle';
+      switch (svgTagForShape(shape)) {
+        case 'rect':
+          el.attr('x', cx - w / 2).attr('y', cy - h / 2).attr('width', w).attr('height', h);
+          if (shape === 'pill') el.attr('rx', h / 2).attr('ry', h / 2);
+          break;
+        case 'ellipse': {
+          const rx = shape === 'circle' ? Math.min(w, h) / 2 : w / 2;
+          const ry = shape === 'circle' ? Math.min(w, h) / 2 : h / 2;
+          el.attr('cx', cx).attr('cy', cy).attr('rx', rx).attr('ry', ry);
+          break;
+        }
+        case 'polygon':
+          el.attr('points', shapePolygonPoints(shape as 'diamond' | 'hexagon', cx, cy, w, h));
+          break;
+      }
+    });
   }
 
   /**
@@ -4398,11 +4447,12 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
   private updateNodePositionsOnly(): void {
     if (!this.svgNodes) return;
 
-    this.svgNodes.select('rect')
-      .attr('x', (d: any) => d.x != null ? d.x - (d.visualWidth ?? d.width) / 2 : 0)
-      .attr('y', (d: any) => d.y != null ? d.y - (d.visualHeight ?? d.height) / 2 : 0)
-      .attr('width', (d: any) => d.visualWidth ?? d.width)
-      .attr('height', (d: any) => d.visualHeight ?? d.height);
+    this.applyNodeShapeGeometry(this.svgNodes.select('.node-box'), (d: any) => ({
+      cx: d.x ?? 0,
+      cy: d.y ?? 0,
+      w: d.visualWidth ?? d.width,
+      h: d.visualHeight ?? d.height,
+    }));
 
     this.svgNodes.select('image')
       .attr('x', (d: any) => {
@@ -4449,18 +4499,20 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
       .attr('height', (d: any) => d.bounds.height() )
       .lower();
 
-    // Update node rectangles using visual dimensions (NOT d.bounds, which WebCola inflates
-    // for collision avoidance). Rects should reflect the original visual size.
-    this.svgNodes.select('rect')
+    // Update node shapes using visual dimensions (NOT d.bounds, which WebCola inflates
+    // for collision avoidance). Shapes should reflect the original visual size.
+    const nodeBoxes = this.svgNodes.select('.node-box')
       .each((d: any) => {
         if (d.bounds) {
           d.innerBounds = d.bounds.inflate(-1);
         }
-      })
-      .attr('x', (d: any) => d.x - (d.visualWidth ?? d.width) / 2)
-      .attr('y', (d: any) => d.y - (d.visualHeight ?? d.height) / 2)
-      .attr('width', (d: any) => d.visualWidth ?? d.width)
-      .attr('height', (d: any) => d.visualHeight ?? d.height);
+      });
+    this.applyNodeShapeGeometry(nodeBoxes, (d: any) => ({
+      cx: d.x,
+      cy: d.y,
+      w: d.visualWidth ?? d.width,
+      h: d.visualHeight ?? d.height,
+    }));
 
     // Update node icons with proper positioning
     this.svgNodes.select('image')
@@ -4706,12 +4758,17 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
     const groupLabel = this.container.selectAll(".groupLabel");
 
     // UPDATE NODES AND NODE LABELS
-    node.select("rect")
-        .each(function (d: any) { d.innerBounds = d.bounds.inflate(-1); })
-        .attr("x", function (d: any) { return d.bounds.x; })
-        .attr("y", function (d: any) { return d.bounds.y; })
-        .attr("width", function (d: any) { return d.bounds.width(); })
-        .attr("height", function (d: any) { return d.bounds.height(); });
+    // Grid mode sizes shapes to d.bounds (the layout box), matching the
+    // historical rect behavior in this mode.
+    this.applyNodeShapeGeometry(
+      node.select(".node-box")
+        .each(function (d: any) { d.innerBounds = d.bounds.inflate(-1); }),
+      (d: any) => ({
+        cx: d.bounds.x + d.bounds.width() / 2,
+        cy: d.bounds.y + d.bounds.height() / 2,
+        w: d.bounds.width(),
+        h: d.bounds.height(),
+      }));
     
 
     node.select("image")
@@ -9965,18 +10022,18 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         cursor: grabbing;
       }
       
-      .node rect {
+      .node .node-box {
         cursor: move;
       }
 
-      .error-node rect, .error-group {
+      .error-node .node-box, .error-group {
         stroke-width: 2px;
         stroke-dasharray: 5 5;
         animation: dash 1s linear infinite;
       }
 
       /* Enhanced visibility for small error nodes */
-      .small-error-node rect {
+      .small-error-node .node-box {
         stroke-width: 4px !important; /* Thicker stroke for visibility */
         stroke-dasharray: 8 4 !important; /* Larger dash pattern */
         animation: dash 1s linear infinite, pulse-bg 2s ease-in-out infinite !important;
@@ -10134,7 +10191,7 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
         cursor: crosshair !important;
       }
 
-      svg.input-mode .node rect {
+      svg.input-mode .node .node-box {
         cursor: crosshair !important;
       }
 

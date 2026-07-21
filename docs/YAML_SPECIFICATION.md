@@ -392,11 +392,12 @@ Directives control visual styling and presentation without affecting layout stru
 
 ### Atom Style Directive (atomStyle)
 
-Styles the atoms (nodes) matching a selector. An atom is a composite of an interior **fill**, an outline **border**, and its **label**, so styling uses the shared `fillStyle`, `borderStyle`, and `textStyle` blocks (the same block vocabulary as `edgeStyle`'s `lineStyle`/`textStyle`).
+Styles the atoms (nodes) matching a selector. An atom is a composite of an outline **shape**, an interior **fill**, an outline **border**, and its **label**, so styling uses a `shape` plus the shared `fillStyle`, `borderStyle`, and `textStyle` blocks (the same block vocabulary as `edgeStyle`'s `lineStyle`/`textStyle`).
 
 ```yaml
 - atomStyle:
     selector: <unary-selector>   # Optional: which atoms to style (absent = all atoms)
+    shape: <shape>               # Optional: rectangle | ellipse | circle | diamond | hexagon | pill
     fillStyle:                   # Optional: the interior fill (opt-in)
       color: <color>
     borderStyle:                 # Optional: the outline
@@ -412,11 +413,14 @@ Styles the atoms (nodes) matching a selector. An atom is a composite of an inter
 | Field | Required | Type | Description |
 |-------|----------|------|-------------|
 | `selector` | ❌ No | string | Unary selector for target atoms; absent styles every atom |
+| `shape` | ❌ No | enum | `rectangle` (default), `ellipse`, `circle`, `diamond`, `hexagon`, or `pill` — the outline drawn for the atom |
 | `fillStyle.color` | ❌ No | string | CSS color of the node's interior fill (opt-in; the default is an unfilled Tufte look where only stroke + label mark the node) |
 | `borderStyle.color` | ❌ No | string | CSS color of the node's outline |
 | `borderStyle.width` | ❌ No | number | Outline thickness in pixels (must be > 0) |
 | `textStyle.size` | ❌ No | enum | `small`, `normal`, or `large` — *reserved; not yet applied to the node's own label* |
 | `textStyle.color` | ❌ No | string | CSS color of the atom's label |
+
+**Shape semantics:** the shape is drawn inscribed in the node's rectangular box — layout, spacing, and edge routing still treat the node as that box (edges attach at the box perimeter, which the shape touches at each side's midpoint). Auto-sized boxes grow as needed so the label fits *inside* the shape (a circle sizes to the label's diagonal, a diamond doubles the label block, etc.). An explicit `size` directive is never inflated: the shape inscribes in exactly the box you pinned, and an over-tight box overflows just as text does today.
 
 **Inheritance & conflicts:** rules match atoms through their selector, and a supertype selector already returns subtype atoms — so a `Node` rule and a `RedNode` rule both apply to a `RedNode` atom, their set properties **composing** (gap-fill inheritance up the type hierarchy). Two rules that set the *same* property to *different* values is an error: styles never silently override.
 
@@ -434,6 +438,15 @@ Styles the atoms (nodes) matching a selector. An atom is a composite of an inter
 - atomStyle:
     selector: Error
     borderStyle: { color: red }
+
+# Decision atoms as diamonds, states as filled ellipses
+- atomStyle:
+    selector: Decision
+    shape: diamond
+- atomStyle:
+    selector: State
+    shape: ellipse
+    fillStyle: { color: '#eef6ff' }
 ```
 
 **Migrating from `atomColor`:** `atomColor` (below) is the legacy flat form and still works; its `value` maps onto `borderStyle.color` (so existing diagrams keep their outlines exactly), and you can add a `fillStyle` for a real interior fill:

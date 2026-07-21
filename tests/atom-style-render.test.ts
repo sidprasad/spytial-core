@@ -77,11 +77,12 @@ describe('webcola translator — LayoutNode atomStyle reaches the render datum',
     };
     const toColaNode = (node: any) => (WebColaLayout.prototype as any).toColaNode.call(stubThis, node);
 
-    it('carries color (border), fillColor, borderWidth, and textStyle onto the datum', () => {
+    it('carries color (border), shape, fillColor, borderWidth, and textStyle onto the datum', () => {
         const datum = toColaNode({
             id: 'n1',
             label: 'n1',
             color: '#33c',
+            shape: 'hexagon',
             fillColor: '#eef',
             borderWidth: 3,
             textStyle: { color: '#003' },
@@ -92,6 +93,7 @@ describe('webcola translator — LayoutNode atomStyle reaches the render datum',
         });
         expect(datum).toMatchObject({
             color: '#33c',
+            shape: 'hexagon',
             fillColor: '#eef',
             borderWidth: 3,
             textStyle: { color: '#003' },
@@ -108,6 +110,7 @@ describe('webcola translator — LayoutNode atomStyle reaches the render datum',
             mostSpecificType: 'Node',
             showLabels: true,
         });
+        expect(datum.shape).toBeUndefined();
         expect(datum.fillColor).toBeUndefined();
         expect(datum.borderWidth).toBeUndefined();
         expect(datum.textStyle).toBeUndefined();

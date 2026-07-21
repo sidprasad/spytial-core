@@ -14,6 +14,8 @@
  */
 import { parseTextStyle } from './text-style';
 import type { TextStyle } from './text-style';
+import { parseNodeShape } from './node-shape';
+import type { NodeShape } from './node-shape';
 import { resolveStyle } from './style-resolver';
 import type { StyleContribution } from './style-resolver';
 
@@ -30,6 +32,12 @@ export type BorderStyle = {
 
 /** The full sparse payload of an `atomStyle` directive. `type`, so it stays assignable to SparseStyle. */
 export type AtomStyleSpec = {
+    /**
+     * Outline shape drawn inscribed in the node's box (absent = rectangle).
+     * Layout and routing still see the box; auto-sizing grows the box so the
+     * label fits inside the shape (see node-shape.ts).
+     */
+    shape?: NodeShape;
     fillStyle?: FillStyle;
     borderStyle?: BorderStyle;
     textStyle?: TextStyle;
@@ -69,6 +77,9 @@ export function parseAtomStyleSpec(raw: unknown): AtomStyleSpec {
     const spec: AtomStyleSpec = {};
     if (!raw || typeof raw !== 'object') return spec;
     const r = raw as Record<string, unknown>;
+
+    const shape = parseNodeShape(r.shape);
+    if (shape) spec.shape = shape;
 
     const fillStyle = parseFillStyle(r.fillStyle);
     if (fillStyle) spec.fillStyle = fillStyle;

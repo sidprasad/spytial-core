@@ -216,3 +216,49 @@ directives:
         expect(nodeById(layout, 'r1').color).not.toBe('#f00');
     });
 });
+
+describe('atomStyle shape — end to end', () => {
+    it('carries the shape onto the LayoutNode and leaves unmatched nodes rectangular', () => {
+        const { layout } = layoutFor(`
+directives:
+  - atomStyle:
+      selector: n1
+      shape: diamond
+`)();
+        expect(nodeById(layout, 'n1').shape).toBe('diamond');
+        expect(nodeById(layout, 'r1').shape).toBeUndefined();
+    });
+
+    it('inflates the auto-sized box so the label fits the shape (circle goes square)', () => {
+        const { layout } = layoutFor(`
+directives:
+  - atomStyle:
+      selector: n1
+      shape: circle
+`)();
+        const circle = nodeById(layout, 'n1');
+        expect(circle.width).toBe(circle.height);
+        // The rectangle default for this short label is 100×60.
+        const plain = nodeById(layout, 'r1');
+        expect(plain.width).toBe(100);
+        expect(plain.height).toBe(60);
+    });
+
+    it('never inflates an explicit size directive (sat_size stays exact)', () => {
+        const { layout } = layoutFor(`
+constraints:
+  - size:
+      selector: n1
+      width: 40
+      height: 30
+directives:
+  - atomStyle:
+      selector: n1
+      shape: ellipse
+`)();
+        const node = nodeById(layout, 'n1');
+        expect(node.shape).toBe('ellipse');
+        expect(node.width).toBe(40);
+        expect(node.height).toBe(30);
+    });
+});

@@ -2,6 +2,7 @@ import { Group } from "webcola";
 import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint, GroupByField, GroupBySelector, RelativeDirection } from "./layoutspec";
 import { EdgeStyle } from "./edge-style";
 import type { TextStyle } from "./style/text-style";
+import type { NodeShape } from "./style/node-shape";
 
 export interface LayoutGroup {
     // The name of the group
@@ -75,6 +76,13 @@ export interface LayoutNode {
      * colors untouched. Absent is treated as {@link ColorSource.DefaultPalette}.
      */
     colorSource?: ColorSource;
+    /**
+     * Outline shape from `atomStyle.shape`, drawn inscribed in the node's
+     * width × height box. Absent = rectangle. Layout and edge routing always
+     * see the box; only the drawn outline (and the auto-sizing that grew the
+     * box to fit the label inside it) reflect the shape.
+     */
+    shape?: NodeShape;
     /**
      * Interior fill of the node's rectangle, from `atomStyle.fillStyle.color`.
      * Absent = the renderer's default (a Tufte canvas-matched fill, so only the

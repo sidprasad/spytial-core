@@ -2,6 +2,7 @@ import { Node, Group, Link, Rectangle } from 'webcola';
 import { InstanceLayout, LayoutNode, LayoutEdge, LayoutConstraint, LayoutGroup, LeftConstraint, TopConstraint, AlignmentConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, isBoundingBoxConstraint, isGroupBoundaryConstraint, ColorSource } from '../../layout/interfaces';
 import { EdgeStyle } from '../../layout/edge-style';
 import type { TextStyle } from '../../layout/style/text-style';
+import type { NodeShape } from '../../layout/style/node-shape';
 import { LayoutInstance } from '../../layout/layoutinstance';
 import type { IDataInstance } from '../../data-instance/interfaces';
 import type { SequencePolicy } from './sequence-policy';
@@ -51,6 +52,8 @@ type NodeWithMetadata = Node & {
   color: string,
   /** Provenance of `color` (default palette vs. user directive). See {@link ColorSource}. */
   colorSource?: ColorSource,
+  /** Outline shape from `atomStyle.shape`, inscribed in the visual box; absent = rectangle. */
+  shape?: NodeShape,
   /** Interior fill from `atomStyle.fillStyle.color`; absent = renderer's canvas-matched default. */
   fillColor?: string,
   /** Border/stroke width in px from `atomStyle.borderStyle.width`; absent = renderer default. */
@@ -717,6 +720,7 @@ export class WebColaLayout {
       id: node.id,
       color: node.color,
       colorSource: node.colorSource ?? ColorSource.DefaultPalette,
+      shape: node.shape,
       fillColor: node.fillColor,
       borderWidth: node.borderWidth,
       textStyle: node.textStyle,

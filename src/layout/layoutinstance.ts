@@ -34,7 +34,8 @@ import type { IEvaluatorResult } from '../evaluators/interfaces';
 import { ColorPicker } from './colorpicker';
 import { type ConstraintError, type ErrorMessages, ConstraintValidator, orientationConstraintToString } from './constraint-validator';
 import { QualitativeConstraintValidator } from './qualitative-constraint-validator';
-import { estimateLabelBox, resolveAttrFontSize, SecondaryLine } from './text-extent';
+import { resolveAttrFontSize, SecondaryLine } from './text-extent';
+import { estimateShapedLabelBox } from './style/node-shape';
 
 /** The strings the renderer will draw inside a node's box. Used to size the box. */
 type NodeDisplayContent = {
@@ -1233,7 +1234,8 @@ export class LayoutInstance {
         // drawn inside the box" so the box sizer (getNodeSizeMap) and the
         // LayoutNode mapping below see the same content.
         let contentByNode = this.getNodeDisplayContent(g, ai, attributes, attributeTextStyles);
-        let nodeSizeMap = this.getNodeSizeMap(g, contentByNode);
+        // atomStyleMap feeds the sizer too: a non-rect shape inflates the auto box.
+        let nodeSizeMap = this.getNodeSizeMap(g, contentByNode, atomStyleMap);
 
         let dcN = this.getDisconnectedNodes(g);
 
@@ -1287,6 +1289,7 @@ export class LayoutInstance {
                 name: label,
                 color: color,
                 colorSource: colorSource,
+                shape: atomStyle?.shape,
                 fillColor: atomStyle?.fillStyle?.color,
                 borderWidth: atomStyle?.borderStyle?.width,
                 textStyle: atomStyle?.textStyle,
@@ -2653,7 +2656,8 @@ export class LayoutInstance {
 
     private getNodeSizeMap(
         g: Graph,
-        contentByNode: Record<string, NodeDisplayContent>
+        contentByNode: Record<string, NodeDisplayContent>,
+        atomStyleMap: Record<string, AtomStyleSpec>
     ): Record<string, { width: number; height: number }> {
         let nodeSizeMap: Record<string, { width: number; height: number }> = {};
 
@@ -2696,7 +2700,9 @@ export class LayoutInstance {
         // Auto-size nodes that no `size` directive matched. The estimator
         // floor is DEFAULT_NODE_WIDTH × DEFAULT_NODE_HEIGHT (100 × 60), so
         // short-label nodes keep their historical footprint and only
-        // long-label nodes grow.
+        // long-label nodes grow. A non-rectangular atomStyle shape grows the
+        // box further so the label fits inside the inscribed outline; explicit
+        // `size` directives above are never inflated (sat_size is exact).
         const floor = { w: this.DEFAULT_NODE_WIDTH, h: this.DEFAULT_NODE_HEIGHT };
         for (const nodeId of g.nodes()) {
             if (nodeSizeMap[nodeId]) continue;
@@ -2710,7 +2716,8 @@ export class LayoutInstance {
                     ...c.skolemLines,
                 ]
                 : [];
-            nodeSizeMap[nodeId] = estimateLabelBox(main, secondary, { min: floor });
+            nodeSizeMap[nodeId] = estimateShapedLabelBox(
+                atomStyleMap[nodeId]?.shape, main, secondary, { min: floor });
         }
 
         return nodeSizeMap;

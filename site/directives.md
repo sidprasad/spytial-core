@@ -6,11 +6,12 @@ Directives control the **visual presentation** of your graph — colors, icons, 
 
 ## Atom Styling
 
-Styles the atoms (nodes) matching a selector. An atom has an interior **fill**, an outline **border**, and a **label**, styled with the shared `fillStyle`, `borderStyle`, and `textStyle` blocks — the same block vocabulary `edgeStyle` uses for lines and labels. Use `atomStyle` in the directives section.
+Styles the atoms (nodes) matching a selector. An atom has an outline **shape**, an interior **fill**, an outline **border**, and a **label**, styled with `shape` plus the shared `fillStyle`, `borderStyle`, and `textStyle` blocks — the same block vocabulary `edgeStyle` uses for lines and labels. Use `atomStyle` in the directives section.
 
 ```yaml
 - atomStyle:
     selector: <unary-selector>                        # Optional (absent = all atoms)
+    shape: <rectangle|ellipse|circle|diamond|hexagon|pill>  # the outline drawn (default rectangle)
     fillStyle:   { color: <color> }                   # the interior fill (opt-in)
     borderStyle: { color: <color>, width: <number> }  # the outline
     textStyle:   { size: <small|normal|large>, color: <color> }  # the atom's label
@@ -19,6 +20,7 @@ Styles the atoms (nodes) matching a selector. An atom has an interior **fill**, 
 | Field | Required | Type | Description |
 |-------|----------|------|-------------|
 | `selector` | No | string | Unary selector for target atoms; absent styles every atom |
+| `shape` | No | enum | `rectangle` (default), `ellipse`, `circle`, `diamond`, `hexagon`, or `pill` |
 | `fillStyle.color` | No | string | Interior fill color (opt-in; the default is unfilled) |
 | `borderStyle.color` | No | string | Outline color |
 | `borderStyle.width` | No | number | Outline thickness in px (must be > 0) |
@@ -26,6 +28,8 @@ Styles the atoms (nodes) matching a selector. An atom has an interior **fill**, 
 | `textStyle.size` | No | enum | `small`/`normal`/`large` — *reserved; not yet applied to the node's own label* |
 
 You can use hex codes, named colors, `rgb()`, `hsl()`, etc.
+
+A shape is drawn inscribed in the node's rectangular box: layout, spacing, and edge routing still see the box (edges attach at the box perimeter, which the shape touches at each side's midpoint). Auto-sized nodes grow so the label fits inside the shape; an explicit `size` directive is never inflated — the shape inscribes in exactly the box you pinned.
 
 When several `atomStyle` rules match one atom their set properties **compose**; because a supertype selector already returns subtype atoms, a rule on a supertype and a rule on a subtype both apply (inheritance up the type hierarchy). Setting the *same* property two different ways is an error — no silent override.
 
@@ -45,9 +49,14 @@ When several `atomStyle` rules match one atom their set properties **compose**; 
 - atomStyle:
     selector: Error
     borderStyle: { color: red }
+
+# Draw Decision atoms as diamonds
+- atomStyle:
+    selector: Decision
+    shape: diamond
 ```
 
-<div class="spytial-diagram" data-height="320" data-caption="Live: each type gets its own atomStyle — Person filled blue, Error red-bordered, Warning amber fill.">
+<div class="spytial-diagram" data-height="320" data-caption="Live: each type gets its own atomStyle — Person a filled blue pill, Error a red-bordered diamond, Warning an amber-filled ellipse.">
 <template class="data">
 {
   "atoms": [
@@ -69,9 +78,9 @@ When several `atomStyle` rules match one atom their set properties **compose**; 
 </template>
 <template class="spec">
 directives:
-  - atomStyle: { selector: Person,  fillStyle: { color: "#e0f2ff" }, borderStyle: { color: "#4a90d9", width: 3 } }
-  - atomStyle: { selector: Error,   borderStyle: { color: "red", width: 3 } }
-  - atomStyle: { selector: Warning, fillStyle: { color: "rgb(255, 236, 179)" } }
+  - atomStyle: { selector: Person,  shape: pill, fillStyle: { color: "#e0f2ff" }, borderStyle: { color: "#4a90d9", width: 3 } }
+  - atomStyle: { selector: Error,   shape: diamond, borderStyle: { color: "red", width: 3 } }
+  - atomStyle: { selector: Warning, shape: ellipse, fillStyle: { color: "rgb(255, 236, 179)" } }
 </template>
 </div>
 
