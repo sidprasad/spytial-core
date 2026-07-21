@@ -50,6 +50,10 @@ export {
 // ---- diagnostics ----
 export { validateItem, validateState } from './core/diagnostics';
 
+// ---- code-view diagnostic positioning (eemeli/yaml) ----
+export { positionDiagnostics, lintYaml } from './core/code-positioning';
+export type { PositionedDiagnostic } from './core/code-positioning';
+
 // ---- id helper (used by integrators that build SpecItems by hand) ----
 export { newId } from './core/id';
 

@@ -28,6 +28,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import '@testing-library/jest-dom'
+import { EditorView } from '@codemirror/view'
 
 import { SpecEditor } from '../src/spec-editor/ui/SpecEditor'
 import { parseYamlToState } from '../src/spec-editor'
@@ -81,6 +82,25 @@ function getBuilderTab(root: HTMLElement = document.body): HTMLElement {
 }
 function getCodeTab(root: HTMLElement = document.body): HTMLElement {
   return within(root).getByRole('tab', { name: 'Code' })
+}
+
+/**
+ * Drive the CodeMirror code view. There is no `<textarea>` to set `.value` on;
+ * we dispatch a document replacement into the EditorView, which fires the same
+ * `onChange` path typing would.
+ */
+function findCmView(): EditorView {
+  const el = document.querySelector('.cm-editor') as HTMLElement | null
+  const view = el ? EditorView.findFromDOM(el) : null
+  if (!view) throw new Error('CodeMirror editor not found in DOM')
+  return view
+}
+function setCmText(text: string): void {
+  const view = findCmView()
+  view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } })
+}
+function cmText(): string {
+  return findCmView().state.doc.toString()
 }
 
 /**
@@ -163,10 +183,9 @@ describe('SpecEditor — code-view edits sync to the model (debounced)', () => {
     // typing (userEvent.type deadlocks under fake timers).
     render(<Host onChangeSpy={onChange} defaultView="code" />)
 
-    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
     const yaml = 'constraints:\n  - orientation: {}\n'
     act(() => {
-      fireEvent.change(textarea, { target: { value: yaml } })
+      setCmText(yaml)
     })
 
     // onChange fires immediately (text is controlled); model not yet synced.
@@ -227,10 +246,9 @@ describe('SpecEditor — a model mutation cancels a pending code-view parse (Fin
     act(() => {
       fireEvent.click(getCodeTab())
     })
-    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
     const T = 'constraints:\n  - orientation: {selector: fromCode}\n'
     act(() => {
-      fireEvent.change(textarea, { target: { value: T } })
+      setCmText(T)
     })
     // onChange echoes the code text immediately (controlled), parse not yet run.
     expect(onChange).toHaveBeenLastCalledWith(T)
@@ -277,13 +295,9 @@ describe('SpecEditor — invalid YAML preserves the model and shows a diagnostic
         />,
       )
 
-      const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
-
       // Type syntactically invalid YAML.
       act(() => {
-        fireEvent.change(textarea, {
-          target: { value: 'constraints:\n  - orientation: {directions: [below]' },
-        })
+        setCmText('constraints:\n  - orientation: {directions: [below]')
         vi.advanceTimersByTime(350)
       })
 
@@ -303,9 +317,8 @@ describe('SpecEditor — invalid YAML preserves the model and shows a diagnostic
       act(() => {
         fireEvent.click(getCodeTab())
       })
-      const ta2 = screen.getByRole('textbox') as HTMLTextAreaElement
       act(() => {
-        fireEvent.change(ta2, { target: { value: 'directives:\n  - flag: foo\n' } })
+        setCmText('directives:\n  - flag: foo\n')
         vi.advanceTimersByTime(350)
       })
 
@@ -574,14 +587,13 @@ describe('CndLayoutInterface — back-compat with the legacy prop surface', () =
     render(<LegacyHost />)
 
     // Renders in the code view by default (isNoCodeView=false).
-    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
-    expect(textarea).toBeInTheDocument()
+    expect(document.querySelector('.cm-editor')).toBeInTheDocument()
 
-    // Code-view edits flow through onChange and update the textarea.
-    fireEvent.change(textarea, {
-      target: { value: 'directives:\n  - attribute:\n      field: key\n' },
+    // Code-view edits flow through onChange and update the editor.
+    act(() => {
+      setCmText('directives:\n  - attribute:\n      field: key\n')
     })
-    expect(textarea.value).toContain('attribute')
+    expect(cmText()).toContain('attribute')
 
     // The deprecated setDirectives callback is kept loosely in sync.
     await waitFor(() => {

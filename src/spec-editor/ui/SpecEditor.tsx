@@ -57,6 +57,7 @@ import {
 } from './theme';
 import { BuilderView } from './BuilderView';
 import { CodeView } from './CodeView';
+import { lintYaml } from '../core/code-positioning';
 import type { SelectorFieldExtras } from './FieldRenderer';
 
 export interface SpecEditorProps {
@@ -552,17 +553,11 @@ export const SpecEditor: React.FC<SpecEditorProps> = ({
     .filter(Boolean)
     .join(' ');
 
-  const codeDiagnostics = useMemo(() => {
-    const ds: Diagnostic[] = [];
-    if (parseError) ds.push(parseError);
-    // Surface non-yaml structural/domain diagnostics too (without locations).
-    for (const d of structuralDomain) {
-      if (d.severity === 'error' || d.severity === 'warning') {
-        ds.push(d);
-      }
-    }
-    return ds;
-  }, [parseError, structuralDomain]);
+  // Lint the code-view text itself — parse + validate + position all from the
+  // same `value`, so diagnostics' item ids match the state used to place them.
+  // (Deliberately independent of the debounced model, whose ids drift on each
+  // re-parse and whose text may lag during unapplied edits.)
+  const codeDiagnostics = useMemo(() => lintYaml(value, domain), [value, domain]);
 
   const resolvedTheme = resolveSpecEditorTheme(theme);
 
