@@ -90,6 +90,39 @@ function findKeyRange(node: unknown, key: string): [number, number] | null {
 }
 
 /**
+ * Find the range of a key reached by a dotted `path` (`['fillStyle', 'width']`),
+ * descending into each segment's value. A single-segment path is an unqualified
+ * key → {@link findKeyRange}'s recursive search. A parent-qualified path lets a
+ * nested unknown key resolve to the exact token *in its own block*, not a
+ * same-named key in a sibling block (e.g. `fillStyle.width` vs `borderStyle.width`).
+ */
+function findKeyByPath(node: unknown, path: string[]): [number, number] | null {
+  if (path.length === 0) return null;
+  if (path.length === 1) return findKeyRange(node, path[0]);
+  const [head, ...rest] = path;
+  if (isMap(node)) {
+    for (const pair of node.items) {
+      if (isScalar(pair.key) && String(pair.key.value) === head) {
+        const found = findKeyByPath(pair.value, rest);
+        if (found) return found;
+      }
+    }
+    // `head` isn't at this level — an item wraps its body under a type key, so
+    // descend one level with the full path.
+    for (const pair of node.items) {
+      const found = findKeyByPath(pair.value, path);
+      if (found) return found;
+    }
+  } else if (isSeq(node)) {
+    for (const item of node.items) {
+      const found = findKeyByPath(item, path);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+/**
  * Resolve a `[from, to]` range for one diagnostic, or null if it can't be
  * located. Order of preference: the specific field key, then the item's type
  * key, then a line/column already on the diagnostic.
@@ -109,7 +142,7 @@ function resolveRange(
         const itemNode = seq.items[loc.index];
         if (itemNode !== undefined) {
           if (d.fieldKey) {
-            const fieldRange = findKeyRange(itemNode, d.fieldKey);
+            const fieldRange = findKeyByPath(itemNode, d.fieldKey.split('.'));
             if (fieldRange) return fieldRange;
           }
           const typeRange = itemTypeKeyRange(itemNode);
