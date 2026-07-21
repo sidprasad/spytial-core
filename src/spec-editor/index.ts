@@ -17,6 +17,7 @@ export type {
   Diagnostic,
   ItemDefinition,
   SpecDocumentState,
+  OtherSection,
 } from './core/types';
 
 // ---- document ----

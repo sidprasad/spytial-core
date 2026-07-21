@@ -4,8 +4,10 @@ import { render, within, screen, act, waitFor, cleanup } from '@testing-library/
 import { EditorView } from '@codemirror/view'
 import {
   mountCndLayoutInterface,
+  unmountCndLayoutInterface,
   CndLayoutStateManager,
   InstanceStateManager,
+  DataAPI,
 } from '../webcola-demo/react-component-integration'
 import userEvent, { UserEvent } from '@testing-library/user-event'
 import { createRoot, Root } from 'react-dom/client'
@@ -258,6 +260,64 @@ directives:
       expect(currentSpec).toContain('orientation')
       expect(currentSpec).toContain('attribute')
       expect(currentSpec).toContain('flag')
+    })
+
+    it('DataAPI.updateSpec replaces the mounted editor contents in place', async () => {
+      // Push a spec from outside React, the way a host's "suggest layout"
+      // feature would via window.updateSpecFromReact — no remount involved.
+      await act(async () => {
+        DataAPI.updateSpec(testYaml)
+      })
+
+      // The code view (CodeMirror) reflects the pushed spec…
+      await waitFor(() => {
+        expect(getCmView().state.doc.toString().trim()).toBe(testYaml.trim())
+      })
+      // …and readers get the pushed spec back.
+      expect(DataAPI.getCurrentCndSpec()?.trim()).toBe(testYaml.trim())
+    })
+
+    it('a pushed spec reaches the builder view and legacy readers live', async () => {
+      const user = userEvent.setup()
+      await switchToBuilderView(user)
+
+      await act(async () => {
+        DataAPI.updateSpec(testYaml)
+      })
+
+      // The builder re-renders in place with the pushed items.
+      const testContainer = screen.getByTestId(
+        'test-cnd-layout-interface',
+      ) as HTMLElement
+      const constraintsList = within(testContainer).getByRole('list', {
+        name: 'Constraints List',
+      })
+      await waitFor(() => {
+        expect(within(constraintsList).getAllByText('Orientation')).toHaveLength(2)
+      })
+
+      // The deprecated constraint/directive arrays were re-synced too, so
+      // getCurrentCndSpec (which generates from them in No-Code view) does not
+      // serve a stale spec.
+      const currentSpec = DataAPI.getCurrentCndSpec()
+      expect(currentSpec).toContain('orientation')
+      expect(currentSpec).toContain('flag')
+    })
+
+    it('unmountCndLayoutInterface tears down the mounted root', async () => {
+      expect(container.childElementCount).toBeGreaterThan(0)
+
+      let unmounted = false
+      act(() => {
+        unmounted = unmountCndLayoutInterface('test-cnd-layout-interface')
+      })
+      expect(unmounted).toBe(true)
+      expect(container.childElementCount).toBe(0)
+
+      // A second call reports nothing to unmount, and pushing a spec after
+      // teardown is safe (the wrapper unsubscribed on unmount).
+      expect(unmountCndLayoutInterface('test-cnd-layout-interface')).toBe(false)
+      expect(() => DataAPI.updateSpec(testYaml)).not.toThrow()
     })
 
     it('should reflect builder edits when retrieving the spec after a change', async () => {

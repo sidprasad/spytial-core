@@ -90,6 +90,14 @@ function cloneState(state: SpecDocumentState): SpecDocumentState {
     constraints: state.constraints.map(cloneItem),
     directives: state.directives.map(cloneItem),
     ...(state.headerComment !== undefined ? { headerComment: state.headerComment } : {}),
+    ...(state.otherSections !== undefined
+      ? {
+          otherSections: state.otherSections.map((section) => ({
+            key: section.key,
+            value: cloneValue(section.value),
+          })),
+        }
+      : {}),
   };
 }
 
@@ -104,6 +112,10 @@ function freezeState(state: SpecDocumentState): Readonly<SpecDocumentState> {
   });
   Object.freeze(state.constraints);
   Object.freeze(state.directives);
+  if (state.otherSections !== undefined) {
+    state.otherSections.forEach((section) => Object.freeze(section));
+    Object.freeze(state.otherSections);
+  }
   return Object.freeze(state);
 }
 
