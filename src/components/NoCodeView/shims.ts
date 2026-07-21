@@ -28,7 +28,6 @@ import {
   serializeStateToYaml,
   newId,
   isKnownType,
-  isKnownYamlKey,
   getKnownYamlKeys,
 } from '../../spec-editor';
 import type { SpecItem, SpecDocumentState } from '../../spec-editor';
@@ -155,12 +154,21 @@ export interface SpytialValidationResult {
 
 /**
  * Recognized constraint/directive keys are derived from the registry
- * (`isKnownYamlKey` / `getKnownYamlKeys`) rather than hand-listed here, so this
- * check can't drift out of sync as the registry grows — the reason a
- * hand-maintained list previously false-warned on `atomStyle`/`edgeStyle`. The
- * check is kind-agnostic (a known key is accepted in either section, matching
- * the engine, which simply ignores a directive placed among constraints).
+ * (`getKnownYamlKeys`) rather than hand-listed here, so this check can't drift
+ * as the registry grows — the reason a stale list previously false-warned on
+ * the current `atomStyle`/`edgeStyle` directives. The check stays section-aware:
+ * a known key in the wrong section (e.g. `edgeStyle` under `constraints`) is
+ * still flagged, because `parseLayoutSpec` drops it there.
  */
+
+/** Keys valid in the `constraints:` section. */
+const CONSTRAINT_SECTION_KEYS = getKnownYamlKeys('constraint');
+/**
+ * Keys valid in the `directives:` section. `size`/`hideAtom` are registered as
+ * constraints but the engine also reads them among directives, so they are
+ * valid in both sections.
+ */
+const DIRECTIVE_SECTION_KEYS = [...getKnownYamlKeys('directive'), 'size', 'hideAtom'];
 
 /** Known top-level keys in a Spytial spec. */
 const KNOWN_TOP_LEVEL_KEYS = ['constraints', 'directives'];
@@ -217,9 +225,9 @@ export function validateSpytialSpec(yamlString: string): SpytialValidationResult
       obj.constraints.forEach((constraint, i) => {
         if (constraint && typeof constraint === 'object') {
           const constraintType = Object.keys(constraint as object)[0];
-          if (constraintType && !isKnownYamlKey(constraintType)) {
+          if (constraintType && !CONSTRAINT_SECTION_KEYS.includes(constraintType)) {
             result.warnings.push(
-              `Unrecognized constraint type at index ${i}: "${constraintType}". Known types: ${getKnownYamlKeys().join(', ')}`,
+              `Unrecognized constraint type at index ${i}: "${constraintType}". Known types: ${CONSTRAINT_SECTION_KEYS.join(', ')}`,
             );
           }
         }
@@ -230,9 +238,9 @@ export function validateSpytialSpec(yamlString: string): SpytialValidationResult
       obj.directives.forEach((directive, i) => {
         if (directive && typeof directive === 'object') {
           const directiveType = Object.keys(directive as object)[0];
-          if (directiveType && !isKnownYamlKey(directiveType)) {
+          if (directiveType && !DIRECTIVE_SECTION_KEYS.includes(directiveType)) {
             result.warnings.push(
-              `Unrecognized directive type at index ${i}: "${directiveType}". Known types: ${getKnownYamlKeys().join(', ')}`,
+              `Unrecognized directive type at index ${i}: "${directiveType}". Known types: ${DIRECTIVE_SECTION_KEYS.join(', ')}`,
             );
           }
         }

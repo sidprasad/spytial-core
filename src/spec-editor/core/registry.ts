@@ -24,7 +24,7 @@
  *     - attribute:    { field, selector?, filter?, textStyle?:{size,color} }
  *     - hideField:    { field, selector?, filter? }
  *     - icon:         { path, selector?, showLabels? }
- *     - atomStyle:    { selector?, shape?, fillStyle?:{color}, borderStyle?:{color,width}, textStyle?:{size,color} }
+ *     - atomStyle:    { selector?, fillStyle?:{color}, borderStyle?:{color,width}, textStyle?:{size,color} }
  *     - atomColor:    { value, selector? }  (deprecated → atomStyle)
  *     - edgeStyle:    { field, selector?, filter?, lineStyle?:{color,pattern,weight,highlight}, textStyle?:{size,color}, showLabel?, hidden? }
  *     - edgeColor:    { value, field, selector?, filter?, style?, weight?, showLabel?, hidden?, highlight? }  (deprecated → edgeStyle)
@@ -95,14 +95,6 @@ export const ORIENTATION_DIRECTIONS = [
 export const CYCLIC_DIRECTIONS = ['clockwise', 'counterclockwise'] as const;
 export const ALIGN_DIRECTIONS = ['horizontal', 'vertical'] as const;
 export const EDGE_STYLES = ['solid', 'dashed', 'dotted'] as const;
-
-/**
- * Node outline shapes for `atomStyle.shape`, drawn inscribed in the node's
- * box. (Mirrors NODE_SHAPES in layout/style/node-shape.ts.) No field `default`
- * is set — an unset value is omitted from YAML and the engine draws the
- * rectangle, so specs stay clean.
- */
-export const NODE_SHAPE_OPTIONS = ['rectangle', 'ellipse', 'circle', 'diamond', 'hexagon', 'pill'] as const;
 
 /**
  * Text-size tiers for a label line, relative to the node label. `large` renders
@@ -741,10 +733,9 @@ const atomStyle: ItemDefinition = {
   kind: 'directive',
   type: 'atomStyle',
   label: 'Atom style',
-  description: 'Style matching atoms — shape, fill, border, and label.',
+  description: 'Style matching atoms — fill, border, and label.',
   fields: [
     { key: 'selector', kind: 'selector', label: 'Selector', selectorArity: 'unary' },
-    { key: 'shape', kind: 'enum', options: NODE_SHAPE_OPTIONS, label: 'Shape' },
     { key: 'fillStyle', kind: 'group', label: 'Fill style', children: FILL_STYLE_FIELDS },
     { key: 'borderStyle', kind: 'group', label: 'Border style', children: BORDER_STYLE_FIELDS },
     { key: 'textStyle', kind: 'group', label: 'Text style', children: TEXT_STYLE_FIELDS },
@@ -957,13 +948,24 @@ export function isKnownYamlKey(yamlKey: string): boolean {
 }
 
 /**
- * Every YAML key some definition emits under (constraints + directives),
- * deduplicated. The registry-derived source of truth for "which top-level
- * constraint/directive keys are recognized" — use this instead of hand-listing
- * types, which drifts as the registry grows.
+ * YAML keys some definition emits under, deduplicated. With no `kind`, every
+ * key (constraints + directives); with a `kind`, only keys some definition of
+ * that kind emits under. The registry-derived source of truth for "which
+ * top-level keys are recognized" — use this instead of hand-listing types,
+ * which drifts as the registry grows.
+ *
+ * Note: `size`/`hideAtom` are registered as constraints, so they appear only
+ * under `'constraint'` here even though the engine also reads them among
+ * directives — callers that validate the directives section must allow them.
  */
-export function getKnownYamlKeys(): string[] {
-  return [...CANDIDATES_BY_YAML_KEY.keys()];
+export function getKnownYamlKeys(kind?: ItemKind): string[] {
+  const keys: string[] = [];
+  for (const [key, defs] of CANDIDATES_BY_YAML_KEY) {
+    if (!kind || defs.some((d) => d.kind === kind)) {
+      keys.push(key);
+    }
+  }
+  return keys;
 }
 
 /** Look up an item definition by registry type key. */
