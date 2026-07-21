@@ -1,35 +1,42 @@
 /**
  * {@link CodeView} — the raw-YAML editing surface of the spec editor.
  *
- * A controlled monospace `<textarea>` whose value is owned by {@link SpecEditor}.
- * Typing fires `onChange(text)` immediately (the text is controlled), and a
- * debounced parse is attempted by the parent via `onParse`. CodeView itself is
- * presentation-only: it does not own a {@link SpecDocument}. The parent passes
- * down the current parse `diagnostics` (line/column anchored, severity colored)
- * and a flag indicating whether the text currently differs from the model
- * ("unapplied edits"). A parse error never clobbers the model — the parent keeps
- * the last good state and surfaces the diagnostic here.
+ * A CodeMirror 6 editor (not a textarea): CodeMirror owns the text rendering, so
+ * syntax highlighting is real (no transparent-text mirror to keep in sync) and
+ * diagnostics are drawn as IDE-style squiggly underlines you can hover to read.
+ * The value is controlled by {@link SpecEditor}: typing fires `onChange(text)`
+ * immediately, and the parent attempts a debounced parse. A parse error never
+ * clobbers the model — the parent keeps the last good state and passes the
+ * diagnostics down here as {@link PositionedDiagnostic}s (already resolved to
+ * character ranges by `positionDiagnostics`), which we hand to `@codemirror/lint`.
  *
- * The YAML is syntax-highlighted with the same mirror-overlay technique the
- * SelectorField uses: a highlighted `<pre>` sits behind a transparent-text
- * textarea with identical metrics, scroll-synced on both axes (the text never
- * wraps, so horizontal sync matters here). Tokenization is the lossless
- * line tokenizer in `highlight-yaml.ts` (comments, strings, numbers, keys,
- * and the spec's known constraint/directive keywords). Optional line numbers
- * render in a gutter that shares the same scroll sync.
+ * Highlighting uses `@codemirror/lang-yaml` themed through the same
+ * `--spytial-ed-syn-*` CSS variables the rest of the editor uses, so it tracks
+ * light/dark automatically. A persistent diagnostics list is kept below the
+ * editor for accessibility and for any diagnostic that couldn't be positioned.
  */
 
-import React, { useCallback, useEffect, useId, useMemo, useRef } from 'react';
+import React, { useEffect, useId, useMemo, useRef } from 'react';
+import { EditorState, Compartment } from '@codemirror/state';
+import { EditorView, keymap, lineNumbers } from '@codemirror/view';
+import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
+import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
+import { yaml } from '@codemirror/lang-yaml';
+import { lintGutter, setDiagnostics, type Diagnostic as CmDiagnostic } from '@codemirror/lint';
+import { tags as t } from '@lezer/highlight';
 import type { Diagnostic } from '../core/types';
-import { tokenizeYaml, yamlTokenClassName } from './highlight-yaml';
+import type { PositionedDiagnostic } from '../core/code-positioning';
 
 export interface CodeViewProps {
   /** controlled YAML text */
   value: string;
   /** fired with the next text on every edit */
   onChange(value: string): void;
-  /** parse diagnostics for the current text (line/column, severity colored). */
-  diagnostics?: readonly Diagnostic[];
+  /**
+   * Diagnostics for the current text, pre-resolved to character ranges. Those
+   * with a range become editor squiggles; all appear in the list below.
+   */
+  diagnostics?: readonly PositionedDiagnostic[];
   /**
    * True when the text differs from the applied model (a parse error is keeping
    * the model on its last good state). Drives the "unapplied edits" notice.
@@ -37,10 +44,7 @@ export interface CodeViewProps {
   hasUnappliedEdits?: boolean;
   /** render a line-number gutter (default true). */
   showLineNumbers?: boolean;
-  /**
-   * Render the YAML highlight mirror (default true). Escape hatch for hosts
-   * where the overlay misaligns: when false the textarea shows its own text.
-   */
+  /** syntax-highlight the YAML (default true). */
   syntaxHighlighting?: boolean;
   disabled?: boolean;
   'aria-label'?: string;
@@ -54,60 +58,180 @@ const SEVERITY_ORDER: Record<Diagnostic['severity'], number> = {
   info: 2,
 };
 
+/**
+ * YAML token colors, mapped onto the editor's `--spytial-ed-syn-*` variables so
+ * the highlight tracks the active (light/dark) theme. Keys carry the "keyword"
+ * color, matching the old hand-rolled tokenizer's palette.
+ */
+const yamlHighlightStyle = HighlightStyle.define([
+  { tag: t.comment, color: 'var(--spytial-ed-syn-comment, #8a8170)', fontStyle: 'italic' },
+  { tag: [t.string, t.special(t.string)], color: 'var(--spytial-ed-syn-string, #7a5901)' },
+  { tag: [t.number, t.bool, t.null], color: 'var(--spytial-ed-syn-number, #7a5901)' },
+  {
+    tag: [t.propertyName, t.definition(t.propertyName), t.keyword, t.atom],
+    color: 'var(--spytial-ed-syn-keyword, #6d28a8)',
+  },
+  { tag: [t.punctuation, t.separator], color: 'var(--spytial-ed-text-muted, #6e6553)' },
+]);
+
+/** Editor chrome themed through the shared spec-editor CSS variables. */
+const editorTheme = EditorView.theme({
+  '&': {
+    fontSize: '0.85em',
+    color: 'var(--spytial-ed-text, #221d14)',
+    backgroundColor: 'var(--spytial-ed-surface, #faf8f2)',
+    border: '1px solid var(--spytial-ed-border, #d9d2c0)',
+    borderRadius: 'var(--spytial-ed-radius, 2px)',
+    minHeight: '12rem',
+  },
+  '&.cm-focused': { outline: '2px solid var(--spytial-ed-accent, #b5431a)', outlineOffset: '-1px' },
+  '.cm-scroller': {
+    fontFamily: 'var(--spytial-ed-mono-font-family, ui-monospace, monospace)',
+    lineHeight: '1.5',
+    overflow: 'auto',
+  },
+  '.cm-content': { padding: '0.5em 0', caretColor: 'var(--spytial-ed-accent, #b5431a)' },
+  '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--spytial-ed-accent, #b5431a)' },
+  '.cm-gutters': {
+    backgroundColor: 'var(--spytial-ed-surface-raised, #f1ecdf)',
+    color: 'var(--spytial-ed-text-muted, #6e6553)',
+    border: 'none',
+    borderInlineEnd: '1px solid var(--spytial-ed-border, #d9d2c0)',
+  },
+  '.cm-lineNumbers .cm-gutterElement': { padding: '0 0.5em 0 0.6em' },
+  '&.cm-editor .cm-selectionBackground, & .cm-selectionBackground, & .cm-content ::selection': {
+    backgroundColor: 'color-mix(in srgb, var(--spytial-ed-accent, #b5431a) 22%, transparent)',
+  },
+  '.cm-tooltip': {
+    border: '1px solid var(--spytial-ed-border, #d9d2c0)',
+    backgroundColor: 'var(--spytial-ed-surface-raised, #f1ecdf)',
+    color: 'var(--spytial-ed-text, #221d14)',
+    borderRadius: 'var(--spytial-ed-radius, 2px)',
+    fontSize: '0.85em',
+  },
+});
+
+/** Map our severity onto CodeMirror's (identical vocabulary for these three). */
+function cmSeverity(s: Diagnostic['severity']): CmDiagnostic['severity'] {
+  return s; // 'error' | 'warning' | 'info' all exist in CodeMirror's union
+}
+
+/** Positioned diagnostics → CodeMirror lint diagnostics (only the ranged ones). */
+function toCmDiagnostics(
+  diagnostics: readonly PositionedDiagnostic[] | undefined,
+  docLength: number,
+): CmDiagnostic[] {
+  if (!diagnostics) return [];
+  const out: CmDiagnostic[] = [];
+  for (const d of diagnostics) {
+    if (d.from === undefined || d.to === undefined) continue;
+    const from = Math.max(0, Math.min(d.from, docLength));
+    const to = Math.max(from, Math.min(d.to, docLength));
+    out.push({
+      from,
+      to,
+      severity: cmSeverity(d.severity),
+      message: d.message,
+      // `code` (e.g. 'deprecated') surfaces as the source label in the tooltip.
+      source: d.code,
+    });
+  }
+  // CodeMirror expects diagnostics sorted by `from`.
+  out.sort((a, b) => a.from - b.from);
+  return out;
+}
+
 export const CodeView: React.FC<CodeViewProps> = ({
   value,
   onChange,
   diagnostics,
   hasUnappliedEdits = false,
   showLineNumbers = true,
-  syntaxHighlighting = true,
+  syntaxHighlighting: highlight = true,
   disabled = false,
   'aria-label': ariaLabel = 'Layout specification YAML',
   className,
 }) => {
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const gutterRef = useRef<HTMLDivElement | null>(null);
-  const mirrorRef = useRef<HTMLPreElement | null>(null);
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const viewRef = useRef<EditorView | null>(null);
+  // Always-current callback, so the persistent editor never calls a stale one.
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  // Reconfigurable editable/read-only state (driven by `disabled`).
+  const editableRef = useRef(new Compartment());
   const baseId = useId();
   const diagId = `${baseId}-diag`;
 
-  const lineCount = useMemo(() => {
-    // At least one line so the gutter is never empty.
-    const lines = value.split('\n').length;
-    return Math.max(1, lines);
-  }, [value]);
+  // Create the editor once; subsequent prop changes are pushed via the effects
+  // below (the EditorView persists across React renders).
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
 
-  const highlightedLines = useMemo(
-    () => (syntaxHighlighting ? tokenizeYaml(value) : []),
-    [value, syntaxHighlighting],
-  );
+    const extensions = [
+      history(),
+      keymap.of([...defaultKeymap, ...historyKeymap]),
+      ...(showLineNumbers ? [lineNumbers()] : []),
+      ...(highlight ? [yaml(), syntaxHighlighting(yamlHighlightStyle)] : []),
+      lintGutter(),
+      editorTheme,
+      editableRef.current.of([
+        EditorView.editable.of(!disabled),
+        EditorState.readOnly.of(disabled),
+      ]),
+      EditorView.contentAttributes.of({ 'aria-label': ariaLabel, 'aria-describedby': diagId }),
+      EditorView.updateListener.of((update) => {
+        if (update.docChanged) {
+          onChangeRef.current(update.state.doc.toString());
+        }
+      }),
+    ];
 
-  // Keep the gutter and the highlight mirror scrolled in lockstep with the
-  // textarea — both axes: with `wrap="off"` the text scrolls horizontally too.
-  const syncScroll = useCallback(() => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    const gutter = gutterRef.current;
-    if (gutter) gutter.scrollTop = ta.scrollTop;
-    const mirror = mirrorRef.current;
-    if (mirror) {
-      mirror.scrollTop = ta.scrollTop;
-      mirror.scrollLeft = ta.scrollLeft;
-    }
+    const view = new EditorView({
+      state: EditorState.create({ doc: value, extensions }),
+      parent: host,
+    });
+    viewRef.current = view;
+
+    return () => {
+      view.destroy();
+      viewRef.current = null;
+    };
+    // Mount once. `value`/`diagnostics`/`disabled` are synced by the effects
+    // below; the other inputs are construction-time options.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-sync after every value change as well (typing can scroll the textarea
-  // without firing a scroll event in all engines).
+  // Push external value changes into the editor (guarding the typing feedback
+  // loop: when the user types, onChange updates `value`, which arrives here
+  // already equal to the doc, so no transaction is dispatched).
   useEffect(() => {
-    syncScroll();
-  }, [value, syncScroll]);
+    const view = viewRef.current;
+    if (!view) return;
+    const current = view.state.doc.toString();
+    if (current !== value) {
+      view.dispatch({ changes: { from: 0, to: current.length, insert: value } });
+    }
+  }, [value]);
 
-  const handleChange = useCallback(
-    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      onChange(e.target.value);
-    },
-    [onChange],
-  );
+  // Push diagnostics into the lint layer (squiggles + hover tooltips).
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch(setDiagnostics(view.state, toCmDiagnostics(diagnostics, view.state.doc.length)));
+  }, [diagnostics]);
+
+  // Reconfigure editable / read-only when `disabled` changes.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({
+      effects: editableRef.current.reconfigure([
+        EditorView.editable.of(!disabled),
+        EditorState.readOnly.of(disabled),
+      ]),
+    });
+  }, [disabled]);
 
   const sorted = useMemo(() => {
     if (!diagnostics || diagnostics.length === 0) return [];
@@ -118,9 +242,6 @@ export const CodeView: React.FC<CodeViewProps> = ({
     });
   }, [diagnostics]);
 
-  const hasError = sorted.some((d) => d.severity === 'error');
-  const describedBy = sorted.length > 0 ? diagId : undefined;
-
   return (
     <div className={`spytial-ed-code${className ? ` ${className}` : ''}`}>
       {hasUnappliedEdits ? (
@@ -129,69 +250,10 @@ export const CodeView: React.FC<CodeViewProps> = ({
         </div>
       ) : null}
 
-      <div className="spytial-ed-code-editor">
-        {showLineNumbers ? (
-          <div
-            ref={gutterRef}
-            className="spytial-ed-code-gutter"
-            aria-hidden="true"
-          >
-            {Array.from({ length: lineCount }, (_, i) => (
-              <div key={i} className="spytial-ed-code-gutter-line">
-                {i + 1}
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        <div className="spytial-ed-code-input-wrap">
-          {/* Highlight mirror, behind the textarea (presentation only;
-              omitted entirely when highlighting is disabled). */}
-          {syntaxHighlighting ? (
-            <pre
-              ref={mirrorRef}
-              className="spytial-ed-code-mirror"
-              aria-hidden="true"
-            >
-              {highlightedLines.map((tokens, lineIdx) => (
-                <React.Fragment key={lineIdx}>
-                  {lineIdx > 0 ? '\n' : null}
-                  {tokens.map((t, i) => {
-                    const cls = yamlTokenClassName(t.kind);
-                    return cls ? (
-                      <span key={i} className={cls}>
-                        {t.text}
-                      </span>
-                    ) : (
-                      t.text
-                    );
-                  })}
-                </React.Fragment>
-              ))}
-              {/* trailing newline keeps the last line's height in the mirror */}
-              {'\n'}
-            </pre>
-          ) : null}
-
-          <textarea
-            ref={textareaRef}
-            className={`spytial-ed-code-textarea${
-              syntaxHighlighting ? '' : ' spytial-ed-code-textarea--plain'
-            }`}
-            value={value}
-            onChange={handleChange}
-            onScroll={syncScroll}
-            disabled={disabled}
-            spellCheck={false}
-            autoCapitalize="off"
-            autoCorrect="off"
-            wrap="off"
-            aria-label={ariaLabel}
-            aria-describedby={describedBy}
-            aria-invalid={hasError || undefined}
-          />
-        </div>
-      </div>
+      <div
+        ref={hostRef}
+        className={`spytial-ed-code-cm${disabled ? ' spytial-ed-code-cm--disabled' : ''}`}
+      />
 
       {sorted.length > 0 ? (
         <ul className="spytial-ed-code-diagnostics" id={diagId}>

@@ -39,9 +39,10 @@ constraints:
       directions:
         - right
 directives:
-  - atomColor:
+  - atomStyle:
       selector: A->B
-      value: "#FF0000"
+      fillStyle:
+        color: "#FF0000"
   - size:
       selector: A->B
       height: 100
@@ -119,9 +120,10 @@ constraints:
   it('caches results for multiple directives using the same selector', () => {
     const layoutSpecWithMultipleDirectives = `
 directives:
-  - atomColor:
+  - atomStyle:
       selector: Type1
-      value: "#FF0000"
+      fillStyle:
+        color: "#FF0000"
   - size:
       selector: Type1
       height: 100
@@ -162,9 +164,10 @@ constraints:
       directions:
         - right
 directives:
-  - atomColor:
+  - atomStyle:
       selector: A->B
-      value: "#FF0000"
+      fillStyle:
+        color: "#FF0000"
 `;
 
     const instance = new JSONDataInstance(jsonData);

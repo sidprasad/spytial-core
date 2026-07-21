@@ -360,6 +360,7 @@ const groupfield: ItemDefinition = {
   label: 'Group (by field)',
   description: 'Group elements based on a field. Deprecated — prefer Group (by selector).',
   deprecated: true,
+  deprecatedInFavorOf: 'groupselector',
   fields: [
     {
       key: 'field',
@@ -564,6 +565,13 @@ const attribute: ItemDefinition = {
       label: 'Selector',
       selectorArity: 'unary',
     },
+    {
+      key: 'filter',
+      kind: 'selector',
+      label: 'Filter',
+      selectorArity: 'binary',
+      help: 'Optional n-ary selector — apply only to matching (source, target) tuples.',
+    },
     // Shared text-style block (size + color), same shape edgeStyle/atomStyle use.
     { key: 'textStyle', kind: 'group', label: 'Text style', children: TEXT_STYLE_FIELDS },
   ],
@@ -592,6 +600,13 @@ const hideField: ItemDefinition = {
       kind: 'selector',
       label: 'Selector',
       selectorArity: 'unary',
+    },
+    {
+      key: 'filter',
+      kind: 'selector',
+      label: 'Filter',
+      selectorArity: 'binary',
+      help: 'Optional n-ary selector — hide only matching (source, target) tuples.',
     },
   ],
   summary(params) {
@@ -642,6 +657,7 @@ const atomColor: ItemDefinition = {
   label: 'Atom color',
   description: 'Deprecated — use Atom style (atomStyle). Still parsed/rendered for back-compat (value → border color).',
   deprecated: true,
+  deprecatedInFavorOf: 'atomStyle',
   fields: [
     {
       key: 'value',
@@ -740,6 +756,7 @@ const edgeColor: ItemDefinition = {
   label: 'Edge color',
   description: 'Deprecated — use Edge style (edgeStyle). Still parsed/rendered for back-compat.',
   deprecated: true,
+  deprecatedInFavorOf: 'edgeStyle',
   fields: [
     {
       key: 'field',
@@ -928,6 +945,27 @@ export function getDefinitionsForYamlKey(yamlKey: string): readonly ItemDefiniti
 /** True iff some registry definition emits under this YAML key. */
 export function isKnownYamlKey(yamlKey: string): boolean {
   return CANDIDATES_BY_YAML_KEY.has(yamlKey);
+}
+
+/**
+ * YAML keys some definition emits under, deduplicated. With no `kind`, every
+ * key (constraints + directives); with a `kind`, only keys some definition of
+ * that kind emits under. The registry-derived source of truth for "which
+ * top-level keys are recognized" — use this instead of hand-listing types,
+ * which drifts as the registry grows.
+ *
+ * Note: `size`/`hideAtom` are registered as constraints, so they appear only
+ * under `'constraint'` here even though the engine also reads them among
+ * directives — callers that validate the directives section must allow them.
+ */
+export function getKnownYamlKeys(kind?: ItemKind): string[] {
+  const keys: string[] = [];
+  for (const [key, defs] of CANDIDATES_BY_YAML_KEY) {
+    if (!kind || defs.some((d) => d.kind === kind)) {
+      keys.push(key);
+    }
+  }
+  return keys;
 }
 
 /** Look up an item definition by registry type key. */

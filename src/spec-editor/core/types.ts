@@ -21,6 +21,14 @@ export interface SpecItem {
   comment?: string;
   /** present iff type unknown to registry; re-emitted verbatim */
   raw?: unknown;
+  /**
+   * The raw inner YAML body this item parsed from, when a custom `fromYamlNode`
+   * (group / flag) ingested it. Curated ingestion copies only recognized keys
+   * into `params`, so this preserves the rest — enabling the unknown-key check
+   * to still flag typos on those types. Not serialized; absent for
+   * builder-built items (which only ever hold known fields).
+   */
+  sourceBody?: Record<string, unknown>;
 }
 
 // ---- field model ----
@@ -61,6 +69,18 @@ export interface FieldSpec {
 export interface Diagnostic {
   severity: 'error' | 'warning' | 'info';
   message: string;
+  /**
+   * Machine-readable category, so consumers can filter/handle by kind rather
+   * than string-matching the message — e.g. surface `'deprecated'` differently
+   * from `'unknown-key'`. Optional and open-ended; absent on older diagnostics.
+   */
+  code?:
+    | 'unknown-key'
+    | 'unknown-type'
+    | 'deprecated'
+    | 'missing-required'
+    | 'invalid-value'
+    | (string & {});
   /** ties to a builder row */
   itemId?: string;
   /** ties to a specific field */
@@ -81,6 +101,11 @@ export interface ItemDefinition {
   description?: string;
   /** parse + render, but hide from add menu (e.g. 'groupfield') */
   deprecated?: boolean;
+  /**
+   * When `deprecated`, the label of the type that supersedes it (e.g. 'atomStyle'
+   * for 'atomColor'). Surfaced in the deprecation diagnostic so the fix is named.
+   */
+  deprecatedInFavorOf?: string;
   fields: FieldSpec[];
   /** one-line summary for the collapsed row, e.g. "left, above · parent" */
   summary(params: Record<string, unknown>): string;

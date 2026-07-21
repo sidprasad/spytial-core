@@ -284,7 +284,15 @@ function nodeToItem(node: unknown, kind: SpecItem['kind']): SpecItem | null {
     }
     const params = def.fromYamlNode(node);
     if (params !== null) {
-      return { id: newId(), kind, type: def.type, params };
+      const item: SpecItem = { id: newId(), kind, type: def.type, params };
+      // Preserve the raw inner body: fromYamlNode copies only recognized keys
+      // into `params`, so keep the original around for the unknown-key check to
+      // flag typos it would otherwise have dropped.
+      const body = (node as Record<string, unknown>)[yamlKey];
+      if (isRecord(body)) {
+        item.sourceBody = body;
+      }
+      return item;
     }
   }
 

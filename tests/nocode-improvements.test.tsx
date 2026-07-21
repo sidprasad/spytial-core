@@ -141,6 +141,45 @@ directives:
             const result = validateSpytialSpec(validDirectives);
             expect(result.warnings.filter(w => w.includes('Unrecognized directive'))).toHaveLength(0);
         });
+
+        it('recognizes the current atomStyle/edgeStyle directives (registry-derived, no drift)', () => {
+            // Regression: a hand-maintained known-types list omitted these and
+            // false-warned on the recommended style directives.
+            const currentStyleDirectives = `
+directives:
+  - atomStyle:
+      selector: Node
+      fillStyle: { color: "#ff0000" }
+  - edgeStyle:
+      field: edges
+      lineStyle: { color: "#00ff00" }
+`;
+            const result = validateSpytialSpec(currentStyleDirectives);
+            expect(result.warnings.filter(w => w.includes('Unrecognized directive'))).toHaveLength(0);
+        });
+
+        it('flags a known directive key placed under constraints (section-aware)', () => {
+            // edgeStyle is a directive; under `constraints` the engine drops it,
+            // so the misplaced no-op block should still be surfaced.
+            const result = validateSpytialSpec('constraints:\n  - edgeStyle:\n      field: link\n');
+            expect(result.warnings.some(
+                w => w.includes('Unrecognized constraint type') && w.includes('edgeStyle'),
+            )).toBe(true);
+        });
+
+        it('flags a known constraint key placed under directives (section-aware)', () => {
+            const result = validateSpytialSpec('directives:\n  - orientation:\n      selector: a\n      directions: [left]\n');
+            expect(result.warnings.some(
+                w => w.includes('Unrecognized directive type') && w.includes('orientation'),
+            )).toBe(true);
+        });
+
+        it('allows size/hideAtom in the directives section (dual-placed)', () => {
+            const result = validateSpytialSpec(
+                'directives:\n  - size: { width: 100, height: 60, selector: X }\n  - hideAtom: { selector: X }\n',
+            );
+            expect(result.warnings.filter(w => w.includes('Unrecognized directive'))).toHaveLength(0);
+        });
     });
 });
 

@@ -463,11 +463,35 @@ function assertValidSizeParams(size: Record<string, unknown>, context: string): 
 }
 
 
+/**
+ * A non-fatal issue found while parsing a spec. Warnings never block parsing —
+ * the returned {@link LayoutSpec} is always usable — they are advisory feedback
+ * a consumer can surface or ignore. Returned on {@link LayoutSpec.warnings} so
+ * callers get them by reading the parse result (no callback, no throw), and the
+ * same messages are still written to `console.warn` for back-compat.
+ *
+ * `code` is a machine-readable category (e.g. `'deprecated'`) so consumers can
+ * filter without string-matching; it aligns with the spec-editor `Diagnostic`
+ * `code` vocabulary.
+ */
+export interface ParseWarning {
+    code: 'deprecated' | (string & {});
+    message: string;
+}
+
 export interface LayoutSpec {
 
     constraints: ConstraintsBlock
 
     directives : DirectivesBlock
+
+    /**
+     * Advisory, non-fatal warnings raised while parsing (e.g. use of a
+     * deprecated directive form). Optional and additive — existing consumers
+     * that only read `constraints`/`directives` are unaffected. Populated by
+     * {@link parseLayoutSpec}; empty when the spec is built directly.
+     */
+    warnings?: ParseWarning[]
 }
 
 function DEFAULT_LAYOUT() : LayoutSpec 
@@ -499,7 +523,8 @@ function DEFAULT_LAYOUT() : LayoutSpec
             hiddenAtoms: [],
             hideDisconnected: false,
             hideDisconnectedBuiltIns: false
-        }
+        },
+        warnings: []
     };
 }
 
@@ -542,6 +567,9 @@ export function parseLayoutSpec(s: string): LayoutSpec {
 
 
     let layoutSpec: LayoutSpec = DEFAULT_LAYOUT();
+    // Same array reference as `layoutSpec.warnings` (seeded by DEFAULT_LAYOUT);
+    // parsing pushes advisory warnings here and they ride out on the result.
+    const warnings = layoutSpec.warnings!;
 
     // Now we go through the constraints and directives and extract them
     // Note: size and hideAtom can appear in either constraints or directives
@@ -578,7 +606,7 @@ export function parseLayoutSpec(s: string): LayoutSpec {
 
     if (directives && Array.isArray(directives)) {
         try {
-            let directivesParsed = parseDirectives(directives);
+            let directivesParsed = parseDirectives(directives, warnings);
             layoutSpec.directives = directivesParsed;
             
             // Merge size and hideAtom from constraints into directives
@@ -919,9 +947,16 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
  * @returns List of CnD directives
  * @throws Error if there are inconsistencies in the directives.
  */
-function parseDirectives(directives: unknown[]): DirectivesBlock {
+function parseDirectives(directives: unknown[], warnings: ParseWarning[] = []): DirectivesBlock {
     // Type assertion since we expect specific structure from YAML
     const typedDirectives = directives as Record<string, any>[];
+
+    // Emit a deprecation both to the console (back-compat: several tests assert
+    // this) and to the consumable `warnings` accumulator (rides out on the spec).
+    const deprecate = (message: string): void => {
+        console.warn(message);
+        warnings.push({ code: 'deprecated', message });
+    };
 
     // CURRENTLY NO SUGAR HERE!
 
@@ -943,7 +978,7 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
     // and atom styling flows via `atomStyles`.
     const rawAtomColors = typedDirectives.filter(d => d.atomColor);
     if (rawAtomColors.length > 0) {
-        console.warn(
+        deprecate(
             "[spytial] 'atomColor' is deprecated and will be removed in a future major; " +
             "use 'atomStyle' with a 'borderStyle' block (value→borderStyle.color), " +
             "or a 'fillStyle' block for a real interior fill."
@@ -973,7 +1008,7 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
     // (findEdgeDirective) then no-ops, and edge styling flows via `edgeStyles`.
     const rawEdgeColors = typedDirectives.filter(d => d.edgeColor);
     if (rawEdgeColors.length > 0) {
-        console.warn(
+        deprecate(
             "[spytial] 'edgeColor' is deprecated and will be removed in a future major; " +
             "use 'edgeStyle' with a 'lineStyle' block " +
             "(value→lineStyle.color, style→lineStyle.pattern, weight→lineStyle.weight, highlight→lineStyle.highlight)."
@@ -1025,7 +1060,7 @@ function parseDirectives(directives: unknown[]): DirectivesBlock {
         };
     });
     if (usedLegacyInferredInline) {
-        console.warn(
+        deprecate(
             "[spytial] inferredEdge's inline 'color'/'style'/'weight'/'highlight' are deprecated; " +
             "use a 'lineStyle' block (color, pattern, weight, highlight) instead."
         );

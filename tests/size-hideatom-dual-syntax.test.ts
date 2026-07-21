@@ -206,9 +206,10 @@ constraints:
   - hideAtom:
       selector: Type2
 directives:
-  - atomColor:
+  - atomStyle:
       selector: Type1
-      value: "#FF0000"
+      fillStyle:
+        color: "#FF0000"
 `;
 
       const layoutSpec = parseLayoutSpec(layoutSpecYaml);
@@ -220,10 +221,10 @@ directives:
       // Check directives (including size and hideAtom from constraints)
       expect(layoutSpec.directives.sizes).toHaveLength(1);
       expect(layoutSpec.directives.hiddenAtoms).toHaveLength(1);
-      // atomColor now desugars into a border-preserving atomStyle rule (atomColors emptied).
+      // atomStyle sets the fill color directly (no legacy atomColor desugar).
       expect(layoutSpec.directives.atomColors).toHaveLength(0);
       expect(layoutSpec.directives.atomStyles).toHaveLength(1);
-      expect(layoutSpec.directives.atomStyles[0].style.borderStyle?.color).toBe('#FF0000');
+      expect(layoutSpec.directives.atomStyles[0].style.fillStyle?.color).toBe('#FF0000');
     });
   });
 

@@ -5,6 +5,8 @@ import {
   getDefinitions,
   defaultParamsFor,
   validateItem,
+  validateState,
+  parseYamlToState,
   type SpecItem,
 } from '../src/spec-editor';
 import { newId } from '../src/spec-editor';
@@ -152,5 +154,140 @@ describe('diagnostics — structural validation', () => {
     const o = doc.addItem('constraint', 'orientation');
     doc.updateItem(o.id, { params: { selector: 'parent', directions: ['below'] } });
     expect(doc.validate()).toHaveLength(0);
+  });
+});
+
+describe('diagnostics — unknown keys (typo detection)', () => {
+  it('warns on an unknown top-level key with a did-you-mean', () => {
+    // `showLabel` is a near-miss for the icon field `showLabels`.
+    const diags = validateItem(item('icon', { path: 'a.svg', showLabel: true }, 'directive'));
+    const warn = diags.find((d) => d.message.includes('showLabel'));
+    expect(warn).toBeDefined();
+    expect(warn!.severity).toBe('warning');
+    expect(warn!.source).toBe('structure');
+    expect(warn!.message).toContain('Did you mean "showLabels"');
+  });
+
+  it('warns on an unknown key inside a nested style block', () => {
+    const diags = validateItem(
+      item('edgeStyle', { field: 'next', lineStyle: { colour: 'red' } }, 'directive'),
+    );
+    const warn = diags.find((d) => d.message.includes('colour'));
+    expect(warn).toBeDefined();
+    expect(warn!.severity).toBe('warning');
+    expect(warn!.message).toContain('Line style');
+    expect(warn!.message).toContain('Did you mean "color"');
+  });
+
+  it('routes a nested unknown key with a parent-qualified fieldKey (no sibling collision)', () => {
+    // `width` is valid in borderStyle but not fillStyle; the diagnostic must not
+    // attach to borderStyle.width, so its fieldKey is parent-qualified.
+    const diags = validateItem(item('atomStyle', { fillStyle: { width: 2 } }, 'directive'));
+    const warn = diags.find((d) => d.message.includes('width'));
+    expect(warn).toBeDefined();
+    expect(warn!.code).toBe('unknown-key');
+    expect(warn!.fieldKey).toBe('fillStyle.width');
+  });
+
+  it('flags a typo on a group (custom fromYamlNode) via the raw source body', () => {
+    // groupselector ingests through fromYamlNode, which copies only known keys
+    // into params — so without the raw body preserved, `naem` would vanish.
+    const state = parseYamlToState(
+      'constraints:\n  - group:\n      selector: p\n      name: c\n      naem: cluster\n',
+    );
+    const diags = validateState(state);
+    const warn = diags.find((d) => d.code === 'unknown-key' && d.message.includes('naem'));
+    expect(warn).toBeDefined();
+    expect(warn!.message).toContain('Did you mean "name"');
+  });
+
+  it('lists valid fields when the unknown key has no near-miss', () => {
+    const diags = validateItem(item('atomStyle', { wibble: 1 }, 'directive'));
+    const warn = diags.find((d) => d.message.includes('wibble'));
+    expect(warn).toBeDefined();
+    expect(warn!.severity).toBe('warning');
+    expect(warn!.message).not.toContain('Did you mean');
+    expect(warn!.message).toContain('Known fields:');
+  });
+
+  it('a typo of a required field is reported both ways', () => {
+    // `directon` for `directions`: the field is still missing (error) AND the
+    // stray key is flagged with the fix (warning) — the warning is the clue.
+    const diags = validateItem(
+      item('orientation', { selector: 'p', directon: ['left'] }, 'constraint'),
+    );
+    expect(diags.some((d) => d.severity === 'error' && /Directions/.test(d.message))).toBe(true);
+    const warn = diags.find((d) => d.message.includes('directon'));
+    expect(warn!.severity).toBe('warning');
+    expect(warn!.message).toContain('Did you mean "directions"');
+  });
+
+  it('does not flag `hold` on a constraint (negation marker, not a field)', () => {
+    const diags = validateItem(
+      item('orientation', { selector: 'p', directions: ['left'], hold: 'never' }, 'constraint'),
+    );
+    expect(diags).toHaveLength(0);
+  });
+
+  it('does not flag inferredEdge deprecated inline line keys', () => {
+    // color/style/weight/highlight are still parsed (deprecation-warned
+    // elsewhere), so they are not "unknown".
+    const diags = validateItem(
+      item(
+        'inferredEdge',
+        { name: 'e', selector: 'r', color: '#f00', style: 'dashed', weight: 2 },
+        'directive',
+      ),
+    );
+    expect(diags.filter((d) => /Unknown field/.test(d.message))).toHaveLength(0);
+  });
+
+  it('does not flag `filter` on attribute/hideField (a real field)', () => {
+    const attr = validateItem(
+      item('attribute', { field: 'age', filter: 'x.isAdult' }, 'directive'),
+    );
+    expect(attr.filter((d) => /Unknown field/.test(d.message))).toHaveLength(0);
+    const hide = validateItem(
+      item('hideField', { field: 'age', filter: 'x.isAdult' }, 'directive'),
+    );
+    expect(hide.filter((d) => /Unknown field/.test(d.message))).toHaveLength(0);
+  });
+
+  it('leaves valid items (including nested blocks) clean', () => {
+    const diags = validateItem(
+      item(
+        'edgeStyle',
+        { field: 'next', lineStyle: { color: 'red', pattern: 'dashed' }, showLabel: true },
+        'directive',
+      ),
+    );
+    expect(diags).toHaveLength(0);
+  });
+});
+
+describe('diagnostics — warning taxonomy (code discriminator)', () => {
+  it('tags unknown-key warnings with code "unknown-key"', () => {
+    const diags = validateItem(item('icon', { path: 'a.svg', showLabel: true }, 'directive'));
+    const warn = diags.find((d) => d.message.includes('showLabel'));
+    expect(warn!.code).toBe('unknown-key');
+  });
+
+  it('emits a distinct "deprecated" diagnostic naming the replacement', () => {
+    const diags = validateItem(
+      item('atomColor', { value: '#f00', selector: 'Node' }, 'directive'),
+    );
+    const dep = diags.find((d) => d.code === 'deprecated');
+    expect(dep).toBeDefined();
+    expect(dep!.severity).toBe('warning');
+    expect(dep!.message).toContain('atomStyle');
+    // the deprecation notice is separate from any typo/unknown-key warning
+    expect(dep!.code).not.toBe('unknown-key');
+  });
+
+  it('does not deprecation-warn a current (non-deprecated) type', () => {
+    const diags = validateItem(
+      item('atomStyle', { selector: 'Node', fillStyle: { color: '#f00' } }, 'directive'),
+    );
+    expect(diags.some((d) => d.code === 'deprecated')).toBe(false);
   });
 });

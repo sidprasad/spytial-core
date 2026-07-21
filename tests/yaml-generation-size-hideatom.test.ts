@@ -164,10 +164,10 @@ describe('YAML Generation for Size and HideAtom', () => {
     const directives: DirectiveData[] = [
       {
         id: '1',
-        type: 'atomColor',
+        type: 'atomStyle',
         params: {
           selector: 'Type1',
-          value: '#FF0000'
+          fillStyle: { color: '#FF0000' }
         }
       },
       {
@@ -185,17 +185,17 @@ describe('YAML Generation for Size and HideAtom', () => {
     expect(yaml).toContain('orientation:');
     expect(yaml).toContain('size:');
     expect(yaml).toContain('directives:');
-    expect(yaml).toContain('atomColor:');
+    expect(yaml).toContain('atomStyle:');
     expect(yaml).toContain('hideAtom:');
     
     // Verify it can be parsed back correctly
     const parsed = parseLayoutSpec(yaml);
     expect(parsed.constraints.orientation.relative).toHaveLength(1);
     expect(parsed.directives.sizes).toHaveLength(1);
-    // atomColor now desugars into a border-preserving atomStyle rule (atomColors emptied).
+    // atomStyle sets the fill color directly (no legacy atomColor desugar).
     expect(parsed.directives.atomColors).toHaveLength(0);
     expect(parsed.directives.atomStyles).toHaveLength(1);
-    expect(parsed.directives.atomStyles[0].style.borderStyle?.color).toBe('#FF0000');
+    expect(parsed.directives.atomStyles[0].style.fillStyle?.color).toBe('#FF0000');
     expect(parsed.directives.hiddenAtoms).toHaveLength(1);
   });
 

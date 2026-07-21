@@ -68,14 +68,16 @@ describe('Field-based directives with selectors - Integration', () => {
   it('should apply edge colors only to specified atoms via selector', () => {
     const layoutSpecStr = `
 directives:
-  - edgeColor:
+  - edgeStyle:
       field: 'name'
-      value: 'red'
       selector: 'Person'
-  - edgeColor:
+      lineStyle:
+        color: 'red'
+  - edgeStyle:
       field: 'name'
-      value: 'blue'
       selector: 'Car'
+      lineStyle:
+        color: 'blue'
 `;
 
     const layoutSpec = parseLayoutSpec(layoutSpecStr);

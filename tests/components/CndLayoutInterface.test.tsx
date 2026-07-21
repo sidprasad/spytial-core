@@ -2,9 +2,32 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import '@testing-library/jest-dom'
+import { EditorView } from '@codemirror/view'
 import { CndLayoutInterface } from '../../src/components/CndLayoutInterface'
 import type { ConstraintData, DirectiveData } from '../../src/components/NoCodeView/interfaces'
 import { useState } from 'react'
+
+/*
+ * The Code view is a CodeMirror 6 editor (no `<textarea>`). These helpers drive
+ * it through its EditorView API: `cmText()` reads the doc, `setCmText()` fires
+ * the same onChange path as typing, `cmIsReadOnly()` reflects the disabled state.
+ */
+function cmView(): EditorView {
+  const el = document.querySelector('.cm-editor') as HTMLElement | null
+  const view = el ? EditorView.findFromDOM(el) : null
+  if (!view) throw new Error('CodeMirror editor not found')
+  return view
+}
+function cmText(): string {
+  return cmView().state.doc.toString()
+}
+function setCmText(text: string): void {
+  const view = cmView()
+  view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } })
+}
+function cmIsReadOnly(): boolean {
+  return document.querySelector('.cm-content')?.getAttribute('contenteditable') === 'false'
+}
 
 /*
  * These tests exercise the back-compat `CndLayoutInterface` wrapper, which is
@@ -99,31 +122,27 @@ describe('CndLayoutInterface Component', () => {
       expect(getBuilderTab()).toHaveAttribute('aria-selected', 'true')
     })
 
-    it('should display textarea empty by default', () => {
+    it('should display the editor empty by default', () => {
       render(<CndLayoutInterface {...defaultProps} />)
 
-      const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
-      expect(textarea.value).toBe('')
+      expect(cmText()).toBe('')
     })
 
-    it('should display yamlValue in textarea, if given', () => {
+    it('should display yamlValue in the editor, if given', () => {
       const testYaml = 'constraints:\n  - orientation: {}'
       render(<CndLayoutInterface {...defaultProps} yamlValue={testYaml} />)
 
-      const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
-      expect(textarea.value).toBe(testYaml)
+      expect(cmText()).toBe(testYaml)
     })
   })
 
   describe('User Interactions', () => {
-    it('should call onChange when textarea value changes', async () => {
-      const user = userEvent.setup()
+    it('should call onChange when the code text changes', () => {
       const mockOnChange = defaultProps.onChange
 
       render(<CndLayoutInterface {...defaultProps} />)
 
-      const textarea = screen.getByRole('textbox')
-      await user.type(textarea, 'test content')
+      setCmText('test content')
 
       expect(mockOnChange).toHaveBeenCalled()
     })
@@ -192,10 +211,7 @@ describe('CndLayoutInterface Component', () => {
       // Switch back to code and type invalid YAML; a parse diagnostic appears
       // (the "unapplied edits" badge) without clobbering the model.
       await user.click(getCodeTab())
-      const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
-      fireEvent.change(textarea, {
-        target: { value: 'constraints:\n  - orientation: {directions: [below]' },
-      })
+      setCmText('constraints:\n  - orientation: {directions: [below]')
       await waitFor(
         () => {
           expect(
@@ -206,16 +222,14 @@ describe('CndLayoutInterface Component', () => {
       )
     })
 
-    it('should not call onChange when disabled', async () => {
-      const user = userEvent.setup()
+    it('should not call onChange when disabled', () => {
       const mockOnChange = defaultProps.onChange
 
       render(<CndLayoutInterface {...defaultProps} disabled={true} />)
 
-      const textarea = screen.getByRole('textbox')
-      expect(textarea).toBeDisabled()
-
-      await user.type(textarea, 'test')
+      // A disabled editor is read-only and takes no user input, so onChange
+      // never fires.
+      expect(cmIsReadOnly()).toBe(true)
       expect(mockOnChange).not.toHaveBeenCalled()
     })
   })
@@ -255,8 +269,7 @@ describe('CndLayoutInterface Component', () => {
 
       render(<CndLayoutInterface {...defaultProps} yamlValue={largeYaml} />)
 
-      const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
-      expect(textarea.value).toBe(largeYaml)
+      expect(cmText()).toBe(largeYaml)
     })
 
     it('should render the builder with empty constraints and directives arrays', () => {
@@ -328,9 +341,8 @@ describe('CndLayoutInterface Component', () => {
 
       render(<TestWrapper />)
 
-      const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
-      fireEvent.change(textarea, { target: { value: testYaml } })
-      expect(textarea.value).toBe(testYaml)
+      setCmText(testYaml)
+      expect(cmText()).toBe(testYaml)
 
       // Switch to the builder; the parsed orientation constraint appears.
       await user.click(getBuilderTab())
@@ -341,8 +353,7 @@ describe('CndLayoutInterface Component', () => {
 
       // Switch back to the code view; the YAML is preserved.
       await user.click(getCodeTab())
-      const roundTripped = screen.getByRole('textbox') as HTMLTextAreaElement
-      expect(roundTripped.value).toContain('orientation')
+      expect(cmText()).toContain('orientation')
     })
 
     // REWRITTEN (was "Code View should update when No Code View changes"). The
@@ -364,8 +375,7 @@ describe('CndLayoutInterface Component', () => {
 
       // Switch to Code view; the YAML mentions the attribute directive.
       await user.click(getCodeTab())
-      const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
-      expect(textarea.value).toContain('attribute')
+      expect(cmText()).toContain('attribute')
 
       // Back to the builder; remove the directive via its overflow menu.
       await user.click(getBuilderTab())
@@ -383,8 +393,7 @@ describe('CndLayoutInterface Component', () => {
 
       // The regenerated YAML no longer mentions the attribute directive.
       await user.click(getCodeTab())
-      const newTextarea = screen.getByRole('textbox') as HTMLTextAreaElement
-      expect(newTextarea.value).not.toContain('attribute')
+      expect(cmText()).not.toContain('attribute')
     })
   })
 })
