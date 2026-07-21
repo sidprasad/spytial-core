@@ -11,7 +11,7 @@ import { SelectorArityError } from '../src/evaluators/interfaces';
  *
  * - Binary-position constraints (orientation, align, cyclic) should error when
  *   given a unary selector (e.g. "Person" instead of "Person->Person").
- * - Unary-position constraints/directives (hideAtom, size, atomColor, icon) should
+ * - Unary-position constraints/directives (hideAtom, size, atomStyle, icon) should
  *   error when given a binary selector.
  */
 
@@ -181,12 +181,13 @@ directives:
             expect(arityError!.errorMessage).toContain('unary');
         });
 
-        it('atomColor directive reports error for binary selector', () => {
+        it('atomStyle directive reports error for binary selector', () => {
             const spec = parseLayoutSpec(`
 directives:
-  - atomColor:
+  - atomStyle:
       selector: next
-      value: red
+      fillStyle:
+        color: red
 `);
             const instance = new JSONDataInstance(mixedData);
             const evaluator = createEvaluator(instance);
@@ -194,7 +195,6 @@ directives:
             const { selectorErrors } = layoutInstance.generateLayout(instance);
 
             expect(selectorErrors.length).toBeGreaterThan(0);
-            // atomColor desugars to atomStyle, so the arity check runs under that context now.
             const arityError = selectorErrors.find(e => e.selector === 'next' && e.context === 'atomStyle selector');
             expect(arityError).toBeDefined();
             expect(arityError!.errorMessage).toContain('unary');

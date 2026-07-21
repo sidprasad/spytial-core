@@ -214,10 +214,11 @@ constraints:
       name: nodes
       addEdge: fromgroup
 directives:
-  - edgeColor:
+  - edgeStyle:
       field: nodes
-      value: '#FF0000'
       filter: 'A -> B'
+      lineStyle:
+        color: '#FF0000'
 `);
       const instance = new JSONDataInstance(groupEdgeData);
       const evaluator = createEvaluator(instance);

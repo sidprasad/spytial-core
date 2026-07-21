@@ -308,8 +308,8 @@ describe('yaml-codec — determinism', () => {
     doc.updateItem(o.id, { params: { selector: 'parent', directions: ['left', 'below'] } });
     const s = doc.addItem('constraint', 'size');
     doc.updateItem(s.id, { params: { selector: 'Node', width: 120, height: 40 } });
-    const a = doc.addItem('directive', 'atomColor');
-    doc.updateItem(a.id, { params: { value: '#ff0000', selector: 'Root' } });
+    const a = doc.addItem('directive', 'atomStyle');
+    doc.updateItem(a.id, { params: { selector: 'Root', fillStyle: { color: '#ff0000' } } });
 
     const first = doc.toYaml();
     const second = SpecDocument.fromYaml(first).toYaml();
