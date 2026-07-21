@@ -10,7 +10,7 @@ import { createRoot } from 'react-dom/client';
 import { CndLayoutInterface } from '../src/components/CndLayoutInterface';
 import { InstanceBuilder } from '../src/components/InstanceBuilder/InstanceBuilder';
 import { ConstraintData, DirectiveData } from '../src/components/NoCodeView/interfaces';
-import { generateLayoutSpecYaml } from '../src/components/NoCodeView';
+import { generateLayoutSpecYaml, parseLayoutSpecToData } from '../src/components/NoCodeView';
 import { createEmptyAlloyDataInstance } from '../src/data-instance/alloy-data-instance';
 import { IInputDataInstance } from '../src/data-instance/interfaces';
 import { ErrorMessageContainer, ErrorStateManager, SelectorErrorDetail } from '../src/components/ErrorMessageModal/index'
@@ -95,6 +95,7 @@ export class CndLayoutStateManager {
   private directives: DirectiveData[] = [];
   private yamlValue: string = '';
   private isNoCodeView: boolean = false;
+  private yamlChangeCallbacks: ((yamlValue: string) => void)[] = [];
 
   public constructor() {}
 
@@ -152,6 +153,43 @@ export class CndLayoutStateManager {
    */
   public setYamlValue(yamlValue: string): void {
     this.yamlValue = yamlValue;
+  }
+
+  /**
+   * Push a new YAML spec from OUTSIDE the mounted editor (host code such as a
+   * "suggest layout" feature). Unlike `setYamlValue` — the editor's own outward
+   * sync, which stays silent so edits don't echo back into the editor — this
+   * notifies `onYamlValueChange` subscribers. A mounted editor picks the spec
+   * up live through the controlled SpecEditor's external-replace path: no
+   * remount, view/scroll preserved, and the change lands as one undo step.
+   * @param yamlValue - New YAML string
+   * @public
+   */
+  public updateYamlValue(yamlValue: string): void {
+    this.yamlValue = yamlValue;
+    this.yamlChangeCallbacks.forEach((callback) => {
+      try {
+        callback(yamlValue);
+      } catch (error) {
+        console.error('Error in YAML change callback:', error);
+      }
+    });
+  }
+
+  /**
+   * Register a callback for external YAML pushes (see `updateYamlValue`).
+   * Mirrors `InstanceStateManager.onInstanceChange`.
+   * @param callback - Function to call when a spec is pushed externally
+   * @returns Unsubscribe function that removes the callback
+   * @public
+   */
+  public onYamlValueChange(callback: (yamlValue: string) => void): () => void {
+    this.yamlChangeCallbacks.push(callback);
+    return () => {
+      this.yamlChangeCallbacks = this.yamlChangeCallbacks.filter(
+        (cb) => cb !== callback,
+      );
+    };
   }
 
   /**
@@ -482,6 +520,30 @@ const CndLayoutInterfaceWrapper: React.FC<{ config?: CndLayoutMountConfig }> = (
     [],
   );
 
+  // Inbound spec pushes (DataAPI.updateSpec / window.updateSpecFromReact):
+  // route into local state so the controlled SpecEditor takes the new value
+  // through its external-replace path — no remount, one undo step. The
+  // deprecated constraint/directive arrays are best-effort re-synced too, so
+  // legacy readers (getCurrentCndSpec in No-Code view) don't go stale.
+  useEffect(
+    () =>
+      stateManager.onYamlValueChange((yamlValue) => {
+        setYamlValue(yamlValue);
+        try {
+          const parsed = parseLayoutSpecToData(yamlValue);
+          setConstraints(parsed.constraints);
+          setDirectives(parsed.directives);
+        } catch {
+          // Invalid YAML: leave the legacy arrays untouched; SpecEditor
+          // surfaces the parse error in the code view.
+        }
+        window.dispatchEvent(
+          new CustomEvent('cnd-spec-changed', { detail: yamlValue }),
+        );
+      }),
+    [stateManager],
+  );
+
   // Initialize state manager with config on mount
   useEffect(() => {
     if (config) {
@@ -783,12 +845,19 @@ const ReplWithVisualizationWrapper: React.FC<{ config?: ReplWithVisualizationMou
  * 
  * @public
  */
+/**
+ * React roots created by `mountCndLayoutInterface`, keyed by container id, so
+ * `unmountCndLayoutInterface` can tear them down and a re-mount into the same
+ * container replaces the previous root instead of leaking it.
+ */
+const cndLayoutRoots = new Map<string, ReturnType<typeof createRoot>>();
+
 export function mountCndLayoutInterface(
   containerId: string = 'webcola-cnd-container',
   config?: CndLayoutMountConfig
 ): boolean {
   const container = document.getElementById(containerId);
-  
+
   if (!container) {
     console.error(`CnD Layout Interface: Container '${containerId}' not found`);
     return false;
@@ -805,7 +874,10 @@ export function mountCndLayoutInterface(
   }
 
   try {
+    // Mounting into a container that already has a live root replaces it.
+    unmountCndLayoutInterface(containerId);
     const root = createRoot(container);
+    cndLayoutRoots.set(containerId, root);
     root.render(<CndLayoutInterfaceWrapper config={config} />);
 
     if (config) {
@@ -823,6 +895,32 @@ export function mountCndLayoutInterface(
     console.error('Failed to mount CnD Layout Interface:', error);
     return false;
   }
+}
+
+/**
+ * Unmount a CnD Layout Interface previously mounted with
+ * `mountCndLayoutInterface`, releasing its React root and state-manager
+ * subscriptions. Hosts that re-key or tear down their embedding should call
+ * this instead of abandoning the root.
+ *
+ * @param containerId - DOM element ID the interface was mounted into
+ * @returns True if a mounted root existed for the container id
+ * @public
+ */
+export function unmountCndLayoutInterface(
+  containerId: string = 'webcola-cnd-container'
+): boolean {
+  const root = cndLayoutRoots.get(containerId);
+  if (!root) {
+    return false;
+  }
+  cndLayoutRoots.delete(containerId);
+  try {
+    root.unmount();
+  } catch (error) {
+    console.error('Failed to unmount CnD Layout Interface:', error);
+  }
+  return true;
 }
 
 /**
@@ -1740,6 +1838,21 @@ export const DataAPI = {
   },
 
   /**
+   * Push a new CND spec into the mounted layout editor programmatically.
+   * The editor replaces its document in place — no remount, Builder/Code view
+   * and scroll preserved, and the change lands in the editor's undo history.
+   * Mirror of `updateInstance` for the spec side.
+   * @param yamlValue - Layout-spec YAML (constraints/directives)
+   */
+  updateSpec: (yamlValue: string): void => {
+    try {
+      CndLayoutStateManager.getInstance().updateYamlValue(yamlValue);
+    } catch (error) {
+      console.error('Error updating CND spec:', error);
+    }
+  },
+
+  /**
    * Get current Pyret data instance from PyretReplInterface component
    * @returns Current Pyret data instance or undefined if not available
    */
@@ -1824,7 +1937,8 @@ export const DataAPI = {
 export const CnDCore = {
   // Mounting functions
   mountCndLayoutInterface,
-  mountInstanceBuilder, 
+  unmountCndLayoutInterface,
+  mountInstanceBuilder,
   mountErrorMessageModal,
   mountAllComponents,
   mountEvaluatorRepl,
@@ -1879,6 +1993,7 @@ if (typeof window !== 'undefined') {
   
   // Legacy compatibility - expose individual functions
   globalWindow.mountCndLayoutInterface = mountCndLayoutInterface;
+  globalWindow.unmountCndLayoutInterface = unmountCndLayoutInterface;
   globalWindow.mountInstanceBuilder = mountInstanceBuilder;
   globalWindow.mountErrorMessageModal = mountErrorMessageModal;
   globalWindow.mountIntegratedComponents = mountAllComponents;
@@ -1901,6 +2016,9 @@ if (typeof window !== 'undefined') {
   // Push a freshly parsed data instance to the shared state so the spec
   // editor picks up domain awareness (dropdowns, completions, warnings).
   globalWindow.updateInstanceFromReact = DataAPI.updateInstance;
+  // Push a new spec into the mounted editor (e.g. a host's "suggest layout"
+  // feature) without remounting it.
+  globalWindow.updateSpecFromReact = DataAPI.updateSpec;
   
   // Pyret-specific data functions for legacy compatibility
   globalWindow.getCurrentPyretInstanceFromReact = DataAPI.getCurrentPyretInstance;
