@@ -25,6 +25,7 @@ function normalizeState(state: Readonly<SpecDocumentState>): unknown {
     constraints: state.constraints.map(normalizeItem),
     directives: state.directives.map(normalizeItem),
     headerComment: state.headerComment ?? null,
+    otherSections: state.otherSections ?? null,
   };
 }
 
@@ -298,6 +299,70 @@ describe('yaml-codec — unknown type preservation', () => {
     const state = parseYamlToState(yaml);
     expect(state.directives[0].type).toBe('wibble');
     expect(state.directives[0].raw).toEqual({ wibble: { x: 9 } });
+  });
+});
+
+describe('yaml-codec — unknown top-level section preservation', () => {
+  const FULL_CND = `projections:
+  - sig: State
+    orderBy: next
+
+constraints:
+  - orientation:
+      selector: left
+      directions:
+        - left
+
+temporal:
+  policy: stability
+`;
+
+  it('preserves projections/temporal blocks across a round trip', () => {
+    const state = parseYamlToState(FULL_CND);
+    expect(state.otherSections).toEqual([
+      { key: 'projections', value: [{ sig: 'State', orderBy: 'next' }] },
+      { key: 'temporal', value: { policy: 'stability' } },
+    ]);
+
+    const out = serializeStateToYaml(state);
+    const reparsed = parseYamlToState(out);
+    expect(normalizeState(reparsed)).toEqual(normalizeState(state));
+    // The constraint section still round-trips alongside.
+    expect(reparsed.constraints).toHaveLength(1);
+  });
+
+  it('emits preserved sections even when there are no constraints/directives', () => {
+    const state = parseYamlToState('temporal:\n  policy: stability\n');
+    const out = serializeStateToYaml(state);
+    expect(parseYamlToState(out).otherSections).toEqual([
+      { key: 'temporal', value: { policy: 'stability' } },
+    ]);
+  });
+
+  it('keeps preserved sections through document mutations and undo', () => {
+    const doc = SpecDocument.fromYaml(FULL_CND);
+    const added = doc.addItem('directive', 'flag');
+    doc.updateItem(added.id, { params: { flag: 'hideDisconnectedBuiltIns' } });
+    expect(doc.toYaml()).toContain('projections:');
+    expect(doc.toYaml()).toContain('temporal:');
+
+    doc.undo();
+    doc.undo();
+    expect(doc.toYaml()).toContain('projections:');
+    expect(doc.getState().otherSections).toHaveLength(2);
+  });
+
+  it('replaceFromYaml swaps preserved sections with the new document', () => {
+    const doc = SpecDocument.fromYaml(FULL_CND);
+    doc.replaceFromYaml('directives:\n  - flag: hideDisconnectedBuiltIns\n');
+    expect(doc.getState().otherSections).toBeUndefined();
+    expect(doc.toYaml()).not.toContain('projections:');
+  });
+
+  it('is deterministic across repeated round trips', () => {
+    const first = serializeStateToYaml(parseYamlToState(FULL_CND));
+    const second = serializeStateToYaml(parseYamlToState(first));
+    expect(second).toBe(first);
   });
 });
 

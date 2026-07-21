@@ -363,6 +363,16 @@ export function parseYamlToState(yamlStr: string): SpecDocumentState {
   if (headerComment) {
     state.headerComment = headerComment;
   }
+
+  // Preserve top-level sections the editor doesn't interpret (a host's
+  // `projections:`/`temporal:` blocks, …) in document order, so a round trip
+  // through the editor never deletes them.
+  const otherSections = Object.entries(root)
+    .filter(([key]) => key !== 'constraints' && key !== 'directives')
+    .map(([key, value]) => ({ key, value }));
+  if (otherSections.length > 0) {
+    state.otherSections = otherSections;
+  }
   return state;
 }
 
@@ -507,6 +517,18 @@ export function serializeStateToYaml(state: SpecDocumentState): string {
       }
       lines.push(...emitItemLines(item));
     }
+  }
+
+  // Preserved uninterpreted sections come last, each dumped whole. Emission is
+  // semantic, not byte-for-byte — same contract as unknown item nodes.
+  for (const section of state.otherSections ?? []) {
+    if (lines.length > 0) {
+      lines.push('');
+    }
+    const dumped = jsyaml
+      .dump({ [section.key]: section.value }, { lineWidth: -1, sortKeys: false })
+      .trimEnd();
+    lines.push(...dumped.split('\n'));
   }
 
   return lines.length > 0 ? `${lines.join('\n')}\n` : '';

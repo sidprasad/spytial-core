@@ -119,9 +119,24 @@ export interface ItemDefinition {
 
 // ---- document state ----
 
+/** One preserved top-level YAML section the editor does not interpret. */
+export interface OtherSection {
+  /** top-level YAML key, e.g. 'projections' or 'temporal' */
+  key: string;
+  /** the section's parsed value, re-emitted verbatim on serialize */
+  value: unknown;
+}
+
 export interface SpecDocumentState {
   constraints: SpecItem[];
   directives: SpecItem[];
   /** comments/blank-line structure not attached to an item, preserved on serialize */
   headerComment?: string;
+  /**
+   * Top-level sections other than `constraints:`/`directives:` (e.g. a host's
+   * `projections:`/`temporal:` blocks), preserved in document order and
+   * re-emitted after the known sections. The editor never edits these — it
+   * just doesn't delete content it doesn't understand.
+   */
+  otherSections?: OtherSection[];
 }
