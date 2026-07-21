@@ -21,6 +21,14 @@ export interface SpecItem {
   comment?: string;
   /** present iff type unknown to registry; re-emitted verbatim */
   raw?: unknown;
+  /**
+   * The raw inner YAML body this item parsed from, when a custom `fromYamlNode`
+   * (group / flag) ingested it. Curated ingestion copies only recognized keys
+   * into `params`, so this preserves the rest — enabling the unknown-key check
+   * to still flag typos on those types. Not serialized; absent for
+   * builder-built items (which only ever hold known fields).
+   */
+  sourceBody?: Record<string, unknown>;
 }
 
 // ---- field model ----

@@ -122,6 +122,7 @@ function unknownKeyDiagnostic(
   suggestable: readonly string[],
   context: string,
   itemId: string,
+  fieldKey: string = key,
 ): Diagnostic {
   const suggestion = closestKey(key, suggestable);
   const hint = suggestion
@@ -134,7 +135,7 @@ function unknownKeyDiagnostic(
     code: 'unknown-key',
     message: `Unknown field "${key}" in ${context}.${hint}`,
     itemId,
-    fieldKey: key,
+    fieldKey,
     source: 'structure',
   };
 }
@@ -155,7 +156,13 @@ function checkUnknownKeys(item: SpecItem, def: ItemDefinition): Diagnostic[] {
   }
   for (const k of EXTRA_ACCEPTED_KEYS_BY_TYPE[item.type] ?? []) allowed.add(k);
 
-  for (const key of Object.keys(item.params)) {
+  // Prefer the raw parsed body when present: a custom `fromYamlNode` (group /
+  // flag) copies only recognized keys into `params`, so a typo like `naem` would
+  // otherwise be dropped before it reaches this check. `sourceBody` preserves the
+  // original keys for exactly this; it falls back to `params` for builder-built
+  // items (which only ever hold known fields).
+  const topLevel = isRecord(item.sourceBody) ? item.sourceBody : item.params;
+  for (const key of Object.keys(topLevel)) {
     if (allowed.has(key)) continue;
     out.push(unknownKeyDiagnostic(key, fieldKeys, def.label, item.id));
   }
@@ -168,7 +175,13 @@ function checkUnknownKeys(item: SpecItem, def: ItemDefinition): Diagnostic[] {
     const allowedChildren = new Set(childKeys);
     for (const key of Object.keys(block)) {
       if (allowedChildren.has(key)) continue;
-      out.push(unknownKeyDiagnostic(key, childKeys, field.label, item.id));
+      // Route with a parent-qualified key (`fillStyle.width`) so the diagnostic
+      // can't collide with a same-named field in a sibling block (e.g.
+      // `borderStyle.width`) — the renderer filters nested diagnostics by an
+      // exact `fieldKey`. The message still names the child key and its block.
+      out.push(
+        unknownKeyDiagnostic(key, childKeys, field.label, item.id, `${field.key}.${key}`),
+      );
     }
   }
 

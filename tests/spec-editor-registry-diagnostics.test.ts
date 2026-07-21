@@ -5,6 +5,8 @@ import {
   getDefinitions,
   defaultParamsFor,
   validateItem,
+  validateState,
+  parseYamlToState,
   type SpecItem,
 } from '../src/spec-editor';
 import { newId } from '../src/spec-editor';
@@ -175,6 +177,28 @@ describe('diagnostics — unknown keys (typo detection)', () => {
     expect(warn!.severity).toBe('warning');
     expect(warn!.message).toContain('Line style');
     expect(warn!.message).toContain('Did you mean "color"');
+  });
+
+  it('routes a nested unknown key with a parent-qualified fieldKey (no sibling collision)', () => {
+    // `width` is valid in borderStyle but not fillStyle; the diagnostic must not
+    // attach to borderStyle.width, so its fieldKey is parent-qualified.
+    const diags = validateItem(item('atomStyle', { fillStyle: { width: 2 } }, 'directive'));
+    const warn = diags.find((d) => d.message.includes('width'));
+    expect(warn).toBeDefined();
+    expect(warn!.code).toBe('unknown-key');
+    expect(warn!.fieldKey).toBe('fillStyle.width');
+  });
+
+  it('flags a typo on a group (custom fromYamlNode) via the raw source body', () => {
+    // groupselector ingests through fromYamlNode, which copies only known keys
+    // into params — so without the raw body preserved, `naem` would vanish.
+    const state = parseYamlToState(
+      'constraints:\n  - group:\n      selector: p\n      name: c\n      naem: cluster\n',
+    );
+    const diags = validateState(state);
+    const warn = diags.find((d) => d.code === 'unknown-key' && d.message.includes('naem'));
+    expect(warn).toBeDefined();
+    expect(warn!.message).toContain('Did you mean "name"');
   });
 
   it('lists valid fields when the unknown key has no near-miss', () => {
