@@ -1280,6 +1280,21 @@
   padding: 0.4em 0.6em;
 }
 
+/* CodeMirror host: the editor renders its own themed chrome (via EditorView.theme
+   in CodeView.tsx, driven by the same --spytial-ed-* vars); this container only
+   sizes and caps it. The .spytial-ed-code-editor / -gutter / -textarea / -mirror
+   rules below are retained for the legacy textarea CodeView still exported from
+   the barrel. */
+.spytial-ed-code-cm {
+  display: block;
+}
+.spytial-ed-code-cm .cm-editor {
+  max-height: 32rem;
+}
+.spytial-ed-code-cm--disabled {
+  opacity: 0.65;
+}
+
 .spytial-ed-code-editor {
   display: flex;
   border: 1px solid var(--spytial-ed-border, #d9d2c0);

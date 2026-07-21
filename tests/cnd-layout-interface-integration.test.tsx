@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import '@testing-library/jest-dom'
-import { render, within, screen, act, waitFor, fireEvent, cleanup } from '@testing-library/react'
+import { render, within, screen, act, waitFor, cleanup } from '@testing-library/react'
+import { EditorView } from '@codemirror/view'
 import {
   mountCndLayoutInterface,
   CndLayoutStateManager,
@@ -78,20 +79,27 @@ directives:
     )
   }
 
-  function getTextarea(): HTMLTextAreaElement {
+  function getCmView(): EditorView {
     const testContainer = screen.getByTestId(
       'test-cnd-layout-interface',
     ) as HTMLElement
-    return within(testContainer).getByRole('textbox') as HTMLTextAreaElement
+    const el = testContainer.querySelector('.cm-editor') as HTMLElement | null
+    const view = el ? EditorView.findFromDOM(el) : null
+    if (!view) throw new Error('CodeMirror editor not found')
+    return view
   }
 
   async function typeYaml(yaml: string) {
-    // Type the YAML into the Code View (the textarea is controlled, so the host
-    // state must echo it back — fireEvent.change drives the controlled input).
-    const textarea = getTextarea()
+    // Drive the CodeMirror code view (no <textarea>): dispatch a document
+    // replacement, which fires the same onChange path as typing. Wrap it in
+    // act() so the resulting onChange → setState → effect chain (which syncs the
+    // host's state manager) flushes before the caller reads the spec back.
+    await act(async () => {
+      const view = getCmView()
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: yaml } })
+    })
     await waitFor(() => {
-      fireEvent.change(textarea, { target: { value: yaml } })
-      expect(textarea.value).toBe(yaml)
+      expect(getCmView().state.doc.toString()).toBe(yaml)
     })
   }
 

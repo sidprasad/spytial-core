@@ -1,17 +1,23 @@
 import { describe, vi, expect, it } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { render, screen } from '@testing-library/react'
 import '@testing-library/jest-dom'
+import { EditorView } from '@codemirror/view'
 
 /*
- * The legacy `NoCodeView/CodeView` React component was removed in the
- * spec-editor redesign and replaced by the schema-driven `src/spec-editor/ui/
- * CodeView`. This file is rewritten to test the NEW CodeView, preserving the
- * original rendering + keyboard-focus intent (a controlled YAML textarea) while
- * dropping the old prop surface (constraints/directives/handleTextareaChange).
+ * CodeView is a CodeMirror 6 editor (it replaced the textarea + highlight-mirror
+ * overlay). CodeMirror owns the text rendering, so these tests drive it through
+ * its EditorView API rather than a `<textarea>` value.
  */
 
 import { CodeView } from '../../src/spec-editor/ui/CodeView'
+
+/** The EditorView backing the rendered CodeView. */
+function cmView(container: HTMLElement): EditorView {
+  const el = container.querySelector('.cm-editor') as HTMLElement | null
+  const view = el ? EditorView.findFromDOM(el) : null
+  if (!view) throw new Error('CodeMirror editor not found')
+  return view
+}
 
 describe('CodeView Component Tests', () => {
   const defaultProps = {
@@ -20,71 +26,55 @@ describe('CodeView Component Tests', () => {
   }
 
   describe('Rendering', () => {
-    it('should render a textarea for YAML input', () => {
-      render(<CodeView {...defaultProps} />)
-      const textarea = screen.getByRole('textbox')
-      expect(textarea).toBeInTheDocument()
-      expect(textarea).toHaveValue('')
+    it('renders a CodeMirror editor', () => {
+      const { container } = render(<CodeView {...defaultProps} />)
+      expect(container.querySelector('.cm-editor')).toBeInTheDocument()
+      expect(cmView(container).state.doc.toString()).toBe('')
     })
 
-    it('should render with an initial YAML value', () => {
+    it('shows the initial YAML value', () => {
       const initialYaml = 'constraints:\n  - orientation: {}'
-      render(<CodeView {...defaultProps} value={initialYaml} />)
-      const textarea = screen.getByRole('textbox')
-      expect(textarea).toHaveValue(initialYaml)
+      const { container } = render(<CodeView {...defaultProps} value={initialYaml} />)
+      expect(cmView(container).state.doc.toString()).toBe(initialYaml)
     })
 
-    it('renders a highlight mirror whose text matches the value exactly', () => {
-      // The metrics contract behind the overlay: the mirror must contain the
-      // textarea's text verbatim (plus the trailing newline that preserves the
-      // last line's height), with spec keywords classed for highlighting.
-      const yaml = 'constraints:\n  - orientation: {selector: left}'
-      render(<CodeView {...defaultProps} value={yaml} />)
-      const mirror = document.querySelector('.spytial-ed-code-mirror')!
-      expect(mirror).toBeInTheDocument()
-      expect(mirror.textContent).toBe(`${yaml}\n`)
-      expect(
-        mirror.querySelector('.spytial-ed-syn-keyword')?.textContent,
-      ).toBe('constraints')
+    it('renders a line-number gutter by default', () => {
+      const { container } = render(<CodeView {...defaultProps} value={'a\nb\nc'} />)
+      expect(container.querySelector('.cm-lineNumbers')).toBeInTheDocument()
     })
 
-    it('syntaxHighlighting={false} kills the mirror and shows plain text', () => {
-      // The escape hatch for hosts where the overlay misaligns.
-      render(
-        <CodeView {...defaultProps} value="constraints: []" syntaxHighlighting={false} />,
+    it('omits the line-number gutter when showLineNumbers={false}', () => {
+      const { container } = render(
+        <CodeView {...defaultProps} value={'a\nb'} showLineNumbers={false} />,
       )
-      expect(document.querySelector('.spytial-ed-code-mirror')).toBeNull()
-      expect(screen.getByRole('textbox').className).toContain(
-        'spytial-ed-code-textarea--plain',
-      )
+      expect(container.querySelector('.cm-lineNumbers')).toBeNull()
     })
   })
 
   describe('Interactions', () => {
     it('should fire onChange with the edited text', () => {
       const onChange = vi.fn()
-      render(<CodeView {...defaultProps} onChange={onChange} />)
-      const textarea = screen.getByRole('textbox')
-      fireEvent.change(textarea, { target: { value: 'directives:\n  - flag: foo' } })
+      const { container } = render(<CodeView {...defaultProps} onChange={onChange} />)
+      cmView(container).dispatch({
+        changes: { from: 0, insert: 'directives:\n  - flag: foo' },
+      })
       expect(onChange).toHaveBeenCalledWith('directives:\n  - flag: foo')
     })
 
     it('should not be editable when disabled', () => {
-      render(<CodeView {...defaultProps} disabled />)
-      expect(screen.getByRole('textbox')).toBeDisabled()
+      const { container } = render(<CodeView {...defaultProps} disabled />)
+      const content = container.querySelector('.cm-content')
+      expect(content?.getAttribute('contenteditable')).toBe('false')
     })
   })
 
   describe('Accessibility', () => {
-    it('should support keyboard navigation', async () => {
-      const user = userEvent.setup()
-      render(<CodeView {...defaultProps} />)
-
-      const textarea = screen.getByRole('textbox')
-
-      // Should be able to focus the textarea with the keyboard.
-      await user.tab()
-      expect(textarea).toHaveFocus()
+    it('exposes a focusable, labelled text input', () => {
+      const { container } = render(<CodeView {...defaultProps} />)
+      const content = container.querySelector('.cm-content') as HTMLElement
+      expect(content.getAttribute('aria-label')).toBe('Layout specification YAML')
+      content.focus()
+      expect(document.activeElement).toBe(content)
     })
 
     it('should surface parse diagnostics with the unapplied-edits notice', () => {
@@ -94,7 +84,15 @@ describe('CodeView Component Tests', () => {
           value="constraints: ["
           hasUnappliedEdits
           diagnostics={[
-            { severity: 'error', message: 'bad yaml', source: 'yaml', line: 1, column: 14 },
+            {
+              severity: 'error',
+              message: 'bad yaml',
+              source: 'yaml',
+              line: 1,
+              column: 14,
+              from: 13,
+              to: 14,
+            },
           ]}
         />,
       )
