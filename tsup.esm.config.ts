@@ -18,7 +18,10 @@ import { defineConfig } from 'tsup'
 // the consumer's bundler dedupes + tree-shakes d3/lodash/webcola/etc. rather
 // than inlining a second copy — the opposite of the IIFE's `noExternal` list.
 export default defineConfig({
-  entry: { index: 'src/index.ts' },
+  // explorer shares chunks with index (splitting: true), so importing both
+  // 'spytial-core' and 'spytial-core/explorer' never duplicates the
+  // WebColaCnDGraph class the explorer extends.
+  entry: { index: 'src/index.ts', explorer: 'src/explorer.ts' },
   format: ['esm'],
   outDir: 'dist/esm',
   // tsup's dts hard-fails on the pre-existing baseline type errors (e.g. the

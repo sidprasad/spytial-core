@@ -175,7 +175,7 @@ These register themselves automatically when the bundle loads in a browser.
 | Tag                     | Class                | Role                                                                          |
 |-------------------------|----------------------|-------------------------------------------------------------------------------|
 | `<webcola-cnd-graph>`   | `WebColaCnDGraph`    | The default visual renderer. Methods: `renderLayout`, `generateSequenceLayouts`, `getLayoutState`, `getNodePositions`, `clear`, `highlightNodes`, `highlightNodePairs`, `clearNodeHighlights`, `getAllRelations`, `highlightRelation`, `clearHighlightRelation`. |
-| `<spytial-explorer>`    | `SpytialExplorer`    | `WebColaCnDGraph` + Data Navigator overlay, must/can spatial REPL, datum REPL, group navigation, modal spatial annotations. Adds `enableAccessibility(layout, validator, dataEvaluator?)`. |
+| `<spytial-explorer>`    | `SpytialExplorer`    | `WebColaCnDGraph` + Data Navigator overlay, must/can spatial REPL, datum REPL, group navigation, modal spatial annotations. Adds `enableAccessibility(layout, validator, dataEvaluator?)`. Opt-in since 4.0.0: `spytial-core/explorer` (npm) or `spytial-core-explorer.global.js` (CDN). |
 | `<structured-input-graph>` | `StructuredInputGraph` | Form-like editor for building specs and instances. |
 
 ---
@@ -272,10 +272,12 @@ Types: `HeadlessLayoutOptions`, `HeadlessLayoutResult`, `EdgeKey`, `ChangeEmphas
 | `spytial-core` (default entry)                                      | NPM consumers (Vite, Webpack, esbuild, Node). Real ESM — tree-shakable, no React/SQL weight. |
 | `spytial-core/react`                                                | The React components (error modal, `InstanceBuilder`, REPLs, projections, `CndLayoutInterface`). `react`/`react-dom` are optional peer deps. Styles: `spytial-core/react.css`. |
 | `spytial-core/sql-evaluator`                                        | `SQLEvaluator` (AlaSQL-backed). `alasql` is an optional peer dep. |
+| `spytial-core/explorer`                                             | `<spytial-explorer>` a11y element (registers itself on import). `data-navigator` is an optional peer dep. |
 | `spytial-core/alloy-instance`                                       | Standalone Alloy XML parser. |
 | `spytial-core/evaluator`                                            | Self-contained headless evaluator (bundles SGQ). |
 | `dist/browser/spytial-core-complete.global.js` (CDN)                | Self-contained browser bundle (engine + custom elements; no React components or SQL since 4.0.0). |
 | `dist/browser/spytial-core-sql.global.js` (CDN, opt-in)             | Adds `SQLEvaluator` back onto the `spytialcore` global for pages using SQL selectors. Load after the main bundle. |
+| `dist/browser/spytial-core-explorer.global.js` (CDN, opt-in)        | Registers `<spytial-explorer>` and adds `SpytialExplorer` onto the `spytialcore` global. Load after the main bundle. |
 | `dist/components/react-component-integration.global.js` + `.css` (CDN) | React component bundle + `window.mount*` API (`mountErrorMessageModal`, `mountCndLayoutInterface`, …). |
 
 CDN URLs:

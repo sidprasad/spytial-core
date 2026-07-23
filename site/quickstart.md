@@ -114,9 +114,11 @@ const layout = setupLayout(spec, instance, evaluator);
 
 ## Accessibility variant
 
-Swap `<webcola-cnd-graph>` for `<spytial-explorer>` to add keyboard navigation, screen-reader announcements, and the must/can spatial REPL:
+Swap `<webcola-cnd-graph>` for `<spytial-explorer>` to add keyboard navigation, screen-reader announcements, and the must/can spatial REPL. Since 4.0.0 the explorer is opt-in: load its bundle after the main one (npm: `import 'spytial-core/explorer'`, which registers the element):
 
 ```html
+<script src="https://cdn.jsdelivr.net/npm/spytial-core/dist/browser/spytial-core-explorer.global.js"></script>
+
 <spytial-explorer id="g" width="800" height="500"></spytial-explorer>
 <script>
   const explorer = document.getElementById('g');

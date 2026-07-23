@@ -164,6 +164,7 @@
 &lt;script src=<span class="string">"d3.v4.min.js"</span>&gt;&lt;/script&gt;
 &lt;script src=<span class="string">"cola.js"</span>&gt;&lt;/script&gt;
 &lt;script src=<span class="string">"spytial-core-complete.global.js"</span>&gt;&lt;/script&gt;
+&lt;script src=<span class="string">"spytial-core-explorer.global.js"</span>&gt;&lt;/script&gt;
 
 <span class="comment">&lt;!-- 2. Drop in the element (same attributes as webcola-cnd-graph) --&gt;</span>
 &lt;spytial-explorer id=<span class="string">"explorer"</span> width=<span class="string">"800"</span> height=<span class="string">"500"</span>&gt;&lt;/spytial-explorer&gt;
@@ -187,10 +188,12 @@
         </details>
     </div>
 
-    <!-- Load the library bundle (registers <spytial-explorer> automatically) -->
+    <!-- Load the library bundle, then the explorer bundle (4.0.0+: the
+         explorer is opt-in and registers <spytial-explorer> itself) -->
     <script src="https://d3js.org/d3.v4.min.js"></script>
     <script src="../vendor/cola.js"></script>
     <script src="../dist/browser/spytial-core-complete.global.js"></script>
+    <script src="../dist/browser/spytial-core-explorer.global.js"></script>
 
     <script>
         // BST example data

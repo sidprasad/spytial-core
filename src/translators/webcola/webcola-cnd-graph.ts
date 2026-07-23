@@ -11036,7 +11036,11 @@ export class WebColaCnDGraph extends HTMLElementBase {
 
 }
 
-// Register the custom element only in browser environments
-if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined') {
+// Register the custom element only in browser environments. The get() guard
+// makes registration idempotent: this module is inlined into more than one
+// bundle (main global + explorer global), and a second unguarded define on a
+// page loading both throws NotSupportedError.
+if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined'
+    && !customElements.get('webcola-cnd-graph')) {
   customElements.define('webcola-cnd-graph', WebColaCnDGraph);
 }

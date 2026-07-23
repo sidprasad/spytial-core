@@ -331,9 +331,12 @@
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-typescript.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-bash.min.js"></script>
 
-  <!-- spytial-core bundle: registers <webcola-cnd-graph> and <spytial-explorer> custom elements. -->
-  <script src="https://cdn.jsdelivr.net/npm/spytial-core@2.6.2/dist/browser/spytial-core-complete.global.js"></script>
+  <!-- spytial-core bundle: registers <webcola-cnd-graph>. NOTE: @4 URLs resolve
+       once 4.0.0 is published to npm — deploy this page after publishing. -->
+  <script src="https://cdn.jsdelivr.net/npm/spytial-core@4/dist/browser/spytial-core-complete.global.js"></script>
+  <!-- Opt-in a11y explorer (4.0.0+): registers <spytial-explorer>. -->
+  <script src="https://cdn.jsdelivr.net/npm/spytial-core@4/dist/browser/spytial-core-explorer.global.js"></script>
   <!-- React component integration: exposes window.mountErrorMessageModal / showPositionalError / showHiddenNodeConflict / clearAllErrors. -->
-  <script src="https://cdn.jsdelivr.net/npm/spytial-core@2.6.2/dist/components/react-component-integration.global.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/spytial-core@4/dist/components/react-component-integration.global.js"></script>
 </body>
 </html>

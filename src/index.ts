@@ -45,7 +45,10 @@ export { ForgeEvaluator, WrappedForgeEvaluator } from './evaluators/data/forge-e
 // 'spytial-core/sql-evaluator' (npm) or load spytial-core-sql.global.js (CDN).
 export { WebColaTranslator } from './translators';
 export { AccessibleTranslator, buildSpatialNavigationMap } from './translators';
-export { SpytialExplorer } from './components/spytial-explorer';
+// SpytialExplorer (the a11y explorer element) moved out of the default entry
+// in 4.0.0 while it matures — it carries the data-navigator dependency. Import
+// it from 'spytial-core/explorer' (npm, auto-registers the element) or load
+// spytial-core-explorer.global.js after the main bundle (CDN).
 export { StructuredInputGraph } from './translators';
 export {
   ignoreHistory,
@@ -117,12 +120,8 @@ if (typeof window !== 'undefined') {
         }
       }).catch(console.error);
 
-      // Register spytial-explorer
-      import('./components/spytial-explorer/spytial-explorer').then(({ SpytialExplorer }) => {
-        if (typeof customElements !== 'undefined' && !customElements.get('spytial-explorer')) {
-          customElements.define('spytial-explorer', SpytialExplorer as any);
-        }
-      }).catch(console.error);
+      // <spytial-explorer> registration moved to the spytial-core/explorer
+      // entry (spytial-core-explorer.global.js on CDN) in 4.0.0.
     }).catch(console.error);
   }).catch(console.error);
 }

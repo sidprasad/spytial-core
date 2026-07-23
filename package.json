@@ -50,6 +50,12 @@
       }
     },
     "./react.css": "./dist/react.css",
+    "./explorer": {
+      "import": {
+        "types": "./dist/types/explorer.d.ts",
+        "default": "./dist/esm/explorer.mjs"
+      }
+    },
     "./sql-evaluator": {
       "import": {
         "types": "./dist/sql-evaluator.d.mts",
@@ -153,6 +159,7 @@
     "@vitest/ui": "^3.2.4",
     "alasql": "^4.17.0",
     "axe-core": "^4.11.2",
+    "data-navigator": "^2.4.1",
     "eslint": "^9.29.0",
     "fast-check": "^4.6.0",
     "globals": "^17.6.0",
@@ -186,7 +193,6 @@
     "chroma-js": "^3.1.2",
     "d3": "^7.9.0",
     "dagre": "^0.8.5",
-    "data-navigator": "^2.4.1",
     "forge-expr-evaluator": "^1.1.0",
     "graphlib": "^2.1.8",
     "graphlib-dot": "^0.6.4",
@@ -199,11 +205,15 @@
   },
   "peerDependencies": {
     "alasql": "^4.0.0",
+    "data-navigator": "^2.4.1",
     "react": ">=18",
     "react-dom": ">=18"
   },
   "peerDependenciesMeta": {
     "alasql": {
+      "optional": true
+    },
+    "data-navigator": {
       "optional": true
     },
     "react": {
