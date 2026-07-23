@@ -114,6 +114,32 @@ describe('JSONDataInstance relation-type inference (lenient external JSON)', () 
         expect(rel.tuples[0].types).toEqual(['Being']);
     });
 
+    it('keeps an arity-correct signature when a relation name is split across records', () => {
+        // Regression for the merge/union bug: inferring each record before
+        // mergeRelations, then unioning the signatures, produced
+        // ['Person','Car','Bike'] on two-atom tuples — which SQLEvaluator reads
+        // as arity 3. The signature must be derived AFTER merge from the full
+        // tuple set: ['Person', 'univ'] (position 1 disagrees), length 2.
+        const split = {
+            atoms: [
+                { id: 'p1', label: 'Alice', type: 'Person' },
+                { id: 'p2', label: 'Bob', type: 'Person' },
+                { id: 'c1', label: 'Toyota', type: 'Car' },
+                { id: 'b1', label: 'Trek', type: 'Bike' },
+            ],
+            relations: [
+                { name: 'owns', tuples: [['p1', 'c1']] },   // Person -> Car
+                { name: 'owns', tuples: [['p2', 'b1']] },   // Person -> Bike
+            ],
+        } as unknown as IJsonDataInstance;
+        const owns = new JSONDataInstance(split).getRelations().find(r => r.name === 'owns')!;
+        expect(owns.tuples).toHaveLength(2);
+        expect(owns.types).toEqual(['Person', 'univ']);
+        expect(owns.types.length).toBe(owns.tuples[0].atoms.length); // arity invariant
+        // Tuple-level types stay specific; only the shared signature abstracts.
+        expect(owns.tuples.map(t => t.types)).toEqual([['Person', 'Car'], ['Person', 'Bike']]);
+    });
+
     it('accepts bare-array tuples (the json-demo placeholder shape)', () => {
         // Verbatim shape of webcola-demo/json-demo.html's textarea placeholder.
         const placeholder = {

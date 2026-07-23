@@ -879,25 +879,33 @@ export class DataInstanceNormalizer {
   }
 
   /**
-   * Fill in missing relation and tuple type signatures from the atoms' types.
+   * Normalize each relation into the shape mergeRelations + the internal model
+   * require, WITHOUT yet committing a relation-level type signature.
    *
    * External JSON (e.g. pasted into the demos, or produced by host-language
    * integrations) routinely carries relations as just `{ name, tuples:
    * [{ atoms: [...] }] }` — no `types` arrays and no `id` — or, terser still,
    * tuples as bare atom-id arrays (`"tuples": [["p1", "p2"]]`). The internal
    * IRelation/ITuple shapes require the full form, and mergeRelations crashes
-   * on the missing arrays ("types is not iterable"). This step makes the
-   * documented leniency real: bare-array tuples are lifted to `{ atoms,
-   * types }`, tuple types are looked up from each referenced atom's type
-   * ('univ' when the atom is unknown), and the relation's signature takes the
-   * per-position type when all tuples agree, 'univ' otherwise. Provided
-   * `types`/`id` values are never overridden.
+   * on the missing arrays ("types is not iterable"). This step lifts bare-array
+   * tuples to `{ atoms, types }`, looks up each tuple position's type from the
+   * referenced atom ('univ' when the atom is unknown), and defaults a missing
+   * relation `id` to its name.
+   *
+   * A missing relation `types` becomes `[]` — a merge-safe placeholder (union
+   * of empty is empty) that signals {@link inferRelationSignatures}, run AFTER
+   * mergeRelations, to derive the real signature from the *full* tuple set.
+   * Doing the signature after merge is what keeps its length equal to the tuple
+   * arity: inferring per-record and letting mergeRelations union the results
+   * would turn a two-column `Person -> Car` + `Person -> Bike` into
+   * `['Person', 'Car', 'Bike']` on two-atom tuples, which SQLEvaluator reads as
+   * arity 3. Provided `types`/`id`/tuple `types` are never overridden.
    *
    * @param atoms - Atoms used to look up each tuple position's type
    * @param relations - Relations that may be missing `types`, tuple `types`, or `id`
-   * @returns Completed relations plus how many needed filling
+   * @returns Normalized relations plus how many needed normalizing
    */
-  static inferRelationTypes(
+  static normalizeRelationShape(
     atoms: IAtom[],
     relations: IRelation[]
   ): { relations: IRelation[]; filled: number } {
@@ -915,24 +923,48 @@ export class DataInstanceNormalizer {
 
       const tuples = rawTuples.map(t => {
         // Bare-array shorthand: ["p1", "p2"] → { atoms, types }
-        const atoms = Array.isArray(t) ? (t as unknown as string[]) : t.atoms;
+        const tupleAtoms = Array.isArray(t) ? (t as unknown as string[]) : t.atoms;
         if (!Array.isArray(t) && Array.isArray(t.types)) return t;
-        return { atoms, types: atoms.map(id => atomType.get(id) ?? 'univ') };
+        return { atoms: tupleAtoms, types: tupleAtoms.map(id => atomType.get(id) ?? 'univ') };
       });
 
-      let types = relation.types;
-      if (!Array.isArray(types)) {
-        const arity = tuples[0]?.atoms.length ?? 0;
-        types = Array.from({ length: arity }, (_, i) => {
-          const seen = new Set(tuples.map(t => t.types[i] ?? 'univ'));
-          return seen.size === 1 ? seen.values().next().value! : 'univ';
-        });
-      }
-
-      return { ...relation, id: relation.id ?? relation.name, types, tuples };
+      return {
+        ...relation,
+        id: relation.id ?? relation.name,
+        // Keep a provided signature; otherwise leave [] for post-merge inference.
+        types: Array.isArray(relation.types) ? relation.types : [],
+        tuples,
+      };
     });
 
     return { relations: completed, filled };
+  }
+
+  /**
+   * Derive each relation's column-type signature from its (merged) tuples, for
+   * relations left without one by {@link normalizeRelationShape}
+   * (`types.length === 0`). Must run AFTER mergeRelations so the signature
+   * reflects every tuple in the final relation: for each position, the shared
+   * type when all tuples agree, else 'univ'. This keeps the signature length
+   * equal to the tuple arity — merging `Person -> Car` and `Person -> Bike`
+   * yields `['Person', 'univ']`, not the arity-breaking `['Person', 'Car',
+   * 'Bike']`. Relations that already carry a signature (caller-provided, or
+   * strict input untouched by normalizeRelationShape) are left as-is.
+   *
+   * @param relations - Merged relations, tuples already normalized to { atoms, types }
+   * @returns Relations with an arity-correct type signature
+   */
+  static inferRelationSignatures(relations: IRelation[]): IRelation[] {
+    return relations.map(relation => {
+      if (!Array.isArray(relation.types) || relation.types.length > 0) return relation;
+      const tuples = relation.tuples ?? [];
+      const arity = tuples[0]?.atoms.length ?? 0;
+      const types = Array.from({ length: arity }, (_, i) => {
+        const seen = new Set(tuples.map(t => t.types?.[i] ?? 'univ'));
+        return seen.size === 1 ? seen.values().next().value! : 'univ';
+      });
+      return { ...relation, types };
+    });
   }
 
   /**
@@ -1115,13 +1147,16 @@ export class DataInstanceNormalizer {
       }
     }
 
-    // Step 1.5: Fill in missing relation/tuple type signatures and ids from
-    // the atoms — must run before mergeRelations, which requires them.
+    // Step 1.5: Normalize relation shape (lift bare-array tuples, fill tuple
+    // types, default ids) so mergeRelations won't choke on lenient external
+    // JSON. The relation-level signature is deliberately deferred to step 2.5,
+    // after merge, so a name split across records yields one arity-correct
+    // signature instead of a unioned, over-long one.
     if (relations.length > 0) {
-      const inferred = this.inferRelationTypes(atoms, relations);
-      relations = inferred.relations;
-      if (inferred.filled > 0) {
-        errors.push(`Inferred type signatures for ${inferred.filled} relations`);
+      const shaped = this.normalizeRelationShape(atoms, relations);
+      relations = shaped.relations;
+      if (shaped.filled > 0) {
+        errors.push(`Normalized ${shaped.filled} relations from lenient JSON`);
       }
     }
 
@@ -1132,6 +1167,13 @@ export class DataInstanceNormalizer {
       if (relations.length < originalCount) {
         errors.push(`Merged ${originalCount - relations.length} duplicate relations`);
       }
+    }
+
+    // Step 2.5: Derive relation type signatures from the merged tuple set (for
+    // relations left without one in step 1.5). After merge so the arity is
+    // correct even when one relation name is split across several records.
+    if (relations.length > 0) {
+      relations = this.inferRelationSignatures(relations);
     }
 
     // Step 3: Infer types if not provided
