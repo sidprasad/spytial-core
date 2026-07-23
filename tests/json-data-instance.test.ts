@@ -36,6 +36,123 @@ describe('JSONDataInstance', () => {
         expect(graph.edges()).toHaveLength(1);
     });
 });
+describe('JSONDataInstance relation-type inference (lenient external JSON)', () => {
+    // The exact shape the json-demo placeholder (and host-language
+    // integrations) produce: no relation id, no relation/tuple `types`.
+    const lenientJSON = {
+        atoms: [
+            { id: 'p1', label: 'Alice', type: 'Person' },
+            { id: 'p2', label: 'Bob', type: 'Person' },
+            { id: 'c1', label: 'Toyota', type: 'Car' },
+        ],
+        relations: [
+            {
+                name: 'friend',
+                tuples: [{ atoms: ['p1', 'p2'] }],
+            },
+            {
+                name: 'owns',
+                tuples: [
+                    { atoms: ['p1', 'c1'] },
+                    { atoms: ['p2', 'c1'] },
+                ],
+            },
+        ],
+    } as unknown as IJsonDataInstance;
+
+    it('constructs from relations missing id and types arrays', () => {
+        const instance = new JSONDataInstance(lenientJSON);
+        expect(instance.getAtoms()).toHaveLength(3);
+        expect(instance.getRelations()).toHaveLength(2);
+    });
+
+    it('fills tuple types from the referenced atoms', () => {
+        const instance = new JSONDataInstance(lenientJSON);
+        const owns = instance.getRelations().find(r => r.name === 'owns')!;
+        expect(owns.tuples[0].types).toEqual(['Person', 'Car']);
+        expect(owns.types).toEqual(['Person', 'Car']);
+        expect(owns.id).toBe('owns');
+    });
+
+    it('falls back to univ for unknown atoms and mixed positions', () => {
+        const mixed = {
+            atoms: [
+                { id: 'p1', label: 'Alice', type: 'Person' },
+                { id: 'c1', label: 'Toyota', type: 'Car' },
+            ],
+            relations: [
+                {
+                    name: 'touches',
+                    tuples: [
+                        { atoms: ['p1', 'ghost'] },   // ghost: not an atom → univ
+                        { atoms: ['c1', 'ghost'] },   // position 0 disagrees → univ
+                    ],
+                },
+            ],
+        } as unknown as IJsonDataInstance;
+        const instance = new JSONDataInstance(mixed, { validateReferences: false });
+        const touches = instance.getRelations()[0];
+        expect(touches.tuples[0].types).toEqual(['Person', 'univ']);
+        expect(touches.types).toEqual(['univ', 'univ']);
+    });
+
+    it('never overrides provided types or id', () => {
+        const explicit = {
+            atoms: [{ id: 'p1', label: 'Alice', type: 'Person' }],
+            relations: [
+                {
+                    id: 'custom-id',
+                    name: 'self',
+                    types: ['Being'],
+                    tuples: [{ atoms: ['p1'], types: ['Being'] }],
+                },
+            ],
+        } as unknown as IJsonDataInstance;
+        const rel = new JSONDataInstance(explicit).getRelations()[0];
+        expect(rel.id).toBe('custom-id');
+        expect(rel.types).toEqual(['Being']);
+        expect(rel.tuples[0].types).toEqual(['Being']);
+    });
+
+    it('accepts bare-array tuples (the json-demo placeholder shape)', () => {
+        // Verbatim shape of webcola-demo/json-demo.html's textarea placeholder.
+        const placeholder = {
+            atoms: [
+                { id: 'p1', label: 'Alice', type: 'Person' },
+                { id: 'p2', label: 'Bob', type: 'Person' },
+            ],
+            relations: [
+                { name: 'friend', tuples: [['p1', 'p2']] },
+            ],
+        } as unknown as IJsonDataInstance;
+        const instance = new JSONDataInstance(placeholder);
+        const friend = instance.getRelations()[0];
+        expect(friend.tuples[0].atoms).toEqual(['p1', 'p2']);
+        expect(friend.tuples[0].types).toEqual(['Person', 'Person']);
+        expect(friend.types).toEqual(['Person', 'Person']);
+        const graph = instance.generateGraph();
+        expect(graph.nodes()).toHaveLength(2);
+        expect(graph.edges()).toHaveLength(1);
+    });
+
+    it('merges same-name lenient relations without crashing', () => {
+        const twoSources = {
+            atoms: [
+                { id: 'p1', label: 'Alice', type: 'Person' },
+                { id: 'p2', label: 'Bob', type: 'Person' },
+            ],
+            relations: [
+                { name: 'friend', tuples: [{ atoms: ['p1', 'p2'] }] },
+                { name: 'friend', tuples: [{ atoms: ['p2', 'p1'] }] },
+            ],
+        } as unknown as IJsonDataInstance;
+        const instance = new JSONDataInstance(twoSources);
+        const friend = instance.getRelations();
+        expect(friend).toHaveLength(1);
+        expect(friend[0].tuples).toHaveLength(2);
+    });
+});
+
 describe('JSONDataInstance.applyProjections', () => {
     it('should return clone when no atoms are provided', () => {
         const instance = new JSONDataInstance(validJSON);

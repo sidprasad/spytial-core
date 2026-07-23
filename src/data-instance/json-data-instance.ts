@@ -879,6 +879,63 @@ export class DataInstanceNormalizer {
   }
 
   /**
+   * Fill in missing relation and tuple type signatures from the atoms' types.
+   *
+   * External JSON (e.g. pasted into the demos, or produced by host-language
+   * integrations) routinely carries relations as just `{ name, tuples:
+   * [{ atoms: [...] }] }` — no `types` arrays and no `id` — or, terser still,
+   * tuples as bare atom-id arrays (`"tuples": [["p1", "p2"]]`). The internal
+   * IRelation/ITuple shapes require the full form, and mergeRelations crashes
+   * on the missing arrays ("types is not iterable"). This step makes the
+   * documented leniency real: bare-array tuples are lifted to `{ atoms,
+   * types }`, tuple types are looked up from each referenced atom's type
+   * ('univ' when the atom is unknown), and the relation's signature takes the
+   * per-position type when all tuples agree, 'univ' otherwise. Provided
+   * `types`/`id` values are never overridden.
+   *
+   * @param atoms - Atoms used to look up each tuple position's type
+   * @param relations - Relations that may be missing `types`, tuple `types`, or `id`
+   * @returns Completed relations plus how many needed filling
+   */
+  static inferRelationTypes(
+    atoms: IAtom[],
+    relations: IRelation[]
+  ): { relations: IRelation[]; filled: number } {
+    const atomType = new Map(atoms.map(a => [a.id, a.type]));
+    let filled = 0;
+
+    const completed = relations.map(relation => {
+      const rawTuples = Array.isArray(relation.tuples) ? relation.tuples : [];
+      const needsWork =
+        !Array.isArray(relation.types) ||
+        relation.id === undefined ||
+        rawTuples.some(t => Array.isArray(t) || !Array.isArray(t.types));
+      if (!needsWork) return relation;
+      filled++;
+
+      const tuples = rawTuples.map(t => {
+        // Bare-array shorthand: ["p1", "p2"] → { atoms, types }
+        const atoms = Array.isArray(t) ? (t as unknown as string[]) : t.atoms;
+        if (!Array.isArray(t) && Array.isArray(t.types)) return t;
+        return { atoms, types: atoms.map(id => atomType.get(id) ?? 'univ') };
+      });
+
+      let types = relation.types;
+      if (!Array.isArray(types)) {
+        const arity = tuples[0]?.atoms.length ?? 0;
+        types = Array.from({ length: arity }, (_, i) => {
+          const seen = new Set(tuples.map(t => t.types[i] ?? 'univ'));
+          return seen.size === 1 ? seen.values().next().value! : 'univ';
+        });
+      }
+
+      return { ...relation, id: relation.id ?? relation.name, types, tuples };
+    });
+
+    return { relations: completed, filled };
+  }
+
+  /**
    * Infer type definitions from atoms when explicit types are not provided.
    * Creates a basic type hierarchy where each type contains itself.
    * 
@@ -1055,6 +1112,16 @@ export class DataInstanceNormalizer {
       atoms = this.deduplicateAtoms(atoms);
       if (atoms.length < originalCount) {
         errors.push(`Removed ${originalCount - atoms.length} duplicate atoms`);
+      }
+    }
+
+    // Step 1.5: Fill in missing relation/tuple type signatures and ids from
+    // the atoms — must run before mergeRelations, which requires them.
+    if (relations.length > 0) {
+      const inferred = this.inferRelationTypes(atoms, relations);
+      relations = inferred.relations;
+      if (inferred.filled > 0) {
+        errors.push(`Inferred type signatures for ${inferred.filled} relations`);
       }
     }
 
