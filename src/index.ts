@@ -40,7 +40,9 @@ export { parseLayoutSpec } from './layout/layoutspec';
 export { setupLayout } from './layout';
 export { type default as IEvaluator, SelectorArityError } from './evaluators/interfaces';
 export { ForgeEvaluator, WrappedForgeEvaluator } from './evaluators/data/forge-evaluator';
-export { SQLEvaluator } from './evaluators/data/sql-evaluator';
+// SQLEvaluator moved out of the default entry in 4.0.0 — it drags the alasql
+// SQL engine (~500 KB min) into every bundle. Import it from
+// 'spytial-core/sql-evaluator' (npm) or load spytial-core-sql.global.js (CDN).
 export { WebColaTranslator } from './translators';
 export { AccessibleTranslator, buildSpatialNavigationMap } from './translators';
 export { SpytialExplorer } from './components/spytial-explorer';
@@ -172,33 +174,18 @@ export const createCndCore = (config?: CoreConfig): CndCore => {
 
 export const version = '1.0.0';
 
-// Export error message components
-export { ErrorMessageContainer } from './components/ErrorMessageModal/ErrorMessageContainer';
-export type { ErrorMessageContainerProps } from './components/ErrorMessageModal/ErrorMessageContainer';
-export { ErrorStateManager } from './components/ErrorMessageModal/ErrorStateManager';
-export type { SystemError, SelectorErrorDetail } from './components/ErrorMessageModal/ErrorStateManager';
+// Error state (shared with the separately-bundled error modal UI).
+// The React components themselves (ErrorMessageContainer, InstanceBuilder, the
+// REPL interfaces, ProjectionControls/Orchestrator, CndLayoutInterface) moved
+// out of the default entry in 4.0.0: import them from 'spytial-core/react'
+// (npm) or load dist/components/react-component-integration.global.js (CDN),
+// which also exposes the window.mount* API.
+export { ErrorStateManager } from './layout/error-state';
+export type { SystemError, SelectorErrorDetail } from './layout/error-state';
 
-// Export React components
-export { InstanceBuilder } from './components/InstanceBuilder/InstanceBuilder';
-export type { InstanceBuilderProps } from './components/InstanceBuilder/InstanceBuilder';
-export { ReplInterface } from './components/ReplInterface/ReplInterface';
-export type { ReplInterfaceProps } from './components/ReplInterface/ReplInterface';
-export { PyretReplInterface } from './components/ReplInterface/PyretReplInterface';
-export type { PyretReplInterfaceProps } from './components/ReplInterface/PyretReplInterface';
-export { ReplWithVisualization } from './components/ReplInterface/ReplWithVisualization';
-export type { ReplWithVisualizationProps } from './components/ReplInterface/ReplWithVisualization';
-
-// Export REPL parsers
+// REPL expression parser (React-free; kept for Pyret hosts using the global)
 export { PyretExpressionParser } from './components/ReplInterface/parsers/PyretExpressionParser';
 export type { PyretEvaluator, PyretEvaluationResult } from './components/ReplInterface/parsers/PyretExpressionParser';
-
-// Projection Controls Component
-export { ProjectionControls } from './components/ProjectionControls';
-export type { ProjectionControlsProps, ProjectionChoice } from './components/ProjectionControls';
-
-// Projection Orchestrator Component (manages projections + transform + controls)
-export { ProjectionOrchestrator } from './components/ProjectionControls';
-export type { ProjectionOrchestratorProps, ProjectionOrchestratorResult } from './components/ProjectionControls';
 
 // Projection Transform (pre-layout data instance transformation)
 export { applyProjectionTransform, topologicalSortWithCycleBreaking } from './data-instance/projection-transform';

@@ -1,5 +1,21 @@
 import IEvaluator, {EvaluatorResult} from "../interfaces";
-import {SimpleGraphQueryEvaluator, EvaluationResult, ErrorResult} from "simple-graph-query";
+// simple-graph-query ships a CJS bundle with an __esModule marker, which puts
+// its API in a different place depending on who loads it: plain Node exposes
+// module.exports as the namespace's `.default` (its lexer can't see the
+// bundle's named exports), while bundlers that honor __esModule surface the
+// named exports on the namespace itself. Import the namespace and pick
+// whichever side actually has the API, so this module loads correctly both
+// bundled (browser IIFE, ./evaluator) and external (dist/esm in plain Node).
+// Types are erased, so they stay ordinary type imports (class aliased — the
+// destructured const needs the plain name in value space).
+import * as sgqNamespace from "simple-graph-query";
+import type {
+    SimpleGraphQueryEvaluator as SimpleGraphQueryEvaluatorType,
+    EvaluationResult,
+    ErrorResult,
+} from "simple-graph-query";
+const sgq: any = (sgqNamespace as any).SimpleGraphQueryEvaluator ? sgqNamespace : (sgqNamespace as any).default;
+const { SimpleGraphQueryEvaluator } = sgq;
 export { JSONDataInstance } from "../../data-instance/json-data-instance";
 
 // Also surface SQG's static analyzer and by-example (FOIL-style) synthesizers on the
@@ -7,13 +23,19 @@ export { JSONDataInstance } from "../../data-instance/json-data-instance";
 // can reach the cheap static gate and the selector synthesizer through the same
 // windowless module they already require for evaluation, with no second import and no
 // browser globals. Runtime values only; the types ride along in the generated .d.ts.
-export {
+export const {
     analyzeForgeExpression,
     synthesizeSelector,
     synthesizeBinaryRelation,
     synthesizeBinaryRelationWithWhy,
     synthesizeSelectorWithWhy,
-} from "simple-graph-query";
+} = sgq as {
+    analyzeForgeExpression: typeof sgqNamespace.analyzeForgeExpression;
+    synthesizeSelector: typeof sgqNamespace.synthesizeSelector;
+    synthesizeBinaryRelation: typeof sgqNamespace.synthesizeBinaryRelation;
+    synthesizeBinaryRelationWithWhy: typeof sgqNamespace.synthesizeBinaryRelationWithWhy;
+    synthesizeSelectorWithWhy: typeof sgqNamespace.synthesizeSelectorWithWhy;
+};
 
 import {EvaluationContext, EvaluatorConfig, IEvaluatorResult } from "../interfaces";
 import { IDataInstance } from "../../data-instance/interfaces";
@@ -226,7 +248,7 @@ export class SGQEvaluatorResult implements IEvaluatorResult {
  */
 export class SGraphQueryEvaluator implements IEvaluator {
   private context: EvaluationContext | undefined;
-  private eval!: SimpleGraphQueryEvaluator;
+  private eval!: SimpleGraphQueryEvaluatorType;
   // Cache for evaluator results - lifetime tied to this evaluator instance
   // Using LRU strategy with a maximum size to prevent unbounded growth
   private evaluatorCache: Map<string, IEvaluatorResult> = new Map();

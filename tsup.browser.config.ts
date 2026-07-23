@@ -2,8 +2,11 @@ import { defineConfig } from 'tsup'
 
 export default defineConfig({
   entry: {
-    // Complete browser bundle with everything
-    'spytial-core-complete': 'src/index.ts'
+    // CDN bundle: barrel exports + custom-element registration + the published
+    // stylesheet (see src/global.ts). React components and SQLEvaluator moved
+    // to their own bundles in 4.0.0 (react-component-integration.global.js and
+    // spytial-core-sql.global.js respectively).
+    'spytial-core-complete': 'src/global.ts'
   },
   format: ['iife'], // Immediately Invoked Function Expression for browser
   globalName: 'spytialcore', // Global variable name for the complete library

@@ -1,0 +1,22 @@
+{
+  // Best-effort declaration emit for the npm entries (dist/types).
+  //
+  // Why not tsup dts? tsup's dts build hard-fails on the ~70 pre-existing
+  // baseline type errors (see `npm run typecheck`), which is exactly why the
+  // old tsup.config.ts dts build was abandoned. tsc, by contrast, still EMITS
+  // declarations in the presence of those errors, so `build:types` runs tsc
+  // and then verifies dist/types/index.d.ts actually landed rather than
+  // trusting the exit code. When the baseline reaches zero, fold this back
+  // into a strict dts build.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "declaration": true,
+    "declarationMap": false,
+    "rootDir": "src",
+    "outDir": "dist/types"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
+}

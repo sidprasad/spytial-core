@@ -86,7 +86,7 @@ That's the entire core pipeline. Where `jsonPayload` and `yamlSpec` come from is
 | **Renderers**        | `<webcola-cnd-graph>` (visual), `<spytial-explorer>` (a11y + spatial REPL), `AccessibleTranslator` (semantic HTML / alt-text). |
 | **Sequence support** | Pairwise policies (`stability`, `changeEmphasis`, `randomPositioning`, …) for inter-frame continuity. Custom policies via `registerSequencePolicy`. |
 | **Selector synthesis** | Generate CnD selectors from positive/negative atom or pair examples. |
-| **React components** | `InstanceBuilder`, `ReplInterface`, `ProjectionControls`, `ProjectionOrchestrator`, `ErrorMessageContainer`, `ReplWithVisualization`. |
+| **React components** | `InstanceBuilder`, `ReplInterface`, `ProjectionControls`, `ProjectionOrchestrator`, `ErrorMessageContainer`, `ReplWithVisualization` — via `spytial-core/react` (npm) or the components CDN bundle; kept out of the default entry since 4.0.0. |
 
 Full export surface: [API Reference](./site/api-reference.md).
 

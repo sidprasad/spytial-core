@@ -16,15 +16,27 @@
  * - Derive color/size directive selectors from visual examples
  */
 
-import { 
-  synthesizeSelector, 
+// simple-graph-query ships a CJS bundle whose API lands on the namespace when
+// bundled but on `.default` in plain Node — pick whichever side has it (see
+// sgq-evaluator.ts for the long form).
+import * as sgqNamespace from 'simple-graph-query';
+import type {
+  AtomSelectionExample,
+  BinaryRelationExample,
+  SynthesisWhy,
+} from 'simple-graph-query';
+const sgq: any = (sgqNamespace as any).synthesizeSelector ? sgqNamespace : (sgqNamespace as any).default;
+const {
+  synthesizeSelector,
   synthesizeBinaryRelation,
   synthesizeSelectorWithWhy,
   synthesizeBinaryRelationWithWhy,
-  type AtomSelectionExample,
-  type BinaryRelationExample,
-  type SynthesisWhy
-} from 'simple-graph-query';
+} = sgq as {
+  synthesizeSelector: typeof sgqNamespace.synthesizeSelector;
+  synthesizeBinaryRelation: typeof sgqNamespace.synthesizeBinaryRelation;
+  synthesizeSelectorWithWhy: typeof sgqNamespace.synthesizeSelectorWithWhy;
+  synthesizeBinaryRelationWithWhy: typeof sgqNamespace.synthesizeBinaryRelationWithWhy;
+};
 import type { IAtom, IDataInstance } from '../data-instance/interfaces';
 import type IEvaluator from '../evaluators/interfaces';
 import { SGraphQueryEvaluator } from '../evaluators/data/sgq-evaluator';

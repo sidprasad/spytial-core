@@ -108,7 +108,7 @@ Re-exports under `Layout` namespace include `LayoutSpec`, `InstanceLayout`, `Lay
 | `SelectorArityError`                            | Thrown when a unary/binary selector mismatches the constraint. |
 | `SGraphQueryEvaluator`                          | Default selector engine. |
 | `ForgeEvaluator`, `WrappedForgeEvaluator`       | Forge expression evaluator (uses the `forge-expr-evaluator` dependency). |
-| `SQLEvaluator`                                  | AlaSQL-backed alternative for users who'd rather write SQL. |
+| `SQLEvaluator` *(moved in 4.0.0)*               | AlaSQL-backed alternative for users who'd rather write SQL. Import from `spytial-core/sql-evaluator`; on CDN pages load `spytial-core-sql.global.js`. |
 | `LayoutEvaluator`, `LayoutEvaluatorResult`, `LayoutEvaluatorRecordResult`, `LayoutEvaluatorEdgeResult` | Spatial query engine — answers questions like "what's directly above A?". Used by `<spytial-explorer>` and accessibility tooling. |
 | `SpatialQuery`, `DirectionalRelation`, `AlignmentAxis`, `Modality`, `EdgeInfo` | Types used by `LayoutEvaluator`. |
 
@@ -181,6 +181,12 @@ These register themselves automatically when the bundle loads in a browser.
 ---
 
 ## React components
+
+Since 4.0.0 these live on their own entry: `import { … } from 'spytial-core/react'`
+(npm; styles via `spytial-core/react.css`), or the CDN component bundle
+`dist/components/react-component-integration.global.js`, which also exposes the
+`window.mount*` API. Exceptions: `ErrorStateManager` (+ its types) and
+`PyretExpressionParser` are React-free and stay on the default entry too.
 
 | Export | Role |
 |--------|------|
@@ -263,16 +269,21 @@ Types: `HeadlessLayoutOptions`, `HeadlessLayoutResult`, `EdgeKey`, `ChangeEmphas
 
 | Path                                                                | Use                                            |
 |---------------------------------------------------------------------|------------------------------------------------|
-| `spytial-core` (default export)                                     | NPM consumers (Vite, Webpack, esbuild, …).     |
-| `spytial-core/components/*`                                         | Tree-shakable subpath for individual components. |
-| `dist/browser/spytial-core-complete.global.js` (CDN)                | Self-contained browser bundle.                 |
+| `spytial-core` (default entry)                                      | NPM consumers (Vite, Webpack, esbuild, Node). Real ESM — tree-shakable, no React/SQL weight. |
+| `spytial-core/react`                                                | The React components (error modal, `InstanceBuilder`, REPLs, projections, `CndLayoutInterface`). `react`/`react-dom` are optional peer deps. Styles: `spytial-core/react.css`. |
+| `spytial-core/sql-evaluator`                                        | `SQLEvaluator` (AlaSQL-backed). `alasql` is an optional peer dep. |
+| `spytial-core/alloy-instance`                                       | Standalone Alloy XML parser. |
+| `spytial-core/evaluator`                                            | Self-contained headless evaluator (bundles SGQ). |
+| `dist/browser/spytial-core-complete.global.js` (CDN)                | Self-contained browser bundle (engine + custom elements; no React components or SQL since 4.0.0). |
+| `dist/browser/spytial-core-sql.global.js` (CDN, opt-in)             | Adds `SQLEvaluator` back onto the `spytialcore` global for pages using SQL selectors. Load after the main bundle. |
+| `dist/components/react-component-integration.global.js` + `.css` (CDN) | React component bundle + `window.mount*` API (`mountErrorMessageModal`, `mountCndLayoutInterface`, …). |
 
 CDN URLs:
 
 - jsDelivr: `https://cdn.jsdelivr.net/npm/spytial-core/dist/browser/spytial-core-complete.global.js`
 - unpkg:    `https://unpkg.com/spytial-core/dist/browser/spytial-core-complete.global.js`
 
-For reproducibility, pin a version (`spytial-core@2.5.2`).
+For reproducibility, pin a version (`spytial-core@4.0.0`).
 
 ---
 

@@ -3,7 +3,7 @@ import { IAtom, IDataInstance } from '../data-instance/interfaces';
 import { type PositionalConstraintError, type GroupOverlapError, type HiddenNodeConflictError, type IConstraintValidator, isPositionalConstraintError, isGroupOverlapError, isHiddenNodeConflictError } from './constraint-types';
 import { EdgeStyle, normalizeEdgeStyle } from './edge-style';
 import { resolveIconPath } from './icon-registry';
-import type { SelectorErrorDetail } from '../components/ErrorMessageModal/ErrorStateManager';
+import type { SelectorErrorDetail } from './error-state';
 
 
 import {

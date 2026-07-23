@@ -1,9 +1,18 @@
 import { DOMParser } from '@xmldom/xmldom';
 
-import { ForgeExprEvaluatorUtil, EvaluationResult, ErrorResult } from 'forge-expr-evaluator';
+// forge-expr-evaluator ships a CJS bundle whose API lands on the namespace
+// when bundled but on `.default` in plain Node — pick whichever side has it
+// (see sgq-evaluator.ts for the long form). The class is aliased in type
+// space; everything else is type-only and erased at compile time.
+import * as forgeExprEvaluatorNamespace from 'forge-expr-evaluator';
+import type { ForgeExprEvaluatorUtil as ForgeExprEvaluatorUtilType, EvaluationResult, ErrorResult } from 'forge-expr-evaluator';
+const forgeExprEvaluator: any = (forgeExprEvaluatorNamespace as any).ForgeExprEvaluatorUtil
+  ? forgeExprEvaluatorNamespace
+  : (forgeExprEvaluatorNamespace as any).default;
+const { ForgeExprEvaluatorUtil } = forgeExprEvaluator;
 import { AlloyDatum, AlloyRelation, parseAlloyXML, AlloyTuple, AlloyInstance, AlloyType } from '../../data-instance/alloy/alloy-instance';
-import { DatumParsed, ParsedValue, Relation, Sig, InstanceData, ForgeTuple, BuiltinType } from 'forge-expr-evaluator/dist/types';
-import { SingleValue, Tuple } from 'forge-expr-evaluator/dist/ForgeExprEvaluator';
+import type { DatumParsed, ParsedValue, Relation, Sig, InstanceData, ForgeTuple, BuiltinType } from 'forge-expr-evaluator/dist/types';
+import type { SingleValue, Tuple } from 'forge-expr-evaluator/dist/ForgeExprEvaluator';
 import IEvaluator, {
   EvaluationContext,
   EvaluatorConfig,
@@ -320,7 +329,7 @@ export class ForgeEvaluatorResult implements IEvaluatorResult {
 
 export class ForgeEvaluator implements IEvaluator {
     private context?: EvaluationContext;
-    private evaluator?: ForgeExprEvaluatorUtil;
+    private evaluator?: ForgeExprEvaluatorUtilType;
     private sourceCode: string = '';
     private initialized: boolean = false;
     // Cache for evaluator results - lifetime tied to this evaluator instance

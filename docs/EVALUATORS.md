@@ -139,7 +139,10 @@ Uses standard SQL syntax with AlaSQL. Best for users comfortable with SQL and fo
 ### Initialization
 
 ```typescript
-import { SQLEvaluator, AlloyDataInstance } from 'spytial-core';
+// 4.0.0+: SQLEvaluator has its own entry so the AlaSQL engine is opt-in.
+// (CDN pages: load dist/browser/spytial-core-sql.global.js after the main bundle.)
+import { SQLEvaluator } from 'spytial-core/sql-evaluator';
+import { AlloyDataInstance } from 'spytial-core';
 
 const evaluator = new SQLEvaluator();
 evaluator.initialize({ sourceData: myDataInstance });
