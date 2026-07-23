@@ -978,9 +978,27 @@ export class WebColaCnDGraph extends HTMLElementBase {
       throw new Error(`Layout cannot have both conflictingConstraints (${conflictingNodeIds}) and overlappingNodes ${overlappingNodeIds}`);
     }
 
-    const errorNodes = [...conflictingNodes, ...overlappingNodes];
+    // Visible atoms whose relationship was dropped because their partner was hidden.
+    // These are mutually exclusive with the constraint/overlap conflicts above (a
+    // hidden-node conflict short-circuits before those validators run).
+    const hiddenConflictNodes = this.currentLayout.hiddenConflictNodes;
+
+    const errorNodes = [...conflictingNodes, ...overlappingNodes, ...hiddenConflictNodes];
 
     return errorNodes.some((errorNode: LayoutNode) => errorNode.id === node.id); // NOTE: `id` should be unique
+  }
+
+  /**
+   * Determines if a node was re-introduced — i.e. hidden by a hideAtom directive but shown
+   * anyway because a layout constraint references it. These are marked distinctly so the
+   * user understands why an atom they asked to hide is visible.
+   * @param node - Node object to check
+   * @returns True if the node is in the layout's set of re-introduced nodes
+   */
+  private isReintroducedNode(node: { id: string }): boolean {
+    const reintroduced = this.currentLayout?.reintroducedNodes;
+    if (!reintroduced || reintroduced.length === 0) return false;
+    return reintroduced.some((n: LayoutNode) => n.id === node.id);
   }
 
   /**
@@ -4003,9 +4021,12 @@ export class WebColaCnDGraph extends HTMLElementBase {
       .enter()
       .append("g")
       .attr("class", (d: any) => {
-        const baseClass = this.isErrorNode(d) ? "error-node" : "node";
+        let baseClass = this.isErrorNode(d) ? "error-node" : "node";
         if (this.isErrorNode(d) && this.isSmallNode(d)) {
-          return baseClass + " small-error-node";
+          baseClass += " small-error-node";
+        }
+        if (this.isReintroducedNode(d)) {
+          baseClass += " reintroduced-node";
         }
         return baseClass;
       })
@@ -9983,6 +10004,16 @@ export class WebColaCnDGraph extends HTMLElementBase {
         stroke-width: 2px;
         stroke-dasharray: 5 5;
         animation: dash 1s linear infinite;
+      }
+
+      /* Atoms re-introduced because a constraint references them despite a hideAtom
+         directive. Distinct from error nodes: a calmer dashed purple outline + faded
+         fill that reads as "shown because needed, but you meant to hide it". */
+      .reintroduced-node rect {
+        stroke: var(--cnd-reintroduced-stroke, #8e44ad);
+        stroke-width: 2px;
+        stroke-dasharray: 3 3;
+        fill-opacity: 0.55;
       }
 
       /* Enhanced visibility for small error nodes */
