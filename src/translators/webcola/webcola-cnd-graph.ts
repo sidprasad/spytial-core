@@ -6,8 +6,12 @@ import { IInputDataInstance, ITuple, IAtom } from '../../data-instance/interface
 import { MAIN_LABEL_FONT_SIZE, SECONDARY_FONT_SIZE, LABEL_LINE_HEIGHT_RATIO, resolveAttrFontSize } from '../../layout/text-extent';
 import { setLabLightness, type NodeColorParams } from '../../layout/colorpicker';
 
-let d3 = window.d3v4 || window.d3; // Use d3 v4 if available, otherwise fallback to the default window.d3
-let cola = window.cola;
+// Guarded: this module is reachable from the npm entries' static import graph
+// (via SpytialExplorer / StructuredInputGraph), so it must be LOADABLE in Node
+// (SSR, tests, headless evaluation) even though the element itself needs a DOM.
+// In the browser these evaluate exactly as before.
+let d3 = typeof window !== 'undefined' ? (window.d3v4 || window.d3) : undefined; // Use d3 v4 if available, otherwise fallback to the default window.d3
+let cola = typeof window !== 'undefined' ? window.cola : undefined;
 
 /**
  * Checks if two SVG elements are overlapping.
@@ -101,7 +105,13 @@ export interface GraphTheme {
   nodeColors?: NodeColorParams;
 }
 
-export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'undefined' ? HTMLElement : (class {} as any)) {
+// HTMLElement doesn't exist in Node; fall back to a plain class so the module
+// can be imported headless. Instantiating the element still requires a DOM.
+const HTMLElementBase = (typeof HTMLElement !== 'undefined'
+  ? HTMLElement
+  : (class {} as unknown as typeof HTMLElement));
+
+export class WebColaCnDGraph extends HTMLElementBase {
   private svg!: any;
   private container!: any;
   private currentLayout!: WebColaLayout;
@@ -11026,7 +11036,11 @@ export class WebColaCnDGraph extends  HTMLElement { //(typeof HTMLElement !== 'u
 
 }
 
-// Register the custom element only in browser environments
-if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined') {
+// Register the custom element only in browser environments. The get() guard
+// makes registration idempotent: this module is inlined into more than one
+// bundle (main global + explorer global), and a second unguarded define on a
+// page loading both throws NotSupportedError.
+if (typeof customElements !== 'undefined' && typeof HTMLElement !== 'undefined'
+    && !customElements.get('webcola-cnd-graph')) {
   customElements.define('webcola-cnd-graph', WebColaCnDGraph);
 }

@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const d3: any = (window as any).d3v4 || (window as any).d3;
+// Guarded for headless import — see webcola-cnd-graph.ts.
+const d3: any = typeof window !== 'undefined' ? ((window as any).d3v4 || (window as any).d3) : undefined;
 import { WebColaCnDGraph } from './webcola-cnd-graph';
 import { IInputDataInstance, IAtom, ITuple, IRelation } from '../../data-instance/interfaces';
 import { JSONDataInstance } from '../../data-instance/json-data-instance';

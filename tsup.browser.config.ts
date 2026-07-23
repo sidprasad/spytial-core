@@ -1,9 +1,12 @@
 import { defineConfig } from 'tsup'
 
-export default defineConfig({
+export default defineConfig([{
   entry: {
-    // Complete browser bundle with everything
-    'spytial-core-complete': 'src/index.ts'
+    // CDN bundle: barrel exports + custom-element registration + the published
+    // stylesheet (see src/global.ts). React components and SQLEvaluator moved
+    // to their own bundles in 4.0.0 (react-component-integration.global.js and
+    // spytial-core-sql.global.js respectively).
+    'spytial-core-complete': 'src/global.ts'
   },
   format: ['iife'], // Immediately Invoked Function Expression for browser
   globalName: 'spytialcore', // Global variable name for the complete library
@@ -43,4 +46,36 @@ export default defineConfig({
   },
   // Ensure DOM types are available
   platform: 'browser',
-})
+},
+{
+  // Opt-in a11y explorer: registers <spytial-explorer> and merges
+  // SpytialExplorer onto window.spytialcore. Load AFTER the main bundle
+  // (shares its d3/cola page globals). Inlines data-navigator; kept out of
+  // the main bundle while the explorer matures as a proof of concept.
+  entry: { 'spytial-core-explorer': 'src/explorer.ts' },
+  format: ['iife'],
+  globalName: 'spytialExplorerBundle',
+  dts: false,
+  splitting: false,
+  sourcemap: true,
+  clean: false,
+  minify: true,
+  target: 'es2020',
+  outDir: 'dist/browser',
+  bundle: true,
+  treeshake: true,
+  platform: 'browser',
+  noExternal: [
+    'data-navigator',
+    'graphlib',
+    'kiwi.js',
+    'chroma-js',
+    'js-yaml',
+    'lodash',
+    '@xmldom/xmldom',
+  ],
+  define: {
+    'process.env.NODE_ENV': '"production"',
+    'global': 'globalThis',
+  },
+}])

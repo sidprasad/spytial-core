@@ -446,6 +446,14 @@ export class SQLEvaluator implements IEvaluator {
     const tableName = this.sanitizeTableName(relation.name);
     const arity = relation.types.length;
 
+    // An arity-0 relation (an empty relation with no inferable signature, e.g.
+    // `{ name, tuples: [] }` from lenient JSON) has no columns — `CREATE TABLE
+    // t ()` is a SQL parse error. It carries no queryable data, so skip it
+    // rather than aborting initialize() for every other relation.
+    if (arity === 0) {
+      return;
+    }
+
     // Determine column names based on arity
     // Use simple names that won't conflict with SQL reserved words
     let columns: string[];
