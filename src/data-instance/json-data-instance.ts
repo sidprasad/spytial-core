@@ -941,24 +941,38 @@ export class DataInstanceNormalizer {
   }
 
   /**
-   * Derive each relation's column-type signature from its (merged) tuples, for
-   * relations left without one by {@link normalizeRelationShape}
-   * (`types.length === 0`). Must run AFTER mergeRelations so the signature
-   * reflects every tuple in the final relation: for each position, the shared
-   * type when all tuples agree, else 'univ'. This keeps the signature length
-   * equal to the tuple arity — merging `Person -> Car` and `Person -> Bike`
-   * yields `['Person', 'univ']`, not the arity-breaking `['Person', 'Car',
-   * 'Bike']`. Relations that already carry a signature (caller-provided, or
-   * strict input untouched by normalizeRelationShape) are left as-is.
+   * Derive each relation's column-type signature from its (merged) tuples.
+   * Must run AFTER mergeRelations so the signature reflects every tuple in the
+   * final relation: for each position, the shared type when all tuples agree,
+   * else 'univ'.
+   *
+   * A signature is trusted (left as-is) only when it is arity-consistent —
+   * `types.length === tuple arity`. Anything else is (re)derived from the
+   * tuples. That covers three cases, all of which must end up length === arity
+   * or SQLEvaluator (which reads `relation.types.length` as the arity)
+   * misbehaves:
+   *   1. the `[]` placeholder normalizeRelationShape leaves for lenient input;
+   *   2. a signature `mergeRelations` collapsed via its type-dedup — a
+   *      homogeneous `['Person','Person']` merged into a `[]` placeholder
+   *      becomes `['Person']` (length 1) on arity-2 tuples;
+   *   3. a caller-provided signature whose length simply doesn't match the
+   *      tuples (malformed input — it cannot be used correctly as given).
+   * Merging `Person -> Car` and `Person -> Bike` therefore yields
+   * `['Person', 'univ']`, never `['Person', 'Car', 'Bike']`. A valid
+   * caller-provided signature (length already equals arity) is never touched.
    *
    * @param relations - Merged relations, tuples already normalized to { atoms, types }
    * @returns Relations with an arity-correct type signature
    */
   static inferRelationSignatures(relations: IRelation[]): IRelation[] {
     return relations.map(relation => {
-      if (!Array.isArray(relation.types) || relation.types.length > 0) return relation;
       const tuples = relation.tuples ?? [];
-      const arity = tuples[0]?.atoms.length ?? 0;
+      // No tuples → no arity evidence to repair against. Preserve whatever
+      // signature the caller gave (e.g. an empty relation declared
+      // `types: ['Person','Person'], tuples: []`); only a missing one stays [].
+      if (tuples.length === 0) return relation;
+      const arity = tuples[0].atoms.length;
+      if (Array.isArray(relation.types) && relation.types.length === arity) return relation;
       const types = Array.from({ length: arity }, (_, i) => {
         const seen = new Set(tuples.map(t => t.types?.[i] ?? 'univ'));
         return seen.size === 1 ? seen.values().next().value! : 'univ';
@@ -1153,11 +1167,10 @@ export class DataInstanceNormalizer {
     // after merge, so a name split across records yields one arity-correct
     // signature instead of a unioned, over-long one.
     if (relations.length > 0) {
-      const shaped = this.normalizeRelationShape(atoms, relations);
-      relations = shaped.relations;
-      if (shaped.filled > 0) {
-        errors.push(`Normalized ${shaped.filled} relations from lenient JSON`);
-      }
+      // Purely structural completion of lenient input — deliberately does NOT
+      // push to `errors` (which feeds isValid()); shaping well-formed-enough
+      // JSON is not a validation failure.
+      relations = this.normalizeRelationShape(atoms, relations).relations;
     }
 
     // Step 2: Merge relations with same name

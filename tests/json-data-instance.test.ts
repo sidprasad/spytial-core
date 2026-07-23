@@ -140,6 +140,53 @@ describe('JSONDataInstance relation-type inference (lenient external JSON)', () 
         expect(owns.tuples.map(t => t.types)).toEqual([['Person', 'Car'], ['Person', 'Bike']]);
     });
 
+    it('survives mergeRelations type-dedup collapsing a homogeneous signature', () => {
+        // Order-dependent regression: a lenient record (→ types: []) as the
+        // FIRST occurrence of a name, then a homogeneous explicit record.
+        // mergeRelations de-duplicates types when appending, collapsing
+        // ['Person','Person'] into ['Person'] on arity-2 tuples. The post-merge
+        // signature inference must repair the arity (length must equal 2).
+        const collapsed = {
+            atoms: [
+                { id: 'a', label: 'A', type: 'Person' },
+                { id: 'b', label: 'B', type: 'Person' },
+                { id: 'c', label: 'C', type: 'Person' },
+                { id: 'd', label: 'D', type: 'Person' },
+            ],
+            relations: [
+                { name: 'friend', tuples: [['a', 'b']] },                     // lenient → placeholder []
+                { name: 'friend', types: ['Person', 'Person'],
+                  tuples: [{ atoms: ['c', 'd'], types: ['Person', 'Person'] }] },
+            ],
+        } as unknown as IJsonDataInstance;
+        const friend = new JSONDataInstance(collapsed).getRelations().find(r => r.name === 'friend')!;
+        expect(friend.tuples).toHaveLength(2);
+        expect(friend.types.length).toBe(2);           // NOT ['Person'] (arity 1)
+        expect(friend.types).toEqual(['Person', 'Person']);
+    });
+
+    it('re-derives a caller-provided signature whose length does not match arity', () => {
+        // A malformed explicit signature (length 1 on binary tuples) cannot be
+        // used as given; it is repaired to arity-correct rather than preserved.
+        const wrong = {
+            atoms: [{ id: 'p1', label: 'A', type: 'Person' }, { id: 'c1', label: 'C', type: 'Car' }],
+            relations: [{ name: 'owns', types: ['Person'], tuples: [{ atoms: ['p1', 'c1'], types: ['Person', 'Car'] }] }],
+        } as unknown as IJsonDataInstance;
+        const owns = new JSONDataInstance(wrong).getRelations()[0];
+        expect(owns.types).toEqual(['Person', 'Car']);
+    });
+
+    it('preserves an explicit signature on a relation with zero tuples', () => {
+        // No tuples means no arity evidence — the provided signature must
+        // survive rather than being wiped to [] (regression guard).
+        const empty = {
+            atoms: [{ id: 'p1', label: 'A', type: 'Person' }],
+            relations: [{ id: 'friend', name: 'friend', types: ['Person', 'Person'], tuples: [] }],
+        } as unknown as IJsonDataInstance;
+        const friend = new JSONDataInstance(empty).getRelations()[0];
+        expect(friend.types).toEqual(['Person', 'Person']);
+    });
+
     it('accepts bare-array tuples (the json-demo placeholder shape)', () => {
         // Verbatim shape of webcola-demo/json-demo.html's textarea placeholder.
         const placeholder = {
