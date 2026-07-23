@@ -23,6 +23,11 @@
  * with `assistant.complete()`; `assistant.synthesize` powers the ✨ affordance;
  * `assistant.review()` results are merged into the field diagnostics (debounced,
  * stale-dropped, failures swallowed).
+ *
+ * Layout assistance: `layoutAssistant.suggest` powers the toolbar's Suggest
+ * button. The proposal is applied through `replaceFromYaml` + `emit`, so it is
+ * one undo step, refreshes the builder in place, and re-validates — the same
+ * path a code-view edit takes. Its rationale renders in the suggestions panel.
  */
 
 import React, {
@@ -49,6 +54,11 @@ import {
   mergeCompletions,
 } from '../domain/completions';
 import type { Completion, SelectorAssistant, SelectorAssistContext } from '../domain/assistant';
+import type {
+  LayoutAssistant,
+  LayoutAssistContext,
+  LayoutSuggestionResult,
+} from '../domain/layout-assistant';
 import type { IInputDataInstance } from '../../data-instance/interfaces';
 import {
   SpecEditorThemeInput,
@@ -57,6 +67,7 @@ import {
 } from './theme';
 import { BuilderView } from './BuilderView';
 import { CodeView } from './CodeView';
+import { SuggestionsPanel } from './SuggestionsPanel';
 import { lintYaml } from '../core/code-positioning';
 import type { SelectorFieldExtras } from './FieldRenderer';
 
@@ -76,6 +87,11 @@ export interface SpecEditorProps {
    */
   theme?: SpecEditorThemeInput;
   selectorAssistant?: SelectorAssistant;
+  /**
+   * Whole-spec suggestion hook. When it provides `suggest`, the toolbar grows a
+   * Suggest button; otherwise nothing is rendered and the editor is unchanged.
+   */
+  layoutAssistant?: LayoutAssistant;
   /** appearance */
   density?: 'compact' | 'comfortable';
   /**
@@ -112,6 +128,7 @@ export const SpecEditor: React.FC<SpecEditorProps> = ({
   domain: domainProp,
   theme,
   selectorAssistant,
+  layoutAssistant,
   density = 'compact',
   syntaxHighlighting = true,
   defaultView = 'builder',
@@ -320,11 +337,60 @@ export const SpecEditor: React.FC<SpecEditorProps> = ({
 
   useEffect(
     () => () => {
+      alive.current = false;
       if (parseTimer.current) clearTimeout(parseTimer.current);
       if (reviewTimer.current) clearTimeout(reviewTimer.current);
     },
     [],
   );
+
+  // ── Layout assistance (whole-spec suggestion) ───────────────────────────
+  const [suggestion, setSuggestion] = useState<{
+    running: boolean;
+    result: LayoutSuggestionResult | null;
+    error: string | null;
+  }>({ running: false, result: null, error: null });
+  // Dropped-result guards: a superseded run (the user clicked Suggest again)
+  // and an unmount both mean the resolved promise must not touch the document.
+  const suggestSeq = useRef(0);
+  const alive = useRef(true);
+
+  const handleSuggest = useCallback(() => {
+    const suggest = layoutAssistant?.suggest;
+    if (!suggest || disabled) return;
+    // Land any debounced code-view parse first, so the suggester sees the text
+    // the user is looking at rather than the last-parsed model.
+    flushParseRef.current();
+    const seq = ++suggestSeq.current;
+    setSuggestion({ running: true, result: null, error: null });
+    const ctx: LayoutAssistContext = { domain, instance, currentYaml: value };
+    Promise.resolve()
+      .then(() => suggest(ctx))
+      .then((result) => {
+        if (seq !== suggestSeq.current || !alive.current) return;
+        // Same path as a code-view edit: one undo step, builder refreshed in
+        // place, re-validated. Throws on unparseable YAML WITHOUT mutating,
+        // which the catch below turns into a panel error.
+        doc.replaceFromYaml(result.yaml);
+        emit();
+        setSuggestion({ running: false, result, error: null });
+      })
+      .catch((err: unknown) => {
+        if (seq !== suggestSeq.current || !alive.current) return;
+        setSuggestion({
+          running: false,
+          result: null,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+  }, [layoutAssistant, disabled, domain, instance, value, doc, emit]);
+
+  const dismissSuggestion = useCallback(() => {
+    // Bump the token too: a run still in flight when the user dismisses should
+    // not reopen the panel behind them.
+    suggestSeq.current += 1;
+    setSuggestion({ running: false, result: null, error: null });
+  }, []);
 
   // ── Builder mutations ───────────────────────────────────────────────────
   const handleAddItem = useCallback(
@@ -609,29 +675,58 @@ export const SpecEditor: React.FC<SpecEditorProps> = ({
           </button>
         </div>
 
-        <div className="spytial-ed-history">
-          <button
-            type="button"
-            className="spytial-ed-history-btn"
-            aria-label="Undo"
-            title="Undo (Cmd/Ctrl+Z)"
-            disabled={disabled || !doc.canUndo()}
-            onClick={handleUndo}
-          >
-            <span aria-hidden="true">↶</span>
-          </button>
-          <button
-            type="button"
-            className="spytial-ed-history-btn"
-            aria-label="Redo"
-            title="Redo (Shift+Cmd/Ctrl+Z)"
-            disabled={disabled || !doc.canRedo()}
-            onClick={handleRedo}
-          >
-            <span aria-hidden="true">↷</span>
-          </button>
+        <div className="spytial-ed-toolbar-actions">
+          {layoutAssistant?.suggest ? (
+            <button
+              type="button"
+              className="spytial-ed-suggest-btn"
+              title="Suggest a layout for the current data"
+              disabled={disabled || suggestion.running}
+              aria-busy={suggestion.running}
+              onClick={handleSuggest}
+            >
+              <span aria-hidden="true">✦</span>
+              {suggestion.running ? 'Analyzing…' : 'Suggest'}
+            </button>
+          ) : null}
+
+          <div className="spytial-ed-history">
+            <button
+              type="button"
+              className="spytial-ed-history-btn"
+              aria-label="Undo"
+              title="Undo (Cmd/Ctrl+Z)"
+              disabled={disabled || !doc.canUndo()}
+              onClick={handleUndo}
+            >
+              <span aria-hidden="true">↶</span>
+            </button>
+            <button
+              type="button"
+              className="spytial-ed-history-btn"
+              aria-label="Redo"
+              title="Redo (Shift+Cmd/Ctrl+Z)"
+              disabled={disabled || !doc.canRedo()}
+              onClick={handleRedo}
+            >
+              <span aria-hidden="true">↷</span>
+            </button>
+          </div>
         </div>
       </div>
+
+      {suggestion.error !== null ? (
+        <p className="spytial-ed-suggest-error" role="alert">
+          {suggestion.error}
+        </p>
+      ) : null}
+
+      {suggestion.result !== null ? (
+        <SuggestionsPanel
+          result={suggestion.result}
+          onDismiss={dismissSuggestion}
+        />
+      ) : null}
 
       <div className="spytial-ed-body">
         {view === 'builder' ? (

@@ -171,6 +171,34 @@ export interface SelectorAssistant {
   review?(ctx: SelectorAssistContext, value: string): Promise<Diagnostic[]>;
 }
 
+// ---- domain/layout-assistant.ts (HOOK: whole-spec suggestion) ----
+export interface LayoutAssistContext {
+  domain?: DomainSchema;
+  instance?: IInputDataInstance;
+  /** full current spec YAML, so a suggester can extend rather than replace */
+  currentYaml: string;
+}
+export interface LayoutSuggestionDetail {
+  id: string;                       // stable + unique per result; the React key
+  rationale?: string;
+  confidence?: 'high' | 'medium' | 'low';
+  outcome?: 'applied' | 'weakened' | 'omitted';
+}
+export interface LayoutSuggestionResult {
+  yaml: string;
+  suggestions?: readonly LayoutSuggestionDetail[];
+  notes?: readonly string[];
+}
+export interface LayoutAssistant {
+  /** whole-spec suggestion. Powers the Suggest affordance in the toolbar. */
+  suggest?(ctx: LayoutAssistContext): Promise<LayoutSuggestionResult>;
+}
+// Applied via `replaceFromYaml` + emit — one undo step, builder refreshed in
+// place, re-validated, and surfaced to the host as an ordinary onChange. A
+// rejection (or unparseable YAML) leaves the document untouched. The optional
+// per-suggestion metadata renders in a read-only panel; accept/reject of
+// individual suggestions is host policy, not part of this contract.
+
 // ---- ui/theme.ts (HOOK: appearance customization) ----
 /** Every visual knob is a token; tokens become --spytial-ed-* custom properties. */
 export interface SpecEditorTheme {

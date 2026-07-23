@@ -84,6 +84,7 @@ Defined in `src/spec-editor/ui/SpecEditor.tsx`.
 | `domain` | `DomainSchema` | `undefined` | Precomputed domain schema. **Wins over `instance`** if both are given. |
 | `theme` | `SpecEditorTheme \| string` | `undefined` | Either a partial token object (only the keys you set are applied as inline CSS variables on the editor root), or the **name** of a registered theme — `'light'`, `'dark'`, or anything added via `registerSpecEditorThemes` — mirroring `webcola-cnd-graph`'s by-name `theme` attribute. See [Theming](#theming-guide-hook-1). |
 | `selectorAssistant` | `SelectorAssistant` | `undefined` | Pluggable completion / synthesis / review hook for selector fields. See [Selector assistance](#selector-assistance-guide-hook-2). |
+| `layoutAssistant` | `LayoutAssistant` | `undefined` | Pluggable **whole-spec** suggestion hook. Providing `suggest` adds a Suggest button to the toolbar. See [Layout assistance](#layout-assistance-guide-hook-3). |
 | `density` | `'compact' \| 'comfortable'` | `'compact'` | Row padding / font sizing. `compact` is noticeably tighter than the old cards. |
 | `syntaxHighlighting` | `boolean` | `true` | Syntax highlighting in the code view and selector fields. Both use a mirror overlay (highlighted `<pre>` behind a transparent-text textarea, scroll-synced, with ligatures/kerning normalized on both elements). If a host's fonts or zoom ever misalign the overlay, set this to `false` to render plain visible text with no mirror — the escape hatch that the old, removed highlighter never had. |
 | `defaultView` | `'builder' \| 'code'` | `'builder'` | The view shown initially when the editor owns its own view state (i.e. `view` is not passed). |
@@ -122,8 +123,9 @@ in sync on a best-effort basis** and are no longer a source of truth:
 | `setDirectives` | Same best-effort sync as `setConstraints`, with `parsed.directives`. |
 
 New `SpecEditorProps` the wrapper accepts and forwards: `instance`, `domain`,
-`theme`, `selectorAssistant`, `density`, `onDiagnostics`, `className`,
-`disabled`, and `'aria-label'` (default `'CND Layout Specification Interface'`).
+`theme`, `selectorAssistant`, `layoutAssistant`, `density`, `onDiagnostics`,
+`className`, `disabled`, and `'aria-label'` (default
+`'CND Layout Specification Interface'`).
 It always forwards `defaultView: 'builder'`. It does not expose `defaultView` as
 its own prop — view selection goes through `isNoCodeView`.
 
@@ -464,6 +466,85 @@ the same label/insert text as a built-in suppresses the built-in. Atom
 completions from the domain are capped (`MAX_ATOM_COMPLETIONS = 200`) to keep the
 popup responsive on large instances; supply an `assistant.complete()` if you need
 instance-aware results beyond the cap.
+
+## Layout assistance guide (hook 3)
+
+Where `SelectorAssistant` assists one field, `LayoutAssistant` (in
+`src/spec-editor/domain/layout-assistant.ts`) proposes an **entire spec**. The
+host supplies the policy; the editor owns the affordance.
+
+```ts
+export interface LayoutAssistant {
+  suggest?(ctx: LayoutAssistContext): Promise<LayoutSuggestionResult>;
+}
+
+export interface LayoutAssistContext {
+  domain?: DomainSchema;          // as resolved by the editor
+  instance?: IInputDataInstance;  // when the host passed one
+  currentYaml: string;            // full current spec text
+}
+
+export interface LayoutSuggestionResult {
+  yaml: string;                                       // the proposed spec
+  suggestions?: readonly LayoutSuggestionDetail[];    // optional panel detail
+  notes?: readonly string[];                          // optional remarks
+}
+
+export interface LayoutSuggestionDetail {
+  id: string;                                          // stable, unique per result
+  rationale?: string;
+  confidence?: 'high' | 'medium' | 'low';
+  outcome?: 'applied' | 'weakened' | 'omitted';
+}
+```
+
+The context is deliberately those three fields and nothing else — no Alloy,
+Forge, or other host vocabulary — so any host can plug in any suggester
+(heuristic, model, synthesis engine). The per-suggestion metadata is optional
+and rendered generically; a suggester with no such vocabulary returns `{ yaml }`
+alone and the panel just confirms that a suggestion was applied.
+
+### What the editor does with a result
+
+1. **Applies the YAML through the document** — `replaceFromYaml` + the normal
+   emit path. That means it is **one undo step**, the builder repopulates in
+   place (no remount, no lost scroll or view), diagnostics re-run, and the host
+   sees it as an ordinary `onChange`. A host whose "apply" is a separate action
+   therefore gets the suggestion in its editor draft and nothing else — the same
+   mental model as a hand edit.
+2. **Renders the rationale** in a read-only suggestions panel below the toolbar,
+   dismissable, so the reasoning isn't discarded the way a bare YAML swap
+   discards it.
+
+Failure is a normal outcome. A rejected promise — or proposal YAML that does not
+parse — leaves the document **untouched** and surfaces the message in an alert
+above the editor body. Results that arrive after the editor unmounts, or after
+the user dismisses the panel, are dropped.
+
+```tsx
+const layoutAssistant: LayoutAssistant = {
+  async suggest({ domain, instance, currentYaml }) {
+    const draft = await analyze(instance, currentYaml, domain);
+    return {
+      yaml: draft.spec,
+      suggestions: draft.rules.map((r) => ({
+        id: r.id,
+        rationale: r.why,
+        confidence: r.confidence,
+        outcome: r.outcome,
+      })),
+      notes: draft.notes,
+    };
+  },
+};
+
+<SpecEditor value={yaml} onChange={setYaml} instance={instance} layoutAssistant={layoutAssistant} />;
+```
+
+Accepting or rejecting individual suggestions is deliberately **not** in this
+contract: recomposing a spec from a subset is host policy (dependencies between
+rules, weaker fallbacks), not something the editor can do generically. A host
+that wants it can expose its own panel and drive the editor through `value`.
 
 ## Adding a new constraint/directive type
 

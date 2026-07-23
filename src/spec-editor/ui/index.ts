@@ -44,6 +44,10 @@ export { CodeView } from './CodeView';
 export type { BuilderViewProps } from './BuilderView';
 export { BuilderView } from './BuilderView';
 
+// ---- layout-suggestion panel (HOOK 3) ----
+export type { SuggestionsPanelProps } from './SuggestionsPanel';
+export { SuggestionsPanel } from './SuggestionsPanel';
+
 // ---- the public component (WP4) ----
 export type { SpecEditorProps } from './SpecEditor';
 export { SpecEditor } from './SpecEditor';
