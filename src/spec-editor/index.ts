@@ -75,6 +75,16 @@ export type {
   Completion,
 } from './domain/assistant';
 
+// ---- layout assistance contract (HOOK 3) ----
+export type {
+  LayoutAssistant,
+  LayoutAssistContext,
+  LayoutSuggestionResult,
+  LayoutSuggestionDetail,
+  LayoutSuggestionConfidence,
+  LayoutSuggestionOutcome,
+} from './domain/layout-assistant';
+
 // ---- built-in completions (WP2) ----
 export {
   getSelectorKeywordCompletions,
@@ -111,6 +121,9 @@ export { CodeView } from './ui/CodeView';
 
 export type { BuilderViewProps } from './ui/BuilderView';
 export { BuilderView } from './ui/BuilderView';
+
+export type { SuggestionsPanelProps } from './ui/SuggestionsPanel';
+export { SuggestionsPanel } from './ui/SuggestionsPanel';
 
 export type { SpecEditorProps } from './ui/SpecEditor';
 export { SpecEditor } from './ui/SpecEditor';

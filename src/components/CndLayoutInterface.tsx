@@ -4,6 +4,7 @@ import type {
   SpecEditorProps,
   Diagnostic,
   DomainSchema,
+  LayoutAssistant,
   SelectorAssistant,
   SpecEditorThemeInput,
 } from '../spec-editor';
@@ -57,6 +58,12 @@ export interface CndLayoutInterfaceProps {
   theme?: SpecEditorThemeInput;
   /** Selector-writing assistant hook. */
   selectorAssistant?: SelectorAssistant;
+  /**
+   * Whole-spec suggestion hook. Supplying `suggest` adds a Suggest button to
+   * the editor toolbar; the proposal is applied to the document (one undo step)
+   * and surfaced through `onChange` like any other edit.
+   */
+  layoutAssistant?: LayoutAssistant;
   /** Row density. */
   density?: 'compact' | 'comfortable';
   /** Syntax highlighting in code view + selector fields (default true). */
@@ -105,6 +112,7 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
   domain,
   theme,
   selectorAssistant,
+  layoutAssistant,
   density,
   syntaxHighlighting,
   onDiagnostics,
@@ -164,6 +172,7 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
     if (domain !== undefined) props.domain = domain;
     if (theme !== undefined) props.theme = theme;
     if (selectorAssistant !== undefined) props.selectorAssistant = selectorAssistant;
+    if (layoutAssistant !== undefined) props.layoutAssistant = layoutAssistant;
     if (density !== undefined) props.density = density;
     if (syntaxHighlighting !== undefined)
       props.syntaxHighlighting = syntaxHighlighting;
@@ -179,6 +188,7 @@ const CndLayoutInterface: React.FC<CndLayoutInterfaceProps> = ({
     domain,
     theme,
     selectorAssistant,
+    layoutAssistant,
     density,
     syntaxHighlighting,
     onDiagnostics,

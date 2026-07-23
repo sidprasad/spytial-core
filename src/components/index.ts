@@ -42,6 +42,19 @@ export type {
 // Spec authoring (embeds the CodeMirror-based SpecEditor)
 export { CndLayoutInterface } from './CndLayoutInterface';
 export type { CndLayoutInterfaceProps } from './CndLayoutInterface';
+// Assistant hooks, re-exported so React hosts don't need the spec-editor entry
+// just to type the objects they pass to CndLayoutInterface.
+export type {
+  SelectorAssistant,
+  SelectorAssistContext,
+  Completion,
+  LayoutAssistant,
+  LayoutAssistContext,
+  LayoutSuggestionResult,
+  LayoutSuggestionDetail,
+  LayoutSuggestionConfidence,
+  LayoutSuggestionOutcome,
+} from '../spec-editor';
 export { generateLayoutSpecYaml, parseLayoutSpecToData } from './NoCodeView';
 export type { ConstraintData, DirectiveData } from './NoCodeView';
 
