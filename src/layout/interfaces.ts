@@ -2,6 +2,7 @@ import { Group } from "webcola";
 import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint, GroupByField, GroupBySelector, RelativeDirection } from "./layoutspec";
 import { EdgeStyle } from "./edge-style";
 import type { TextStyle } from "./style/text-style";
+import type { LayoutWarning } from "./error-state";
 
 export interface LayoutGroup {
     // The name of the group
@@ -265,6 +266,16 @@ export interface InstanceLayout {
     groups: LayoutGroup[];
     conflictingConstraints?: LayoutConstraint[];
     overlappingNodes?: LayoutNode[]; // IDs of overlapping nodes
+    /**
+     * Advisory notes about constraints and directives that quietly had no effect —
+     * a selector naming something absent from the instance, say.
+     *
+     * Rides on the layout, like `conflictingConstraints` and `overlappingNodes`,
+     * for the same reason: every host calls `generateLayout` itself and then hands
+     * the diagram element only the layout. Carrying warnings here means the
+     * element can surface them without any host wiring.
+     */
+    warnings?: LayoutWarning[];
     /**
      * Disjunctive constraints, where at least one alternative in each disjunction must be satisfiable.
      * These are separate from conjunctive constraints for clearer solver integration.

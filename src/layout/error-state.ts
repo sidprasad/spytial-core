@@ -22,6 +22,57 @@ export interface SelectorErrorDetail {
 }
 
 /**
+ * An advisory note about one constraint or directive, raised while generating a
+ * layout. Unlike {@link SelectorErrorDetail} — which records a selector that
+ * *failed* — a warning means the selector evaluated fine but produced something
+ * the spec author probably did not intend.
+ *
+ * The motivating case is an unresolved name. simple-graph-query 3.0 evaluates a
+ * name matching nothing to the empty relation rather than throwing, because an
+ * instance carries only *populated* types and relations: a legitimately-empty
+ * sig looks byte-for-byte like a typo, and a sig can empty out mid-trace. Since
+ * an empty set satisfies predicates vacuously (`no Playr` is `true`), the
+ * warning is the only thing distinguishing a typo from a real empty result —
+ * which is why these must reach the user rather than being dropped.
+ *
+ * Carried on {@link CounterfactualLayoutResult} and on `InstanceLayout` beside
+ * `selectorErrors`, never merged into it: `selectorErrors` stays errors-only so
+ * existing consumers keep their meaning.
+ */
+export interface LayoutWarning {
+  severity: 'warning' | 'error';
+  /** Machine-readable category, so consumers can filter without matching prose. */
+  code: 'unresolved-name' | 'selector-arity' | 'evaluation-failed' | (string & {});
+  /** Human-readable explanation, including what the consequence was. */
+  message: string;
+  /** The selector expression this warning is about. */
+  selector: string;
+  /** Where the selector was being used, e.g. `'orientation selector'`. */
+  context: string;
+  /**
+   * Registry type key of the owning spec item — `'orientation'`, `'atomStyle'`.
+   * Together with {@link specIndex} this names the item the warning came from.
+   */
+  specType?: string;
+  /**
+   * Position within the owning parsed section array.
+   *
+   * This is an index into the *parsed* spec, not a YAML line: `parseLayoutSpec`
+   * uses js-yaml (which discards positions), dedupes entries, and merges `size`
+   * and `hideAtom` across both sections. So it is deterministic and stable, but
+   * not guaranteed to equal the YAML ordinal. Enough to name an item in a
+   * warning; not enough to anchor an editor marker.
+   */
+  specIndex?: number;
+  /** Display label — a constraint's `toHTML()`, else `type[index] · selector`. */
+  label?: string;
+  /** The unresolved name, when the kind carries one. Doubles as the dedup key. */
+  name?: string;
+  /** simple-graph-query's "did you mean" suggestion, when it offers one. */
+  suggestion?: string;
+}
+
+/**
  * Represents different types of errors that can occur in the system
  */
 export type SystemError = {

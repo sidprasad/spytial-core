@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator, NodePositionHint, TransformInfo, LayoutState, WebColaLayoutOptions, WebColaRenderTransitionMode } from './webcolatranslator';
 import { InstanceLayout, isAlignmentConstraint, isInstanceLayout, isLeftConstraint, isTopConstraint, LayoutNode, ColorSource } from '../../layout/interfaces';
+import type { LayoutWarning } from '../../layout/error-state';
 import type { GridRouter, Group, Layout, Node, Link } from 'webcola';
 import { IInputDataInstance, ITuple, IAtom } from '../../data-instance/interfaces';
 import { MAIN_LABEL_FONT_SIZE, SECONDARY_FONT_SIZE, LABEL_LINE_HEIGHT_RATIO, resolveAttrFontSize } from '../../layout/text-extent';
@@ -116,6 +117,14 @@ export class WebColaCnDGraph extends HTMLElementBase {
   private container!: any;
   private currentLayout!: WebColaLayout;
   private colaLayout!: Layout;
+  /** Signature of the warnings currently on screen. See renderLayoutWarnings. */
+  private currentWarningSignature: string | null = null;
+  /**
+   * Signature of the warning set the user dismissed, or null if they haven't.
+   * Compared against each render's signature so a dismissal survives re-renders
+   * of the *same* warnings but does not suppress new ones.
+   */
+  private dismissedWarningSignature: string | null = null;
   private readonly lineFunction: d3.Line<{ x: number; y: number }>;
   /**
    * Snapshot of the seed positions the most-recent policy resolved
@@ -834,6 +843,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
     this.attachShadow({ mode: 'open' });
     this.initializeDOM();
     this.initializeD3();
+    this.setupLayoutWarningsToggle();
 
     // TODO: I'd like to make this better.
     this.lineFunction = d3.line()
@@ -1405,6 +1415,17 @@ export class WebColaCnDGraph extends HTMLElementBase {
       <div id="loading" role="status" aria-live="polite" aria-atomic="true">
         <span class="loading-dot" aria-hidden="true"></span>
         <span id="loading-progress">Computing layout...</span>
+      </div>
+      <div id="layout-warnings" hidden>
+        <div id="layout-warnings-bar">
+          <button id="layout-warnings-badge" type="button" aria-expanded="false" aria-controls="layout-warnings-panel">
+            <span aria-hidden="true">&#9888;</span>
+            <span id="layout-warnings-count"></span>
+            <span id="layout-warnings-caret" aria-hidden="true">&#9656;</span>
+          </button>
+          <button id="layout-warnings-dismiss" type="button" title="Dismiss" aria-label="Dismiss selector warnings">&#215;</button>
+        </div>
+        <div id="layout-warnings-panel" role="region" aria-label="Selector warnings" hidden></div>
       </div>
       <svg id="svg">
         <defs>
@@ -2144,6 +2165,13 @@ export class WebColaCnDGraph extends HTMLElementBase {
     // then race the new render's (the wedged-overlay / never-routed-edges /
     // never-revealed-morph failures).
     this.teardownInflightRender();
+
+    // Surface the advisory warnings this layout carries. Done before the solve
+    // rather than after because the badge describes the *spec*, not the geometry,
+    // so it stays accurate even if this render is later superseded or fails —
+    // but strictly after teardown, which must observe the prior render's state
+    // untouched.
+    this.renderLayoutWarnings(instanceLayout.warnings ?? []);
 
     // Claim the render generation. A superseded render can be torn down at
     // entry only if its solver already exists — a competitor arriving while
@@ -9953,6 +9981,129 @@ export class WebColaCnDGraph extends HTMLElementBase {
         animation: loading-pulse 1s ease-in-out infinite;
       }
 
+      /* Selector warnings: a collapsed summary bar, with detail on demand.
+         An unresolved name yields an empty set rather than an error, so the
+         diagram still renders looking perfectly fine — this bar is the only thing
+         saying a constraint silently did nothing. Collapsed rather than expanded
+         because these are advisory and, on an animated trace, one fires per
+         frame; dismissable because a warning you have already read and decided
+         to live with should not keep shouting. */
+      #layout-warnings {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 1001;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+        max-width: min(80%, 420px);
+      }
+
+      #layout-warnings[hidden] {
+        display: none;
+      }
+
+      #layout-warnings-bar {
+        display: flex;
+        align-items: stretch;
+        background: var(--cnd-warning-bg, #fef3c7);
+        border: 1px solid var(--cnd-warning-border, #f59e0b);
+        border-radius: 6px;
+        overflow: hidden;
+      }
+
+      #layout-warnings-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        flex: 1;
+        padding: 4px 10px;
+        background: none;
+        border: none;
+        color: var(--cnd-warning-text, #92400e);
+        font: inherit;
+        font-size: 12px;
+        line-height: 1.6;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      #layout-warnings-badge:hover,
+      #layout-warnings-dismiss:hover {
+        background: var(--cnd-warning-bg-hover, #fde68a);
+      }
+
+      #layout-warnings-badge:focus-visible,
+      #layout-warnings-dismiss:focus-visible {
+        outline: 2px solid var(--cnd-warning-border, #f59e0b);
+        outline-offset: -2px;
+      }
+
+      #layout-warnings-caret {
+        margin-left: auto;
+        font-size: 10px;
+        transition: transform 120ms ease;
+      }
+
+      #layout-warnings-badge[aria-expanded="true"] #layout-warnings-caret {
+        transform: rotate(90deg);
+      }
+
+      #layout-warnings-dismiss {
+        padding: 0 9px;
+        background: none;
+        border: none;
+        border-left: 1px solid var(--cnd-warning-border, #f59e0b);
+        color: var(--cnd-warning-text, #92400e);
+        font: inherit;
+        font-size: 15px;
+        line-height: 1;
+        cursor: pointer;
+      }
+
+      #layout-warnings-panel {
+        max-height: 260px;
+        overflow-y: auto;
+        padding: 8px 10px;
+        background: var(--cnd-panel-bg, rgba(255, 255, 255, 0.97));
+        border: 1px solid var(--cnd-warning-border, #f59e0b);
+        border-radius: 6px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
+        color: var(--cnd-loading-text, #374151);
+        font-size: 12px;
+        text-align: left;
+      }
+
+      #layout-warnings-panel[hidden] {
+        display: none;
+      }
+
+      .layout-warning-item + .layout-warning-item {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid var(--cnd-panel-border, rgba(0, 0, 0, 0.12));
+      }
+
+      .layout-warning-label {
+        font-weight: 600;
+      }
+
+      .layout-warning-item code {
+        padding: 0 3px;
+        background: var(--cnd-code-bg, rgba(0, 0, 0, 0.06));
+        border-radius: 3px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      .layout-warning-message {
+        margin-top: 2px;
+      }
+
+      .layout-warning-item[title] {
+        cursor: help;
+      }
+
       #loading-progress {
         overflow: hidden;
         text-overflow: ellipsis;
@@ -10529,6 +10680,124 @@ export class WebColaCnDGraph extends HTMLElementBase {
     this.hideLoading();
     error.style.display = 'block';
     error.textContent = message;
+  }
+
+  /**
+   * Renders the advisory-warning badge for the layout being drawn, and emits
+   * `layout-warnings` so hosts with richer UI can route them elsewhere.
+   *
+   * These ride on the layout rather than arriving through a host callback because
+   * every host — the docs site, the demos, spytial-py, spytial-rust — calls
+   * `generateLayout` itself and hands this element only the resulting layout.
+   * Anything needing extra host wiring would reach nobody.
+   *
+   * The badge is rebuilt per render, so on an animated trace it reflects the
+   * current frame instead of accumulating across frames.
+   */
+  private renderLayoutWarnings(warnings: LayoutWarning[]): void {
+    const container = this.root.querySelector('#layout-warnings') as HTMLElement | null;
+    const badge = this.root.querySelector('#layout-warnings-badge') as HTMLElement | null;
+    const count = this.root.querySelector('#layout-warnings-count') as HTMLElement | null;
+    const panel = this.root.querySelector('#layout-warnings-panel') as HTMLElement | null;
+    if (!container || !badge || !count || !panel) {
+      return; // Template not rendered yet (or overridden by a subclass)
+    }
+
+    if (warnings.length === 0) {
+      container.hidden = true;
+      panel.hidden = true;
+      badge.setAttribute('aria-expanded', 'false');
+      panel.replaceChildren();
+      this.dismissedWarningSignature = null;
+      return;
+    }
+
+    // A dismissal applies to the warnings that were on screen when it happened.
+    // Re-showing an identical set every frame of a trace would make the dismiss
+    // button useless; staying hidden after the warnings *change* would hide new
+    // information. Keying on the set itself gets both.
+    const signature = warnings
+      .map(w => `${w.code}|${w.specType ?? ''}|${w.specIndex ?? ''}|${w.name ?? w.selector}`)
+      .join('\n');
+    if (this.dismissedWarningSignature === signature) {
+      container.hidden = true;
+      return;
+    }
+    this.dismissedWarningSignature = null;
+
+    count.textContent = `${warnings.length} selector ${warnings.length === 1 ? 'warning' : 'warnings'}`;
+    badge.setAttribute('title', 'Click for detail');
+    this.currentWarningSignature = signature;
+
+    // Built with DOM calls rather than innerHTML: every field below is authored
+    // data (selector text, an instance's own names) and must not be parsed as markup.
+    panel.replaceChildren(...warnings.map(w => {
+      const item = document.createElement('div');
+      item.className = 'layout-warning-item';
+
+      const label = document.createElement('div');
+      label.className = 'layout-warning-label';
+      label.textContent = w.label ?? `${w.specType ?? 'spec'}[${w.specIndex ?? 0}]`;
+      item.appendChild(label);
+
+      const message = document.createElement('div');
+      message.className = 'layout-warning-message';
+      message.textContent = w.message;
+      item.appendChild(message);
+
+      // The suggestion is available on hover, not as visible text. It is only a
+      // guess: simple-graph-query takes the nearest name within one or two edits,
+      // over atom ids as well as types and relations, so it can propose something
+      // meaningless in selector position. Putting it behind a hover keeps it
+      // reachable without letting a guess read like a diagnosis. It remains on
+      // `LayoutWarning.suggestion` for programmatic consumers either way.
+      if (w.suggestion) {
+        item.title = `Did you mean '${w.suggestion}'?`;
+      }
+
+      const where = document.createElement('div');
+      where.className = 'layout-warning-message';
+      where.append(`${w.context}: `);
+      const selector = document.createElement('code');
+      selector.textContent = w.selector;
+      where.appendChild(selector);
+      item.appendChild(where);
+
+      return item;
+    }));
+
+    // Preserve the open/closed state across re-renders — on an animated trace the
+    // badge re-renders every frame, and a panel that snapped shut each time would
+    // be unreadable.
+    panel.hidden = badge.getAttribute('aria-expanded') !== 'true';
+    container.hidden = false;
+
+    this.dispatchEvent(new CustomEvent('layout-warnings', {
+      detail: { warnings },
+      bubbles: true
+    }));
+  }
+
+  /** Wires the warning bar's expand/collapse and dismiss controls. Called once, at setup. */
+  private setupLayoutWarningsToggle(): void {
+    const container = this.root.querySelector('#layout-warnings') as HTMLElement | null;
+    const badge = this.root.querySelector('#layout-warnings-badge') as HTMLElement | null;
+    const panel = this.root.querySelector('#layout-warnings-panel') as HTMLElement | null;
+    const dismiss = this.root.querySelector('#layout-warnings-dismiss') as HTMLElement | null;
+    if (!container || !badge || !panel || !dismiss) {
+      return;
+    }
+    badge.addEventListener('click', () => {
+      const willExpand = badge.getAttribute('aria-expanded') !== 'true';
+      badge.setAttribute('aria-expanded', String(willExpand));
+      panel.hidden = !willExpand;
+    });
+    dismiss.addEventListener('click', () => {
+      this.dismissedWarningSignature = this.currentWarningSignature;
+      container.hidden = true;
+      panel.hidden = true;
+      badge.setAttribute('aria-expanded', 'false');
+    });
   }
 
   // =========================================

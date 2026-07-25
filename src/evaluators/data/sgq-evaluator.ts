@@ -13,6 +13,7 @@ import type {
     SimpleGraphQueryEvaluator as SimpleGraphQueryEvaluatorType,
     EvaluationResult,
     ErrorResult,
+    Diagnostic,
 } from "simple-graph-query";
 const sgq: any = (sgqNamespace as any).SimpleGraphQueryEvaluator ? sgqNamespace : (sgqNamespace as any).default;
 const { SimpleGraphQueryEvaluator } = sgq;
@@ -75,16 +76,34 @@ export class SGQEvaluatorResult implements IEvaluatorResult {
     private isErrorResult: boolean = false;
     private isSingletonResult: boolean = false;
     private expr: string;
+    /**
+     * Advisory diagnostics raised while evaluating `expr` — today only
+     * `unresolved-name`, which evaluates to the empty set rather than failing.
+     *
+     * These live on the *result*, not on the evaluator, and that placement is
+     * load-bearing. `SGraphQueryEvaluator` memoizes whole `SGQEvaluatorResult`
+     * objects, so keeping diagnostics here means a cache hit replays them. A
+     * drain-once channel on the evaluator (a `getLastDiagnostics()`, or an array
+     * the reader empties) would report on the first evaluation and go silent on
+     * every one after — which is precisely the failure this whole feature exists
+     * to prevent. simple-graph-query hit the identical bug twice internally.
+     */
+    private readonly diagnostics: readonly Diagnostic[];
 
-    constructor(result: EvaluationResult, expr: string) {
+    constructor(result: EvaluationResult, expr: string, diagnostics: readonly Diagnostic[] = []) {
         this.result = result;
         this.expr = expr;
         this.isErrorResult = isErrorResult(result);
         this.isSingletonResult = isSingleValue(result);
+        this.diagnostics = diagnostics;
     }
 
     isError(): boolean {
         return this.isErrorResult;
+    }
+
+    getDiagnostics(): readonly Diagnostic[] {
+        return this.diagnostics;
     }
 
     isSingleton(): boolean {
@@ -306,11 +325,14 @@ export class SGraphQueryEvaluator implements IEvaluator {
       return cachedResult;
     }
 
-    const result = this.eval.evaluateExpression(expression);
-
+    // Take the diagnostics-bearing entry point, and cache them *with* the value.
+    // An unresolved name evaluates to the empty set, so a typo and a legitimately
+    // empty set are indistinguishable from the value alone — the diagnostic is
+    // the only thing that tells them apart.
+    const { value, diagnostics } = this.eval.evaluateExpressionWithDiagnostics(expression);
 
     // Now we need to wrap the result in our IEvaluatorResult interface
-    const wrappedResult = new SGQEvaluatorResult(result, expression);
+    const wrappedResult = new SGQEvaluatorResult(value, expression, diagnostics);
     
     // Implement LRU eviction: if cache is at max size, remove oldest entry
     if (this.evaluatorCache.size >= this.MAX_CACHE_SIZE) {
