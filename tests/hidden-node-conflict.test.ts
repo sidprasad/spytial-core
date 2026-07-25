@@ -676,6 +676,223 @@ directives:
     });
   });
 
+  describe('Counterfactual shows the conflicting relationships', () => {
+    it('draws the edges of the shown-despite-hide atom', () => {
+      const result = createLayout(`
+constraints:
+  - orientation:
+      selector: edge
+      directions: [right]
+directives:
+  - hideAtom:
+      selector: B
+`);
+
+      // The whole point of the counterfactual: the relationships that made the
+      // hide unsatisfiable are visible. B touches A->B and B->C.
+      const touchingB = result.layout.edges.filter(
+        e => e.source.id === 'B' || e.target.id === 'B'
+      );
+      expect(touchingB.length).toBeGreaterThanOrEqual(2);
+      expect(touchingB.some(e => e.source.id === 'A' && e.target.id === 'B')).toBe(true);
+      expect(touchingB.some(e => e.source.id === 'B' && e.target.id === 'C')).toBe(true);
+    });
+
+    it('leaves reintroducedNodes unset when there is no conflict', () => {
+      const result = createLayout(`
+constraints:
+  - orientation:
+      selector: edge
+      directions: [right]
+directives: []
+`);
+
+      expect(result.error).toBeNull();
+      expect(result.layout.reintroducedNodes).toBeUndefined();
+    });
+  });
+
+  describe('Error-slot precedence', () => {
+    it('a genuine positional conflict in the counterfactual takes precedence, but the atoms stay marked', () => {
+      // right AND left on every edge tuple is contradictory regardless of the hide;
+      // the counterfactual pass surfaces that as the (also unsat) primary error.
+      const result = createLayout(`
+constraints:
+  - orientation:
+      selector: edge
+      directions: [right]
+  - orientation:
+      selector: edge
+      directions: [left]
+directives:
+  - hideAtom:
+      selector: B
+`);
+
+      expect(result.error).not.toBeNull();
+      expect(result.error!.type).toBe('positional-conflict');
+
+      // The hide conflict is still visible on the layout itself.
+      const reintroduced = (result.layout.reintroducedNodes ?? []).map(n => n.id);
+      expect(reintroduced).toContain('B');
+    });
+  });
+
+  describe('Negated constraints', () => {
+    it('a negated orientation referencing a hidden atom is still a conflict', () => {
+      // The tuple-level check runs before negation handling: NOT(A right of B)
+      // still places B, so it cannot hold with B hidden.
+      const result = createLayout(`
+constraints:
+  - orientation:
+      selector: edge
+      directions: [right]
+      hold: never
+directives:
+  - hideAtom:
+      selector: B
+`);
+
+      expect(result.error).not.toBeNull();
+      expect(result.error!.type).toBe('hidden-node-conflict');
+      const reintroduced = (result.layout.reintroducedNodes ?? []).map(n => n.id);
+      expect(reintroduced).toContain('B');
+    });
+
+    it('a negated cyclic constraint referencing a hidden atom is still a conflict', () => {
+      const ringData = {
+        atoms: [
+          { id: 'X', type: 'Node', label: 'X' },
+          { id: 'Y', type: 'Node', label: 'Y' },
+          { id: 'Z', type: 'Node', label: 'Z' },
+        ],
+        relations: [
+          {
+            id: 'next',
+            name: 'next',
+            types: ['Node', 'Node'],
+            tuples: [
+              { atoms: ['X', 'Y'], types: ['Node', 'Node'] },
+              { atoms: ['Y', 'Z'], types: ['Node', 'Node'] },
+              { atoms: ['Z', 'X'], types: ['Node', 'Node'] },
+            ]
+          }
+        ]
+      };
+
+      const result = createLayout(`
+constraints:
+  - cyclic:
+      selector: next
+      direction: clockwise
+      hold: never
+directives:
+  - hideAtom:
+      selector: Y
+`, ringData);
+
+      expect(result.error).not.toBeNull();
+      expect(result.error!.type).toBe('hidden-node-conflict');
+      const reintroduced = (result.layout.reintroducedNodes ?? []).map(n => n.id);
+      expect(reintroduced).toContain('Y');
+    });
+
+    it('a hidden member of a negated group is NOT a conflict', () => {
+      // A negated group asserts non-containment; hiding a member does not
+      // contradict it, so the hide simply applies.
+      const result = createLayout(`
+constraints:
+  - group:
+      selector: edge
+      name: bucket
+      hold: never
+directives:
+  - hideAtom:
+      selector: D
+`);
+
+      expect(result.error?.type).not.toBe('hidden-node-conflict');
+      const nodeIds = result.layout.nodes.map(n => n.id);
+      expect(nodeIds).not.toContain('D');
+      expect(result.layout.reintroducedNodes).toBeUndefined();
+    });
+  });
+
+  describe('Unary group selectors', () => {
+    it('reports a conflict when a hidden atom is a member of a unary group', () => {
+      // Unary selector: every Node atom is a member (there is no separate key).
+      const result = createLayout(`
+constraints:
+  - group:
+      selector: Node
+      name: blob
+directives:
+  - hideAtom:
+      selector: B
+`);
+
+      expect(result.error).not.toBeNull();
+      expect(result.error!.type).toBe('hidden-node-conflict');
+
+      const reintroduced = (result.layout.reintroducedNodes ?? []).map(n => n.id);
+      expect(reintroduced).toContain('B');
+      expect(result.layout.groups.some(gr => gr.nodeIds.includes('B'))).toBe(true);
+    });
+  });
+
+  describe('Interactions across constraint families', () => {
+    it('lists every conflicting source when one hidden atom is referenced by a constraint and a group', () => {
+      const result = createLayout(`
+constraints:
+  - orientation:
+      selector: edge
+      directions: [right]
+  - group:
+      selector: edge
+      name: bucket
+directives:
+  - hideAtom:
+      selector: D
+`);
+
+      expect(result.error).not.toBeNull();
+      expect(result.error!.type).toBe('hidden-node-conflict');
+
+      const error = result.error as HiddenNodeConflictError;
+      const sourceKeys = [...error.errorMessages.minimalConflictingConstraints.keys()];
+      expect(sourceKeys.some(k => k.includes('OrientationConstraint'))).toBe(true);
+      expect(sourceKeys.some(k => k.includes('GroupBySelector'))).toBe(true);
+      expect(sourceKeys.some(k => k.includes('hideAtom'))).toBe(true);
+
+      // D is marked exactly once despite conflicting with two sources.
+      const reintroduced = (result.layout.reintroducedNodes ?? []).map(n => n.id);
+      expect(reintroduced).toEqual(['D']);
+      expect(error.reintroducedNodeIds).toEqual(['D']);
+    });
+
+    it('carries spec warnings on the counterfactual result (the second pass does not lose them)', () => {
+      // The deprecated group-by-field form raises a parse warning AND builds a
+      // group whose hidden member conflicts — both must survive the re-run.
+      const result = createLayout(`
+constraints:
+  - group:
+      field: edge
+      groupOn: 0
+      addToGroup: 1
+directives:
+  - hideAtom:
+      selector: D
+`);
+
+      expect(result.error).not.toBeNull();
+      expect(result.error!.type).toBe('hidden-node-conflict');
+
+      const warnings = result.layout.warnings ?? [];
+      expect(warnings.length).toBeGreaterThan(0);
+      expect(result.warnings?.length).toBe(warnings.length);
+    });
+  });
+
   describe('isHiddenNodeConflictError type guard', () => {
     it('returns true for hidden-node-conflict errors', () => {
       const result = createLayout(`
