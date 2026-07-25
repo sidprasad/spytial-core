@@ -229,9 +229,10 @@ describe('diagnostics — unknown keys (typo detection)', () => {
     expect(diags).toHaveLength(0);
   });
 
-  it('does not flag inferredEdge deprecated inline line keys', () => {
-    // color/style/weight/highlight are still parsed (deprecation-warned
-    // elsewhere), so they are not "unknown".
+  it('calls inferredEdge inline line keys deprecated, not unknown', () => {
+    // color/style/weight/highlight are still parsed, so they are not "unknown" —
+    // but they are on their way out, so they get a `deprecated` diagnostic
+    // naming the block that replaces each.
     const diags = validateItem(
       item(
         'inferredEdge',
@@ -240,6 +241,10 @@ describe('diagnostics — unknown keys (typo detection)', () => {
       ),
     );
     expect(diags.filter((d) => /Unknown field/.test(d.message))).toHaveLength(0);
+    expect(diags.filter((d) => d.code === 'deprecated')).toHaveLength(3);
+    expect(diags.find((d) => d.message.includes('"style"'))!.message).toMatch(
+      /lineStyle\.pattern/,
+    );
   });
 
   it('does not flag `filter` on attribute/hideField (a real field)', () => {

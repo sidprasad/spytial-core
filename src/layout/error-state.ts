@@ -35,6 +35,13 @@ export interface SelectorErrorDetail {
  * warning is the only thing distinguishing a typo from a real empty result —
  * which is why these must reach the user rather than being dropped.
  *
+ * The other source is the spec parse itself: `parseLayoutSpec` raises a
+ * `'deprecated'` {@link ParseWarning} for a legacy form (`atomColor`,
+ * `edgeColor`, group-by-field, `inferredEdge`'s inline line styling), and
+ * `LayoutInstance` forwards those onto the layout as warnings too. Same reason:
+ * the spec works, quietly, on a form that is going away — and the console is
+ * not somewhere a diagram's author looks.
+ *
  * Carried on {@link CounterfactualLayoutResult} and on `InstanceLayout` beside
  * `selectorErrors`, never merged into it: `selectorErrors` stays errors-only so
  * existing consumers keep their meaning.
@@ -42,12 +49,16 @@ export interface SelectorErrorDetail {
 export interface LayoutWarning {
   severity: 'warning' | 'error';
   /** Machine-readable category, so consumers can filter without matching prose. */
-  code: 'unresolved-name' | 'selector-arity' | 'evaluation-failed' | (string & {});
+  code: 'unresolved-name' | 'selector-arity' | 'evaluation-failed' | 'deprecated' | (string & {});
   /** Human-readable explanation, including what the consequence was. */
   message: string;
-  /** The selector expression this warning is about. */
-  selector: string;
-  /** Where the selector was being used, e.g. `'orientation selector'`. */
+  /**
+   * The selector expression this warning is about. Absent when the warning is
+   * not about a selector at all — a `'deprecated'` warning is raised while
+   * *parsing* the spec, before any selector is evaluated.
+   */
+  selector?: string;
+  /** Where the warning came from, e.g. `'orientation selector'`, `'spec'`. */
   context: string;
   /**
    * Registry type key of the owning spec item — `'orientation'`, `'atomStyle'`.

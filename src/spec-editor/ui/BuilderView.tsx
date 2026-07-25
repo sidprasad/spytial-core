@@ -17,6 +17,11 @@
  * labelled with their YAML key and a "preserved as written" note — they survive
  * round-trips untouched.
  *
+ * Diagnostics that belong to the item rather than to one of its fields — a
+ * deprecated type (`atomColor`) or a deprecated key (`inferredEdge`'s inline
+ * `color`) — are listed at the top of the expanded panel, since the per-field
+ * renderer has nowhere to put them.
+ *
  * This component is domain-blind about completion/synthesis: the parent passes a
  * `selectorProps(item, field)` callback that composes the real sources.
  */
@@ -364,6 +369,15 @@ const Row: React.FC<RowProps> = ({
   );
   const severity = topSeverity(itemDiagnostics);
 
+  // Diagnostics about the item as a whole rather than one of its fields —
+  // a deprecated type or key, an unknown type, a `def.validate()` result.
+  // `FieldRenderer` buckets by `fieldKey` and so cannot show these; without
+  // this list they were a severity dot with no readable message anywhere.
+  const itemLevelDiagnostics = useMemo(
+    () => itemDiagnostics.filter((d) => d.fieldKey === undefined),
+    [itemDiagnostics],
+  );
+
   // Unknown / unregistered types render read-only ("preserved as written").
   if (!def) {
     return (
@@ -462,6 +476,20 @@ const Row: React.FC<RowProps> = ({
             }
           }}
         >
+          {itemLevelDiagnostics.length > 0 ? (
+            <ul className="spytial-ed-diagnostics spytial-ed-diagnostics--item">
+              {itemLevelDiagnostics.map((d, i) => (
+                <li
+                  key={i}
+                  className={`spytial-ed-diagnostic spytial-ed-diagnostic--${d.severity}`}
+                >
+                  <span className="spytial-ed-diagnostic-dot" aria-hidden="true" />
+                  <span className="spytial-ed-diagnostic-msg">{d.message}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
           <FieldRenderer
             fields={visibleFields(def.fields)}
             values={item.params}

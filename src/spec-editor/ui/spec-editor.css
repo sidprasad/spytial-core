@@ -740,6 +740,23 @@
   text-overflow: ellipsis;
 }
 
+/* Item-level diagnostics (deprecated type/key, unknown type, validate()) sit at
+   the top of an expanded row rather than under a control. They get the full
+   panel width, so — unlike the one-line field diagnostics — they wrap instead
+   of truncating: the message names the replacement to move to, which is the
+   part that would be cut off. */
+.spytial-ed-diagnostics--item {
+  gap: 0.2em;
+}
+.spytial-ed-diagnostics--item .spytial-ed-diagnostic {
+  white-space: normal;
+  overflow: visible;
+}
+.spytial-ed-diagnostics--item .spytial-ed-diagnostic-msg {
+  overflow: visible;
+  text-overflow: clip;
+}
+
 .spytial-ed-diagnostic-dot {
   flex: 0 0 auto;
   inline-size: 0.5em;

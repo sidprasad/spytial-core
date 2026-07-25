@@ -213,7 +213,9 @@ For a binary selector with tuples `(a, b), (a, c), (a, d)`, the group is keyed b
 
 ---
 
-### Group Constraint (by Field)
+### Group Constraint (by Field) — *legacy*
+
+> **Deprecated:** prefer [group by selector](#group-constraint-by-selector) above. The field form still groups exactly as before, but it raises a deprecation warning. To migrate, give a binary selector whose first column is the group key and whose second is the members (plus the `name` that form requires). Over `worksIn: Employee -> Department`, `field: worksIn` with `groupOn: 1` / `addToGroup: 0` keys on Department, so it becomes `selector: ~worksIn`.
 
 Groups elements based on a relational field (tuple-based grouping).
 
