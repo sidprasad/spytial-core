@@ -45,7 +45,7 @@ Save the following as `demo.html`, then open it in a browser:
       constraints:
         - orientation: { selector: parent, directions: [above] }
       directives:
-        - atomColor: { selector: Node, value: "#4a90d9" }
+        - atomStyle: { selector: Node, borderStyle: { color: "#4a90d9" } }
         - flag: hideDisconnectedBuiltIns
     `;
 
@@ -91,7 +91,7 @@ The four numbered comments map directly to the [pipeline stages](pipeline.md). I
 constraints:
   - orientation: { selector: parent, directions: [above] }
 directives:
-  - atomColor: { selector: Node, value: "#4a90d9" }
+  - atomStyle: { selector: Node, borderStyle: { color: "#4a90d9" } }
   - flag: hideDisconnectedBuiltIns
 </template>
 </div>

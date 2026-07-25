@@ -74,11 +74,11 @@ directives:
 - attribute: { field: nid }
 - hideAtom:  { selector: NoneType + int }
 - hideAtom:  { selector: str }
-- atomColor: { selector: "{x: Node | @num:(x.nid) = 0}", value: red }
-- atomColor: { selector: "{x: Node | @num:(x.nid) = 1}", value: blue }
-- atomColor: { selector: "{x: Node | (@num:(x.nid) > 1)}", value: black }
-- edgeColor: { field: hi, value: green }
-- edgeColor: { field: lo, value: orange }
+- atomStyle: { selector: "{x: Node | @num:(x.nid) = 0}", borderStyle: { color: red } }
+- atomStyle: { selector: "{x: Node | @num:(x.nid) = 1}", borderStyle: { color: blue } }
+- atomStyle: { selector: "{x: Node | (@num:(x.nid) > 1)}", borderStyle: { color: black } }
+- edgeStyle: { field: hi, lineStyle: { color: green } }
+- edgeStyle: { field: lo, lineStyle: { color: orange } }
 </template>
 
 Compilers can vectorize loops you never wrote. IDEs can finish functions before you do. Agents can refactor your codebase from a sentence. And yet, when you want to inspect the value your program just produced, you still use the REPL as if nothing has changed in fifty years: type a variable name, get text back, squint. Here is Python showing you a binary decision diagram:
@@ -183,11 +183,11 @@ constraints:
 - orientation: { selector: "{x, y : Node | x->y in lo and (@num:(y.nid) > 1)}", directions: [left] }
 - orientation: { selector: "{x, y : Node | x->y in hi and (@num:(y.nid) > 1)}", directions: [right] }
 directives:
-- atomColor: { selector: "{x: Node | @num:(x.nid) = 0}", value: red }
-- atomColor: { selector: "{x: Node | @num:(x.nid) = 1}", value: blue }
-- atomColor: { selector: "{x: Node | (@num:(x.nid) > 1)}", value: black }
-- edgeColor: { field: hi, value: green }
-- edgeColor: { field: lo, value: orange }
+- atomStyle: { selector: "{x: Node | @num:(x.nid) = 0}", borderStyle: { color: red } }
+- atomStyle: { selector: "{x: Node | @num:(x.nid) = 1}", borderStyle: { color: blue } }
+- atomStyle: { selector: "{x: Node | (@num:(x.nid) > 1)}", borderStyle: { color: black } }
+- edgeStyle: { field: hi, lineStyle: { color: green } }
+- edgeStyle: { field: lo, lineStyle: { color: orange } }
 ```
 
 <div class="step-pair">
@@ -247,7 +247,7 @@ constraints:
   - orientation: { selector: left,  directions: [below, left]  }
   - orientation: { selector: right, directions: [below, right] }
 directives:
-  - atomColor: { selector: Node, value: "#4a90d9" }
+  - atomStyle: { selector: Node, borderStyle: { color: "#4a90d9" } }
 </template>
 </div>
 

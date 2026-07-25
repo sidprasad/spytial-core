@@ -80,7 +80,7 @@ That's the entire core pipeline. Where `jsonPayload` and `yamlSpec` come from is
 | Layer                | Highlights                                                                            |
 |----------------------|---------------------------------------------------------------------------------------|
 | **Data instances**   | `JSONDataInstance`, `AlloyDataInstance`, `DotDataInstance`, `PyretDataInstance`, `TlaDataInstance`, plus the `IDataInstance` interface for custom adapters. |
-| **Spec language**    | YAML constraints (`orientation`, `align`, `cyclic`, `group`, `size`, `hideAtom`) and directives (`atomColor`, `edgeColor`, `icon`, `attribute`, `tag`, `inferredEdge`, `flag`, …). |
+| **Spec language**    | YAML constraints (`orientation`, `align`, `cyclic`, `group`, `size`, `hideAtom`) and directives (`atomStyle`, `edgeStyle`, `icon`, `attribute`, `tag`, `inferredEdge`, `flag`, …). |
 | **Selector engine**  | `SGraphQueryEvaluator` (Forge-style relational expressions) plus optional Forge / SQL evaluators. |
 | **Layout solver**    | `LayoutInstance` + `QualitativeConstraintValidator` — qualitative spatial constraints with IIS reporting. |
 | **Renderers**        | `<webcola-cnd-graph>` (visual), `<spytial-explorer>` (a11y + spatial REPL; opt-in via `spytial-core/explorer` since 4.0.0), `AccessibleTranslator` (semantic HTML / alt-text). |

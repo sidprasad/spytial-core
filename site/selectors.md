@@ -32,7 +32,7 @@ The key concept to understand is **arity** — how many "columns" a selector ret
 
 A **unary selector** returns a *set of atoms*. It answers the question: **"which nodes?"**
 
-Used by: `atomColor`, `align`, `hideAtom`, `icon`, `size`, `group` (by selector)
+Used by: `atomStyle`, `align`, `hideAtom`, `icon`, `size`, `group` (by selector)
 
 ```yaml
 # All Node atoms
@@ -93,9 +93,9 @@ constraints:
 
 directives:
   # Unary selector: color all nodes
-  - atomColor:
+  - atomStyle:
       selector: Node
-      value: "#4a90d9"
+      borderStyle: { color: "#4a90d9" }
 
   # Show key as attribute instead of edge
   - attribute:
@@ -105,8 +105,7 @@ directives:
   - inferredEdge:
       name: "descendant"
       selector: "^(left + right)"
-      color: gray
-      style: dotted
+      lineStyle: { color: gray, pattern: dotted }
 
   - flag: hideDisconnectedBuiltIns
 ```
@@ -154,9 +153,9 @@ constraints:
   - orientation: { selector: right, directions: [below, right] }
   - align:       { selector: "Node - left.Node - right.Node",  direction: horizontal }
 directives:
-  - atomColor:    { selector: Node, value: "#4a90d9" }
+  - atomStyle:    { selector: Node, borderStyle: { color: "#4a90d9" } }
   - attribute:    { field: key }
-  - inferredEdge: { name: "descendant", selector: "^(left + right)", color: gray, style: dotted }
+  - inferredEdge: { name: "descendant", selector: "^(left + right)", lineStyle: { color: gray, pattern: dotted } }
   - flag: hideDisconnectedBuiltIns
 </template>
 </div>

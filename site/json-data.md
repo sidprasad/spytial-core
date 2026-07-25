@@ -157,9 +157,9 @@ constraints:
 directives:
   - attribute:
       field: age
-  - atomColor:
+  - atomStyle:
       selector: Person
-      value: "#4a90d9"
+      borderStyle: { color: "#4a90d9" }
   - flag: hideDisconnectedBuiltIns
 ```
 
@@ -196,7 +196,7 @@ constraints:
   - orientation: { selector: parent, directions: [above] }
 directives:
   - attribute: { field: age }
-  - atomColor: { selector: Person, value: "#4a90d9" }
+  - atomStyle: { selector: Person, borderStyle: { color: "#4a90d9" } }
   - flag: hideDisconnectedBuiltIns
 </template>
 </div>
