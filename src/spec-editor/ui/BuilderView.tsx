@@ -1,9 +1,11 @@
 /**
  * {@link BuilderView} — the compact, schema-driven row list of the spec editor.
  *
- * Each constraint/directive is a single compact row: a kind badge, the type
- * label, a live `summary(params)`, a diagnostic dot when the item has issues,
- * and an overflow menu (duplicate · delete · move up/down · add comment).
+ * Each constraint/directive is a single compact row: the type label, a live
+ * `summary(params)`, a diagnostic dot when the item has issues, and an overflow
+ * menu (duplicate · delete · move up/down · add comment). No per-row kind badge
+ * — the rows already sit under a "Constraints" or "Directives" heading, so a
+ * C/D stamp on every one of them only repeated it.
  * Clicking a row expands it inline (accordion: exactly one open at a time, Esc
  * collapses) into the generated form rendered by {@link FieldRenderer} from the
  * registry definition, plus a "negate" toggle for types that support `hold` and
@@ -383,9 +385,6 @@ const Row: React.FC<RowProps> = ({
     return (
       <li className="spytial-ed-row spytial-ed-row--unknown">
         <div className="spytial-ed-row-main">
-          <span className="spytial-ed-badge spytial-ed-badge--unknown">
-            {item.kind === 'constraint' ? 'C' : 'D'}
-          </span>
           <span className="spytial-ed-row-type">{item.type}</span>
           <span className="spytial-ed-row-summary spytial-ed-row-summary--muted">
             preserved as written
@@ -422,12 +421,6 @@ const Row: React.FC<RowProps> = ({
           disabled={disabled}
           onClick={() => onToggleExpand(item.id)}
         >
-          <span
-            className={`spytial-ed-badge spytial-ed-badge--${item.kind}`}
-            aria-hidden="true"
-          >
-            {item.kind === 'constraint' ? 'C' : 'D'}
-          </span>
           <span className="spytial-ed-row-type">{def.label}</span>
           {negated ? (
             <span

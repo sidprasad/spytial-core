@@ -1185,34 +1185,6 @@
     calc(var(--spytial-ed-gap, 8px) * 0.75);
 }
 
-/* kind badge as an inked stamp: outlined, mono, square */
-.spytial-ed-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  inline-size: 1.5em;
-  block-size: 1.5em;
-  flex: 0 0 auto;
-  font-family: var(--spytial-ed-chrome-font);
-  font-size: 0.72em;
-  font-weight: 700;
-  border-radius: var(--spytial-ed-radius-sm, 2px);
-  background: transparent;
-}
-
-.spytial-ed-badge--constraint {
-  color: var(--spytial-ed-accent, #b5431a);
-  border: 1px solid var(--spytial-ed-accent, #b5431a);
-}
-.spytial-ed-badge--directive {
-  color: var(--spytial-ed-syn-type, #0e6b6b);
-  border: 1px solid var(--spytial-ed-syn-type, #0e6b6b);
-}
-.spytial-ed-badge--unknown {
-  color: var(--spytial-ed-text-muted, #6e6553);
-  border: 1px dashed var(--spytial-ed-text-muted, #6e6553);
-}
-
 .spytial-ed-row-type {
   font-family: var(--spytial-ed-chrome-font);
   font-size: 0.88em;
